@@ -1,19 +1,15 @@
-import { AlertCircle, Gauge } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { type ContextUsage } from "@/lib/api";
-import { formatTokens } from "./utils";
+import { AlertCircle, Gauge } from 'lucide-react'
+import type { ContextUsage } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { formatTokens } from './utils'
 
 export function ContextUsageBar({ usage }: { usage: ContextUsage }) {
-  const percent = Math.min(100, usage.percent_used);
-  const isWarning = percent > 70;
-  const isDanger = percent > 90;
+  const percent = Math.min(100, usage.percent_used)
+  const isWarning = percent > 70
+  const isDanger = percent > 90
 
   return (
-    <div
-      className={cn(
-        "section-card"
-      )}
-    >
+    <div className={cn('section-card')}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-slate-500" />
@@ -28,12 +24,12 @@ export function ContextUsageBar({ usage }: { usage: ContextUsage }) {
       <div className="h-2 bg-slate-800/80 rounded-full overflow-hidden">
         <div
           className={cn(
-            "h-full rounded-full transition-all duration-500",
+            'h-full rounded-full transition-all duration-500',
             isDanger
-              ? "bg-gradient-to-r from-red-600 to-red-500"
+              ? 'bg-gradient-to-r from-red-600 to-red-500'
               : isWarning
-                ? "bg-gradient-to-r from-amber-600 to-amber-500"
-                : "bg-gradient-to-r from-emerald-600 to-emerald-500"
+                ? 'bg-gradient-to-r from-amber-600 to-amber-500'
+                : 'bg-gradient-to-r from-emerald-600 to-emerald-500',
           )}
           style={{ width: `${percent}%` }}
         />
@@ -49,5 +45,5 @@ export function ContextUsageBar({ usage }: { usage: ContextUsage }) {
         </div>
       )}
     </div>
-  );
+  )
 }

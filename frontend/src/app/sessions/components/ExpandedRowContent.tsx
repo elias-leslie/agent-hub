@@ -1,46 +1,51 @@
-import { Maximize2, RefreshCw } from "lucide-react";
+import { Maximize2, RefreshCw } from 'lucide-react'
 
-import { EventTimeline } from "@/components/timeline";
-import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
-import { formatDuration } from "../utils";
-import { CopyIdButton } from "./CopyIdButton";
+import { EventTimeline } from '@/components/timeline'
+import type { Session, SessionEventsResponse, SessionListItem } from '@/lib/api'
+import { formatDuration } from '../utils'
+import { CopyIdButton } from './CopyIdButton'
 
 function hasText(value: string | null | undefined): value is string {
-  return Boolean(value?.trim());
+  return Boolean(value?.trim())
 }
 
-function isUsefulLiveSummary(summary: string | null | undefined): summary is string {
-  const value = summary?.trim();
-  if (!value) return false;
-  const normalized = value.toLowerCase();
+function isUsefulLiveSummary(
+  summary: string | null | undefined,
+): summary is string {
+  const value = summary?.trim()
+  if (!value) return false
+  const normalized = value.toLowerCase()
   return (
-    normalized !== "execution completed" &&
-    normalized !== "execution complete" &&
-    !normalized.startsWith("transcript sync heartbeat")
-  );
+    normalized !== 'execution completed' &&
+    normalized !== 'execution complete' &&
+    !normalized.startsWith('transcript sync heartbeat')
+  )
 }
 
 function formatQuiet(seconds: number | null | undefined): string | null {
-  if (seconds === null || seconds === undefined) return null;
-  if (seconds < 60) return `quiet ${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `quiet ${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `quiet ${hours}h ${rest}m` : `quiet ${hours}h`;
+  if (seconds === null || seconds === undefined) return null
+  if (seconds < 60) return `quiet ${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `quiet ${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest > 0 ? `quiet ${hours}h ${rest}m` : `quiet ${hours}h`
 }
 
 function compactState(session: Session) {
-  const live = session.live_activity;
-  const parts = [live?.status || session.status, live?.phase, formatQuiet(live?.quiet_for_seconds)]
-    .filter(hasText);
-  return parts.join(" · ");
+  const live = session.live_activity
+  const parts = [
+    live?.status || session.status,
+    live?.phase,
+    formatQuiet(live?.quiet_for_seconds),
+  ].filter(hasText)
+  return parts.join(' · ')
 }
 
 function ScopeLine({ label, paths }: { label: string; paths: string[] }) {
-  if (paths.length === 0) return null;
-  const visiblePaths = paths.slice(0, 5);
-  const remaining = paths.length - visiblePaths.length;
+  if (paths.length === 0) return null
+  const visiblePaths = paths.slice(0, 5)
+  const remaining = paths.length - visiblePaths.length
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
@@ -60,7 +65,7 @@ function ScopeLine({ label, paths }: { label: string; paths: string[] }) {
         </span>
       ) : null}
     </div>
-  );
+  )
 }
 
 export function ExpandedRowContent({
@@ -69,10 +74,10 @@ export function ExpandedRowContent({
   eventsData,
   isLoading,
 }: {
-  session: SessionListItem;
-  expandedData: Session | null;
-  eventsData: SessionEventsResponse | null;
-  isLoading: boolean;
+  session: SessionListItem
+  expandedData: Session | null
+  eventsData: SessionEventsResponse | null
+  isLoading: boolean
 }) {
   if (isLoading) {
     return (
@@ -80,52 +85,73 @@ export function ExpandedRowContent({
         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
         Loading session evidence…
       </div>
-    );
+    )
   }
 
   if (!expandedData || !eventsData) {
-    return <div className="px-4 py-6 text-sm text-slate-500">Session evidence unavailable.</div>;
+    return (
+      <div className="px-4 py-6 text-sm text-slate-500">
+        Session evidence unavailable.
+      </div>
+    )
   }
 
-  const live = expandedData.live_activity;
-  const eventCount = expandedData.event_count ?? eventsData.total;
-  const messageCount = expandedData.message_count ?? session.message_count;
-  const usefulLiveSummary = isUsefulLiveSummary(live?.summary) ? live.summary : null;
-  const summary = expandedData.summary_oneliner?.trim() || usefulLiveSummary;
-  const duration = formatDuration(expandedData.created_at, expandedData.updated_at);
-  const writes = expandedData.observed_write_paths ?? [];
-  const declared = expandedData.declared_scope_paths ?? [];
-  const reads = expandedData.observed_read_paths ?? [];
-  const primaryScope = writes.length > 0
-    ? { label: "Writes", paths: writes }
-    : declared.length > 0
-      ? { label: "Scope", paths: declared }
-      : null;
+  const live = expandedData.live_activity
+  const eventCount = expandedData.event_count ?? eventsData.total
+  const messageCount = expandedData.message_count ?? session.message_count
+  const usefulLiveSummary = isUsefulLiveSummary(live?.summary)
+    ? live.summary
+    : null
+  const summary = expandedData.summary_oneliner?.trim() || usefulLiveSummary
+  const duration = formatDuration(
+    expandedData.created_at,
+    expandedData.updated_at,
+  )
+  const writes = expandedData.observed_write_paths ?? []
+  const declared = expandedData.declared_scope_paths ?? []
+  const reads = expandedData.observed_read_paths ?? []
+  const primaryScope =
+    writes.length > 0
+      ? { label: 'Writes', paths: writes }
+      : declared.length > 0
+        ? { label: 'Scope', paths: declared }
+        : null
   const liveWarnings = [
     live?.stall_reason,
     live?.termination_reason ? `terminated: ${live.termination_reason}` : null,
-    live?.last_tool_error ? `last tool failed${live.last_tool_name ? `: ${live.last_tool_name}` : ""}` : null,
+    live?.last_tool_error
+      ? `last tool failed${live.last_tool_name ? `: ${live.last_tool_name}` : ''}`
+      : null,
     live?.reapable_reason ? `reapable: ${live.reapable_reason}` : null,
-  ].filter(hasText);
+  ].filter(hasText)
 
   return (
     <div className="border-t border-slate-800/70 bg-slate-950/92">
       <div className="flex flex-wrap items-start gap-3 px-4 py-2.5">
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-            <span className="font-mono text-slate-200">{compactState(expandedData)}</span>
+            <span className="font-mono text-slate-200">
+              {compactState(expandedData)}
+            </span>
             {hasText(summary) ? (
-              <span className="max-w-[42rem] truncate text-slate-300" title={summary}>
+              <span
+                className="max-w-[42rem] truncate text-slate-300"
+                title={summary}
+              >
                 {summary}
               </span>
             ) : null}
             {live?.current_tool_name ? (
-              <span className="text-sky-300">tool {live.current_tool_name}</span>
+              <span className="text-sky-300">
+                tool {live.current_tool_name}
+              </span>
             ) : null}
             <span className="text-slate-500">
               {messageCount ?? 0} messages · {eventCount} events · {duration}
             </span>
-            {reads.length > 0 ? <span className="text-slate-600">reads {reads.length}</span> : null}
+            {reads.length > 0 ? (
+              <span className="text-slate-600">reads {reads.length}</span>
+            ) : null}
           </div>
 
           {primaryScope ? (
@@ -137,7 +163,10 @@ export function ExpandedRowContent({
           {liveWarnings.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 font-mono text-[11px] text-amber-200/90">
               {liveWarnings.map((note) => (
-                <span key={note} className="border border-amber-900/40 bg-amber-950/15 px-2 py-1">
+                <span
+                  key={note}
+                  className="border border-amber-900/40 bg-amber-950/15 px-2 py-1"
+                >
                   {note}
                 </span>
               ))}
@@ -162,5 +191,5 @@ export function ExpandedRowContent({
         <EventTimeline events={eventsData.events} density="compact" />
       </div>
     </div>
-  );
+  )
 }

@@ -1,21 +1,25 @@
-import { useState, useCallback, useMemo } from "react";
-import { Play, Search, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useVoicePreferences, type VoiceOption } from "@agent-hub/chat-ui";
-import { getApiBaseUrl, buildApiUrl, fetchApi } from "@/lib/api-config";
-import type { PersonaAutosaveState } from "@/app/persona/hooks/usePersona";
-import { useHeartbeat } from "@/app/persona/hooks/useHeartbeat";
-import type { Persona, PersonaUpdate } from "@/types/persona";
+import { useVoicePreferences, type VoiceOption } from '@agent-hub/chat-ui'
+import { Check, Play, Search } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useHeartbeat } from '@/app/persona/hooks/useHeartbeat'
+import type { PersonaAutosaveState } from '@/app/persona/hooks/usePersona'
+import { buildApiUrl, fetchApi, getApiBaseUrl } from '@/lib/api-config'
+import { cn } from '@/lib/utils'
+import type { Persona, PersonaUpdate } from '@/types/persona'
 
 interface VoiceHeartbeatTabProps {
-  persona: Persona;
-  onUpdate: (fields: PersonaUpdate) => void;
-  autosave: PersonaAutosaveState;
+  persona: Persona
+  onUpdate: (fields: PersonaUpdate) => void
+  autosave: PersonaAutosaveState
 }
 
-export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbeatTabProps) {
-  const [search, setSearch] = useState("");
-  const { status: heartbeatStatus } = useHeartbeat();
+export function VoiceHeartbeatTab({
+  persona,
+  onUpdate,
+  autosave,
+}: VoiceHeartbeatTabProps) {
+  const [search, setSearch] = useState('')
+  const { status: heartbeatStatus } = useHeartbeat()
 
   const {
     voices,
@@ -25,40 +29,42 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
     setTtsEnabled,
     previewVoice,
   } = useVoicePreferences({
-    ttsBaseUrl: getApiBaseUrl() || (typeof window !== "undefined" ? window.location.origin : ""),
-    preferencesEndpoint: buildApiUrl("/api/persona"),
+    ttsBaseUrl:
+      getApiBaseUrl() ||
+      (typeof window !== 'undefined' ? window.location.origin : ''),
+    preferencesEndpoint: buildApiUrl('/api/persona'),
     fetchFn: (url: string, options?: RequestInit) => fetchApi(url, options),
-  });
+  })
 
   const filteredVoices = useMemo(() => {
-    const lowerSearch = search.toLowerCase();
+    const lowerSearch = search.toLowerCase()
     return voices.filter(
       (v) =>
         v.name.toLowerCase().includes(lowerSearch) ||
         v.locale.toLowerCase().includes(lowerSearch) ||
         v.personalities.some((p) => p.toLowerCase().includes(lowerSearch)),
-    );
-  }, [voices, search]);
+    )
+  }, [voices, search])
 
   const grouped = useMemo(() => {
-    const groups: Record<string, VoiceOption[]> = {};
+    const groups: Record<string, VoiceOption[]> = {}
     for (const v of filteredVoices) {
-      const key = v.gender || "Other";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(v);
+      const key = v.gender || 'Other'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(v)
     }
-    return groups;
-  }, [filteredVoices]);
+    return groups
+  }, [filteredVoices])
 
   const handleHeartbeatChange = useCallback(
     (minutes: number) => {
-      onUpdate({ heartbeat_interval_minutes: minutes });
+      onUpdate({ heartbeat_interval_minutes: minutes })
     },
     [onUpdate],
-  );
-  const runtime = heartbeatStatus?.runtime;
-  const heartbeatWarning = runtime?.warnings?.[0] ?? null;
-  const heartbeatDisabled = persona.heartbeat_interval_minutes === 0;
+  )
+  const runtime = heartbeatStatus?.runtime
+  const heartbeatWarning = runtime?.warnings?.[0] ?? null
+  const heartbeatDisabled = persona.heartbeat_interval_minutes === 0
 
   return (
     <div className="space-y-8">
@@ -66,43 +72,39 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
         <p className="section-kicker">Voice & Heartbeat</p>
         <h2 className="section-heading mt-2">Realtime Presence</h2>
         <p className="section-copy mt-2 max-w-3xl">
-          Configure speech output, review heartbeat readiness, and tune how often
-          this persona checks in autonomously.
+          Configure speech output, review heartbeat readiness, and tune how
+          often this persona checks in autonomously.
         </p>
       </div>
 
       <div className="space-y-4 section-card">
         <div className="section-header gap-4">
           <div>
-            <h2 className="section-heading">
-              Voice
-            </h2>
+            <h2 className="section-heading">Voice</h2>
             <p className="section-copy mt-2">
-            Text-to-speech voice selection for persona responses.
-          </p>
-        </div>
-          <div className="page-pill">
-            Autosave {autosave.status}
+              Text-to-speech voice selection for persona responses.
+            </p>
           </div>
+          <div className="page-pill">Autosave {autosave.status}</div>
         </div>
 
         {/* TTS Toggle */}
         <div className="detail-card max-w-md flex items-center justify-between">
-          <span className="text-sm text-slate-300">
-            Text-to-speech
-          </span>
+          <span className="text-sm text-slate-300">Text-to-speech</span>
           <button
             onClick={() => setTtsEnabled(!ttsEnabled)}
-            aria-label={ttsEnabled ? "Disable text-to-speech" : "Enable text-to-speech"}
+            aria-label={
+              ttsEnabled ? 'Disable text-to-speech' : 'Enable text-to-speech'
+            }
             className={cn(
-              "relative w-10 h-5 rounded-full transition-colors duration-200",
-              ttsEnabled ? "bg-amber-500" : "bg-slate-600",
+              'relative w-10 h-5 rounded-full transition-colors duration-200',
+              ttsEnabled ? 'bg-amber-500' : 'bg-slate-600',
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-slate-200 shadow transition-transform duration-200",
-                ttsEnabled && "translate-x-5",
+                'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-slate-200 shadow transition-transform duration-200',
+                ttsEnabled && 'translate-x-5',
               )}
             />
           </button>
@@ -133,8 +135,8 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                   onClick={() => setSelectedVoice(voice.id)}
                   aria-label={`Select voice ${voice.name}`}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-800/50 transition-colors",
-                    voice.id === selectedVoice && "bg-amber-900/20",
+                    'w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-800/50 transition-colors',
+                    voice.id === selectedVoice && 'bg-amber-900/20',
                   )}
                 >
                   <div
@@ -142,14 +144,14 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                     aria-label={`Preview voice ${voice.name}`}
                     tabIndex={0}
                     onClick={(e) => {
-                      e.stopPropagation();
-                      previewVoice(voice.id);
+                      e.stopPropagation()
+                      previewVoice(voice.id)
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        previewVoice(voice.id);
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        previewVoice(voice.id)
                       }
                     }}
                     className="flex-shrink-0 p-0.5 rounded text-slate-400 hover:text-slate-300"
@@ -162,7 +164,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                     </span>
                     {voice.personalities.length > 0 && (
                       <span className="text-[10px] text-slate-400">
-                        {voice.personalities.slice(0, 2).join(", ")}
+                        {voice.personalities.slice(0, 2).join(', ')}
                       </span>
                     )}
                   </div>
@@ -184,18 +186,14 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
       {/* Heartbeat Section */}
       <div className="space-y-4 section-card">
         <div>
-          <h2 className="section-heading">
-            Heartbeat
-          </h2>
+          <h2 className="section-heading">Heartbeat</h2>
           <p className="section-copy mt-2">
             Autonomous check-in schedule and runtime readiness.
           </p>
         </div>
 
         <div className="detail-card max-w-md flex items-center justify-between">
-          <span className="text-sm text-slate-300">
-            Check-in interval
-          </span>
+          <span className="text-sm text-slate-300">Check-in interval</span>
           <select
             aria-label="Heartbeat interval"
             value={persona.heartbeat_interval_minutes}
@@ -221,38 +219,46 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                 Heartbeat Runtime
               </p>
               <p className="mt-1 text-sm font-medium text-slate-100">
-                {runtime?.model_display_name || runtime?.model || "Unavailable"}
+                {runtime?.model_display_name || runtime?.model || 'Unavailable'}
               </p>
               <p className="text-xs text-slate-400">
-                {runtime ? `${runtime.provider} · thinking ${runtime.thinking_level || "off"}` : "Runtime status unavailable"}
+                {runtime
+                  ? `${runtime.provider} · thinking ${runtime.thinking_level || 'off'}`
+                  : 'Runtime status unavailable'}
               </p>
             </div>
             <span
               className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
                 heartbeatDisabled
-                  ? "bg-slate-800 text-slate-300"
+                  ? 'bg-slate-800 text-slate-300'
                   : runtime?.heartbeat_supported
-                    ? "bg-emerald-900/30 text-emerald-400"
-                    : "bg-rose-900/30 text-rose-400",
+                    ? 'bg-emerald-900/30 text-emerald-400'
+                    : 'bg-rose-900/30 text-rose-400',
               )}
             >
-              {heartbeatDisabled ? "Disabled" : runtime?.heartbeat_supported ? "Ready" : "Attention"}
+              {heartbeatDisabled
+                ? 'Disabled'
+                : runtime?.heartbeat_supported
+                  ? 'Ready'
+                  : 'Attention'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
             <div className="detail-card px-3 py-2">
-              Tools: {runtime?.supports_tools ? "supported" : "not supported"}
+              Tools: {runtime?.supports_tools ? 'supported' : 'not supported'}
             </div>
             <div className="detail-card px-3 py-2">
-              Session cache: {runtime?.supports_session_cache ? "supported" : "not supported"}
+              Session cache:{' '}
+              {runtime?.supports_session_cache ? 'supported' : 'not supported'}
             </div>
           </div>
 
           {heartbeatDisabled && (
             <div className="rounded-lg border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
-              Heartbeat is currently off, so {persona.name} is not autonomously driving work.
+              Heartbeat is currently off, so {persona.name} is not autonomously
+              driving work.
             </div>
           )}
 
@@ -264,5 +270,5 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
         </div>
       </div>
     </div>
-  );
+  )
 }

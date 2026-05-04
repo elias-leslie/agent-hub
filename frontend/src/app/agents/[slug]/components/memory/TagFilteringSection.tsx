@@ -1,14 +1,14 @@
-import { Tags } from "lucide-react";
-import { parseTagsFromInput } from "./utils";
+import { Tags } from 'lucide-react'
+import { parseTagsFromInput } from './utils'
 
 interface TagFilteringSectionProps {
-  audienceTags: string[];
-  excludeTags: string[];
-  excludeMemoryUuids: string[];
+  audienceTags: string[]
+  excludeTags: string[]
+  excludeMemoryUuids: string[]
   onUpdateTags: (
-    field: "audience_tags" | "exclude_tags" | "exclude_memory_uuids",
-    tags: string[]
-  ) => void;
+    field: 'audience_tags' | 'exclude_tags' | 'exclude_memory_uuids',
+    tags: string[],
+  ) => void
 }
 
 export function TagFilteringSection({
@@ -18,12 +18,12 @@ export function TagFilteringSection({
   onUpdateTags,
 }: TagFilteringSectionProps) {
   const handleTagChange = (
-    field: "audience_tags" | "exclude_tags" | "exclude_memory_uuids",
-    value: string
+    field: 'audience_tags' | 'exclude_tags' | 'exclude_memory_uuids',
+    value: string,
   ) => {
-    const tags = parseTagsFromInput(value);
-    onUpdateTags(field, tags);
-  };
+    const tags = parseTagsFromInput(value)
+    onUpdateTags(field, tags)
+  }
 
   return (
     <div className="space-y-5 p-5 rounded-lg border border-slate-700 bg-slate-800/50">
@@ -36,8 +36,8 @@ export function TagFilteringSection({
 
       <p className="text-xs text-slate-400">
         Audience tags route reference memories to this agent. Exclude tags and
-        explicit UUID suppressions are precision escape hatches when global rules
-        or broad tags are too blunt.
+        explicit UUID suppressions are precision escape hatches when global
+        rules or broad tags are too blunt.
       </p>
 
       {/* Audience Tags */}
@@ -47,13 +47,14 @@ export function TagFilteringSection({
         </label>
         <input
           type="text"
-          value={audienceTags.join(", ")}
-          onChange={(e) => handleTagChange("audience_tags", e.target.value)}
+          value={audienceTags.join(', ')}
+          onChange={(e) => handleTagChange('audience_tags', e.target.value)}
           placeholder="e.g. agent:debugger, workflow:heartbeat, provider:codex"
           className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-500">
-          Only tagged reference memories with at least one matching tag remain eligible.
+          Only tagged reference memories with at least one matching tag remain
+          eligible.
         </p>
       </div>
 
@@ -64,13 +65,14 @@ export function TagFilteringSection({
         </label>
         <input
           type="text"
-          value={excludeTags.join(", ")}
-          onChange={(e) => handleTagChange("exclude_tags", e.target.value)}
+          value={excludeTags.join(', ')}
+          onChange={(e) => handleTagChange('exclude_tags', e.target.value)}
           placeholder="e.g. deprecated, internal, draft"
           className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-500">
-          Force-hide memories with these tags, even if they would otherwise match.
+          Force-hide memories with these tags, even if they would otherwise
+          match.
         </p>
       </div>
 
@@ -80,17 +82,18 @@ export function TagFilteringSection({
         </label>
         <input
           type="text"
-          value={excludeMemoryUuids.join(", ")}
+          value={excludeMemoryUuids.join(', ')}
           onChange={(e) =>
-            handleTagChange("exclude_memory_uuids", e.target.value)
+            handleTagChange('exclude_memory_uuids', e.target.value)
           }
           placeholder="e.g. 1234abcd, 5678efgh"
           className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-500">
-          Force-hide specific memories for this agent by UUID prefix or full UUID.
+          Force-hide specific memories for this agent by UUID prefix or full
+          UUID.
         </p>
       </div>
     </div>
-  );
+  )
 }

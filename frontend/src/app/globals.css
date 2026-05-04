@@ -83,9 +83,22 @@
   --sidebar-ring: oklch(0.72 0.1 55);
 
   --body-background:
-    radial-gradient(circle at 14% -4%, oklch(0.84 0.1 60 / 16%), transparent 34%),
-    radial-gradient(circle at 100% 0%, oklch(0.78 0.06 220 / 10%), transparent 28%),
-    linear-gradient(180deg, oklch(0.985 0.008 95) 0%, oklch(0.972 0.008 95) 42%, oklch(0.945 0.012 95) 100%);
+    radial-gradient(
+      circle at 14% -4%,
+      oklch(0.84 0.1 60 / 16%),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      oklch(0.78 0.06 220 / 10%),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      oklch(0.985 0.008 95) 0%,
+      oklch(0.972 0.008 95) 42%,
+      oklch(0.945 0.012 95) 100%
+    );
   --body-overlay-lines:
     linear-gradient(180deg, oklch(0.76 0.08 55 / 5%), transparent 22%),
     repeating-linear-gradient(
@@ -97,10 +110,18 @@
     );
   --body-overlay-glow:
     radial-gradient(circle at 50% 0%, oklch(0.84 0.1 60 / 8%), transparent 32%),
-    radial-gradient(circle at 84% 12%, oklch(0.76 0.06 220 / 8%), transparent 24%);
+    radial-gradient(
+      circle at 84% 12%,
+      oklch(0.76 0.06 220 / 8%),
+      transparent 24%
+    );
   --page-backdrop:
     radial-gradient(circle at 12% 6%, oklch(0.8 0.11 55 / 12%), transparent 22%),
-    radial-gradient(circle at 84% 10%, oklch(0.72 0.08 215 / 10%), transparent 26%),
+    radial-gradient(
+      circle at 84% 10%,
+      oklch(0.72 0.08 215 / 10%),
+      transparent 26%
+    ),
     linear-gradient(180deg, oklch(0.92 0.01 264 / 26%), transparent 40%);
   --grid-pattern-line: oklch(0.24 0.02 264 / 5%);
   --flash-bg: oklch(0.8 0.08 210);
@@ -149,9 +170,22 @@
   --sidebar-ring: oklch(0.556 0 0);
 
   --body-background:
-    radial-gradient(circle at 14% -4%, oklch(0.72 0.18 55 / 18%), transparent 34%),
-    radial-gradient(circle at 100% 0%, oklch(0.68 0.14 220 / 10%), transparent 28%),
-    linear-gradient(180deg, oklch(0.16 0.01 264) 0%, oklch(0.125 0.01 264) 42%, oklch(0.105 0.01 264) 100%);
+    radial-gradient(
+      circle at 14% -4%,
+      oklch(0.72 0.18 55 / 18%),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      oklch(0.68 0.14 220 / 10%),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      oklch(0.16 0.01 264) 0%,
+      oklch(0.125 0.01 264) 42%,
+      oklch(0.105 0.01 264) 100%
+    );
   --body-overlay-lines:
     linear-gradient(180deg, oklch(0.62 0.12 42 / 6%), transparent 22%),
     repeating-linear-gradient(
@@ -163,10 +197,22 @@
     );
   --body-overlay-glow:
     radial-gradient(circle at 50% 0%, oklch(0.7 0.16 55 / 8%), transparent 32%),
-    radial-gradient(circle at 84% 12%, oklch(0.68 0.11 215 / 7%), transparent 24%);
+    radial-gradient(
+      circle at 84% 12%,
+      oklch(0.68 0.11 215 / 7%),
+      transparent 24%
+    );
   --page-backdrop:
-    radial-gradient(circle at 12% 6%, oklch(0.68 0.15 55 / 11%), transparent 22%),
-    radial-gradient(circle at 84% 10%, oklch(0.65 0.11 215 / 9%), transparent 26%),
+    radial-gradient(
+      circle at 12% 6%,
+      oklch(0.68 0.15 55 / 11%),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 84% 10%,
+      oklch(0.65 0.11 215 / 9%),
+      transparent 26%
+    ),
     linear-gradient(180deg, oklch(0.2 0.01 264 / 20%), transparent 40%);
   --grid-pattern-line: oklch(1 0 0 / 2.2%);
   --flash-bg: oklch(0.35 0.15 200);
@@ -267,8 +313,13 @@
 
 /* Status indicator pulse */
 @keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .animate-status-pulse {
@@ -290,7 +341,9 @@
 
 /* Sidebar transitions */
 .sidebar-transition {
-  transition: width 200ms ease-out, padding 200ms ease-out;
+  transition:
+    width 200ms ease-out,
+    padding 200ms ease-out;
 }
 
 /* Nav item hover effect */
@@ -299,14 +352,18 @@
 }
 
 .nav-item-hover::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
   height: 0;
-  background: linear-gradient(to bottom, oklch(0.75 0.18 55), oklch(0.65 0.2 30));
+  background: linear-gradient(
+    to bottom,
+    oklch(0.75 0.18 55),
+    oklch(0.65 0.2 30)
+  );
   border-radius: 0 2px 2px 0;
   transition: height 150ms ease-out;
 }
@@ -318,7 +375,7 @@
 
 /* Scanline overlay for tech feel (subtle) */
 .scanlines::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
@@ -333,7 +390,9 @@
 
 /* Card hover lift */
 .card-hover-lift {
-  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+  transition:
+    transform 200ms ease-out,
+    box-shadow 200ms ease-out;
 }
 
 .card-hover-lift:hover {
@@ -395,12 +454,24 @@
   animation: fade-up 0.4s ease-out both;
 }
 
-.stagger-1 { animation-delay: 50ms; }
-.stagger-2 { animation-delay: 100ms; }
-.stagger-3 { animation-delay: 150ms; }
-.stagger-4 { animation-delay: 200ms; }
-.stagger-5 { animation-delay: 250ms; }
-.stagger-6 { animation-delay: 300ms; }
+.stagger-1 {
+  animation-delay: 50ms;
+}
+.stagger-2 {
+  animation-delay: 100ms;
+}
+.stagger-3 {
+  animation-delay: 150ms;
+}
+.stagger-4 {
+  animation-delay: 200ms;
+}
+.stagger-5 {
+  animation-delay: 250ms;
+}
+.stagger-6 {
+  animation-delay: 300ms;
+}
 
 @layer components {
   .page-shell {

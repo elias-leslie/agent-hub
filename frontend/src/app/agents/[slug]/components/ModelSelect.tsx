@@ -1,12 +1,12 @@
-import { ModelInfo } from "../types";
+import type { ModelInfo } from '../types'
 
 interface ModelSelectProps {
-  value: string | null;
-  onChange: (value: string | null) => void;
-  label: string;
-  description?: string;
-  models: ModelInfo[];
-  allowNull?: boolean;
+  value: string | null
+  onChange: (value: string | null) => void
+  label: string
+  description?: string
+  models: ModelInfo[]
+  allowNull?: boolean
 }
 
 export function ModelSelect({
@@ -20,15 +20,13 @@ export function ModelSelect({
   return (
     <div className="section-card space-y-3">
       <div>
-        <label className="detail-label">
-          {label}
-        </label>
+        <label className="detail-label">{label}</label>
         {description ? (
           <p className="mt-2 text-sm text-slate-400">{description}</p>
         ) : null}
       </div>
       <select
-        value={value ?? ""}
+        value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
         className="control-select w-full"
       >
@@ -40,5 +38,5 @@ export function ModelSelect({
         ))}
       </select>
     </div>
-  );
+  )
 }

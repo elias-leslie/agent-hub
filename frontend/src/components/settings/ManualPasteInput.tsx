@@ -1,14 +1,14 @@
-"use client";
+'use client'
 
-import { useState, useRef, useEffect } from "react";
-import { Loader2 } from "lucide-react";
-import { MANUAL_PASTE, PROVIDER_ID_CLAUDE } from "./ProviderCardUtils";
+import { Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { MANUAL_PASTE, PROVIDER_ID_CLAUDE } from './ProviderCardUtils'
 
 interface ManualPasteInputProps {
-  providerId: string;
-  onSubmit: (input: string) => Promise<void> | void;
-  onCancel: () => void;
-  error?: string | null;
+  providerId: string
+  onSubmit: (input: string) => Promise<void> | void
+  onCancel: () => void
+  error?: string | null
 }
 
 export function ManualPasteInput({
@@ -17,35 +17,35 @@ export function ManualPasteInput({
   onCancel,
   error,
 }: ManualPasteInputProps) {
-  const [value, setValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    inputRef.current?.focus()
+  }, [])
 
-  const isClaude = providerId === PROVIDER_ID_CLAUDE;
-  const hint = isClaude ? MANUAL_PASTE.CLAUDE_HINT : MANUAL_PASTE.DEFAULT_HINT;
+  const isClaude = providerId === PROVIDER_ID_CLAUDE
+  const hint = isClaude ? MANUAL_PASTE.CLAUDE_HINT : MANUAL_PASTE.DEFAULT_HINT
   const placeholder = isClaude
     ? MANUAL_PASTE.CLAUDE_PLACEHOLDER
-    : MANUAL_PASTE.DEFAULT_PLACEHOLDER;
+    : MANUAL_PASTE.DEFAULT_PLACEHOLDER
 
   async function handleSubmit() {
-    if (!value.trim() || submitting) return;
-    setSubmitting(true);
+    if (!value.trim() || submitting) return
+    setSubmitting(true)
     try {
-      await onSubmit(value.trim());
+      await onSubmit(value.trim())
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && value.trim()) {
-      handleSubmit();
-    } else if (e.key === "Escape") {
-      onCancel();
+    if (e.key === 'Enter' && value.trim()) {
+      handleSubmit()
+    } else if (e.key === 'Escape') {
+      onCancel()
     }
   }
 
@@ -79,9 +79,7 @@ export function ManualPasteInput({
           Cancel
         </button>
       </div>
-      {error && (
-        <p className="text-xs text-red-400">{error}</p>
-      )}
+      {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
-  );
+  )
 }

@@ -1,10 +1,10 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from 'lucide-react'
 
 interface InfiniteScrollFooterProps {
-  isFetchingNextPage: boolean;
-  hasNextPage: boolean;
-  allSessionsLength: number;
-  total: number;
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  allSessionsLength: number
+  total: number
 }
 
 export function InfiniteScrollFooter({
@@ -14,7 +14,7 @@ export function InfiniteScrollFooter({
   total,
 }: InfiniteScrollFooterProps) {
   if (allSessionsLength === 0) {
-    return null;
+    return null
   }
 
   if (isFetchingNextPage) {
@@ -25,12 +25,12 @@ export function InfiniteScrollFooter({
           <span className="sr-only">Loading more rows</span>
         </span>
       </div>
-    );
+    )
   }
 
   return (
     <div className="py-3 text-center text-xs text-slate-500">
-      {hasNextPage ? `${allSessionsLength} of ${total}` : "End of list"}
+      {hasNextPage ? `${allSessionsLength} of ${total}` : 'End of list'}
     </div>
-  );
+  )
 }

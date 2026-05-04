@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,7 +30,7 @@ def mock_db() -> AsyncMock:
 
 
 @pytest.fixture
-def client(mock_db: AsyncMock) -> APITestClient:
+def client(mock_db: AsyncMock) -> Generator[APITestClient]:
     """Test client with mocked database."""
 
     async def override_get_db():
@@ -46,6 +47,9 @@ def _mock_session_exists(mock_db: AsyncMock) -> None:
     mock_session_obj.id = "test-session-123"
     mock_session_obj.project_id = "test-project"
     mock_session_obj.status = "active"
+    mock_session_obj.parent_session_id = None
+    mock_session_obj.provider_metadata = {}
+    mock_session_obj.updated_at = None
 
     session_result = MagicMock()
     session_result.scalar_one_or_none.return_value = mock_session_obj

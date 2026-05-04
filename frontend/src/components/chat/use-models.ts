@@ -1,58 +1,58 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchApi } from "@/lib/api-config";
+import { useQuery } from '@tanstack/react-query'
+import { fetchApi } from '@/lib/api-config'
 import type {
   CatalogHealth,
   ModelCapabilities,
   ModelCost,
   ModelEnrichment,
-} from "@/lib/models";
+} from '@/lib/models'
 
-export type { ModelCapabilities, ModelCost, ModelEnrichment };
+export type { ModelCapabilities, ModelCost, ModelEnrichment }
 
 export interface ModelScores {
-  coding: number;
-  reasoning: number;
-  planning: number;
-  tool_use: number;
-  instruction: number;
-  design: number;
-  composite: number;
+  coding: number
+  reasoning: number
+  planning: number
+  tool_use: number
+  instruction: number
+  design: number
+  composite: number
 }
 
 export interface ModelOption {
-  id: string;
-  alias: string;
-  name: string;
-  hint: string;
-  provider: string;
-  scores: ModelScores;
-  cost: ModelCost;
-  context_window: number;
-  speed_tier: "fast" | "medium" | "slow";
-  capabilities: ModelCapabilities;
-  release_date?: string | null;
-  knowledge_cutoff?: string | null;
-  family?: string | null;
-  availability?: string | null;
-  enrichment?: ModelEnrichment | null;
+  id: string
+  alias: string
+  name: string
+  hint: string
+  provider: string
+  scores: ModelScores
+  cost: ModelCost
+  context_window: number
+  speed_tier: 'fast' | 'medium' | 'slow'
+  capabilities: ModelCapabilities
+  release_date?: string | null
+  knowledge_cutoff?: string | null
+  family?: string | null
+  availability?: string | null
+  enrichment?: ModelEnrichment | null
 }
 
 export interface ModelsApiResponse {
-  models: ModelOption[];
-  providers: Record<string, string>;
-  last_sync: string | null;
-  last_model_review: string | null;
-  catalog_health: CatalogHealth | null;
+  models: ModelOption[]
+  providers: Record<string, string>
+  last_sync: string | null
+  last_model_review: string | null
+  catalog_health: CatalogHealth | null
 }
 
-export const MODELS_CATALOG_QUERY_KEY = ["models", "catalog"] as const;
+export const MODELS_CATALOG_QUERY_KEY = ['models', 'catalog'] as const
 
 async function fetchModels(): Promise<ModelsApiResponse> {
-  const response = await fetchApi("/api/models");
+  const response = await fetchApi('/api/models')
   if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.status}`);
+    throw new Error(`Failed to fetch models: ${response.status}`)
   }
-  return response.json();
+  return response.json()
 }
 
 export function useModels(): ModelOption[] {
@@ -62,8 +62,8 @@ export function useModels(): ModelOption[] {
     staleTime: Infinity,
     gcTime: Infinity,
     select: (d) => d.models,
-  });
-  return data ?? [];
+  })
+  return data ?? []
 }
 
 export function useModelsWithSync() {
@@ -72,7 +72,7 @@ export function useModelsWithSync() {
     queryFn: fetchModels,
     staleTime: Infinity,
     gcTime: Infinity,
-  });
+  })
   return {
     models: query.data?.models ?? [],
     providers: query.data?.providers ?? {},
@@ -83,5 +83,5 @@ export function useModelsWithSync() {
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
-  };
+  }
 }

@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation'
 
 export default async function AgentArenaRedirect({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string }>
 }) {
-  const { slug } = await params;
-  redirect(`/arena/${slug}`);
+  const { slug } = await params
+  redirect(`/arena/${slug}`)
 }

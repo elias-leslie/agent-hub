@@ -1,33 +1,33 @@
-"use client";
+'use client'
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useModels } from "@/components/chat/use-models";
-import { buildModelCostMap } from "@/lib/model-pricing";
-import { SessionTable } from "./components/SessionTable";
-import { SessionsHeader } from "./components/SessionsHeader";
-import { LoadingState } from "./components/LoadingState";
-import { InfiniteScrollFooter } from "./components/InfiniteScrollFooter";
-import { ErrorAlert } from "./components/ErrorAlert";
-import { EmptyState } from "./components/EmptyState";
-import { useSessionsData } from "./hooks/useSessionsData";
-import { useSessionFilters } from "./hooks/useSessionFilters";
-import { useSessionExpansion } from "./hooks/useSessionExpansion";
-import { useSessionPreferences } from "./hooks/useSessionPreferences";
-import { useSessionKeyboard } from "./hooks/useSessionKeyboard";
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useModels } from '@/components/chat/use-models'
+import { buildModelCostMap } from '@/lib/model-pricing'
+import { EmptyState } from './components/EmptyState'
+import { ErrorAlert } from './components/ErrorAlert'
+import { InfiniteScrollFooter } from './components/InfiniteScrollFooter'
+import { LoadingState } from './components/LoadingState'
+import { SessionsHeader } from './components/SessionsHeader'
+import { SessionTable } from './components/SessionTable'
+import { useSessionExpansion } from './hooks/useSessionExpansion'
+import { useSessionFilters } from './hooks/useSessionFilters'
+import { useSessionKeyboard } from './hooks/useSessionKeyboard'
+import { useSessionPreferences } from './hooks/useSessionPreferences'
+import { useSessionsData } from './hooks/useSessionsData'
 
 export default function SessionsPage() {
-  const queryClient = useQueryClient();
-  const tableRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const pageSize = 25;
-  const models = useModels();
-  const modelCosts = useMemo(() => buildModelCostMap(models), [models]);
+  const queryClient = useQueryClient()
+  const tableRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const pageSize = 25
+  const models = useModels()
+  const modelCosts = useMemo(() => buildModelCostMap(models), [models])
 
-  const { sortField, sortDirection, handleSort } = useSessionPreferences();
+  const { sortField, sortDirection, handleSort } = useSessionPreferences()
 
   const {
     data,
@@ -39,7 +39,7 @@ export default function SessionsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useSessionsData({ statusFilter, projectFilter: "", pageSize });
+  } = useSessionsData({ statusFilter, projectFilter: '', pageSize })
 
   const {
     modelFilter,
@@ -55,7 +55,7 @@ export default function SessionsPage() {
     sortField,
     sortDirection,
     hideBenchmarkTraffic,
-  });
+  })
 
   const {
     expandedSessionId,
@@ -64,63 +64,71 @@ export default function SessionsPage() {
     isLoadingDetails,
     handleToggleExpand,
     clearExpansion,
-  } = useSessionExpansion();
+  } = useSessionExpansion()
 
   const { focusedRowIndex, handleKeyDown } = useSessionKeyboard({
     sessions: filteredAndSorted,
     onToggleExpand: handleToggleExpand,
     onClearExpansion: clearExpansion,
-  });
+  })
 
   const liveSessionIds = useMemo(
     () =>
       new Set(
         allSessions
-          .filter((session) => session.status === "active" || session.live_activity?.lifecycle_state === "working")
+          .filter(
+            (session) =>
+              session.status === 'active' ||
+              session.live_activity?.lifecycle_state === 'working',
+          )
           .map((session) => session.id),
       ),
     [allSessions],
-  );
+  )
 
   const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    queryClient.invalidateQueries({ queryKey: ["sessions"] }).finally(() => {
-      setTimeout(() => setIsRefreshing(false), 500);
-    });
-  }, [queryClient]);
+    setIsRefreshing(true)
+    queryClient.invalidateQueries({ queryKey: ['sessions'] }).finally(() => {
+      setTimeout(() => setIsRefreshing(false), 500)
+    })
+  }, [queryClient])
 
   const handleScroll = useCallback(() => {
-    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return;
-    const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return
+    const { scrollTop, scrollHeight, clientHeight } = tableRef.current
     if (scrollHeight - scrollTop - clientHeight < 500) {
-      fetchNextPage();
+      fetchNextPage()
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const handleModelFilterClick = (model: string) => {
-    setModelFilter(modelFilter === model ? "" : model);
-  };
+    setModelFilter(modelFilter === model ? '' : model)
+  }
 
   const counts = useMemo(
     () => ({ visible: visibleCount, loaded: loadedCount, total }),
     [loadedCount, total, visibleCount],
-  );
+  )
 
-  const showEmptyData = Boolean(data && !error && !isLoading && total === 0);
-  const showNoMatch = Boolean(data && !error && !isLoading && total > 0 && visibleCount === 0);
-  const showTable = Boolean(data && !error && !isLoading && visibleCount > 0);
+  const showEmptyData = Boolean(data && !error && !isLoading && total === 0)
+  const showNoMatch = Boolean(
+    data && !error && !isLoading && total > 0 && visibleCount === 0,
+  )
+  const showTable = Boolean(data && !error && !isLoading && visibleCount > 0)
 
   useEffect(() => {
     if (!expandedSessionId) {
-      return;
+      return
     }
-    const expandedStillVisible = filteredAndSorted.some((session) => session.id === expandedSessionId);
+    const expandedStillVisible = filteredAndSorted.some(
+      (session) => session.id === expandedSessionId,
+    )
     if (expandedStillVisible) {
-      return;
+      return
     }
-    clearExpansion();
-    searchInputRef.current?.focus();
-  }, [clearExpansion, expandedSessionId, filteredAndSorted]);
+    clearExpansion()
+    searchInputRef.current?.focus()
+  }, [clearExpansion, expandedSessionId, filteredAndSorted])
 
   return (
     <div className="page-shell bg-slate-950 text-slate-100">
@@ -137,7 +145,7 @@ export default function SessionsPage() {
         onSearchChange={setSearchQuery}
         onStatusFilterChange={setStatusFilter}
         onHideBenchmarkTrafficChange={setHideBenchmarkTraffic}
-        onClearModelFilter={() => setModelFilter("")}
+        onClearModelFilter={() => setModelFilter('')}
         onRefresh={handleRefresh}
       />
 
@@ -154,7 +162,7 @@ export default function SessionsPage() {
               totalCount={total}
               canLoadMore={Boolean(hasNextPage)}
               onLoadMore={() => {
-                void fetchNextPage();
+                void fetchNextPage()
               }}
             />
           )}
@@ -192,5 +200,5 @@ export default function SessionsPage() {
         </div>
       </main>
     </div>
-  );
+  )
 }

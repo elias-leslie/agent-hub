@@ -1,10 +1,10 @@
-import { Plus, Trash2 } from "lucide-react";
-import { ModelInfo } from "../types";
+import { Plus, Trash2 } from 'lucide-react'
+import type { ModelInfo } from '../types'
 
 interface FallbackModelsListProps {
-  selectedModels: string[];
-  availableModels: ModelInfo[];
-  onChange: (models: string[]) => void;
+  selectedModels: string[]
+  availableModels: ModelInfo[]
+  onChange: (models: string[]) => void
 }
 
 export function FallbackModelsList({
@@ -13,30 +13,31 @@ export function FallbackModelsList({
   onChange,
 }: FallbackModelsListProps) {
   const addModel = () => {
-    const available = availableModels.filter((m) => !selectedModels.includes(m.id));
+    const available = availableModels.filter(
+      (m) => !selectedModels.includes(m.id),
+    )
     if (available.length > 0) {
-      onChange([...selectedModels, available[0].id]);
+      onChange([...selectedModels, available[0].id])
     }
-  };
+  }
 
   const removeModel = (index: number) => {
-    onChange(selectedModels.filter((_, i) => i !== index));
-  };
+    onChange(selectedModels.filter((_, i) => i !== index))
+  }
 
   const updateModel = (index: number, value: string) => {
-    const updated = [...selectedModels];
-    updated[index] = value;
-    onChange(updated);
-  };
+    const updated = [...selectedModels]
+    updated[index] = value
+    onChange(updated)
+  }
 
   return (
     <div className="section-card space-y-3">
       <div>
-        <label className="detail-label">
-        Fallback Models (in order)
-        </label>
+        <label className="detail-label">Fallback Models (in order)</label>
         <p className="mt-2 text-sm text-slate-400">
-          Define the ordered fallback chain used when the primary model is unavailable.
+          Define the ordered fallback chain used when the primary model is
+          unavailable.
         </p>
       </div>
       {selectedModels.length === 0 ? (
@@ -80,5 +81,5 @@ export function FallbackModelsList({
         Add Fallback
       </button>
     </div>
-  );
+  )
 }

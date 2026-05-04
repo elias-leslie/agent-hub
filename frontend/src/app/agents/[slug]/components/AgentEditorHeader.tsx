@@ -1,17 +1,26 @@
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Bot, Save, ArrowLeft, Eye, MessageSquare, Loader2, Menu, FlaskConical } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Agent } from "../types";
+import {
+  ArrowLeft,
+  Bot,
+  Eye,
+  FlaskConical,
+  Loader2,
+  Menu,
+  MessageSquare,
+  Save,
+} from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import type { Agent } from '../types'
 
 interface AgentEditorHeaderProps {
-  agent: Agent;
-  hasChanges: boolean;
-  isSaving: boolean;
-  onSave: () => void;
-  onPreview: () => void;
-  onOpenSidebar?: () => void;
-  activeTabLabel?: string;
+  agent: Agent
+  hasChanges: boolean
+  isSaving: boolean
+  onSave: () => void
+  onPreview: () => void
+  onOpenSidebar?: () => void
+  activeTabLabel?: string
 }
 
 export function AgentEditorHeader({
@@ -23,7 +32,7 @@ export function AgentEditorHeader({
   onOpenSidebar,
   activeTabLabel,
 }: AgentEditorHeaderProps) {
-  const router = useRouter();
+  const router = useRouter()
 
   return (
     <header className="page-header">
@@ -40,7 +49,7 @@ export function AgentEditorHeader({
             </button>
             <button
               type="button"
-              onClick={() => router.push("/agents")}
+              onClick={() => router.push('/agents')}
               aria-label="Back to agents"
               className="icon-button"
             >
@@ -52,9 +61,7 @@ export function AgentEditorHeader({
             <div className="page-title-stack">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="page-title">{agent.name}</h1>
-                <span className="page-pill font-mono">
-                  {agent.slug}
-                </span>
+                <span className="page-pill font-mono">{agent.slug}</span>
                 {activeTabLabel && (
                   <span className="page-pill lg:hidden">{activeTabLabel}</span>
                 )}
@@ -63,23 +70,23 @@ export function AgentEditorHeader({
                 <span className="page-pill">v{agent.version}</span>
                 <span
                   className={cn(
-                    "page-pill",
+                    'page-pill',
                     agent.is_active
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-                      : "border-slate-700/80 bg-slate-900/90 text-slate-400",
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >
-                  {agent.is_active ? "Active" : "Inactive"}
+                  {agent.is_active ? 'Active' : 'Inactive'}
                 </span>
                 <span
                   className={cn(
-                    "page-pill",
+                    'page-pill',
                     hasChanges
-                      ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
-                      : "border-slate-700/80 bg-slate-900/90 text-slate-400",
+                      ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                      : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >
-                  {hasChanges ? "Unsaved changes" : "Saved"}
+                  {hasChanges ? 'Unsaved changes' : 'Saved'}
                 </span>
               </div>
             </div>
@@ -101,10 +108,7 @@ export function AgentEditorHeader({
               <MessageSquare className="h-4 w-4" />
               Chat
             </Link>
-            <Link
-              href={`/arena/${agent.slug}`}
-              className="button-secondary"
-            >
+            <Link href={`/arena/${agent.slug}`} className="button-secondary">
               <FlaskConical className="h-4 w-4" />
               Arena
             </Link>
@@ -119,11 +123,11 @@ export function AgentEditorHeader({
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {isSaving ? "Saving" : "Save"}
+              {isSaving ? 'Saving' : 'Save'}
             </button>
           </div>
         </div>
       </div>
     </header>
-  );
+  )
 }

@@ -27,10 +27,7 @@ export default function AdminLoading() {
           {/* Stats grid skeleton */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="panel-surface p-5"
-              >
+              <div key={i} className="panel-surface p-5">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 rounded-lg bg-slate-800/80">
                     <div className="w-4 h-4 rounded animate-shimmer" />
@@ -57,5 +54,5 @@ export default function AdminLoading() {
         </div>
       </main>
     </div>
-  );
+  )
 }

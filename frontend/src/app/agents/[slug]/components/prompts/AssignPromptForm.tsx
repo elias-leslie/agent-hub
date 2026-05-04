@@ -1,16 +1,20 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Plus } from 'lucide-react'
+import { useState } from 'react'
 
-import { type AgentPromptAssignment, type Prompt, assignPrompt } from "@/lib/api/prompts";
+import {
+  type AgentPromptAssignment,
+  assignPrompt,
+  type Prompt,
+} from '@/lib/api/prompts'
 
 interface AssignPromptFormProps {
-  agentSlug: string;
-  availablePrompts: Prompt[];
-  orderedAssignments: AgentPromptAssignment[];
-  onClose: () => void;
+  agentSlug: string
+  availablePrompts: Prompt[]
+  orderedAssignments: AgentPromptAssignment[]
+  onClose: () => void
 }
 
 export function AssignPromptForm({
@@ -19,20 +23,23 @@ export function AssignPromptForm({
   orderedAssignments,
   onClose,
 }: AssignPromptFormProps) {
-  const queryClient = useQueryClient();
-  const [selectedPromptSlug, setSelectedPromptSlug] = useState("");
-  const [assignRole, setAssignRole] = useState("context");
+  const queryClient = useQueryClient()
+  const [selectedPromptSlug, setSelectedPromptSlug] = useState('')
+  const [assignRole, setAssignRole] = useState('context')
 
   const assignMutation = useMutation({
-    mutationFn: async (payload: { prompt_slug: string; role: string; priority: number }) =>
-      assignPrompt(agentSlug, payload),
+    mutationFn: async (payload: {
+      prompt_slug: string
+      role: string
+      priority: number
+    }) => assignPrompt(agentSlug, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
-      setSelectedPromptSlug("");
-      setAssignRole("context");
-      onClose();
+      queryClient.invalidateQueries({ queryKey: ['agent-prompts', agentSlug] })
+      setSelectedPromptSlug('')
+      setAssignRole('context')
+      onClose()
     },
-  });
+  })
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -82,10 +89,13 @@ export function AssignPromptForm({
               priority:
                 orderedAssignments.length === 0
                   ? 0
-                  : orderedAssignments[orderedAssignments.length - 1].priority + 10,
+                  : orderedAssignments[orderedAssignments.length - 1].priority +
+                    10,
             })
           }
-          disabled={!selectedPromptSlug || !assignRole || assignMutation.isPending}
+          disabled={
+            !selectedPromptSlug || !assignRole || assignMutation.isPending
+          }
           className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:opacity-50"
         >
           {assignMutation.isPending ? (
@@ -97,5 +107,5 @@ export function AssignPromptForm({
         </button>
       </div>
     </div>
-  );
+  )
 }

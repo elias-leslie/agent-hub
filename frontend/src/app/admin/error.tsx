@@ -1,7 +1,7 @@
-"use client"
+'use client'
 
-import { AlertTriangle } from "lucide-react"
-import { ErrorPage } from "@/components/error"
+import { AlertTriangle } from 'lucide-react'
+import { ErrorPage } from '@/components/error'
 
 export default function AdminError({
   error,

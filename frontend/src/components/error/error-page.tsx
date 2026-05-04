@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import { useEffect } from "react"
-import type { LucideIcon } from "lucide-react"
-import { AlertCircle, RefreshCw } from "lucide-react"
+import type { LucideIcon } from 'lucide-react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
+import { useEffect } from 'react'
 
 interface ErrorPageProps {
   error: Error & { digest?: string }
@@ -18,12 +18,12 @@ interface ErrorPageProps {
 export function ErrorPage({
   error,
   reset,
-  title = "Something went wrong",
-  message = "An unexpected error occurred. Please try again.",
+  title = 'Something went wrong',
+  message = 'An unexpected error occurred. Please try again.',
   icon: Icon = AlertCircle,
-  iconColor = "text-red-500",
-  buttonColor = "bg-amber-500 hover:bg-amber-400",
-  label = "Error",
+  iconColor = 'text-red-500',
+  buttonColor = 'bg-amber-500 hover:bg-amber-400',
+  label = 'Error',
 }: ErrorPageProps) {
   useEffect(() => {
     console.error(`${label} error:`, error)
@@ -34,9 +34,7 @@ export function ErrorPage({
       <div className="p-4 rounded-full bg-red-900/20 mb-4">
         <Icon className={`h-8 w-8 ${iconColor}`} />
       </div>
-      <h2 className="text-lg font-semibold text-slate-100 mb-2">
-        {title}
-      </h2>
+      <h2 className="text-lg font-semibold text-slate-100 mb-2">{title}</h2>
       <p className="text-sm text-slate-400 mb-6 text-center max-w-md">
         {message}
       </p>

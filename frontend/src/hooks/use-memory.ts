@@ -1,99 +1,106 @@
-"use client";
+'use client'
 
-import { useCallback, useEffect, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
-} from "@tanstack/react-query";
+} from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  fetchMemoryStats,
-  fetchMemoryList,
-  fetchMemoryGroups,
-  searchMemories,
-  deleteMemory,
   bulkDeleteMemories,
-  exportMemoriesAsJson,
+  deleteMemory,
   downloadJson,
+  exportMemoriesAsJson,
+  fetchMemoryGroups,
+  fetchMemoryList,
+  fetchMemoryStats,
   type MemoryCategory,
+  type MemoryEpisode,
+  type MemoryGroup,
+  type MemoryListResult,
   type MemoryScope,
   type MemorySortBy,
   type MemorySortOrder,
-  type MemoryEpisode,
   type MemoryStats,
-  type MemoryGroup,
-  type MemoryListResult,
-} from "@/lib/memory-api";
+  searchMemories,
+} from '@/lib/memory-api'
 
 export interface UseMemoryOptions {
-  groupId?: string;
-  scope?: MemoryScope;
-  category?: MemoryCategory;
-  sortBy?: MemorySortBy;
-  sortOrder?: MemorySortOrder;
-  limit?: number;
+  groupId?: string
+  scope?: MemoryScope
+  category?: MemoryCategory
+  sortBy?: MemorySortBy
+  sortOrder?: MemorySortOrder
+  limit?: number
 }
 
 export interface UseMemoryReturn {
   // Data
-  stats: MemoryStats | undefined;
-  groups: MemoryGroup[];
-  episodes: MemoryEpisode[];
-  searchResults: MemoryListResult | undefined;
+  stats: MemoryStats | undefined
+  groups: MemoryGroup[]
+  episodes: MemoryEpisode[]
+  searchResults: MemoryListResult | undefined
 
   // Pagination
-  hasMore: boolean;
-  loadMore: () => void;
-  isFetchingMore: boolean;
+  hasMore: boolean
+  loadMore: () => void
+  isFetchingMore: boolean
 
   // Loading states
-  isLoadingStats: boolean;
-  isLoadingGroups: boolean;
-  isLoadingEpisodes: boolean;
-  isSearching: boolean;
+  isLoadingStats: boolean
+  isLoadingGroups: boolean
+  isLoadingEpisodes: boolean
+  isSearching: boolean
 
   // Errors
-  statsError: Error | null;
-  episodesError: Error | null;
+  statsError: Error | null
+  episodesError: Error | null
 
   // Selection
-  selectedIds: Set<string>;
-  toggleSelect: (id: string) => void;
-  selectAll: () => void;
-  clearSelection: () => void;
-  isAllSelected: boolean;
+  selectedIds: Set<string>
+  toggleSelect: (id: string) => void
+  selectAll: () => void
+  clearSelection: () => void
+  isAllSelected: boolean
 
   // Search
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
+  searchQuery: string
+  setSearchQuery: (query: string) => void
 
   // Actions
-  deleteOne: (id: string) => Promise<void>;
-  deleteSelected: () => Promise<void>;
-  exportSelected: () => void;
-  isDeleting: boolean;
+  deleteOne: (id: string) => Promise<void>
+  deleteSelected: () => Promise<void>
+  exportSelected: () => void
+  isDeleting: boolean
 
   // Refresh
-  refresh: () => void;
+  refresh: () => void
 }
 
 export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
-  const { groupId, scope, category, sortBy = "updated_at", sortOrder = "desc", limit = 50 } = options;
-  const queryClient = useQueryClient();
+  const {
+    groupId,
+    scope,
+    category,
+    sortBy = 'updated_at',
+    sortOrder = 'desc',
+    limit = 50,
+  } = options
+  const queryClient = useQueryClient()
 
   // Selection state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
   // Debounce search query (500ms)
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+      setDebouncedSearchQuery(searchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // Fetch stats
   const {
@@ -101,17 +108,17 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     isLoading: isLoadingStats,
     error: statsError,
   } = useQuery({
-    queryKey: ["memoryStats", groupId],
+    queryKey: ['memoryStats', groupId],
     queryFn: () => fetchMemoryStats(groupId),
     refetchInterval: 60000, // Refresh every minute
-  });
+  })
 
   // Fetch groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
-    queryKey: ["memoryGroups"],
+    queryKey: ['memoryGroups'],
     queryFn: fetchMemoryGroups,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  });
+  })
 
   // Fetch episodes with infinite query for virtual scrolling
   const {
@@ -122,7 +129,15 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["memoryList", groupId, scope, category, sortBy, sortOrder, limit],
+    queryKey: [
+      'memoryList',
+      groupId,
+      scope,
+      category,
+      sortBy,
+      sortOrder,
+      limit,
+    ],
     queryFn: ({ pageParam }) =>
       fetchMemoryList({
         limit,
@@ -136,7 +151,7 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     getNextPageParam: (lastPage: MemoryListResult) =>
       lastPage.has_more ? lastPage.cursor : undefined,
     initialPageParam: undefined as string | undefined,
-  });
+  })
 
   // Search query (uses debounced value)
   const {
@@ -144,97 +159,94 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     isLoading: isSearching,
     isFetching: isSearchFetching,
   } = useQuery({
-    queryKey: ["memorySearch", debouncedSearchQuery, groupId, category],
+    queryKey: ['memorySearch', debouncedSearchQuery, groupId, category],
     queryFn: () => searchMemories(debouncedSearchQuery, { groupId, category }),
     enabled: debouncedSearchQuery.length >= 2, // Only search with 2+ chars
     staleTime: 30000, // Cache search results for 30s
-  });
+  })
 
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: ({ id }: { id: string }) => deleteMemory(id, groupId),
     onSuccess: () => {
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ["memoryList"] });
-      queryClient.invalidateQueries({ queryKey: ["memoryStats"] });
+      queryClient.invalidateQueries({ queryKey: ['memoryList'] })
+      queryClient.invalidateQueries({ queryKey: ['memoryStats'] })
     },
-  });
+  })
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: ({ ids }: { ids: string[] }) =>
       bulkDeleteMemories(ids, groupId),
     onSuccess: () => {
-      setSelectedIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["memoryList"] });
-      queryClient.invalidateQueries({ queryKey: ["memoryStats"] });
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['memoryList'] })
+      queryClient.invalidateQueries({ queryKey: ['memoryStats'] })
     },
-  });
+  })
 
   // Flatten episodes from infinite query pages
-  const episodes =
-    episodesData?.pages.flatMap((page) => page.episodes) ?? [];
+  const episodes = episodesData?.pages.flatMap((page) => page.episodes) ?? []
 
   // Selection handlers
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev)
       if (next.has(id)) {
-        next.delete(id);
+        next.delete(id)
       } else {
-        next.add(id);
+        next.add(id)
       }
-      return next;
-    });
-  }, []);
+      return next
+    })
+  }, [])
 
   const selectAll = useCallback(() => {
-    setSelectedIds(new Set(episodes.map((ep) => ep.uuid)));
-  }, [episodes]);
+    setSelectedIds(new Set(episodes.map((ep) => ep.uuid)))
+  }, [episodes])
 
   const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
+    setSelectedIds(new Set())
+  }, [])
 
   const isAllSelected =
-    episodes.length > 0 && selectedIds.size === episodes.length;
+    episodes.length > 0 && selectedIds.size === episodes.length
 
   // Delete handlers
   const deleteOne = useCallback(
     async (id: string) => {
-      await deleteMutation.mutateAsync({ id });
+      await deleteMutation.mutateAsync({ id })
       setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     },
     [deleteMutation],
-  );
+  )
 
   const deleteSelected = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) });
-  }, [selectedIds, bulkDeleteMutation]);
+    if (selectedIds.size === 0) return
+    await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) })
+  }, [selectedIds, bulkDeleteMutation])
 
   // Export handler
   const exportSelected = useCallback(() => {
-    const selectedEpisodes = episodes.filter((ep) =>
-      selectedIds.has(ep.uuid),
-    );
-    if (selectedEpisodes.length === 0) return;
+    const selectedEpisodes = episodes.filter((ep) => selectedIds.has(ep.uuid))
+    if (selectedEpisodes.length === 0) return
 
-    const blob = exportMemoriesAsJson(selectedEpisodes);
-    const filename = `memories-export-${new Date().toISOString().split("T")[0]}.json`;
-    downloadJson(blob, filename);
-  }, [episodes, selectedIds]);
+    const blob = exportMemoriesAsJson(selectedEpisodes)
+    const filename = `memories-export-${new Date().toISOString().split('T')[0]}.json`
+    downloadJson(blob, filename)
+  }, [episodes, selectedIds])
 
   // Refresh handler
   const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["memoryList"] });
-    queryClient.invalidateQueries({ queryKey: ["memoryStats"] });
-    queryClient.invalidateQueries({ queryKey: ["memoryGroups"] });
-  }, [queryClient]);
+    queryClient.invalidateQueries({ queryKey: ['memoryList'] })
+    queryClient.invalidateQueries({ queryKey: ['memoryStats'] })
+    queryClient.invalidateQueries({ queryKey: ['memoryGroups'] })
+  }, [queryClient])
 
   return {
     // Data
@@ -252,7 +264,10 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     isLoadingStats,
     isLoadingGroups,
     isLoadingEpisodes,
-    isSearching: isSearching || isSearchFetching || (searchQuery.length >= 2 && searchQuery !== debouncedSearchQuery),
+    isSearching:
+      isSearching ||
+      isSearchFetching ||
+      (searchQuery.length >= 2 && searchQuery !== debouncedSearchQuery),
 
     // Errors
     statsError: statsError as Error | null,
@@ -277,5 +292,5 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
 
     // Refresh
     refresh,
-  };
+  }
 }

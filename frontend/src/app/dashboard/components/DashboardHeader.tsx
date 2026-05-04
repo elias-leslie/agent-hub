@@ -1,20 +1,20 @@
-import { LayoutDashboard } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { LayoutDashboard } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface DashboardHeaderProps {
-  status: { status: string } | undefined;
-  daysRange: number;
-  showRangeDropdown: boolean;
-  onToggleDropdown: () => void;
-  onRangeChange: (days: number) => void;
+  status: { status: string } | undefined
+  daysRange: number
+  showRangeDropdown: boolean
+  onToggleDropdown: () => void
+  onRangeChange: (days: number) => void
 }
 
 const TIME_RANGE_OPTIONS = [
-  { value: 1, label: "1d" },
-  { value: 7, label: "7d" },
-  { value: 14, label: "14d" },
-  { value: 30, label: "30d" },
-];
+  { value: 1, label: '1d' },
+  { value: 7, label: '7d' },
+  { value: 14, label: '14d' },
+  { value: 30, label: '30d' },
+]
 
 export function DashboardHeader({
   status,
@@ -33,22 +33,31 @@ export function DashboardHeader({
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="page-title">Dashboard</h1>
                 {status && (
-                  <div className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
-                    status.status === "healthy"
-                      ? "border-emerald-500/15 bg-emerald-500/10 text-emerald-300"
-                      : "border-amber-500/15 bg-amber-500/10 text-amber-300"
-                  )}>
-                    <span className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      status.status === "healthy" ? "bg-emerald-400" : "bg-amber-400"
-                    )} />
+                  <div
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]',
+                      status.status === 'healthy'
+                        ? 'border-emerald-500/15 bg-emerald-500/10 text-emerald-300'
+                        : 'border-amber-500/15 bg-amber-500/10 text-amber-300',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full',
+                        status.status === 'healthy'
+                          ? 'bg-emerald-400'
+                          : 'bg-amber-400',
+                      )}
+                    />
                     {status.status}
                   </div>
                 )}
               </div>
               <div className="page-meta">
-                <span>Live command-center overview for requests, health, cost, and memory.</span>
+                <span>
+                  Live command-center overview for requests, health, cost, and
+                  memory.
+                </span>
                 <span className="page-pill">{daysRange}-day view</span>
               </div>
             </div>
@@ -62,10 +71,10 @@ export function DashboardHeader({
                   type="button"
                   onClick={() => onRangeChange(value)}
                   className={cn(
-                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-150",
+                    'rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-150',
                     daysRange === value
-                      ? "bg-amber-500 text-slate-950 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]"
-                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                      ? 'bg-amber-500 text-slate-950 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
                   )}
                 >
                   {label}
@@ -76,5 +85,5 @@ export function DashboardHeader({
         </div>
       </div>
     </header>
-  );
+  )
 }

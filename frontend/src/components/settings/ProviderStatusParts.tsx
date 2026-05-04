@@ -1,23 +1,21 @@
-"use client";
+'use client'
 
+import { Activity, AlertTriangle, Clock, Key, Shield, Zap } from 'lucide-react'
+import type { Credential } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import type { ProviderInfo } from './constants'
 import {
-  Shield,
-  Key,
-  Activity,
-  Clock,
-  Zap,
-  AlertTriangle,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Credential } from "@/lib/api";
-import type { ProviderInfo } from "./constants";
-import {
-  type OAuthStatus,
-  type OAuthProviderStatus,
-  type ProviderHealthData,
   isClaudeStatus,
-} from "./ProviderCardTypes";
-import { timeAgo, unixTimeAgo, formatDuration, formatLatency } from "./ProviderCardUtils";
+  type OAuthProviderStatus,
+  type OAuthStatus,
+  type ProviderHealthData,
+} from './ProviderCardTypes'
+import {
+  formatDuration,
+  formatLatency,
+  timeAgo,
+  unixTimeAgo,
+} from './ProviderCardUtils'
 
 // ---------------------------------------------------------------------------
 // Auth Badges
@@ -27,92 +25,86 @@ export function AuthBadges({
   isOAuth,
   isClaude,
   oauthStatus,
-  hasOAuthToken,
   hasApiKey,
   isConfigured,
   primaryCredential,
   providerStatus,
-  hasBothCredentials,
-  preferredAuth,
-  onPreferenceChange,
   provider,
   credentials,
 }: {
-  isOAuth: boolean;
-  isClaude: boolean;
-  oauthStatus?: OAuthStatus;
-  hasOAuthToken: boolean;
-  hasApiKey: boolean;
-  isConfigured: boolean;
-  primaryCredential?: Credential;
-  providerStatus: OAuthProviderStatus | null;
-  hasBothCredentials: boolean;
-  preferredAuth: "oauth" | "api_key";
-  onPreferenceChange?: (pref: "oauth" | "api_key") => void;
-  provider: ProviderInfo;
-  credentials: Credential[];
+  isOAuth: boolean
+  isClaude: boolean
+  oauthStatus?: OAuthStatus
+  hasApiKey: boolean
+  isConfigured: boolean
+  primaryCredential?: Credential
+  providerStatus: OAuthProviderStatus | null
+  provider: ProviderInfo
+  credentials: Credential[]
 }) {
-  const badges: React.ReactNode[] = [];
+  const badges: React.ReactNode[] = []
 
   if (isOAuth) {
     if (isClaude && oauthStatus && isClaudeStatus(oauthStatus)) {
-      const isValid = oauthStatus.status === "valid";
-      const isExpired = oauthStatus.status === "expired";
+      const isValid = oauthStatus.status === 'valid'
+      const isExpired = oauthStatus.status === 'expired'
       badges.push(
         <span
           key="oauth"
           className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
             isValid
-              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+              ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
               : isExpired
-                ? "bg-red-500/15 text-red-400 ring-1 ring-red-500/20"
-                : "bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20",
+                ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
+                : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
           )}
         >
           <Shield className="h-2.5 w-2.5" />
-          OAuth {isValid ? "Active" : isExpired ? "Expired" : "—"}
+          OAuth {isValid ? 'Active' : isExpired ? 'Expired' : '—'}
         </span>,
-      );
+      )
       if (isValid && oauthStatus.expires_in_seconds != null) {
         badges.push(
           <span key="expires" className="text-[10px] text-slate-500">
             expires in {formatDuration(oauthStatus.expires_in_seconds)}
           </span>,
-        );
+        )
       }
       if (isExpired) {
         badges.push(
           <span key="reauth" className="text-[10px] text-red-400">
             run `claude` to re-auth
           </span>,
-        );
+        )
       }
     } else {
       // Non-Claude OAuth providers
-      const oauthState = providerStatus?.oauth_status;
-      const isAuth = oauthState === "authenticated";
-      const isExpired = oauthState === "expired";
+      const oauthState = providerStatus?.oauth_status
+      const isAuth = oauthState === 'authenticated'
+      const isExpired = oauthState === 'expired'
       badges.push(
         <span
           key="oauth"
           className={cn(
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium",
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
             isAuth
-              ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+              ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
               : isExpired
-                ? "bg-red-500/15 text-red-400 ring-1 ring-red-500/20"
-                : "bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20",
+                ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
+                : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
           )}
         >
           <Shield className="h-2.5 w-2.5" />
-          OAuth {isAuth ? "Active" : isExpired ? "Expired" : "—"}
+          OAuth {isAuth ? 'Active' : isExpired ? 'Expired' : '—'}
         </span>,
-      );
+      )
       if (isAuth && providerStatus?.email) {
         badges.push(
-          <span key="email" className="text-[10px] text-slate-500">{providerStatus.email}</span>,
-        );
+          <span key="email" className="text-[10px] text-slate-500">
+            {providerStatus.email}
+          </span>,
+        )
       }
     }
   }
@@ -120,7 +112,11 @@ export function AuthBadges({
   // API key badge(s)
   if (hasApiKey && isConfigured && primaryCredential) {
     // Check if we have multiple credentials of type "api_key" (for single-field providers like Gemini)
-    const apiKeyCount = provider.credentialFields ? 1 : credentials.filter(c => c.credential_type === "api_key" || !c.credential_type).length;
+    const apiKeyCount = provider.credentialFields
+      ? 1
+      : credentials.filter(
+          (c) => c.credential_type === 'api_key' || !c.credential_type,
+        ).length
 
     badges.push(
       <span
@@ -128,63 +124,72 @@ export function AuthBadges({
         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-amber-400 ring-1 ring-blue-500/20"
       >
         <Key className="h-2.5 w-2.5" />
-        {apiKeyCount > 1 ? `API Key (${apiKeyCount})` : "API Key"}
+        {apiKeyCount > 1 ? `API Key (${apiKeyCount})` : 'API Key'}
       </span>,
-    );
+    )
   }
 
-  if (badges.length === 0) return null;
+  if (badges.length === 0) return null
 
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {badges}
-    </div>
-  );
+  return <div className="flex items-center gap-1.5 flex-wrap">{badges}</div>
 }
 
 // ---------------------------------------------------------------------------
 // Health Metrics Strip
 // ---------------------------------------------------------------------------
 
-export function HealthMetricsStrip({ health }: { health: NonNullable<ProviderHealthData["health"]> }) {
+export function HealthMetricsStrip({
+  health,
+}: {
+  health: NonNullable<ProviderHealthData['health']>
+}) {
   const isLatencyOnlySlow =
-    health.state === "degraded"
-    && health.availability >= 1
-    && health.consecutive_failures === 0
-    && !health.last_error;
+    health.state === 'degraded' &&
+    health.availability >= 1 &&
+    health.consecutive_failures === 0 &&
+    !health.last_error
 
   const stateColors: Record<string, string> = {
-    healthy: "text-emerald-400",
-    degraded: "text-amber-400",
-    unavailable: "text-red-400",
-    unknown: "text-slate-400",
-  };
+    healthy: 'text-emerald-400',
+    degraded: 'text-amber-400',
+    unavailable: 'text-red-400',
+    unknown: 'text-slate-400',
+  }
 
   const stateLabels: Record<string, string> = {
-    healthy: "Healthy",
-    degraded: "Degraded",
-    unavailable: "Down",
-    unknown: "Unknown",
-  };
+    healthy: 'Healthy',
+    degraded: 'Degraded',
+    unavailable: 'Down',
+    unknown: 'Unknown',
+  }
 
   const stateBg: Record<string, string> = {
-    healthy: "bg-emerald-500/8",
-    degraded: "bg-amber-500/8",
-    unavailable: "bg-red-500/8",
-    unknown: "bg-slate-500/8",
-  };
+    healthy: 'bg-emerald-500/8',
+    degraded: 'bg-amber-500/8',
+    unavailable: 'bg-red-500/8',
+    unknown: 'bg-slate-500/8',
+  }
 
-  const availPct = Math.round(health.availability * 100);
+  const availPct = Math.round(health.availability * 100)
 
   return (
-    <div className={cn(
-      "flex items-center gap-3 px-2 py-1 rounded-md text-[10px]",
-      stateBg[health.state] ?? "bg-slate-500/8",
-    )}>
+    <div
+      className={cn(
+        'flex items-center gap-3 px-2 py-1 rounded-md text-[10px]',
+        stateBg[health.state] ?? 'bg-slate-500/8',
+      )}
+    >
       {/* State indicator */}
-      <span className={cn("font-semibold uppercase tracking-wider", stateColors[health.state])}>
+      <span
+        className={cn(
+          'font-semibold uppercase tracking-wider',
+          stateColors[health.state],
+        )}
+      >
         <Activity className="h-2.5 w-2.5 inline mr-0.5 -mt-px" />
-        {isLatencyOnlySlow ? "Slow" : (stateLabels[health.state] ?? health.state)}
+        {isLatencyOnlySlow
+          ? 'Slow'
+          : (stateLabels[health.state] ?? health.state)}
       </span>
 
       <span className="text-slate-600">|</span>
@@ -198,9 +203,15 @@ export function HealthMetricsStrip({ health }: { health: NonNullable<ProviderHea
       <span className="text-slate-600">|</span>
 
       {/* Availability */}
-      <span className={cn(
-        availPct >= 95 ? "text-emerald-400" : availPct >= 70 ? "text-amber-400" : "text-red-400",
-      )}>
+      <span
+        className={cn(
+          availPct >= 95
+            ? 'text-emerald-400'
+            : availPct >= 70
+              ? 'text-amber-400'
+              : 'text-red-400',
+        )}
+      >
         {availPct}% avail
       </span>
 
@@ -210,12 +221,13 @@ export function HealthMetricsStrip({ health }: { health: NonNullable<ProviderHea
           <span className="text-slate-600">|</span>
           <span className="text-red-400">
             <AlertTriangle className="h-2.5 w-2.5 inline mr-0.5 -mt-px" />
-            {health.consecutive_failures} fail{health.consecutive_failures > 1 ? "s" : ""}
+            {health.consecutive_failures} fail
+            {health.consecutive_failures > 1 ? 's' : ''}
           </span>
         </>
       )}
     </div>
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -228,16 +240,16 @@ export function TimestampRow({
   isClaude,
   oauthStatus,
 }: {
-  authSince: string | null;
-  healthData?: ProviderHealthData;
-  isClaude: boolean;
-  oauthStatus?: OAuthStatus;
+  authSince: string | null
+  healthData?: ProviderHealthData
+  isClaude: boolean
+  oauthStatus?: OAuthStatus
 }) {
-  const lastCheck = healthData?.health?.last_check;
-  const lastSuccess = healthData?.health?.last_success;
+  const lastCheck = healthData?.health?.last_check
+  const lastSuccess = healthData?.health?.last_success
 
   // No timestamps to show
-  if (!authSince && !lastCheck) return null;
+  if (!authSince && !lastCheck) return null
 
   return (
     <div className="flex items-center gap-3 text-[10px] text-slate-500">
@@ -248,16 +260,18 @@ export function TimestampRow({
         </span>
       )}
       {/* For Claude with valid OAuth but no DB credential, show token expiry instead */}
-      {!authSince && isClaude && oauthStatus && isClaudeStatus(oauthStatus) && oauthStatus.status === "valid" && (
-        <span className="flex items-center gap-0.5">
-          <Shield className="h-2.5 w-2.5" />
-          OAuth active via CLI
-        </span>
-      )}
+      {!authSince &&
+        isClaude &&
+        oauthStatus &&
+        isClaudeStatus(oauthStatus) &&
+        oauthStatus.status === 'valid' && (
+          <span className="flex items-center gap-0.5">
+            <Shield className="h-2.5 w-2.5" />
+            OAuth active via CLI
+          </span>
+        )}
       {lastCheck && lastCheck > 0 && (
-        <span>
-          Checked {unixTimeAgo(lastCheck)}
-        </span>
+        <span>Checked {unixTimeAgo(lastCheck)}</span>
       )}
       {lastSuccess && lastSuccess > 0 && lastSuccess !== lastCheck && (
         <span className="text-emerald-500/70">
@@ -265,7 +279,7 @@ export function TimestampRow({
         </span>
       )}
     </div>
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -276,36 +290,36 @@ export function PreferenceToggle({
   preferredAuth,
   onPreferenceChange,
 }: {
-  preferredAuth: "oauth" | "api_key";
-  onPreferenceChange: (pref: "oauth" | "api_key") => void;
+  preferredAuth: 'oauth' | 'api_key'
+  onPreferenceChange: (pref: 'oauth' | 'api_key') => void
 }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[10px] text-slate-500">Prefer:</span>
       <div className="flex rounded-md border border-slate-700 overflow-hidden">
         <button
-          onClick={() => onPreferenceChange("oauth")}
+          onClick={() => onPreferenceChange('oauth')}
           className={cn(
-            "px-2 py-0.5 text-[10px] font-medium transition-colors",
-            preferredAuth === "oauth"
-              ? "bg-emerald-600 text-white"
-              : "bg-slate-800 text-slate-500 hover:bg-slate-700",
+            'px-2 py-0.5 text-[10px] font-medium transition-colors',
+            preferredAuth === 'oauth'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-800 text-slate-500 hover:bg-slate-700',
           )}
         >
           OAuth
         </button>
         <button
-          onClick={() => onPreferenceChange("api_key")}
+          onClick={() => onPreferenceChange('api_key')}
           className={cn(
-            "px-2 py-0.5 text-[10px] font-medium transition-colors",
-            preferredAuth === "api_key"
-              ? "bg-amber-500 text-slate-950"
-              : "bg-slate-800 text-slate-500 hover:bg-slate-700",
+            'px-2 py-0.5 text-[10px] font-medium transition-colors',
+            preferredAuth === 'api_key'
+              ? 'bg-amber-500 text-slate-950'
+              : 'bg-slate-800 text-slate-500 hover:bg-slate-700',
           )}
         >
           API Key
         </button>
       </div>
     </div>
-  );
+  )
 }

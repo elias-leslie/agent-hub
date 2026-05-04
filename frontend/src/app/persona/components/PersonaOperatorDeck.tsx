@@ -1,81 +1,106 @@
-"use client";
+'use client'
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 
-import { useToastActions } from "@/components/error/toast";
-import type { Persona } from "@/types/persona";
-import type { AgentPreview, PreviewProjectOption } from "@/types/agent-preview";
-import type { PersonaPulseMetric, PersonaPulseSummary, PersonaStreamEntry } from "@/lib/api/persona-stream";
-import type { Session, SessionListItem } from "@/lib/api/sessions";
-import {
-  fetchExecutionPermission,
-  fetchProjectPermissions,
-  type ExecutionPermission,
-  type ProjectPermission,
-} from "@/lib/api/project-permissions";
+import { useToastActions } from '@/components/error/toast'
 import {
   createPersonaAutomation,
   deletePersonaAutomation,
   fetchPersonaAutomations,
   fetchPersonaOperatorPreview,
+  type PersonaAutomation,
   triggerPersonaAutomation,
   updatePersonaAutomation,
-  type PersonaAutomation,
-} from "@/lib/api/persona-operator";
-import type { FilterMode } from "./pulse-helpers";
-import { PulseOverviewPanels } from "./workspace-cards";
-import type { PersonaRuntimeState } from "../hooks/usePersonaRuntime";
-import { PersonaAutomationPanel } from "./PersonaAutomationPanel";
-import { PersonaBackgroundInbox } from "./PersonaBackgroundInbox";
-import { PersonaBlockerPanel } from "./PersonaBlockerPanel";
-import { PersonaCommandPalette, type PersonaCommandItem } from "./PersonaCommandPalette";
-import { PersonaPromptBudgetPanel } from "./PersonaPromptBudgetPanel";
-import { PersonaRunHud } from "./PersonaRunHud";
-import { PersonaWorkflowComposer } from "./PersonaWorkflowComposer";
+} from '@/lib/api/persona-operator'
+import type {
+  PersonaPulseMetric,
+  PersonaPulseSummary,
+  PersonaStreamEntry,
+} from '@/lib/api/persona-stream'
+import {
+  type ExecutionPermission,
+  fetchExecutionPermission,
+  fetchProjectPermissions,
+  type ProjectPermission,
+} from '@/lib/api/project-permissions'
+import type { Session, SessionListItem } from '@/lib/api/sessions'
+import type { AgentPreview, PreviewProjectOption } from '@/types/agent-preview'
+import type { Persona } from '@/types/persona'
+import type { PersonaRuntimeState } from '../hooks/usePersonaRuntime'
+import { PersonaAutomationPanel } from './PersonaAutomationPanel'
+import { PersonaBackgroundInbox } from './PersonaBackgroundInbox'
+import { PersonaBlockerPanel } from './PersonaBlockerPanel'
+import {
+  type PersonaCommandItem,
+  PersonaCommandPalette,
+} from './PersonaCommandPalette'
+import { PersonaPromptBudgetPanel } from './PersonaPromptBudgetPanel'
+import { PersonaRunHud } from './PersonaRunHud'
+import { PersonaWorkflowComposer } from './PersonaWorkflowComposer'
+import type { FilterMode } from './pulse-helpers'
+import { PulseOverviewPanels } from './workspace-cards'
 
-export type PersonaOperatorTab = "workflow" | "insights" | "lanes" | "automations";
+export type PersonaOperatorTab =
+  | 'workflow'
+  | 'insights'
+  | 'lanes'
+  | 'automations'
 
 interface PersonaOperatorDeckProps {
-  persona: Persona;
-  personaName: string;
-  runtime: PersonaRuntimeState;
-  focusSession: SessionListItem | null;
-  focusSessionDetails: Session | null;
-  onStopFocusSession?: () => void;
-  entries: PersonaStreamEntry[];
-  pulse: PersonaPulseSummary;
-  visiblePulseMetrics: PersonaPulseMetric[];
-  activeSessionId: string | null;
-  selectedProjectId: string;
-  onProjectChange: (projectId: string) => void;
-  onSelectSession: (sessionId: string | null) => void;
-  sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
-  applyPulseFilter: (mode: FilterMode, anchorEntryId?: string | null) => void;
-  inspectAgentPulse: (agentSlug: string) => void;
-  activeTab: PersonaOperatorTab;
-  onTabChange: (tab: PersonaOperatorTab) => void;
-  layout?: "rail" | "stacked";
+  persona: Persona
+  personaName: string
+  runtime: PersonaRuntimeState
+  focusSession: SessionListItem | null
+  focusSessionDetails: Session | null
+  onStopFocusSession?: () => void
+  entries: PersonaStreamEntry[]
+  pulse: PersonaPulseSummary
+  visiblePulseMetrics: PersonaPulseMetric[]
+  activeSessionId: string | null
+  selectedProjectId: string
+  onProjectChange: (projectId: string) => void
+  onSelectSession: (sessionId: string | null) => void
+  sendMessage: (
+    content: string,
+    targetAgents?: string[],
+    sessionIdOverride?: string,
+  ) => void
+  applyPulseFilter: (mode: FilterMode, anchorEntryId?: string | null) => void
+  inspectAgentPulse: (agentSlug: string) => void
+  activeTab: PersonaOperatorTab
+  onTabChange: (tab: PersonaOperatorTab) => void
+  layout?: 'rail' | 'stacked'
 }
 
 const TAB_META: Array<{
-  id: PersonaOperatorTab;
-  label: string;
-  detail: string;
+  id: PersonaOperatorTab
+  label: string
+  detail: string
 }> = [
-  { id: "workflow", label: "Workflow", detail: "Run staged work in the open." },
-  { id: "insights", label: "Insights", detail: "Blockers, prompt weight, and friction." },
-  { id: "lanes", label: "Lanes", detail: "Redirect and inspect side work." },
-  { id: "automations", label: "Automations", detail: "Recurring checks and run-now." },
-];
+  { id: 'workflow', label: 'Workflow', detail: 'Run staged work in the open.' },
+  {
+    id: 'insights',
+    label: 'Insights',
+    detail: 'Blockers, prompt weight, and friction.',
+  },
+  { id: 'lanes', label: 'Lanes', detail: 'Redirect and inspect side work.' },
+  {
+    id: 'automations',
+    label: 'Automations',
+    detail: 'Recurring checks and run-now.',
+  },
+]
 
-function toProjectOptions(permissions: ProjectPermission[]): PreviewProjectOption[] {
+function toProjectOptions(
+  permissions: ProjectPermission[],
+): PreviewProjectOption[] {
   return permissions
-    .filter((permission) => permission.permission_tier !== "off")
+    .filter((permission) => permission.permission_tier !== 'off')
     .map((permission) => ({
       id: permission.project_id,
       name: permission.project_id,
       rootPath: permission.root_path,
-    }));
+    }))
 }
 
 export function PersonaOperatorDeck({
@@ -97,112 +122,149 @@ export function PersonaOperatorDeck({
   inspectAgentPulse,
   activeTab,
   onTabChange,
-  layout = "rail",
+  layout = 'rail',
 }: PersonaOperatorDeckProps) {
-  const toast = useToastActions();
+  const toast = useToastActions()
 
-  const [projectPermissions, setProjectPermissions] = useState<ProjectPermission[]>([]);
-  const [executionPermission, setExecutionPermission] = useState<ExecutionPermission | null>(null);
-  const [workflowPrompt, setWorkflowPrompt] = useState("");
-  const deferredWorkflowPrompt = useDeferredValue(workflowPrompt);
-  const [preview, setPreview] = useState<AgentPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<PersonaAutomation[]>([]);
-  const [jobsLoading, setJobsLoading] = useState(true);
-  const [jobsError, setJobsError] = useState<string | null>(null);
-  const [savingAutomation, setSavingAutomation] = useState(false);
-  const [triggeringJobId, setTriggeringJobId] = useState<string | null>(null);
-  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [projectPermissions, setProjectPermissions] = useState<
+    ProjectPermission[]
+  >([])
+  const [executionPermission, setExecutionPermission] =
+    useState<ExecutionPermission | null>(null)
+  const [workflowPrompt, setWorkflowPrompt] = useState('')
+  const deferredWorkflowPrompt = useDeferredValue(workflowPrompt)
+  const [preview, setPreview] = useState<AgentPreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [jobs, setJobs] = useState<PersonaAutomation[]>([])
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+  const [savingAutomation, setSavingAutomation] = useState(false)
+  const [triggeringJobId, setTriggeringJobId] = useState<string | null>(null)
+  const [commandsOpen, setCommandsOpen] = useState(false)
 
   const projectOptions = useMemo(() => {
-    const options = toProjectOptions(projectPermissions);
-    return options.length > 0 ? options : [{ id: "agent-hub", name: "agent-hub", rootPath: null }];
-  }, [projectPermissions]);
+    const options = toProjectOptions(projectPermissions)
+    return options.length > 0
+      ? options
+      : [{ id: 'agent-hub', name: 'agent-hub', rootPath: null }]
+  }, [projectPermissions])
   const selectedProject = useMemo(
-    () => projectOptions.find((project) => project.id === selectedProjectId) ?? null,
+    () =>
+      projectOptions.find((project) => project.id === selectedProjectId) ??
+      null,
     [projectOptions, selectedProjectId],
-  );
+  )
   const selectedProjectPermission = useMemo(
-    () => projectPermissions.find((project) => project.project_id === selectedProjectId) ?? null,
+    () =>
+      projectPermissions.find(
+        (project) => project.project_id === selectedProjectId,
+      ) ?? null,
     [projectPermissions, selectedProjectId],
-  );
+  )
   const workflowParentSessionId = useMemo(() => {
-    if (focusSession?.agent_slug === "persona" && !focusSession.parent_session_id) {
-      return focusSession.id;
+    if (
+      focusSession?.agent_slug === 'persona' &&
+      !focusSession.parent_session_id
+    ) {
+      return focusSession.id
     }
-    if (runtime.primarySession?.agent_slug === "persona" && !runtime.primarySession.parent_session_id) {
-      return runtime.primarySession.id;
+    if (
+      runtime.primarySession?.agent_slug === 'persona' &&
+      !runtime.primarySession.parent_session_id
+    ) {
+      return runtime.primarySession.id
     }
-    return null;
-  }, [focusSession, runtime.primarySession]);
+    return null
+  }, [focusSession, runtime.primarySession])
 
   const loadProjectPermissions = async () => {
     try {
-      const permissions = await fetchProjectPermissions();
-      setProjectPermissions(permissions);
-      if (!permissions.some((permission) => permission.project_id === selectedProjectId)) {
-        const fallback = permissions.find((permission) => permission.project_id === "agent-hub") ?? permissions[0];
+      const permissions = await fetchProjectPermissions()
+      setProjectPermissions(permissions)
+      if (
+        !permissions.some(
+          (permission) => permission.project_id === selectedProjectId,
+        )
+      ) {
+        const fallback =
+          permissions.find(
+            (permission) => permission.project_id === 'agent-hub',
+          ) ?? permissions[0]
         if (fallback) {
-          onProjectChange(fallback.project_id);
+          onProjectChange(fallback.project_id)
         }
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load project permissions");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load project permissions',
+      )
     }
-  };
+  }
 
   const loadExecutionPermission = async (projectId: string) => {
     try {
-      setExecutionPermission(await fetchExecutionPermission(projectId));
+      setExecutionPermission(await fetchExecutionPermission(projectId))
     } catch (err) {
-      setExecutionPermission(null);
-      toast.error(err instanceof Error ? err.message : "Failed to load execution permission");
+      setExecutionPermission(null)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load execution permission',
+      )
     }
-  };
+  }
 
   const loadPreview = async (projectId: string, promptInput: string) => {
     try {
-      setPreviewLoading(true);
-      setPreviewError(null);
+      setPreviewLoading(true)
+      setPreviewError(null)
       setPreview(
         await fetchPersonaOperatorPreview({
           projectId,
-          promptInput: promptInput.trim() || "Summarize operator status, blockers, and next best move.",
-          taskType: "chat",
+          promptInput:
+            promptInput.trim() ||
+            'Summarize operator status, blockers, and next best move.',
+          taskType: 'chat',
         }),
-      );
+      )
     } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : "Failed to load preview");
+      setPreviewError(
+        err instanceof Error ? err.message : 'Failed to load preview',
+      )
     } finally {
-      setPreviewLoading(false);
+      setPreviewLoading(false)
     }
-  };
+  }
 
   const loadAutomations = async () => {
     try {
-      setJobsLoading(true);
-      setJobsError(null);
-      setJobs(await fetchPersonaAutomations());
+      setJobsLoading(true)
+      setJobsError(null)
+      setJobs(await fetchPersonaAutomations())
     } catch (err) {
-      setJobsError(err instanceof Error ? err.message : "Failed to load automations");
+      setJobsError(
+        err instanceof Error ? err.message : 'Failed to load automations',
+      )
     } finally {
-      setJobsLoading(false);
+      setJobsLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    void loadProjectPermissions();
-    void loadAutomations();
-  }, []);
+    void loadProjectPermissions()
+    void loadAutomations()
+  }, [])
 
   useEffect(() => {
     if (!selectedProjectId) {
-      return;
+      return
     }
-    void loadExecutionPermission(selectedProjectId);
-    void loadPreview(selectedProjectId, deferredWorkflowPrompt);
-  }, [deferredWorkflowPrompt, selectedProjectId]);
+    void loadExecutionPermission(selectedProjectId)
+    void loadPreview(selectedProjectId, deferredWorkflowPrompt)
+  }, [deferredWorkflowPrompt, selectedProjectId])
 
   const refreshEverything = async () => {
     await Promise.allSettled([
@@ -211,133 +273,159 @@ export function PersonaOperatorDeck({
       loadExecutionPermission(selectedProjectId),
       loadPreview(selectedProjectId, deferredWorkflowPrompt),
       loadAutomations(),
-    ]);
-  };
+    ])
+  }
 
   const askStatus = () => {
-    sendMessage("Pause and give concise status: current goal, blocker, active lane, and next move.");
-  };
+    sendMessage(
+      'Pause and give concise status: current goal, blocker, active lane, and next move.',
+    )
+  }
 
   const commands: PersonaCommandItem[] = [
     {
-      id: "status",
-      label: "Ask Status",
-      description: "Interrupt politely and return current goal, blocker, and next move.",
+      id: 'status',
+      label: 'Ask Status',
+      description:
+        'Interrupt politely and return current goal, blocker, and next move.',
       run: askStatus,
     },
     {
-      id: "revise-plan",
-      label: "Revise Plan",
-      description: "Request a tighter plan for current work without restarting from scratch.",
-      run: () => sendMessage("Revise the current plan. Keep what still holds. Call out only the delta and why."),
+      id: 'revise-plan',
+      label: 'Revise Plan',
+      description:
+        'Request a tighter plan for current work without restarting from scratch.',
+      run: () =>
+        sendMessage(
+          'Revise the current plan. Keep what still holds. Call out only the delta and why.',
+        ),
     },
     {
-      id: "review-work",
-      label: "Review Current Work",
-      description: "Run a bug-risk review over the current branch or output.",
-      run: () => sendMessage("Review current work for defects, regressions, and missing verification. Findings first."),
+      id: 'review-work',
+      label: 'Review Current Work',
+      description: 'Run a bug-risk review over the current branch or output.',
+      run: () =>
+        sendMessage(
+          'Review current work for defects, regressions, and missing verification. Findings first.',
+        ),
     },
     {
-      id: "show-blockers",
-      label: "Summarize Blockers",
-      description: "Return exact blocker text, missing capability, and the smallest unblock path.",
-      run: () => sendMessage("Summarize exact blockers, missing capabilities, and the smallest unblock path."),
+      id: 'show-blockers',
+      label: 'Summarize Blockers',
+      description:
+        'Return exact blocker text, missing capability, and the smallest unblock path.',
+      run: () =>
+        sendMessage(
+          'Summarize exact blockers, missing capabilities, and the smallest unblock path.',
+        ),
     },
     {
-      id: "open-workflow",
-      label: "Open Workflow",
-      description: "Focus the staged workflow panel.",
-      run: () => onTabChange("workflow"),
+      id: 'open-workflow',
+      label: 'Open Workflow',
+      description: 'Focus the staged workflow panel.',
+      run: () => onTabChange('workflow'),
     },
     {
-      id: "open-lanes",
-      label: "Open Lanes",
-      description: "Focus active and blocked lane management.",
-      run: () => onTabChange("lanes"),
+      id: 'open-lanes',
+      label: 'Open Lanes',
+      description: 'Focus active and blocked lane management.',
+      run: () => onTabChange('lanes'),
     },
     {
-      id: "open-automations",
-      label: "Open Automations",
-      description: "Focus scheduled automations.",
-      run: () => onTabChange("automations"),
+      id: 'open-automations',
+      label: 'Open Automations',
+      description: 'Focus scheduled automations.',
+      run: () => onTabChange('automations'),
     },
-  ];
+  ]
 
   const saveAutomation = async (
     jobId: string | null,
     payload: {
-      name: string;
-      schedule_type: "at" | "every" | "cron";
-      schedule_value: string;
-      payload_message: string;
+      name: string
+      schedule_type: 'at' | 'every' | 'cron'
+      schedule_value: string
+      payload_message: string
     },
   ) => {
     try {
-      setSavingAutomation(true);
+      setSavingAutomation(true)
       if (jobId) {
-        await updatePersonaAutomation(jobId, payload);
+        await updatePersonaAutomation(jobId, payload)
       } else {
-        await createPersonaAutomation(payload);
+        await createPersonaAutomation(payload)
       }
-      await loadAutomations();
-      toast.success(jobId ? "Automation updated" : "Automation created");
+      await loadAutomations()
+      toast.success(jobId ? 'Automation updated' : 'Automation created')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save automation");
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save automation',
+      )
     } finally {
-      setSavingAutomation(false);
+      setSavingAutomation(false)
     }
-  };
+  }
 
   const toggleAutomation = async (job: PersonaAutomation) => {
     try {
-      setSavingAutomation(true);
-      await updatePersonaAutomation(job.id, { enabled: !job.enabled });
-      await loadAutomations();
+      setSavingAutomation(true)
+      await updatePersonaAutomation(job.id, { enabled: !job.enabled })
+      await loadAutomations()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update automation");
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update automation',
+      )
     } finally {
-      setSavingAutomation(false);
+      setSavingAutomation(false)
     }
-  };
+  }
 
   const removeAutomation = async (jobId: string) => {
     try {
-      setSavingAutomation(true);
-      await deletePersonaAutomation(jobId);
-      await loadAutomations();
+      setSavingAutomation(true)
+      await deletePersonaAutomation(jobId)
+      await loadAutomations()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete automation");
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to delete automation',
+      )
     } finally {
-      setSavingAutomation(false);
+      setSavingAutomation(false)
     }
-  };
+  }
 
   const runAutomationNow = async (job: PersonaAutomation) => {
     try {
-      setTriggeringJobId(job.id);
-      const result = await triggerPersonaAutomation(job.id);
-      await Promise.allSettled([loadAutomations(), runtime.refresh()]);
+      setTriggeringJobId(job.id)
+      const result = await triggerPersonaAutomation(job.id)
+      await Promise.allSettled([loadAutomations(), runtime.refresh()])
       if (result.session_id) {
-        onSelectSession(result.session_id);
-        onTabChange("lanes");
+        onSelectSession(result.session_id)
+        onTabChange('lanes')
       }
-      toast.success(result.session_id ? "Automation running in thread" : "Automation triggered");
+      toast.success(
+        result.session_id
+          ? 'Automation running in thread'
+          : 'Automation triggered',
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to run automation");
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to run automation',
+      )
     } finally {
-      setTriggeringJobId(null);
+      setTriggeringJobId(null)
     }
-  };
+  }
 
-  const panelChrome = layout === "rail"
-    ? "flex h-full min-h-0 flex-col overflow-hidden bg-slate-950/90"
-    : "rounded-xl border border-slate-800/60 bg-slate-950/92";
+  const panelChrome =
+    layout === 'rail'
+      ? 'flex h-full min-h-0 flex-col overflow-hidden bg-slate-950/90'
+      : 'rounded-xl border border-slate-800/60 bg-slate-950/92'
 
-  const bodyChrome = layout === "rail"
-    ? "min-h-0 flex-1 overflow-y-auto px-3 pb-3"
-    : "px-3 pb-3";
+  const bodyChrome =
+    layout === 'rail' ? 'min-h-0 flex-1 overflow-y-auto px-3 pb-3' : 'px-3 pb-3'
 
-  const showAllSections = false;
+  const showAllSections = false
 
   return (
     <div className={panelChrome} data-testid="persona-operator-deck">
@@ -349,14 +437,14 @@ export function PersonaOperatorDeck({
           sessionDetails={focusSessionDetails}
           onStop={() => {
             if (onStopFocusSession) {
-              onStopFocusSession();
-              return;
+              onStopFocusSession()
+              return
             }
             if (!focusSession) {
-              void runtime.stopCurrentStream();
-              return;
+              void runtime.stopCurrentStream()
+              return
             }
-            void runtime.stopSession(focusSession.id);
+            void runtime.stopSession(focusSession.id)
           }}
           onRefresh={() => void refreshEverything()}
           onOpenCommands={() => setCommandsOpen(true)}
@@ -371,8 +459,8 @@ export function PersonaOperatorDeck({
               onClick={() => onTabChange(tab.id)}
               className={
                 activeTab === tab.id
-                  ? "shrink-0 border-b border-amber-400 pb-1 font-medium text-slate-100"
-                  : "shrink-0 border-b border-transparent pb-1 text-slate-500 transition hover:text-slate-300"
+                  ? 'shrink-0 border-b border-amber-400 pb-1 font-medium text-slate-100'
+                  : 'shrink-0 border-b border-transparent pb-1 text-slate-500 transition hover:text-slate-300'
               }
               title={tab.detail}
             >
@@ -384,7 +472,7 @@ export function PersonaOperatorDeck({
 
       <div className={bodyChrome}>
         <div className="space-y-3 pt-3">
-          {showAllSections || activeTab === "workflow" ? (
+          {showAllSections || activeTab === 'workflow' ? (
             <PersonaWorkflowComposer
               projectOptions={projectOptions}
               selectedProjectId={selectedProjectId}
@@ -394,7 +482,7 @@ export function PersonaOperatorDeck({
             />
           ) : null}
 
-          {showAllSections || activeTab === "insights" ? (
+          {showAllSections || activeTab === 'insights' ? (
             <>
               <PersonaBlockerPanel
                 executionState={persona.execution_state}
@@ -423,7 +511,7 @@ export function PersonaOperatorDeck({
             </>
           ) : null}
 
-          {showAllSections || activeTab === "lanes" ? (
+          {showAllSections || activeTab === 'lanes' ? (
             <PersonaBackgroundInbox
               entries={entries}
               activeChildSessions={runtime.activeChildSessions}
@@ -431,24 +519,24 @@ export function PersonaOperatorDeck({
               stoppingSessionId={runtime.stoppingSessionId}
               onSelectSession={(sessionId) => onSelectSession(sessionId)}
               onStopSession={(sessionId) => {
-                void runtime.stopSession(sessionId);
+                void runtime.stopSession(sessionId)
               }}
               onRedirectSession={(sessionId, draft) => {
-                onSelectSession(sessionId);
-                sendMessage(draft, undefined, sessionId);
+                onSelectSession(sessionId)
+                sendMessage(draft, undefined, sessionId)
               }}
               onPromoteSession={(sessionId, draft) => {
-                onSelectSession(sessionId);
-                sendMessage(draft, undefined, sessionId);
+                onSelectSession(sessionId)
+                sendMessage(draft, undefined, sessionId)
               }}
               onHandoffSession={(sessionId, draft) => {
-                onSelectSession(sessionId);
-                sendMessage(draft, undefined, sessionId);
+                onSelectSession(sessionId)
+                sendMessage(draft, undefined, sessionId)
               }}
             />
           ) : null}
 
-          {showAllSections || activeTab === "automations" ? (
+          {showAllSections || activeTab === 'automations' ? (
             <PersonaAutomationPanel
               selectedProject={selectedProject}
               jobs={jobs}
@@ -471,5 +559,5 @@ export function PersonaOperatorDeck({
         commands={commands}
       />
     </div>
-  );
+  )
 }

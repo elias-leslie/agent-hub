@@ -1,51 +1,61 @@
-"use client";
+'use client'
 
-import { useState, useMemo, useCallback } from "react";
-import { ChevronDown, ChevronRight, Inbox } from "lucide-react";
-import type { MemoryEpisode } from "@/lib/memory-api";
-import { TIMELINE_COLLAPSE_KEY } from "@/lib/memory-config";
-import { TimelineItem } from "@/components/memory/TimelineItem";
+import { ChevronDown, ChevronRight, Inbox } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { TimelineItem } from '@/components/memory/TimelineItem'
+import type { MemoryEpisode } from '@/lib/memory-api'
+import { TIMELINE_COLLAPSE_KEY } from '@/lib/memory-config'
 
 type DateBucket =
-  | "today"
-  | "yesterday"
-  | "this_week"
-  | "last_week"
-  | "this_month"
-  | "last_month"
-  | "older";
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'last_month'
+  | 'older'
 
 interface DateGroup {
-  label: string;
-  key: DateBucket;
-  episodes: MemoryEpisode[];
+  label: string
+  key: DateBucket
+  episodes: MemoryEpisode[]
 }
 
 const BUCKET_ORDER: DateBucket[] = [
-  "today",
-  "yesterday",
-  "this_week",
-  "last_week",
-  "this_month",
-  "last_month",
-  "older",
-];
+  'today',
+  'yesterday',
+  'this_week',
+  'last_week',
+  'this_month',
+  'last_month',
+  'older',
+]
 
-function classifyDate(dateStr: string, now: Date): { label: string; key: DateBucket } {
-  const date = new Date(dateStr);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const episodeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const delta = Math.floor((today.getTime() - episodeDate.getTime()) / 86400000);
+function classifyDate(
+  dateStr: string,
+  now: Date,
+): { label: string; key: DateBucket } {
+  const date = new Date(dateStr)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const episodeDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  )
+  const delta = Math.floor((today.getTime() - episodeDate.getTime()) / 86400000)
 
-  if (delta === 0) return { label: "Today", key: "today" };
-  if (delta === 1) return { label: "Yesterday", key: "yesterday" };
+  if (delta === 0) return { label: 'Today', key: 'today' }
+  if (delta === 1) return { label: 'Yesterday', key: 'yesterday' }
   if (delta < 7 && episodeDate.getDay() < today.getDay())
-    return { label: "This Week", key: "this_week" };
-  if (delta < 7) return { label: "Last Week", key: "last_week" };
-  if (episodeDate.getFullYear() === today.getFullYear() && episodeDate.getMonth() === today.getMonth())
-    return { label: "This Month", key: "this_month" };
-  if (delta < 60) return { label: "Last Month", key: "last_month" };
-  return { label: "Older", key: "older" };
+    return { label: 'This Week', key: 'this_week' }
+  if (delta < 7) return { label: 'Last Week', key: 'last_week' }
+  if (
+    episodeDate.getFullYear() === today.getFullYear() &&
+    episodeDate.getMonth() === today.getMonth()
+  )
+    return { label: 'This Month', key: 'this_month' }
+  if (delta < 60) return { label: 'Last Month', key: 'last_month' }
+  return { label: 'Older', key: 'older' }
 }
 
 function DateGroupHeader({
@@ -54,10 +64,10 @@ function DateGroupHeader({
   isOpen,
   onToggle,
 }: {
-  label: string;
-  count: number;
-  isOpen: boolean;
-  onToggle: () => void;
+  label: string
+  count: number
+  isOpen: boolean
+  onToggle: () => void
 }) {
   return (
     <button
@@ -77,58 +87,63 @@ function DateGroupHeader({
       </span>
       <div className="flex-1 h-px bg-slate-800 ml-2" />
     </button>
-  );
+  )
 }
 
 interface EpisodesTimelineViewProps {
-  items: MemoryEpisode[];
-  isLoading: boolean;
-  isFetchingMore: boolean;
+  items: MemoryEpisode[]
+  isLoading: boolean
+  isFetchingMore: boolean
 }
 
-export function EpisodesTimelineView({ items, isLoading, isFetchingMore }: EpisodesTimelineViewProps) {
+export function EpisodesTimelineView({
+  items,
+  isLoading,
+  isFetchingMore,
+}: EpisodesTimelineViewProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem(TIMELINE_COLLAPSE_KEY);
-      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+      const stored = localStorage.getItem(TIMELINE_COLLAPSE_KEY)
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set()
     } catch {
-      return new Set();
+      return new Set()
     }
-  });
+  })
 
   const groups = useMemo((): DateGroup[] => {
-    const now = new Date();
-    const buckets: Record<string, { label: string; episodes: MemoryEpisode[] }> = {};
+    const now = new Date()
+    const buckets: Record<
+      string,
+      { label: string; episodes: MemoryEpisode[] }
+    > = {}
 
     for (const ep of items) {
-      const { label, key } = classifyDate(ep.created_at, now);
+      const { label, key } = classifyDate(ep.created_at, now)
       if (!buckets[key]) {
-        buckets[key] = { label, episodes: [] };
+        buckets[key] = { label, episodes: [] }
       }
-      buckets[key].episodes.push(ep);
+      buckets[key].episodes.push(ep)
     }
 
-    return BUCKET_ORDER
-      .filter((key) => buckets[key])
-      .map((key) => ({
-        label: buckets[key].label,
-        key,
-        episodes: buckets[key].episodes,
-      }));
-  }, [items]);
+    return BUCKET_ORDER.filter((key) => buckets[key]).map((key) => ({
+      label: buckets[key].label,
+      key,
+      episodes: buckets[key].episodes,
+    }))
+  }, [items])
 
   const toggleGroup = useCallback((dateKey: string) => {
     setCollapsedGroups((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev)
       if (next.has(dateKey)) {
-        next.delete(dateKey);
+        next.delete(dateKey)
       } else {
-        next.add(dateKey);
+        next.add(dateKey)
       }
-      localStorage.setItem(TIMELINE_COLLAPSE_KEY, JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
+      localStorage.setItem(TIMELINE_COLLAPSE_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }, [])
 
   if (isLoading) {
     return (
@@ -160,7 +175,7 @@ export function EpisodesTimelineView({ items, isLoading, isFetchingMore }: Episo
           </div>
         ))}
       </div>
-    );
+    )
   }
 
   if (groups.length === 0) {
@@ -169,18 +184,20 @@ export function EpisodesTimelineView({ items, isLoading, isFetchingMore }: Episo
         <div className="p-4 rounded-full bg-slate-800 mb-4">
           <Inbox className="w-8 h-8 text-slate-500" />
         </div>
-        <h3 className="text-lg font-medium text-slate-100 mb-1">No episodes yet</h3>
+        <h3 className="text-lg font-medium text-slate-100 mb-1">
+          No episodes yet
+        </h3>
         <p className="text-sm text-slate-400 max-w-sm">
           Episodes will appear here grouped by date as they are captured.
         </p>
       </div>
-    );
+    )
   }
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-3xl">
       {groups.map((group) => {
-        const isOpen = !collapsedGroups.has(group.key);
+        const isOpen = !collapsedGroups.has(group.key)
         return (
           <div key={group.key}>
             <DateGroupHeader
@@ -201,7 +218,7 @@ export function EpisodesTimelineView({ items, isLoading, isFetchingMore }: Episo
               </div>
             )}
           </div>
-        );
+        )
       })}
       {isFetchingMore && (
         <div className="flex justify-center py-4">
@@ -209,5 +226,5 @@ export function EpisodesTimelineView({ items, isLoading, isFetchingMore }: Episo
         </div>
       )}
     </div>
-  );
+  )
 }
