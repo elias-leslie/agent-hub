@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 7 | Last run: 2026-05-04 | State: ISSUES_
+_Sessions: 8 | Last run: 2026-05-04 | State: ISSUES_
 
 ## Architecture
 - FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -37,10 +37,12 @@ _Sessions: 7 | Last run: 2026-05-04 | State: ISSUES_
 - 2026-05-04 continuation: preflight found no ready tasks and no owner overlap; only dirty residue was tracked generated `graphify-out/GRAPH_REPORT.md` from a graphify run. Kept and published the regenerated report rather than dropping valid generated output.
 - Replaced the remaining live UI/test stale `dt` examples in memory episode form placeholder and compactness fixture with `st check` wording. Historical docs, generated task exports, and tests intentionally modeling old tool-friction events remain unchanged.
 - Merged additional exact duplicate feedback clusters for focused changed gates, project-memory guardrails, search-first workflow, and duplicate feedback search. Final feedback summary still reports unresolved governance backlog led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`.
+- 2026-05-04 continuation: repo started clean with `READY[0]`; merged remaining exact duplicate open feedback titles surfaced by capped `st feedback list --status open --type ... --limit 200` scans. Final duplicate-title recheck found no repeated exact titles in the capped open lists.
 
 ## Open Items
-- [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - exact duplicate clusters were merged in bulk, but many open feedback items remain and some near-duplicate clusters need policy/product judgment before merging across component/type boundaries - impact: visible feedback still accumulates without full disposition.
+- [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - exact duplicate title clusters in capped open lists were merged, but many open feedback items remain and near-duplicate or cross-component/type clusters need policy/product judgment before disposition - impact: visible feedback still accumulates without full disposition.
 ## Completed
+- [AH-AUDIT-033] 2026-05-04 - Merged remaining exact duplicate open feedback titles from capped type scans; duplicate-title recheck returned no repeated exact titles.
 - [AH-AUDIT-032] 2026-05-04 - Removed remaining live UI/test stale `dt` wording from memory episode form and compactness fixture; Biome, focused Vitest, changed gate, and stale live-reference search passed.
 - [AH-AUDIT-031] 2026-05-04 - Published refreshed tracked graphify report residue and merged more exact duplicate feedback clusters; final ready queue remained empty.
 - [AH-AUDIT-030] 2026-05-04 - Merged exact duplicate feedback clusters across praise/friction/idea groups, including repeated `dt`, feedback-search, precision-search, timeout-summary, citation-tracking, auto-project-detection, and tool-registry items.
