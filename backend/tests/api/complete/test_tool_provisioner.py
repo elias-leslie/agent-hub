@@ -10,6 +10,8 @@ def test_provision_standard_tools_uses_minimal_shell_first_baseline() -> None:
         "bash",
         "read_file",
         "write_file",
+        "search_scratch_context",
+        "batch_execute",
     ]
 
 

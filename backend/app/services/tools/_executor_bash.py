@@ -6,7 +6,6 @@ for bash commands executed by agents.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from app.services.persona_policy import (
     get_persona_git_publish_block_reason,
 )
 from app.services.tools.command_guard import get_command_guard_block_reason
+from app.utils.safe_subprocess import create_bash_process
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ async def run_bash(
     *,
     agent_slug: str | None = None,
     session_id: str | None = None,
+    max_output_size: int | None = MAX_OUTPUT_SIZE,
 ) -> str:
     """Execute a bash command and return combined stdout+stderr output."""
     persona_block_reason = get_persona_block_reason(command, agent_slug)
@@ -54,11 +55,9 @@ async def run_bash(
         return guard_block_reason
 
     try:
-        process = await asyncio.create_subprocess_shell(
+        process = await create_bash_process(
             command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(working_dir),
+            working_dir=working_dir,
             env=env,
         )
 
@@ -70,8 +69,8 @@ async def run_bash(
         if stderr_text:
             output = output + stderr_text
 
-        if len(output) > MAX_OUTPUT_SIZE:
-            output = output[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
+        if max_output_size is not None and len(output) > max_output_size:
+            output = output[:max_output_size] + "\n... (output truncated)"
 
         return output or "(no output)"
 

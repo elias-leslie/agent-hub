@@ -26,7 +26,14 @@ def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools(
     assert tools is not None
     tool_names = {tool.name for tool in tools}
 
-    assert tool_names == {"bash", "read_file", "write_file", "review_memory_system"}
+    assert tool_names == {
+        "bash",
+        "read_file",
+        "write_file",
+        "search_scratch_context",
+        "batch_execute",
+        "review_memory_system",
+    }
     review_tool = next(tool for tool in tools if tool.name == "review_memory_system")
     assert review_tool.input_schema["properties"]["force_all"]["type"] == "boolean"
     assert review_tool.input_schema["properties"]["only_missing_compact"]["type"] == "boolean"

@@ -592,6 +592,17 @@ class TestCheckToolAllowed:
             assert reason == "allowed"
 
     @pytest.mark.asyncio
+    async def test_search_scratch_context_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "search_scratch_context")
+            assert allowed is True
+            assert reason == "allowed"
+
+    @pytest.mark.asyncio
     async def test_search_web_allowed_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
@@ -643,6 +654,16 @@ class TestCheckToolAllowed:
             return_value="yolo",
         ):
             allowed, _ = await check_tool_allowed("proj", "bash")
+            assert allowed is True
+
+    @pytest.mark.asyncio
+    async def test_yolo_tier_allows_batch_execute(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="yolo",
+        ):
+            allowed, _ = await check_tool_allowed("proj", "batch_execute")
             assert allowed is True
 
     @pytest.mark.asyncio

@@ -141,6 +141,7 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "search_web",
     "fetch_web_page",
     "tool_search",
+    "search_scratch_context",
     "read_personality",
     "read_user_context",
     "list_scheduled_jobs",
@@ -159,6 +160,7 @@ _WRITE_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
 
 _YOLO_TOOLS: frozenset[str] = _WRITE_TOOLS | frozenset({
     "bash",
+    "batch_execute",
     "send_push",
     "manage_tasks",
     "schedule_job",
