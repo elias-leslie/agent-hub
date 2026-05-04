@@ -1,51 +1,51 @@
-"use client";
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getWsUrl } from "@/lib/api-config";
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getWsUrl } from '@/lib/api-config'
 import type {
   ConnectionStatus,
-  SessionEvent,
   LegacySessionEventType,
+  SessionEvent,
   SubscribeRequest,
   SubscribeResponse,
-} from "@/types/events";
+} from '@/types/events'
 
-const MAX_RECONNECT_DELAY = 30000;
-const INITIAL_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 30000
+const INITIAL_RECONNECT_DELAY = 1000
 
 interface UseSessionEventsOptions {
   /** Session IDs to filter (empty = all sessions) */
-  sessionIds?: string[];
+  sessionIds?: string[]
   /** Event types to filter (empty = all types) */
-  eventTypes?: LegacySessionEventType[];
+  eventTypes?: LegacySessionEventType[]
   /** Callback when event received */
-  onEvent?: (event: SessionEvent) => void;
+  onEvent?: (event: SessionEvent) => void
   /** Auto-connect on mount */
-  autoConnect?: boolean;
+  autoConnect?: boolean
   /** Enable reconnection on disconnect */
-  autoReconnect?: boolean;
+  autoReconnect?: boolean
 }
 
 interface UseSessionEventsReturn {
   /** Recent events (last 100) */
-  events: SessionEvent[];
+  events: SessionEvent[]
   /** Connection status */
-  status: ConnectionStatus;
+  status: ConnectionStatus
   /** Error message if any */
-  error: string | null;
+  error: string | null
   /** Subscription ID if connected */
-  subscriptionId: string | null;
+  subscriptionId: string | null
   /** Connect to WebSocket */
-  connect: () => void;
+  connect: () => void
   /** Disconnect from WebSocket */
-  disconnect: () => void;
+  disconnect: () => void
   /** Update subscription filters */
   updateFilters: (
     sessionIds?: string[],
     eventTypes?: LegacySessionEventType[],
-  ) => void;
+  ) => void
   /** Clear event history */
-  clearEvents: () => void;
+  clearEvents: () => void
 }
 
 /**
@@ -72,73 +72,73 @@ export function useSessionEvents(
     onEvent,
     autoConnect = true,
     autoReconnect = true,
-  } = options;
+  } = options
 
-  const [events, setEvents] = useState<SessionEvent[]>([]);
-  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
-  const [error, setError] = useState<string | null>(null);
-  const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  const [events, setEvents] = useState<SessionEvent[]>([])
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected')
+  const [error, setError] = useState<string | null>(null)
+  const [subscriptionId, setSubscriptionId] = useState<string | null>(null)
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
-  const shouldReconnectRef = useRef(autoReconnect);
-  const filtersRef = useRef({ sessionIds, eventTypes });
-  const onEventRef = useRef(onEvent);
-  const connectRef = useRef<() => void>(() => {});
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY)
+  const shouldReconnectRef = useRef(autoReconnect)
+  const filtersRef = useRef({ sessionIds, eventTypes })
+  const onEventRef = useRef(onEvent)
+  const connectRef = useRef<() => void>(() => {})
 
   // Keep refs in sync
   useEffect(() => {
-    filtersRef.current = { sessionIds, eventTypes };
-  }, [sessionIds, eventTypes]);
+    filtersRef.current = { sessionIds, eventTypes }
+  }, [sessionIds, eventTypes])
 
   useEffect(() => {
-    onEventRef.current = onEvent;
-  }, [onEvent]);
+    onEventRef.current = onEvent
+  }, [onEvent])
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
     }
-  }, []);
+  }, [])
 
   const scheduleReconnect = useCallback(() => {
-    if (!shouldReconnectRef.current) return;
+    if (!shouldReconnectRef.current) return
 
-    clearReconnectTimeout();
-    const delay = reconnectDelayRef.current;
-    reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY);
+    clearReconnectTimeout()
+    const delay = reconnectDelayRef.current
+    reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY)
 
     reconnectTimeoutRef.current = setTimeout(() => {
       if (shouldReconnectRef.current) {
-        connectRef.current();
+        connectRef.current()
       }
-    }, delay);
-  }, [clearReconnectTimeout]);
+    }, delay)
+  }, [clearReconnectTimeout])
 
   const connect = useCallback(() => {
     // Clean up existing connection
     if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+      wsRef.current.close()
+      wsRef.current = null
     }
-    clearReconnectTimeout();
+    clearReconnectTimeout()
 
-    setError(null);
-    setStatus("connecting");
-    shouldReconnectRef.current = autoReconnect;
+    setError(null)
+    setStatus('connecting')
+    shouldReconnectRef.current = autoReconnect
 
-    const ws = new WebSocket(getWsUrl("/api/events"));
-    wsRef.current = ws;
+    const ws = new WebSocket(getWsUrl('/api/events'))
+    wsRef.current = ws
 
     ws.onopen = () => {
-      setStatus("connected");
-      reconnectDelayRef.current = INITIAL_RECONNECT_DELAY;
+      setStatus('connected')
+      reconnectDelayRef.current = INITIAL_RECONNECT_DELAY
 
       // Send subscribe message
       const request: SubscribeRequest = {
-        type: "subscribe",
+        type: 'subscribe',
         session_ids:
           filtersRef.current.sessionIds.length > 0
             ? filtersRef.current.sessionIds
@@ -147,94 +147,94 @@ export function useSessionEvents(
           filtersRef.current.eventTypes.length > 0
             ? filtersRef.current.eventTypes
             : undefined,
-      };
-      ws.send(JSON.stringify(request));
-    };
+      }
+      ws.send(JSON.stringify(request))
+    }
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data)
 
         // Handle subscription responses
-        if ("type" in data && !("event_type" in data)) {
-          const response = data as SubscribeResponse;
-          if (response.type === "subscribed" || response.type === "updated") {
-            setSubscriptionId(response.subscription_id ?? null);
-          } else if (response.type === "error") {
-            setError(response.message ?? "Subscription error");
+        if ('type' in data && !('event_type' in data)) {
+          const response = data as SubscribeResponse
+          if (response.type === 'subscribed' || response.type === 'updated') {
+            setSubscriptionId(response.subscription_id ?? null)
+          } else if (response.type === 'error') {
+            setError(response.message ?? 'Subscription error')
           }
-          return;
+          return
         }
 
         // Handle session events
-        if ("event_type" in data) {
-          const sessionEvent = data as SessionEvent;
+        if ('event_type' in data) {
+          const sessionEvent = data as SessionEvent
           setEvents((prev) => {
-            const updated = [...prev, sessionEvent];
+            const updated = [...prev, sessionEvent]
             // Keep last 100 events
-            return updated.slice(-100);
-          });
-          onEventRef.current?.(sessionEvent);
+            return updated.slice(-100)
+          })
+          onEventRef.current?.(sessionEvent)
         }
       } catch {
-        console.error("Failed to parse WebSocket message:", event.data);
+        console.error('Failed to parse WebSocket message:', event.data)
       }
-    };
+    }
 
     ws.onerror = () => {
-      setError("WebSocket connection error");
-      setStatus("error");
-    };
+      setError('WebSocket connection error')
+      setStatus('error')
+    }
 
     ws.onclose = () => {
-      wsRef.current = null;
-      setSubscriptionId(null);
+      wsRef.current = null
+      setSubscriptionId(null)
 
       if (shouldReconnectRef.current) {
-        setStatus("connecting");
-        scheduleReconnect();
+        setStatus('connecting')
+        scheduleReconnect()
       } else {
-        setStatus("disconnected");
+        setStatus('disconnected')
       }
-    };
-  }, [autoReconnect, clearReconnectTimeout, scheduleReconnect]);
+    }
+  }, [autoReconnect, clearReconnectTimeout, scheduleReconnect])
 
   // Keep connectRef in sync
   useEffect(() => {
-    connectRef.current = connect;
-  }, [connect]);
+    connectRef.current = connect
+  }, [connect])
 
   const disconnect = useCallback(() => {
-    shouldReconnectRef.current = false;
-    clearReconnectTimeout();
+    shouldReconnectRef.current = false
+    clearReconnectTimeout()
 
     if (wsRef.current) {
       // Send unsubscribe
       if (wsRef.current.readyState === WebSocket.OPEN) {
-        const request: SubscribeRequest = { type: "unsubscribe" };
-        wsRef.current.send(JSON.stringify(request));
+        const request: SubscribeRequest = { type: 'unsubscribe' }
+        wsRef.current.send(JSON.stringify(request))
       }
-      wsRef.current.close();
-      wsRef.current = null;
+      wsRef.current.close()
+      wsRef.current = null
     }
 
-    setStatus("disconnected");
-    setSubscriptionId(null);
-  }, [clearReconnectTimeout]);
+    setStatus('disconnected')
+    setSubscriptionId(null)
+  }, [clearReconnectTimeout])
 
   const updateFilters = useCallback(
     (newSessionIds?: string[], newEventTypes?: LegacySessionEventType[]) => {
       if (newSessionIds !== undefined) {
-        filtersRef.current.sessionIds = newSessionIds;
+        filtersRef.current.sessionIds = newSessionIds
       }
       if (newEventTypes !== undefined) {
-        filtersRef.current.eventTypes = newEventTypes;
+        filtersRef.current.eventTypes = newEventTypes
       }
 
       // Send update if connected
       if (wsRef.current?.readyState === WebSocket.OPEN && subscriptionId) {
         const request: SubscribeRequest = {
-          type: "update",
+          type: 'update',
           session_ids:
             filtersRef.current.sessionIds.length > 0
               ? filtersRef.current.sessionIds
@@ -243,37 +243,37 @@ export function useSessionEvents(
             filtersRef.current.eventTypes.length > 0
               ? filtersRef.current.eventTypes
               : undefined,
-        };
-        wsRef.current.send(JSON.stringify(request));
+        }
+        wsRef.current.send(JSON.stringify(request))
       }
     },
     [subscriptionId],
-  );
+  )
 
   const clearEvents = useCallback(() => {
-    setEvents([]);
-  }, []);
+    setEvents([])
+  }, [])
 
   useEffect(() => {
     if (subscriptionId) {
-      updateFilters(sessionIds, eventTypes);
+      updateFilters(sessionIds, eventTypes)
     }
-  }, [subscriptionId, sessionIds, eventTypes, updateFilters]);
+  }, [subscriptionId, sessionIds, eventTypes, updateFilters])
 
   // Auto-connect on mount
   useEffect(() => {
     if (autoConnect) {
-      connect();
+      connect()
     }
 
     return () => {
-      shouldReconnectRef.current = false;
-      clearReconnectTimeout();
+      shouldReconnectRef.current = false
+      clearReconnectTimeout()
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close()
       }
-    };
-  }, [autoConnect, connect, clearReconnectTimeout]);
+    }
+  }, [autoConnect, connect, clearReconnectTimeout])
 
   return {
     events,
@@ -284,5 +284,5 @@ export function useSessionEvents(
     disconnect,
     updateFilters,
     clearEvents,
-  };
+  }
 }

@@ -1,19 +1,19 @@
-"use client";
+'use client'
 
-import { useEffect } from "react";
-import { AlertCircle, RefreshCw, Home } from "lucide-react";
-import Link from "next/link";
+import { AlertCircle, Home, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect } from 'react'
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
   useEffect(() => {
-    console.error("Application error:", error);
-  }, [error]);
+    console.error('Application error:', error)
+  }, [error])
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
@@ -52,5 +52,5 @@ export default function Error({
         </div>
       </div>
     </div>
-  );
+  )
 }

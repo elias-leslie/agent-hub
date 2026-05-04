@@ -6,16 +6,16 @@
  */
 export function Sparkline({
   data,
-  color = "emerald",
+  color = 'emerald',
   width,
   height,
   showDot = false,
 }: {
-  data: number[];
-  color?: "emerald" | "blue" | "amber" | "red";
-  width?: number;
-  height?: number;
-  showDot?: boolean;
+  data: number[]
+  color?: 'emerald' | 'blue' | 'amber' | 'red'
+  width?: number
+  height?: number
+  showDot?: boolean
 }) {
   if (!data || data.length < 2) {
     if (width && height) {
@@ -26,38 +26,42 @@ export function Sparkline({
         >
           No data
         </div>
-      );
+      )
     }
-    return <div className="h-full w-full bg-slate-800 rounded animate-pulse" />;
+    return <div className="h-full w-full bg-slate-800 rounded animate-pulse" />
   }
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
 
   const colorMap = {
-    emerald: { stroke: "#10b981", fill: "#10b98120" },
-    blue: { stroke: "#3b82f6", fill: "#3b82f620" },
-    amber: { stroke: "#f59e0b", fill: "#f59e0b20" },
-    red: { stroke: "#ef4444", fill: "#ef444420" },
-  };
+    emerald: { stroke: '#10b981', fill: '#10b98120' },
+    blue: { stroke: '#3b82f6', fill: '#3b82f620' },
+    amber: { stroke: '#f59e0b', fill: '#f59e0b20' },
+    red: { stroke: '#ef4444', fill: '#ef444420' },
+  }
 
-  const colors = colorMap[color];
+  const colors = colorMap[color]
 
   // Responsive mode: viewBox-based, fills container
   if (!width || !height) {
-    const vw = 100;
-    const vh = 100;
+    const vw = 100
+    const vh = 100
     const points = data
       .map((v, i) => {
-        const x = (i / (data.length - 1)) * vw;
-        const y = vh - ((v - min) / range) * (vh * 0.8) - vh * 0.1;
-        return `${x},${y}`;
+        const x = (i / (data.length - 1)) * vw
+        const y = vh - ((v - min) / range) * (vh * 0.8) - vh * 0.1
+        return `${x},${y}`
       })
-      .join(" ");
+      .join(' ')
 
     return (
-      <svg viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="none" className="w-full h-full">
+      <svg
+        viewBox={`0 0 ${vw} ${vh}`}
+        preserveAspectRatio="none"
+        className="w-full h-full"
+      >
         <polygon points={`0,${vh} ${points} ${vw},${vh}`} fill={colors.fill} />
         <polyline
           points={points}
@@ -71,37 +75,42 @@ export function Sparkline({
         {showDot && (
           <circle
             cx={vw}
-            cy={vh - ((data[data.length - 1] - min) / range) * (vh * 0.8) - vh * 0.1}
+            cy={
+              vh -
+              ((data[data.length - 1] - min) / range) * (vh * 0.8) -
+              vh * 0.1
+            }
             r="3"
             fill={colors.stroke}
           />
         )}
       </svg>
-    );
+    )
   }
 
   // Fixed-size mode: pixel-based rendering
-  const padding = 2;
-  const effectiveWidth = width - padding * 2;
-  const effectiveHeight = height - padding * 2;
+  const padding = 2
+  const effectiveWidth = width - padding * 2
+  const effectiveHeight = height - padding * 2
 
   const points = data.map((value, index) => {
-    const x = padding + (index / (data.length - 1)) * effectiveWidth;
-    const y = padding + effectiveHeight - ((value - min) / range) * effectiveHeight;
-    return `${x},${y}`;
-  });
+    const x = padding + (index / (data.length - 1)) * effectiveWidth
+    const y =
+      padding + effectiveHeight - ((value - min) / range) * effectiveHeight
+    return `${x},${y}`
+  })
 
   const fillPoints = [
     `${padding},${height - padding}`,
     ...points,
     `${width - padding},${height - padding}`,
-  ].join(" ");
+  ].join(' ')
 
   return (
     <svg width={width} height={height} className="flex-shrink-0">
       <polygon points={fillPoints} fill={colors.fill} />
       <polyline
-        points={points.join(" ")}
+        points={points.join(' ')}
         fill="none"
         stroke={colors.stroke}
         strokeWidth={1.5}
@@ -109,5 +118,5 @@ export function Sparkline({
         strokeLinejoin="round"
       />
     </svg>
-  );
+  )
 }

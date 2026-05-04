@@ -1,19 +1,19 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { SessionTimelineEvent } from "@/lib/api";
-import { EventItem } from "./event-item";
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import type { SessionTimelineEvent } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { EventItem } from './event-item'
 
 interface TurnGroupProps {
-  turn: number;
-  events: SessionTimelineEvent[];
-  isLast: boolean;
+  turn: number
+  events: SessionTimelineEvent[]
+  isLast: boolean
 }
 
 export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   return (
     <div className="relative">
@@ -21,11 +21,11 @@ export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className={cn(
-          "sticky top-0 z-10 w-full flex items-center gap-3 py-2 px-3 mb-3",
-          "bg-slate-950/95 backdrop-blur-sm",
-          "border-b border-slate-800/60",
-          "hover:bg-slate-900/80 transition-colors",
-          "text-left"
+          'sticky top-0 z-10 w-full flex items-center gap-3 py-2 px-3 mb-3',
+          'bg-slate-950/95 backdrop-blur-sm',
+          'border-b border-slate-800/60',
+          'hover:bg-slate-900/80 transition-colors',
+          'text-left',
         )}
       >
         <div className="flex items-center gap-2">
@@ -40,7 +40,7 @@ export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
         </div>
         <div className="flex-1 h-px bg-gradient-to-r from-slate-800 to-transparent" />
         <span className="text-xs text-slate-600 font-mono">
-          {events.length} event{events.length !== 1 ? "s" : ""}
+          {events.length} event{events.length !== 1 ? 's' : ''}
         </span>
       </button>
 
@@ -58,5 +58,5 @@ export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
         </div>
       )}
     </div>
-  );
+  )
 }

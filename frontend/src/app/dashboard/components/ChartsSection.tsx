@@ -1,24 +1,28 @@
-import { Sparkline } from "@/components/dashboard/Sparkline";
-import { ProviderStatusCard } from "@/components/dashboard/ProviderStatusCard";
-import { formatCurrency, formatNumber } from "@/lib/formatters";
-import type { StatusResponse } from "@/lib/api/status";
+import { ProviderStatusCard } from '@/components/dashboard/ProviderStatusCard'
+import { Sparkline } from '@/components/dashboard/Sparkline'
+import type { StatusResponse } from '@/lib/api/status'
+import { formatCurrency, formatNumber } from '@/lib/formatters'
 
 interface ChartsSectionProps {
-  requestsByDay: number[];
-  costByDay: number[];
-  totalCosts: {
-    total_requests: number;
-    total_cost_usd: number;
-  } | undefined;
-  dailyLoading: boolean;
-  statusLoading: boolean;
-  status: StatusResponse | undefined;
-  costsByModel: {
-    aggregations: Array<{
-      input_tokens: number;
-      output_tokens: number;
-    }>;
-  } | undefined;
+  requestsByDay: number[]
+  costByDay: number[]
+  totalCosts:
+    | {
+        total_requests: number
+        total_cost_usd: number
+      }
+    | undefined
+  dailyLoading: boolean
+  statusLoading: boolean
+  status: StatusResponse | undefined
+  costsByModel:
+    | {
+        aggregations: Array<{
+          input_tokens: number
+          output_tokens: number
+        }>
+      }
+    | undefined
 }
 
 export function ChartsSection({
@@ -72,18 +76,34 @@ export function ChartsSection({
             </div>
           </div>
           <div className="rounded-2xl border border-slate-800/70 bg-slate-950/55 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Token Flow</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Token Flow
+            </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Input</p>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Input
+                </p>
                 <p className="text-xl font-mono font-semibold text-slate-100">
-                  {formatNumber(costsByModel?.aggregations.reduce((sum, a) => sum + a.input_tokens, 0) || 0)}
+                  {formatNumber(
+                    costsByModel?.aggregations.reduce(
+                      (sum, a) => sum + a.input_tokens,
+                      0,
+                    ) || 0,
+                  )}
                 </p>
               </div>
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Output</p>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Output
+                </p>
                 <p className="text-xl font-mono font-semibold text-slate-100">
-                  {formatNumber(costsByModel?.aggregations.reduce((sum, a) => sum + a.output_tokens, 0) || 0)}
+                  {formatNumber(
+                    costsByModel?.aggregations.reduce(
+                      (sum, a) => sum + a.output_tokens,
+                      0,
+                    ) || 0,
+                  )}
                 </p>
               </div>
             </div>
@@ -117,5 +137,5 @@ export function ChartsSection({
         </div>
       </div>
     </>
-  );
+  )
 }

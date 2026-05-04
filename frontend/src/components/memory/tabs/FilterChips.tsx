@@ -1,22 +1,26 @@
-"use client";
+'use client'
 
-import { Pin, Tag, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { MemoryCategory, MemoryScope, MemoryListResult } from "@/lib/memory-api";
-import { SCOPE_CONFIG, CATEGORY_CONFIG } from "@/lib/memory-config";
+import { Pin, Tag, X } from 'lucide-react'
+import type {
+  MemoryCategory,
+  MemoryListResult,
+  MemoryScope,
+} from '@/lib/memory-api'
+import { CATEGORY_CONFIG, SCOPE_CONFIG } from '@/lib/memory-config'
+import { cn } from '@/lib/utils'
 
 interface FilterChipsProps {
-  pinnedOnly: boolean;
-  tagFilter: string | null;
-  scope?: MemoryScope;
-  category?: MemoryCategory;
-  isSearchMode: boolean;
-  searchQuery: string;
-  searchResults?: MemoryListResult;
-  onPinnedToggle: () => void;
-  onTagFilterChange: (tag: string | null) => void;
-  onScopeChange: (scope: MemoryScope | undefined) => void;
-  onCategoryChange: (category: MemoryCategory | undefined) => void;
+  pinnedOnly: boolean
+  tagFilter: string | null
+  scope?: MemoryScope
+  category?: MemoryCategory
+  isSearchMode: boolean
+  searchQuery: string
+  searchResults?: MemoryListResult
+  onPinnedToggle: () => void
+  onTagFilterChange: (tag: string | null) => void
+  onScopeChange: (scope: MemoryScope | undefined) => void
+  onCategoryChange: (category: MemoryCategory | undefined) => void
 }
 
 export function FilterChips({
@@ -37,10 +41,10 @@ export function FilterChips({
       <button
         onClick={onPinnedToggle}
         className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border transition-colors",
+          'flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border transition-colors',
           pinnedOnly
-            ? "bg-violet-500/10 border-violet-500/40 text-violet-400"
-            : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300 hover:border-slate-600"
+            ? 'bg-violet-500/10 border-violet-500/40 text-violet-400'
+            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300 hover:border-slate-600',
         )}
       >
         <Pin className="h-3 w-3" />
@@ -86,5 +90,5 @@ export function FilterChips({
         </span>
       )}
     </div>
-  );
+  )
 }

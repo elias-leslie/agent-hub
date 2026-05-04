@@ -1,73 +1,70 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft,
-  Save,
-  Trash2,
-  Loader2,
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   Globe,
-} from "lucide-react";
+  Loader2,
+  Save,
+  Trash2,
+} from 'lucide-react'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { PromptRevisionHistory } from '@/app/prompts/[slug]/components/PromptRevisionHistory'
+import { CompactnessMeter } from '@/components/CompactnessMeter'
 import {
   deletePrompt,
   fetchPrompt,
   fetchPromptRevisions,
   restorePromptRevision,
   updatePrompt,
-} from "@/lib/api/prompts";
-import { CompactnessMeter } from "@/components/CompactnessMeter";
-import { PromptRevisionHistory } from "@/app/prompts/[slug]/components/PromptRevisionHistory";
-import { cn } from "@/lib/utils";
+} from '@/lib/api/prompts'
+import { cn } from '@/lib/utils'
 
 export default function PromptEditPage() {
-  const params = useParams();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const slug = params.slug as string;
+  const params = useParams()
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const slug = params.slug as string
 
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-  const [description, setDescription] = useState("");
-  const [isGlobal, setIsGlobal] = useState(false);
-  const [enabled, setEnabled] = useState(true);
-  const [excludeAgents, setExcludeAgents] = useState<string[]>([]);
-  const [excludeInput, setExcludeInput] = useState("");
-  const [changeReason, setChangeReason] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [description, setDescription] = useState('')
+  const [isGlobal, setIsGlobal] = useState(false)
+  const [enabled, setEnabled] = useState(true)
+  const [excludeAgents, setExcludeAgents] = useState<string[]>([])
+  const [excludeInput, setExcludeInput] = useState('')
+  const [changeReason, setChangeReason] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const {
     data: prompt,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["prompt", slug],
+    queryKey: ['prompt', slug],
     queryFn: () => fetchPrompt(slug),
     enabled: !!slug,
-  });
+  })
 
-  const {
-    data: revisions = [],
-    isLoading: revisionsLoading,
-  } = useQuery({
-    queryKey: ["prompt-revisions", slug],
+  const { data: revisions = [], isLoading: revisionsLoading } = useQuery({
+    queryKey: ['prompt-revisions', slug],
     queryFn: () => fetchPromptRevisions(slug),
     enabled: !!slug,
-  });
+  })
 
   useEffect(() => {
     if (prompt) {
-      setName(prompt.name);
-      setContent(prompt.content);
-      setDescription(prompt.description ?? "");
-      setIsGlobal(prompt.is_global);
-      setEnabled(prompt.enabled);
-      setExcludeAgents(prompt.exclude_agents ?? []);
+      setName(prompt.name)
+      setContent(prompt.content)
+      setDescription(prompt.description ?? '')
+      setIsGlobal(prompt.is_global)
+      setEnabled(prompt.enabled)
+      setExcludeAgents(prompt.exclude_agents ?? [])
     }
-  }, [prompt]);
+  }, [prompt])
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -81,12 +78,12 @@ export default function PromptEditPage() {
         change_reason: changeReason || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prompt", slug] });
-      queryClient.invalidateQueries({ queryKey: ["prompt-revisions", slug] });
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      setChangeReason("");
+      queryClient.invalidateQueries({ queryKey: ['prompt', slug] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-revisions', slug] })
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      setChangeReason('')
     },
-  });
+  })
 
   const restoreMutation = useMutation({
     mutationFn: (revisionId: string) =>
@@ -96,35 +93,35 @@ export default function PromptEditPage() {
         changeReason || `Restore ${slug} revision`,
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prompt", slug] });
-      queryClient.invalidateQueries({ queryKey: ["prompt-revisions", slug] });
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      setChangeReason("");
+      queryClient.invalidateQueries({ queryKey: ['prompt', slug] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-revisions', slug] })
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      setChangeReason('')
     },
-  });
+  })
 
   const deleteMutation = useMutation({
     mutationFn: () => deletePrompt(slug),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      router.push("/prompts");
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      router.push('/prompts')
     },
-  });
+  })
 
   const handleDelete = () => {
     if (confirmDelete) {
-      deleteMutation.mutate();
+      deleteMutation.mutate()
     } else {
-      setConfirmDelete(true);
+      setConfirmDelete(true)
     }
-  };
+  }
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
-    );
+    )
   }
 
   if (error || !prompt) {
@@ -132,18 +129,16 @@ export default function PromptEditPage() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">
-            Prompt not found
-          </p>
+          <p className="text-sm text-slate-400">Prompt not found</p>
           <button
-            onClick={() => router.push("/prompts")}
+            onClick={() => router.push('/prompts')}
             className="mt-4 px-4 py-2 text-sm font-medium text-amber-500 hover:underline"
           >
             Back to Prompts
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -173,13 +168,13 @@ export default function PromptEditPage() {
         <div className="page-container px-4 lg:px-8">
           <div className="page-header-row">
             <div className="page-title-group">
-            <button
-              onClick={() => router.push("/prompts")}
-              className="icon-button"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
+              <button
+                onClick={() => router.push('/prompts')}
+                className="icon-button"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
               <div className="page-title-icon">
                 <Globe className="h-5 w-5" />
               </div>
@@ -191,63 +186,69 @@ export default function PromptEditPage() {
                 <div className="page-meta">
                   <span
                     className={cn(
-                      "page-pill",
+                      'page-pill',
                       prompt.enabled
-                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-                        : "border-rose-500/20 bg-rose-500/10 text-rose-200",
+                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                        : 'border-rose-500/20 bg-rose-500/10 text-rose-200',
                     )}
                   >
-                    {prompt.enabled ? "Enabled" : "Disabled"}
+                    {prompt.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                   <span
                     className={cn(
-                      "page-pill",
+                      'page-pill',
                       prompt.is_global
-                        ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
-                        : "border-slate-700/80 bg-slate-900/90 text-slate-400",
+                        ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                        : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                     )}
                   >
-                    {prompt.is_global ? "Global prompt" : "Scoped prompt"}
+                    {prompt.is_global ? 'Global prompt' : 'Scoped prompt'}
                   </span>
                   {prompt.owner_agent_slug ? (
-                    <span className="page-pill">Owner {prompt.owner_agent_slug}</span>
+                    <span className="page-pill">
+                      Owner {prompt.owner_agent_slug}
+                    </span>
                   ) : null}
                 </div>
               </div>
             </div>
             <div className="page-toolbar">
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending || prompt.deletion_locked}
-              className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {deleteMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  {prompt.deletion_locked ? "Locked" : confirmDelete ? "Confirm Delete" : "Delete"}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="button-primary disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Save className="h-4 w-4" />
-                  Save
-                </span>
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending || prompt.deletion_locked}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    {prompt.deletion_locked
+                      ? 'Locked'
+                      : confirmDelete
+                        ? 'Confirm Delete'
+                        : 'Delete'}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="button-primary disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
+              >
+                {saveMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Save className="h-4 w-4" />
+                    Save
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
         </div>
       </header>
 
@@ -259,15 +260,14 @@ export default function PromptEditPage() {
                 <p className="section-kicker">Prompt Document</p>
                 <h2 className="section-heading mt-2">Source Content</h2>
                 <p className="section-copy mt-2 max-w-3xl">
-                  Edit the prompt body, operator-facing description, and change reason
-                  that downstream Arena and benchmark runs use for attribution.
+                  Edit the prompt body, operator-facing description, and change
+                  reason that downstream Arena and benchmark runs use for
+                  attribution.
                 </p>
               </div>
               <div className="space-y-5 px-5 py-5 lg:px-6 lg:py-6">
                 <div className="space-y-1.5">
-                  <label className="detail-label">
-                    Name
-                  </label>
+                  <label className="detail-label">Name</label>
                   <input
                     type="text"
                     value={name}
@@ -277,9 +277,7 @@ export default function PromptEditPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="detail-label">
-                    Content
-                  </label>
+                  <label className="detail-label">Content</label>
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
@@ -290,9 +288,7 @@ export default function PromptEditPage() {
 
                 <div className="grid gap-5 lg:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="detail-label">
-                      Description
-                    </label>
+                    <label className="detail-label">Description</label>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -305,8 +301,8 @@ export default function PromptEditPage() {
                     <div>
                       <p className="detail-label">Change Reason</p>
                       <p className="mt-2 text-sm text-slate-400">
-                        Saved with every update and restore so regressions can be tied to
-                        a concrete prompt change.
+                        Saved with every update and restore so regressions can
+                        be tied to a concrete prompt change.
                       </p>
                     </div>
                     <input
@@ -337,7 +333,9 @@ export default function PromptEditPage() {
                   <div className="detail-card">
                     <p className="detail-label">Ownership</p>
                     <p className="detail-value">
-                      {prompt.owner_agent_slug ? `Owned by ${prompt.owner_agent_slug}` : "Shared system prompt"}
+                      {prompt.owner_agent_slug
+                        ? `Owned by ${prompt.owner_agent_slug}`
+                        : 'Shared system prompt'}
                     </p>
                   </div>
                   {prompt.deletion_locked && (
@@ -357,10 +355,10 @@ export default function PromptEditPage() {
                       type="button"
                       onClick={() => setIsGlobal(true)}
                       className={cn(
-                        "segmented-option",
+                        'segmented-option',
                         isGlobal
-                          ? "border-amber-500/20 bg-amber-500/12 text-amber-100"
-                          : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                          ? 'border-amber-500/20 bg-amber-500/12 text-amber-100'
+                          : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                       )}
                     >
                       <Globe className="h-4 w-4" />
@@ -370,10 +368,10 @@ export default function PromptEditPage() {
                       type="button"
                       onClick={() => setIsGlobal(false)}
                       className={cn(
-                        "segmented-option",
+                        'segmented-option',
                         !isGlobal
-                          ? "border-slate-600 bg-slate-900/90 text-slate-100"
-                          : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                          ? 'border-slate-600 bg-slate-900/90 text-slate-100'
+                          : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                       )}
                     >
                       Scoped
@@ -382,13 +380,13 @@ export default function PromptEditPage() {
                       type="button"
                       onClick={() => setEnabled(!enabled)}
                       className={cn(
-                        "segmented-option",
+                        'segmented-option',
                         enabled
-                          ? "border-emerald-500/20 bg-emerald-500/12 text-emerald-100"
-                          : "border-rose-500/20 bg-rose-500/12 text-rose-200",
+                          ? 'border-emerald-500/20 bg-emerald-500/12 text-emerald-100'
+                          : 'border-rose-500/20 bg-rose-500/12 text-rose-200',
                       )}
                     >
-                      {enabled ? "Enabled" : "Disabled"}
+                      {enabled ? 'Enabled' : 'Disabled'}
                     </button>
                   </div>
 
@@ -397,7 +395,8 @@ export default function PromptEditPage() {
                       <div>
                         <p className="detail-label">Excluded Agents</p>
                         <p className="mt-2 text-sm text-slate-400">
-                          Agent slugs that should not receive this global prompt.
+                          Agent slugs that should not receive this global
+                          prompt.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -413,7 +412,9 @@ export default function PromptEditPage() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setExcludeAgents(excludeAgents.filter((a) => a !== agent))
+                                  setExcludeAgents(
+                                    excludeAgents.filter((a) => a !== agent),
+                                  )
                                 }
                                 className="ml-0.5 rounded-full p-0.5 text-rose-200 transition hover:bg-rose-500/15"
                                 aria-label={`Remove excluded agent ${agent}`}
@@ -430,13 +431,13 @@ export default function PromptEditPage() {
                           value={excludeInput}
                           onChange={(e) => setExcludeInput(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && excludeInput.trim()) {
-                              e.preventDefault();
-                              const val = excludeInput.trim();
+                            if (e.key === 'Enter' && excludeInput.trim()) {
+                              e.preventDefault()
+                              const val = excludeInput.trim()
                               if (!excludeAgents.includes(val)) {
-                                setExcludeAgents([...excludeAgents, val]);
+                                setExcludeAgents([...excludeAgents, val])
                               }
-                              setExcludeInput("");
+                              setExcludeInput('')
                             }
                           }}
                           placeholder="Agent slug..."
@@ -445,11 +446,11 @@ export default function PromptEditPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const val = excludeInput.trim();
+                            const val = excludeInput.trim()
                             if (val && !excludeAgents.includes(val)) {
-                              setExcludeAgents([...excludeAgents, val]);
+                              setExcludeAgents([...excludeAgents, val])
                             }
-                            setExcludeInput("");
+                            setExcludeInput('')
                           }}
                           disabled={!excludeInput.trim()}
                           className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
@@ -460,7 +461,8 @@ export default function PromptEditPage() {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
-                      Scoped prompts follow their assignment target only, so exclusions are not needed.
+                      Scoped prompts follow their assignment target only, so
+                      exclusions are not needed.
                     </div>
                   )}
                 </div>
@@ -470,7 +472,11 @@ export default function PromptEditPage() {
                 prompt={prompt}
                 revisions={revisions}
                 isLoading={revisionsLoading}
-                restoringRevisionId={restoreMutation.isPending ? restoreMutation.variables ?? null : null}
+                restoringRevisionId={
+                  restoreMutation.isPending
+                    ? (restoreMutation.variables ?? null)
+                    : null
+                }
                 onRestore={(revisionId) => restoreMutation.mutate(revisionId)}
               />
             </aside>
@@ -478,5 +484,5 @@ export default function PromptEditPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

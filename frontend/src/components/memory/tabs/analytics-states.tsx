@@ -1,5 +1,5 @@
-import { BarChart3 } from "lucide-react";
-import { SkeletonCard, SkeletonSection } from "./analytics-components";
+import { BarChart3 } from 'lucide-react'
+import { SkeletonCard, SkeletonSection } from './analytics-components'
 
 export function LoadingState() {
   return (
@@ -23,11 +23,11 @@ export function LoadingState() {
         <SkeletonSection />
       </div>
     </div>
-  );
+  )
 }
 
 interface ErrorStateProps {
-  message: string;
+  message: string
 }
 
 export function ErrorState({ message }: ErrorStateProps) {
@@ -36,8 +36,10 @@ export function ErrorState({ message }: ErrorStateProps) {
       <div className="p-4 rounded-full bg-red-900/20 mb-4">
         <BarChart3 className="w-8 h-8 text-red-400" />
       </div>
-      <h3 className="text-lg font-medium text-slate-100 mb-1">Failed to Load Analytics</h3>
+      <h3 className="text-lg font-medium text-slate-100 mb-1">
+        Failed to Load Analytics
+      </h3>
       <p className="text-sm text-red-400 max-w-sm">{message}</p>
     </div>
-  );
+  )
 }

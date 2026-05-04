@@ -1,71 +1,75 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Shield, Copy, Check, ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buildApiUrl, fetchApi } from "@/lib/api-config";
+import { ArrowLeft, Check, Copy, Shield } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { buildApiUrl, fetchApi } from '@/lib/api-config'
+import { cn } from '@/lib/utils'
 
 interface ClientCreateResponse {
-  client_id: string;
-  display_name: string;
-  client_type: string;
-  status: string;
-  rate_limit_rpm: number;
-  rate_limit_tpm: number;
-  created_at: string;
+  client_id: string
+  display_name: string
+  client_type: string
+  status: string
+  rate_limit_rpm: number
+  rate_limit_tpm: number
+  created_at: string
 }
 
 export default function NewClientPage() {
-  const router = useRouter();
-  const [displayName, setDisplayName] = useState("");
-  const [clientType, setClientType] = useState("external");
-  const [rateLimitRpm, setRateLimitRpm] = useState(60);
-  const [rateLimitTpm, setRateLimitTpm] = useState(100000);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [createdClient, setCreatedClient] = useState<ClientCreateResponse | null>(null);
-  const [copiedId, setCopiedId] = useState(false);
+  const router = useRouter()
+  const [displayName, setDisplayName] = useState('')
+  const [clientType, setClientType] = useState('external')
+  const [rateLimitRpm, setRateLimitRpm] = useState(60)
+  const [rateLimitTpm, setRateLimitTpm] = useState(100000)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [createdClient, setCreatedClient] =
+    useState<ClientCreateResponse | null>(null)
+  const [copiedId, setCopiedId] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
+    e.preventDefault()
+    setIsSubmitting(true)
+    setError(null)
 
     try {
-      const response = await fetchApi(buildApiUrl("/api/access-control/clients"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetchApi(
+        buildApiUrl('/api/access-control/clients'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            display_name: displayName,
+            client_type: clientType,
+            rate_limit_rpm: rateLimitRpm,
+            rate_limit_tpm: rateLimitTpm,
+          }),
         },
-        body: JSON.stringify({
-          display_name: displayName,
-          client_type: clientType,
-          rate_limit_rpm: rateLimitRpm,
-          rate_limit_tpm: rateLimitTpm,
-        }),
-      });
+      )
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "Failed to create client");
+        const data = await response.json()
+        throw new Error(data.detail || 'Failed to create client')
       }
 
-      const data: ClientCreateResponse = await response.json();
-      setCreatedClient(data);
+      const data: ClientCreateResponse = await response.json()
+      setCreatedClient(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
   }
 
   function handleCopyId() {
     if (createdClient?.client_id) {
-      navigator.clipboard.writeText(createdClient.client_id);
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 2000);
+      navigator.clipboard.writeText(createdClient.client_id)
+      setCopiedId(true)
+      setTimeout(() => setCopiedId(false), 2000)
     }
   }
 
@@ -79,8 +83,12 @@ export default function NewClientPage() {
               <Shield className="h-6 w-6 text-emerald-400" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-slate-100">Client Created</h1>
-              <p className="text-sm text-slate-400">{createdClient.display_name}</p>
+              <h1 className="text-lg font-semibold text-slate-100">
+                Client Created
+              </h1>
+              <p className="text-sm text-slate-400">
+                {createdClient.display_name}
+              </p>
             </div>
           </div>
 
@@ -108,27 +116,30 @@ export default function NewClientPage() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-400">Type</span>
-              <span className="text-slate-100 capitalize">{createdClient.client_type}</span>
+              <span className="text-slate-100 capitalize">
+                {createdClient.client_type}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Rate Limits</span>
               <span className="text-slate-100 font-mono">
-                {createdClient.rate_limit_rpm} rpm / {(createdClient.rate_limit_tpm / 1000).toFixed(0)}k tpm
+                {createdClient.rate_limit_rpm} rpm /{' '}
+                {(createdClient.rate_limit_tpm / 1000).toFixed(0)}k tpm
               </span>
             </div>
           </div>
 
           <div className="mt-6 flex gap-3">
             <button
-              onClick={() => router.push("/access-control/clients")}
+              onClick={() => router.push('/access-control/clients')}
               className="button-secondary flex-1 justify-center"
             >
               View All Clients
             </button>
             <button
               onClick={() => {
-                setCreatedClient(null);
-                setDisplayName("");
+                setCreatedClient(null)
+                setDisplayName('')
               }}
               className="button-primary flex-1 justify-center"
             >
@@ -137,7 +148,7 @@ export default function NewClientPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -148,7 +159,11 @@ export default function NewClientPage() {
         <div className="page-container px-4 lg:px-8">
           <div className="page-header-row">
             <div className="page-title-group">
-              <Link href="/access-control/clients" className="icon-button" aria-label="Go back">
+              <Link
+                href="/access-control/clients"
+                className="icon-button"
+                aria-label="Go back"
+              >
                 <ArrowLeft className="h-5 w-5" />
               </Link>
               <div className="page-title-icon">
@@ -157,7 +172,8 @@ export default function NewClientPage() {
               <div className="page-title-stack">
                 <h1 className="page-title">Register New Client</h1>
                 <p className="page-subtitle">
-                  Create a caller identity with a display name, type, and throttle policy.
+                  Create a caller identity with a display name, type, and
+                  throttle policy.
                 </p>
               </div>
             </div>
@@ -168,109 +184,120 @@ export default function NewClientPage() {
       <main className="page-container">
         <div className="page-frame">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <form onSubmit={handleSubmit} className="panel-surface space-y-6 p-5 lg:p-6">
-          {error && (
-            <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-3">
-              <p className="text-sm text-red-400">{error}</p>
-            </div>
-          )}
-
-          <div>
-            <p className="section-kicker">Client Identity</p>
-            <h2 className="section-heading mt-2">Core Details</h2>
-          </div>
-
-          <div>
-            <label className="detail-label mb-2 block">
-              Display Name
-            </label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="My API Client"
-              required
-              minLength={1}
-              maxLength={100}
-              className="control-input"
-            />
-            <p className="mt-2 text-xs text-slate-400">
-              Use a descriptive label operators can recognize quickly in access-control lists.
-            </p>
-          </div>
-
-          <div>
-            <label className="detail-label mb-2 block">
-              Client Type
-            </label>
-            <select
-              value={clientType}
-              onChange={(e) => setClientType(e.target.value)}
-              className="control-select w-full"
+            <form
+              onSubmit={handleSubmit}
+              className="panel-surface space-y-6 p-5 lg:p-6"
             >
-              <option value="external">External</option>
-              <option value="internal">Internal</option>
-              <option value="service">Service</option>
-            </select>
-          </div>
+              {error && (
+                <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-3">
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
+              )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="detail-label mb-2 block">
-                Rate Limit (RPM)
-              </label>
-              <input
-                type="number"
-                value={rateLimitRpm}
-                onChange={(e) => setRateLimitRpm(parseInt(e.target.value) || 60)}
-                min={1}
-                max={10000}
-                className="control-input"
-              />
-            </div>
-            <div>
-              <label className="detail-label mb-2 block">
-                Rate Limit (TPM)
-              </label>
-              <input
-                type="number"
-                value={rateLimitTpm}
-                onChange={(e) => setRateLimitTpm(parseInt(e.target.value) || 100000)}
-                min={1000}
-                max={10000000}
-                className="control-input"
-              />
-            </div>
-          </div>
+              <div>
+                <p className="section-kicker">Client Identity</p>
+                <h2 className="section-heading mt-2">Core Details</h2>
+              </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting || !displayName.trim()}
-            className={cn(
-              "button-primary w-full justify-center",
-              isSubmitting || !displayName.trim()
-                ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500 shadow-none"
-                : ""
-            )}
-          >
-            {isSubmitting ? "Creating..." : "Create Client"}
-          </button>
-        </form>
+              <div>
+                <label className="detail-label mb-2 block">Display Name</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="My API Client"
+                  required
+                  minLength={1}
+                  maxLength={100}
+                  className="control-input"
+                />
+                <p className="mt-2 text-xs text-slate-400">
+                  Use a descriptive label operators can recognize quickly in
+                  access-control lists.
+                </p>
+              </div>
+
+              <div>
+                <label className="detail-label mb-2 block">Client Type</label>
+                <select
+                  value={clientType}
+                  onChange={(e) => setClientType(e.target.value)}
+                  className="control-select w-full"
+                >
+                  <option value="external">External</option>
+                  <option value="internal">Internal</option>
+                  <option value="service">Service</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="detail-label mb-2 block">
+                    Rate Limit (RPM)
+                  </label>
+                  <input
+                    type="number"
+                    value={rateLimitRpm}
+                    onChange={(e) =>
+                      setRateLimitRpm(parseInt(e.target.value, 10) || 60)
+                    }
+                    min={1}
+                    max={10000}
+                    className="control-input"
+                  />
+                </div>
+                <div>
+                  <label className="detail-label mb-2 block">
+                    Rate Limit (TPM)
+                  </label>
+                  <input
+                    type="number"
+                    value={rateLimitTpm}
+                    onChange={(e) =>
+                      setRateLimitTpm(parseInt(e.target.value, 10) || 100000)
+                    }
+                    min={1000}
+                    max={10000000}
+                    className="control-input"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || !displayName.trim()}
+                className={cn(
+                  'button-primary w-full justify-center',
+                  isSubmitting || !displayName.trim()
+                    ? 'cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500 shadow-none'
+                    : '',
+                )}
+              >
+                {isSubmitting ? 'Creating...' : 'Create Client'}
+              </button>
+            </form>
             <aside className="panel-surface p-5 lg:p-6">
               <p className="section-kicker">Provisioning Notes</p>
               <h2 className="section-heading mt-2">Policy Guide</h2>
               <div className="mt-5 space-y-3">
                 <div className="detail-card">
                   <p className="detail-label">External</p>
-                  <p className="detail-value">Use for third-party callers and partner integrations.</p>
+                  <p className="detail-value">
+                    Use for third-party callers and partner integrations.
+                  </p>
                 </div>
                 <div className="detail-card">
                   <p className="detail-label">Internal</p>
-                  <p className="detail-value">Use for first-party dashboards and trusted internal tooling.</p>
+                  <p className="detail-value">
+                    Use for first-party dashboards and trusted internal tooling.
+                  </p>
                 </div>
                 <div className="detail-card">
                   <p className="detail-label">Service</p>
-                  <p className="detail-value">Use for background workers, automation, and server-to-server jobs.</p>
+                  <p className="detail-value">
+                    Use for background workers, automation, and server-to-server
+                    jobs.
+                  </p>
                 </div>
               </div>
             </aside>
@@ -278,5 +305,5 @@ export default function NewClientPage() {
         </div>
       </main>
     </div>
-  );
+  )
 }

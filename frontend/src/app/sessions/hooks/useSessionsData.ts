@@ -1,14 +1,18 @@
-import { useMemo } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { fetchSessions } from "@/lib/api";
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { fetchSessions } from '@/lib/api'
 
 interface UseSessionsDataProps {
-  statusFilter: string;
-  projectFilter: string;
-  pageSize: number;
+  statusFilter: string
+  projectFilter: string
+  pageSize: number
 }
 
-export function useSessionsData({ statusFilter, projectFilter, pageSize }: UseSessionsDataProps) {
+export function useSessionsData({
+  statusFilter,
+  projectFilter,
+  pageSize,
+}: UseSessionsDataProps) {
   const {
     data,
     isLoading,
@@ -17,7 +21,10 @@ export function useSessionsData({ statusFilter, projectFilter, pageSize }: UseSe
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["sessions", { status: statusFilter, project: projectFilter, pageSize }],
+    queryKey: [
+      'sessions',
+      { status: statusFilter, project: projectFilter, pageSize },
+    ],
     queryFn: ({ pageParam = 1 }) =>
       fetchSessions({
         page: pageParam,
@@ -26,19 +33,19 @@ export function useSessionsData({ statusFilter, projectFilter, pageSize }: UseSe
         project_id: projectFilter || undefined,
       }),
     getNextPageParam: (lastPage) => {
-      const totalPages = Math.ceil(lastPage.total / lastPage.page_size);
-      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+      const totalPages = Math.ceil(lastPage.total / lastPage.page_size)
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined
     },
     initialPageParam: 1,
-  });
+  })
 
-  const allSessions = useMemo(() =>
-    data?.pages.flatMap((page) => page.sessions) ?? [],
-    [data]
-  );
+  const allSessions = useMemo(
+    () => data?.pages.flatMap((page) => page.sessions) ?? [],
+    [data],
+  )
 
-  const total = data?.pages[0]?.total ?? 0;
-  const loadedCount = allSessions.length;
+  const total = data?.pages[0]?.total ?? 0
+  const loadedCount = allSessions.length
 
   return {
     data,
@@ -50,5 +57,5 @@ export function useSessionsData({ statusFilter, projectFilter, pageSize }: UseSe
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  };
+  }
 }

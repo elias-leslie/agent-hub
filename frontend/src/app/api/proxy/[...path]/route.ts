@@ -9,7 +9,7 @@
  * instead of directly to the backend.
  */
 
-import { getApiBaseUrl, buildInternalHeaders } from '@/lib/api-config'
+import { buildInternalHeaders, getApiBaseUrl } from '@/lib/api-config'
 
 const SSE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-cache, no-transform',
@@ -52,8 +52,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     headers: { 'Content-Type': 'application/json', ...auth },
     body,
   })
-  const contentType =
-    response.headers.get('Content-Type') ?? 'application/json'
+  const contentType = response.headers.get('Content-Type') ?? 'application/json'
   const isSSE = contentType.includes('text/event-stream')
   return new Response(response.body, {
     status: response.status,

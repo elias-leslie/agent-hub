@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { ErrorPage } from "@/components/error"
+import { ErrorPage } from '@/components/error'
 
 export default function MemoryError({
   error,

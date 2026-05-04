@@ -1,40 +1,47 @@
-"use client";
+'use client'
 
-import { cn } from "@/lib/utils";
-import { Check, Database } from "lucide-react";
-import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
-import { SortableHeader, type SortDirection } from "@/components/ui/SortableHeader";
-import type { SortField } from "./types";
-import { MemoryTableRow } from "./MemoryTableRow";
+import { Check, Database } from 'lucide-react'
+import {
+  SortableHeader,
+  type SortDirection,
+} from '@/components/ui/SortableHeader'
+import type {
+  MemoryCategory,
+  MemoryEpisode,
+  MemoryScope,
+} from '@/lib/memory-api'
+import { cn } from '@/lib/utils'
+import { MemoryTableRow } from './MemoryTableRow'
+import type { SortField } from './types'
 
 interface MemoryTableProps {
-  items: MemoryEpisode[];
-  isLoading: boolean;
-  isFetchingMore: boolean;
-  isSearchMode: boolean;
-  searchQuery: string;
-  sortField: SortField;
-  sortDirection: SortDirection;
-  selectedIds: Set<string>;
-  isAllSelected: boolean;
-  focusedRowIndex?: number;
-  expandedMemoryId: string | null;
-  scope?: MemoryScope;
-  category?: MemoryCategory;
-  pendingDeleteId: string | null;
-  isDeleting: boolean;
-  onSort: (field: SortField) => void;
-  onSelectAll: () => void;
-  onClearSelection: () => void;
-  onToggleExpand: (id: string) => void;
-  onToggleSelect: (id: string) => void;
-  onScopeChange: (scope: MemoryScope | undefined) => void;
-  onCategoryChange: (category: MemoryCategory | undefined) => void;
-  onDelete: (id: string) => void;
-  onTierChange?: (id: string, newCategory: MemoryCategory) => void;
-  onEdit?: () => void;
-  onTagFilter?: (tag: string) => void;
-  formatRelativeTime: (date: string) => string;
+  items: MemoryEpisode[]
+  isLoading: boolean
+  isFetchingMore: boolean
+  isSearchMode: boolean
+  searchQuery: string
+  sortField: SortField
+  sortDirection: SortDirection
+  selectedIds: Set<string>
+  isAllSelected: boolean
+  focusedRowIndex?: number
+  expandedMemoryId: string | null
+  scope?: MemoryScope
+  category?: MemoryCategory
+  pendingDeleteId: string | null
+  isDeleting: boolean
+  onSort: (field: SortField) => void
+  onSelectAll: () => void
+  onClearSelection: () => void
+  onToggleExpand: (id: string) => void
+  onToggleSelect: (id: string) => void
+  onScopeChange: (scope: MemoryScope | undefined) => void
+  onCategoryChange: (category: MemoryCategory | undefined) => void
+  onDelete: (id: string) => void
+  onTierChange?: (id: string, newCategory: MemoryCategory) => void
+  onEdit?: () => void
+  onTagFilter?: (tag: string) => void
+  formatRelativeTime: (date: string) => string
 }
 
 export function MemoryTable({
@@ -74,10 +81,10 @@ export function MemoryTable({
           <button
             onClick={isAllSelected ? onClearSelection : onSelectAll}
             className={cn(
-              "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+              'w-5 h-5 rounded border flex items-center justify-center transition-colors',
               isAllSelected
-                ? "bg-emerald-500 border-emerald-500 text-white"
-                : "border-slate-600 hover:border-emerald-400"
+                ? 'bg-emerald-500 border-emerald-500 text-white'
+                : 'border-slate-600 hover:border-emerald-400',
             )}
             data-testid="select-all-checkbox"
           >
@@ -85,15 +92,47 @@ export function MemoryTable({
           </button>
 
           <div className="hidden md:block">
-            <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={onSort} />
+            <SortableHeader
+              label="Scope"
+              field="scope"
+              currentField={sortField}
+              direction={sortDirection}
+              onSort={onSort}
+            />
           </div>
-          <SortableHeader label="Type" field="tier" currentField={sortField} direction={sortDirection} onSort={onSort} />
-          <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={onSort} />
+          <SortableHeader
+            label="Type"
+            field="tier"
+            currentField={sortField}
+            direction={sortDirection}
+            onSort={onSort}
+          />
+          <SortableHeader
+            label="Content"
+            field="content"
+            currentField={sortField}
+            direction={sortDirection}
+            onSort={onSort}
+          />
           <div className="hidden md:block">
-            <SortableHeader label="Updated" field="updated_at" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
+            <SortableHeader
+              label="Updated"
+              field="updated_at"
+              currentField={sortField}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+            />
           </div>
           <div className="hidden md:block">
-            <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
+            <SortableHeader
+              label="Utility"
+              field="utility"
+              currentField={sortField}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+            />
           </div>
           <div />
         </div>
@@ -103,7 +142,10 @@ export function MemoryTable({
       {isLoading && (
         <div className="divide-y divide-slate-800/50">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
+            <div
+              key={i}
+              className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center"
+            >
               <div className="h-4 w-4 rounded bg-slate-700 animate-pulse" />
               <div className="hidden md:block h-5 w-14 rounded bg-slate-700 animate-pulse" />
               <div className="h-5 w-16 rounded bg-slate-700 animate-pulse" />
@@ -128,7 +170,7 @@ export function MemoryTable({
           <p className="text-sm text-slate-400 max-w-sm">
             {isSearchMode
               ? `No results for "${searchQuery}"`
-              : "Memories will appear here as they are created"}
+              : 'Memories will appear here as they are created'}
           </p>
         </div>
       )}
@@ -172,5 +214,5 @@ export function MemoryTable({
         </div>
       )}
     </>
-  );
+  )
 }

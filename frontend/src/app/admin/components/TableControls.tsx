@@ -1,20 +1,20 @@
-import { Search, X, Filter, Download, Radio } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { REFRESH_OPTIONS, type RefreshInterval } from "./tableConfig";
+import { Download, Filter, Radio, Search, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { REFRESH_OPTIONS, type RefreshInterval } from './tableConfig'
 
 interface TableControlsProps {
-  searchQuery: string;
-  onSearchChange: (value: string) => void;
-  clientFilter: string | null;
-  onClientFilterChange: (value: string | null) => void;
-  uniqueClients: string[];
-  refreshInterval: RefreshInterval;
-  onRefreshIntervalChange: (value: RefreshInterval) => void;
-  onExport: () => void;
-  isRefreshing: boolean;
-  sortedCount: number;
-  totalCount: number;
-  hasExportData: boolean;
+  searchQuery: string
+  onSearchChange: (value: string) => void
+  clientFilter: string | null
+  onClientFilterChange: (value: string | null) => void
+  uniqueClients: string[]
+  refreshInterval: RefreshInterval
+  onRefreshIntervalChange: (value: RefreshInterval) => void
+  onExport: () => void
+  isRefreshing: boolean
+  sortedCount: number
+  totalCount: number
+  hasExportData: boolean
 }
 
 export function TableControls({
@@ -46,7 +46,7 @@ export function TableControls({
           />
           {searchQuery && (
             <button
-              onClick={() => onSearchChange("")}
+              onClick={() => onSearchChange('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
               <X className="h-4 w-4" />
@@ -58,19 +58,19 @@ export function TableControls({
         <div className="relative">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <select
-            value={clientFilter || ""}
+            value={clientFilter || ''}
             onChange={(e) => onClientFilterChange(e.target.value || null)}
             className={cn(
-              "pl-9 pr-8 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 appearance-none cursor-pointer",
+              'pl-9 pr-8 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 appearance-none cursor-pointer',
               clientFilter
-                ? "bg-amber-900/30 border-amber-700 text-amber-300"
-                : "bg-slate-800/50 border-slate-700 text-slate-300"
+                ? 'bg-amber-900/30 border-amber-700 text-amber-300'
+                : 'bg-slate-800/50 border-slate-700 text-slate-300',
             )}
           >
             <option value="">All Clients</option>
             {uniqueClients.map((client) => (
               <option key={client} value={client}>
-                {client === "<unknown>" ? "UNKNOWN" : client}
+                {client === '<unknown>' ? 'UNKNOWN' : client}
               </option>
             ))}
           </select>
@@ -80,18 +80,24 @@ export function TableControls({
         <div className="flex items-center gap-1.5">
           <Radio
             className={cn(
-              "h-4 w-4",
-              refreshInterval > 0 ? "text-amber-400 animate-pulse" : "text-slate-500"
+              'h-4 w-4',
+              refreshInterval > 0
+                ? 'text-amber-400 animate-pulse'
+                : 'text-slate-500',
             )}
           />
           <select
             value={refreshInterval}
-            onChange={(e) => onRefreshIntervalChange(parseInt(e.target.value, 10) as RefreshInterval)}
+            onChange={(e) =>
+              onRefreshIntervalChange(
+                parseInt(e.target.value, 10) as RefreshInterval,
+              )
+            }
             className={cn(
-              "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40",
+              'px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40',
               refreshInterval > 0
-                ? "bg-amber-900/30 border-amber-700 text-amber-300"
-                : "bg-slate-800/50 border-slate-700 text-slate-400"
+                ? 'bg-amber-900/30 border-amber-700 text-amber-300'
+                : 'bg-slate-800/50 border-slate-700 text-slate-400',
             )}
           >
             {REFRESH_OPTIONS.map((opt) => (
@@ -130,14 +136,17 @@ export function TableControls({
           {clientFilter && (
             <span
               className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-full border",
-                clientFilter === "<unknown>"
-                  ? "bg-red-900/30 text-red-300 border-red-700"
-                  : "bg-amber-900/30 text-amber-300 border-amber-700"
+                'flex items-center gap-1 px-2 py-1 rounded-full border',
+                clientFilter === '<unknown>'
+                  ? 'bg-red-900/30 text-red-300 border-red-700'
+                  : 'bg-amber-900/30 text-amber-300 border-amber-700',
               )}
             >
-              Client: {clientFilter === "<unknown>" ? "UNKNOWN" : clientFilter}
-              <button onClick={() => onClientFilterChange(null)} className="hover:text-slate-100">
+              Client: {clientFilter === '<unknown>' ? 'UNKNOWN' : clientFilter}
+              <button
+                onClick={() => onClientFilterChange(null)}
+                className="hover:text-slate-100"
+              >
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -145,5 +154,5 @@ export function TableControls({
         </div>
       )}
     </div>
-  );
+  )
 }

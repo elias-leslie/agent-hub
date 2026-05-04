@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import Link from "next/link";
-import { FileQuestion, Home, ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileQuestion, Home } from 'lucide-react'
+import Link from 'next/link'
 
 export default function NotFound() {
   return (
@@ -32,7 +32,9 @@ export default function NotFound() {
           </Link>
 
           <button
-            onClick={() => typeof window !== "undefined" && window.history.back()}
+            onClick={() =>
+              typeof window !== 'undefined' && window.history.back()
+            }
             className="button-secondary cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -41,5 +43,5 @@ export default function NotFound() {
         </div>
       </div>
     </div>
-  );
+  )
 }

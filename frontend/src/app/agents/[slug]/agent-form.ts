@@ -1,8 +1,8 @@
-import type { Agent } from "./types"
-import { cloneConfig, parseConfig } from "./components/memory/utils"
+import { cloneConfig, parseConfig } from './components/memory/utils'
+import type { Agent } from './types'
 
-function cloneStrategies(strategies: Agent["strategies"]): Agent["strategies"] {
-  return JSON.parse(JSON.stringify(strategies ?? {})) as Agent["strategies"]
+function cloneStrategies(strategies: Agent['strategies']): Agent['strategies'] {
+  return JSON.parse(JSON.stringify(strategies ?? {})) as Agent['strategies']
 }
 
 export function createAgentFormData(agent: Agent): Partial<Agent> {
@@ -32,7 +32,9 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
   }
 }
 
-export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent> {
+export function buildAgentUpdatePayload(
+  formData: Partial<Agent>,
+): Partial<Agent> {
   const payload = { ...formData }
 
   if (!payload.name) delete payload.name
@@ -41,11 +43,13 @@ export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent
   delete payload.effective_memory_config
   if (payload.memory_config) {
     payload.memory_config = cloneConfig(
-      payload.memory_config as NonNullable<Agent["memory_config"]>
+      payload.memory_config as NonNullable<Agent['memory_config']>,
     )
   }
   if (payload.strategies) {
-    payload.strategies = cloneStrategies(payload.strategies as Agent["strategies"])
+    payload.strategies = cloneStrategies(
+      payload.strategies as Agent['strategies'],
+    )
   }
 
   return payload

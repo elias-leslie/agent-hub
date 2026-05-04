@@ -1,25 +1,29 @@
-"use client";
+'use client'
 
-import { X } from "lucide-react";
-import { ModelRadar } from "./model-radar";
-import type { ModelOption } from "@/components/chat/use-models";
+import { X } from 'lucide-react'
+import type { ModelOption } from '@/components/chat/use-models'
 import {
-  ScoreBreakdown,
-  CompositeScore,
-  CostComparison,
-  ContextWindow,
   CapabilitiesMatrix,
+  CompositeScore,
+  ContextWindow,
+  CostComparison,
   RemoveButtons,
-} from "./model-comparison-sections";
+  ScoreBreakdown,
+} from './model-comparison-sections'
+import { ModelRadar } from './model-radar'
 
 interface ModelComparisonProps {
-  models: ModelOption[];
-  onClose: () => void;
-  onRemoveModel: (modelId: string) => void;
+  models: ModelOption[]
+  onClose: () => void
+  onRemoveModel: (modelId: string) => void
 }
 
-export function ModelComparison({ models, onClose, onRemoveModel }: ModelComparisonProps) {
-  if (models.length === 0) return null;
+export function ModelComparison({
+  models,
+  onClose,
+  onRemoveModel,
+}: ModelComparisonProps) {
+  if (models.length === 0) return null
 
   return (
     <div className="fixed inset-y-0 right-0 w-full lg:w-[800px] bg-slate-900 border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
@@ -31,7 +35,7 @@ export function ModelComparison({ models, onClose, onRemoveModel }: ModelCompari
               Model Comparison
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {models.length} model{models.length !== 1 ? "s" : ""} selected
+              {models.length} model{models.length !== 1 ? 's' : ''} selected
             </p>
           </div>
           <button
@@ -62,5 +66,5 @@ export function ModelComparison({ models, onClose, onRemoveModel }: ModelCompari
         <RemoveButtons models={models} onRemoveModel={onRemoveModel} />
       </div>
     </div>
-  );
+  )
 }

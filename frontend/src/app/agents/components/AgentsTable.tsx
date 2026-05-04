@@ -1,7 +1,12 @@
-import { Bot } from "lucide-react";
-import { AgentsTableHeader } from "./AgentsTableHeader";
-import { AgentRow } from "./AgentRow";
-import type { Agent, AgentMetrics, SortField, SortDirection } from "../lib/types";
+import { Bot } from 'lucide-react'
+import type {
+  Agent,
+  AgentMetrics,
+  SortDirection,
+  SortField,
+} from '../lib/types'
+import { AgentRow } from './AgentRow'
+import { AgentsTableHeader } from './AgentsTableHeader'
 
 export function AgentsTable({
   agents,
@@ -17,34 +22,36 @@ export function AgentsTable({
   onClearSearch,
   onShowActiveOnly,
 }: {
-  agents: Agent[];
-  sortField: SortField;
-  sortDirection: SortDirection;
-  onSort: (field: SortField) => void;
-  getMetrics: (slug: string) => AgentMetrics | null;
-  onClone: (agent: Agent) => void;
-  onArchive: (agent: Agent) => void;
-  totalAgents: number;
-  searchQuery: string;
-  showInactive: boolean;
-  onClearSearch: () => void;
-  onShowActiveOnly: () => void;
+  agents: Agent[]
+  sortField: SortField
+  sortDirection: SortDirection
+  onSort: (field: SortField) => void
+  getMetrics: (slug: string) => AgentMetrics | null
+  onClone: (agent: Agent) => void
+  onArchive: (agent: Agent) => void
+  totalAgents: number
+  searchQuery: string
+  showInactive: boolean
+  onClearSearch: () => void
+  onShowActiveOnly: () => void
 }) {
   if (agents.length === 0) {
-    const hasSearch = searchQuery.trim().length > 0;
+    const hasSearch = searchQuery.trim().length > 0
 
     return (
       <div className="empty-surface">
         <Bot className="mx-auto mb-4 h-10 w-10 text-slate-600" />
         <p className="text-sm font-semibold text-slate-200">
-          {hasSearch ? `No agents match "${searchQuery.trim()}"` : "No agents to show"}
+          {hasSearch
+            ? `No agents match "${searchQuery.trim()}"`
+            : 'No agents to show'}
         </p>
         <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
           {hasSearch
-            ? "Try a different name, slug, or description search."
+            ? 'Try a different name, slug, or description search.'
             : showInactive
-              ? "Only the persona agent is configured right now, or the current list is empty."
-              : "Inactive agents are hidden by default, and the persona agent is managed from Persona Settings."}
+              ? 'Only the persona agent is configured right now, or the current list is empty.'
+              : 'Inactive agents are hidden by default, and the persona agent is managed from Persona Settings.'}
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {hasSearch && (
@@ -65,15 +72,12 @@ export function AgentsTable({
               Include inactive agents
             </button>
           )}
-          <a
-            href="/agents/new"
-            className="button-primary px-3 py-2 text-xs"
-          >
+          <a href="/agents/new" className="button-primary px-3 py-2 text-xs">
             New Agent
           </a>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -95,5 +99,5 @@ export function AgentsTable({
         ))}
       </div>
     </div>
-  );
+  )
 }

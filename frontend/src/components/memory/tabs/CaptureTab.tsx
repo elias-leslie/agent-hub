@@ -1,16 +1,9 @@
-"use client";
+'use client'
 
-import {
-  Radio,
-  Pause,
-  Play,
-  Trash2,
-  Inbox,
-  Loader2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useMemoryStream } from "@/hooks/use-memory-stream";
-import { CaptureItem } from "@/components/memory/CaptureItem";
+import { Inbox, Loader2, Pause, Play, Radio, Trash2 } from 'lucide-react'
+import { CaptureItem } from '@/components/memory/CaptureItem'
+import { useMemoryStream } from '@/hooks/use-memory-stream'
+import { cn } from '@/lib/utils'
 
 function CaptureEmpty() {
   return (
@@ -18,15 +11,13 @@ function CaptureEmpty() {
       <div className="p-4 rounded-full bg-slate-800 mb-4">
         <Inbox className="w-8 h-8 text-slate-500" />
       </div>
-      <h3 className="text-lg font-medium text-slate-100 mb-1">
-        No events yet
-      </h3>
+      <h3 className="text-lg font-medium text-slate-100 mb-1">No events yet</h3>
       <p className="text-sm text-slate-400 max-w-sm">
         Observations will appear here in real-time as they are captured by
         hooks, agents, and chat sessions.
       </p>
     </div>
-  );
+  )
 }
 
 function CaptureConnecting() {
@@ -40,14 +31,14 @@ function CaptureConnecting() {
         Establishing SSE connection to the backend.
       </p>
     </div>
-  );
+  )
 }
 
 export function CaptureTab() {
   const { events, isConnected, isPaused, pause, resume, clear } =
-    useMemoryStream();
+    useMemoryStream()
 
-  const showConnecting = !isConnected && !isPaused && events.length === 0;
+  const showConnecting = !isConnected && !isPaused && events.length === 0
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -64,26 +55,22 @@ export function CaptureTab() {
             <span className="flex items-center gap-1.5 text-xs">
               <span
                 className={cn(
-                  "w-2 h-2 rounded-full",
+                  'w-2 h-2 rounded-full',
                   isConnected
-                    ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]"
+                    ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]'
                     : isPaused
-                      ? "bg-amber-400"
-                      : "bg-red-400"
+                      ? 'bg-amber-400'
+                      : 'bg-red-400',
                 )}
               />
               <span className="text-slate-500">
-                {isConnected
-                  ? "Live"
-                  : isPaused
-                    ? "Paused"
-                    : "Disconnected"}
+                {isConnected ? 'Live' : isPaused ? 'Paused' : 'Disconnected'}
               </span>
             </span>
 
             {events.length > 0 && (
               <span className="text-xs text-slate-500">
-                {events.length} event{events.length !== 1 ? "s" : ""}
+                {events.length} event{events.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
@@ -93,10 +80,10 @@ export function CaptureTab() {
             <button
               onClick={isPaused ? resume : pause}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors",
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors',
                 isPaused
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                  : "bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600"
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600',
               )}
             >
               {isPaused ? (
@@ -116,10 +103,10 @@ export function CaptureTab() {
               onClick={clear}
               disabled={events.length === 0}
               className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors",
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors',
                 events.length === 0
-                  ? "bg-slate-800/50 border-slate-800 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600"
+                  ? 'bg-slate-800/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-600',
               )}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -144,5 +131,5 @@ export function CaptureTab() {
         )}
       </div>
     </div>
-  );
+  )
 }

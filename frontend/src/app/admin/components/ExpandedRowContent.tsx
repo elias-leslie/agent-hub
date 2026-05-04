@@ -1,6 +1,6 @@
-import { cn } from "@/lib/utils";
-import { CopyButton } from "@/components/memory/CopyButton";
-import type { BlockedRequest } from "@/lib/api";
+import { CopyButton } from '@/components/memory/CopyButton'
+import type { BlockedRequest } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function ExpandedRowContent({ request }: { request: BlockedRequest }) {
   return (
@@ -51,11 +51,17 @@ export function ExpandedRowContent({ request }: { request: BlockedRequest }) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-slate-500">Client</span>
-            <span className={cn(
-              "font-mono",
-              request.client_name === "<unknown>" ? "text-red-400 font-bold" : "text-amber-400"
-            )}>
-              {request.client_name === "<unknown>" ? "UNKNOWN" : request.client_name || "—"}
+            <span
+              className={cn(
+                'font-mono',
+                request.client_name === '<unknown>'
+                  ? 'text-red-400 font-bold'
+                  : 'text-amber-400',
+              )}
+            >
+              {request.client_name === '<unknown>'
+                ? 'UNKNOWN'
+                : request.client_name || '—'}
             </span>
           </div>
           <div className="flex justify-between items-center">
@@ -67,5 +73,5 @@ export function ExpandedRowContent({ request }: { request: BlockedRequest }) {
         </div>
       </div>
     </div>
-  );
+  )
 }

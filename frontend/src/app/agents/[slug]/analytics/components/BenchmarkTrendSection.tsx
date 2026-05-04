@@ -6,12 +6,12 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from "recharts";
-import { ChartCard } from "./ChartCard";
-import type { AgentBenchmarkTrendPoint } from "../types";
+} from 'recharts'
+import type { AgentBenchmarkTrendPoint } from '../types'
+import { ChartCard } from './ChartCard'
 
 interface BenchmarkTrendSectionProps {
-  trend: AgentBenchmarkTrendPoint[];
+  trend: AgentBenchmarkTrendPoint[]
 }
 
 function buildChartData(trend: AgentBenchmarkTrendPoint[]) {
@@ -19,19 +19,19 @@ function buildChartData(trend: AgentBenchmarkTrendPoint[]) {
     ...point,
     label: point.completed_at
       ? new Date(point.completed_at).toLocaleString([], {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
         })
       : `Run ${index + 1}`,
     score: point.avg_score ?? 0,
     passRate: point.pass_rate ?? 0,
-  }));
+  }))
 }
 
 export function BenchmarkTrendSection({ trend }: BenchmarkTrendSectionProps) {
-  const chartData = buildChartData(trend);
+  const chartData = buildChartData(trend)
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
@@ -46,15 +46,22 @@ export function BenchmarkTrendSection({ trend }: BenchmarkTrendSectionProps) {
                 stroke="#94a3b8"
                 minTickGap={48}
               />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11 }}
+                stroke="#94a3b8"
+              />
               <Tooltip
-                formatter={(value) => [`${Number(value ?? 0).toFixed(1)}`, "Avg score"]}
+                formatter={(value) => [
+                  `${Number(value ?? 0).toFixed(1)}`,
+                  'Avg score',
+                ]}
                 labelFormatter={(value) => String(value)}
                 contentStyle={{
-                  backgroundColor: "#0f172a",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "12px",
+                  backgroundColor: '#0f172a',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '12px',
                 }}
               />
               <Line
@@ -82,15 +89,22 @@ export function BenchmarkTrendSection({ trend }: BenchmarkTrendSectionProps) {
                 stroke="#94a3b8"
                 minTickGap={48}
               />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11 }}
+                stroke="#94a3b8"
+              />
               <Tooltip
-                formatter={(value) => [`${Number(value ?? 0).toFixed(1)}%`, "Pass rate"]}
+                formatter={(value) => [
+                  `${Number(value ?? 0).toFixed(1)}%`,
+                  'Pass rate',
+                ]}
                 labelFormatter={(value) => String(value)}
                 contentStyle={{
-                  backgroundColor: "#0f172a",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "12px",
+                  backgroundColor: '#0f172a',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '12px',
                 }}
               />
               <Line
@@ -107,5 +121,5 @@ export function BenchmarkTrendSection({ trend }: BenchmarkTrendSectionProps) {
         </div>
       </ChartCard>
     </div>
-  );
+  )
 }

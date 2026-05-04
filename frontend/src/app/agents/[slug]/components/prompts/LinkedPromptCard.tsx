@@ -1,31 +1,31 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { CompactnessMeter } from "@/components/CompactnessMeter";
-import { type Prompt, updatePrompt } from "@/lib/api/prompts";
+import { CompactnessMeter } from '@/components/CompactnessMeter'
+import { type Prompt, updatePrompt } from '@/lib/api/prompts'
 
 interface LinkedPromptCardProps {
-  prompt: Prompt;
-  onUpdated: () => void;
+  prompt: Prompt
+  onUpdated: () => void
 }
 
 export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
-  const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
-  const [name, setName] = useState(prompt.name);
-  const [description, setDescription] = useState(prompt.description ?? "");
-  const [content, setContent] = useState(prompt.content);
-  const [enabled, setEnabled] = useState(prompt.enabled);
+  const queryClient = useQueryClient()
+  const [expanded, setExpanded] = useState(false)
+  const [name, setName] = useState(prompt.name)
+  const [description, setDescription] = useState(prompt.description ?? '')
+  const [content, setContent] = useState(prompt.content)
+  const [enabled, setEnabled] = useState(prompt.enabled)
 
   useEffect(() => {
-    setName(prompt.name);
-    setDescription(prompt.description ?? "");
-    setContent(prompt.content);
-    setEnabled(prompt.enabled);
-  }, [prompt.content, prompt.description, prompt.enabled, prompt.name]);
+    setName(prompt.name)
+    setDescription(prompt.description ?? '')
+    setContent(prompt.content)
+    setEnabled(prompt.enabled)
+  }, [prompt.content, prompt.description, prompt.enabled, prompt.name])
 
   const saveMutation = useMutation({
     mutationFn: async () =>
@@ -36,18 +36,18 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
         enabled,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prompt", prompt.slug] });
-      queryClient.invalidateQueries({ queryKey: ["persona-workflow-prompts"] });
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      onUpdated();
+      queryClient.invalidateQueries({ queryKey: ['prompt', prompt.slug] })
+      queryClient.invalidateQueries({ queryKey: ['persona-workflow-prompts'] })
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      onUpdated()
     },
-  });
+  })
 
   const dirty =
     name !== prompt.name ||
-    description !== (prompt.description ?? "") ||
+    description !== (prompt.description ?? '') ||
     content !== prompt.content ||
-    enabled !== prompt.enabled;
+    enabled !== prompt.enabled
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900">
@@ -84,7 +84,9 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
             />
           </label>
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">Description</span>
+            <span className="text-xs font-medium text-slate-400">
+              Description
+            </span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -128,5 +130,5 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
         </div>
       ) : null}
     </div>
-  );
+  )
 }

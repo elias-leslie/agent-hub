@@ -25,7 +25,9 @@ describe('fetchApi', () => {
     process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE = 'agent-hub-dashboard'
     vi.stubGlobal('window', undefined)
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const { fetchApi } = await import('./api-config')
@@ -48,7 +50,9 @@ describe('fetchApi', () => {
     process.env.INTERNAL_SERVICE_SECRET = 'secret-123'
     vi.stubGlobal('window', undefined)
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const { fetchApi } = await import('./api-config')
@@ -68,7 +72,9 @@ describe('fetchApi', () => {
   })
 
   it('builds the same-origin chat completion path for browser requests', async () => {
-    vi.stubGlobal('window', { location: { hostname: '192.168.8.244' } } as Window & typeof globalThis)
+    vi.stubGlobal('window', {
+      location: { hostname: '192.168.8.244' },
+    } as Window & typeof globalThis)
 
     const { getCompleteApiUrl } = await import('./api-config')
 
@@ -81,7 +87,9 @@ describe('fetchApi', () => {
     delete process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID
     vi.stubGlobal('window', undefined)
 
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const { fetchApi } = await import('./api-config')

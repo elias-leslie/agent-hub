@@ -1,44 +1,44 @@
-"use client";
+'use client'
 
-import { Database, Clock, Layers, Brain } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { MemoryStats } from "@/lib/memory-api";
+import { Brain, Clock, Database, Layers } from 'lucide-react'
+import type { MemoryStats as MemoryStatsData } from '@/lib/memory-api'
+import { cn } from '@/lib/utils'
 
 interface MemoryStatsProps {
-  stats: MemoryStats | undefined;
-  isLoading: boolean;
+  stats: MemoryStatsData | undefined
+  isLoading: boolean
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "Never";
-  const date = new Date(dateStr);
+  if (!dateStr) return 'Never'
+  const date = new Date(dateStr)
   return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function getCategoryIcon(category: string): string {
   const icons: Record<string, string> = {
-    coding_standard: "📏",
-    troubleshooting_guide: "⚠️",
-    system_design: "🏗️",
-    operational_context: "⚙️",
-    domain_knowledge: "📚",
-    active_state: "▶️",
-  };
-  return icons[category] || "📝";
+    coding_standard: '📏',
+    troubleshooting_guide: '⚠️',
+    system_design: '🏗️',
+    operational_context: '⚙️',
+    domain_knowledge: '📚',
+    active_state: '▶️',
+  }
+  return icons[category] || '📝'
 }
 
 function getScopeLabel(scope: string): string {
   const labels: Record<string, string> = {
-    global: "Global",
-    project: "Project",
-    task: "Task",
-  };
-  return labels[scope] || scope;
+    global: 'Global',
+    project: 'Project',
+    task: 'Task',
+  }
+  return labels[scope] || scope
 }
 
 function StatCard({
@@ -46,27 +46,27 @@ function StatCard({
   label,
   value,
   subtext,
-  accentColor = "emerald",
+  accentColor = 'emerald',
 }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  subtext?: string;
-  accentColor?: "emerald" | "amber" | "blue" | "purple";
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string | number
+  subtext?: string
+  accentColor?: 'emerald' | 'amber' | 'blue' | 'purple'
 }) {
   const colors = {
-    emerald: "border-l-emerald-400",
-    amber: "border-l-amber-400",
-    blue: "border-l-amber-400",
-    purple: "border-l-purple-400",
-  };
+    emerald: 'border-l-emerald-400',
+    amber: 'border-l-amber-400',
+    blue: 'border-l-amber-400',
+    purple: 'border-l-purple-400',
+  }
 
   return (
     <div
       className={cn(
-        "border-l-4 rounded-lg p-4",
-        "bg-slate-900/50",
-        "border border-slate-800",
+        'border-l-4 rounded-lg p-4',
+        'bg-slate-900/50',
+        'border border-slate-800',
         colors[accentColor],
       )}
       data-testid="stat-card"
@@ -74,19 +74,13 @@ function StatCard({
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-slate-400">{label}</p>
-          <p className="text-2xl font-semibold text-slate-100 mt-1">
-            {value}
-          </p>
-          {subtext && (
-            <p className="text-xs text-slate-500 mt-1">
-              {subtext}
-            </p>
-          )}
+          <p className="text-2xl font-semibold text-slate-100 mt-1">{value}</p>
+          {subtext && <p className="text-xs text-slate-500 mt-1">{subtext}</p>}
         </div>
         <Icon className="w-5 h-5 text-slate-500" />
       </div>
     </div>
-  );
+  )
 }
 
 function SkeletonCard() {
@@ -97,7 +91,7 @@ function SkeletonCard() {
         <div className="h-8 w-16 bg-slate-700 rounded mt-2" />
       </div>
     </div>
-  );
+  )
 }
 
 export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
@@ -112,16 +106,16 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
         <SkeletonCard />
         <SkeletonCard />
       </div>
-    );
+    )
   }
 
   if (!stats) {
-    return null;
+    return null
   }
 
   // Get top 2 categories and scopes for display
-  const topCategories = stats.by_category.slice(0, 2);
-  const topScopes = stats.by_scope.slice(0, 3);
+  const topCategories = stats.by_category.slice(0, 2)
+  const topScopes = stats.by_scope.slice(0, 3)
 
   return (
     <div
@@ -146,7 +140,9 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
         value={topScopes.length > 0 ? topScopes[0].count : 0}
         subtext={
           topScopes.length > 0
-            ? topScopes.map((s) => `${getScopeLabel(s.scope)}: ${s.count}`).join(", ")
+            ? topScopes
+                .map((s) => `${getScopeLabel(s.scope)}: ${s.count}`)
+                .join(', ')
             : undefined
         }
         accentColor="amber"
@@ -157,11 +153,13 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
         value={stats.by_category.length}
         subtext={
           topCategories.length > 0
-            ? topCategories.map((c) => `${getCategoryIcon(c.category)} ${c.count}`).join(" ")
+            ? topCategories
+                .map((c) => `${getCategoryIcon(c.category)} ${c.count}`)
+                .join(' ')
             : undefined
         }
         accentColor="purple"
       />
     </div>
-  );
+  )
 }

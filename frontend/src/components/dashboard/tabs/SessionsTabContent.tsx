@@ -1,13 +1,19 @@
-import { MessageSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatRelativeTime, formatModelName } from "@/lib/formatters";
-import type { SessionListItem } from "@/lib/api";
+import { MessageSquare } from 'lucide-react'
+import type { SessionListItem } from '@/lib/api'
+import { formatModelName, formatRelativeTime } from '@/lib/formatters'
+import { cn } from '@/lib/utils'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SESSIONS TAB CONTENT
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionListItem[]; isLoading: boolean }) {
+export function SessionsTabContent({
+  sessions,
+  isLoading,
+}: {
+  sessions: SessionListItem[]
+  isLoading: boolean
+}) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -15,7 +21,7 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
           <div key={i} className="h-12 bg-slate-800 rounded animate-pulse" />
         ))}
       </div>
-    );
+    )
   }
 
   if (sessions.length === 0) {
@@ -24,7 +30,7 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
         <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
         <p className="text-sm">No recent sessions</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -36,10 +42,14 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
           className="flex items-center justify-between p-2.5 rounded-md hover:bg-slate-800/50 transition-colors group"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              session.status === "active" ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
-            )} />
+            <div
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                session.status === 'active'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-slate-400',
+              )}
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-100 truncate">
@@ -51,7 +61,11 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
               </div>
               <div className="text-[11px] text-slate-400">
                 {session.message_count} messages
-                {session.agent_slug && <span className="ml-2 text-slate-500">| {session.agent_slug}</span>}
+                {session.agent_slug && (
+                  <span className="ml-2 text-slate-500">
+                    | {session.agent_slug}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -61,5 +75,5 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
         </a>
       ))}
     </div>
-  );
+  )
 }

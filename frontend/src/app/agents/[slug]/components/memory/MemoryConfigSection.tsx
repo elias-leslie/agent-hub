@@ -1,23 +1,23 @@
-import { cn } from "@/lib/utils";
-import { MemoryConfig } from "./types";
-import { Toggle } from "./Toggle";
+import { cn } from '@/lib/utils'
+import { Toggle } from './Toggle'
+import type { MemoryConfig } from './types'
 
 const CONSUMER_PROFILE_SUGGESTIONS = [
-  "agent_general",
-  "agent_visual",
-  "agent_coding",
-  "agent_operator",
-  "agent_promptops",
-  "agent_preview",
-  "agent_runtime",
-  "claude_session_start",
-  "codex_startup",
-] as const;
+  'agent_general',
+  'agent_visual',
+  'agent_coding',
+  'agent_operator',
+  'agent_promptops',
+  'agent_preview',
+  'agent_runtime',
+  'claude_session_start',
+  'codex_startup',
+] as const
 
 interface MemoryConfigSectionProps {
-  config: MemoryConfig;
-  isCustomEnabled: boolean;
-  onUpdateConfig: (updates: Partial<MemoryConfig>) => void;
+  config: MemoryConfig
+  isCustomEnabled: boolean
+  onUpdateConfig: (updates: Partial<MemoryConfig>) => void
 }
 
 export function MemoryConfigSection({
@@ -25,18 +25,19 @@ export function MemoryConfigSection({
   isCustomEnabled,
   onUpdateConfig,
 }: MemoryConfigSectionProps) {
-  const subordinateControlsDisabled = !isCustomEnabled || !config.injection_enabled;
+  const subordinateControlsDisabled =
+    !isCustomEnabled || !config.injection_enabled
   const referenceIndexDisabled =
-    subordinateControlsDisabled || !config.include_references;
-  const profileInputsDisabled = !isCustomEnabled;
+    subordinateControlsDisabled || !config.include_references
+  const profileInputsDisabled = !isCustomEnabled
 
   return (
     <div
       className={cn(
-        "space-y-5 p-5 rounded-lg border",
+        'space-y-5 p-5 rounded-lg border',
         isCustomEnabled
-          ? "border-slate-700 bg-slate-800/50"
-          : "border-slate-700/50 bg-slate-800/20 opacity-50 pointer-events-none"
+          ? 'border-slate-700 bg-slate-800/50'
+          : 'border-slate-700/50 bg-slate-800/20 opacity-50 pointer-events-none',
       )}
     >
       <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
@@ -45,11 +46,10 @@ export function MemoryConfigSection({
 
       <div className="space-y-3 rounded-lg border border-slate-700/70 bg-slate-900/40 p-4">
         <div>
-          <p className="text-sm font-medium text-slate-200">
-            Context Routing
-          </p>
+          <p className="text-sm font-medium text-slate-200">Context Routing</p>
           <p className="text-xs text-slate-400">
-            Set role-fit memory budget and rendering. Leave blank to inherit defaults.
+            Set role-fit memory budget and rendering. Leave blank to inherit
+            defaults.
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export function MemoryConfigSection({
               type="text"
               list="memory-consumer-profiles"
               aria-label="Runtime Profile Override"
-              value={config.runtime_consumer_profile ?? ""}
+              value={config.runtime_consumer_profile ?? ''}
               onChange={(e) =>
                 onUpdateConfig({
                   runtime_consumer_profile: e.target.value.trim() || undefined,
@@ -73,7 +73,8 @@ export function MemoryConfigSection({
               className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
             />
             <p className="text-[11px] text-slate-500">
-              Live completion surface. Main switch for no-more-no-less policy routing.
+              Live completion surface. Main switch for no-more-no-less policy
+              routing.
             </p>
           </div>
 
@@ -85,7 +86,7 @@ export function MemoryConfigSection({
               type="text"
               list="memory-consumer-profiles"
               aria-label="Preview Profile Override"
-              value={config.preview_consumer_profile ?? ""}
+              value={config.preview_consumer_profile ?? ''}
               onChange={(e) =>
                 onUpdateConfig({
                   preview_consumer_profile: e.target.value.trim() || undefined,
@@ -108,7 +109,7 @@ export function MemoryConfigSection({
               type="text"
               list="memory-consumer-profiles"
               aria-label="Shared Profile Fallback"
-              value={config.consumer_profile ?? ""}
+              value={config.consumer_profile ?? ''}
               onChange={(e) =>
                 onUpdateConfig({
                   consumer_profile: e.target.value.trim() || undefined,
@@ -134,9 +135,7 @@ export function MemoryConfigSection({
       {/* Injection Enabled */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-200">
-            Memory Injection
-          </p>
+          <p className="text-sm font-medium text-slate-200">Memory Injection</p>
           <p className="text-xs text-slate-400">
             Enable durable memory injection for this agent
           </p>
@@ -152,10 +151,10 @@ export function MemoryConfigSection({
                 include_references: false,
                 reference_index_enabled: false,
                 continuity_enabled: false,
-              });
-              return;
+              })
+              return
             }
-            onUpdateConfig({ injection_enabled: true });
+            onUpdateConfig({ injection_enabled: true })
           }}
           disabled={!isCustomEnabled}
           ariaLabel="Memory Injection"
@@ -168,7 +167,8 @@ export function MemoryConfigSection({
             Project Index Context
           </p>
           <p className="text-xs text-slate-400">
-            Inject compact canonical `.index.yaml` project metadata for project-scoped work
+            Inject compact canonical `.index.yaml` project metadata for
+            project-scoped work
           </p>
         </div>
         <Toggle
@@ -189,7 +189,8 @@ export function MemoryConfigSection({
             Tool Capability Context
           </p>
           <p className="text-xs text-slate-400">
-            Inject compact wrapper-tool discovery hints and canonical `--help` entrypoints
+            Inject compact wrapper-tool discovery hints and canonical `--help`
+            entrypoints
           </p>
         </div>
         <Toggle
@@ -206,9 +207,7 @@ export function MemoryConfigSection({
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-200">
-            Include Mandates
-          </p>
+          <p className="text-sm font-medium text-slate-200">Include Mandates</p>
           <p className="text-xs text-slate-400">
             Keep universal rule summaries and full mandate expansions eligible
           </p>
@@ -267,7 +266,8 @@ export function MemoryConfigSection({
             Passive Reference Index
           </p>
           <p className="text-xs text-slate-400">
-            Inject a lightweight lookup catalog before pulling full reference details
+            Inject a lightweight lookup catalog before pulling full reference
+            details
           </p>
         </div>
         <Toggle
@@ -321,7 +321,7 @@ export function MemoryConfigSection({
             value={config.continuity_max_sessions}
             onChange={(e) =>
               onUpdateConfig({
-                continuity_max_sessions: parseInt(e.target.value),
+                continuity_max_sessions: parseInt(e.target.value, 10),
               })
             }
             disabled={!isCustomEnabled}
@@ -335,5 +335,5 @@ export function MemoryConfigSection({
         </div>
       )}
     </div>
-  );
+  )
 }

@@ -1,32 +1,40 @@
-import { useState } from "react";
-import { Copy, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Check, Copy } from 'lucide-react'
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
-export function CopyIdButton({ id, className, asSpan }: { id: string; className?: string; asSpan?: boolean }) {
-  const [copied, setCopied] = useState(false);
+export function CopyIdButton({
+  id,
+  className,
+  asSpan,
+}: {
+  id: string
+  className?: string
+  asSpan?: boolean
+}) {
+  const [copied, setCopied] = useState(false)
 
   const doCopy = async () => {
-    await navigator.clipboard.writeText(id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+    await navigator.clipboard.writeText(id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await doCopy();
-  };
+    e.stopPropagation()
+    e.preventDefault()
+    await doCopy()
+  }
 
   const commonProps = {
     onClick: handleCopy,
     className: cn(
-      "relative p-1 rounded-md transition-all cursor-pointer",
-      "hover:bg-slate-700",
-      "active:scale-95",
-      className
+      'relative p-1 rounded-md transition-all cursor-pointer',
+      'hover:bg-slate-700',
+      'active:scale-95',
+      className,
     ),
-    title: copied ? undefined : "Copy session ID",
-  };
+    title: copied ? undefined : 'Copy session ID',
+  }
 
   const content = (
     <>
@@ -41,16 +49,27 @@ export function CopyIdButton({ id, className, asSpan }: { id: string; className?
         </span>
       )}
     </>
-  );
+  )
 
   // Use span when inside another interactive element (button/link)
   if (asSpan) {
     return (
-      <span role="button" tabIndex={0} {...commonProps} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); doCopy(); } }}>
+      <span
+        role="button"
+        tabIndex={0}
+        {...commonProps}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.stopPropagation()
+            e.preventDefault()
+            doCopy()
+          }
+        }}
+      >
         {content}
       </span>
-    );
+    )
   }
 
-  return <button {...commonProps}>{content}</button>;
+  return <button {...commonProps}>{content}</button>
 }

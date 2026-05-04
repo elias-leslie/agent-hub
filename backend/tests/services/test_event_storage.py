@@ -17,6 +17,14 @@ from app.services.event_storage import (
 )
 
 
+def _mock_parent_session(provider_metadata: dict[str, object] | None = None) -> MagicMock:
+    session = MagicMock()
+    session.provider_metadata = provider_metadata if provider_metadata is not None else {}
+    session.updated_at = None
+    session.parent_session_id = None
+    return session
+
+
 class TestEventSequencer:
     """Tests for EventSequencer turn/sequence state machine."""
 
@@ -157,10 +165,8 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_syncs_sequencer_from_db_for_existing_session(self) -> None:
         db = MagicMock()
-        parent_session = MagicMock()
         original_metadata: dict[str, object] = {"cwd": "/tmp/example"}
-        parent_session.provider_metadata = original_metadata
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session(original_metadata)
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
         sequencer = get_sequencer()
@@ -183,9 +189,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_touches_parent_session_updated_at(self) -> None:
         db = MagicMock()
-        parent_session = MagicMock()
-        parent_session.provider_metadata = {}
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
@@ -207,9 +211,7 @@ class TestMemoryInjectEvent:
         db = MagicMock()
         db.get = AsyncMock()
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
-        parent_session = MagicMock()
-        parent_session.provider_metadata = {}
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session()
         get_sequencer()._sessions.clear()
 
         await store_event(
@@ -228,9 +230,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_tool_events_update_live_activity_summary(self) -> None:
         db = MagicMock()
-        parent_session = MagicMock()
-        parent_session.provider_metadata = {}
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
@@ -299,8 +299,10 @@ class TestMemoryInjectEvent:
         assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
         assert session.observed_write_paths == ["backend/app/services/event_storage.py"]
         assert session.scope_confidence == "observed_write"
-        assert session.provider_metadata["live_activity"]["last_read_path"] == "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"
-        assert session.provider_metadata["live_activity"]["last_write_path"] == "backend/app/services/event_storage.py"
+        assert session.provider_metadata is not None
+        live_activity = session.provider_metadata["live_activity"]
+        assert live_activity["last_read_path"] == "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"
+        assert live_activity["last_write_path"] == "backend/app/services/event_storage.py"
 
     @pytest.mark.asyncio
     async def test_store_event_infers_scope_from_exec_command_and_apply_patch(self) -> None:
@@ -352,9 +354,11 @@ class TestMemoryInjectEvent:
         assert session.observed_read_paths == ["backend/app/services/session_scope.py"]
         assert session.observed_write_paths == ["backend/app/services/ownership_inventory.py"]
         assert session.scope_confidence == "observed_write"
-        assert session.provider_metadata["live_activity"]["last_command"] == "sed -n '1,40p' backend/app/services/session_scope.py"
-        assert session.provider_metadata["live_activity"]["last_read_path"] == "backend/app/services/session_scope.py"
-        assert session.provider_metadata["live_activity"]["last_write_path"] == "backend/app/services/ownership_inventory.py"
+        assert session.provider_metadata is not None
+        live_activity = session.provider_metadata["live_activity"]
+        assert live_activity["last_command"] == "sed -n '1,40p' backend/app/services/session_scope.py"
+        assert live_activity["last_read_path"] == "backend/app/services/session_scope.py"
+        assert live_activity["last_write_path"] == "backend/app/services/ownership_inventory.py"
 
     @pytest.mark.asyncio
     async def test_store_event_tracks_subagent_model_without_overwriting_primary_model(self) -> None:
@@ -395,9 +399,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_strips_null_bytes_from_event_fields(self) -> None:
         db = MagicMock()
-        parent_session = MagicMock()
-        parent_session.provider_metadata = {}
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
@@ -432,9 +434,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
         db = MagicMock()
-        parent_session = MagicMock()
-        parent_session.provider_metadata = {}
-        parent_session.updated_at = None
+        parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
@@ -453,6 +453,8 @@ class TestMemoryInjectEvent:
             agent_id="persona",
         )
 
+        assert event.content is not None
+        assert event.tool_input is not None
         assert "refs selected=1 index=2" in event.content
         assert event.tool_input["reference_selected_count"] == 1
         assert event.tool_input["reference_index_count"] == 2

@@ -1,8 +1,8 @@
-import { SortableHeader } from "@/components/ui/SortableHeader";
-import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
-import type { ModelCost } from "@/lib/models";
-import { SortField, SortDirection } from "../types";
-import { SessionTableRow } from "./SessionTableRow";
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import type { Session, SessionEventsResponse, SessionListItem } from '@/lib/api'
+import type { ModelCost } from '@/lib/models'
+import type { SortDirection, SortField } from '../types'
+import { SessionTableRow } from './SessionTableRow'
 
 export function SessionTable({
   sessions,
@@ -24,33 +24,32 @@ export function SessionTable({
   onToggleExpand,
   onModelFilterClick,
 }: {
-  sessions: SessionListItem[];
-  modelCosts: Map<string, ModelCost>;
-  sortField: SortField;
-  sortDirection: SortDirection;
-  modelFilter: string;
-  expandedSessionId: string | null;
-  expandedSessionData: Session | null;
-  expandedEventsData: SessionEventsResponse | null;
-  isLoadingDetails: boolean;
-  liveSessionIds: Set<string>;
-  focusedRowIndex: number;
-  flashingSessionIds: Set<string>;
-  tableRef: React.RefObject<HTMLDivElement | null>;
-  onSort: (field: SortField) => void;
-  onKeyDown: (e: React.KeyboardEvent) => void;
-  onScroll: () => void;
-  onToggleExpand: (sessionId: string) => void;
-  onModelFilterClick: (model: string) => void;
+  sessions: SessionListItem[]
+  modelCosts: Map<string, ModelCost>
+  sortField: SortField
+  sortDirection: SortDirection
+  modelFilter: string
+  expandedSessionId: string | null
+  expandedSessionData: Session | null
+  expandedEventsData: SessionEventsResponse | null
+  isLoadingDetails: boolean
+  liveSessionIds: Set<string>
+  focusedRowIndex: number
+  flashingSessionIds: Set<string>
+  tableRef: React.RefObject<HTMLDivElement | null>
+  onSort: (field: SortField) => void
+  onKeyDown: (e: React.KeyboardEvent) => void
+  onScroll: () => void
+  onToggleExpand: (sessionId: string) => void
+  onModelFilterClick: (model: string) => void
 }) {
   if (sessions.length === 0) {
-    return null;
+    return null
   }
 
   return (
     <div
       ref={tableRef}
-      tabIndex={0}
       onKeyDown={onKeyDown}
       onScroll={onScroll}
       className="max-h-[calc(100vh-220px)] overflow-auto border border-slate-800/70 bg-slate-950/70 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
@@ -116,5 +115,5 @@ export function SessionTable({
         ))}
       </div>
     </div>
-  );
+  )
 }

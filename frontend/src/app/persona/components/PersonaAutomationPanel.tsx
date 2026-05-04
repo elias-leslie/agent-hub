@@ -1,60 +1,69 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict } from 'date-fns'
 import {
   CalendarClock,
   ChevronDown,
-  Pencil,
   PauseCircle,
+  Pencil,
   PlayCircle,
   Rocket,
   Trash2,
-} from "lucide-react";
-
-import { cn } from "@/lib/utils";
-import type { PreviewProjectOption } from "@/types/agent-preview";
-import type { PersonaAutomation } from "@/lib/api/persona-operator";
+} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import type { PersonaAutomation } from '@/lib/api/persona-operator'
+import { cn } from '@/lib/utils'
+import type { PreviewProjectOption } from '@/types/agent-preview'
 
 interface PersonaAutomationPanelProps {
-  selectedProject: PreviewProjectOption | null;
-  jobs: PersonaAutomation[];
-  loading: boolean;
-  error: string | null;
-  saving: boolean;
-  triggeringJobId: string | null;
+  selectedProject: PreviewProjectOption | null
+  jobs: PersonaAutomation[]
+  loading: boolean
+  error: string | null
+  saving: boolean
+  triggeringJobId: string | null
   onSave: (
     jobId: string | null,
     payload: {
-      name: string;
-      schedule_type: "at" | "every" | "cron";
-      schedule_value: string;
-      payload_message: string;
+      name: string
+      schedule_type: 'at' | 'every' | 'cron'
+      schedule_value: string
+      payload_message: string
     },
-  ) => Promise<void>;
-  onToggle: (job: PersonaAutomation) => Promise<void>;
-  onDelete: (jobId: string) => Promise<void>;
-  onTrigger: (job: PersonaAutomation) => Promise<void>;
+  ) => Promise<void>
+  onToggle: (job: PersonaAutomation) => Promise<void>
+  onDelete: (jobId: string) => Promise<void>
+  onTrigger: (job: PersonaAutomation) => Promise<void>
 }
 
-function buildDefaultMessage(project: PreviewProjectOption | null, detail: string) {
+function buildDefaultMessage(
+  project: PreviewProjectOption | null,
+  detail: string,
+) {
   return [
-    `Project: ${project?.id ?? "agent-hub"}`,
+    `Project: ${project?.id ?? 'agent-hub'}`,
     project?.rootPath ? `Working dir: ${project.rootPath}` : null,
     detail,
-    "Use only core tools: read, write, edit, bash.",
-    "Post concise status back into the persona workspace timeline.",
+    'Use only core tools: read, write, edit, bash.',
+    'Post concise status back into the persona workspace timeline.',
   ]
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n')
 }
 
 function automationDetail(message: string): string {
-  return message
-    .split(/\n\s*\n/)
-    .map((chunk) => chunk.trim())
-    .find((chunk) => !chunk.startsWith("Project:") && !chunk.startsWith("Working dir:") && !chunk.startsWith("Use only core tools:") && !chunk.startsWith("Post concise status"))
-    || message;
+  return (
+    message
+      .split(/\n\s*\n/)
+      .map((chunk) => chunk.trim())
+      .find(
+        (chunk) =>
+          !chunk.startsWith('Project:') &&
+          !chunk.startsWith('Working dir:') &&
+          !chunk.startsWith('Use only core tools:') &&
+          !chunk.startsWith('Post concise status'),
+      ) || message
+  )
 }
 
 export function PersonaAutomationPanel({
@@ -69,60 +78,72 @@ export function PersonaAutomationPanel({
   onDelete,
   onTrigger,
 }: PersonaAutomationPanelProps) {
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [editingJobId, setEditingJobId] = useState<string | null>(null);
-  const [name, setName] = useState("Daily operator check");
-  const [scheduleType, setScheduleType] = useState<"every" | "cron" | "at">("every");
-  const [everyMinutes, setEveryMinutes] = useState("60");
-  const [cronValue, setCronValue] = useState("0 14 * * *");
-  const [atValue, setAtValue] = useState("");
-  const [detail, setDetail] = useState("Check active work, summarize blockers, and call out the next best move.");
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [editingJobId, setEditingJobId] = useState<string | null>(null)
+  const [name, setName] = useState('Daily operator check')
+  const [scheduleType, setScheduleType] = useState<'every' | 'cron' | 'at'>(
+    'every',
+  )
+  const [everyMinutes, setEveryMinutes] = useState('60')
+  const [cronValue, setCronValue] = useState('0 14 * * *')
+  const [atValue, setAtValue] = useState('')
+  const [detail, setDetail] = useState(
+    'Check active work, summarize blockers, and call out the next best move.',
+  )
 
   const editingJob = useMemo(
     () => jobs.find((job) => job.id === editingJobId) ?? null,
     [editingJobId, jobs],
-  );
+  )
 
   useEffect(() => {
     if (!editingJob) {
-      return;
+      return
     }
-    setComposerOpen(true);
-    setName(editingJob.name);
-    setScheduleType(editingJob.schedule_type);
-    if (editingJob.schedule_type === "every") {
-      setEveryMinutes(String(Math.max(1, Math.round(Number(editingJob.schedule_value) / 60000))));
+    setComposerOpen(true)
+    setName(editingJob.name)
+    setScheduleType(editingJob.schedule_type)
+    if (editingJob.schedule_type === 'every') {
+      setEveryMinutes(
+        String(
+          Math.max(1, Math.round(Number(editingJob.schedule_value) / 60000)),
+        ),
+      )
     }
-    if (editingJob.schedule_type === "cron") {
-      setCronValue(editingJob.schedule_value);
+    if (editingJob.schedule_type === 'cron') {
+      setCronValue(editingJob.schedule_value)
     }
-    if (editingJob.schedule_type === "at") {
-      const value = new Date(editingJob.schedule_value);
-      setAtValue(Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 16));
+    if (editingJob.schedule_type === 'at') {
+      const value = new Date(editingJob.schedule_value)
+      setAtValue(
+        Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 16),
+      )
     }
-    setDetail(automationDetail(editingJob.payload_message));
-  }, [editingJob]);
+    setDetail(automationDetail(editingJob.payload_message))
+  }, [editingJob])
 
   const scheduleValue = useMemo(() => {
-    if (scheduleType === "every") {
-      const minutes = Math.max(1, parseInt(everyMinutes || "60", 10));
-      return String(minutes * 60 * 1000);
+    if (scheduleType === 'every') {
+      const minutes = Math.max(1, parseInt(everyMinutes || '60', 10))
+      return String(minutes * 60 * 1000)
     }
-    if (scheduleType === "cron") {
-      return cronValue.trim();
+    if (scheduleType === 'cron') {
+      return cronValue.trim()
     }
-    return atValue ? new Date(atValue).toISOString() : "";
-  }, [atValue, cronValue, everyMinutes, scheduleType]);
+    return atValue ? new Date(atValue).toISOString() : ''
+  }, [atValue, cronValue, everyMinutes, scheduleType])
 
   const resetComposer = () => {
-    setEditingJobId(null);
-    setName("Daily operator check");
-    setScheduleType("every");
-    setEveryMinutes("60");
-    setCronValue("0 14 * * *");
-    setAtValue("");
-    setDetail("Check active work, summarize blockers, and call out the next best move.");
-  };
+    setEditingJobId(null)
+    setName('Daily operator check')
+    setScheduleType('every')
+    setEveryMinutes('60')
+    setCronValue('0 14 * * *')
+    setAtValue('')
+    setDetail(
+      'Check active work, summarize blockers, and call out the next best move.',
+    )
+  }
 
   const save = async () => {
     await onSave(editingJobId, {
@@ -130,10 +151,10 @@ export function PersonaAutomationPanel({
       schedule_type: scheduleType,
       schedule_value: scheduleValue,
       payload_message: buildDefaultMessage(selectedProject, detail),
-    });
-    resetComposer();
-    setComposerOpen(false);
-  };
+    })
+    resetComposer()
+    setComposerOpen(false)
+  }
 
   return (
     <section
@@ -157,12 +178,12 @@ export function PersonaAutomationPanel({
           <button
             type="button"
             onClick={() => {
-              resetComposer();
-              setComposerOpen((current) => !current || jobs.length === 0);
+              resetComposer()
+              setComposerOpen((current) => !current || jobs.length === 0)
             }}
             className="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900"
           >
-            {composerOpen ? "Hide editor" : "New automation"}
+            {composerOpen ? 'Hide editor' : 'New automation'}
           </button>
         </div>
       </div>
@@ -175,13 +196,20 @@ export function PersonaAutomationPanel({
         >
           <div>
             <div className="text-sm font-medium text-slate-100">
-              {editingJobId ? "Edit automation" : "New automation"}
+              {editingJobId ? 'Edit automation' : 'New automation'}
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              {editingJobId ? "Adjust schedule or prompt without leaving /persona." : "Create only when needed. Keep chat surface clear."}
+              {editingJobId
+                ? 'Adjust schedule or prompt without leaving /persona.'
+                : 'Create only when needed. Keep chat surface clear.'}
             </div>
           </div>
-          <ChevronDown className={cn("h-4 w-4 text-slate-500 transition-transform", !composerOpen && "-rotate-90")} />
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-slate-500 transition-transform',
+              !composerOpen && '-rotate-90',
+            )}
+          />
         </button>
 
         {composerOpen ? (
@@ -195,14 +223,16 @@ export function PersonaAutomationPanel({
             <div className="grid gap-2 md:grid-cols-3">
               <select
                 value={scheduleType}
-                onChange={(event) => setScheduleType(event.target.value as "every" | "cron" | "at")}
+                onChange={(event) =>
+                  setScheduleType(event.target.value as 'every' | 'cron' | 'at')
+                }
                 className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none"
               >
                 <option value="every">Every N minutes</option>
                 <option value="cron">Cron</option>
                 <option value="at">Run once</option>
               </select>
-              {scheduleType === "every" ? (
+              {scheduleType === 'every' ? (
                 <input
                   value={everyMinutes}
                   onChange={(event) => setEveryMinutes(event.target.value)}
@@ -210,7 +240,7 @@ export function PersonaAutomationPanel({
                   placeholder="60"
                 />
               ) : null}
-              {scheduleType === "cron" ? (
+              {scheduleType === 'cron' ? (
                 <input
                   value={cronValue}
                   onChange={(event) => setCronValue(event.target.value)}
@@ -218,7 +248,7 @@ export function PersonaAutomationPanel({
                   placeholder="0 14 * * *"
                 />
               ) : null}
-              {scheduleType === "at" ? (
+              {scheduleType === 'at' ? (
                 <input
                   type="datetime-local"
                   value={atValue}
@@ -238,17 +268,29 @@ export function PersonaAutomationPanel({
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={saving || !name.trim() || !scheduleValue.trim() || !detail.trim()}
+                disabled={
+                  saving ||
+                  !name.trim() ||
+                  !scheduleValue.trim() ||
+                  !detail.trim()
+                }
                 className="inline-flex items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:border-emerald-400/30 hover:bg-emerald-950/30 disabled:opacity-60"
               >
-                {saving ? "Saving automation…" : editingJobId ? "Save automation" : "Create automation"}
+                {saving
+                  ? 'Saving automation…'
+                  : editingJobId
+                    ? 'Save automation'
+                    : 'Create automation'}
               </button>
-              {(editingJobId || name !== "Daily operator check" || detail !== "Check active work, summarize blockers, and call out the next best move.") ? (
+              {editingJobId ||
+              name !== 'Daily operator check' ||
+              detail !==
+                'Check active work, summarize blockers, and call out the next best move.' ? (
                 <button
                   type="button"
                   onClick={() => {
-                    resetComposer();
-                    setComposerOpen(false);
+                    resetComposer()
+                    setComposerOpen(false)
                   }}
                   className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900"
                 >
@@ -273,28 +315,38 @@ export function PersonaAutomationPanel({
           </div>
         ) : null}
         {jobs.map((job) => (
-          <div key={job.id} className="rounded-2xl border border-slate-800/70 bg-slate-950/70 px-3 py-2.5">
+          <div
+            key={job.id}
+            className="rounded-2xl border border-slate-800/70 bg-slate-950/70 px-3 py-2.5"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-slate-100">{job.name}</span>
+                  <span className="text-sm font-medium text-slate-100">
+                    {job.name}
+                  </span>
                   <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">
                     {job.schedule_type}
                   </span>
                   <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">
-                    {job.enabled ? "enabled" : "paused"}
+                    {job.enabled ? 'enabled' : 'paused'}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{automationDetail(job.payload_message)}</p>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
+                  {automationDetail(job.payload_message)}
+                </p>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
                   <span>
                     {job.next_run_at
                       ? `Next ${formatDistanceToNowStrict(new Date(job.next_run_at), { addSuffix: true })}`
-                      : "No next run scheduled"}
+                      : 'No next run scheduled'}
                   </span>
                   {job.last_run_at ? (
                     <span>
-                      Last {formatDistanceToNowStrict(new Date(job.last_run_at), { addSuffix: true })}
+                      Last{' '}
+                      {formatDistanceToNowStrict(new Date(job.last_run_at), {
+                        addSuffix: true,
+                      })}
                     </span>
                   ) : null}
                 </div>
@@ -307,7 +359,7 @@ export function PersonaAutomationPanel({
                   className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-2.5 py-1.5 text-xs font-medium text-emerald-200 transition hover:border-emerald-400/30 hover:bg-emerald-950/30 disabled:opacity-60"
                 >
                   <Rocket className="h-4 w-4" />
-                  {triggeringJobId === job.id ? "Running" : "Run now"}
+                  {triggeringJobId === job.id ? 'Running' : 'Run now'}
                 </button>
                 <button
                   type="button"
@@ -322,8 +374,12 @@ export function PersonaAutomationPanel({
                   onClick={() => void onToggle(job)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
                 >
-                  {job.enabled ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
-                  {job.enabled ? "Pause" : "Resume"}
+                  {job.enabled ? (
+                    <PauseCircle className="h-4 w-4" />
+                  ) : (
+                    <PlayCircle className="h-4 w-4" />
+                  )}
+                  {job.enabled ? 'Pause' : 'Resume'}
                 </button>
                 <button
                   type="button"
@@ -339,5 +395,5 @@ export function PersonaAutomationPanel({
         ))}
       </div>
     </section>
-  );
+  )
 }
