@@ -273,6 +273,7 @@ async def run_injection_operation(
             project_id=effective_project_id,
             bash_available=bash_available,
             st_quick=st_usage_memory.quick if st_usage_memory else None,
+            agent_slug=consumer_agent_slug,
         )
         if tool_capability_block:
             context.debug_info.update({

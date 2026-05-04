@@ -75,7 +75,9 @@ async def inject_agent_mandates(
     if agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
     if project_id:
-        perm_block = await _build_project_permissions_block(project_id, None)
+        perm_block = await _build_project_permissions_block(
+            project_id, None, agent_slug=agent.slug,
+        )
         if perm_block:
             sections.append(perm_block)
     return MandateInjection(system_content="\n\n".join(sections), injected_uuids=[])
@@ -118,7 +120,12 @@ def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
     return lines
 
 
-async def _build_project_permissions_block(project_id: str, db: AsyncSession | None) -> str | None:
+async def _build_project_permissions_block(
+    project_id: str,
+    db: AsyncSession | None,
+    *,
+    agent_slug: str | None = None,
+) -> str | None:
     try:
         from app.services.project_permission_service import get_visible_tools_for_project
 
@@ -126,8 +133,15 @@ async def _build_project_permissions_block(project_id: str, db: AsyncSession | N
         if perm is None:
             return None
         tier = perm.permission_tier
-        visible_tool_names = await get_visible_tools_for_project(project_id, db)
-        tools_list = ", ".join(sorted(visible_tool_names)) or "none"
+        if agent_slug == "persona":
+            from app.services.tools.persona_tool_surface import (
+                format_persona_operator_tools_for_tier,
+            )
+
+            tools_list = format_persona_operator_tools_for_tier(tier)
+        else:
+            visible_tool_names = await get_visible_tools_for_project(project_id, db)
+            tools_list = ", ".join(sorted(visible_tool_names)) or "none"
         lines = [
             "<project_permissions>",
             f"Current project: {project_id}",

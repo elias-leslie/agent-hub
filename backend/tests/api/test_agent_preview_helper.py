@@ -448,6 +448,7 @@ async def test_build_agent_preview_passes_bash_availability_to_tool_capabilities
     assert mock_visible_tools.await_count == 1
     assert mock_tool_capabilities.call_args is not None
     assert mock_tool_capabilities.call_args.kwargs["bash_available"] is False
+    assert mock_tool_capabilities.call_args.kwargs["agent_slug"] == "persona"
 
 
 @pytest.mark.asyncio

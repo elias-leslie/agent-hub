@@ -149,6 +149,7 @@ def _capture_generated_context(
             consumer_profile=consumer_profile,
             task_type=task_type,
             project_id=project_id,
+            agent_slug=agent.slug,
         )
         if tool_capabilities_enabled
         else ""

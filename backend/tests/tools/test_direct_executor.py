@@ -394,7 +394,7 @@ class TestDispatch:
         )
 
         with patch(
-            "app.services.tools._executor_precision_code_search.subprocess.run",
+            "app.services.tools._executor_precision_code_search.run_process",
             return_value=SimpleNamespace(
                 returncode=0,
                 stdout='{"prompt_context":"context","metadata":{"symbol_count":1}}',

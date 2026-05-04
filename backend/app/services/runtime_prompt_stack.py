@@ -231,7 +231,9 @@ async def collect_runtime_prompt_sections(
     if project_id:
         from app.services.agent_routing_utils import _build_project_permissions_block
 
-        permissions = await _build_project_permissions_block(project_id, db)
+        permissions = await _build_project_permissions_block(
+            project_id, db, agent_slug=agent.slug,
+        )
         if permissions:
             sections.append(
                 RuntimePromptSection(

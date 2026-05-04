@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 from app.core.project_roots import resolve_summitflow_scripts_dir
+from app.utils.safe_subprocess import run_process
 
 DEFAULT_PRECISION_SEARCH_BUDGET = 1200
 
@@ -64,7 +64,7 @@ async def precision_code_search(
         normalized_query,
     ]
     completed = await asyncio.to_thread(
-        subprocess.run,
+        run_process,
         cmd,
         capture_output=True,
         text=True,

@@ -314,6 +314,7 @@ async def build_agent_preview(
             project_id=project_id,
             bash_available=bash_available,
             st_quick=st_usage_memory.quick if st_usage_memory else None,
+            agent_slug=agent.slug,
         )
         if tool_capability_block:
             combined = f"{combined}\n\n{tool_capability_block}" if combined else tool_capability_block

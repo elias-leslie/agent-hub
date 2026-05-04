@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
-import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from app.core.project_roots import resolve_summitflow_scripts_dir
+from app.utils.safe_subprocess import run_process
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,7 @@ def _resolve_shared_command_guard_cached() -> SharedCommandGuard | None:
         return None
 
     try:
-        result = subprocess.run(
+        result = run_process(
             [str(guard_bin), "--emit-intercept-words"],
             capture_output=True,
             text=True,
@@ -115,7 +115,7 @@ def get_command_guard_block_reason(
         env["AGENT_HUB_SESSION_ID"] = session_id
 
     try:
-        result = subprocess.run(
+        result = run_process(
             [
                 resolved.guard_bin,
                 "--shell-command",

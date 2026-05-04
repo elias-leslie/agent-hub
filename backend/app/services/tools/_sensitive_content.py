@@ -7,6 +7,7 @@ import json
 import logging
 
 from app.core.project_roots import resolve_summitflow_scripts_dir
+from app.utils.safe_subprocess import create_process
 
 logger = logging.getLogger(__name__)
 _DEFAULT_BLOCK_REASON = "sensitive content requires review"
@@ -66,11 +67,9 @@ async def scan_runtime_sensitive_content(
     cmd.extend(["--content-file", "-"])
 
     try:
-        process = await asyncio.create_subprocess_exec(
+        process = await create_process(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await process.communicate(content.encode("utf-8"))
     except Exception as exc:

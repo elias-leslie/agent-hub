@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.hatchet_app import hatchet
+from app.utils.safe_subprocess import create_process
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,8 @@ class HealthCheckResult(BaseModel):
 
 async def _run_cmd(*args: str, timeout: int = 30) -> str:
     """Run a subprocess command and return stdout. Raises on non-zero exit."""
-    proc = await asyncio.create_subprocess_exec(
+    proc = await create_process(
         *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     if proc.returncode != 0:
