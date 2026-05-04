@@ -21,7 +21,7 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - 2026-05-04 recurring hygiene reviewed `st pulse -P agent-hub --details`, `st sessions ownership/overlap -P agent-hub`, `st ready --limit 50`, `st feedback list --limit 50`, `st feedback summary`, audit open/completed items, VCS doctor, TODO/FIXME search, and targeted code/config scans.
 - Parallelism used: two read-only explorer sidecars swept task/feedback queue and code/config/dependency debt. Findings integrated: stale test bugs, schema refactor, raw subprocess root resolver, tracked `backend/--output`, frontend lint suppressions, and remaining open clusters.
 - Completed stale task cleanup for `task-235285e8` and `task-53b8efe2` after focused `st check pytest -- backend/tests/scripts/test_seed_agent_model_policy.py backend/tests/services/memory/test_reference_injection.py` passed 25 tests.
-- Claimed `task-3144db3f` and completed slice `1.1`; pending `st done` closeout after audit update and final VCS recheck.
+- Claimed and completed `task-3144db3f`; first `st done` push hit remote 500, retry succeeded, merged to `main`, deleted task branch, and removed checkpoint.
 - VCS doctor reports cross-repo blockers outside agent-hub (`portfolio-ai`, `.codex`) but agent-hub pulse is clean before current-session edits; use agent-hub-local pulse/status for this closeout.
 
 ## Open Items
