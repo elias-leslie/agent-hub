@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import { ArenaCommandCenter } from "./components/ArenaCommandCenter";
+import { ArenaCommandCenter } from './components/ArenaCommandCenter'
 
 export default function ArenaPage() {
-  return <ArenaCommandCenter />;
+  return <ArenaCommandCenter />
 }

@@ -45,7 +45,8 @@ export function getApiBaseUrl(): string {
  */
 export function getWsUrl(path: string): string {
   if (typeof window === 'undefined') {
-    const apiUrl = process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
+    const apiUrl =
+      process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
     return apiUrl.replace(/^http/, 'ws') + path
   }
 
@@ -133,7 +134,8 @@ export function buildInternalHeaders(): Record<string, string> {
     process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim() ||
     DEFAULT_DASHBOARD_CLIENT_ID
   const dashboardRequestSource =
-    process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE?.trim() || 'agent-hub-dashboard'
+    process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE?.trim() ||
+    'agent-hub-dashboard'
 
   if (internalSecret) {
     headers['X-Agent-Hub-Internal'] = internalSecret
@@ -162,7 +164,10 @@ export const INTERNAL_HEADERS: Record<string, string> = buildInternalHeaders()
  * @param options - Standard fetch options
  * @returns Fetch response
  */
-export async function fetchApi(url: string, options: RequestInit = {}): Promise<Response> {
+export async function fetchApi(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
   const headers = {
     ...buildInternalHeaders(),
     ...options.headers,

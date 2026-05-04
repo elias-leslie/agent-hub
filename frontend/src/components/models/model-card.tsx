@@ -1,65 +1,81 @@
-"use client";
+'use client'
 
-import { Brain, Camera, Eye, FileText, Headphones, Pencil, Zap, Clock, Gauge, Database } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { PROVIDER_COLORS } from "@/components/settings/constants";
-import { formatCatalogModelPricing } from "@/lib/model-pricing";
-import { ModelRadar } from "./model-radar";
-import type { ModelOption } from "@/components/chat/use-models";
+import {
+  Brain,
+  Camera,
+  Clock,
+  Database,
+  Eye,
+  FileText,
+  Gauge,
+  Headphones,
+  Pencil,
+  Zap,
+} from 'lucide-react'
+import type { ModelOption } from '@/components/chat/use-models'
+import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { formatCatalogModelPricing } from '@/lib/model-pricing'
+import { cn } from '@/lib/utils'
+import { ModelRadar } from './model-radar'
 
 interface ModelCardProps {
-  model: ModelOption;
-  isSelected?: boolean;
-  onSelect?: (model: ModelOption) => void;
-  onExpand?: (model: ModelOption) => void;
+  model: ModelOption
+  isSelected?: boolean
+  onSelect?: (model: ModelOption) => void
+  onExpand?: (model: ModelOption) => void
 }
 
 function getSpeedBadgeColor(tier: string): string {
   switch (tier) {
-    case "fast":
-      return "bg-green-500/10 text-green-400 border-green-500/20";
-    case "medium":
-      return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    case "slow":
-      return "bg-red-500/10 text-red-400 border-red-500/20";
+    case 'fast':
+      return 'bg-green-500/10 text-green-400 border-green-500/20'
+    case 'medium':
+      return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+    case 'slow':
+      return 'bg-red-500/10 text-red-400 border-red-500/20'
     default:
-      return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+      return 'bg-slate-500/10 text-slate-400 border-slate-500/20'
   }
 }
 
 function formatSyncMoment(value: string | null | undefined): string | null {
-  if (!value) return null;
+  if (!value) return null
   return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
-export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardProps) {
-  const providerColor = PROVIDER_COLORS[model.provider];
-  const hasEnrichment = !!model.enrichment;
-  const pricing = formatCatalogModelPricing(model);
-  const syncedAt = formatSyncMoment(model.enrichment?.synced_at);
-  const isCodexOnlyPreview = model.availability === "codex_only";
+export function ModelCard({
+  model,
+  isSelected,
+  onSelect,
+  onExpand,
+}: ModelCardProps) {
+  const providerColor = PROVIDER_COLORS[model.provider]
+  const hasEnrichment = !!model.enrichment
+  const pricing = formatCatalogModelPricing(model)
+  const syncedAt = formatSyncMoment(model.enrichment?.synced_at)
+  const isCodexOnlyPreview = model.availability === 'codex_only'
 
   return (
     <div
       className={cn(
-        "group relative rounded-lg border bg-slate-900 overflow-hidden",
-        "transition-all duration-200",
+        'group relative rounded-lg border bg-slate-900 overflow-hidden',
+        'transition-all duration-200',
         isSelected
-          ? "border-amber-500/40 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20"
-          : "border-slate-800 hover:border-slate-700 hover:shadow-md",
+          ? 'border-amber-500/40 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20'
+          : 'border-slate-800 hover:border-slate-700 hover:shadow-md',
       )}
       onClick={() => onExpand?.(model)}
     >
       {/* Provider accent */}
       <div
         className={cn(
-          "absolute top-0 left-0 right-0 h-1",
-          providerColor.dot.replace("bg-", "bg-gradient-to-r from-"),
+          'absolute top-0 left-0 right-0 h-1',
+          providerColor.dot.replace('bg-', 'bg-gradient-to-r from-'),
         )}
       />
 
@@ -95,12 +111,16 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           </div>
 
           {/* Provider badge */}
-          <div className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ml-2",
-            providerColor.dot.replace("bg-", "text-"),
-            providerColor.bg,
-          )}>
-            <div className={cn("w-1.5 h-1.5 rounded-full", providerColor.dot)} />
+          <div
+            className={cn(
+              'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ml-2',
+              providerColor.dot.replace('bg-', 'text-'),
+              providerColor.bg,
+            )}
+          >
+            <div
+              className={cn('w-1.5 h-1.5 rounded-full', providerColor.dot)}
+            />
             <span className="capitalize">{model.provider}</span>
           </div>
         </div>
@@ -108,10 +128,8 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         {/* Composite Score */}
         <div className="flex items-center gap-2 mb-4">
           <div className="flex-1">
-            <div className="text-xs text-slate-400 mb-1">
-              Composite Score
-            </div>
-          <div className="flex items-baseline gap-1">
+            <div className="text-xs text-slate-400 mb-1">Composite Score</div>
+            <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-slate-100">
                 {model.scores.composite}
               </span>
@@ -134,13 +152,19 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
             </div>
             <div
               className={cn(
-                "px-2 py-1 rounded text-xs font-medium text-center border",
+                'px-2 py-1 rounded text-xs font-medium text-center border',
                 getSpeedBadgeColor(model.speed_tier),
               )}
             >
-              {model.speed_tier === "fast" && <Zap className="inline h-3 w-3 mr-0.5" />}
-              {model.speed_tier === "medium" && <Gauge className="inline h-3 w-3 mr-0.5" />}
-              {model.speed_tier === "slow" && <Clock className="inline h-3 w-3 mr-0.5" />}
+              {model.speed_tier === 'fast' && (
+                <Zap className="inline h-3 w-3 mr-0.5" />
+              )}
+              {model.speed_tier === 'medium' && (
+                <Gauge className="inline h-3 w-3 mr-0.5" />
+              )}
+              {model.speed_tier === 'slow' && (
+                <Clock className="inline h-3 w-3 mr-0.5" />
+              )}
               {model.speed_tier}
             </div>
           </div>
@@ -221,10 +245,10 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
             <span>Price Source</span>
             <span
               className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
-                model.cost.source === "enrichment"
-                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-                  : "border-slate-700 bg-slate-800 text-slate-300",
+                'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]',
+                model.cost.source === 'enrichment'
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                  : 'border-slate-700 bg-slate-800 text-slate-300',
               )}
             >
               {pricing.source}
@@ -243,21 +267,21 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           <button
             type="button"
             onClick={(e) => {
-              e.stopPropagation();
-              onSelect(model);
+              e.stopPropagation()
+              onSelect(model)
             }}
             className={cn(
-              "absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity",
-              "px-2 py-1 rounded-md text-xs font-medium border",
+              'absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity',
+              'px-2 py-1 rounded-md text-xs font-medium border',
               isSelected
-                ? "bg-amber-500 text-slate-950 border-amber-400"
-                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700",
+                ? 'bg-amber-500 text-slate-950 border-amber-400'
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700',
             )}
           >
-            {isSelected ? "Selected" : "Compare"}
+            {isSelected ? 'Selected' : 'Compare'}
           </button>
         )}
       </div>
     </div>
-  );
+  )
 }

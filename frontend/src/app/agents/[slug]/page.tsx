@@ -1,61 +1,72 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { Agent, PreviewScenario, PreviewTaskType, TabId } from "./types";
-import { fetchAgent, updateAgent, fetchModels } from "@/lib/api";
-import { AgentEditorHeader } from "./components/AgentEditorHeader";
-import { getAgentEditorTabs, Sidebar } from "./components/Sidebar";
-import { CommitteeTab } from "./components/CommitteeTab";
-import { GeneralTab } from "./components/GeneralTab";
-import { ModelsTab } from "./components/ModelsTab";
-import { ParametersTab } from "./components/ParametersTab";
-import { PromptsTab } from "./components/PromptsTab";
-import { MemoryTab } from "./components/MemoryTab";
-import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
-import { useAgentPreview } from "./hooks/useAgentPreview";
-import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
+import { fetchAgent, fetchModels, updateAgent } from '@/lib/api'
+import { DEFAULT_PREVIEW_SCENARIO } from '@/types/agent-preview'
+import { buildAgentUpdatePayload, createAgentFormData } from './agent-form'
+import { AgentEditorHeader } from './components/AgentEditorHeader'
+import { CommitteeTab } from './components/CommitteeTab'
+import { GeneralTab } from './components/GeneralTab'
+import { MemoryTab } from './components/MemoryTab'
+import { ModelsTab } from './components/ModelsTab'
+import { ParametersTab } from './components/ParametersTab'
+import { PromptsTab } from './components/PromptsTab'
+import { getAgentEditorTabs, Sidebar } from './components/Sidebar'
+import { useAgentPreview } from './hooks/useAgentPreview'
+import type { Agent, PreviewScenario, PreviewTaskType, TabId } from './types'
 
 function isAgentTab(value: string | null, slug: string): value is TabId {
-  return getAgentEditorTabs(slug).some((tab) => tab.id === value);
+  return getAgentEditorTabs(slug).some((tab) => tab.id === value)
 }
 
 export default function AgentEditorPage() {
-  const params = useParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
-  const slug = params.slug as string;
+  const params = useParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const slug = params.slug as string
 
   // Redirect persona slug to dedicated settings page
   useEffect(() => {
-    if (slug === "persona") {
-      router.replace("/persona/settings");
+    if (slug === 'persona') {
+      router.replace('/persona/settings')
     }
-  }, [slug, router]);
+  }, [slug, router])
 
-  const [formData, setFormData] = useState<Partial<Agent>>({});
-  const [hasChanges, setHasChanges] = useState(false);
-  const [showInlinePreview, setShowInlinePreview] = useState(false);
-  const [previewMode, setPreviewMode] = useState<PreviewTaskType>("chat");
-  const [previewScenario, setPreviewScenario] = useState<PreviewScenario>(() => ({
-    ...DEFAULT_PREVIEW_SCENARIO,
-  }));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [formData, setFormData] = useState<Partial<Agent>>({})
+  const [hasChanges, setHasChanges] = useState(false)
+  const [showInlinePreview, setShowInlinePreview] = useState(false)
+  const [previewMode, setPreviewMode] = useState<PreviewTaskType>('chat')
+  const [previewScenario, setPreviewScenario] = useState<PreviewScenario>(
+    () => ({
+      ...DEFAULT_PREVIEW_SCENARIO,
+    }),
+  )
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const { data: agent, isLoading, error } = useQuery({
-    queryKey: ["agent", slug],
+  const {
+    data: agent,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['agent', slug],
     queryFn: () => fetchAgent(slug),
     enabled: !!slug,
-  });
+  })
 
   const { data: availableModels = [] } = useQuery({
-    queryKey: ["models", "options"],
+    queryKey: ['models', 'options'],
     queryFn: fetchModels,
-  });
+  })
 
   const {
     data: preview,
@@ -67,79 +78,91 @@ export default function AgentEditorPage() {
     previewMode,
     scenario: previewScenario,
     enabled: showInlinePreview && !!slug,
-  });
+  })
 
   const mutation = useMutation({
     mutationFn: (data: Partial<Agent>) => updateAgent(slug, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent", slug] });
-      queryClient.invalidateQueries({ queryKey: ["agents"] });
-      setHasChanges(false);
+      queryClient.invalidateQueries({ queryKey: ['agent', slug] })
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      setHasChanges(false)
     },
-  });
+  })
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasChanges) {
-        e.preventDefault();
-        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
-        return e.returnValue;
+        e.preventDefault()
+        e.returnValue =
+          'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
       }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasChanges]);
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasChanges])
 
   useEffect(() => {
     if (agent) {
-      setFormData(createAgentFormData(agent));
+      setFormData(createAgentFormData(agent))
     }
-  }, [agent]);
+  }, [agent])
 
-  const updateField = useCallback(<K extends keyof Agent>(field: K, value: Agent[K]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setHasChanges(true);
-  }, []);
-  const setActiveTab = useCallback((tab: TabId) => {
-    const nextParams = new URLSearchParams(searchParams.toString());
-    if (tab === "general") {
-      nextParams.delete("tab");
-    } else {
-      nextParams.set("tab", tab);
-    }
-    const query = nextParams.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [pathname, router, searchParams]);
-  const updatePreviewScenario = useCallback((updates: Partial<PreviewScenario>) => {
-    setPreviewScenario((prev) => ({ ...prev, ...updates }));
-  }, []);
+  const updateField = useCallback(
+    <K extends keyof Agent>(field: K, value: Agent[K]) => {
+      setFormData((prev) => ({ ...prev, [field]: value }))
+      setHasChanges(true)
+    },
+    [],
+  )
+  const setActiveTab = useCallback(
+    (tab: TabId) => {
+      const nextParams = new URLSearchParams(searchParams.toString())
+      if (tab === 'general') {
+        nextParams.delete('tab')
+      } else {
+        nextParams.set('tab', tab)
+      }
+      const query = nextParams.toString()
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      })
+    },
+    [pathname, router, searchParams],
+  )
+  const updatePreviewScenario = useCallback(
+    (updates: Partial<PreviewScenario>) => {
+      setPreviewScenario((prev) => ({ ...prev, ...updates }))
+    },
+    [],
+  )
 
   const handleSave = () => {
-    mutation.mutate(buildAgentUpdatePayload(formData));
-  };
+    mutation.mutate(buildAgentUpdatePayload(formData))
+  }
 
   const handlePreview = () => {
-    setActiveTab("prompts");
-    setShowInlinePreview(true);
+    setActiveTab('prompts')
+    setShowInlinePreview(true)
     if (showInlinePreview) {
-      void refetchPreview();
+      void refetchPreview()
     }
-  };
+  }
   const previewError =
     previewQueryError instanceof Error
       ? previewQueryError.message
       : previewQueryError
-        ? "Failed to load preview"
-        : null;
-  const tabParam = searchParams.get("tab");
-  const activeTab: TabId = isAgentTab(tabParam, slug) ? tabParam : "general";
+        ? 'Failed to load preview'
+        : null
+  const tabParam = searchParams.get('tab')
+  const activeTab: TabId = isAgentTab(tabParam, slug) ? tabParam : 'general'
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
-    );
+    )
   }
 
   if (error || !agent) {
@@ -147,25 +170,24 @@ export default function AgentEditorPage() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">
-            Agent not found
-          </p>
+          <p className="text-sm text-slate-400">Agent not found</p>
           <button
-            onClick={() => router.push("/agents")}
+            onClick={() => router.push('/agents')}
             className="mt-4 px-4 py-2 text-sm font-medium text-amber-500 hover:underline"
           >
             Back to Agents
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   const activeTabLabel =
-    getAgentEditorTabs(slug).find((tab) => tab.id === activeTab)?.label ?? "Editor";
+    getAgentEditorTabs(slug).find((tab) => tab.id === activeTab)?.label ??
+    'Editor'
   const activeTabDescription =
     getAgentEditorTabs(slug).find((tab) => tab.id === activeTab)?.description ??
-    "Adjust this slice of the agent runtime profile.";
+    'Adjust this slice of the agent runtime profile.'
 
   return (
     <div className="page-shell">
@@ -223,24 +245,27 @@ export default function AgentEditorPage() {
                 </div>
                 <div className="px-5 py-5 lg:px-6 lg:py-6">
                   <div className="max-w-5xl">
-                    {activeTab === "general" && (
-                      <GeneralTab formData={formData} updateField={updateField} />
+                    {activeTab === 'general' && (
+                      <GeneralTab
+                        formData={formData}
+                        updateField={updateField}
+                      />
                     )}
-                    {activeTab === "models" && (
+                    {activeTab === 'models' && (
                       <ModelsTab
                         formData={formData}
                         availableModels={availableModels}
                         updateField={updateField}
                       />
                     )}
-                    {activeTab === "parameters" && (
+                    {activeTab === 'parameters' && (
                       <ParametersTab
                         formData={formData}
                         availableModels={availableModels}
                         updateField={updateField}
                       />
                     )}
-                    {activeTab === "prompts" && (
+                    {activeTab === 'prompts' && (
                       <PromptsTab
                         agentSlug={slug}
                         preview={preview}
@@ -255,10 +280,13 @@ export default function AgentEditorPage() {
                         refetchPreview={refetchPreview}
                       />
                     )}
-                    {activeTab === "memory" && (
-                      <MemoryTab formData={formData} updateField={updateField} />
+                    {activeTab === 'memory' && (
+                      <MemoryTab
+                        formData={formData}
+                        updateField={updateField}
+                      />
                     )}
-                    {activeTab === "committee" && (
+                    {activeTab === 'committee' && (
                       <CommitteeTab
                         formData={formData}
                         updateField={updateField}
@@ -272,7 +300,6 @@ export default function AgentEditorPage() {
           </div>
         </div>
       </div>
-
     </div>
-  );
+  )
 }

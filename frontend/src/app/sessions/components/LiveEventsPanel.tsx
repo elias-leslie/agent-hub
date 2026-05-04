@@ -1,8 +1,8 @@
-import { LiveBadge, EventStream } from "@/components/monitoring";
-import type { SessionEvent } from "@/types/events";
+import { EventStream, LiveBadge } from '@/components/monitoring'
+import type { SessionEvent } from '@/types/events'
 
 interface LiveEventsPanelProps {
-  events: SessionEvent[];
+  events: SessionEvent[]
 }
 
 export function LiveEventsPanel({ events }: LiveEventsPanelProps) {
@@ -19,5 +19,5 @@ export function LiveEventsPanel({ events }: LiveEventsPanelProps) {
       </div>
       <EventStream events={events} maxHeight="200px" />
     </div>
-  );
+  )
 }

@@ -1,28 +1,32 @@
-"use client";
+'use client'
 
-import { Search, X } from "lucide-react";
-import { SEARCH_STORAGE_KEY } from "@/lib/memory-config";
+import { Search, X } from 'lucide-react'
+import { SEARCH_STORAGE_KEY } from '@/lib/memory-config'
 
 interface SearchBarProps {
-  searchQuery: string;
-  isSearching: boolean;
-  onSearchChange: (query: string) => void;
+  searchQuery: string
+  isSearching: boolean
+  onSearchChange: (query: string) => void
 }
 
-export function SearchBar({ searchQuery, isSearching, onSearchChange }: SearchBarProps) {
+export function SearchBar({
+  searchQuery,
+  isSearching,
+  onSearchChange,
+}: SearchBarProps) {
   const handleChange = (value: string) => {
-    onSearchChange(value);
+    onSearchChange(value)
     if (value) {
-      localStorage.setItem(SEARCH_STORAGE_KEY, value);
+      localStorage.setItem(SEARCH_STORAGE_KEY, value)
     } else {
-      localStorage.removeItem(SEARCH_STORAGE_KEY);
+      localStorage.removeItem(SEARCH_STORAGE_KEY)
     }
-  };
+  }
 
   const handleClear = () => {
-    onSearchChange("");
-    localStorage.removeItem(SEARCH_STORAGE_KEY);
-  };
+    onSearchChange('')
+    localStorage.removeItem(SEARCH_STORAGE_KEY)
+  }
 
   return (
     <div className="relative flex-1 max-w-md">
@@ -49,5 +53,5 @@ export function SearchBar({ searchQuery, isSearching, onSearchChange }: SearchBa
         </div>
       )}
     </div>
-  );
+  )
 }

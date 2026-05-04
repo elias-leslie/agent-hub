@@ -1,7 +1,6 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2,
   ChevronDown,
@@ -10,7 +9,8 @@ import {
   Loader2,
   Trash2,
   Unplug,
-} from "lucide-react";
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import {
   type AgentPromptAssignment,
@@ -18,18 +18,18 @@ import {
   removeAssignment,
   updateAssignment,
   updatePrompt,
-} from "@/lib/api/prompts";
+} from '@/lib/api/prompts'
 
 interface PromptAssignmentCardProps {
-  agentSlug: string;
-  assignment: AgentPromptAssignment;
-  onPromptUpdated: () => void;
-  onPromptDeleted: (slug: string) => void;
-  onAssignmentRemoved: (slug: string) => void;
-  draggable?: boolean;
-  onDragStart?: (slug: string) => void;
-  onDragOver?: (slug: string) => void;
-  onDrop?: (slug: string) => void;
+  agentSlug: string
+  assignment: AgentPromptAssignment
+  onPromptUpdated: () => void
+  onPromptDeleted: (slug: string) => void
+  onAssignmentRemoved: (slug: string) => void
+  draggable?: boolean
+  onDragStart?: (slug: string) => void
+  onDragOver?: (slug: string) => void
+  onDrop?: (slug: string) => void
 }
 
 export function PromptAssignmentCard({
@@ -43,34 +43,40 @@ export function PromptAssignmentCard({
   onDragOver,
   onDrop,
 }: PromptAssignmentCardProps) {
-  const prompt = assignment.prompt;
-  const ownedByCurrentAgent = prompt.owner_agent_slug === agentSlug;
-  const canDeletePrompt = ownedByCurrentAgent && !prompt.deletion_locked;
-  const canRemoveAssignment = !ownedByCurrentAgent;
-  const [expanded, setExpanded] = useState(false);
-  const [name, setName] = useState(prompt.name);
-  const [description, setDescription] = useState(prompt.description ?? "");
-  const [content, setContent] = useState(prompt.content);
-  const [enabled, setEnabled] = useState(prompt.enabled);
-  const [role, setRole] = useState(assignment.role);
+  const prompt = assignment.prompt
+  const ownedByCurrentAgent = prompt.owner_agent_slug === agentSlug
+  const canDeletePrompt = ownedByCurrentAgent && !prompt.deletion_locked
+  const canRemoveAssignment = !ownedByCurrentAgent
+  const [expanded, setExpanded] = useState(false)
+  const [name, setName] = useState(prompt.name)
+  const [description, setDescription] = useState(prompt.description ?? '')
+  const [content, setContent] = useState(prompt.content)
+  const [enabled, setEnabled] = useState(prompt.enabled)
+  const [role, setRole] = useState(assignment.role)
 
   useEffect(() => {
-    setName(prompt.name);
-    setDescription(prompt.description ?? "");
-    setContent(prompt.content);
-    setEnabled(prompt.enabled);
-    setRole(assignment.role);
-  }, [assignment.role, prompt.content, prompt.description, prompt.enabled, prompt.name]);
+    setName(prompt.name)
+    setDescription(prompt.description ?? '')
+    setContent(prompt.content)
+    setEnabled(prompt.enabled)
+    setRole(assignment.role)
+  }, [
+    assignment.role,
+    prompt.content,
+    prompt.description,
+    prompt.enabled,
+    prompt.name,
+  ])
 
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
   const saveMutation = useMutation({
     mutationFn: async () => {
       const promptChanged =
         name !== prompt.name ||
-        description !== (prompt.description ?? "") ||
+        description !== (prompt.description ?? '') ||
         content !== prompt.content ||
-        enabled !== prompt.enabled;
-      const assignmentChanged = role !== assignment.role;
+        enabled !== prompt.enabled
+      const assignmentChanged = role !== assignment.role
 
       if (promptChanged) {
         await updatePrompt(prompt.slug, {
@@ -78,51 +84,51 @@ export function PromptAssignmentCard({
           description: description || undefined,
           content,
           enabled,
-        });
+        })
       }
       if (assignmentChanged) {
-        await updateAssignment(agentSlug, prompt.slug, { role });
+        await updateAssignment(agentSlug, prompt.slug, { role })
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      onPromptUpdated();
+      queryClient.invalidateQueries({ queryKey: ['agent-prompts', agentSlug] })
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      onPromptUpdated()
     },
-  });
+  })
 
   const deleteMutation = useMutation({
     mutationFn: async () => deletePrompt(prompt.slug),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      onPromptDeleted(prompt.slug);
+      queryClient.invalidateQueries({ queryKey: ['agent-prompts', agentSlug] })
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      onPromptDeleted(prompt.slug)
     },
-  });
+  })
 
   const removeMutation = useMutation({
     mutationFn: async () => removeAssignment(agentSlug, prompt.slug),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
-      onAssignmentRemoved(prompt.slug);
+      queryClient.invalidateQueries({ queryKey: ['agent-prompts', agentSlug] })
+      onAssignmentRemoved(prompt.slug)
     },
-  });
+  })
 
   const dirty =
     name !== prompt.name ||
-    description !== (prompt.description ?? "") ||
+    description !== (prompt.description ?? '') ||
     content !== prompt.content ||
     enabled !== prompt.enabled ||
-    role !== assignment.role;
+    role !== assignment.role
 
   return (
     <div
       draggable={draggable}
       onDragStart={() => onDragStart?.(prompt.slug)}
       onDragOver={(event) => {
-        if (!draggable) return;
-        event.preventDefault();
-        onDragOver?.(prompt.slug);
+        if (!draggable) return
+        event.preventDefault()
+        onDragOver?.(prompt.slug)
       }}
       onDrop={() => onDrop?.(prompt.slug)}
       className="rounded-xl border border-slate-800 bg-slate-900"
@@ -168,9 +174,7 @@ export function PromptAssignmentCard({
                 </span>
               ) : null}
             </div>
-            <p className="truncate text-xs text-slate-400">
-              {prompt.slug}
-            </p>
+            <p className="truncate text-xs text-slate-400">{prompt.slug}</p>
           </div>
         </button>
       </div>
@@ -197,7 +201,9 @@ export function PromptAssignmentCard({
           </div>
 
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">Description</span>
+            <span className="text-xs font-medium text-slate-400">
+              Description
+            </span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -266,5 +272,5 @@ export function PromptAssignmentCard({
         </div>
       ) : null}
     </div>
-  );
+  )
 }

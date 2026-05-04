@@ -1,17 +1,14 @@
-import Link from "next/link";
-import { Menu, Zap } from "lucide-react";
+import { Menu, Zap } from 'lucide-react'
+import Link from 'next/link'
 
 interface MobileHeaderProps {
-  onMenuClick: () => void;
+  onMenuClick: () => void
 }
 
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-800/70 bg-slate-950/75 px-4 backdrop-blur-xl lg:hidden">
-      <button
-        onClick={onMenuClick}
-        className="icon-button -ml-1 h-11 w-11"
-      >
+      <button onClick={onMenuClick} className="icon-button -ml-1 h-11 w-11">
         <Menu className="h-5 w-5 text-slate-400" />
       </button>
 
@@ -32,5 +29,5 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       {/* Placeholder for balance */}
       <div className="w-11" />
     </header>
-  );
+  )
 }

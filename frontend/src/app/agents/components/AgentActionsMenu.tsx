@@ -1,45 +1,45 @@
-import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
-import { MoreVertical, MessageSquare, Copy, Archive } from "lucide-react";
-import type { Agent } from "../lib/types";
+import { Archive, Copy, MessageSquare, MoreVertical } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { Agent } from '../lib/types'
 
 export function AgentActionsMenu({
   agent,
   onClone,
   onArchive,
 }: {
-  agent: Agent;
-  onClone?: (agent: Agent) => void;
-  onArchive?: (agent: Agent) => void;
+  agent: Agent
+  onClone?: (agent: Agent) => void
+  onArchive?: (agent: Agent) => void
 }) {
-  const [open, setOpen] = useState(false);
-  const menuId = useId();
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!open) {
-      return;
+      return
     }
 
     const handlePointerDown = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+        setOpen(false)
       }
-    };
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false)
       }
-    };
+    }
 
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
 
   return (
     <div ref={containerRef} className="relative">
@@ -75,8 +75,8 @@ export function AgentActionsMenu({
             type="button"
             role="menuitem"
             onClick={() => {
-              onClone?.(agent);
-              setOpen(false);
+              onClone?.(agent)
+              setOpen(false)
             }}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-700"
           >
@@ -88,8 +88,8 @@ export function AgentActionsMenu({
             type="button"
             role="menuitem"
             onClick={() => {
-              onArchive?.(agent);
-              setOpen(false);
+              onArchive?.(agent)
+              setOpen(false)
             }}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-950/20"
           >
@@ -99,5 +99,5 @@ export function AgentActionsMenu({
         </div>
       )}
     </div>
-  );
+  )
 }

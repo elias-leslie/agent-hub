@@ -1,26 +1,33 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import type { ChatMessage, StreamStatus } from "@agent-hub/chat-ui";
+import type { ChatMessage, StreamStatus } from '@agent-hub/chat-ui'
+import { useEffect, useMemo, useState } from 'react'
+import type { SessionListItem } from '@/lib/api/sessions'
+import { cn } from '@/lib/utils'
+import type { Persona } from '@/types/persona'
+import {
+  type PersonaRuntimeState,
+  toSessionListItem,
+} from '../hooks/usePersonaRuntime'
+import {
+  PersonaOperatorDeck,
+  type PersonaOperatorTab,
+} from './PersonaOperatorDeck'
+import { PersonaThreadHeader } from './PersonaThreadHeader'
+import { useWorkspaceState } from './useWorkspaceState'
+import { WorkspaceChatFooter } from './WorkspaceChatFooter'
+import { WorkspaceTimeline } from './WorkspaceTimeline'
+import { WorkspaceToolbar } from './WorkspaceToolbar'
 
-import { cn } from "@/lib/utils";
-import type { Persona } from "@/types/persona";
-import type { Session, SessionListItem } from "@/lib/api/sessions";
-import { toSessionListItem, type PersonaRuntimeState } from "../hooks/usePersonaRuntime";
-import { useWorkspaceState } from "./useWorkspaceState";
-import { PersonaOperatorDeck, type PersonaOperatorTab } from "./PersonaOperatorDeck";
-import { PersonaThreadHeader } from "./PersonaThreadHeader";
-import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { WorkspaceTimeline } from "./WorkspaceTimeline";
-import { WorkspaceChatFooter } from "./WorkspaceChatFooter";
-
-function getLatestAssistantMessage(messages: ChatMessage[]): ChatMessage | null {
+function getLatestAssistantMessage(
+  messages: ChatMessage[],
+): ChatMessage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index]?.role === "assistant") {
-      return messages[index];
+    if (messages[index]?.role === 'assistant') {
+      return messages[index]
     }
   }
-  return null;
+  return null
 }
 
 function buildDraftSession(
@@ -30,29 +37,30 @@ function buildDraftSession(
   responseStatusLabel: string | null,
   messages: ChatMessage[],
 ): SessionListItem {
-  const latestAssistant = getLatestAssistantMessage(messages);
-  const runningTool = latestAssistant?.toolExecutions?.find((tool) => tool.status === "running") ?? null;
-  const now = new Date().toISOString();
-  const liveStatus = status === "error" ? "error" : "active";
+  const latestAssistant = getLatestAssistantMessage(messages)
+  const runningTool =
+    latestAssistant?.toolExecutions?.find(
+      (tool) => tool.status === 'running',
+    ) ?? null
+  const now = new Date().toISOString()
+  const liveStatus = status === 'error' ? 'error' : 'active'
   const phase =
-    status === "error"
-      ? "error"
+    status === 'error'
+      ? 'error'
       : runningTool
-        ? "running_tool"
-        : "waiting_for_model";
-  const summary =
-    runningTool
-      ? `Running ${runningTool.name}`
-      : responseStatusLabel
-        ?? "Waiting for model response";
+        ? 'running_tool'
+        : 'waiting_for_model'
+  const summary = runningTool
+    ? `Running ${runningTool.name}`
+    : (responseStatusLabel ?? 'Waiting for model response')
   return {
     id: sessionId,
     project_id: projectId,
-    provider: latestAssistant?.agentProvider ?? "openai",
-    model: latestAssistant?.agentModel ?? "unknown",
-    status: liveStatus === "error" ? "failed" : "active",
-    agent_slug: "persona",
-    session_type: "chat",
+    provider: latestAssistant?.agentProvider ?? 'openai',
+    model: latestAssistant?.agentModel ?? 'unknown',
+    status: liveStatus === 'error' ? 'failed' : 'active',
+    agent_slug: 'persona',
+    session_type: 'chat',
     parent_session_id: null,
     external_id: null,
     current_branch: null,
@@ -60,7 +68,7 @@ function buildDraftSession(
       phase,
       status: liveStatus,
       summary,
-      health: liveStatus === "error" ? "error" : "ok",
+      health: liveStatus === 'error' ? 'error' : 'ok',
       stalled: false,
       current_tool_name: runningTool?.name ?? null,
       last_tool_name: runningTool?.name ?? null,
@@ -73,70 +81,87 @@ function buildDraftSession(
     total_output_tokens: latestAssistant?.outputTokens ?? 0,
     created_at: latestAssistant?.timestamp.toISOString() ?? now,
     updated_at: now,
-  };
+  }
 }
 
 function isActiveChatStream(status: StreamStatus): boolean {
-  return status === "connecting" || status === "streaming" || status === "reconnecting" || status === "cancelling";
+  return (
+    status === 'connecting' ||
+    status === 'streaming' ||
+    status === 'reconnecting' ||
+    status === 'cancelling'
+  )
 }
 
 interface UnifiedPersonaWorkspaceProps {
-  persona?: Persona;
-  agentSlug: string;
-  personaName?: string;
-  runtime?: PersonaRuntimeState;
-  activeSessionId: string | null;
-  sidebarRefreshTrigger: number;
-  runtimeSyncKey: string;
-  onSelectSession: (sessionId: string | null) => void;
-  onSessionCreated: (sessionId: string) => void;
-  onNewSession: () => void;
+  persona?: Persona
+  agentSlug: string
+  personaName?: string
+  runtime?: PersonaRuntimeState
+  activeSessionId: string | null
+  sidebarRefreshTrigger: number
+  runtimeSyncKey: string
+  onSelectSession: (sessionId: string | null) => void
+  onSessionCreated: (sessionId: string) => void
+  onNewSession: () => void
 }
 
 export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
   const focusedRuntimeSession = useMemo(() => {
     if (!props.runtime || !props.activeSessionId) {
-      return null;
+      return null
     }
-    const sessions = [props.runtime.primarySession, ...props.runtime.activeChildSessions].filter(
-      (session): session is NonNullable<typeof session> => Boolean(session),
-    );
-    return sessions.find((session) => session.id === props.activeSessionId) ?? null;
-  }, [props.activeSessionId, props.runtime]);
-  const persistedSessionProjectId = props.runtime?.primarySessionDetails?.project_id ?? null;
-  const sessionProjectId = focusedRuntimeSession?.project_id ?? persistedSessionProjectId ?? null;
-  const [selectedProjectId, setSelectedProjectId] = useState(sessionProjectId ?? "agent-hub");
-  const [activeOperatorTab, setActiveOperatorTab] = useState<PersonaOperatorTab>("workflow");
-  const [deskOpen, setDeskOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : false));
-  const [compactViewport, setCompactViewport] = useState(false);
+    const sessions = [
+      props.runtime.primarySession,
+      ...props.runtime.activeChildSessions,
+    ].filter((session): session is NonNullable<typeof session> =>
+      Boolean(session),
+    )
+    return (
+      sessions.find((session) => session.id === props.activeSessionId) ?? null
+    )
+  }, [props.activeSessionId, props.runtime])
+  const persistedSessionProjectId =
+    props.runtime?.primarySessionDetails?.project_id ?? null
+  const sessionProjectId =
+    focusedRuntimeSession?.project_id ?? persistedSessionProjectId ?? null
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    sessionProjectId ?? 'agent-hub',
+  )
+  const [activeOperatorTab, setActiveOperatorTab] =
+    useState<PersonaOperatorTab>('workflow')
+  const [deskOpen, setDeskOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false,
+  )
+  const [compactViewport, setCompactViewport] = useState(false)
   const state = useWorkspaceState({
     ...props,
     targetProjectId: selectedProjectId,
     sessionProjectId,
-  });
-  const optimisticDraftActive = isActiveChatStream(state.status);
+  })
+  const optimisticDraftActive = isActiveChatStream(state.status)
   const persistedDisplaySession = useMemo(() => {
     if (!props.runtime?.primarySessionDetails) {
-      return null;
+      return null
     }
-    return toSessionListItem(props.runtime.primarySessionDetails);
-  }, [props.runtime?.primarySessionDetails]);
+    return toSessionListItem(props.runtime.primarySessionDetails)
+  }, [props.runtime?.primarySessionDetails])
   const displaySession = useMemo(() => {
     if (!props.runtime) {
-      return null;
+      return null
     }
-    const selectedSessionId = state.selectedSessionId ?? state.currentSessionId;
+    const selectedSessionId = state.selectedSessionId ?? state.currentSessionId
     const shouldPreferDraftForSelectedSession = Boolean(
-      optimisticDraftActive
-      && state.currentSessionId
-      && selectedSessionId
-      && selectedSessionId === state.currentSessionId,
-    );
+      optimisticDraftActive &&
+        state.currentSessionId &&
+        selectedSessionId &&
+        selectedSessionId === state.currentSessionId,
+    )
     const runtimeSessions = [
       props.runtime.primarySession,
       ...props.runtime.activePersonaSessions,
       ...props.runtime.activeChildSessions,
-    ].filter((session): session is SessionListItem => Boolean(session));
+    ].filter((session): session is SessionListItem => Boolean(session))
     if (shouldPreferDraftForSelectedSession) {
       return buildDraftSession(
         state.currentSessionId!,
@@ -144,15 +169,17 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
         state.status,
         state.responseStatusLabel,
         state.messages,
-      );
+      )
     }
     if (selectedSessionId) {
-      const matchedSession = runtimeSessions.find((session) => session.id === selectedSessionId);
+      const matchedSession = runtimeSessions.find(
+        (session) => session.id === selectedSessionId,
+      )
       if (matchedSession) {
-        return matchedSession;
+        return matchedSession
       }
       if (persistedDisplaySession?.id === selectedSessionId) {
-        return persistedDisplaySession;
+        return persistedDisplaySession
       }
     }
     if (
@@ -161,27 +188,30 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
       (!selectedSessionId || selectedSessionId === state.currentSessionId) &&
       !optimisticDraftActive
     ) {
-      return persistedDisplaySession;
+      return persistedDisplaySession
     }
-    if (state.currentSessionId && (!selectedSessionId || selectedSessionId === state.currentSessionId)) {
+    if (
+      state.currentSessionId &&
+      (!selectedSessionId || selectedSessionId === state.currentSessionId)
+    ) {
       return buildDraftSession(
         state.currentSessionId,
         sessionProjectId ?? selectedProjectId,
         state.status,
         state.responseStatusLabel,
         state.messages,
-      );
+      )
     }
     if (optimisticDraftActive && !state.selectedSessionId) {
       return buildDraftSession(
-        "__live_draft__",
+        '__live_draft__',
         selectedProjectId,
         state.status,
         state.responseStatusLabel,
         state.messages,
-      );
+      )
     }
-    return props.runtime.primarySession ?? persistedDisplaySession;
+    return props.runtime.primarySession ?? persistedDisplaySession
   }, [
     optimisticDraftActive,
     persistedDisplaySession,
@@ -193,103 +223,110 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
     state.responseStatusLabel,
     state.selectedSessionId,
     state.status,
-  ]);
+  ])
   const displaySessionDetails = useMemo(() => {
     if (!displaySession || !props.runtime?.primarySessionDetails) {
-      return null;
+      return null
     }
-    return props.runtime.primarySessionDetails.id === displaySession.id ? props.runtime.primarySessionDetails : null;
-  }, [displaySession, props.runtime?.primarySessionDetails]);
-  const isTerminalThread =
-    Boolean(
-      displaySession
-      && displaySession.agent_slug === "persona"
-      && !displaySession.parent_session_id
-      && displaySession.status !== "active"
-      && displaySession.live_activity?.status !== "active"
-      && !["waiting_for_model", "running_tool", "finalizing"].includes(displaySession.live_activity?.phase ?? ""),
-    );
+    return props.runtime.primarySessionDetails.id === displaySession.id
+      ? props.runtime.primarySessionDetails
+      : null
+  }, [displaySession, props.runtime?.primarySessionDetails])
+  const isTerminalThread = Boolean(
+    displaySession &&
+      displaySession.agent_slug === 'persona' &&
+      !displaySession.parent_session_id &&
+      displaySession.status !== 'active' &&
+      displaySession.live_activity?.status !== 'active' &&
+      !['waiting_for_model', 'running_tool', 'finalizing'].includes(
+        displaySession.live_activity?.phase ?? '',
+      ),
+  )
   const isDraftDisplaySession = Boolean(
-    displaySession
-    && (
-      displaySession.id === "__live_draft__"
-      || (optimisticDraftActive && state.currentSessionId && displaySession.id === state.currentSessionId)
-    ),
-  );
-  const threadSource = displaySession || state.messages.length > 0
-    ? (isDraftDisplaySession ? "draft" : "session")
-    : null;
+    displaySession &&
+      (displaySession.id === '__live_draft__' ||
+        (optimisticDraftActive &&
+          state.currentSessionId &&
+          displaySession.id === state.currentSessionId)),
+  )
+  const threadSource =
+    displaySession || state.messages.length > 0
+      ? isDraftDisplaySession
+        ? 'draft'
+        : 'session'
+      : null
   const handleStopDisplaySession = () => {
     if (!props.runtime) {
-      return;
+      return
     }
     if (state.currentSessionId) {
-      void props.runtime.stopSession(state.currentSessionId);
-      return;
+      void props.runtime.stopSession(state.currentSessionId)
+      return
     }
     if (optimisticDraftActive) {
-      state.cancelStream();
-      return;
+      state.cancelStream()
+      return
     }
     if (displaySession) {
-      void props.runtime.stopSession(displaySession.id);
-      return;
+      void props.runtime.stopSession(displaySession.id)
+      return
     }
-    void props.runtime.stopCurrentStream();
-  };
+    void props.runtime.stopCurrentStream()
+  }
 
   useEffect(() => {
     if (sessionProjectId) {
-      setSelectedProjectId(sessionProjectId);
+      setSelectedProjectId(sessionProjectId)
     }
-  }, [sessionProjectId]);
+  }, [sessionProjectId])
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    if (typeof window === 'undefined') {
+      return
     }
     const updateCompactViewport = () => {
-      const isCompact = window.innerHeight < 720;
-      setCompactViewport(isCompact);
+      const isCompact = window.innerHeight < 720
+      setCompactViewport(isCompact)
       if (window.innerWidth >= 1024) {
-        setDeskOpen(true);
+        setDeskOpen(true)
       }
-    };
-    updateCompactViewport();
-    window.addEventListener("resize", updateCompactViewport);
-    return () => window.removeEventListener("resize", updateCompactViewport);
-  }, []);
+    }
+    updateCompactViewport()
+    window.addEventListener('resize', updateCompactViewport)
+    return () => window.removeEventListener('resize', updateCompactViewport)
+  }, [])
 
   const handleNewThread = () => {
-    state.resetSession();
-    props.onNewSession();
-  };
+    state.resetSession()
+    props.onNewSession()
+  }
 
   const footerThreadSessionId =
-    state.selectedSessionId
-    ?? state.currentSessionId
-    ?? props.activeSessionId
-    ?? null;
+    state.selectedSessionId ??
+    state.currentSessionId ??
+    props.activeSessionId ??
+    null
   const showJumpToLatest = Boolean(
-    state.latestItemId && (!state.isAtBottom || !state.autoFollow || state.newActivityCount > 0),
-  );
+    state.latestItemId &&
+      (!state.isAtBottom || !state.autoFollow || state.newActivityCount > 0),
+  )
   const jumpToLatestLabel = showJumpToLatest
     ? state.newActivityCount > 0
-      ? `${state.newActivityCount} new ${state.newActivityCount === 1 ? "item" : "items"} · Jump to latest`
-      : "Jump to latest"
-    : null;
+      ? `${state.newActivityCount} new ${state.newActivityCount === 1 ? 'item' : 'items'} · Jump to latest`
+      : 'Jump to latest'
+    : null
 
   return (
     <div
       data-testid="persona-workspace-root"
-      data-compact-viewport={compactViewport ? "true" : "false"}
+      data-compact-viewport={compactViewport ? 'true' : 'false'}
       className="relative flex h-full min-h-0 flex-col overflow-hidden"
     >
       <WorkspaceToolbar
         search={state.search}
         onSearchChange={(value) => {
-          state.setSearch(value);
-          state.setAnchorEntryId(null);
+          state.setSearch(value)
+          state.setAnchorEntryId(null)
         }}
         timeRange={state.timeRange}
         onTimeRangeChange={state.setTimeRange}
@@ -305,7 +342,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
         activeMatchId={state.activeMatchId}
         onJumpToMatch={state.jumpToSearchMatch}
         onSelectMatch={(entryId) => {
-          state.setAnchorEntryId(entryId);
+          state.setAnchorEntryId(entryId)
         }}
       />
 
@@ -326,7 +363,10 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
         />
       ) : null}
 
-      <div data-testid="persona-workspace-main" className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        data-testid="persona-workspace-main"
+        className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px]"
+      >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <WorkspaceTimeline
             scrollRef={state.scrollRef}
@@ -348,7 +388,6 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
             activeMatchId={state.activeMatchId}
             sessionEventDetails={state.sessionEventDetails}
             narrationCache={state.narrationCache}
-            fetchNarrationTags={state.fetchNarrationTags}
             personaDisplayName={state.personaDisplayName}
             total={state.total}
             entries={state.entries}
@@ -429,7 +468,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
 
       <div
         data-testid="persona-footer-shell"
-        className={cn(compactViewport && "absolute inset-x-0 bottom-0 z-30")}
+        className={cn(compactViewport && 'absolute inset-x-0 bottom-0 z-30')}
       >
         <WorkspaceChatFooter
           personaDisplayName={state.personaDisplayName}
@@ -446,10 +485,12 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           onNewSession={handleNewThread}
           compactViewport={compactViewport}
           jumpToLatestLabel={jumpToLatestLabel}
-          onJumpToLatest={jumpToLatestLabel ? state.handleJumpToLatest : undefined}
+          onJumpToLatest={
+            jumpToLatestLabel ? state.handleJumpToLatest : undefined
+          }
           showNewThread={!props.persona || !props.runtime}
         />
       </div>
     </div>
-  );
+  )
 }

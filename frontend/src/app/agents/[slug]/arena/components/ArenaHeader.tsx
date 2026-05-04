@@ -1,29 +1,29 @@
-import { useRouter } from "next/navigation";
-import { ArrowLeft, FlaskConical, RefreshCw } from "lucide-react";
+import { ArrowLeft, FlaskConical, RefreshCw } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
-export type ArenaWindow = 7 | 30 | 90;
-export type ArenaView = "overview" | "suites" | "runtime" | "experiments";
+export type ArenaWindow = 7 | 30 | 90
+export type ArenaView = 'overview' | 'suites' | 'runtime' | 'experiments'
 
 interface ArenaHeaderProps {
-  agentName: string;
-  slug: string;
-  backHref?: string;
-  windowDays: ArenaWindow;
-  activeView: ArenaView;
-  onWindowDaysChange: (value: ArenaWindow) => void;
-  onViewChange: (value: ArenaView) => void;
-  onRefresh: () => void;
-  isRefreshing: boolean;
+  agentName: string
+  slug: string
+  backHref?: string
+  windowDays: ArenaWindow
+  activeView: ArenaView
+  onWindowDaysChange: (value: ArenaWindow) => void
+  onViewChange: (value: ArenaView) => void
+  onRefresh: () => void
+  isRefreshing: boolean
 }
 
 const VIEW_OPTIONS: Array<{ id: ArenaView; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "suites", label: "Suites" },
-  { id: "runtime", label: "Runtime" },
-  { id: "experiments", label: "Experiments" },
-];
+  { id: 'overview', label: 'Overview' },
+  { id: 'suites', label: 'Suites' },
+  { id: 'runtime', label: 'Runtime' },
+  { id: 'experiments', label: 'Experiments' },
+]
 
 export function ArenaHeader({
   agentName,
@@ -36,7 +36,7 @@ export function ArenaHeader({
   onRefresh,
   isRefreshing,
 }: ArenaHeaderProps) {
-  const router = useRouter();
+  const router = useRouter()
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
@@ -70,10 +70,10 @@ export function ArenaHeader({
                     type="button"
                     onClick={() => onWindowDaysChange(days)}
                     className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                      'px-3 py-1 text-xs font-medium rounded-md transition-all duration-150',
                       windowDays === days
-                        ? "bg-amber-500 text-slate-950 shadow-sm"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200',
                     )}
                   >
                     {days}d
@@ -85,7 +85,9 @@ export function ArenaHeader({
                 disabled={isRefreshing}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-50"
               >
-                <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                <RefreshCw
+                  className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')}
+                />
                 Refresh
               </button>
             </div>
@@ -98,10 +100,10 @@ export function ArenaHeader({
                 type="button"
                 onClick={() => onViewChange(view.id)}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+                  'rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-200',
                   activeView === view.id
-                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60",
+                    ? 'bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60',
                 )}
                 aria-pressed={activeView === view.id}
               >
@@ -112,5 +114,5 @@ export function ArenaHeader({
         </div>
       </div>
     </header>
-  );
+  )
 }

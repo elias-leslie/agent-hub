@@ -1,54 +1,98 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Trash2, Check, Eye, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { MemoryEpisode } from "@/lib/memory-api";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  MessageCircle,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+} from 'lucide-react'
+import { useState } from 'react'
+import type { MemoryEpisode } from '@/lib/memory-api'
+import { cn } from '@/lib/utils'
 
 interface MemoryCardProps {
-  episode: MemoryEpisode;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-  isDeleting: boolean;
+  episode: MemoryEpisode
+  isSelected: boolean
+  onSelect: () => void
+  onDelete: () => void
+  isDeleting: boolean
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = new Date(dateStr)
   return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
-function getCategoryBadge(category: string): { icon: string; color: string; label: string } {
-  const badges: Record<string, { icon: string; color: string; label: string }> = {
-    coding_standard: { icon: "📏", color: "bg-blue-900/30 text-amber-300", label: "Standard" },
-    troubleshooting_guide: { icon: "⚠️", color: "bg-red-900/30 text-red-300", label: "Gotcha" },
-    system_design: { icon: "🏗️", color: "bg-purple-900/30 text-purple-300", label: "Design" },
-    operational_context: { icon: "⚙️", color: "bg-amber-900/30 text-amber-300", label: "Ops" },
-    domain_knowledge: { icon: "📚", color: "bg-emerald-900/30 text-emerald-300", label: "Domain" },
-    active_state: { icon: "▶️", color: "bg-cyan-900/30 text-cyan-300", label: "Active" },
-  };
-  return badges[category] || { icon: "📝", color: "bg-slate-800 text-slate-400", label: category };
+function getCategoryBadge(category: string): {
+  icon: string
+  color: string
+  label: string
+} {
+  const badges: Record<string, { icon: string; color: string; label: string }> =
+    {
+      coding_standard: {
+        icon: '📏',
+        color: 'bg-blue-900/30 text-amber-300',
+        label: 'Standard',
+      },
+      troubleshooting_guide: {
+        icon: '⚠️',
+        color: 'bg-red-900/30 text-red-300',
+        label: 'Gotcha',
+      },
+      system_design: {
+        icon: '🏗️',
+        color: 'bg-purple-900/30 text-purple-300',
+        label: 'Design',
+      },
+      operational_context: {
+        icon: '⚙️',
+        color: 'bg-amber-900/30 text-amber-300',
+        label: 'Ops',
+      },
+      domain_knowledge: {
+        icon: '📚',
+        color: 'bg-emerald-900/30 text-emerald-300',
+        label: 'Domain',
+      },
+      active_state: {
+        icon: '▶️',
+        color: 'bg-cyan-900/30 text-cyan-300',
+        label: 'Active',
+      },
+    }
+  return (
+    badges[category] || {
+      icon: '📝',
+      color: 'bg-slate-800 text-slate-400',
+      label: category,
+    }
+  )
 }
 
 function getScopeBadge(scope: string): { color: string; label: string } {
   const badges: Record<string, { color: string; label: string }> = {
-    global: { color: "bg-indigo-900/30 text-indigo-300", label: "Global" },
-    project: { color: "bg-teal-900/30 text-teal-300", label: "Project" },
-    task: { color: "bg-orange-900/30 text-orange-300", label: "Task" },
-  };
-  return badges[scope] || { color: "bg-slate-800 text-slate-400", label: scope };
+    global: { color: 'bg-indigo-900/30 text-indigo-300', label: 'Global' },
+    project: { color: 'bg-teal-900/30 text-teal-300', label: 'Project' },
+    task: { color: 'bg-orange-900/30 text-orange-300', label: 'Task' },
+  }
+  return badges[scope] || { color: 'bg-slate-800 text-slate-400', label: scope }
 }
 
 function getUtilityScoreColor(score: number | undefined): string {
-  if (score === undefined) return "bg-slate-800 text-slate-400";
-  if (score >= 0.7) return "bg-emerald-900/30 text-emerald-300";
-  if (score >= 0.4) return "bg-amber-900/30 text-amber-300";
-  return "bg-red-900/30 text-red-300";
+  if (score === undefined) return 'bg-slate-800 text-slate-400'
+  if (score >= 0.7) return 'bg-emerald-900/30 text-emerald-300'
+  if (score >= 0.4) return 'bg-amber-900/30 text-amber-300'
+  return 'bg-red-900/30 text-red-300'
 }
 
 export function MemoryCard({
@@ -58,23 +102,24 @@ export function MemoryCard({
   onDelete,
   isDeleting,
 }: MemoryCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const categoryBadge = getCategoryBadge(episode.category);
-  const scopeBadge = getScopeBadge(episode.scope);
+  const [isExpanded, setIsExpanded] = useState(false)
+  const categoryBadge = getCategoryBadge(episode.category)
+  const scopeBadge = getScopeBadge(episode.scope)
 
   // Truncate content for preview
-  const previewContent = episode.content.length > 200
-    ? episode.content.slice(0, 200) + "..."
-    : episode.content;
+  const previewContent =
+    episode.content.length > 200
+      ? `${episode.content.slice(0, 200)}...`
+      : episode.content
 
   return (
     <div
       className={cn(
-        "rounded-lg border transition-all",
-        "bg-slate-900/50",
+        'rounded-lg border transition-all',
+        'bg-slate-900/50',
         isSelected
-          ? "border-emerald-400 ring-1 ring-emerald-500/50"
-          : "border-slate-800 hover:border-slate-700",
+          ? 'border-emerald-400 ring-1 ring-emerald-500/50'
+          : 'border-slate-800 hover:border-slate-700',
       )}
       data-testid="memory-card"
     >
@@ -84,10 +129,10 @@ export function MemoryCard({
         <button
           onClick={onSelect}
           className={cn(
-            "flex-shrink-0 w-5 h-5 rounded border transition-colors mt-0.5",
+            'flex-shrink-0 w-5 h-5 rounded border transition-colors mt-0.5',
             isSelected
-              ? "bg-emerald-500 border-emerald-500 text-white"
-              : "border-slate-600 hover:border-emerald-400",
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'border-slate-600 hover:border-emerald-400',
           )}
         >
           {isSelected && <Check className="w-4 h-4" />}
@@ -97,10 +142,20 @@ export function MemoryCard({
         <div className="flex-1 min-w-0">
           {/* Meta row */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
-            <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", scopeBadge.color)}>
+            <span
+              className={cn(
+                'px-2 py-0.5 rounded-full text-xs font-medium',
+                scopeBadge.color,
+              )}
+            >
               {scopeBadge.label}
             </span>
-            <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", categoryBadge.color)}>
+            <span
+              className={cn(
+                'px-2 py-0.5 rounded-full text-xs font-medium',
+                categoryBadge.color,
+              )}
+            >
               {categoryBadge.icon} {categoryBadge.label}
             </span>
             <span className="text-xs text-slate-500">
@@ -135,35 +190,53 @@ export function MemoryCard({
           )}
 
           {/* Usage stats row (compact) */}
-          {(episode.loaded_count !== undefined || episode.utility_score !== undefined) && (
+          {(episode.loaded_count !== undefined ||
+            episode.utility_score !== undefined) && (
             <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
               {episode.loaded_count !== undefined && (
-                <span className="flex items-center gap-1" title="Times loaded into context">
+                <span
+                  className="flex items-center gap-1"
+                  title="Times loaded into context"
+                >
                   <Eye className="w-3 h-3" />
                   {episode.loaded_count}
                 </span>
               )}
               {episode.referenced_count !== undefined && (
-                <span className="flex items-center gap-1" title="Times cited by LLM">
+                <span
+                  className="flex items-center gap-1"
+                  title="Times cited by LLM"
+                >
                   <MessageCircle className="w-3 h-3" />
                   {episode.referenced_count}
                 </span>
               )}
-              {episode.helpful_count !== undefined && episode.helpful_count > 0 && (
-                <span className="flex items-center gap-1 text-emerald-400" title="Helpful feedback">
-                  <ThumbsUp className="w-3 h-3" />
-                  {episode.helpful_count}
-                </span>
-              )}
-              {episode.harmful_count !== undefined && episode.harmful_count > 0 && (
-                <span className="flex items-center gap-1 text-red-400" title="Harmful feedback">
-                  <ThumbsDown className="w-3 h-3" />
-                  {episode.harmful_count}
-                </span>
-              )}
+              {episode.helpful_count !== undefined &&
+                episode.helpful_count > 0 && (
+                  <span
+                    className="flex items-center gap-1 text-emerald-400"
+                    title="Helpful feedback"
+                  >
+                    <ThumbsUp className="w-3 h-3" />
+                    {episode.helpful_count}
+                  </span>
+                )}
+              {episode.harmful_count !== undefined &&
+                episode.harmful_count > 0 && (
+                  <span
+                    className="flex items-center gap-1 text-red-400"
+                    title="Harmful feedback"
+                  >
+                    <ThumbsDown className="w-3 h-3" />
+                    {episode.harmful_count}
+                  </span>
+                )}
               {episode.utility_score !== undefined && (
                 <span
-                  className={cn("px-1.5 py-0.5 rounded text-xs font-medium", getUtilityScoreColor(episode.utility_score))}
+                  className={cn(
+                    'px-1.5 py-0.5 rounded text-xs font-medium',
+                    getUtilityScoreColor(episode.utility_score),
+                  )}
                   title="Utility score (cited vs loaded ratio)"
                 >
                   {(episode.utility_score * 100).toFixed(0)}%
@@ -171,7 +244,6 @@ export function MemoryCard({
               )}
             </div>
           )}
-
         </div>
 
         {/* Delete button */}
@@ -179,9 +251,9 @@ export function MemoryCard({
           onClick={onDelete}
           disabled={isDeleting}
           className={cn(
-            "flex-shrink-0 p-2 rounded-lg transition-colors",
-            "text-slate-400 hover:text-red-500 hover:bg-red-900/20",
-            isDeleting && "opacity-50 cursor-not-allowed",
+            'flex-shrink-0 p-2 rounded-lg transition-colors',
+            'text-slate-400 hover:text-red-500 hover:bg-red-900/20',
+            isDeleting && 'opacity-50 cursor-not-allowed',
           )}
           title="Delete memory"
         >
@@ -193,5 +265,5 @@ export function MemoryCard({
         </button>
       </div>
     </div>
-  );
+  )
 }

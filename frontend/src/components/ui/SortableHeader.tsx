@@ -1,7 +1,7 @@
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-export type SortDirection = "asc" | "desc";
+export type SortDirection = 'asc' | 'desc'
 
 export function SortableHeader<T extends string>({
   label,
@@ -10,32 +10,32 @@ export function SortableHeader<T extends string>({
   direction,
   onSort,
   icon,
-  align = "left",
+  align = 'left',
 }: {
-  label: string;
-  field: T;
-  currentField: T;
-  direction: SortDirection;
-  onSort: (field: T) => void;
-  icon?: React.ReactNode;
-  align?: "left" | "right";
+  label: string
+  field: T
+  currentField: T
+  direction: SortDirection
+  onSort: (field: T) => void
+  icon?: React.ReactNode
+  align?: 'left' | 'right'
 }) {
-  const isActive = currentField === field;
+  const isActive = currentField === field
 
   return (
     <button
       onClick={() => onSort(field)}
       className={cn(
-        "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
-        "text-slate-500 hover:text-slate-300",
-        isActive && "text-slate-200",
-        align === "right" && "justify-end ml-auto"
+        'flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors',
+        'text-slate-500 hover:text-slate-300',
+        isActive && 'text-slate-200',
+        align === 'right' && 'justify-end ml-auto',
       )}
     >
       {icon}
       {label}
       {isActive ? (
-        direction === "asc" ? (
+        direction === 'asc' ? (
           <ArrowUp className="h-3 w-3" />
         ) : (
           <ArrowDown className="h-3 w-3" />
@@ -44,5 +44,5 @@ export function SortableHeader<T extends string>({
         <ArrowUpDown className="h-3 w-3 opacity-30" />
       )}
     </button>
-  );
+  )
 }

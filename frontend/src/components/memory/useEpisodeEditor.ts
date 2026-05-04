@@ -1,19 +1,27 @@
-import { useState } from "react";
+import { useState } from 'react'
 import type {
-  MemoryEpisode,
+  MemoryApplicability,
   MemoryCategory,
   MemoryContextKind,
-  MemoryApplicability,
-} from "@/lib/memory-api";
-import { addEpisode, deleteMemory, updateEpisodeProperties } from "@/lib/memory-api";
+  MemoryEpisode,
+} from '@/lib/memory-api'
+import {
+  addEpisode,
+  deleteMemory,
+  updateEpisodeProperties,
+} from '@/lib/memory-api'
 
 interface UseEpisodeEditorProps {
-  episode: MemoryEpisode;
-  onSaved: () => void;
-  onClose: () => void;
+  episode: MemoryEpisode
+  onSaved: () => void
+  onClose: () => void
 }
 
-export function useEpisodeEditor({ episode, onSaved, onClose }: UseEpisodeEditorProps) {
+export function useEpisodeEditor({
+  episode,
+  onSaved,
+  onClose,
+}: UseEpisodeEditorProps) {
   const defaultApplicability = (): MemoryApplicability => ({
     consumer_profiles: [],
     exclude_consumer_profiles: [],
@@ -21,9 +29,9 @@ export function useEpisodeEditor({ episode, onSaved, onClose }: UseEpisodeEditor
     exclude_agent_slugs: [],
     audience_tags: [],
     exclude_audience_tags: [],
-  });
+  })
   const cloneApplicability = (
-    value: MemoryApplicability | undefined
+    value: MemoryApplicability | undefined,
   ): MemoryApplicability => ({
     ...defaultApplicability(),
     ...(value || {}),
@@ -33,64 +41,71 @@ export function useEpisodeEditor({ episode, onSaved, onClose }: UseEpisodeEditor
     exclude_agent_slugs: [...(value?.exclude_agent_slugs || [])],
     audience_tags: [...(value?.audience_tags || [])],
     exclude_audience_tags: [...(value?.exclude_audience_tags || [])],
-  });
+  })
   const arraysEqual = (left: string[], right: string[]) =>
-    left.length === right.length && left.every((item, index) => item === right[index]);
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
   const applicabilityEqual = (
     left: MemoryApplicability,
-    right: MemoryApplicability
+    right: MemoryApplicability,
   ) =>
     arraysEqual(left.consumer_profiles, right.consumer_profiles) &&
-    arraysEqual(left.exclude_consumer_profiles, right.exclude_consumer_profiles) &&
+    arraysEqual(
+      left.exclude_consumer_profiles,
+      right.exclude_consumer_profiles,
+    ) &&
     arraysEqual(left.agent_slugs, right.agent_slugs) &&
     arraysEqual(left.exclude_agent_slugs, right.exclude_agent_slugs) &&
     arraysEqual(left.audience_tags, right.audience_tags) &&
-    arraysEqual(left.exclude_audience_tags, right.exclude_audience_tags);
+    arraysEqual(left.exclude_audience_tags, right.exclude_audience_tags)
 
-  const [content, setContent] = useState(episode.content);
-  const [tier, setTier] = useState<MemoryCategory>(episode.category);
-  const [pinned, setPinned] = useState(episode.pinned ?? false);
-  const [summary, setSummary] = useState(episode.summary ?? "");
+  const [content, setContent] = useState(episode.content)
+  const [tier, setTier] = useState<MemoryCategory>(episode.category)
+  const [pinned, setPinned] = useState(episode.pinned ?? false)
+  const [summary, setSummary] = useState(episode.summary ?? '')
   const [contextKind, setContextKind] = useState<MemoryContextKind>(
-    episode.context_kind ?? "reference"
-  );
+    episode.context_kind ?? 'reference',
+  )
   const [applicability, setApplicability] = useState<MemoryApplicability>(
-    cloneApplicability(episode.applicability)
-  );
-  const [triggerTaskTypes] = useState<string[]>(episode.trigger_task_types ?? []);
+    cloneApplicability(episode.applicability),
+  )
+  const [triggerTaskTypes] = useState<string[]>(
+    episode.trigger_task_types ?? [],
+  )
   const [triggerPhases, setTriggerPhases] = useState<string[]>(
-    episode.trigger_phases ?? []
-  );
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    episode.trigger_phases ?? [],
+  )
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const initialApplicability = cloneApplicability(episode.applicability);
-  const initialTriggerPhases = episode.trigger_phases ?? [];
+  const initialApplicability = cloneApplicability(episode.applicability)
+  const initialTriggerPhases = episode.trigger_phases ?? []
 
   const hasChanges =
     content !== episode.content ||
     tier !== episode.category ||
     pinned !== (episode.pinned ?? false) ||
-    summary !== (episode.summary ?? "") ||
-    contextKind !== (episode.context_kind ?? "reference") ||
+    summary !== (episode.summary ?? '') ||
+    contextKind !== (episode.context_kind ?? 'reference') ||
     !applicabilityEqual(applicability, initialApplicability) ||
-    !arraysEqual(triggerPhases, initialTriggerPhases);
+    !arraysEqual(triggerPhases, initialTriggerPhases)
 
   async function handleSave() {
     if (!hasChanges) {
-      onClose();
-      return;
+      onClose()
+      return
     }
 
-    setIsSaving(true);
-    setError(null);
+    setIsSaving(true)
+    setError(null)
 
     try {
-      const contentOrTierChanged = content !== episode.content || tier !== episode.category;
-      const pinnedChanged = pinned !== (episode.pinned ?? false);
-      const summaryChanged = summary !== (episode.summary ?? "");
+      const contentOrTierChanged =
+        content !== episode.content || tier !== episode.category
+      const pinnedChanged = pinned !== (episode.pinned ?? false)
+      const summaryChanged = summary !== (episode.summary ?? '')
 
-      let newUuid = episode.uuid;
+      let newUuid = episode.uuid
 
       // If content or tier changed, need delete+create flow
       if (contentOrTierChanged) {
@@ -103,63 +118,63 @@ export function useEpisodeEditor({ episode, onSaved, onClose }: UseEpisodeEditor
           context_kind: contextKind,
           applicability,
           preserve_stats_from: episode.uuid,
-        });
-        newUuid = newEpisode.uuid;
+        })
+        newUuid = newEpisode.uuid
 
         // Step 2: Delete original episode
-        await deleteMemory(episode.uuid);
+        await deleteMemory(episode.uuid)
       }
 
       // Update properties on the (possibly new) episode
       const propsToUpdate: {
-        pinned?: boolean;
-        summary?: string;
-        trigger_task_types?: string[];
-        trigger_phases?: string[];
-        context_kind?: MemoryContextKind;
-        applicability?: MemoryApplicability;
-      } = {};
+        pinned?: boolean
+        summary?: string
+        trigger_task_types?: string[]
+        trigger_phases?: string[]
+        context_kind?: MemoryContextKind
+        applicability?: MemoryApplicability
+      } = {}
       if (pinnedChanged || (contentOrTierChanged && pinned)) {
-        propsToUpdate.pinned = pinned;
+        propsToUpdate.pinned = pinned
       }
       if (summaryChanged || (contentOrTierChanged && summary)) {
-        propsToUpdate.summary = summary;
+        propsToUpdate.summary = summary
       }
       if (
         !arraysEqual(triggerTaskTypes, episode.trigger_task_types ?? []) ||
         contentOrTierChanged
       ) {
-        propsToUpdate.trigger_task_types = triggerTaskTypes;
+        propsToUpdate.trigger_task_types = triggerTaskTypes
       }
       if (
         !arraysEqual(triggerPhases, initialTriggerPhases) ||
         contentOrTierChanged
       ) {
-        propsToUpdate.trigger_phases = triggerPhases;
+        propsToUpdate.trigger_phases = triggerPhases
       }
       if (
-        contextKind !== (episode.context_kind ?? "reference") ||
+        contextKind !== (episode.context_kind ?? 'reference') ||
         contentOrTierChanged
       ) {
-        propsToUpdate.context_kind = contextKind;
+        propsToUpdate.context_kind = contextKind
       }
       if (
         !applicabilityEqual(applicability, initialApplicability) ||
         contentOrTierChanged
       ) {
-        propsToUpdate.applicability = applicability;
+        propsToUpdate.applicability = applicability
       }
       if (Object.keys(propsToUpdate).length > 0) {
-        await updateEpisodeProperties(newUuid, propsToUpdate);
+        await updateEpisodeProperties(newUuid, propsToUpdate)
       }
 
       // Success - close modal and trigger refresh
-      onSaved();
-      onClose();
+      onSaved()
+      onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save changes");
+      setError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
   }
 
@@ -182,5 +197,5 @@ export function useEpisodeEditor({ episode, onSaved, onClose }: UseEpisodeEditor
     error,
     hasChanges,
     handleSave,
-  };
+  }
 }

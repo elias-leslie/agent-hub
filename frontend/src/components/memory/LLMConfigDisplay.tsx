@@ -1,5 +1,5 @@
-import { Cpu } from "lucide-react";
-import type { LLMConfig } from "@/lib/api/memory-settings";
+import { Cpu } from 'lucide-react'
+import type { LLMConfig } from '@/lib/api/memory-settings'
 
 export function LLMConfigDisplay({ config }: { config: LLMConfig }) {
   return (
@@ -23,5 +23,5 @@ export function LLMConfigDisplay({ config }: { config: LLMConfig }) {
         </div>
       </div>
     </div>
-  );
+  )
 }

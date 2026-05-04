@@ -1,32 +1,36 @@
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
 interface ClientResponse {
-  client_id: string;
-  display_name: string;
-  client_type: string;
-  status: string;
-  rate_limit_rpm: number;
-  rate_limit_tpm: number;
-  allowed_projects: string[] | null;
-  created_at: string;
-  updated_at: string;
-  last_used_at: string | null;
-  suspended_at: string | null;
-  suspended_by: string | null;
-  suspension_reason: string | null;
+  client_id: string
+  display_name: string
+  client_type: string
+  status: string
+  rate_limit_rpm: number
+  rate_limit_tpm: number
+  allowed_projects: string[] | null
+  created_at: string
+  updated_at: string
+  last_used_at: string | null
+  suspended_at: string | null
+  suspended_by: string | null
+  suspension_reason: string | null
 }
 
 interface ClientDetailsCardProps {
-  client: ClientResponse;
-  formatDate: (date: string | null) => string;
+  client: ClientResponse
+  formatDate: (date: string | null) => string
   statusConfig: {
-    color: string;
-    bg: string;
-    label: string;
-  };
+    color: string
+    bg: string
+    label: string
+  }
 }
 
-export function ClientDetailsCard({ client, formatDate, statusConfig }: ClientDetailsCardProps) {
+export function ClientDetailsCard({
+  client,
+  formatDate,
+  statusConfig,
+}: ClientDetailsCardProps) {
   return (
     <section className="panel-surface p-5 lg:p-6">
       <div className="section-header gap-4">
@@ -50,12 +54,16 @@ export function ClientDetailsCard({ client, formatDate, statusConfig }: ClientDe
         </div>
         <div className="detail-card">
           <p className="detail-label">Status</p>
-          <p className={cn("detail-value capitalize", statusConfig.color)}>{client.status}</p>
+          <p className={cn('detail-value capitalize', statusConfig.color)}>
+            {client.status}
+          </p>
         </div>
         <div className="detail-card">
           <p className="detail-label">Rate Limit</p>
           <p className="detail-value font-mono">{client.rate_limit_rpm} rpm</p>
-          <p className="mt-1 text-xs text-slate-500">{client.rate_limit_tpm.toLocaleString()} tpm</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {client.rate_limit_tpm.toLocaleString()} tpm
+          </p>
         </div>
         <div className="detail-card md:col-span-2 xl:col-span-3">
           <p className="detail-label">Allowed Projects</p>
@@ -97,12 +105,13 @@ export function ClientDetailsCard({ client, formatDate, statusConfig }: ClientDe
           <p className="mt-2 text-amber-100">{client.suspension_reason}</p>
           {client.suspended_at && (
             <p className="mt-2 text-xs text-amber-200/80">
-              {client.status === "blocked" ? "Blocked" : "Suspended"} at {formatDate(client.suspended_at)}
+              {client.status === 'blocked' ? 'Blocked' : 'Suspended'} at{' '}
+              {formatDate(client.suspended_at)}
               {client.suspended_by && ` by ${client.suspended_by}`}
             </p>
           )}
         </div>
       )}
     </section>
-  );
+  )
 }

@@ -1,14 +1,14 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import type { MemoryEpisode, MemoryCategory } from "@/lib/memory-api";
-import { ScopePill } from "./ScopePill";
-import { TierDropdown } from "./TierDropdown";
-import { UsageStatsPane } from "./UsageStatsPane";
-import { MetadataPane } from "./MetadataPane";
-import { TriggerTaskTypes } from "./TriggerTaskTypes";
-import { SimilarEpisodesList } from "./SimilarEpisodesList";
-import { EditEpisodeModal } from "./EditEpisodeModal";
+import { useState } from 'react'
+import type { MemoryCategory, MemoryEpisode } from '@/lib/memory-api'
+import { EditEpisodeModal } from './EditEpisodeModal'
+import { MetadataPane } from './MetadataPane'
+import { ScopePill } from './ScopePill'
+import { SimilarEpisodesList } from './SimilarEpisodesList'
+import { TierDropdown } from './TierDropdown'
+import { TriggerTaskTypes } from './TriggerTaskTypes'
+import { UsageStatsPane } from './UsageStatsPane'
 
 export function ExpandedRowContent({
   episode,
@@ -17,14 +17,13 @@ export function ExpandedRowContent({
   onTierChange,
   onEdit,
 }: {
-  episode: MemoryEpisode;
-  onDelete: () => void;
-  isDeleting: boolean;
-  onTierChange?: (newCategory: MemoryCategory) => void;
-  onEdit?: () => void;
+  episode: MemoryEpisode
+  onDelete: () => void
+  isDeleting: boolean
+  onTierChange?: (newCategory: MemoryCategory) => void
+  onEdit?: () => void
 }) {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   return (
     <div className="px-5 py-4 space-y-3">
@@ -67,7 +66,7 @@ export function ExpandedRowContent({
       {/* BOTTOM: triggers + stats + similar */}
       <div className="space-y-2.5">
         {/* Trigger Task Types - only for reference tier */}
-        {episode.category === "reference" && (
+        {episode.category === 'reference' && (
           <TriggerTaskTypes
             episodeUuid={episode.uuid}
             initialTriggerTypes={episode.trigger_task_types || []}
@@ -96,5 +95,5 @@ export function ExpandedRowContent({
         onSaved={() => onEdit?.()}
       />
     </div>
-  );
+  )
 }

@@ -1,25 +1,25 @@
-import Link from "next/link";
-import { FlaskConical, Orbit, Sparkles } from "lucide-react";
-
-import type { AgentBenchmarkDashboard } from "../types";
-import { ChartCard } from "./ChartCard";
-import { formatPercent, formatScore } from "@/app/arena/utils";
+import { FlaskConical, Orbit, Sparkles } from 'lucide-react'
+import Link from 'next/link'
+import { formatPercent, formatScore } from '@/app/arena/utils'
+import type { AgentBenchmarkDashboard } from '../types'
+import { ChartCard } from './ChartCard'
 
 interface ArenaPreviewCardProps {
-  dashboard: AgentBenchmarkDashboard;
-  slug: string;
-  ctaLabel?: string | null;
-  compact?: boolean;
+  dashboard: AgentBenchmarkDashboard
+  slug: string
+  ctaLabel?: string | null
+  compact?: boolean
 }
 
 export function ArenaPreviewCard({
   dashboard,
   slug,
-  ctaLabel = "Open Arena",
+  ctaLabel = 'Open Arena',
   compact = true,
 }: ArenaPreviewCardProps) {
-  const hasHistory = dashboard.overview.total_runs > 0;
-  const recentSuites = new Set(dashboard.recent_runs.map((run) => run.suite_id)).size;
+  const hasHistory = dashboard.overview.total_runs > 0
+  const recentSuites = new Set(dashboard.recent_runs.map((run) => run.suite_id))
+    .size
 
   return (
     <ChartCard title="Arena">
@@ -34,39 +34,49 @@ export function ArenaPreviewCard({
               </div>
               <p className="mt-3 text-sm font-semibold text-slate-100">
                 {hasHistory
-                  ? "Arena has fresh evidence for this agent."
-                  : "Arena is ready for the first benchmark battery."}
+                  ? 'Arena has fresh evidence for this agent.'
+                  : 'Arena is ready for the first benchmark battery.'}
               </p>
               <p className="mt-1 max-w-2xl text-sm text-slate-300">
                 {hasHistory
-                  ? "Use Arena for score trends, experiments, regressions, and model comparisons without crowding runtime analytics."
-                  : "Run a benchmark or honing loop and Arena will turn the results into a readable scoreboard instead of raw logs."}
+                  ? 'Use Arena for score trends, experiments, regressions, and model comparisons without crowding runtime analytics.'
+                  : 'Run a benchmark or honing loop and Arena will turn the results into a readable scoreboard instead of raw logs.'}
               </p>
             </div>
             <Sparkles className="h-5 w-5 text-amber-500" />
           </div>
 
-          <div className={`mt-4 grid gap-3 ${compact ? "md:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-4"}`}>
+          <div
+            className={`mt-4 grid gap-3 ${compact ? 'md:grid-cols-4' : 'md:grid-cols-2 xl:grid-cols-4'}`}
+          >
             <div className="rounded-xl bg-slate-900/90 px-3 py-3 ring-1 ring-slate-800">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Runs</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Runs
+              </p>
               <p className="mt-1 text-xl font-semibold text-slate-50">
                 {dashboard.overview.total_runs}
               </p>
             </div>
             <div className="rounded-xl bg-slate-900/90 px-3 py-3 ring-1 ring-slate-800">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Avg score</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Avg score
+              </p>
               <p className="mt-1 text-xl font-semibold text-slate-50">
                 {formatScore(dashboard.overview.avg_score)}
               </p>
             </div>
             <div className="rounded-xl bg-slate-900/90 px-3 py-3 ring-1 ring-slate-800">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Pass rate</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Pass rate
+              </p>
               <p className="mt-1 text-xl font-semibold text-slate-50">
                 {formatPercent(dashboard.overview.pass_rate)}
               </p>
             </div>
             <div className="rounded-xl bg-slate-900/90 px-3 py-3 ring-1 ring-slate-800">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Suites</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Suites
+              </p>
               <p className="mt-1 inline-flex items-center gap-2 text-xl font-semibold text-slate-50">
                 <Orbit className="h-4 w-4 text-amber-500" />
                 {recentSuites}
@@ -76,7 +86,8 @@ export function ArenaPreviewCard({
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-slate-400">
-              Open regressions: {dashboard.overview.open_regressions} · Tracked models: {dashboard.overview.tracked_models.length}
+              Open regressions: {dashboard.overview.open_regressions} · Tracked
+              models: {dashboard.overview.tracked_models.length}
             </div>
             {ctaLabel ? (
               <Link
@@ -90,5 +101,5 @@ export function ArenaPreviewCard({
         </div>
       </div>
     </ChartCard>
-  );
+  )
 }

@@ -1,171 +1,216 @@
-import { useEffect, useState } from "react";
-import { Agent, ModelInfo } from "../types";
+import { useEffect, useState } from 'react'
+import type { Agent, ModelInfo } from '../types'
 
 interface ParametersTabProps {
-  formData: Partial<Agent>;
-  availableModels: ModelInfo[];
-  updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
+  formData: Partial<Agent>
+  availableModels: ModelInfo[]
+  updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void
 }
 
 interface LimitFieldConfig {
   field:
-    | "max_concurrency"
-    | "max_subagent_concurrency"
-    | "daily_token_budget"
-    | "hourly_request_limit";
-  label: string;
-  min: number;
-  max?: number;
-  placeholder: string;
-  description: string;
+    | 'max_concurrency'
+    | 'max_subagent_concurrency'
+    | 'daily_token_budget'
+    | 'hourly_request_limit'
+  label: string
+  min: number
+  max?: number
+  placeholder: string
+  description: string
 }
 
-type LimitField = LimitFieldConfig["field"];
-type NumericField = LimitField | "timeout_seconds";
-type DraftState = Record<NumericField, string>;
-type ErrorState = Partial<Record<NumericField, string>>;
+type LimitField = LimitFieldConfig['field']
+type NumericField = LimitField | 'timeout_seconds'
+type DraftState = Record<NumericField, string>
+type ErrorState = Partial<Record<NumericField, string>>
 
 const LIMIT_FIELDS: readonly LimitFieldConfig[] = [
   {
-    field: "max_concurrency",
-    label: "Max concurrency",
+    field: 'max_concurrency',
+    label: 'Max concurrency',
     min: 1,
     max: 100,
-    placeholder: "Default pool",
-    description: "Maximum parallel executions for this agent. Leave empty to use the system default.",
+    placeholder: 'Default pool',
+    description:
+      'Maximum parallel executions for this agent. Leave empty to use the system default.',
   },
   {
-    field: "max_subagent_concurrency",
-    label: "Max subagent concurrency",
+    field: 'max_subagent_concurrency',
+    label: 'Max subagent concurrency',
     min: 1,
     max: 100,
-    placeholder: "Default pool",
-    description: "Cap parallel subagent spawns. Useful for containing fan-out during large workflows.",
+    placeholder: 'Default pool',
+    description:
+      'Cap parallel subagent spawns. Useful for containing fan-out during large workflows.',
   },
   {
-    field: "daily_token_budget",
-    label: "Daily token budget",
+    field: 'daily_token_budget',
+    label: 'Daily token budget',
     min: 0,
-    placeholder: "Unlimited",
-    description: "Per-agent daily token ceiling. Use 0 for unlimited, or leave empty to defer to platform policy.",
+    placeholder: 'Unlimited',
+    description:
+      'Per-agent daily token ceiling. Use 0 for unlimited, or leave empty to defer to platform policy.',
   },
   {
-    field: "hourly_request_limit",
-    label: "Hourly request limit",
+    field: 'hourly_request_limit',
+    label: 'Hourly request limit',
     min: 0,
-    placeholder: "Unlimited",
-    description: "Per-agent request cap each hour. Use 0 for unlimited, or leave empty to defer to platform policy.",
+    placeholder: 'Unlimited',
+    description:
+      'Per-agent request cap each hour. Use 0 for unlimited, or leave empty to defer to platform policy.',
   },
-] as const;
+] as const
 
-function parseOptionalInteger(rawValue: string, min: number, max?: number): number | null | undefined {
-  if (rawValue === "") {
-    return null;
+function parseOptionalInteger(
+  rawValue: string,
+  min: number,
+  max?: number,
+): number | null | undefined {
+  if (rawValue === '') {
+    return null
   }
 
-  const value = Number.parseInt(rawValue, 10);
-  if (Number.isNaN(value) || value < min || (max !== undefined && value > max)) {
-    return undefined;
+  const value = Number.parseInt(rawValue, 10)
+  if (
+    Number.isNaN(value) ||
+    value < min ||
+    (max !== undefined && value > max)
+  ) {
+    return undefined
   }
 
-  return value;
+  return value
 }
 
 function parseOptionalTimeout(rawValue: string): number | null | undefined {
-  if (rawValue === "") {
-    return null;
+  if (rawValue === '') {
+    return null
   }
 
-  const value = Number.parseFloat(rawValue);
+  const value = Number.parseFloat(rawValue)
   if (Number.isNaN(value) || value <= 0 || value > 600) {
-    return undefined;
+    return undefined
   }
 
-  return value;
+  return value
 }
 
 function formatDraftValue(value: number | null | undefined): string {
-  return value == null ? "" : String(value);
+  return value == null ? '' : String(value)
 }
 
 const THINKING_LEVELS = [
-  { value: "", label: "Off (default)", hint: "No extended reasoning" },
-  { value: "none", label: "None", hint: "Explicitly disable reasoning (OpenAI)" },
-  { value: "minimal", label: "Minimal", hint: "Light reasoning for simple tasks" },
-  { value: "low", label: "Low", hint: "Basic reasoning, fast responses" },
-  { value: "medium", label: "Medium", hint: "Balanced reasoning for most tasks" },
-  { value: "high", label: "High", hint: "Deep reasoning for complex analysis" },
-  { value: "xhigh", label: "xHigh", hint: "Maximum reasoning (GPT-5.4/5.5)" },
-] as const;
+  { value: '', label: 'Off (default)', hint: 'No extended reasoning' },
+  {
+    value: 'none',
+    label: 'None',
+    hint: 'Explicitly disable reasoning (OpenAI)',
+  },
+  {
+    value: 'minimal',
+    label: 'Minimal',
+    hint: 'Light reasoning for simple tasks',
+  },
+  { value: 'low', label: 'Low', hint: 'Basic reasoning, fast responses' },
+  {
+    value: 'medium',
+    label: 'Medium',
+    hint: 'Balanced reasoning for most tasks',
+  },
+  { value: 'high', label: 'High', hint: 'Deep reasoning for complex analysis' },
+  { value: 'xhigh', label: 'xHigh', hint: 'Maximum reasoning (GPT-5.4/5.5)' },
+] as const
 
 const VERBOSITY_LEVELS = [
-  { value: "", label: "Default", hint: "Model decides output length" },
-  { value: "low", label: "Low", hint: "Minimal output, no extra comments" },
-  { value: "medium", label: "Medium", hint: "Explanatory comments and structure" },
-  { value: "high", label: "High", hint: "Comprehensive, production-ready output" },
-] as const;
+  { value: '', label: 'Default', hint: 'Model decides output length' },
+  { value: 'low', label: 'Low', hint: 'Minimal output, no extra comments' },
+  {
+    value: 'medium',
+    label: 'Medium',
+    hint: 'Explanatory comments and structure',
+  },
+  {
+    value: 'high',
+    label: 'High',
+    hint: 'Comprehensive, production-ready output',
+  },
+] as const
 
 function getSelectedModel(
   availableModels: ModelInfo[],
   modelId: string | null | undefined,
 ): ModelInfo | null {
   if (!modelId) {
-    return null;
+    return null
   }
-  return availableModels.find((model) => model.id === modelId) ?? null;
+  return availableModels.find((model) => model.id === modelId) ?? null
 }
 
-export function ParametersTab({ formData, availableModels, updateField }: ParametersTabProps) {
+export function ParametersTab({
+  formData,
+  availableModels,
+  updateField,
+}: ParametersTabProps) {
   const [draftValues, setDraftValues] = useState<DraftState>({
     max_concurrency: formatDraftValue(formData.max_concurrency),
-    max_subagent_concurrency: formatDraftValue(formData.max_subagent_concurrency),
+    max_subagent_concurrency: formatDraftValue(
+      formData.max_subagent_concurrency,
+    ),
     daily_token_budget: formatDraftValue(formData.daily_token_budget),
     hourly_request_limit: formatDraftValue(formData.hourly_request_limit),
     timeout_seconds: formatDraftValue(formData.timeout_seconds),
-  });
-  const [fieldErrors, setFieldErrors] = useState<ErrorState>({});
+  })
+  const [fieldErrors, setFieldErrors] = useState<ErrorState>({})
 
   useEffect(() => {
     setDraftValues({
       max_concurrency: formatDraftValue(formData.max_concurrency),
-      max_subagent_concurrency: formatDraftValue(formData.max_subagent_concurrency),
+      max_subagent_concurrency: formatDraftValue(
+        formData.max_subagent_concurrency,
+      ),
       daily_token_budget: formatDraftValue(formData.daily_token_budget),
       hourly_request_limit: formatDraftValue(formData.hourly_request_limit),
       timeout_seconds: formatDraftValue(formData.timeout_seconds),
-    });
+    })
   }, [
     formData.daily_token_budget,
     formData.hourly_request_limit,
     formData.max_concurrency,
     formData.max_subagent_concurrency,
     formData.timeout_seconds,
-  ]);
+  ])
 
   function updateDraft(field: NumericField, rawValue: string) {
-    setDraftValues((current) => ({ ...current, [field]: rawValue }));
+    setDraftValues((current) => ({ ...current, [field]: rawValue }))
   }
 
   function clearFieldError(field: NumericField) {
     setFieldErrors((current) => {
       if (!current[field]) {
-        return current;
+        return current
       }
-      const next = { ...current };
-      delete next[field];
-      return next;
-    });
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
   }
 
   function setFieldError(field: NumericField, message: string) {
-    setFieldErrors((current) => ({ ...current, [field]: message }));
+    setFieldErrors((current) => ({ ...current, [field]: message }))
   }
 
-  const selectedModel = getSelectedModel(availableModels, formData.primary_model_id);
-  const supportsThinking = selectedModel?.capabilities.has_thinking ?? false;
-  const supportsVerbosity = selectedModel?.capabilities.supports_verbosity ?? false;
+  const selectedModel = getSelectedModel(
+    availableModels,
+    formData.primary_model_id,
+  )
+  const supportsThinking = selectedModel?.capabilities.has_thinking ?? false
+  const supportsVerbosity =
+    selectedModel?.capabilities.supports_verbosity ?? false
   const thinkingLevels = THINKING_LEVELS.filter(
-    (level) => level.value !== "xhigh" || selectedModel?.capabilities.supports_xhigh,
-  );
+    (level) =>
+      level.value !== 'xhigh' || selectedModel?.capabilities.supports_xhigh,
+  )
 
   return (
     <div className="space-y-6">
@@ -174,8 +219,8 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
           <p className="section-kicker">Generation Controls</p>
           <h2 className="section-heading mt-2">Generation Parameters</h2>
           <p className="section-copy mt-2 max-w-3xl">
-            Tune creativity, reasoning depth, verbosity, and execution budgets for
-            this agent&apos;s runtime profile.
+            Tune creativity, reasoning depth, verbosity, and execution budgets
+            for this agent&apos;s runtime profile.
           </p>
         </div>
       </div>
@@ -183,10 +228,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
       <div className="space-y-6">
         <div className="section-card space-y-2">
           <div className="flex items-center justify-between">
-            <label
-              htmlFor="temperature"
-              className="detail-label"
-            >
+            <label htmlFor="temperature" className="detail-label">
               Temperature
             </label>
             <span className="text-sm font-mono text-slate-300">
@@ -201,7 +243,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
             step="0.1"
             value={formData.temperature ?? 0.7}
             onChange={(e) =>
-              updateField("temperature", parseFloat(e.target.value))
+              updateField('temperature', parseFloat(e.target.value))
             }
             className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-amber-500"
           />
@@ -214,17 +256,14 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
 
         {supportsThinking ? (
           <div className="section-card space-y-2">
-            <label
-              htmlFor="thinking_level"
-              className="detail-label"
-            >
+            <label htmlFor="thinking_level" className="detail-label">
               Thinking Level
             </label>
             <select
               id="thinking_level"
-              value={formData.thinking_level ?? ""}
+              value={formData.thinking_level ?? ''}
               onChange={(e) =>
-                updateField("thinking_level", e.target.value || null)
+                updateField('thinking_level', e.target.value || null)
               }
               className="control-select w-full"
             >
@@ -235,7 +274,8 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               ))}
             </select>
             <p className="text-[10px] text-slate-400">
-              Controls reasoning depth. Higher levels produce more thorough but slower responses. Unsupported levels are hidden per model.
+              Controls reasoning depth. Higher levels produce more thorough but
+              slower responses. Unsupported levels are hidden per model.
             </p>
           </div>
         ) : (
@@ -246,17 +286,14 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
 
         {supportsVerbosity ? (
           <div className="section-card space-y-2">
-            <label
-              htmlFor="verbosity_level"
-              className="detail-label"
-            >
+            <label htmlFor="verbosity_level" className="detail-label">
               Verbosity Level
             </label>
             <select
               id="verbosity_level"
-              value={formData.verbosity_level ?? ""}
+              value={formData.verbosity_level ?? ''}
               onChange={(e) =>
-                updateField("verbosity_level", e.target.value || null)
+                updateField('verbosity_level', e.target.value || null)
               }
               className="control-select w-full"
             >
@@ -267,7 +304,8 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               ))}
             </select>
             <p className="text-[10px] text-slate-400">
-              Controls output length and detail for models that expose a verbosity knob.
+              Controls output length and detail for models that expose a
+              verbosity knob.
             </p>
           </div>
         ) : (
@@ -278,14 +316,11 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
 
         <div className="section-card space-y-2">
           <div className="flex items-center justify-between">
-            <label
-              htmlFor="timeout_seconds"
-              className="detail-label"
-            >
+            <label htmlFor="timeout_seconds" className="detail-label">
               Timeout (seconds)
             </label>
             <span className="text-sm font-mono text-slate-300">
-              {formData.timeout_seconds ?? "Model default"}
+              {formData.timeout_seconds ?? 'Model default'}
             </span>
           </div>
           <input
@@ -294,45 +329,47 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
             min="1"
             max="600"
             placeholder="Use model default"
-            aria-invalid={fieldErrors.timeout_seconds ? "true" : "false"}
+            aria-invalid={fieldErrors.timeout_seconds ? 'true' : 'false'}
             value={draftValues.timeout_seconds}
             onChange={(e) => {
-              updateDraft("timeout_seconds", e.target.value);
-              const value = parseOptionalTimeout(e.target.value);
+              updateDraft('timeout_seconds', e.target.value)
+              const value = parseOptionalTimeout(e.target.value)
               if (value !== undefined) {
-                clearFieldError("timeout_seconds");
-                updateField("timeout_seconds", value);
+                clearFieldError('timeout_seconds')
+                updateField('timeout_seconds', value)
               } else {
-                setFieldError("timeout_seconds", "Enter a value between 1 and 600 seconds.");
+                setFieldError(
+                  'timeout_seconds',
+                  'Enter a value between 1 and 600 seconds.',
+                )
               }
             }}
             className="control-input"
           />
           <p className="text-[10px] text-slate-400">
-            Override the model&apos;s default timeout. Leave empty to use the model&apos;s timeout hint (based on speed tier).
+            Override the model&apos;s default timeout. Leave empty to use the
+            model&apos;s timeout hint (based on speed tier).
           </p>
           {fieldErrors.timeout_seconds && (
-            <p className="text-[10px] text-rose-500">{fieldErrors.timeout_seconds}</p>
+            <p className="text-[10px] text-rose-500">
+              {fieldErrors.timeout_seconds}
+            </p>
           )}
         </div>
 
         <div className="section-card space-y-4">
           <div>
-            <h3 className="section-heading text-sm">
-              Execution limits
-            </h3>
+            <h3 className="section-heading text-sm">Execution limits</h3>
             <p className="mt-2 text-xs text-slate-400">
-              Agent-specific caps for concurrency, request volume, and spend controls.
+              Agent-specific caps for concurrency, request volume, and spend
+              controls.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {LIMIT_FIELDS.map((config) => (
               <div key={config.field} className="detail-card space-y-2">
-                <label
-                  htmlFor={config.field}
-                  className="detail-label"
-                >
+                <label htmlFor={config.field} className="detail-label">
                   {config.label}
                 </label>
                 <input
@@ -342,16 +379,24 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                   min={config.min}
                   max={config.max}
                   placeholder={config.placeholder}
-                  aria-invalid={fieldErrors[config.field] ? "true" : "false"}
+                  aria-invalid={fieldErrors[config.field] ? 'true' : 'false'}
                   value={draftValues[config.field]}
                   onChange={(e) => {
-                    updateDraft(config.field, e.target.value);
-                    const value = parseOptionalInteger(e.target.value, config.min, config.max)
+                    updateDraft(config.field, e.target.value)
+                    const value = parseOptionalInteger(
+                      e.target.value,
+                      config.min,
+                      config.max,
+                    )
                     if (value !== undefined) {
                       clearFieldError(config.field)
-                      updateField(config.field, value as Agent[typeof config.field])
+                      updateField(
+                        config.field,
+                        value as Agent[typeof config.field],
+                      )
                     } else {
-                      const maxText = config.max !== undefined ? ` and ${config.max}` : ""
+                      const maxText =
+                        config.max !== undefined ? ` and ${config.max}` : ''
                       setFieldError(
                         config.field,
                         `Enter a whole number between ${config.min}${maxText}.`,
@@ -360,9 +405,13 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                   }}
                   className="control-input font-mono"
                 />
-                <p className="text-[10px] text-slate-400">{config.description}</p>
+                <p className="text-[10px] text-slate-400">
+                  {config.description}
+                </p>
                 {fieldErrors[config.field] && (
-                  <p className="text-[10px] text-rose-500">{fieldErrors[config.field]}</p>
+                  <p className="text-[10px] text-rose-500">
+                    {fieldErrors[config.field]}
+                  </p>
                 )}
               </div>
             ))}
@@ -370,5 +419,5 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
         </div>
       </div>
     </div>
-  );
+  )
 }

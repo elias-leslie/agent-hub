@@ -1,34 +1,34 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Sparkles, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { SessionTimelineEvent } from "@/lib/api";
-import { CodeBlock } from "@/components/output/code-block";
-import { getEventConfig } from "./event-config";
-import { formatTimestamp, formatDuration, formatTokens } from "./timeline-utils";
+import { ChevronDown, ChevronRight, Clock, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { CodeBlock } from '@/components/output/code-block'
+import type { SessionTimelineEvent } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { getEventConfig } from './event-config'
+import { formatDuration, formatTimestamp, formatTokens } from './timeline-utils'
 
 interface EventItemProps {
-  event: SessionTimelineEvent;
-  isFirst: boolean;
-  isLast: boolean;
+  event: SessionTimelineEvent
+  isFirst: boolean
+  isLast: boolean
 }
 
 export function EventItem({ event, isFirst, isLast }: EventItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const config = getEventConfig(event.event_type);
-  const Icon = config.icon;
+  const [isExpanded, setIsExpanded] = useState(false)
+  const config = getEventConfig(event.event_type)
+  const Icon = config.icon
 
   const hasExpandableContent =
     (event.content && event.content.length > 200) ||
     event.tool_input ||
-    event.tool_output;
+    event.tool_output
 
   const truncatedContent = event.content
     ? event.content.length > 200 && !isExpanded
-      ? event.content.slice(0, 200) + "..."
+      ? `${event.content.slice(0, 200)}...`
       : event.content
-    : null;
+    : null
 
   return (
     <div className="relative flex gap-3 group">
@@ -38,8 +38,8 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
         {!isFirst && (
           <div
             className={cn(
-              "absolute top-0 w-px h-3",
-              "bg-gradient-to-b from-slate-700/60 to-slate-700/30"
+              'absolute top-0 w-px h-3',
+              'bg-gradient-to-b from-slate-700/60 to-slate-700/30',
             )}
           />
         )}
@@ -47,26 +47,26 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
         {/* Icon circle */}
         <div
           className={cn(
-            "relative z-10 mt-3 flex items-center justify-center",
-            "w-8 h-8 rounded-lg",
+            'relative z-10 mt-3 flex items-center justify-center',
+            'w-8 h-8 rounded-lg',
             config.bgColor,
-            "border",
+            'border',
             config.borderColor,
-            "shadow-lg",
+            'shadow-lg',
             config.glowColor,
-            "transition-all duration-200",
-            "group-hover:scale-110"
+            'transition-all duration-200',
+            'group-hover:scale-110',
           )}
         >
-          <Icon className={cn("w-4 h-4", config.color)} />
+          <Icon className={cn('w-4 h-4', config.color)} />
         </div>
 
         {/* Bottom line */}
         {!isLast && (
           <div
             className={cn(
-              "flex-1 w-px min-h-[2rem]",
-              "bg-gradient-to-b from-slate-700/30 to-slate-700/60"
+              'flex-1 w-px min-h-[2rem]',
+              'bg-gradient-to-b from-slate-700/30 to-slate-700/60',
             )}
           />
         )}
@@ -76,21 +76,26 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
       <div className="flex-1 pb-4 min-w-0">
         <div
           className={cn(
-            "rounded-lg border p-3",
+            'rounded-lg border p-3',
             config.bgColor,
             config.borderColor,
-            "shadow-lg",
+            'shadow-lg',
             config.glowColor,
-            "transition-all duration-200",
-            hasExpandableContent && "cursor-pointer hover:border-opacity-70",
-            isExpanded && "ring-1 ring-white/5"
+            'transition-all duration-200',
+            hasExpandableContent && 'cursor-pointer hover:border-opacity-70',
+            isExpanded && 'ring-1 ring-white/5',
           )}
           onClick={() => hasExpandableContent && setIsExpanded(!isExpanded)}
         >
           {/* Header row */}
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={cn("text-sm font-semibold tracking-wide", config.color)}>
+              <span
+                className={cn(
+                  'text-sm font-semibold tracking-wide',
+                  config.color,
+                )}
+              >
                 {config.label}
               </span>
 
@@ -148,9 +153,9 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
           {truncatedContent && (
             <div
               className={cn(
-                "text-sm text-slate-300 whitespace-pre-wrap break-words",
-                "font-mono leading-relaxed",
-                event.event_type === "thinking" && "italic text-amber-200/80"
+                'text-sm text-slate-300 whitespace-pre-wrap break-words',
+                'font-mono leading-relaxed',
+                event.event_type === 'thinking' && 'italic text-amber-200/80',
               )}
             >
               {truncatedContent}
@@ -181,7 +186,7 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
                   </div>
                   <CodeBlock
                     code={
-                      typeof event.tool_output === "string"
+                      typeof event.tool_output === 'string'
                         ? event.tool_output
                         : JSON.stringify(event.tool_output, null, 2)
                     }
@@ -196,5 +201,5 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

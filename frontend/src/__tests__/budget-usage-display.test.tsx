@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
 
-import { BudgetUsageDisplay } from "@/components/memory/BudgetUsageDisplay";
+import { BudgetUsageDisplay } from '@/components/memory/BudgetUsageDisplay'
 
 const usage = {
   mandates_tokens: 120,
@@ -15,14 +15,14 @@ const usage = {
   guardrails_total: 2,
   reference_injected: 0,
   reference_total: 8,
-};
+}
 
-describe("BudgetUsageDisplay", () => {
-  it("shows rendered token and reference coverage totals", () => {
-    render(<BudgetUsageDisplay usage={usage} continuityEnabled={true} />);
+describe('BudgetUsageDisplay', () => {
+  it('shows rendered token and reference coverage totals', () => {
+    render(<BudgetUsageDisplay usage={usage} continuityEnabled={true} />)
 
-    expect(screen.getByText("197")).toBeInTheDocument();
-    expect(screen.getByText("References")).toBeInTheDocument();
-    expect(screen.getByText("0/8")).toBeInTheDocument();
-  });
-});
+    expect(screen.getByText('197')).toBeInTheDocument()
+    expect(screen.getByText('References')).toBeInTheDocument()
+    expect(screen.getByText('0/8')).toBeInTheDocument()
+  })
+})

@@ -1,12 +1,12 @@
-import { Ban, Play, Trash2, Pencil } from "lucide-react";
+import { Ban, Pencil, Play, Trash2 } from 'lucide-react'
 
 interface ActionButtonsProps {
-  clientStatus: string;
-  onEdit: () => void;
-  onSuspend: () => void;
-  onActivate: () => void;
-  onBlock: () => void;
-  isActivating: boolean;
+  clientStatus: string
+  onEdit: () => void
+  onSuspend: () => void
+  onActivate: () => void
+  onBlock: () => void
+  isActivating: boolean
 }
 
 export function ActionButtons({
@@ -23,20 +23,17 @@ export function ActionButtons({
         <p className="section-kicker">Controls</p>
         <h2 className="section-heading mt-2">Actions</h2>
         <p className="section-copy mt-2">
-          Change policy, pause the client, or permanently block it from requesting access.
+          Change policy, pause the client, or permanently block it from
+          requesting access.
         </p>
       </div>
       <div className="mt-5 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="button-primary"
-        >
+        <button type="button" onClick={onEdit} className="button-primary">
           <Pencil className="h-4 w-4" />
           Edit Settings
         </button>
 
-        {clientStatus === "active" && (
+        {clientStatus === 'active' && (
           <button
             type="button"
             onClick={onSuspend}
@@ -47,7 +44,7 @@ export function ActionButtons({
           </button>
         )}
 
-        {clientStatus === "suspended" && (
+        {clientStatus === 'suspended' && (
           <button
             type="button"
             onClick={onActivate}
@@ -59,7 +56,7 @@ export function ActionButtons({
           </button>
         )}
 
-        {clientStatus !== "blocked" && (
+        {clientStatus !== 'blocked' && (
           <button
             type="button"
             onClick={onBlock}
@@ -71,5 +68,5 @@ export function ActionButtons({
         )}
       </div>
     </section>
-  );
+  )
 }

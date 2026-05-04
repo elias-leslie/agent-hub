@@ -1,21 +1,21 @@
-"use client";
+'use client'
 
-import { RefreshCw, Settings } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { SearchBar } from "./SearchBar";
-import { ViewModeToggle } from "./ViewModeToggle";
+import { RefreshCw, Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { SearchBar } from './SearchBar'
+import { ViewModeToggle } from './ViewModeToggle'
 
-type EpisodesViewMode = "table" | "timeline";
+type EpisodesViewMode = 'table' | 'timeline'
 
 interface EpisodesToolbarProps {
-  searchQuery: string;
-  isSearching: boolean;
-  viewMode: EpisodesViewMode;
-  isRefreshing: boolean;
-  onSearchChange: (query: string) => void;
-  onViewModeChange: (mode: EpisodesViewMode) => void;
-  onRefresh: () => void;
-  onSettingsClick: () => void;
+  searchQuery: string
+  isSearching: boolean
+  viewMode: EpisodesViewMode
+  isRefreshing: boolean
+  onSearchChange: (query: string) => void
+  onViewModeChange: (mode: EpisodesViewMode) => void
+  onRefresh: () => void
+  onSettingsClick: () => void
 }
 
 export function EpisodesToolbar({
@@ -42,16 +42,16 @@ export function EpisodesToolbar({
         onClick={onRefresh}
         disabled={isRefreshing}
         className={cn(
-          "p-2 rounded-lg transition-colors",
-          "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
-          isRefreshing && "cursor-not-allowed"
+          'p-2 rounded-lg transition-colors',
+          'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
+          isRefreshing && 'cursor-not-allowed',
         )}
         title="Refresh"
       >
         <RefreshCw
           className={cn(
-            "h-4 w-4",
-            isRefreshing && "animate-spin text-emerald-500"
+            'h-4 w-4',
+            isRefreshing && 'animate-spin text-emerald-500',
           )}
         />
       </button>
@@ -64,5 +64,5 @@ export function EpisodesToolbar({
         <Settings className="h-5 w-5" />
       </button>
     </div>
-  );
+  )
 }

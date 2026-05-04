@@ -1,14 +1,14 @@
-"use client";
+'use client'
 
-import { AlertTriangle, CheckCircle2, Minimize2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Minimize2 } from 'lucide-react'
 
-import { analyzeCompactness, type CompactnessKind } from "@/lib/compactness";
-import { cn } from "@/lib/utils";
+import { analyzeCompactness, type CompactnessKind } from '@/lib/compactness'
+import { cn } from '@/lib/utils'
 
 interface CompactnessMeterProps {
-  content: string;
-  kind: CompactnessKind;
-  className?: string;
+  content: string
+  kind: CompactnessKind
+  className?: string
 }
 
 export function CompactnessMeter({
@@ -16,20 +16,20 @@ export function CompactnessMeter({
   kind,
   className,
 }: CompactnessMeterProps) {
-  const report = analyzeCompactness(content, kind);
-  const blocked = report.errors.length > 0;
-  const healthy = !blocked && report.warnings.length === 0;
+  const report = analyzeCompactness(content, kind)
+  const blocked = report.errors.length > 0
+  const healthy = !blocked && report.warnings.length === 0
 
   return (
     <div
       className={cn(
-        "rounded-lg border px-3 py-3",
+        'rounded-lg border px-3 py-3',
         blocked
-          ? "border-rose-900/80 bg-rose-950/20"
+          ? 'border-rose-900/80 bg-rose-950/20'
           : healthy
-          ? "border-emerald-900/80 bg-emerald-950/20"
-          : "border-amber-900/80 bg-amber-950/20",
-        className
+            ? 'border-emerald-900/80 bg-emerald-950/20'
+            : 'border-amber-900/80 bg-amber-950/20',
+        className,
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -40,25 +40,25 @@ export function CompactnessMeter({
           </div>
           <p
             className={cn(
-              "mt-1 text-sm",
+              'mt-1 text-sm',
               blocked
-                ? "text-rose-100"
+                ? 'text-rose-100'
                 : healthy
-                  ? "text-emerald-100"
-                  : "text-amber-100"
+                  ? 'text-emerald-100'
+                  : 'text-amber-100',
             )}
           >
             {blocked
-              ? kind === "prompt"
-                ? "Write strict Caveman. Save should fail until prose is tightened."
-                : "Write one strict Caveman rule. Save should fail until tightened."
+              ? kind === 'prompt'
+                ? 'Write strict Caveman. Save should fail until prose is tightened.'
+                : 'Write one strict Caveman rule. Save should fail until tightened.'
               : healthy
-              ? kind === "prompt"
-                ? "Lean enough for routine edits."
-                : "Lean enough for one reusable rule."
-              : kind === "prompt"
-                ? "Trim filler before this prompt grows further."
-                : "Trim or split this memory before it drifts."}
+                ? kind === 'prompt'
+                  ? 'Lean enough for routine edits.'
+                  : 'Lean enough for one reusable rule.'
+                : kind === 'prompt'
+                  ? 'Trim filler before this prompt grows further.'
+                  : 'Trim or split this memory before it drifts.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -75,12 +75,12 @@ export function CompactnessMeter({
       </div>
       <div
         className={cn(
-          "mt-3 flex items-start gap-2 text-xs",
+          'mt-3 flex items-start gap-2 text-xs',
           blocked
-            ? "text-rose-200"
+            ? 'text-rose-200'
             : healthy
-              ? "text-emerald-200"
-              : "text-amber-200"
+              ? 'text-emerald-200'
+              : 'text-amber-200',
         )}
       >
         {healthy ? (
@@ -91,9 +91,9 @@ export function CompactnessMeter({
         <div className="space-y-1">
           {healthy ? (
             <p>
-              {kind === "prompt"
-                ? "Keep signal, cut overlap, avoid repeated examples."
-                : "Keep one atomic rule and avoid conversational phrasing."}
+              {kind === 'prompt'
+                ? 'Keep signal, cut overlap, avoid repeated examples.'
+                : 'Keep one atomic rule and avoid conversational phrasing.'}
             </p>
           ) : (
             [...report.errors, ...report.warnings].map((message) => (
@@ -103,5 +103,5 @@ export function CompactnessMeter({
         </div>
       </div>
     </div>
-  );
+  )
 }

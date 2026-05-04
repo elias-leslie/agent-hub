@@ -1,12 +1,12 @@
-import { Gauge } from "lucide-react";
-import type { MemoryBudgetUsage } from "@/lib/api/memory-settings";
+import { Gauge } from 'lucide-react'
+import type { MemoryBudgetUsage } from '@/lib/api/memory-settings'
 
 export function BudgetUsageDisplay({
   usage,
   continuityEnabled,
 }: {
-  usage: MemoryBudgetUsage;
-  continuityEnabled?: boolean;
+  usage: MemoryBudgetUsage
+  continuityEnabled?: boolean
 }) {
   return (
     <div className="space-y-2 p-3 rounded-lg bg-slate-800/50">
@@ -56,8 +56,8 @@ export function BudgetUsageDisplay({
               {continuityEnabled !== false
                 ? usage.continuity_tokens > 0
                   ? `${usage.continuity_tokens} tokens`
-                  : "0 sessions"
-                : "Off"}
+                  : '0 sessions'
+                : 'Off'}
             </span>
           </div>
         </div>
@@ -74,7 +74,7 @@ export function BudgetUsageDisplay({
               {Math.round(
                 ((usage.mandates_injected + usage.guardrails_injected) /
                   Math.max(usage.mandates_total + usage.guardrails_total, 1)) *
-                  100
+                  100,
               )}
               % of mandates/guardrails
             </span>
@@ -82,5 +82,5 @@ export function BudgetUsageDisplay({
         </div>
       </div>
     </div>
-  );
+  )
 }

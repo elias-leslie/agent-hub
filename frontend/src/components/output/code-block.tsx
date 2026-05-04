@@ -1,80 +1,80 @@
-"use client";
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Prism from "prismjs";
-import "prismjs/components/prism-typescript";
-import "prismjs/components/prism-javascript";
-import "prismjs/components/prism-python";
-import "prismjs/components/prism-bash";
-import "prismjs/components/prism-json";
-import "prismjs/components/prism-css";
-import "prismjs/components/prism-jsx";
-import "prismjs/components/prism-tsx";
-import "prismjs/components/prism-sql";
-import "prismjs/components/prism-yaml";
-import "prismjs/components/prism-markdown";
-import "prismjs/components/prism-rust";
-import "prismjs/components/prism-go";
-import { Check, Copy, FileCode2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import Prism from 'prismjs'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-javascript'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-bash'
+import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-css'
+import 'prismjs/components/prism-jsx'
+import 'prismjs/components/prism-tsx'
+import 'prismjs/components/prism-sql'
+import 'prismjs/components/prism-yaml'
+import 'prismjs/components/prism-markdown'
+import 'prismjs/components/prism-rust'
+import 'prismjs/components/prism-go'
+import { Check, Copy, FileCode2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // Language detection heuristics
 const LANGUAGE_PATTERNS: [RegExp, string][] = [
   [
     /^(import|from)\s+[\w.]+|def\s+\w+\(|class\s+\w+:|if\s+__name__\s*==/,
-    "python",
+    'python',
   ],
   [
     /^(import|export)\s+.*from\s+['"]|const\s+\w+\s*[:=]|=>\s*\{|async\s+function/,
-    "typescript",
+    'typescript',
   ],
-  [/^function\s+\w+\(|var\s+\w+\s*=|===|!==/, "javascript"],
-  [/<\w+[^>]*>.*<\/\w+>|className=/, "tsx"],
-  [/^\s*\{[\s\S]*"[\w]+"\s*:/, "json"],
-  [/^(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s+/i, "sql"],
-  [/^\$\s+|^#!\/bin\/(ba)?sh|^(sudo|apt|npm|yarn|cd|ls|grep|cat)\s+/, "bash"],
-  [/^(fn|let\s+mut|impl|struct|enum|pub\s+fn)\s+/, "rust"],
-  [/^(package|func|import\s+\(|type\s+\w+\s+struct)/, "go"],
-  [/^[\w-]+:\s*[^{]|^\s+-\s+\w+/, "yaml"],
-  [/^#\s+|^\*\*\w+\*\*|^\[[\w\s]+\]\(/, "markdown"],
-  [/^@[\w-]+\s*\{|^\.\w+\s*\{|^#\w+\s*\{/, "css"],
-];
+  [/^function\s+\w+\(|var\s+\w+\s*=|===|!==/, 'javascript'],
+  [/<\w+[^>]*>.*<\/\w+>|className=/, 'tsx'],
+  [/^\s*\{[\s\S]*"[\w]+"\s*:/, 'json'],
+  [/^(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s+/i, 'sql'],
+  [/^\$\s+|^#!\/bin\/(ba)?sh|^(sudo|apt|npm|yarn|cd|ls|grep|cat)\s+/, 'bash'],
+  [/^(fn|let\s+mut|impl|struct|enum|pub\s+fn)\s+/, 'rust'],
+  [/^(package|func|import\s+\(|type\s+\w+\s+struct)/, 'go'],
+  [/^[\w-]+:\s*[^{]|^\s+-\s+\w+/, 'yaml'],
+  [/^#\s+|^\*\*\w+\*\*|^\[[\w\s]+\]\(/, 'markdown'],
+  [/^@[\w-]+\s*\{|^\.\w+\s*\{|^#\w+\s*\{/, 'css'],
+]
 
 function detectLanguage(code: string): string {
-  const trimmed = code.trim();
+  const trimmed = code.trim()
   for (const [pattern, lang] of LANGUAGE_PATTERNS) {
     if (pattern.test(trimmed)) {
-      return lang;
+      return lang
     }
   }
-  return "text";
+  return 'text'
 }
 
 // Language display names
 const LANGUAGE_LABELS: Record<string, string> = {
-  typescript: "TypeScript",
-  javascript: "JavaScript",
-  python: "Python",
-  bash: "Bash",
-  json: "JSON",
-  css: "CSS",
-  jsx: "JSX",
-  tsx: "TSX",
-  sql: "SQL",
-  yaml: "YAML",
-  markdown: "Markdown",
-  rust: "Rust",
-  go: "Go",
-  text: "Plain Text",
-};
+  typescript: 'TypeScript',
+  javascript: 'JavaScript',
+  python: 'Python',
+  bash: 'Bash',
+  json: 'JSON',
+  css: 'CSS',
+  jsx: 'JSX',
+  tsx: 'TSX',
+  sql: 'SQL',
+  yaml: 'YAML',
+  markdown: 'Markdown',
+  rust: 'Rust',
+  go: 'Go',
+  text: 'Plain Text',
+}
 
 interface CodeBlockProps {
-  code: string;
-  language?: string;
-  filename?: string;
-  showLineNumbers?: boolean;
-  maxHeight?: number;
-  className?: string;
+  code: string
+  language?: string
+  filename?: string
+  showLineNumbers?: boolean
+  maxHeight?: number
+  className?: string
 }
 
 export function CodeBlock({
@@ -85,54 +85,54 @@ export function CodeBlock({
   maxHeight = 400,
   className,
 }: CodeBlockProps) {
-  const codeRef = useRef<HTMLElement>(null);
-  const [copied, setCopied] = useState(false);
-  const detectedLang = language || detectLanguage(code);
-  const displayLang = LANGUAGE_LABELS[detectedLang] || detectedLang;
+  const codeRef = useRef<HTMLElement>(null)
+  const [copied, setCopied] = useState(false)
+  const detectedLang = language || detectLanguage(code)
+  const displayLang = LANGUAGE_LABELS[detectedLang] || detectedLang
 
   useEffect(() => {
     if (codeRef.current) {
-      Prism.highlightElement(codeRef.current);
+      Prism.highlightElement(codeRef.current)
     }
-  }, [code, detectedLang]);
+  }, [code, detectedLang])
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch {
       // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = code;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const textarea = document.createElement('textarea')
+      textarea.value = code
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
-  }, [code]);
+  }, [code])
 
-  const lines = code.split("\n");
+  const lines = code.split('\n')
 
   return (
     <div
       className={cn(
-        "group relative rounded-lg overflow-hidden",
-        "bg-[oklch(0.08_0_0)]",
-        "border border-[oklch(0.2_0_0)]",
-        "shadow-[0_2px_12px_oklch(0_0_0/0.4)]",
-        "font-mono text-sm",
+        'group relative rounded-lg overflow-hidden',
+        'bg-[oklch(0.08_0_0)]',
+        'border border-[oklch(0.2_0_0)]',
+        'shadow-[0_2px_12px_oklch(0_0_0/0.4)]',
+        'font-mono text-sm',
         className,
       )}
     >
       {/* Header bar with terminal aesthetic */}
       <div
         className={cn(
-          "flex items-center justify-between px-3 py-2",
-          "bg-[oklch(0.1_0_0)]",
-          "border-b border-[oklch(0.18_0_0)]",
+          'flex items-center justify-between px-3 py-2',
+          'bg-[oklch(0.1_0_0)]',
+          'border-b border-[oklch(0.18_0_0)]',
         )}
       >
         <div className="flex items-center gap-2">
@@ -161,14 +161,14 @@ export function CodeBlock({
           data-testid="code-copy-button"
           onClick={handleCopy}
           className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded",
-            "text-xs font-medium tracking-wide",
-            "transition-all duration-200",
+            'flex items-center gap-1.5 px-2 py-1 rounded',
+            'text-xs font-medium tracking-wide',
+            'transition-all duration-200',
             copied
-              ? "bg-[oklch(0.45_0.12_145)] text-[oklch(0.9_0.05_145)]"
-              : "text-[oklch(0.6_0_0)] hover:text-[oklch(0.85_0_0)] hover:bg-[oklch(0.25_0_0)]",
+              ? 'bg-[oklch(0.45_0.12_145)] text-[oklch(0.9_0.05_145)]'
+              : 'text-[oklch(0.6_0_0)] hover:text-[oklch(0.85_0_0)] hover:bg-[oklch(0.25_0_0)]',
           )}
-          title={copied ? "Copied!" : "Copy code"}
+          title={copied ? 'Copied!' : 'Copy code'}
         >
           {copied ? (
             <>
@@ -190,10 +190,10 @@ export function CodeBlock({
           {showLineNumbers && (
             <div
               className={cn(
-                "flex-shrink-0 py-3 px-3 select-none text-right",
-                "bg-[oklch(0.09_0_0)]",
-                "border-r border-[oklch(0.16_0_0)]",
-                "text-[oklch(0.45_0_0)] text-xs leading-relaxed",
+                'flex-shrink-0 py-3 px-3 select-none text-right',
+                'bg-[oklch(0.09_0_0)]',
+                'border-r border-[oklch(0.16_0_0)]',
+                'text-[oklch(0.45_0_0)] text-xs leading-relaxed',
               )}
             >
               {lines.map((_, i) => (
@@ -206,18 +206,18 @@ export function CodeBlock({
 
           <pre
             className={cn(
-              "flex-1 py-3 px-4 overflow-x-auto m-0",
-              "leading-relaxed",
+              'flex-1 py-3 px-4 overflow-x-auto m-0',
+              'leading-relaxed',
             )}
           >
             <code
               ref={codeRef}
               className={`language-${detectedLang}`}
               style={{
-                background: "transparent",
+                background: 'transparent',
                 padding: 0,
                 margin: 0,
-                lineHeight: "1.5rem",
+                lineHeight: '1.5rem',
               }}
             >
               {code}
@@ -240,5 +240,5 @@ export function CodeBlock({
         }}
       />
     </div>
-  );
+  )
 }

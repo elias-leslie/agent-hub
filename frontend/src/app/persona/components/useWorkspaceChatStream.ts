@@ -1,14 +1,19 @@
-"use client";
+'use client'
 
-import { useMemo } from "react";
-import { useChatStream } from "@agent-hub/chat-ui";
-import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getCompleteApiUrl } from "@/lib/api-config";
+import { useChatStream } from '@agent-hub/chat-ui'
+import { useMemo } from 'react'
+import {
+  fetchApi,
+  getApiBaseUrl,
+  getCompleteApiUrl,
+  INTERNAL_HEADERS,
+} from '@/lib/api-config'
 
 export interface WorkspaceChatStreamOptions {
-  agentSlug: string;
-  personaDisplayName: string;
-  activeSessionId: string | null;
-  projectId: string;
+  agentSlug: string
+  personaDisplayName: string
+  activeSessionId: string | null
+  projectId: string
 }
 
 export function useWorkspaceChatStream({
@@ -22,30 +27,38 @@ export function useWorkspaceChatStream({
       fetchHeaders: INTERNAL_HEADERS,
       completeEndpoint: getCompleteApiUrl(),
       sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
-      preferencesEndpoint: "/api/preferences",
+      preferencesEndpoint: '/api/preferences',
       fetchFn: fetchApi,
       projectId,
-      memoryGroupPrefix: "agent:",
+      memoryGroupPrefix: 'agent:',
     }),
     [projectId],
-  );
+  )
 
-  const { messages, status, error: chatError, currentSessionId, sendMessage, cancelStream, resetSession } = useChatStream({
+  const {
+    messages,
+    status,
+    error: chatError,
+    currentSessionId,
+    sendMessage,
+    cancelStream,
+    resetSession,
+  } = useChatStream({
     agentSlug,
     sessionId: activeSessionId || undefined,
     toolsEnabled: true,
     apiConfig,
     loadInitialSession: Boolean(activeSessionId),
-  });
+  })
 
   const responseStatusLabel =
-    status === "streaming"
+    status === 'streaming'
       ? `${personaDisplayName} is responding`
-      : status === "reconnecting"
+      : status === 'reconnecting'
         ? `Reconnecting to ${personaDisplayName}`
-        : status === "cancelling"
+        : status === 'cancelling'
           ? `Stopping ${personaDisplayName}'s response`
-          : null;
+          : null
 
   return {
     apiConfig,
@@ -57,5 +70,5 @@ export function useWorkspaceChatStream({
     cancelStream,
     resetSession,
     responseStatusLabel,
-  };
+  }
 }

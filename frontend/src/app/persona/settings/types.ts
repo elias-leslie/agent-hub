@@ -1,7 +1,7 @@
 export type PersonaTabId =
-  | "identity"
-  | "models"
-  | "prompts"
-  | "voice"
-  | "session"
-  | "memory";
+  | 'identity'
+  | 'models'
+  | 'prompts'
+  | 'voice'
+  | 'session'
+  | 'memory'

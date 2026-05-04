@@ -470,12 +470,12 @@ class TestReferenceInjection:
                 consumer_profile="codex_startup",
             )
 
-        assert len(context.mandates) == 40
-        assert len(context.guardrails) == 10
+        assert len(context.mandates) == 28
+        assert len(context.guardrails) == 6
         assert context.mandates[0].uuid == "m-00"
-        assert context.mandates[-1].uuid == "m-39"
+        assert context.mandates[-1].uuid == "m-27"
         assert context.guardrails[0].uuid == "g-00"
-        assert context.guardrails[-1].uuid == "g-09"
+        assert context.guardrails[-1].uuid == "g-05"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_agent_coding_uses_compact_policy_profile(self) -> None:
@@ -525,8 +525,8 @@ class TestReferenceInjection:
                 consumer_profile="agent_coding",
             )
 
-        assert len(context.mandates) == 25
-        assert len(context.guardrails) == 8
+        assert len(context.mandates) == 16
+        assert len(context.guardrails) == 4
         assert context.mandates[0].render_tier == "L0"
         assert context.guardrails[0].render_tier == "L0"
         assert context.debug_info["consumer_profile"] == "agent_coding"
@@ -579,9 +579,9 @@ class TestReferenceInjection:
                 consumer_profile="agent_promptops",
             )
 
-        assert len(context.mandates) == 20
-        assert len(context.guardrails) == 8
-        assert context.debug_info["mandates_count"] == 20
+        assert len(context.mandates) == 14
+        assert len(context.guardrails) == 4
+        assert context.debug_info["mandates_count"] == 14
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_prioritizes_clean_reviewed_policies(self) -> None:
@@ -638,7 +638,7 @@ class TestReferenceInjection:
             "clean-2",
             "clean-3",
         ]
-        assert len(context.mandates) == 8
+        assert len(context.mandates) == 6
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_compacts_before_policy_limit(self) -> None:
@@ -683,7 +683,7 @@ class TestReferenceInjection:
                 consumer_profile="agent_general",
             )
 
-        assert len(context.mandates) == 10
+        assert len(context.mandates) == 6
         assert all(item.rendered_content == compact for item in context.mandates)
         assert context.debug_info["render_chars_saved"] > 0
 

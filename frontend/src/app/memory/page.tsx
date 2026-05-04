@@ -1,46 +1,46 @@
-"use client";
+'use client'
 
-import { Suspense, useCallback, useMemo } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Brain } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useMemory } from "@/hooks/use-memory";
-import { CATEGORY_CONFIG } from "@/lib/memory-config";
-import { MemoryTabs, type MemoryTabId } from "@/components/memory/MemoryTabs";
-import { EpisodesTab } from "@/components/memory/tabs/EpisodesTab";
-import { SessionsTab } from "@/components/memory/tabs/SessionsTab";
-import { CaptureTab } from "@/components/memory/tabs/CaptureTab";
-import { AnalyticsTab } from "@/components/memory/tabs/AnalyticsTab";
+import { Brain } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useMemo } from 'react'
+import { type MemoryTabId, MemoryTabs } from '@/components/memory/MemoryTabs'
+import { AnalyticsTab } from '@/components/memory/tabs/AnalyticsTab'
+import { CaptureTab } from '@/components/memory/tabs/CaptureTab'
+import { EpisodesTab } from '@/components/memory/tabs/EpisodesTab'
+import { SessionsTab } from '@/components/memory/tabs/SessionsTab'
+import { useMemory } from '@/hooks/use-memory'
+import { CATEGORY_CONFIG } from '@/lib/memory-config'
+import { cn } from '@/lib/utils'
 
 function MemoryPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const activeTab = (searchParams.get("tab") as MemoryTabId) || "episodes";
+  const activeTab = (searchParams.get('tab') as MemoryTabId) || 'episodes'
 
   const handleTabChange = useCallback(
     (tab: MemoryTabId) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (tab === "episodes") {
-        params.delete("tab");
+      const params = new URLSearchParams(searchParams.toString())
+      if (tab === 'episodes') {
+        params.delete('tab')
       } else {
-        params.set("tab", tab);
+        params.set('tab', tab)
       }
-      const qs = params.toString();
-      router.push(qs ? `/memory?${qs}` : "/memory", { scroll: false });
+      const qs = params.toString()
+      router.push(qs ? `/memory?${qs}` : '/memory', { scroll: false })
     },
-    [router, searchParams]
-  );
+    [router, searchParams],
+  )
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
       <MemoryTabs activeTab={activeTab} onTabChange={handleTabChange} />
-      {activeTab === "episodes" && <EpisodesTab />}
-      {activeTab === "sessions" && <SessionsTab />}
-      {activeTab === "capture" && <CaptureTab />}
-      {activeTab === "analytics" && <AnalyticsTab />}
+      {activeTab === 'episodes' && <EpisodesTab />}
+      {activeTab === 'sessions' && <SessionsTab />}
+      {activeTab === 'capture' && <CaptureTab />}
+      {activeTab === 'analytics' && <AnalyticsTab />}
     </div>
-  );
+  )
 }
 
 function LoadingState() {
@@ -57,16 +57,16 @@ function LoadingState() {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default function MemoryPage() {
-  const { stats, isLoadingStats } = useMemory({});
+  const { stats, isLoadingStats } = useMemory({})
 
   const categoryStats = useMemo(() => {
-    if (!stats?.by_category) return [];
-    return stats.by_category.slice(0, 4);
-  }, [stats]);
+    if (!stats?.by_category) return []
+    return stats.by_category.slice(0, 4)
+  }, [stats])
 
   return (
     <div className="page-shell">
@@ -83,7 +83,7 @@ export default function MemoryPage() {
 
               <div className="hidden sm:flex items-center gap-3 text-xs font-mono tabular-nums">
                 <span className="text-slate-400">
-                  {isLoadingStats ? "..." : stats?.total ?? 0} total
+                  {isLoadingStats ? '...' : (stats?.total ?? 0)} total
                 </span>
                 {categoryStats.length > 0 && (
                   <>
@@ -91,7 +91,10 @@ export default function MemoryPage() {
                     {categoryStats.map((cat) => (
                       <span
                         key={cat.category}
-                        className={cn("flex items-center gap-1", CATEGORY_CONFIG[cat.category].color)}
+                        className={cn(
+                          'flex items-center gap-1',
+                          CATEGORY_CONFIG[cat.category].color,
+                        )}
                       >
                         {CATEGORY_CONFIG[cat.category].icon}
                         {cat.count}
@@ -101,7 +104,6 @@ export default function MemoryPage() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
       </header>
@@ -110,5 +112,5 @@ export default function MemoryPage() {
         <MemoryPageContent />
       </Suspense>
     </div>
-  );
+  )
 }

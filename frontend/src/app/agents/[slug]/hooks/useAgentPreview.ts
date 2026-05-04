@@ -1,21 +1,21 @@
-"use client";
+'use client'
 
-import { useDeferredValue } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query'
+import { useDeferredValue } from 'react'
 
-import { fetchPreview } from "@/lib/api";
-import type { AgentPreview, PreviewScenario, PreviewTaskType } from "../types";
+import { fetchPreview } from '@/lib/api'
+import type { AgentPreview, PreviewScenario, PreviewTaskType } from '../types'
 
 interface UseAgentPreviewOptions {
-  slug: string;
-  previewMode: PreviewTaskType;
-  scenario: PreviewScenario;
-  enabled: boolean;
+  slug: string
+  previewMode: PreviewTaskType
+  scenario: PreviewScenario
+  enabled: boolean
 }
 
 function normalizeOptional(value: string): string | undefined {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 export function useAgentPreview({
@@ -24,13 +24,13 @@ export function useAgentPreview({
   scenario,
   enabled,
 }: UseAgentPreviewOptions) {
-  const deferredProjectId = useDeferredValue(scenario.projectId);
-  const deferredPhase = useDeferredValue(scenario.phase);
-  const deferredPromptInput = useDeferredValue(scenario.promptInput);
+  const deferredProjectId = useDeferredValue(scenario.projectId)
+  const deferredPhase = useDeferredValue(scenario.phase)
+  const deferredPromptInput = useDeferredValue(scenario.promptInput)
 
   return useQuery<AgentPreview>({
     queryKey: [
-      "agent-preview",
+      'agent-preview',
       slug,
       previewMode,
       normalizeOptional(deferredProjectId) ?? null,
@@ -45,5 +45,5 @@ export function useAgentPreview({
         promptInput: normalizeOptional(deferredPromptInput),
       }),
     enabled: enabled && slug.length > 0,
-  });
+  })
 }
