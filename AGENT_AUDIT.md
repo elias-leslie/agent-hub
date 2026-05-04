@@ -29,7 +29,6 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - [AH-AUDIT-007] [HIGH] [OPEN] Task lifecycle/data truth issues remain - ready tasks `task-1e259848`, `task-bdf784b7`, `task-9148c25d` - impact: cleanup truth drift and shaped-subtask readiness/control-plane gaps.
 - [AH-AUDIT-008] [MEDIUM] [OPEN] Persona memory/prompt yield work remains - ready `task-04380626`, sidecar-noted P1 `task-1f1ca536`, feedback `a8e0e474` - impact: prompt budget/reference-memory governance debt.
 - [AH-AUDIT-009] [MEDIUM] [OPEN] Maintainability backlog remains after schema slice - ready refactors `task-354906ba`, `task-7984080d`, `task-f777a41e`, `task-69c7fa38`, `task-d8b9a77f`, `task-d5e78dde`; failed refactors need disposition - impact: large modules and failed cleanup attempts.
-- [AH-AUDIT-010] [MEDIUM] [OPEN] CodeRabbit/review tooling scope debt remains - ready `task-2f7322e5`, `task-6aa0c2f2` - impact: review/file-limit failure handling.
 - [AH-AUDIT-011] [LOW] [OPEN] `packages/push-client` appears unused in repo - no `@agent-hub/push-client` consumer found and Dockerfiles do not install tarball - impact: package/tarball ownership drift.
 
 ## Completed
@@ -38,6 +37,7 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - [AH-AUDIT-014] 2026-05-04 - Replaced request-reachable raw `subprocess.run` in project root resolution with shared `safe_subprocess.run_process`; core tests passed.
 - [AH-AUDIT-015] 2026-05-04 - Removed tracked accidental binary artifact `backend/--output`.
 - [AH-AUDIT-016] 2026-05-04 - Removed three frontend lint suppressions in toast, session dropdown, and analytics tooltip; frontend gate passed.
+- [AH-AUDIT-017] 2026-05-04 - Purged obsolete review-bot heartbeat prompt references from historical Alembic prompt migrations and closed related queue/feedback as stale.
 - [AH-AUDIT-001] 2026-05-04 - Created project-local audit file with architecture, tooling, coordination, task, feedback, and verification context.
 - [AH-AUDIT-002] 2026-05-04 - Consolidated runtime subprocess spawns behind `app.utils.safe_subprocess` to remove raw route/workflow/tool spawns from changed paths.
 - [AH-AUDIT-004] 2026-05-04 - Collapsed persona operator tool surface to tiered core tools with code/doc source of truth and regression tests.

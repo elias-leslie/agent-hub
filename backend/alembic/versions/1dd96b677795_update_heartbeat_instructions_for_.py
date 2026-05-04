@@ -29,7 +29,7 @@ _OLD_PHASE2 = """\
 - `manage_tasks(action="list_ready")` for cross-project overview.
 - Unblock any blocked/failed/stale tasks.
 - st feedback list → resolve trivial items, create tasks for larger ones.
-- Triage CodeRabbit wake events: validate findings, skip false positives, create tasks for real issues."""
+- Triage review wake events: validate findings, skip false positives, create tasks for real issues."""
 
 _NEW_PHASE2 = """\
 ### 2. Task Health & Feedback (REQUIRED)
@@ -41,7 +41,7 @@ _NEW_PHASE2 = """\
   3. Items you've also observed → `manage_feedback(action="vote", item_id="...", comment="...")`.
   4. High-vote friction/improvement items needing code → create a task via `manage_tasks`.
   5. Stale items (>7 days, no longer relevant) → resolve with resolution_note.
-- Triage CodeRabbit wake events: validate findings, skip false positives, create tasks for real issues."""
+- Triage review wake events: validate findings, skip false positives, create tasks for real issues."""
 
 
 def upgrade() -> None:
