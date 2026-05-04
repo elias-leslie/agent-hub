@@ -9,6 +9,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.utils.safe_subprocess import create_process
+
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
@@ -42,10 +44,8 @@ async def _run_st_task_list(project_id: str, status: str | None, limit: int) -> 
     if status:
         command.extend(["--status", status])
 
-    process = await asyncio.create_subprocess_exec(
+    process = await create_process(
         *command,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=8)
