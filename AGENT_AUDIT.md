@@ -29,9 +29,8 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - [AH-AUDIT-007] [HIGH] [OPEN] Task lifecycle/data truth issues remain - ready tasks `task-1e259848`, `task-bdf784b7`, `task-9148c25d` - impact: cleanup truth drift and shaped-subtask readiness/control-plane gaps.
 - [AH-AUDIT-008] [MEDIUM] [OPEN] Persona memory/prompt yield work remains - ready `task-04380626`, sidecar-noted P1 `task-1f1ca536`, feedback `a8e0e474` - impact: prompt budget/reference-memory governance debt.
 - [AH-AUDIT-009] [MEDIUM] [OPEN] Maintainability backlog remains after schema slice - ready refactors `task-354906ba`, `task-7984080d`, `task-f777a41e`, `task-69c7fa38`, `task-d8b9a77f`, `task-d5e78dde`; failed refactors need disposition - impact: large modules and failed cleanup attempts.
-- [AH-AUDIT-011] [LOW] [OPEN] `packages/push-client` appears unused in repo - no `@agent-hub/push-client` consumer found and Dockerfiles do not install tarball - impact: package/tarball ownership drift.
-
 ## Completed
+- [AH-AUDIT-011] 2026-05-04 - Removed unused push workspace package, stale Docker tarball, lock importer, workflow pack step, and stale design-doc package reference; changed gate passed.
 - [AH-AUDIT-012] 2026-05-04 - Verified stale test-failure tasks `task-235285e8` and `task-53b8efe2` are fixed in current tree and closed them.
 - [AH-AUDIT-013] 2026-05-04 - Split persona API schemas into focused domain modules while preserving `app.api.persona.schemas` imports; focused persona tests, ruff, types, frontend, and changed gates passed.
 - [AH-AUDIT-014] 2026-05-04 - Replaced request-reachable raw `subprocess.run` in project root resolution with shared `safe_subprocess.run_process`; core tests passed.

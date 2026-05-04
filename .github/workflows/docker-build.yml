@@ -23,7 +23,7 @@ jobs:
       - name: Pack workspace packages
         run: |
           mkdir -p /tmp/workspace-packages
-          for pkg in chat-ui push-client passport-client; do
+          for pkg in chat-ui passport-client; do
             if [ -d "packages/$pkg" ]; then
               cd "packages/$pkg"
               pnpm pack --pack-destination /tmp/workspace-packages

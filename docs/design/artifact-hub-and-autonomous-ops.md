@@ -794,7 +794,7 @@ ESCALATION_RULES = {
 When an agent hits an escalation trigger:
 
 1. Create an artifact with `artifact_type=escalation`, tagged `escalation:pending`.
-2. Send a push notification via the existing push system (`@agent-hub/push-client`).
+2. Send a push notification via the existing push system.
 3. The artifact contains: what needs deciding, agent's recommendation, confidence score, supporting research artifacts.
 4. Human reviews in the Artifact Hub UI and marks as `escalation:approved` or `escalation:rejected`.
 5. Next heartbeat picks up the resolution and continues.
