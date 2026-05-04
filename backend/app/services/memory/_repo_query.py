@@ -132,7 +132,9 @@ class QueryRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            session.expunge_all()
+            return rows
 
     async def list_by_tier_names(
         self,
@@ -160,7 +162,9 @@ class QueryRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            session.expunge_all()
+            return rows
 
     async def count(
         self,
@@ -247,6 +251,7 @@ class QueryRepository:
             async with async_session() as session:
                 result = await session.execute(stmt)
                 rows = list(result.scalars().all())
+                session.expunge_all()
 
         has_more = len(rows) > limit
         memories = rows[:limit]
@@ -295,6 +300,7 @@ class QueryRepository:
             async with async_session() as session:
                 result = await session.execute(stmt)
                 rows = list(result.scalars().all())
+                session.expunge_all()
         if rows:
             return rows
 
@@ -322,7 +328,9 @@ class QueryRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(fallback_stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            session.expunge_all()
+            return rows
 
     async def resolve_uuid_prefix(
         self,
@@ -392,11 +400,11 @@ class QueryRepository:
 
         if db:
             result = await db.execute(stmt)
+            return {str(row[0]) for row in result.all()}
         else:
             async with async_session() as session:
                 result = await session.execute(stmt)
-
-        return {str(row[0]) for row in result.all()}
+                return {str(row[0]) for row in result.all()}
 
     async def find_duplicate(
         self,

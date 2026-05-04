@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.db import async_session
 from app.models import MemorySettings
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
     """
     if db is not None:
         return await _fetch_settings(db)
-    async for session in get_db():
+    async with async_session() as session:
         return await _fetch_settings(session)
     return _defaults_dto()
 
@@ -158,6 +158,6 @@ async def update_memory_settings(
 
 async def set_active_memory_variant(active_variant: str | None) -> MemorySettingsDTO:
     """Set or clear the globally active memory variant."""
-    async for session in get_db():
+    async with async_session() as session:
         return await update_memory_settings(session, active_variant=active_variant)
     return _defaults_dto()

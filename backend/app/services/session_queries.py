@@ -199,7 +199,7 @@ async def query_session_events(
         page_size: Results per page
 
     Returns:
-        Tuple of (events, total_count, total_pages)
+        Tuple of (events, total_count, max_turn)
     """
     query = select(SessionEvent).where(SessionEvent.session_id == session_id)
     count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
@@ -214,7 +214,10 @@ async def query_session_events(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+    max_turn_result = await db.execute(
+        select(func.max(SessionEvent.turn)).where(SessionEvent.session_id == session_id)
+    )
+    max_turn = max_turn_result.scalar() or 0
     offset = (page - 1) * page_size
 
     query = (
@@ -226,4 +229,4 @@ async def query_session_events(
     result = await db.execute(query)
     events = list(result.scalars().all())
 
-    return events, total, total_pages
+    return events, total, max_turn

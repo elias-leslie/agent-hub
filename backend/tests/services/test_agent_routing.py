@@ -215,7 +215,7 @@ class TestInjectAgentMandates:
         )
 
     @pytest.mark.asyncio
-    async def test_persona_project_permissions_block_renders_operator_tool_names(self) -> None:
+    async def test_persona_project_permissions_block_renders_runtime_tool_names(self) -> None:
         persona_agent = AgentDTO(
             id=9,
             slug="persona",
@@ -249,9 +249,11 @@ class TestInjectAgentMandates:
         ):
             result = await inject_agent_mandates(persona_agent, project_id="agent-hub")
 
-        assert "Allowed tools: Read, Write, Edit" in result.system_content
-        assert "read_file" not in result.system_content
-        assert "write_file" not in result.system_content
+        assert "Allowed tools:" in result.system_content
+        assert "read_file" in result.system_content
+        assert "write_file" in result.system_content
+        assert "query_sessions" in result.system_content
+        assert "dispatch_agent" not in result.system_content
 
     @pytest.mark.asyncio
     async def test_persona_runtime_uses_shared_runtime_prompt_stack(self) -> None:

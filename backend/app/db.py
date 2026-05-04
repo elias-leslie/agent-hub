@@ -57,6 +57,9 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+        finally:
+            if session.in_transaction():
+                await session.rollback()
 
 
 @asynccontextmanager
@@ -76,3 +79,6 @@ async def async_session() -> AsyncGenerator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+        finally:
+            if session.in_transaction():
+                await session.rollback()

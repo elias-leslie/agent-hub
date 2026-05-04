@@ -85,6 +85,7 @@ class TierRepository:
             async with async_session() as session:
                 result = await session.execute(stmt)
                 rows = list(result.scalars().all())
+                session.expunge_all()
 
         candidates = []
         for mem in rows:
@@ -143,6 +144,7 @@ class TierRepository:
             async with async_session() as session:
                 result = await session.execute(stmt)
                 rows = list(result.scalars().all())
+                session.expunge_all()
 
         candidates = []
         for mem in rows:
@@ -194,7 +196,9 @@ class TierRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            session.expunge_all()
+            return rows
 
     async def get_phase_triggered_references(
         self,
@@ -221,4 +225,6 @@ class TierRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            session.expunge_all()
+            return rows

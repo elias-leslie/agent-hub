@@ -58,7 +58,7 @@ export function useChatStream(
   options: UseChatStreamOptions = {},
 ): UseChatStreamReturn {
   const {
-    agentSlug = "chat",
+    agentSlug = "persona",
     sessionId,
     temperature = 1.0,
     workingDir,

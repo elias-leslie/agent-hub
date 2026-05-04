@@ -16,6 +16,11 @@ def work_context_to_prompt(work_context: Any | None) -> str | None:
         return None
     labels = {
         "mode": "mode",
+        "routing_mode": "routing_mode",
+        "preferred_agent_slug": "preferred_agent",
+        "explore_policy": "explore_policy",
+        "research_policy": "research_policy",
+        "verifier_enabled": "verifier_enabled",
         "project_id": "project",
         "project_name": "project_name",
         "task_id": "task",

@@ -1,6 +1,7 @@
 """Utility functions for Agent Routing Service."""
 
 import logging
+from dataclasses import dataclass
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,6 +98,12 @@ _TIER_LABELS: dict[str, str] = {
 }
 
 
+@dataclass(frozen=True)
+class _PermissionSnapshot:
+    project_id: str
+    permission_tier: str
+
+
 async def _fetch_permissions(project_id: str, db: AsyncSession | None):
     from app.services.project_permission_service import (
         get_project_permission,
@@ -106,7 +113,17 @@ async def _fetch_permissions(project_id: str, db: AsyncSession | None):
         return await get_project_permission(db, project_id), await list_project_permissions(db)
     from app.db import async_session
     async with async_session() as fresh_db:
-        return await get_project_permission(fresh_db, project_id), await list_project_permissions(fresh_db)
+        perm = await get_project_permission(fresh_db, project_id)
+        all_perms = await list_project_permissions(fresh_db)
+        current = (
+            _PermissionSnapshot(perm.project_id, perm.permission_tier)
+            if perm is not None
+            else None
+        )
+        return current, [
+            _PermissionSnapshot(p.project_id, p.permission_tier)
+            for p in all_perms
+        ]
 
 
 def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:

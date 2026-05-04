@@ -159,7 +159,12 @@ class CrudRepository(RevisionRepository):
         db: AsyncSession | None = None,
     ) -> dict[str, Any] | None:
         """Get a single memory as a dict."""
-        mem = await self.get(memory_id, db=db)
+        uid = _uuid.UUID(str(memory_id)) if isinstance(memory_id, str) else memory_id
+        if db is None:
+            async with async_session() as session:
+                mem = await session.get(Memory, uid)
+                return to_dict(mem) if mem is not None else None
+        mem = await self.get(uid, db=db)
         if mem is None:
             return None
         return to_dict(mem)

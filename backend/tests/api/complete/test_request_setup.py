@@ -58,6 +58,11 @@ def _resolved_agent(memory_config: dict[str, object] | None) -> SimpleNamespace:
 def test_work_context_prompt_injects_project_task_context() -> None:
     context = WorkContext(
         mode="project_task",
+        routing_mode="auto",
+        preferred_agent_slug="debugger",
+        explore_policy="force",
+        research_policy="avoid",
+        verifier_enabled=True,
         project_id="summitflow",
         project_name="SummitFlow",
         task_id="task-123",
@@ -71,6 +76,11 @@ def test_work_context_prompt_injects_project_task_context() -> None:
 
     assert prompt is not None
     assert "project: summitflow" in prompt
+    assert "routing_mode: auto" in prompt
+    assert "preferred_agent: debugger" in prompt
+    assert "explore_policy: force" in prompt
+    assert "research_policy: avoid" in prompt
+    assert "verifier_enabled: True" in prompt
     assert "task: task-123" in prompt
     assert "pane: pane-1" in prompt
     assert messages[0].role == "system"

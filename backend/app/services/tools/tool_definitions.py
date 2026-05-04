@@ -106,6 +106,7 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "ideator-public": [SUBMIT_IDEA_TOOL],
     "persona": [
         *STANDARD_TOOLS,
+        CONSULT_AGENT_TOOL,
         SEND_PUSH_TOOL,
         *PERSONA_EXTRA_TOOLS,
     ],

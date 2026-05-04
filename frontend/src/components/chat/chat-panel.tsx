@@ -41,6 +41,11 @@ interface WorkChatSourceMetadata {
 
 interface WorkChatContext {
   mode?: string
+  routing_mode?: string
+  preferred_agent_slug?: string
+  explore_policy?: string
+  research_policy?: string
+  verifier_enabled?: boolean
   project_id?: string
   project_name?: string
   task_id?: string

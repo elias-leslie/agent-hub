@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.db import async_session, get_db
 from app.models import ActionRequest, SessionBinding
 from app.services.event_storage import store_message_event
+from app.services.work_chat_verifier_outcomes import record_verifier_outcome
 from app.services.work_chats import (
     create_action_request,
     list_action_requests,
@@ -91,6 +92,33 @@ class JoinResponse(BaseModel):
     binding: SessionBindingResponse | None
 
 
+class VerifierOutcomeRequest(BaseModel):
+    parent_session_id: str | None = None
+    verifier_session_id: str
+    builder_session_id: str
+    project_id: str | None = None
+    task_id: str | None = None
+    status: str
+    confidence: str | None = None
+    atomic_claim_count: int | None = Field(default=None, ge=0)
+    atomic_pass_count: int | None = Field(default=None, ge=0)
+    atomic_fail_count: int | None = Field(default=None, ge=0)
+    feedback_loop_count: int | None = Field(default=None, ge=0)
+    report_excerpt: str = Field(default="", max_length=5000)
+
+
+class VerifierOutcomeResponse(BaseModel):
+    benchmark_id: str
+    benchmark_run_id: str | None
+    performance_log_id: int | None
+    agent_slug: str
+    model_id: str
+    score: int
+    outcome: str
+    feedback_type: str
+    created: bool
+
+
 def _binding_response(binding: SessionBinding) -> SessionBindingResponse:
     return SessionBindingResponse(
         id=str(binding.id),
@@ -134,20 +162,20 @@ def _action_response(request: ActionRequest) -> ActionRequestResponse:
 
 @router.get("/bindings", response_model=SessionBindingsResponse)
 async def get_bindings(
-    db: Annotated[AsyncSession, Depends(get_db)],
     project_id: Annotated[str | None, Query()] = None,
     task_id: Annotated[str | None, Query()] = None,
     session_id: Annotated[str | None, Query()] = None,
     pane_id: Annotated[str | None, Query()] = None,
 ) -> SessionBindingsResponse:
-    bindings = await list_session_bindings(
-        db,
-        project_id=project_id,
-        task_id=task_id,
-        session_id=session_id,
-        pane_id=pane_id,
-    )
-    return SessionBindingsResponse(bindings=[_binding_response(binding) for binding in bindings])
+    async with async_session() as db:
+        bindings = await list_session_bindings(
+            db,
+            project_id=project_id,
+            task_id=task_id,
+            session_id=session_id,
+            pane_id=pane_id,
+        )
+        return SessionBindingsResponse(bindings=[_binding_response(binding) for binding in bindings])
 
 
 @router.post("/bindings", response_model=SessionBindingResponse, status_code=201)
@@ -162,12 +190,12 @@ async def create_or_update_binding(
 
 @router.get("/action-requests", response_model=ActionRequestsResponse)
 async def get_action_requests(
-    db: Annotated[AsyncSession, Depends(get_db)],
     session_id: Annotated[str | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
 ) -> ActionRequestsResponse:
-    requests = await list_action_requests(db, session_id=session_id, status=status)
-    return ActionRequestsResponse(action_requests=[_action_response(request) for request in requests])
+    async with async_session() as db:
+        requests = await list_action_requests(db, session_id=session_id, status=status)
+        return ActionRequestsResponse(action_requests=[_action_response(request) for request in requests])
 
 
 @router.post("/action-requests", response_model=ActionRequestResponse, status_code=201)
@@ -208,6 +236,21 @@ async def resolve_action_request_endpoint(
         )
     await db.commit()
     return _action_response(action_request)
+
+
+@router.post("/verifier-outcomes", response_model=VerifierOutcomeResponse, status_code=201)
+async def create_verifier_outcome(
+    request: VerifierOutcomeRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> VerifierOutcomeResponse:
+    try:
+        result = await record_verifier_outcome(db, request.model_dump())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await db.commit()
+    return VerifierOutcomeResponse(**result.__dict__)
 
 
 @router.get("/telegram/join/{code}", response_model=JoinResponse)

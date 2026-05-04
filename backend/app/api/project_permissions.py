@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.projects import get_known_roots
-from app.db import get_db
+from app.db import async_session, get_db
 from app.models.project_permission import VALID_PERMISSION_TIERS
 from app.services.project_permission_service import (
     ExecutionPermissionResult,
@@ -109,12 +109,11 @@ def _to_response(perm: Any) -> ProjectPermissionResponse:
 
 
 @router.get("/permissions", response_model=list[ProjectPermissionResponse])
-async def list_permissions(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[ProjectPermissionResponse]:
+async def list_permissions() -> list[ProjectPermissionResponse]:
     """List all project permissions."""
-    perms = await list_project_permissions(db)
-    return [_to_response(p) for p in perms]
+    async with async_session() as db:
+        perms = await list_project_permissions(db)
+        return [_to_response(p) for p in perms]
 
 
 @router.get("/roots", response_model=dict[str, str])
@@ -164,13 +163,13 @@ async def create_permission(
 @router.get("/{project_id}/permissions", response_model=ProjectPermissionResponse)
 async def get_permission(
     project_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectPermissionResponse:
     """Get permission for a single project."""
-    perm = await get_project_permission(db, project_id)
-    if perm is None:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    return _to_response(perm)
+    async with async_session() as db:
+        perm = await get_project_permission(db, project_id)
+        if perm is None:
+            raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+        return _to_response(perm)
 
 
 @router.patch("/{project_id}/permissions", response_model=ProjectPermissionResponse)
