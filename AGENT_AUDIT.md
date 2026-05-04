@@ -22,6 +22,7 @@ _Sessions: 2 | Last run: 2026-05-04 | State: ISSUES_
 - Implemented persona tool-surface guardrails: source-of-truth allowlist, provisioning filter, persona permission display, wrapper gating, contract doc, and focused tests.
 - Pre-close critique ran after one transient DB-pool 500; verdict `NEEDS_REVISION` because task package lacked closeout evidence at critique time. Evidence and verdict were logged afterward.
 - Verification this session: focused `st check pytest` 70 passed; `st check --quick --changed-only` passed ARCH/ruff/types/pytest; full `st check --check` still red only on AH-AUDIT-003 debt.
+- Closeout: `st done task-17eba047` committed/pushed `cf3488a0a3e6`, merged to `main`, removed checkpoint; `st vcs reconcile` cleared task refs and final VCS doctor was clean.
 - Reviewed `task-851af567`; fixed its backend raw-subprocess architecture slice and logged progress to the task.
 - Active feedback list has 20 visible open items, mostly CLI/session/tooling friction.
 - Preflight: no overlaps; one unrelated writer owned generated/package paths, so this session avoided those paths.
