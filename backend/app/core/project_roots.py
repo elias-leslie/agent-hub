@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 from functools import lru_cache
 from pathlib import Path
+from subprocess import TimeoutExpired
+
+from app.utils.safe_subprocess import run_process
 
 _CANONICAL_WORKSPACE_ROOT = Path("/srv/workspaces/projects")
 _MANIFEST_NAME = "project.identity.json"
@@ -31,14 +33,14 @@ def resolve_project_root(project_id: str) -> Path | None:
     st_binary = shutil.which("st")
     if st_binary:
         try:
-            result = subprocess.run(
+            result = run_process(
                 [st_binary, "projects", "root", project_id],
                 capture_output=True,
                 text=True,
                 check=False,
                 timeout=5,
             )
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, TimeoutExpired):
             result = None
         if result and result.returncode == 0:
             resolved = Path(result.stdout.strip()).expanduser().resolve()
