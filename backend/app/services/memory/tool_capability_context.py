@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from subprocess import run
 from typing import Any
 
 import yaml
+
+from app.utils.safe_subprocess import run_process
 
 from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
@@ -106,7 +107,7 @@ def _read_help_output(command: tuple[str, ...]) -> str:
     env.pop("PYTHONPATH", None)
     env.pop("PYTHONHOME", None)
     try:
-        result = run(command, capture_output=True, text=True, timeout=3, check=False, env=env)
+        result = run_process(command, capture_output=True, text=True, timeout=3, check=False, env=env)
     except Exception:
         return ""
     output = (result.stdout or "").strip()
@@ -273,7 +274,10 @@ def build_tool_capability_payload(
     project_id: str | None = None,
     bash_available: bool | None = None,
     st_quick: list[str] | None = None,
+    agent_slug: str | None = None,
 ) -> dict[str, Any] | None:
+    if agent_slug == "persona" and bash_available is not True:
+        return None
     if bash_available is False:
         return None
 
@@ -302,6 +306,7 @@ def format_tool_capability_context(
     project_id: str | None = None,
     bash_available: bool | None = None,
     st_quick: list[str] | None = None,
+    agent_slug: str | None = None,
 ) -> str:
     payload = build_tool_capability_payload(
         consumer_profile=consumer_profile,
@@ -309,6 +314,7 @@ def format_tool_capability_context(
         project_id=project_id,
         bash_available=bash_available,
         st_quick=st_quick,
+        agent_slug=agent_slug,
     )
     if not payload:
         return ""

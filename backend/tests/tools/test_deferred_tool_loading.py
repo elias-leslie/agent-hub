@@ -50,21 +50,27 @@ def test_build_deferred_toolset_adds_virtual_catalog_tools() -> None:
     ]
 
 
-def test_persona_heartbeat_hot_tools_stay_loaded_in_deferred_mode() -> None:
-    """Heartbeat-critical persona tools must remain directly callable."""
-    from app.services.tools.tool_definitions import get_agent_tool_specs
+def test_persona_deferred_operator_surface_is_filtered_before_catalog_loading() -> None:
+    """Persona provisioning owns the operator surface before deferred cataloging."""
+    from app.api.complete.tool_provisioner import provision_standard_tools
 
-    persona_tools = get_agent_tool_specs("persona")
-    assert persona_tools is not None
+    provisioned = provision_standard_tools(
+        True,
+        None,
+        agent_slug="persona",
+        project_id="agent-hub",
+        defer_tool_loading=True,
+        visible_tool_names={
+            "read_file",
+            "query_sessions",
+            "inspect_session",
+            "schedule_job",
+            "manage_feedback",
+        },
+    )
 
-    loaded_tools, _catalog_tools = build_deferred_toolset(persona_tools)
-    loaded_names = {tool["name"] for tool in loaded_tools}
-
-    assert "manage_tasks" in loaded_names
-    assert "query_sessions" in loaded_names
-    assert "schedule_job" in loaded_names
-    assert "manage_feedback" in loaded_names
-    assert "inspect_session" in loaded_names
+    assert [tool["name"] for tool in provisioned.loaded_tools] == ["read_file"]
+    assert [tool["name"] for tool in provisioned.catalog_tools] == ["read_file"]
 
 
 @pytest.mark.asyncio

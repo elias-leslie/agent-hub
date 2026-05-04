@@ -25,7 +25,7 @@ def test_resolve_shared_command_guard_falls_back_when_resolved_scripts_lacks_gua
         patch("app.services.tools.command_guard.resolve_summitflow_scripts_dir", return_value=partial_scripts_dir),
         patch("app.services.tools.command_guard.Path") as mock_path,
         patch(
-            "app.services.tools.command_guard.subprocess.run",
+            "app.services.tools.command_guard.run_process",
             return_value=SimpleNamespace(returncode=0, stdout="bash sh", stderr=""),
         ),
     ):
