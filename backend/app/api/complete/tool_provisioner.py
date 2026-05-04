@@ -41,9 +41,37 @@ def _resolve_tools(
 def _filter_tools_by_tier(
     result: list[dict[str, Any]],
     project_id: str,
+    agent_slug: str | None,
     visible_tool_names: set[str] | frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Filter tools by project permission tier using Redis cache (best-effort)."""
+    if agent_slug == "persona":
+        from app.services.tools.persona_tool_surface import (
+            get_persona_runtime_tools_for_tier,
+            get_persona_runtime_tools_for_visible_tools,
+        )
+
+        if visible_tool_names is not None:
+            allowed = set(get_persona_runtime_tools_for_visible_tools(visible_tool_names))
+            return [t for t in result if t.get("name") in allowed]
+
+        allowed: set[str] = set()
+        try:
+            import json
+
+            import redis
+
+            from app.config import settings
+
+            r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
+            cached = r.get(f"agent-hub:project-perm:{project_id}")
+            r.close()
+            tier = json.loads(cached).get("tier") if cached else None
+            allowed = set(get_persona_runtime_tools_for_tier(tier))
+        except Exception as e:
+            logger.debug("Persona tool provisioning tier filter failed closed: %s", e)
+        return [t for t in result if t.get("name") in allowed]
+
     if visible_tool_names is not None:
         before = len(result)
         allowed = set(visible_tool_names)
@@ -125,10 +153,11 @@ def provision_standard_tools(
     result = tools or []
 
     # Filter tools by project permission tier (soft enforcement at provisioning)
-    if result and project_id:
+    if result and (project_id or agent_slug == "persona"):
         result = _filter_tools_by_tier(
             result,
-            project_id,
+            project_id or "",
+            agent_slug,
             visible_tool_names=visible_tool_names,
         )
 
