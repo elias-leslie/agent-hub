@@ -202,19 +202,29 @@ async def list_models() -> ModelsResponse:
         async with async_session() as db:
             enrichments = await get_all_enrichments(db)
             sync_state = await get_catalog_sync_state(db)
+            models = [_build_model_info(e, enrichments.get(e.id)) for e in MODEL_CATALOG]
+            last_sync = None
+            if sync_state and getattr(sync_state, "synced_at", None):
+                last_sync = sync_state.synced_at
+            elif enrichments:
+                synced_times = [e.synced_at for e in enrichments.values() if e.synced_at]
+                if synced_times:
+                    last_sync = max(synced_times)
+            catalog_health = _build_catalog_health(
+                enrichments=enrichments,
+                sync_state=sync_state,
+                last_sync=last_sync,
+            )
     except Exception:
         logger.warning("Failed to load model enrichments", exc_info=True)
         enrichments = {}
-
-    models = [_build_model_info(e, enrichments.get(e.id)) for e in MODEL_CATALOG]
-
-    last_sync = None
-    if sync_state and getattr(sync_state, "synced_at", None):
-        last_sync = sync_state.synced_at
-    elif enrichments:
-        synced_times = [e.synced_at for e in enrichments.values() if e.synced_at]
-        if synced_times:
-            last_sync = max(synced_times)
+        models = [_build_model_info(e, None) for e in MODEL_CATALOG]
+        last_sync = None
+        catalog_health = _build_catalog_health(
+            enrichments=enrichments,
+            sync_state=sync_state,
+            last_sync=last_sync,
+        )
 
     last_model_review = None
     try:
@@ -237,11 +247,7 @@ async def list_models() -> ModelsResponse:
         providers=providers,
         last_sync=last_sync,
         last_model_review=last_model_review,
-        catalog_health=_build_catalog_health(
-            enrichments=enrichments,
-            sync_state=sync_state,
-            last_sync=last_sync,
-        ),
+        catalog_health=catalog_health,
     )
 
 

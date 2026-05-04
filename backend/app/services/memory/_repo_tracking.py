@@ -115,12 +115,12 @@ class TrackingRepository:
         if db:
             result = await db.execute(stmt)
             rows = list(result.scalars().all())
+            return {str(mem.id): to_dict(mem) for mem in rows}
         else:
             async with async_session() as session:
                 result = await session.execute(stmt)
                 rows = list(result.scalars().all())
-
-        return {str(mem.id): to_dict(mem) for mem in rows}
+                return {str(mem.id): to_dict(mem) for mem in rows}
 
     async def batch_update_properties(
         self,

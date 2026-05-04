@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from scripts.export_seeds import _normalized_seed_payload, _serialize_agent
+from scripts.export_seeds import _normalized_seed_payload, _serialize_agent, _serialize_prompt
 
 
 def test_serialize_agent_normalizes_persona_name_for_seed_defaults() -> None:
@@ -68,3 +68,23 @@ def test_normalized_seed_payload_ignores_generated_at() -> None:
     }
 
     assert _normalized_seed_payload(original) == _normalized_seed_payload(regenerated)
+
+
+def test_serialize_prompt_preserves_owner_slug() -> None:
+    prompt = SimpleNamespace(
+        slug="persona-agent-routing-catalog",
+        name="Persona Agent Routing Catalog",
+        content="Use routing catalog.",
+        description="Routing help",
+        is_global=True,
+        enabled=True,
+        exclude_agents=[],
+        prompt_type="standard",
+        deletion_locked=False,
+    )
+
+    exported = _serialize_prompt(prompt, "persona")
+
+    assert exported["slug"] == "persona-agent-routing-catalog"
+    assert exported["owner_agent_slug"] == "persona"
+    assert exported["is_global"] is True

@@ -37,7 +37,7 @@ async def _resolve_tier(proj_id: str) -> str | None:
 
     async with async_session() as db:
         perm = await get_project_permission(db, proj_id)
-    return perm.permission_tier if perm else None
+        return perm.permission_tier if perm else None
 
 
 def _path_within_root(resolved_path: str, root: str) -> bool:

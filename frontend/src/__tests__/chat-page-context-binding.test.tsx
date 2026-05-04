@@ -72,6 +72,11 @@ describe('ChatPage context binding', () => {
       json: async () => ({
         agents: [
           {
+            slug: 'persona',
+            name: 'Jenny',
+            primary_model_id: 'codex/gpt-5.4',
+          },
+          {
             slug: 'chat',
             name: 'General Assistant',
             primary_model_id: 'codex/gpt-5.4',
@@ -189,7 +194,7 @@ describe('ChatPage context binding', () => {
     localStorage.setItem(
       'agent_hub_active_session_by_context',
       JSON.stringify({
-        'chat:general:chat:none': 'chat-session',
+        'chat:general:persona:none': 'persona-session',
         'chat:general:debugger:none': 'debugger-session',
       }),
     )
@@ -199,8 +204,8 @@ describe('ChatPage context binding', () => {
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(
         expect.objectContaining({
-          agentSlug: 'chat',
-          sessionId: 'chat-session',
+          agentSlug: 'persona',
+          sessionId: 'persona-session',
         }),
       )
     })
@@ -216,13 +221,13 @@ describe('ChatPage context binding', () => {
       )
     })
 
-    selectAgent(/General Assistant\s*chat/i)
+    selectAgent(/Jenny\s*persona/i)
 
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(
         expect.objectContaining({
-          agentSlug: 'chat',
-          sessionId: 'chat-session',
+          agentSlug: 'persona',
+          sessionId: 'persona-session',
         }),
       )
     })

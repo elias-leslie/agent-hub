@@ -1,8 +1,8 @@
-"""Canonical persona operator tool surface.
+"""Canonical persona runtime tool surface.
 
-Provider-native Claude built-ins stay owned by the adapter constants. This
-module owns only the persona hot-loaded runtime tools and their operator-facing
-display names.
+Project permissions own the allow-list. This module keeps Jenny's provider
+tool surface in sync with that project-visible set, while preserving stable
+ordering for prompts and tests.
 """
 
 from __future__ import annotations
@@ -14,19 +14,43 @@ PersonaToolTier = Literal["off", "read", "write", "yolo"]
 
 PERSONA_TOOL_TIERS: tuple[PersonaToolTier, ...] = ("off", "read", "write", "yolo")
 
-PERSONA_RUNTIME_TOOLS_BY_TIER: dict[PersonaToolTier, tuple[str, ...]] = {
-    "off": (),
-    "read": ("read_file",),
-    "write": ("read_file", "write_file"),
-    "yolo": ("bash", "read_file", "write_file"),
-}
-
-PERSONA_OPERATOR_TOOLS_BY_TIER: dict[PersonaToolTier, tuple[str, ...]] = {
-    "off": (),
-    "read": ("Read",),
-    "write": ("Read", "Write", "Edit"),
-    "yolo": ("Read", "Write", "Edit", "Bash"),
-}
+PERSONA_RUNTIME_TOOL_ORDER: tuple[str, ...] = (
+    "bash",
+    "read_file",
+    "write_file",
+    "search_scratch_context",
+    "batch_execute",
+    "consult_agent",
+    "send_push",
+    "read_personality",
+    "write_personality",
+    "read_user_context",
+    "write_user_context",
+    "read_heartbeat_instructions",
+    "write_heartbeat_instructions",
+    "manage_memory_tags",
+    "review_memory_system",
+    "mark_memory_relevant",
+    "mark_memory_irrelevant",
+    "submit_onboarding",
+    "schedule_job",
+    "list_scheduled_jobs",
+    "cancel_scheduled_job",
+    "steer_consultation",
+    "list_consultations",
+    "dispatch_agent",
+    "cancel_consultation",
+    "manage_tasks",
+    "manage_backups",
+    "manage_model_config",
+    "manage_feedback",
+    "log_agent_performance",
+    "inspect_session",
+    "review_agent_performance",
+    "review_improvement_signals",
+    "query_sessions",
+    "search_persona_history",
+)
 
 
 def normalize_persona_tool_tier(tier: str | None) -> PersonaToolTier:
@@ -42,7 +66,7 @@ def normalize_persona_tool_tier(tier: str | None) -> PersonaToolTier:
 def infer_persona_tool_tier_from_visible_tools(
     visible_tool_names: Iterable[str] | None,
 ) -> PersonaToolTier:
-    """Infer the fixed persona tier from an already-resolved project-visible set."""
+    """Infer a coarse tier from an already-resolved project-visible set."""
     if not visible_tool_names:
         return "off"
     visible = set(visible_tool_names)
@@ -57,30 +81,32 @@ def infer_persona_tool_tier_from_visible_tools(
 
 def get_persona_runtime_tools_for_tier(tier: str | None) -> tuple[str, ...]:
     """Return ordered hot-loaded runtime tool ids for a persona permission tier."""
-    return PERSONA_RUNTIME_TOOLS_BY_TIER[normalize_persona_tool_tier(tier)]
+    if normalize_persona_tool_tier(tier) == "off":
+        return ()
+    from app.services.project_permission_service import get_visible_tools_for_tier
+
+    return _ordered_persona_runtime_tools(
+        get_visible_tools_for_tier(normalize_persona_tool_tier(tier))
+    )
 
 
 def get_persona_runtime_tools_for_visible_tools(
     visible_tool_names: Iterable[str] | None,
 ) -> tuple[str, ...]:
     """Return ordered hot-loaded runtime tool ids from project-visible tool ids."""
-    return PERSONA_RUNTIME_TOOLS_BY_TIER[
-        infer_persona_tool_tier_from_visible_tools(visible_tool_names)
-    ]
+    return _ordered_persona_runtime_tools(visible_tool_names)
 
 
 def get_persona_operator_tools_for_tier(tier: str | None) -> tuple[str, ...]:
     """Return ordered operator-facing tool names for a persona permission tier."""
-    return PERSONA_OPERATOR_TOOLS_BY_TIER[normalize_persona_tool_tier(tier)]
+    return get_persona_runtime_tools_for_tier(tier)
 
 
 def get_persona_operator_tools_for_visible_tools(
     visible_tool_names: Iterable[str] | None,
 ) -> tuple[str, ...]:
     """Return ordered operator-facing tool names from project-visible tool ids."""
-    return PERSONA_OPERATOR_TOOLS_BY_TIER[
-        infer_persona_tool_tier_from_visible_tools(visible_tool_names)
-    ]
+    return get_persona_runtime_tools_for_visible_tools(visible_tool_names)
 
 
 def format_persona_operator_tools_for_tier(tier: str | None) -> str:
@@ -94,6 +120,19 @@ def filter_persona_runtime_tool_dicts(
     *,
     visible_tool_names: Iterable[str] | None,
 ) -> list[dict[str, object]]:
-    """Keep only tools allowed in the fixed persona runtime surface."""
-    allowed = set(get_persona_runtime_tools_for_visible_tools(visible_tool_names))
-    return [tool for tool in tools if str(tool.get("name", "") or "") in allowed]
+    """Keep only tools allowed in Jenny's project-visible runtime surface."""
+    by_name = {str(tool.get("name", "") or ""): tool for tool in tools}
+    return [
+        by_name[name]
+        for name in get_persona_runtime_tools_for_visible_tools(visible_tool_names)
+        if name in by_name
+    ]
+
+
+def _ordered_persona_runtime_tools(
+    visible_tool_names: Iterable[str] | None,
+) -> tuple[str, ...]:
+    if not visible_tool_names:
+        return ()
+    visible = set(visible_tool_names)
+    return tuple(name for name in PERSONA_RUNTIME_TOOL_ORDER if name in visible)

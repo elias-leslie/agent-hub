@@ -47,7 +47,7 @@ export function useAgentSelection(): UseAgentSelectionReturn {
 
           if (!currentAgent && fetchedAgents.length > 0) {
             return (
-              fetchedAgents.find((a: Agent) => a.slug === 'chat') ||
+              fetchedAgents.find((a: Agent) => a.slug === 'persona') ||
               fetchedAgents[0]
             )
           }

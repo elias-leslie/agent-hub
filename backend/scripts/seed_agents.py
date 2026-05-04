@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.constants import resolve_model
 from app.models import Agent
+from app.models.prompt import AgentPrompt, Prompt
 from app.services.owned_prompt_service import sync_agent_system_prompt
 
 logging.basicConfig(level=logging.WARNING)
@@ -65,6 +66,73 @@ def _load_seed_data() -> tuple[list[dict], list[str]]:
     return data["agents"], data.get("deactivate_slugs", [])
 
 
+async def _seed_prompts(
+    db: AsyncSession,
+    prompts_data: list[dict],
+    assignments_data: list[dict],
+) -> int:
+    """Seed reusable prompts and agent prompt assignments for a fresh DB."""
+    created = 0
+    agent_rows = (await db.execute(select(Agent))).scalars().all()
+    agents_by_slug = {agent.slug: agent for agent in agent_rows}
+
+    for prompt_data in prompts_data:
+        slug = prompt_data["slug"]
+        existing = (await db.execute(select(Prompt).where(Prompt.slug == slug))).scalar_one_or_none()
+        if existing:
+            logger.info("Prompt '%s' already exists, skipping", slug)
+            continue
+        owner_slug = prompt_data.get("owner_agent_slug")
+        owner_agent = agents_by_slug.get(owner_slug) if owner_slug else None
+        prompt = Prompt(
+            slug=slug,
+            name=prompt_data["name"],
+            content=prompt_data["content"],
+            description=prompt_data.get("description"),
+            is_global=bool(prompt_data.get("is_global", False)),
+            enabled=bool(prompt_data.get("enabled", True)),
+            exclude_agents=prompt_data.get("exclude_agents", []),
+            owner_agent_id=owner_agent.id if owner_agent else None,
+            prompt_type=prompt_data.get("prompt_type", "standard"),
+            deletion_locked=bool(prompt_data.get("deletion_locked", False)),
+        )
+        db.add(prompt)
+        await db.flush()
+        created += 1
+        logger.info("Created prompt: %s", slug)
+
+    prompts_by_slug = {
+        prompt.slug: prompt
+        for prompt in (await db.execute(select(Prompt))).scalars().all()
+    }
+    for assignment_data in assignments_data:
+        agent = agents_by_slug.get(assignment_data.get("agent_slug"))
+        prompt = prompts_by_slug.get(assignment_data.get("prompt_slug"))
+        if agent is None or prompt is None:
+            logger.warning("Skipping prompt assignment with missing agent/prompt: %s", assignment_data)
+            continue
+        existing = (
+            await db.execute(
+                select(AgentPrompt).where(
+                    AgentPrompt.agent_id == agent.id,
+                    AgentPrompt.prompt_id == prompt.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            continue
+        db.add(
+            AgentPrompt(
+                agent_id=agent.id,
+                prompt_id=prompt.id,
+                role=assignment_data.get("role", "system"),
+                priority=int(assignment_data.get("priority", 0)),
+            )
+        )
+
+    return created
+
+
 async def seed_agents(db: AsyncSession) -> int:
     """Seed default agents into database (insert-only, skips existing).
 
@@ -72,7 +140,10 @@ async def seed_agents(db: AsyncSession) -> int:
         Number of agents created
     """
     agents_data, deactivate_slugs = _load_seed_data()
-    created = 0
+    raw_seed = json.loads(SEED_FILE.read_text())
+    prompts_data = raw_seed.get("prompts", [])
+    assignments_data = raw_seed.get("agent_prompt_assignments", [])
+    created_agents = 0
 
     for agent_data in agents_data:
         slug = agent_data["slug"]
@@ -107,7 +178,7 @@ async def seed_agents(db: AsyncSession) -> int:
             system_prompt=agent_data["system_prompt"],
             change_reason="Seed default agent system prompt",
         )
-        created += 1
+        created_agents += 1
         logger.info(f"Created agent: {slug}")
 
     # Deactivate absorbed agents
@@ -119,8 +190,13 @@ async def seed_agents(db: AsyncSession) -> int:
             deactivate_agent.version += 1
             logger.info(f"Deactivated agent: {slug}")
 
+    if prompts_data or assignments_data:
+        created_prompts = await _seed_prompts(db, prompts_data, assignments_data)
+        if created_prompts:
+            logger.info("Created prompts: %d", created_prompts)
+
     await db.commit()
-    return created
+    return created_agents
 
 
 async def main() -> None:

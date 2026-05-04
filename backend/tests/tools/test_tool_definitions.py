@@ -48,3 +48,5 @@ def test_persona_tool_registry_includes_memory_review_surface() -> None:
     tool_names = {tool.name for tool in tools}
 
     assert "review_memory_system" in tool_names
+    assert "consult_agent" in tool_names
+    assert "dispatch_agent" in tool_names

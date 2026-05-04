@@ -130,6 +130,37 @@ class DirectToolExecutor:
         """Check if a resolved path is within the project's allowed root or working dir."""
         return _check_path_allowed(path, self._allowed_root, extra_roots=(self.working_dir,))
 
+    async def _allowed_root_for_file_tool(
+        self,
+        path: str,
+        *,
+        write: bool,
+    ) -> tuple[Path | None, str | None]:
+        """Return the project root allowed for a file tool path, or a block reason."""
+        file_path = Path(path)
+        if not file_path.is_absolute():
+            file_path = (self.working_dir / path).resolve()
+
+        if self._is_path_allowed(file_path):
+            return self._allowed_root, None
+        if not self._project_id:
+            return self._allowed_root, None
+
+        from app.services.tools._cross_project_hook import _infer_target_project, _resolve_tier
+
+        target_project = _infer_target_project(file_path, KNOWN_ROOTS)
+        if target_project is None:
+            return self._allowed_root, None
+
+        tier = await _resolve_tier(target_project)
+        if tier is None or tier == "off":
+            return None, f"Project permission denied for {target_project}: {tier or 'missing'}"
+        if write and tier == "read":
+            return None, f"Project permission denied for {target_project}: read-only"
+
+        target_root = KNOWN_ROOTS.get(target_project)
+        return (Path(target_root) if target_root else self._allowed_root), None
+
     async def dispatch(self, name: str, args: dict[str, Any]) -> str:
         """Route a tool call to the matching handler by name."""
         if name not in self.DISPATCHABLE_TOOLS:
@@ -315,10 +346,16 @@ class DirectToolExecutor:
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file with optional line offset and limit."""
-        return await _read_file(path, self.working_dir, self._allowed_root, offset, limit)
+        allowed_root, block_reason = await self._allowed_root_for_file_tool(path, write=False)
+        if block_reason:
+            return f"Error: {block_reason}"
+        return await _read_file(path, self.working_dir, allowed_root, offset, limit)
 
     async def write_file(self, path: str, content: str) -> str:
         """Write a file."""
+        allowed_root, permission_block = await self._allowed_root_for_file_tool(path, write=True)
+        if permission_block:
+            return f"Error: {permission_block}"
         block_reason = await scan_runtime_sensitive_content(
             path,
             content,
@@ -327,7 +364,7 @@ class DirectToolExecutor:
         )
         if block_reason:
             return f"Error: Write blocked: {block_reason}"
-        return await _write_file(path, content, self.working_dir, self._allowed_root)
+        return await _write_file(path, content, self.working_dir, allowed_root)
 
     async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:
         """Consult another agent for advice without executing tools."""

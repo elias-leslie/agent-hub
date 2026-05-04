@@ -76,6 +76,11 @@ class WorkContext(BaseModel):
     """First-class work context injected into agent prompt context."""
 
     mode: str = Field(default="general", max_length=50)
+    routing_mode: str | None = Field(default=None, max_length=20)
+    preferred_agent_slug: str | None = Field(default=None, max_length=100)
+    explore_policy: str | None = Field(default=None, max_length=20)
+    research_policy: str | None = Field(default=None, max_length=20)
+    verifier_enabled: bool | None = None
     project_id: str | None = Field(default=None, max_length=100)
     project_name: str | None = Field(default=None, max_length=200)
     task_id: str | None = Field(default=None, max_length=100)

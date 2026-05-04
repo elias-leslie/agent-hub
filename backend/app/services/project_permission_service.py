@@ -26,6 +26,15 @@ from app.models.project_permission import VALID_PERMISSION_TIERS, ProjectPermiss
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class _PermissionSnapshot:
+    project_id: str
+    permission_tier: str
+    auto_exec_enabled: bool
+    execution_start_hour: int
+    execution_end_hour: int
+
 # Redis cache configuration
 _CACHE_PREFIX = "agent-hub:project-perm:"
 _CACHE_TTL = 60  # seconds
@@ -550,13 +559,22 @@ async def update_project_permission(
 
 async def _load_perm_from_db(
     project_id: str, db: AsyncSession | None
-) -> ProjectPermission | None:
+) -> ProjectPermission | _PermissionSnapshot | None:
     """Load a permission row from DB, creating a session if none provided."""
     if db is not None:
         return await get_project_permission(db, project_id)
     from app.db import async_session  # lazy import to avoid cycles
     async with async_session() as fresh_db:
-        return await get_project_permission(fresh_db, project_id)
+        perm = await get_project_permission(fresh_db, project_id)
+        if perm is None:
+            return None
+        return _PermissionSnapshot(
+            project_id=perm.project_id,
+            permission_tier=perm.permission_tier,
+            auto_exec_enabled=perm.auto_exec_enabled,
+            execution_start_hour=perm.execution_start_hour,
+            execution_end_hour=perm.execution_end_hour,
+        )
 
 
 async def _resolve_project_tier(
