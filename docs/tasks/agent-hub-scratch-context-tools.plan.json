@@ -1,0 +1,204 @@
+{
+  "_meta": {
+    "schema_version": "1.0.0",
+    "created_at": "2026-05-03T22:30:00Z",
+    "source": "manual"
+  },
+  "title": "Build Agent Hub scratch context tools for indexed large output",
+  "description": "Why now: context-mode proved that agents waste most context on oversized tool output that they only need to search or sample later. Agent Hub already has token-efficient st search, st graph, Fallow, and tool capability surfaces; this task adds a native scratch-context layer for transient tool artifacts so provider tool calls can return compact handles, preserve full raw output, and retrieve only relevant slices without adopting context-mode as a runtime dependency.",
+  "task_type": "feature",
+  "priority": 2,
+  "labels": [
+    "agent-hub",
+    "tools",
+    "context",
+    "tokens",
+    "backend"
+  ],
+  "complexity": "STANDARD",
+  "autonomous": true,
+  "objective": "Add Agent Hub-native scratch context behavior for direct tools: auto-index oversized bash output, expose search and batch execution tools, keep outputs token-bounded, and document how this aligns with st search, st graph, Fallow, and existing tool capability design.",
+  "spirit_anti": "Do not vendor context-mode, add a second long-term memory system, or replace st search/st graph/Fallow. Keep scratch context as a transient artifact layer for large tool results and batch command output.",
+  "done_when": [
+    "Oversized bash output is persisted to a scratch artifact and the model receives a compact summary with artifact id, search guidance, and bounded preview instead of the full output.",
+    "Agents can search scratch artifacts by id or latest-session scope and retrieve compact line-bounded matches that include enough context to continue work without re-running the original command.",
+    "Agents can run a bounded batch of shell commands through one direct tool call; each large result is indexed and each small result is returned compactly.",
+    "Tool definitions expose the new scratch search and batch execution behavior in the standard direct-tool registry without bloating prompts with long instructions.",
+    "The implementation is local to Agent Hub backend tool execution and does not require context-mode as a package, MCP server, or runtime dependency.",
+    "Docs record examples, agent usage pattern, token-cost benefit, and alignment with st search, st graph, Fallow, and SummitFlow tool-token-efficiency goals.",
+    "Focused backend tests cover small output passthrough, large output indexing, scratch search, missing artifact behavior, batch execution mixed small/large outputs, and tool definition registration.",
+    "`st check` gates pass for the touched backend/tool suites and at least two full verification passes are run after the final iteration."
+  ],
+  "constraints": [
+    "Use st for task lifecycle and quality gates. Run checks through `st check`, not raw pytest, ruff, tsc, vitest, or legacy dt.",
+    "Treat `/home/kasadis/references/context-mode` as read-only reference material. Do not edit or vendor reference code.",
+    "Scratch context is transient execution context, not durable user memory; it must not feed memory capture automatically.",
+    "Prefer existing Agent Hub direct-tool patterns in `backend/app/services/tools` and keep API shape provider-neutral.",
+    "Avoid a DB migration unless inspection proves file-backed or event-backed scratch artifacts cannot satisfy this task safely.",
+    "Bound returned payload size for every new tool path so tools remain token-efficient by default.",
+    "Do not change unrelated graphify output or pre-existing dirty files."
+  ],
+  "testing_strategy": [
+    "Add focused tests under `backend/tests/tools` for scratch artifact storage, search ranking/context, bash auto-indexing, batch execution, and standard tool registration.",
+    "Run focused `st check pytest -- <touched test paths>` during iteration.",
+    "Run `st check --quick --changed-only` after focused tests pass.",
+    "Run full `st check --check` twice after final changes and record both results in task log.",
+    "If service/runtime rebuild is available through `st service`, run the Agent Hub rebuild/health path and record the result; otherwise record the exact blocker."
+  ],
+  "execution_contract": {
+    "mode": "code_only",
+    "user_flows": [
+      {
+        "flow_id": "large-output-handle",
+        "title": "Run a command that emits large output and continue from a scratch search handle",
+        "actions": [
+          "Execute a shell command whose stdout exceeds the scratch threshold.",
+          "Confirm direct tool output contains compact preview and artifact id.",
+          "Search the artifact for a rare term and retrieve matching lines."
+        ],
+        "expected_outcomes": [
+          "Model-visible output remains bounded.",
+          "Full raw output remains available through scratch search.",
+          "Search results include line numbers and nearby context."
+        ]
+      },
+      {
+        "flow_id": "batch-output-index",
+        "title": "Run several commands in one tool call without flooding context",
+        "actions": [
+          "Execute one small command and one large command through the batch tool.",
+          "Inspect returned command summaries.",
+          "Search the indexed large result by artifact id."
+        ],
+        "expected_outcomes": [
+          "Small results remain inline.",
+          "Large results become searchable artifacts.",
+          "Batch result totals show saved bytes/tokens estimate."
+        ]
+      }
+    ]
+  },
+  "context": {
+    "files_to_modify": [
+      "backend/app/services/tools/_executor_bash.py",
+      "backend/app/services/tools/_standard_tools.py",
+      "backend/app/services/tools/direct_executor_core.py",
+      "backend/app/services/tools/tool_definitions.py"
+    ],
+    "files_to_create": [
+      "backend/app/services/tools/scratch_context.py",
+      "backend/tests/tools/test_scratch_context.py",
+      "docs/scratch-context-tools.md"
+    ],
+    "references": [
+      {
+        "title": "context-mode reference checkout",
+        "url": "/home/kasadis/references/context-mode"
+      },
+      {
+        "title": "Existing direct tool executor",
+        "url": "backend/app/services/tools/direct_executor_core.py"
+      },
+      {
+        "title": "Existing bash executor",
+        "url": "backend/app/services/tools/_executor_bash.py"
+      }
+    ],
+    "risks": [
+      "Returning artifact handles without a reliable search path would make large command output harder to debug.",
+      "Putting scratch context in durable memory would pollute long-term retrieval with ephemeral command noise.",
+      "Adding verbose tool docs would undermine the token savings the feature is meant to create."
+    ]
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "research",
+      "subtask_type": "exploration",
+      "description": "Inspect current direct-tool execution and confirm the smallest native integration point.",
+      "steps": [
+        {
+          "description": "Review bash executor, direct executor dispatch, standard tool definitions, and existing tool tests.",
+          "spec": {
+            "detail": "Confirm where tool result payloads are formed and where new direct tools are registered."
+          }
+        },
+        {
+          "description": "Record the adopted shape and no-migration decision in docs/task log.",
+          "spec": {
+            "detail": "Use file-backed transient scratch artifacts unless code inspection proves a DB-backed table is required for this first Agent Hub-native slice."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "1.1"
+      ],
+      "description": "Implement scratch artifact storage, indexing, and search.",
+      "steps": [
+        {
+          "description": "Create a bounded scratch context service with artifact ids, chunked line metadata, compact summaries, and lexical search.",
+          "spec": {
+            "detail": "The service must persist full raw text outside git-tracked source paths by default and return compact search results with line numbers and snippets."
+          }
+        },
+        {
+          "description": "Add missing-artifact and empty-query handling.",
+          "spec": {
+            "detail": "Failures should be explicit and compact, not exceptions that leak traces to the model."
+          }
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "2.1"
+      ],
+      "description": "Integrate scratch context into direct tool execution.",
+      "steps": [
+        {
+          "description": "Auto-index oversized bash output while preserving small-output behavior.",
+          "spec": {
+            "detail": "Return compact previews and a scratch artifact id for large stdout/stderr content."
+          }
+        },
+        {
+          "description": "Expose scratch search and batch execute as direct tools.",
+          "spec": {
+            "detail": "Keep schemas small, safe, and aligned with existing direct executor patterns."
+          }
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "subtask_type": "test",
+      "depends_on": [
+        "3.1"
+      ],
+      "description": "Prove contract through tests, docs, and repeated st checks.",
+      "steps": [
+        {
+          "description": "Add focused tests and docs covering usage examples, token savings, and alignment with st search/st graph/Fallow.",
+          "spec": {
+            "detail": "Tests should exercise direct executor behavior rather than only testing private helpers."
+          }
+        },
+        {
+          "description": "Run focused and full st check gates twice after final changes.",
+          "spec": {
+            "detail": "Log exact commands and outcomes before closeout."
+          }
+        }
+      ]
+    }
+  ]
+}

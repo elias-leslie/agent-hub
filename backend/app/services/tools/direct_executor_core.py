@@ -46,10 +46,30 @@ from app.services.tools._sensitive_content import scan_runtime_sensitive_content
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
+from app.services.tools.scratch_context import (
+    ScratchContextStore,
+    ScratchOutputResult,
+    inline_output_result,
+)
 
 logger = logging.getLogger(__name__)
 
 _get_command_redirect = get_command_redirect
+
+BATCH_OUTPUT_THRESHOLD = 12_000
+MAX_BATCH_COMMANDS = 8
+
+
+def _is_error_output(output: str) -> bool:
+    return output.startswith("Error:") or output.startswith("Unknown tool:") or output.startswith("BLOCKED:")
+
+
+def _clamp_inline(text: str, limit: int = 8_000) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 28)].rstrip() + "\n... [truncated]"
+
+
 class DirectToolExecutor:
     """Executes tools directly with environment inheritance.
 
@@ -58,7 +78,8 @@ class DirectToolExecutor:
     """
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
-        "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
+        "bash", "read_file", "write_file", "search_scratch_context", "batch_execute",
+        "consult_agent", "dispatch_agent",
         "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
@@ -95,6 +116,7 @@ class DirectToolExecutor:
         self._project_id = project_id
         self._session_id = session_id
         self._agent_slug = agent_slug
+        self._scratch_context = ScratchContextStore()
         if session_id:
             self._env["AGENT_HUB_SESSION_ID"] = session_id
         self._tool_catalog = {
@@ -120,6 +142,18 @@ class DirectToolExecutor:
             return await self.read_file(**{k: v for k, v in args.items() if k in ("path", "offset", "limit")})
         if name == "write_file":
             return await self.write_file(**{k: v for k, v in args.items() if k in ("path", "content")})
+        if name == "search_scratch_context":
+            return await self.search_scratch_context(
+                **{
+                    k: v
+                    for k, v in args.items()
+                    if k in ("query", "artifact_id", "limit", "context_lines")
+                }
+            )
+        if name == "batch_execute":
+            return await self.batch_execute(
+                **{k: v for k, v in args.items() if k in ("commands", "stop_on_error")}
+            )
         if name == "consult_agent":
             return await self.consult_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "question", "context")})
         if name == "dispatch_agent":
@@ -161,41 +195,123 @@ class DirectToolExecutor:
         except TypeError as e:
             return f"Invalid arguments for {name}: {e}"
 
-    async def bash(self, command: str) -> str:
-        """Execute a bash command with environment inheritance."""
-        auto_detached = _rewrite_in_band_agent_hub_restart(command)
-        if auto_detached:
-            rewritten_command, message = auto_detached
-            result = await run_bash(
-                rewritten_command,
-                self.working_dir,
-                self._env,
-                agent_slug=self._agent_slug,
-                session_id=self._session_id,
-            )
-            result = result.strip()
-            if result:
-                return f"{message}\n{result}"
-            return message
-
-        in_band_restart_reason = _in_band_agent_hub_restart_block_reason(command)
-        if in_band_restart_reason:
-            return f"Error: Command blocked for runtime safety: {in_band_restart_reason}"
-
-        self_hosting_block_reason = _self_hosting_restart_block_reason(command, self._env)
-        if self_hosting_block_reason:
-            return f"Error: Command blocked for runtime safety: {self_hosting_block_reason}"
-
-        if self._allowed_root and not self._is_path_allowed(self.working_dir):
-            return "Error: Working directory outside allowed project root"
-
-        return await run_bash(
+    async def _run_bash_process(self, command: str, *, threshold: int) -> ScratchOutputResult:
+        output = await run_bash(
             command,
             self.working_dir,
             self._env,
             agent_slug=self._agent_slug,
             session_id=self._session_id,
+            max_output_size=None,
         )
+        return self._scratch_context.prepare_output(
+            output,
+            threshold=threshold,
+            source="bash",
+            label=command,
+            project_id=self._project_id,
+            session_id=self._session_id,
+            agent_slug=self._agent_slug,
+            working_dir=self.working_dir,
+        )
+
+    async def _bash_result(self, command: str, *, threshold: int = MAX_OUTPUT_SIZE) -> ScratchOutputResult:
+        """Execute a bash command with safety checks and scratch indexing."""
+        auto_detached = _rewrite_in_band_agent_hub_restart(command)
+        if auto_detached:
+            rewritten_command, message = auto_detached
+            result = await self._run_bash_process(rewritten_command, threshold=threshold)
+            content = result.content.strip()
+            combined = f"{message}\n{content}" if content else message
+            return ScratchOutputResult(
+                content=combined,
+                artifact_id=result.artifact_id,
+                raw_chars=result.raw_chars,
+                returned_chars=len(combined),
+                saved_chars=result.saved_chars,
+            )
+
+        in_band_restart_reason = _in_band_agent_hub_restart_block_reason(command)
+        if in_band_restart_reason:
+            return inline_output_result(f"Error: Command blocked for runtime safety: {in_band_restart_reason}")
+
+        self_hosting_block_reason = _self_hosting_restart_block_reason(command, self._env)
+        if self_hosting_block_reason:
+            return inline_output_result(f"Error: Command blocked for runtime safety: {self_hosting_block_reason}")
+
+        if self._allowed_root and not self._is_path_allowed(self.working_dir):
+            return inline_output_result("Error: Working directory outside allowed project root")
+
+        return await self._run_bash_process(command, threshold=threshold)
+
+    async def bash(self, command: str) -> str:
+        """Execute a bash command with environment inheritance."""
+        return (await self._bash_result(command)).content
+
+    async def search_scratch_context(
+        self,
+        query: str = "",
+        artifact_id: str | None = None,
+        limit: int = 5,
+        context_lines: int = 2,
+    ) -> str:
+        """Search scratch artifacts created by previous direct tool output."""
+        return self._scratch_context.search(
+            query=query,
+            artifact_id=artifact_id,
+            project_id=self._project_id,
+            session_id=self._session_id,
+            limit=limit,
+            context_lines=context_lines,
+        )
+
+    async def batch_execute(self, commands: list[str] | None = None, stop_on_error: bool = True) -> str:
+        """Execute a bounded list of bash commands with compact scratch-aware output."""
+        if not isinstance(commands, list) or not commands:
+            return "Error: batch_execute requires a non-empty commands list."
+        if len(commands) > MAX_BATCH_COMMANDS:
+            return f"Error: batch_execute accepts at most {MAX_BATCH_COMMANDS} commands."
+
+        entries: list[str] = []
+        total_raw = 0
+        total_returned = 0
+        total_saved = 0
+        indexed = 0
+        ran = 0
+
+        for index, command in enumerate(commands, start=1):
+            if not isinstance(command, str) or not command.strip():
+                return f"Error: command {index} must be a non-empty string."
+            result = await self._bash_result(command, threshold=BATCH_OUTPUT_THRESHOLD)
+            ran += 1
+            total_raw += result.raw_chars
+            total_returned += result.returned_chars
+            total_saved += result.saved_chars
+            if result.artifact_id:
+                indexed += 1
+            status = "error" if _is_error_output(result.content) else "ok"
+            artifact = f" artifact={result.artifact_id}" if result.artifact_id else ""
+            entries.append(
+                "\n".join(
+                    [
+                        (
+                            f"[{index}/{len(commands)}] {status}{artifact} "
+                            f"chars={result.raw_chars}->{result.returned_chars} "
+                            f"command={command[:180]!r}"
+                        ),
+                        _clamp_inline(result.content),
+                    ]
+                )
+            )
+            if stop_on_error and status == "error":
+                break
+
+        saved_tokens = max(0, total_saved // 4)
+        header = (
+            f"BATCH_EXECUTE[requested={len(commands)}|ran={ran}|indexed={indexed}|"
+            f"chars={total_raw}->{total_returned}|saved_tokens~={saved_tokens}]"
+        )
+        return header + "\n" + "\n\n".join(entries)
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file with optional line offset and limit."""
