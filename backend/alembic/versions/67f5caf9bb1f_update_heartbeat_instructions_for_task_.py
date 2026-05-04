@@ -133,7 +133,7 @@ If you see uncommitted changes on a project, investigate before creating new tas
 - `manage_tasks(action="list_ready")` for cross-project overview.
 - Unblock any blocked/failed/stale tasks.
 - st feedback list → resolve trivial items, create tasks for larger ones.
-- Triage CodeRabbit wake events: validate findings, skip false positives, create tasks for real issues.
+- Triage review wake events: validate findings, skip false positives, create tasks for real issues.
 
 ### 3. Creative Scan (REQUIRED)
 Pick project(s) based on: user focus area > stalest creative attention > recent momentum.
