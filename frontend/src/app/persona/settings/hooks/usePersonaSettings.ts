@@ -1,17 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchAgent, updateAgent, fetchModels } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
 import {
   buildAgentUpdatePayload,
   createAgentFormData,
-} from "@/app/agents/[slug]/agent-form";
-import type { Agent } from "@/app/agents/[slug]/types";
-import { usePersona } from "@/app/persona/hooks/usePersona";
+} from '@/app/agents/[slug]/agent-form'
+import type { Agent } from '@/app/agents/[slug]/types'
+import { usePersona } from '@/app/persona/hooks/usePersona'
+import { fetchAgent, fetchModels, updateAgent } from '@/lib/api'
 
-const PERSONA_SLUG = "persona";
+const PERSONA_SLUG = 'persona'
 
 export function usePersonaSettings() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
   const {
     persona,
     loading: personaLoading,
@@ -19,7 +19,7 @@ export function usePersonaSettings() {
     updatePersona: updatePersonaField,
     setPersona,
     autosave,
-  } = usePersona();
+  } = usePersona()
 
   // --- Agent (explicit save) ---
   const {
@@ -27,42 +27,45 @@ export function usePersonaSettings() {
     isLoading: agentLoading,
     error: agentQueryError,
   } = useQuery({
-    queryKey: ["agent", PERSONA_SLUG],
+    queryKey: ['agent', PERSONA_SLUG],
     queryFn: () => fetchAgent(PERSONA_SLUG),
-  });
+  })
 
   const { data: availableModels = [] } = useQuery({
-    queryKey: ["models", "options"],
+    queryKey: ['models', 'options'],
     queryFn: fetchModels,
-  });
+  })
 
-  const [agentFormData, setAgentFormData] = useState<Partial<Agent>>({});
-  const [hasAgentChanges, setHasAgentChanges] = useState(false);
+  const [agentFormData, setAgentFormData] = useState<Partial<Agent>>({})
+  const [hasAgentChanges, setHasAgentChanges] = useState(false)
 
   useEffect(() => {
     if (agent) {
-      setAgentFormData(createAgentFormData(agent));
-      setHasAgentChanges(false);
+      setAgentFormData(createAgentFormData(agent))
+      setHasAgentChanges(false)
     }
-  }, [agent]);
+  }, [agent])
 
-  const updateAgentField = useCallback(<K extends keyof Agent>(field: K, value: Agent[K]) => {
-    setAgentFormData((prev) => ({ ...prev, [field]: value }));
-    setHasAgentChanges(true);
-  }, []);
+  const updateAgentField = useCallback(
+    <K extends keyof Agent>(field: K, value: Agent[K]) => {
+      setAgentFormData((prev) => ({ ...prev, [field]: value }))
+      setHasAgentChanges(true)
+    },
+    [],
+  )
 
   const saveMutation = useMutation({
     mutationFn: (data: Partial<Agent>) => updateAgent(PERSONA_SLUG, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent", PERSONA_SLUG] });
-      queryClient.invalidateQueries({ queryKey: ["agents"] });
-      setHasAgentChanges(false);
+      queryClient.invalidateQueries({ queryKey: ['agent', PERSONA_SLUG] })
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      setHasAgentChanges(false)
     },
-  });
+  })
 
   const saveAgent = useCallback(() => {
-    saveMutation.mutate(buildAgentUpdatePayload(agentFormData));
-  }, [saveMutation, agentFormData]);
+    saveMutation.mutate(buildAgentUpdatePayload(agentFormData))
+  }, [saveMutation, agentFormData])
 
   return {
     // Persona
@@ -80,7 +83,7 @@ export function usePersonaSettings() {
       agentQueryError instanceof Error
         ? agentQueryError.message
         : agentQueryError
-          ? "Failed to load persona agent settings"
+          ? 'Failed to load persona agent settings'
           : null,
     agentFormData,
     hasAgentChanges,
@@ -92,5 +95,5 @@ export function usePersonaSettings() {
 
     // Models
     availableModels,
-  };
+  }
 }

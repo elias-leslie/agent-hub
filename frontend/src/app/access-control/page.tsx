@@ -1,32 +1,25 @@
-"use client";
+'use client'
 
-import { useQuery } from "@tanstack/react-query";
-import {
-  Shield,
-  Users,
-  Ban,
-  Clock,
-  FolderLock,
-  DollarSign,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buildApiUrl, fetchApi } from "@/lib/api-config";
+import { useQuery } from '@tanstack/react-query'
+import { Ban, Clock, DollarSign, FolderLock, Shield, Users } from 'lucide-react'
+import { buildApiUrl, fetchApi } from '@/lib/api-config'
+import { cn } from '@/lib/utils'
 
 interface ClientStatsResponse {
-  total_clients: number;
-  active_clients: number;
-  suspended_clients: number;
-  blocked_clients: number;
-  blocked_requests_today: number;
-  total_requests_today: number;
+  total_clients: number
+  active_clients: number
+  suspended_clients: number
+  blocked_clients: number
+  blocked_requests_today: number
+  total_requests_today: number
 }
 
 async function fetchAccessControlStats(): Promise<ClientStatsResponse> {
-  const response = await fetchApi(buildApiUrl("/api/access-control/stats"));
+  const response = await fetchApi(buildApiUrl('/api/access-control/stats'))
   if (!response.ok) {
-    throw new Error(`Failed to fetch stats: ${response.statusText}`);
+    throw new Error(`Failed to fetch stats: ${response.statusText}`)
   }
-  return response.json();
+  return response.json()
 }
 
 function StatCard({
@@ -34,45 +27,45 @@ function StatCard({
   value,
   subtext,
   icon: Icon,
-  status = "neutral",
+  status = 'neutral',
 }: {
-  label: string;
-  value: string | number;
-  subtext?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  status?: "success" | "warning" | "error" | "neutral";
+  label: string
+  value: string | number
+  subtext?: string
+  icon: React.ComponentType<{ className?: string }>
+  status?: 'success' | 'warning' | 'error' | 'neutral'
 }) {
   const statusConfig = {
     success: {
-      border: "border-l-emerald-500",
-      dot: "bg-emerald-500",
+      border: 'border-l-emerald-500',
+      dot: 'bg-emerald-500',
     },
     warning: {
-      border: "border-l-amber-500",
-      dot: "bg-amber-500",
+      border: 'border-l-amber-500',
+      dot: 'bg-amber-500',
     },
     error: {
-      border: "border-l-red-500",
-      dot: "bg-red-500",
+      border: 'border-l-red-500',
+      dot: 'bg-red-500',
     },
     neutral: {
-      border: "border-l-slate-600",
-      dot: "bg-slate-400",
+      border: 'border-l-slate-600',
+      dot: 'bg-slate-400',
     },
-  };
+  }
 
-  const config = statusConfig[status];
+  const config = statusConfig[status]
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden",
-        "bg-slate-900/60 backdrop-blur-sm",
-        "border border-slate-800/80",
-        "border-l-[3px]",
+        'relative overflow-hidden',
+        'bg-slate-900/60 backdrop-blur-sm',
+        'border border-slate-800/80',
+        'border-l-[3px]',
         config.border,
-        "rounded-2xl",
-        "p-5",
+        'rounded-2xl',
+        'p-5',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -92,7 +85,7 @@ function StatCard({
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default function AccessControlPage() {
@@ -101,10 +94,10 @@ export default function AccessControlPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["access-control-stats"],
+    queryKey: ['access-control-stats'],
     queryFn: fetchAccessControlStats,
     refetchInterval: 30000,
-  });
+  })
 
   return (
     <div className="page-shell">
@@ -163,7 +156,7 @@ export default function AccessControlPage() {
                     subtext="Today"
                     icon={Ban}
                     status={
-                      stats.blocked_requests_today > 0 ? "warning" : "success"
+                      stats.blocked_requests_today > 0 ? 'warning' : 'success'
                     }
                   />
                 </div>
@@ -259,5 +252,5 @@ export default function AccessControlPage() {
         </div>
       </main>
     </div>
-  );
+  )
 }

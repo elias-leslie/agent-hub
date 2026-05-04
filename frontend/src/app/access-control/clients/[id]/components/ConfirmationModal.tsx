@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from 'react'
 
 interface ConfirmationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (reason: string) => void;
-  title: string;
-  description: string;
-  confirmText: string;
-  confirmClassName: string;
-  isPending: boolean;
-  isDanger?: boolean;
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: (reason: string) => void
+  title: string
+  description: string
+  confirmText: string
+  confirmClassName: string
+  isPending: boolean
+  isDanger?: boolean
 }
 
 export function ConfirmationModal({
@@ -23,19 +23,23 @@ export function ConfirmationModal({
   isPending,
   isDanger = false,
 }: ConfirmationModalProps) {
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState('')
 
   useEffect(() => {
-    if (!isOpen) setReason("");
-  }, [isOpen]);
+    if (!isOpen) setReason('')
+  }, [isOpen])
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
       <div className="panel-surface max-w-md w-full p-6">
-        <p className="section-kicker">{isDanger ? "Permanent Block" : "Temporary Suspension"}</p>
-        <h3 className={`section-heading mt-2 ${isDanger ? "text-red-300" : "text-slate-100"}`}>
+        <p className="section-kicker">
+          {isDanger ? 'Permanent Block' : 'Temporary Suspension'}
+        </p>
+        <h3
+          className={`section-heading mt-2 ${isDanger ? 'text-red-300' : 'text-slate-100'}`}
+        >
           {title}
         </h3>
         <p className="section-copy mt-2 mb-4">{description}</p>
@@ -43,9 +47,9 @@ export function ConfirmationModal({
           type="text"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder={`Reason for ${isDanger ? "blocking" : "suspension"}`}
+          placeholder={`Reason for ${isDanger ? 'blocking' : 'suspension'}`}
           className={`control-input ${
-            isDanger ? "focus:border-red-500" : "focus:border-amber-500"
+            isDanger ? 'focus:border-red-500' : 'focus:border-amber-500'
           } mb-4`}
         />
         <div className="flex gap-3">
@@ -65,5 +69,5 @@ export function ConfirmationModal({
         </div>
       </div>
     </div>
-  );
+  )
 }

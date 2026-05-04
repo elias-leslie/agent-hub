@@ -1,14 +1,20 @@
-"use client";
+'use client'
 
-import { Power, History } from "lucide-react";
-import { ModalHeader } from "./ModalHeader";
-import { ModalFooter } from "./ModalFooter";
-import { ToggleSetting } from "./ToggleSetting";
-import { LLMConfigDisplay } from "./LLMConfigDisplay";
-import { BudgetUsageDisplay } from "./BudgetUsageDisplay";
-import { useMemorySettings } from "./useMemorySettings";
+import { History, Power } from 'lucide-react'
+import { BudgetUsageDisplay } from './BudgetUsageDisplay'
+import { LLMConfigDisplay } from './LLMConfigDisplay'
+import { ModalFooter } from './ModalFooter'
+import { ModalHeader } from './ModalHeader'
+import { ToggleSetting } from './ToggleSetting'
+import { useMemorySettings } from './useMemorySettings'
 
-export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function MemorySettingsModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
   const {
     usage,
     loading,
@@ -23,13 +29,19 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
     continuityMaxSessions,
     setContinuityMaxSessions,
     handleSave,
-  } = useMemorySettings(isOpen, onClose);
+  } = useMemorySettings(isOpen, onClose)
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="settings-modal">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      data-testid="settings-modal"
+    >
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-md mx-4 rounded-xl bg-slate-900 shadow-2xl">
         <ModalHeader onClose={onClose} />
         <div className="p-4 space-y-6">
@@ -87,7 +99,9 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                         max={20}
                         step={1}
                         value={continuityMaxSessions}
-                        onChange={(e) => setContinuityMaxSessions(parseInt(e.target.value))}
+                        onChange={(e) =>
+                          setContinuityMaxSessions(parseInt(e.target.value, 10))
+                        }
                         className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
                       />
                       <div className="flex justify-between text-[10px] text-slate-400">
@@ -119,5 +133,5 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
         />
       </div>
     </div>
-  );
+  )
 }

@@ -1,42 +1,55 @@
-import { X, Check, Minus, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { PROVIDER_COLORS } from "@/components/settings/constants";
-import { formatCatalogModelPricing } from "@/lib/model-pricing";
-import type { ModelOption, ModelScores } from "@/components/chat/use-models";
+import {
+  Brain,
+  Camera,
+  Check,
+  Eye,
+  FileText,
+  Headphones,
+  Minus,
+  Pencil,
+  X,
+} from 'lucide-react'
+import type { ModelOption, ModelScores } from '@/components/chat/use-models'
+import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { formatCatalogModelPricing } from '@/lib/model-pricing'
+import { cn } from '@/lib/utils'
 
-const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
-  "coding",
-  "reasoning",
-  "planning",
-  "tool_use",
-  "instruction",
-  "design",
-];
+const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, 'composite'>> = [
+  'coding',
+  'reasoning',
+  'planning',
+  'tool_use',
+  'instruction',
+  'design',
+]
 
 interface SectionProps {
-  models: ModelOption[];
+  models: ModelOption[]
 }
 
 export function ScoreBreakdown({ models }: SectionProps) {
   return (
     <div className="space-y-6">
-      <h3 className="text-sm font-semibold text-slate-100">
-        Score Breakdown
-      </h3>
+      <h3 className="text-sm font-semibold text-slate-100">Score Breakdown</h3>
       {SCORE_CATEGORIES.map((category) => (
         <div key={category}>
           <div className="text-xs font-medium text-slate-400 mb-2 capitalize">
-            {category.replace("_", " ")}
+            {category.replace('_', ' ')}
           </div>
           <div className="space-y-2">
             {models.map((model) => {
-              const score = model.scores[category];
-              const providerColor = PROVIDER_COLORS[model.provider];
+              const score = model.scores[category]
+              const providerColor = PROVIDER_COLORS[model.provider]
               return (
                 <div key={model.id} className="flex items-center gap-3">
                   <div className="w-32 flex-shrink-0">
                     <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+                      <div
+                        className={cn(
+                          'w-2 h-2 rounded-full',
+                          providerColor.dot,
+                        )}
+                      />
                       <span className="text-xs text-slate-300 truncate">
                         {model.name}
                       </span>
@@ -45,8 +58,11 @@ export function ScoreBreakdown({ models }: SectionProps) {
                   <div className="flex-1 h-6 bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={cn(
-                        "h-full rounded-full transition-all duration-500",
-                        providerColor.dot.replace("bg-", "bg-gradient-to-r from-"),
+                        'h-full rounded-full transition-all duration-500',
+                        providerColor.dot.replace(
+                          'bg-',
+                          'bg-gradient-to-r from-',
+                        ),
                       )}
                       style={{ width: `${score}%` }}
                     />
@@ -55,13 +71,13 @@ export function ScoreBreakdown({ models }: SectionProps) {
                     {score}
                   </span>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
       ))}
     </div>
-  );
+  )
 }
 
 export function CompositeScore({ models }: SectionProps) {
@@ -72,14 +88,16 @@ export function CompositeScore({ models }: SectionProps) {
       </h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider];
+          const providerColor = PROVIDER_COLORS[model.provider]
           return (
             <div
               key={model.id}
               className="flex items-center justify-between bg-slate-900 rounded-lg p-4 border border-slate-800"
             >
               <div className="flex items-center gap-3">
-                <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                <div
+                  className={cn('w-3 h-3 rounded-full', providerColor.dot)}
+                />
                 <span className="text-sm font-medium text-slate-100">
                   {model.name}
                 </span>
@@ -88,37 +106,39 @@ export function CompositeScore({ models }: SectionProps) {
                 {model.scores.composite}
               </div>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
 export function CostComparison({ models }: SectionProps) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-100">
-        Cost Comparison
-      </h3>
+      <h3 className="text-sm font-semibold text-slate-100">Cost Comparison</h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider];
-          const pricing = formatCatalogModelPricing(model);
+          const providerColor = PROVIDER_COLORS[model.provider]
+          const pricing = formatCatalogModelPricing(model)
           return (
             <div
               key={model.id}
               className="flex items-center justify-between bg-slate-800/50 rounded-lg p-4 border border-slate-700"
             >
               <div className="flex items-center gap-3">
-                <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                <div
+                  className={cn('w-3 h-3 rounded-full', providerColor.dot)}
+                />
                 <span className="text-sm font-medium text-slate-100">
                   {model.name}
                 </span>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Pricing</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                    Pricing
+                  </div>
                   <div className="text-sm font-mono font-semibold text-slate-100">
                     {pricing.primary}
                   </div>
@@ -128,39 +148,39 @@ export function CostComparison({ models }: SectionProps) {
                 </div>
                 <div
                   className={cn(
-                    "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                    model.cost.source === "enrichment"
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-                      : "border-slate-700 bg-slate-800 text-slate-300",
+                    'rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
+                    model.cost.source === 'enrichment'
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300',
                   )}
                 >
                   {pricing.source}
                 </div>
               </div>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
 export function ContextWindow({ models }: SectionProps) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-100">
-        Context Window
-      </h3>
+      <h3 className="text-sm font-semibold text-slate-100">Context Window</h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider];
+          const providerColor = PROVIDER_COLORS[model.provider]
           return (
             <div
               key={model.id}
               className="flex items-center justify-between bg-slate-800/50 rounded-lg p-4 border border-slate-700"
             >
               <div className="flex items-center gap-3">
-                <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                <div
+                  className={cn('w-3 h-3 rounded-full', providerColor.dot)}
+                />
                 <span className="text-sm font-medium text-slate-100">
                   {model.name}
                 </span>
@@ -169,19 +189,17 @@ export function ContextWindow({ models }: SectionProps) {
                 {(model.context_window / 1000).toFixed(0)}K tokens
               </span>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
 export function CapabilitiesMatrix({ models }: SectionProps) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-100">
-        Capabilities
-      </h3>
+      <h3 className="text-sm font-semibold text-slate-100">Capabilities</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -217,15 +235,17 @@ export function CapabilitiesMatrix({ models }: SectionProps) {
           </thead>
           <tbody>
             {models.map((model) => {
-              const providerColor = PROVIDER_COLORS[model.provider];
+              const providerColor = PROVIDER_COLORS[model.provider]
               return (
-                <tr
-                  key={model.id}
-                  className="border-b border-slate-800/50"
-                >
+                <tr key={model.id} className="border-b border-slate-800/50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+                      <div
+                        className={cn(
+                          'w-2 h-2 rounded-full',
+                          providerColor.dot,
+                        )}
+                      />
                       <span className="font-medium text-slate-100">
                         {model.name}
                       </span>
@@ -274,25 +294,25 @@ export function CapabilitiesMatrix({ models }: SectionProps) {
                     )}
                   </td>
                 </tr>
-              );
+              )
             })}
           </tbody>
         </table>
       </div>
     </div>
-  );
+  )
 }
 
 interface RemoveButtonsProps {
-  models: ModelOption[];
-  onRemoveModel: (modelId: string) => void;
+  models: ModelOption[]
+  onRemoveModel: (modelId: string) => void
 }
 
 export function RemoveButtons({ models, onRemoveModel }: RemoveButtonsProps) {
   return (
     <div className="flex flex-wrap gap-2">
       {models.map((model) => {
-        const providerColor = PROVIDER_COLORS[model.provider];
+        const providerColor = PROVIDER_COLORS[model.provider]
         return (
           <button
             key={model.id}
@@ -300,14 +320,14 @@ export function RemoveButtons({ models, onRemoveModel }: RemoveButtonsProps) {
             onClick={() => onRemoveModel(model.id)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors"
           >
-            <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+            <div className={cn('w-2 h-2 rounded-full', providerColor.dot)} />
             <span className="text-xs font-medium text-slate-100">
               {model.name}
             </span>
             <X className="h-3 w-3 text-slate-400" />
           </button>
-        );
+        )
       })}
     </div>
-  );
+  )
 }

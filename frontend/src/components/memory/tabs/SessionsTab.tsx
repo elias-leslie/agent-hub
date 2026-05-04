@@ -1,43 +1,46 @@
-"use client";
+'use client'
 
-import { useState, useCallback, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query'
+import { MonitorDot, RefreshCw } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
 import {
-  RefreshCw,
-  MonitorDot,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { SessionCard, type SessionMemoryInfo } from "@/components/memory/SessionCard";
-import { apiFetch } from "@/lib/memory-utils";
-import { getApiBaseUrl } from "@/lib/api-config";
+  SessionCard,
+  type SessionMemoryInfo,
+} from '@/components/memory/SessionCard'
+import { getApiBaseUrl } from '@/lib/api-config'
+import { apiFetch } from '@/lib/memory-utils'
+import { cn } from '@/lib/utils'
 
-const API_BASE = `${getApiBaseUrl()}/api`;
-const PAGE_SIZE = 30;
+const API_BASE = `${getApiBaseUrl()}/api`
+const PAGE_SIZE = 30
 
 interface SessionMemoryList {
-  sessions: SessionMemoryInfo[];
-  total: number;
+  sessions: SessionMemoryInfo[]
+  total: number
 }
 
 async function fetchSessionsWithMemory(
   limit: number,
   offset: number,
 ): Promise<SessionMemoryList> {
-  const params = new URLSearchParams();
-  params.set("limit", limit.toString());
-  params.set("offset", offset.toString());
+  const params = new URLSearchParams()
+  params.set('limit', limit.toString())
+  params.set('offset', offset.toString())
   return apiFetch<SessionMemoryList>(
     `${API_BASE}/memory/sessions-with-memory?${params}`,
     {},
-    "Sessions fetch failed",
-  );
+    'Sessions fetch failed',
+  )
 }
 
 function SessionSkeleton() {
   return (
     <div className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 animate-pulse">
+        <div
+          key={i}
+          className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 animate-pulse"
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2">
@@ -59,39 +62,34 @@ function SessionSkeleton() {
         </div>
       ))}
     </div>
-  );
+  )
 }
 
 export function SessionsTab() {
-  const [offset, setOffset] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["sessionsWithMemory", offset],
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['sessionsWithMemory', offset],
     queryFn: () => fetchSessionsWithMemory(PAGE_SIZE, offset),
     staleTime: 30000,
-  });
+  })
 
   const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
+    setIsRefreshing(true)
     refetch().finally(() => {
-      setTimeout(() => setIsRefreshing(false), 400);
-    });
-  }, [refetch]);
+      setTimeout(() => setIsRefreshing(false), 400)
+    })
+  }, [refetch])
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   const goToPage = useCallback((page: number) => {
-    setOffset((page - 1) * PAGE_SIZE);
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+    setOffset((page - 1) * PAGE_SIZE)
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   if (error) {
     return (
@@ -112,7 +110,7 @@ export function SessionsTab() {
           Retry
         </button>
       </div>
-    );
+    )
   }
 
   return (
@@ -123,25 +121,23 @@ export function SessionsTab() {
             Sessions with Memory
           </h3>
           {data && (
-            <span className="text-xs text-slate-500">
-              {data.total} total
-            </span>
+            <span className="text-xs text-slate-500">{data.total} total</span>
           )}
         </div>
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
           className={cn(
-            "p-2 rounded-lg transition-colors",
-            "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
-            isRefreshing && "cursor-not-allowed"
+            'p-2 rounded-lg transition-colors',
+            'text-slate-400 hover:text-slate-200 hover:bg-slate-800',
+            isRefreshing && 'cursor-not-allowed',
           )}
           title="Refresh"
         >
           <RefreshCw
             className={cn(
-              "h-4 w-4",
-              isRefreshing && "animate-spin text-emerald-500"
+              'h-4 w-4',
+              isRefreshing && 'animate-spin text-emerald-500',
             )}
           />
         </button>
@@ -176,10 +172,10 @@ export function SessionsTab() {
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage <= 1}
               className={cn(
-                "px-3 py-1.5 rounded-md text-sm transition-colors",
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
                 currentPage <= 1
-                  ? "text-slate-600 cursor-not-allowed"
-                  : "text-slate-300 bg-slate-800 hover:bg-slate-700"
+                  ? 'text-slate-600 cursor-not-allowed'
+                  : 'text-slate-300 bg-slate-800 hover:bg-slate-700',
               )}
             >
               Previous
@@ -191,10 +187,10 @@ export function SessionsTab() {
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
               className={cn(
-                "px-3 py-1.5 rounded-md text-sm transition-colors",
+                'px-3 py-1.5 rounded-md text-sm transition-colors',
                 currentPage >= totalPages
-                  ? "text-slate-600 cursor-not-allowed"
-                  : "text-slate-300 bg-slate-800 hover:bg-slate-700"
+                  ? 'text-slate-600 cursor-not-allowed'
+                  : 'text-slate-300 bg-slate-800 hover:bg-slate-700',
               )}
             >
               Next
@@ -203,5 +199,5 @@ export function SessionsTab() {
         )}
       </div>
     </div>
-  );
+  )
 }

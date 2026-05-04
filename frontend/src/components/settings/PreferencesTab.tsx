@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import { Palette, SunMoon } from "lucide-react";
-import { ThemeSelector } from "@/components/theme-selector";
+import { Palette, SunMoon } from 'lucide-react'
+import { ThemeSelector } from '@/components/theme-selector'
 
 export function PreferencesTab() {
   return (
@@ -12,9 +12,7 @@ export function PreferencesTab() {
             <Palette className="h-5 w-5" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-slate-100">
-              Appearance
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-100">Appearance</h3>
             <p className="text-sm text-slate-400">
               Choose the default look for the dashboard. System mode respects
               your device preference and updates automatically when it changes.
@@ -46,5 +44,5 @@ export function PreferencesTab() {
         </p>
       </section>
     </div>
-  );
+  )
 }

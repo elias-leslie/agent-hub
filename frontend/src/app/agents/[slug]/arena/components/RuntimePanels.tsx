@@ -1,41 +1,69 @@
-import { Activity, AlertTriangle, Clock, DollarSign, Sigma } from "lucide-react";
+import { Activity, AlertTriangle, Clock, DollarSign, Sigma } from 'lucide-react'
 
-import { ChartCard } from "@/app/agents/[slug]/analytics/components/ChartCard";
-import { ChartSection } from "@/app/agents/[slug]/analytics/components/ChartSection";
-import { KPICard } from "@/app/agents/[slug]/analytics/components/KPICard";
-import type { AnalyticsData } from "@/app/agents/[slug]/analytics/types";
-import { formatLatency } from "@/lib/formatters";
+import { ChartCard } from '@/app/agents/[slug]/analytics/components/ChartCard'
+import { ChartSection } from '@/app/agents/[slug]/analytics/components/ChartSection'
+import { KPICard } from '@/app/agents/[slug]/analytics/components/KPICard'
+import type { AnalyticsData } from '@/app/agents/[slug]/analytics/types'
+import { formatLatency } from '@/lib/formatters'
 
 interface RuntimePanelsProps {
-  analytics: AnalyticsData | null;
-  primaryModel: string | null;
-  hasRuntimeActivity: boolean;
-  runtimeErrorMessage: string | null;
+  analytics: AnalyticsData | null
+  primaryModel: string | null
+  hasRuntimeActivity: boolean
+  runtimeErrorMessage: string | null
 }
 
-export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, runtimeErrorMessage }: RuntimePanelsProps) {
+export function RuntimePanels({
+  analytics,
+  primaryModel,
+  hasRuntimeActivity,
+  runtimeErrorMessage,
+}: RuntimePanelsProps) {
   if (runtimeErrorMessage || !analytics) {
     return (
       <div className="mt-6">
         <ChartCard title="Runtime view">
           <div className="rounded-2xl border border-dashed border-amber-900 bg-amber-950/20 px-6 py-10 text-center">
-            <p className="text-sm font-semibold text-slate-100">Runtime metrics unavailable</p>
+            <p className="text-sm font-semibold text-slate-100">
+              Runtime metrics unavailable
+            </p>
             <p className="mt-2 text-sm text-slate-400">
-              {runtimeErrorMessage ?? "No runtime metrics are available for this agent yet."}
+              {runtimeErrorMessage ??
+                'No runtime metrics are available for this agent yet.'}
             </p>
           </div>
         </ChartCard>
       </div>
-    );
+    )
   }
 
   return (
     <>
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KPICard label="24h Cost" value={`$${analytics.totalCostUsd.toFixed(2)}`} icon={DollarSign} color="blue" />
-        <KPICard label="Avg Latency" value={formatLatency(analytics.avgLatencyMs)} icon={Clock} color="amber" />
-        <KPICard label="Error Rate" value={`${analytics.errorRate}%`} icon={AlertTriangle} color="red" />
-        <KPICard label="Success Rate" value={`${analytics.successRate}%`} icon={Activity} color="green" />
+        <KPICard
+          label="24h Cost"
+          value={`$${analytics.totalCostUsd.toFixed(2)}`}
+          icon={DollarSign}
+          color="blue"
+        />
+        <KPICard
+          label="Avg Latency"
+          value={formatLatency(analytics.avgLatencyMs)}
+          icon={Clock}
+          color="amber"
+        />
+        <KPICard
+          label="Error Rate"
+          value={`${analytics.errorRate}%`}
+          icon={AlertTriangle}
+          color="red"
+        />
+        <KPICard
+          label="Success Rate"
+          value={`${analytics.successRate}%`}
+          icon={Activity}
+          color="green"
+        />
       </div>
 
       <div className="mt-6">
@@ -44,9 +72,12 @@ export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, run
         ) : (
           <ChartCard title="Activity window">
             <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-10 text-center">
-              <p className="text-sm font-medium text-slate-100">No recent runtime activity</p>
+              <p className="text-sm font-medium text-slate-100">
+                No recent runtime activity
+              </p>
               <p className="mt-2 text-sm text-slate-400">
-                This agent has not handled any requests in the last 24 hours yet.
+                This agent has not handled any requests in the last 24 hours
+                yet.
               </p>
             </div>
           </ChartCard>
@@ -58,15 +89,21 @@ export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, run
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Requests</span>
-              <span className="font-semibold text-slate-100">{analytics.totalRequests}</span>
+              <span className="font-semibold text-slate-100">
+                {analytics.totalRequests}
+              </span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Requests / hour</span>
-              <span className="font-semibold text-slate-100">{analytics.requestsPerHour}</span>
+              <span className="font-semibold text-slate-100">
+                {analytics.requestsPerHour}
+              </span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Tokens</span>
-              <span className="font-semibold text-slate-100">{analytics.totalTokens.toLocaleString()}</span>
+              <span className="font-semibold text-slate-100">
+                {analytics.totalTokens.toLocaleString()}
+              </span>
             </div>
           </div>
         </ChartCard>
@@ -89,7 +126,9 @@ export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, run
           <div className="space-y-4 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Metrics basis</span>
-              <span className="font-semibold text-slate-100">24h aggregate</span>
+              <span className="font-semibold text-slate-100">
+                24h aggregate
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Agent updated</span>
@@ -99,11 +138,13 @@ export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, run
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Primary model</span>
-              <span className="font-semibold text-slate-100">{primaryModel ?? "Unassigned"}</span>
+              <span className="font-semibold text-slate-100">
+                {primaryModel ?? 'Unassigned'}
+              </span>
             </div>
           </div>
         </ChartCard>
       </div>
     </>
-  );
+  )
 }

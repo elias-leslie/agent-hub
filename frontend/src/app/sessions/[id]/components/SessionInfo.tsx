@@ -1,25 +1,26 @@
-import { Cpu, Activity, Clock, Layers } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Session } from "@/lib/api";
-import type { SessionMemoryObservability } from "@/lib/session-memory-observability";
-import { formatDate, formatTokens } from "./utils";
-import { ContextUsageBar } from "./ContextUsageBar";
-import { StatCard } from "./StatCard";
+import { Activity, Clock, Cpu, Layers } from 'lucide-react'
+import type { Session } from '@/lib/api'
+import type { SessionMemoryObservability } from '@/lib/session-memory-observability'
+import { cn } from '@/lib/utils'
+import { ContextUsageBar } from './ContextUsageBar'
+import { StatCard } from './StatCard'
+import { formatDate, formatTokens } from './utils'
 
 interface SessionInfoProps {
-  session: Session;
-  memorySummary?: SessionMemoryObservability | null;
+  session: Session
+  memorySummary?: SessionMemoryObservability | null
 }
 
 export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
-  const requestedModel = session.requested_model || session.model;
-  const effectiveModel = session.effective_model || session.model;
-  const requestedProvider = session.requested_provider || session.provider;
-  const effectiveProvider = session.effective_provider || session.provider;
-  const fallbackDetail = session.fallback_used && requestedModel !== effectiveModel
-    ? `${requestedProvider}/${requestedModel} -> ${effectiveProvider}/${effectiveModel}`
-    : effectiveModel;
-  const live = session.live_activity;
+  const requestedModel = session.requested_model || session.model
+  const effectiveModel = session.effective_model || session.model
+  const requestedProvider = session.requested_provider || session.provider
+  const effectiveProvider = session.effective_provider || session.provider
+  const fallbackDetail =
+    session.fallback_used && requestedModel !== effectiveModel
+      ? `${requestedProvider}/${requestedModel} -> ${effectiveProvider}/${effectiveModel}`
+      : effectiveModel
+  const live = session.live_activity
 
   return (
     <div className="space-y-6 p-5 lg:p-6">
@@ -28,8 +29,8 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           <p className="section-kicker">Session Intel</p>
           <h2 className="section-heading mt-2">Execution Summary</h2>
           <p className="section-copy mt-2 max-w-3xl">
-            Review the provider fallback path, context pressure, token totals, and
-            any live health signals captured for this session.
+            Review the provider fallback path, context pressure, token totals,
+            and any live health signals captured for this session.
           </p>
         </div>
       </div>
@@ -75,12 +76,12 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {live && (
         <div
           className={cn(
-            "section-card",
-            live.health === "stalled"
-              ? "bg-red-950/20 border border-red-800/40"
-              : live.health === "quiet"
-                ? "bg-amber-950/20 border border-amber-800/40"
-                : "bg-slate-900/60 border border-slate-800/60"
+            'section-card',
+            live.health === 'stalled'
+              ? 'bg-red-950/20 border border-red-800/40'
+              : live.health === 'quiet'
+                ? 'bg-amber-950/20 border border-amber-800/40'
+                : 'bg-slate-900/60 border border-slate-800/60',
           )}
         >
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
@@ -92,11 +93,12 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
                 tool {live.current_tool_name}
               </span>
             )}
-            {live.quiet_for_seconds !== null && live.quiet_for_seconds !== undefined && (
-              <span className="text-slate-500">
-                quiet {live.quiet_for_seconds}s
-              </span>
-            )}
+            {live.quiet_for_seconds !== null &&
+              live.quiet_for_seconds !== undefined && (
+                <span className="text-slate-500">
+                  quiet {live.quiet_for_seconds}s
+                </span>
+              )}
             <span className="text-slate-500">
               tools {live.tool_calls_count}
             </span>
@@ -104,11 +106,19 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           {live.summary && (
             <p className="mt-2 text-sm text-slate-300">{live.summary}</p>
           )}
-          {(live.stall_reason || live.last_command || live.last_validation_command || live.last_read_path || live.last_write_path) && (
+          {(live.stall_reason ||
+            live.last_command ||
+            live.last_validation_command ||
+            live.last_read_path ||
+            live.last_write_path) && (
             <div className="mt-3 space-y-1 text-xs font-mono text-slate-400 break-all">
               {live.stall_reason && <p>{live.stall_reason}</p>}
-              {live.last_validation_command && <p>validation: {live.last_validation_command}</p>}
-              {!live.last_validation_command && live.last_command && <p>command: {live.last_command}</p>}
+              {live.last_validation_command && (
+                <p>validation: {live.last_validation_command}</p>
+              )}
+              {!live.last_validation_command && live.last_command && (
+                <p>command: {live.last_command}</p>
+              )}
               {live.last_read_path && <p>read: {live.last_read_path}</p>}
               {live.last_write_path && <p>write: {live.last_write_path}</p>}
             </div>
@@ -119,8 +129,8 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {session.fallback_used && session.fallback_reason && (
         <div
           className={cn(
-            "section-card",
-            "bg-amber-950/20 border border-amber-800/40"
+            'section-card',
+            'bg-amber-950/20 border border-amber-800/40',
           )}
         >
           <h3 className="text-sm font-medium text-amber-300 mb-1">
@@ -135,11 +145,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {/* Token breakdown */}
       {session.agent_token_breakdown &&
         session.agent_token_breakdown.length > 0 && (
-          <div
-            className={cn(
-              "section-card"
-            )}
-          >
+          <div className={cn('section-card')}>
             <h3 className="text-sm font-medium text-slate-300 mb-3">
               Token Breakdown by Agent
             </h3>
@@ -162,7 +168,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
                       {formatTokens(agent.total_tokens)}
                     </p>
                     <p className="text-xs text-slate-500 font-mono">
-                      {formatTokens(agent.input_tokens)} in /{" "}
+                      {formatTokens(agent.input_tokens)} in /{' '}
                       {formatTokens(agent.output_tokens)} out
                     </p>
                   </div>
@@ -177,8 +183,8 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
         <div className="grid grid-cols-2 gap-3">
           <div
             className={cn(
-              "section-card text-center",
-              "bg-sky-950/30 border border-sky-800/40"
+              'section-card text-center',
+              'bg-sky-950/30 border border-sky-800/40',
             )}
           >
             <p className="text-2xl font-mono font-semibold text-sky-400">
@@ -188,8 +194,8 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           </div>
           <div
             className={cn(
-              "section-card text-center",
-              "bg-violet-950/30 border border-violet-800/40"
+              'section-card text-center',
+              'bg-violet-950/30 border border-violet-800/40',
             )}
           >
             <p className="text-2xl font-mono font-semibold text-violet-400">
@@ -200,5 +206,5 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
         </div>
       )}
     </div>
-  );
+  )
 }

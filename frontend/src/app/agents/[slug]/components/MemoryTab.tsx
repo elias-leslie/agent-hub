@@ -1,72 +1,77 @@
-"use client";
+'use client'
 
-import { Brain, Settings2 } from "lucide-react";
-import { Agent } from "../types";
-import { cloneConfig, parseConfig } from "./memory/utils";
-import { Toggle } from "./memory/Toggle";
-import { MemoryConfigSection } from "./memory/MemoryConfigSection";
-import { TagFilteringSection } from "./memory/TagFilteringSection";
-import { MemoryConfig } from "./memory/types";
+import { Brain, Settings2 } from 'lucide-react'
+import type { Agent } from '../types'
+import { MemoryConfigSection } from './memory/MemoryConfigSection'
+import { TagFilteringSection } from './memory/TagFilteringSection'
+import { Toggle } from './memory/Toggle'
+import type { MemoryConfig } from './memory/types'
+import { cloneConfig, parseConfig } from './memory/utils'
 
 interface MemoryTabProps {
-  formData: Partial<Agent>;
-  updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
+  formData: Partial<Agent>
+  updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void
 }
 
 export function MemoryTab({ formData, updateField }: MemoryTabProps) {
-  const isCustomEnabled = formData.memory_config != null;
-  const effectiveSource = formData.effective_memory_config as MemoryConfig | undefined;
+  const isCustomEnabled = formData.memory_config != null
+  const effectiveSource = formData.effective_memory_config as
+    | MemoryConfig
+    | undefined
 
   if (!effectiveSource) {
-    return null;
+    return null
   }
 
-  const effectiveConfig = cloneConfig(effectiveSource);
+  const effectiveConfig = cloneConfig(effectiveSource)
   const config = isCustomEnabled
     ? formData.memory_config
       ? parseConfig(formData.memory_config, effectiveConfig)
       : cloneConfig(effectiveConfig)
-    : cloneConfig(effectiveConfig);
+    : cloneConfig(effectiveConfig)
 
   const updateConfig = (updates: Partial<MemoryConfig>) => {
-    const newConfig = { ...config, ...updates };
-    updateField("memory_config", newConfig);
-  };
+    const newConfig = { ...config, ...updates }
+    updateField('memory_config', newConfig)
+  }
 
   const toggleCustomSettings = () => {
     if (isCustomEnabled) {
-      updateField("memory_config", null);
+      updateField('memory_config', null)
     } else {
-      updateField("memory_config", cloneConfig(effectiveConfig) as Agent["memory_config"]);
+      updateField(
+        'memory_config',
+        cloneConfig(effectiveConfig) as Agent['memory_config'],
+      )
     }
-  };
+  }
 
   const handleUpdateTags = (
-    field: "audience_tags" | "exclude_tags" | "exclude_memory_uuids",
-    tags: string[]
+    field: 'audience_tags' | 'exclude_tags' | 'exclude_memory_uuids',
+    tags: string[],
   ) => {
     if (isCustomEnabled) {
-      updateConfig({ [field]: tags });
+      updateConfig({ [field]: tags })
     } else {
       const candidateConfig = {
         ...effectiveConfig,
         [field]: tags,
-      } as MemoryConfig;
+      } as MemoryConfig
       const hasExplicitFilters =
         candidateConfig.audience_tags.length > 0 ||
         candidateConfig.exclude_tags.length > 0 ||
-        candidateConfig.exclude_memory_uuids.length > 0;
+        candidateConfig.exclude_memory_uuids.length > 0
 
       if (!hasExplicitFilters) {
-        updateField("memory_config", null);
+        updateField('memory_config', null)
       } else {
         updateField(
-          "memory_config",
-          candidateConfig as unknown as Agent["memory_config"]
-        );
+          'memory_config',
+          candidateConfig as unknown as Agent['memory_config'],
+        )
       }
     }
-  };
+  }
 
   return (
     <div className="space-y-8">
@@ -92,8 +97,8 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             </p>
             <p className="text-xs text-slate-400">
               {isCustomEnabled
-                ? "Using per-agent memory configuration"
-                : "Using inherited memory baseline"}
+                ? 'Using per-agent memory configuration'
+                : 'Using inherited memory baseline'}
             </p>
           </div>
         </div>
@@ -119,5 +124,5 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
         onUpdateTags={handleUpdateTags}
       />
     </div>
-  );
+  )
 }

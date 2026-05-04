@@ -1,30 +1,30 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { CompactnessMeter } from "@/components/CompactnessMeter";
+import { CompactnessMeter } from '@/components/CompactnessMeter'
 import {
   type AgentPromptAssignment,
   assignPrompt,
   createPrompt,
-} from "@/lib/api/prompts";
+} from '@/lib/api/prompts'
 
 function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 interface CreatePromptFormProps {
-  agentSlug: string;
-  orderedAssignments: AgentPromptAssignment[];
-  onClose: () => void;
+  agentSlug: string
+  orderedAssignments: AgentPromptAssignment[]
+  onClose: () => void
 }
 
 export function CreatePromptForm({
@@ -32,18 +32,18 @@ export function CreatePromptForm({
   orderedAssignments,
   onClose,
 }: CreatePromptFormProps) {
-  const queryClient = useQueryClient();
-  const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [newRole, setNewRole] = useState("context");
+  const queryClient = useQueryClient()
+  const [newName, setNewName] = useState('')
+  const [newSlug, setNewSlug] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newContent, setNewContent] = useState('')
+  const [newRole, setNewRole] = useState('context')
 
   useEffect(() => {
     if (!newSlug) {
-      setNewSlug(slugify(newName));
+      setNewSlug(slugify(newName))
     }
-  }, [newName, newSlug]);
+  }, [newName, newSlug])
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -53,23 +53,23 @@ export function CreatePromptForm({
         description: newDescription || undefined,
         content: newContent,
         enabled: true,
-      });
+      })
       const nextPriority =
         orderedAssignments.length === 0
           ? 0
-          : orderedAssignments[orderedAssignments.length - 1].priority + 10;
+          : orderedAssignments[orderedAssignments.length - 1].priority + 10
       await assignPrompt(agentSlug, {
         prompt_slug: prompt.slug,
         role: newRole,
         priority: nextPriority,
-      });
+      })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
-      onClose();
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      queryClient.invalidateQueries({ queryKey: ['agent-prompts', agentSlug] })
+      onClose()
     },
-  });
+  })
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -80,8 +80,8 @@ export function CreatePromptForm({
           <input
             value={newName}
             onChange={(event) => {
-              setNewName(event.target.value);
-              setNewSlug(slugify(event.target.value));
+              setNewName(event.target.value)
+              setNewSlug(slugify(event.target.value))
             }}
             className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
           />
@@ -97,7 +97,9 @@ export function CreatePromptForm({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-400">Description</span>
+          <span className="text-xs font-medium text-slate-400">
+            Description
+          </span>
           <textarea
             value={newDescription}
             onChange={(event) => setNewDescription(event.target.value)}
@@ -136,7 +138,9 @@ export function CreatePromptForm({
         <button
           type="button"
           onClick={() => createMutation.mutate()}
-          disabled={!newName || !newSlug || !newContent || createMutation.isPending}
+          disabled={
+            !newName || !newSlug || !newContent || createMutation.isPending
+          }
           className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:opacity-50"
         >
           {createMutation.isPending ? (
@@ -148,5 +152,5 @@ export function CreatePromptForm({
         </button>
       </div>
     </div>
-  );
+  )
 }

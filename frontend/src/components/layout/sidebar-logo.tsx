@@ -1,17 +1,17 @@
-import Link from "next/link";
-import { Zap, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { X, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 interface SidebarLogoProps {
-  isCollapsed: boolean;
-  isMobileOpen: boolean;
-  statusIndicator?: "healthy" | "degraded" | "unknown";
-  onMobileClose: () => void;
+  isCollapsed: boolean
+  isMobileOpen: boolean
+  statusIndicator?: 'healthy' | 'degraded' | 'unknown'
+  onMobileClose: () => void
 }
 
 export function SidebarLogo({
   isCollapsed,
-  statusIndicator = "unknown",
+  statusIndicator = 'unknown',
   onMobileClose,
 }: SidebarLogoProps) {
   return (
@@ -19,8 +19,8 @@ export function SidebarLogo({
       <Link
         href="/dashboard"
         className={cn(
-          "flex items-center gap-3",
-          isCollapsed && "lg:justify-center",
+          'flex items-center gap-3',
+          isCollapsed && 'lg:justify-center',
         )}
       >
         <div className="relative flex-shrink-0">
@@ -30,12 +30,12 @@ export function SidebarLogo({
           {/* Status indicator */}
           <div
             className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900",
-              statusIndicator === "healthy"
-                ? "bg-emerald-500 animate-status-pulse"
-                : statusIndicator === "degraded"
-                  ? "bg-amber-500"
-                  : "bg-slate-400",
+              'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900',
+              statusIndicator === 'healthy'
+                ? 'bg-emerald-500 animate-status-pulse'
+                : statusIndicator === 'degraded'
+                  ? 'bg-amber-500'
+                  : 'bg-slate-400',
             )}
           />
         </div>
@@ -65,5 +65,5 @@ export function SidebarLogo({
         <X className="h-5 w-5" />
       </button>
     </div>
-  );
+  )
 }

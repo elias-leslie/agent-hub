@@ -1,37 +1,37 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Copy, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Check, Copy } from 'lucide-react'
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
 export function CopyButton({
   text,
   className,
 }: {
-  text: string;
-  className?: string;
+  text: string
+  className?: string
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false)
 
   const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+    e.stopPropagation()
+    e.preventDefault()
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <button
       onClick={handleCopy}
       className={cn(
-        "relative p-1 rounded-md transition-all cursor-pointer",
-        "hover:bg-slate-700",
-        "active:scale-95",
-        className
+        'relative p-1 rounded-md transition-all cursor-pointer',
+        'hover:bg-slate-700',
+        'active:scale-95',
+        className,
       )}
       aria-label="Copy to clipboard"
-      title={copied ? undefined : "Copy to clipboard"}
+      title={copied ? undefined : 'Copy to clipboard'}
     >
       {copied ? (
         <Check className="h-3 w-3 text-emerald-500" />
@@ -44,5 +44,5 @@ export function CopyButton({
         </span>
       )}
     </button>
-  );
+  )
 }

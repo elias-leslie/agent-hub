@@ -1,20 +1,25 @@
-"use client";
+'use client'
 
-import { X, Pencil, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { MemoryEpisode } from "@/lib/memory-api";
-import { useEpisodeEditor } from "./useEpisodeEditor";
-import { TierSelector } from "./TierSelector";
-import { EpisodeFormFields } from "./EpisodeFormFields";
+import { Loader2, Pencil, X } from 'lucide-react'
+import type { MemoryEpisode } from '@/lib/memory-api'
+import { cn } from '@/lib/utils'
+import { EpisodeFormFields } from './EpisodeFormFields'
+import { TierSelector } from './TierSelector'
+import { useEpisodeEditor } from './useEpisodeEditor'
 
 interface EditEpisodeModalProps {
-  episode: MemoryEpisode;
-  isOpen: boolean;
-  onClose: () => void;
-  onSaved: () => void;
+  episode: MemoryEpisode
+  isOpen: boolean
+  onClose: () => void
+  onSaved: () => void
 }
 
-export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpisodeModalProps) {
+export function EditEpisodeModal({
+  episode,
+  isOpen,
+  onClose,
+  onSaved,
+}: EditEpisodeModalProps) {
   const {
     content,
     setContent,
@@ -34,14 +39,20 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
     error,
     hasChanges,
     handleSave,
-  } = useEpisodeEditor({ episode, onSaved, onClose });
+  } = useEpisodeEditor({ episode, onSaved, onClose })
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="edit-episode-modal">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      data-testid="edit-episode-modal"
+    >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
       {/* Modal */}
       <div className="relative w-full max-w-3xl mx-4 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
@@ -52,8 +63,12 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
               <Pencil className="w-5 h-5 text-violet-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">Edit Memory</h2>
-              <p className="text-xs text-slate-400 font-mono">{episode.uuid.slice(0, 8)}...</p>
+              <h2 className="text-lg font-semibold text-slate-100">
+                Edit Memory
+              </h2>
+              <p className="text-xs text-slate-400 font-mono">
+                {episode.uuid.slice(0, 8)}...
+              </p>
             </div>
           </div>
           <button
@@ -98,8 +113,9 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
           {/* Info Box */}
           <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-800">
             <p className="text-xs text-amber-400">
-              <strong>Note:</strong> Editing creates a new memory with the updated content while preserving usage
-              statistics (helpful/harmful counts, load count, etc.).
+              <strong>Note:</strong> Editing creates a new memory with the
+              updated content while preserving usage statistics (helpful/harmful
+              counts, load count, etc.).
             </p>
           </div>
         </div>
@@ -110,7 +126,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
             {hasChanges ? (
               <span className="text-violet-400">Unsaved changes</span>
             ) : (
-              "No changes"
+              'No changes'
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -127,9 +143,9 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
               onClick={handleSave}
               disabled={isSaving || !hasChanges || !content.trim()}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors flex items-center gap-2",
-                "bg-violet-600 hover:bg-violet-700",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
+                'px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors flex items-center gap-2',
+                'bg-violet-600 hover:bg-violet-700',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
             >
               {isSaving ? (
@@ -138,12 +154,12 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
                   Saving...
                 </>
               ) : (
-                "Save Changes"
+                'Save Changes'
               )}
             </button>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

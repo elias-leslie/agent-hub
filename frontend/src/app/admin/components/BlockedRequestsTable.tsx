@@ -1,11 +1,11 @@
-import { useRef } from "react";
-import { Shield } from "lucide-react";
-import { SortableHeader } from "@/components/ui/SortableHeader";
-import { TableControls } from "./TableControls";
-import { BlockedRequestRow } from "./BlockedRequestRow";
-import { useBlockedRequestsTable } from "./useBlockedRequestsTable";
-import { TABLE_GRID_COLS } from "./tableConfig";
-import type { BlockedRequest } from "@/lib/api";
+import { Shield } from 'lucide-react'
+import { useRef } from 'react'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import type { BlockedRequest } from '@/lib/api'
+import { BlockedRequestRow } from './BlockedRequestRow'
+import { TableControls } from './TableControls'
+import { TABLE_GRID_COLS } from './tableConfig'
+import { useBlockedRequestsTable } from './useBlockedRequestsTable'
 
 export function BlockedRequestsTable({
   requests,
@@ -13,12 +13,12 @@ export function BlockedRequestsTable({
   onRefresh,
   isRefreshing,
 }: {
-  requests: BlockedRequest[];
-  isLoading: boolean;
-  onRefresh: () => void;
-  isRefreshing: boolean;
+  requests: BlockedRequest[]
+  isLoading: boolean
+  onRefresh: () => void
+  isRefreshing: boolean
 }) {
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null)
   const {
     searchQuery,
     setSearchQuery,
@@ -36,7 +36,7 @@ export function BlockedRequestsTable({
     handleToggleExpand,
     handleKeyDown,
     handleExport,
-  } = useBlockedRequestsTable(requests, onRefresh);
+  } = useBlockedRequestsTable(requests, onRefresh)
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/30 overflow-hidden">
@@ -59,13 +59,14 @@ export function BlockedRequestsTable({
       {/* Table */}
       <div
         ref={tableRef}
-        tabIndex={0}
         onKeyDown={handleKeyDown}
         className="max-h-[600px] overflow-auto focus:outline-none"
       >
         {/* Table Header */}
         <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
-          <div className={`grid ${TABLE_GRID_COLS} gap-3 px-4 py-3 items-center`}>
+          <div
+            className={`grid ${TABLE_GRID_COLS} gap-3 px-4 py-3 items-center`}
+          >
             <SortableHeader
               label="Time"
               field="timestamp"
@@ -102,7 +103,10 @@ export function BlockedRequestsTable({
         {isLoading && (
           <div className="divide-y divide-slate-800/50">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className={`grid ${TABLE_GRID_COLS} gap-3 px-4 py-3 items-center`}>
+              <div
+                key={i}
+                className={`grid ${TABLE_GRID_COLS} gap-3 px-4 py-3 items-center`}
+              >
                 <div className="h-4 w-16 rounded animate-shimmer" />
                 <div className="h-4 w-24 rounded animate-shimmer" />
                 <div className="h-4 w-full max-w-xs rounded animate-shimmer" />
@@ -120,12 +124,14 @@ export function BlockedRequestsTable({
               <Shield className="w-10 h-10 text-emerald-400" />
             </div>
             <h3 className="text-lg font-semibold text-slate-100 mb-1">
-              {requests.length === 0 ? "No blocked requests" : "No matching requests"}
+              {requests.length === 0
+                ? 'No blocked requests'
+                : 'No matching requests'}
             </h3>
             <p className="text-sm text-slate-500 max-w-sm">
               {requests.length === 0
-                ? "All systems operational. Blocked requests will appear here when access is denied."
-                : "Try adjusting your search or filter criteria"}
+                ? 'All systems operational. Blocked requests will appear here when access is denied.'
+                : 'Try adjusting your search or filter criteria'}
             </p>
           </div>
         )}
@@ -154,13 +160,17 @@ export function BlockedRequestsTable({
             {sortedRequests.length} of {requests.length} requests
           </span>
           <div className="flex items-center gap-1">
-            <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono">j/k</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono">
+              j/k
+            </span>
             <span>navigate</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono ml-2">Enter</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono ml-2">
+              Enter
+            </span>
             <span>expand</span>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

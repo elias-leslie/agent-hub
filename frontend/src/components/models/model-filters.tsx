@@ -1,54 +1,92 @@
-"use client";
+'use client'
 
-import { Search, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { PROVIDER_COLORS } from "@/components/settings/constants";
+import {
+  Brain,
+  Camera,
+  Eye,
+  FileText,
+  Headphones,
+  Pencil,
+  Search,
+} from 'lucide-react'
+import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { cn } from '@/lib/utils'
 
 interface CapabilityFilters {
-  vision: boolean;
-  imageGen: boolean;
-  imageEdit: boolean;
-  thinking: boolean;
-  pdf: boolean;
-  audio: boolean;
+  vision: boolean
+  imageGen: boolean
+  imageEdit: boolean
+  thinking: boolean
+  pdf: boolean
+  audio: boolean
 }
 
 interface ModelFiltersProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  providers: Record<string, string>;
-  selectedProviders: Set<string>;
-  onProviderToggle: (provider: string) => void;
-  capabilityFilters: CapabilityFilters;
-  onCapabilityToggle: (capability: keyof CapabilityFilters) => void;
-  sortBy: string;
-  onSortChange: (sort: string) => void;
-  groupByProvider: boolean;
-  onGroupByProviderToggle: () => void;
+  searchQuery: string
+  onSearchChange: (query: string) => void
+  providers: Record<string, string>
+  selectedProviders: Set<string>
+  onProviderToggle: (provider: string) => void
+  capabilityFilters: CapabilityFilters
+  onCapabilityToggle: (capability: keyof CapabilityFilters) => void
+  sortBy: string
+  onSortChange: (sort: string) => void
+  groupByProvider: boolean
+  onGroupByProviderToggle: () => void
 }
 
 const SORT_OPTIONS = [
-  { value: "composite", label: "Composite Score" },
-  { value: "coding", label: "Coding Score" },
-  { value: "reasoning", label: "Reasoning Score" },
-  { value: "cost-asc", label: "Cost (Low to High)" },
-  { value: "cost-desc", label: "Cost (High to Low)" },
-  { value: "name", label: "Name" },
-];
+  { value: 'composite', label: 'Composite Score' },
+  { value: 'coding', label: 'Coding Score' },
+  { value: 'reasoning', label: 'Reasoning Score' },
+  { value: 'cost-asc', label: 'Cost (Low to High)' },
+  { value: 'cost-desc', label: 'Cost (High to Low)' },
+  { value: 'name', label: 'Name' },
+]
 
 const CAPABILITY_BUTTONS: {
-  key: keyof CapabilityFilters;
-  label: string;
-  icon: typeof Eye;
-  activeClass: string;
+  key: keyof CapabilityFilters
+  label: string
+  icon: typeof Eye
+  activeClass: string
 }[] = [
-  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  { key: "thinking", label: "Thinking", icon: Brain, activeClass: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
-  { key: "imageGen", label: "Image Gen", icon: Camera, activeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
-  { key: "pdf", label: "PDF", icon: FileText, activeClass: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-  { key: "audio", label: "Audio", icon: Headphones, activeClass: "bg-teal-500/10 text-teal-400 border-teal-500/20" },
-  { key: "imageEdit", label: "Edit", icon: Pencil, activeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
-];
+  {
+    key: 'vision',
+    label: 'Vision',
+    icon: Eye,
+    activeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  },
+  {
+    key: 'thinking',
+    label: 'Thinking',
+    icon: Brain,
+    activeClass: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+  },
+  {
+    key: 'imageGen',
+    label: 'Image Gen',
+    icon: Camera,
+    activeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  },
+  {
+    key: 'pdf',
+    label: 'PDF',
+    icon: FileText,
+    activeClass: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  },
+  {
+    key: 'audio',
+    label: 'Audio',
+    icon: Headphones,
+    activeClass: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+  },
+  {
+    key: 'imageEdit',
+    label: 'Edit',
+    icon: Pencil,
+    activeClass: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+  },
+]
 
 export function ModelFilters({
   searchQuery,
@@ -93,38 +131,39 @@ export function ModelFilters({
 
       {/* Provider Filters */}
       <div>
-        <div className="text-xs font-medium text-slate-400 mb-2">
-          Providers
-        </div>
+        <div className="text-xs font-medium text-slate-400 mb-2">Providers</div>
         <div className="flex flex-wrap gap-2">
           {Object.entries(providers).map(([id, displayName]) => {
-            const isSelected = selectedProviders.has(id);
-            const providerColor = PROVIDER_COLORS[id] ?? { dot: "bg-slate-400", bg: "border-slate-500/20" };
+            const isSelected = selectedProviders.has(id)
+            const providerColor = PROVIDER_COLORS[id] ?? {
+              dot: 'bg-slate-400',
+              bg: 'border-slate-500/20',
+            }
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => onProviderToggle(id)}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
                   isSelected
                     ? cn(
-                        "border-current",
-                        providerColor.dot.replace("bg-", "text-"),
+                        'border-current',
+                        providerColor.dot.replace('bg-', 'text-'),
                         providerColor.bg,
                       )
-                    : "border-slate-700 text-slate-400 hover:border-slate-600",
+                    : 'border-slate-700 text-slate-400 hover:border-slate-600',
                 )}
               >
                 <div
                   className={cn(
-                    "w-2 h-2 rounded-full",
-                    isSelected ? providerColor.dot : "bg-slate-600",
+                    'w-2 h-2 rounded-full',
+                    isSelected ? providerColor.dot : 'bg-slate-600',
                   )}
                 />
                 <span>{displayName}</span>
               </button>
-            );
+            )
           })}
         </div>
       </div>
@@ -141,10 +180,10 @@ export function ModelFilters({
               type="button"
               onClick={() => onCapabilityToggle(key)}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
                 capabilityFilters[key]
                   ? activeClass
-                  : "border-slate-700 text-slate-400 hover:border-slate-600",
+                  : 'border-slate-700 text-slate-400 hover:border-slate-600',
               )}
             >
               <Icon className="h-3 w-3" />
@@ -169,5 +208,5 @@ export function ModelFilters({
         </label>
       </div>
     </div>
-  );
+  )
 }

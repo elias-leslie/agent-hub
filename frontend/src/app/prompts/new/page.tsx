@@ -1,52 +1,52 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft,
-  Save,
-  Loader2,
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   Globe,
-} from "lucide-react";
-import { CompactnessMeter } from "@/components/CompactnessMeter";
-import { createPrompt } from "@/lib/api/prompts";
-import { cn } from "@/lib/utils";
+  Loader2,
+  Save,
+} from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { CompactnessMeter } from '@/components/CompactnessMeter'
+import { createPrompt } from '@/lib/api/prompts'
+import { cn } from '@/lib/utils'
 
 function slugify(text: string): string {
   return text
     .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 export default function PromptNewPage() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const router = useRouter()
+  const queryClient = useQueryClient()
 
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-  const [description, setDescription] = useState("");
-  const [isGlobal, setIsGlobal] = useState(false);
-  const [enabled, setEnabled] = useState(true);
-  const [autoSlug, setAutoSlug] = useState(true);
+  const [slug, setSlug] = useState('')
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [description, setDescription] = useState('')
+  const [isGlobal, setIsGlobal] = useState(false)
+  const [enabled, setEnabled] = useState(true)
+  const [autoSlug, setAutoSlug] = useState(true)
 
   const handleNameChange = (value: string) => {
-    setName(value);
+    setName(value)
     if (autoSlug) {
-      setSlug(slugify(value));
+      setSlug(slugify(value))
     }
-  };
+  }
 
   const handleSlugChange = (value: string) => {
-    setAutoSlug(false);
-    setSlug(slugify(value));
-  };
+    setAutoSlug(false)
+    setSlug(slugify(value))
+  }
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -59,10 +59,10 @@ export default function PromptNewPage() {
         enabled,
       }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      router.push(`/prompts/${data.slug}`);
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      router.push(`/prompts/${data.slug}`)
     },
-  });
+  })
 
   return (
     <div className="page-shell">
@@ -85,7 +85,7 @@ export default function PromptNewPage() {
         <div className="page-header-row px-4 lg:px-8">
           <div className="page-title-group">
             <button
-              onClick={() => router.push("/prompts")}
+              onClick={() => router.push('/prompts')}
               className="icon-button"
               aria-label="Go back"
             >
@@ -115,9 +115,7 @@ export default function PromptNewPage() {
         <div className="space-y-6">
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Name
-            </label>
+            <label className="text-xs font-medium text-slate-400">Name</label>
             <input
               type="text"
               value={name}
@@ -129,9 +127,7 @@ export default function PromptNewPage() {
 
           {/* Slug (editable, auto-generated from name) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Slug
-            </label>
+            <label className="text-xs font-medium text-slate-400">Slug</label>
             <input
               type="text"
               value={slug}
@@ -140,9 +136,7 @@ export default function PromptNewPage() {
               className="control-input font-mono"
             />
             {autoSlug && name && (
-              <p className="text-xs text-slate-400">
-                Auto-generated from name
-              </p>
+              <p className="text-xs text-slate-400">Auto-generated from name</p>
             )}
           </div>
 
@@ -155,7 +149,7 @@ export default function PromptNewPage() {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Enter prompt content..."
-              style={{ minHeight: "300px" }}
+              style={{ minHeight: '300px' }}
               className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
             />
             <CompactnessMeter content={content} kind="prompt" />
@@ -184,10 +178,10 @@ export default function PromptNewPage() {
               <button
                 onClick={() => setIsGlobal(true)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                   isGlobal
-                    ? "bg-amber-950/40 border-amber-800 text-amber-500"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-800",
+                    ? 'bg-amber-950/40 border-amber-800 text-amber-500'
+                    : 'border-slate-700 text-slate-400 hover:bg-slate-800',
                 )}
               >
                 <Globe className="h-4 w-4" />
@@ -196,10 +190,10 @@ export default function PromptNewPage() {
               <button
                 onClick={() => setIsGlobal(false)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                   !isGlobal
-                    ? "bg-slate-800 border-slate-600 text-slate-200"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-800",
+                    ? 'bg-slate-800 border-slate-600 text-slate-200'
+                    : 'border-slate-700 text-slate-400 hover:bg-slate-800',
                 )}
               >
                 Non-Global
@@ -207,18 +201,18 @@ export default function PromptNewPage() {
               <button
                 onClick={() => setEnabled(!enabled)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
                   enabled
-                    ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
-                    : "bg-slate-800 border-slate-600 text-slate-400",
+                    ? 'bg-emerald-950/40 border-emerald-800 text-emerald-600'
+                    : 'bg-slate-800 border-slate-600 text-slate-400',
                 )}
               >
-                {enabled ? "Enabled" : "Disabled"}
+                {enabled ? 'Enabled' : 'Disabled'}
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

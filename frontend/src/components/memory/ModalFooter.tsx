@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
 export function ModalFooter({
   onClose,
@@ -7,11 +7,11 @@ export function ModalFooter({
   saving,
   saved,
 }: {
-  onClose: () => void;
-  onSave: () => void;
-  loading: boolean;
-  saving: boolean;
-  saved: boolean;
+  onClose: () => void
+  onSave: () => void
+  loading: boolean
+  saving: boolean
+  saved: boolean
 }) {
   return (
     <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-800">
@@ -26,8 +26,8 @@ export function ModalFooter({
         onClick={onSave}
         disabled={loading || saving || saved}
         className={cn(
-          "px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 flex items-center gap-2 transition-colors",
-          saved ? "bg-emerald-600" : "bg-amber-600 hover:bg-amber-500"
+          'px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 flex items-center gap-2 transition-colors',
+          saved ? 'bg-emerald-600' : 'bg-amber-600 hover:bg-amber-500',
         )}
       >
         {saving ? (
@@ -36,11 +36,11 @@ export function ModalFooter({
             Saving...
           </>
         ) : saved ? (
-          "Saved!"
+          'Saved!'
         ) : (
-          "Save Changes"
+          'Save Changes'
         )}
       </button>
     </div>
-  );
+  )
 }

@@ -1,9 +1,9 @@
-"use client";
+'use client'
 
-import { Loader2 } from "lucide-react";
-import { getProviderInfo, isOAuthProvider, PROVIDER_COLORS } from "./constants";
-import { ProviderCard } from "./ProviderCard";
-import { useProvidersTab } from "./useProvidersTab";
+import { Loader2 } from 'lucide-react'
+import { getProviderInfo, isOAuthProvider, PROVIDER_COLORS } from './constants'
+import { ProviderCard } from './ProviderCard'
+import { useProvidersTab } from './useProvidersTab'
 
 export function ProvidersTab() {
   const {
@@ -37,7 +37,7 @@ export function ProvidersTab() {
     handlePreferenceChange,
     onDelete,
     onSetPrimaryCredential,
-  } = useProvidersTab();
+  } = useProvidersTab()
 
   if (isLoading) {
     return (
@@ -45,7 +45,7 @@ export function ProvidersTab() {
         <Loader2 className="h-5 w-5 animate-spin mr-2" />
         Loading providers...
       </div>
-    );
+    )
   }
 
   return (
@@ -56,21 +56,25 @@ export function ProvidersTab() {
 
       <div className="grid gap-3">
         {providerIds.map((providerId) => {
-          const provider = getProviderInfo(providerId);
-          const creds = credentialsByProvider[provider.id] ?? [];
+          const provider = getProviderInfo(providerId)
+          const creds = credentialsByProvider[provider.id] ?? []
           const colors = PROVIDER_COLORS[provider.id] ?? {
-            dot: "bg-slate-400",
-            bg: "border-slate-500/20",
-          };
-          const isEditing = editingProvider === provider.id;
-          const isAdding = addingProvider === provider.id;
-          const isConfirmDelete = confirmingDelete === provider.id;
+            dot: 'bg-slate-400',
+            bg: 'border-slate-500/20',
+          }
+          const isEditing = editingProvider === provider.id
+          const isAdding = addingProvider === provider.id
+          const isConfirmDelete = confirmingDelete === provider.id
           const primaryApiCredential = creds.find(
-            (c) => c.credential_type === "api_key" || !c.credential_type,
-          );
+            (c) => c.credential_type === 'api_key' || !c.credential_type,
+          )
           const oauthCredentialIds = creds
-            .filter((c) => c.credential_type === "oauth_token" || c.credential_type === "refresh_token")
-            .map((c) => c.id);
+            .filter(
+              (c) =>
+                c.credential_type === 'oauth_token' ||
+                c.credential_type === 'refresh_token',
+            )
+            .map((c) => c.id)
 
           return (
             <ProviderCard
@@ -86,20 +90,24 @@ export function ProvidersTab() {
               isSaving={isSaving}
               error={error}
               onEdit={() => {
-                resetForm();
-                setEditingCredentialId(primaryApiCredential?.id ?? null);
-                setEditingProvider(provider.id);
+                resetForm()
+                setEditingCredentialId(primaryApiCredential?.id ?? null)
+                setEditingProvider(provider.id)
               }}
               onAdd={() => {
-                resetForm();
-                setEditingCredentialId(null);
-                setAddingProvider(provider.id);
+                resetForm()
+                setEditingCredentialId(null)
+                setAddingProvider(provider.id)
               }}
               onDeleteAll={(ids) => onDelete(ids)}
               onSave={(value, options) =>
                 handleSave(provider.id, value, {
                   ...options,
-                  credentialId: options?.credentialId ?? (isEditing ? editingCredentialId ?? undefined : undefined),
+                  credentialId:
+                    options?.credentialId ??
+                    (isEditing
+                      ? (editingCredentialId ?? undefined)
+                      : undefined),
                   forceCreate: options?.forceCreate ?? isAdding,
                 })
               }
@@ -109,7 +117,9 @@ export function ProvidersTab() {
                   : undefined
               }
               onCancel={resetForm}
-              onConfirmDelete={() => { setConfirmingDelete(provider.id); }}
+              onConfirmDelete={() => {
+                setConfirmingDelete(provider.id)
+              }}
               onCancelDelete={() => setConfirmingDelete(null)}
               isDeletingThis={isDeletingAny}
               onOAuthStart={
@@ -124,19 +134,21 @@ export function ProvidersTab() {
               }
               isOAuthLoading={oauthLoading === provider.id}
               isManualPasteActive={manualPasteProvider === provider.id}
-              onManualExchange={(input) => handleManualExchange(provider.id, input)}
+              onManualExchange={(input) =>
+                handleManualExchange(provider.id, input)
+              }
               onCancelManualPaste={() => {
-                setManualPasteProvider(null);
-                setManualPasteState(null);
-                setOauthLoading(null);
+                setManualPasteProvider(null)
+                setManualPasteState(null)
+                setOauthLoading(null)
               }}
               onEditCredential={(credentialId) => {
-                resetForm();
-                setEditingCredentialId(credentialId);
-                setEditingProvider(provider.id);
+                resetForm()
+                setEditingCredentialId(credentialId)
+                setEditingProvider(provider.id)
               }}
               onDeleteCredential={(credentialId) => {
-                onDelete([credentialId]);
+                onDelete([credentialId])
               }}
               preferredAuth={getPreferredAuth(provider.id)}
               onPreferenceChange={
@@ -145,14 +157,14 @@ export function ProvidersTab() {
                   : undefined
               }
               onSetPrimaryCredential={
-                provider.id === "gemini"
+                provider.id === 'gemini'
                   ? (credentialId) => onSetPrimaryCredential(credentialId)
                   : undefined
               }
             />
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }

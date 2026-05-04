@@ -1,17 +1,17 @@
-import { NotesButton, NotesProvider } from "@summitflow/notes-ui";
-import { Settings, Activity, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { NotesButton, NotesProvider } from '@summitflow/notes-ui'
+import { Activity, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface StatusData {
-  status: "healthy" | "degraded" | "unknown";
-  uptime_seconds: number;
+  status: 'healthy' | 'degraded' | 'unknown'
+  uptime_seconds: number
 }
 
 interface SidebarFooterProps {
-  isCollapsed: boolean;
-  status?: StatusData;
-  onSettingsClick: () => void;
-  onCollapseToggle: () => void;
+  isCollapsed: boolean
+  status?: StatusData
+  onSettingsClick: () => void
+  onCollapseToggle: () => void
 }
 
 export function SidebarFooter({
@@ -27,10 +27,10 @@ export function SidebarFooter({
         <div className="mb-2 hidden items-center gap-3 rounded-2xl border border-slate-800/70 bg-slate-900/75 px-3 py-2.5 lg:flex">
           <Activity
             className={cn(
-              "h-4 w-4 flex-shrink-0",
-              status.status === "healthy"
-                ? "text-emerald-500"
-                : "text-amber-500",
+              'h-4 w-4 flex-shrink-0',
+              status.status === 'healthy'
+                ? 'text-emerald-500'
+                : 'text-amber-500',
             )}
           />
           <div className="flex-1 min-w-0">
@@ -46,8 +46,8 @@ export function SidebarFooter({
 
       <div
         className={cn(
-          "mb-1 flex w-full items-center gap-2 rounded-xl px-1.5 py-1",
-          isCollapsed && "justify-center",
+          'mb-1 flex w-full items-center gap-2 rounded-xl px-1.5 py-1',
+          isCollapsed && 'justify-center',
         )}
       >
         <NotesProvider apiPrefix="/api" projectScope="agent-hub">
@@ -65,17 +65,19 @@ export function SidebarFooter({
       <button
         onClick={onSettingsClick}
         className={cn(
-          "mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2",
-          "text-slate-400",
-          "border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80",
-          "transition-colors duration-150",
-          isCollapsed && "justify-center",
+          'mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2',
+          'text-slate-400',
+          'border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80',
+          'transition-colors duration-150',
+          isCollapsed && 'justify-center',
         )}
-        title={isCollapsed ? "Settings" : undefined}
+        title={isCollapsed ? 'Settings' : undefined}
         aria-label="Settings"
       >
         <Settings className="h-3.5 w-3.5" />
-        {!isCollapsed && <span className="text-[13px] hidden lg:block">Settings</span>}
+        {!isCollapsed && (
+          <span className="text-[13px] hidden lg:block">Settings</span>
+        )}
         {/* Mobile always shows label */}
         <span className="text-[13px] lg:hidden">Settings</span>
       </button>
@@ -84,13 +86,13 @@ export function SidebarFooter({
       <button
         onClick={onCollapseToggle}
         className={cn(
-          "hidden w-full items-center gap-2 rounded-xl px-3 py-2 lg:flex",
-          "text-slate-400",
-          "border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80",
-          "transition-colors duration-150",
-          isCollapsed && "justify-center",
+          'hidden w-full items-center gap-2 rounded-xl px-3 py-2 lg:flex',
+          'text-slate-400',
+          'border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80',
+          'transition-colors duration-150',
+          isCollapsed && 'justify-center',
         )}
-        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {isCollapsed ? (
           <ChevronRight className="h-3.5 w-3.5" />
@@ -102,5 +104,5 @@ export function SidebarFooter({
         )}
       </button>
     </div>
-  );
+  )
 }

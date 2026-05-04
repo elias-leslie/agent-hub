@@ -1,40 +1,40 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { fetchStatus } from "@/lib/api";
-import { SettingsModal } from "@/components/settings-modal";
-import { SidebarLogo } from "./sidebar-logo";
-import { SidebarNav } from "./sidebar-nav";
-import { SidebarFooter } from "./sidebar-footer";
-import { MobileHeader } from "./mobile-header";
-import { usePersonaDisplayName } from "@/app/persona/hooks/usePersonaDisplayName";
+import { useQuery } from '@tanstack/react-query'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePersonaDisplayName } from '@/app/persona/hooks/usePersonaDisplayName'
+import { SettingsModal } from '@/components/settings-modal'
+import { fetchStatus } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { MobileHeader } from './mobile-header'
+import { SidebarFooter } from './sidebar-footer'
+import { SidebarLogo } from './sidebar-logo'
+import { SidebarNav } from './sidebar-nav'
 
 interface AppShellProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const pathname = usePathname()
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   // Fetch system status for the indicator
   const { data: status } = useQuery({
-    queryKey: ["status"],
+    queryKey: ['status'],
     queryFn: fetchStatus,
     refetchInterval: 30000,
     staleTime: 10000,
-  });
-  const { personaName } = usePersonaDisplayName();
+  })
+  const { personaName } = usePersonaDisplayName()
 
   // Close mobile nav on route change
   useEffect(() => {
-    setIsMobileOpen(false);
-  }, [pathname]);
+    setIsMobileOpen(false)
+  }, [pathname])
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-transparent">
@@ -50,18 +50,18 @@ export function AppShell({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-50",
-          "flex flex-col",
-          "bg-slate-950/80 backdrop-blur-xl",
-          "border-r border-slate-800/70",
-          "shadow-[0_30px_80px_-55px_rgba(0,0,0,0.95)]",
-          "sidebar-transition",
+          'fixed lg:static inset-y-0 left-0 z-50',
+          'flex flex-col',
+          'bg-slate-950/80 backdrop-blur-xl',
+          'border-r border-slate-800/70',
+          'shadow-[0_30px_80px_-55px_rgba(0,0,0,0.95)]',
+          'sidebar-transition',
           // Desktop width
-          isCollapsed ? "lg:w-18" : "lg:w-60",
+          isCollapsed ? 'lg:w-18' : 'lg:w-60',
           // Mobile
           isMobileOpen
-            ? "translate-x-0 w-[280px]"
-            : "-translate-x-full lg:translate-x-0",
+            ? 'translate-x-0 w-[280px]'
+            : '-translate-x-full lg:translate-x-0',
         )}
       >
         <SidebarLogo
@@ -71,7 +71,11 @@ export function AppShell({ children }: AppShellProps) {
           onMobileClose={() => setIsMobileOpen(false)}
         />
 
-        <SidebarNav isCollapsed={isCollapsed} pathname={pathname} personaName={personaName} />
+        <SidebarNav
+          isCollapsed={isCollapsed}
+          pathname={pathname}
+          personaName={personaName}
+        />
 
         <SidebarFooter
           isCollapsed={isCollapsed}
@@ -95,5 +99,5 @@ export function AppShell({ children }: AppShellProps) {
         onClose={() => setIsSettingsOpen(false)}
       />
     </div>
-  );
+  )
 }

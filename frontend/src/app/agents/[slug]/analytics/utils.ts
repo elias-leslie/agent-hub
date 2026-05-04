@@ -3,17 +3,17 @@ import type {
   AgentBenchmarkTrendPoint,
   AgentMetrics,
   AnalyticsData,
-} from "./types";
+} from './types'
 
 export function metricsToAnalytics(
   metrics: AgentMetrics,
-  agent: Agent
+  agent: Agent,
 ): AnalyticsData {
   const trend = metrics.latency_trend.map((latencyMs, index) => ({
-    hour: `${String(index).padStart(2, "0")}:00`,
+    hour: `${String(index).padStart(2, '0')}:00`,
     latencyMs,
     successRate: Number((metrics.success_trend[index] ?? 0).toFixed(1)),
-  }));
+  }))
 
   return {
     totalCostUsd: metrics.cost_24h_usd,
@@ -26,23 +26,25 @@ export function metricsToAnalytics(
     trend,
     modelSummary: [agent.primary_model_id, ...agent.fallback_models],
     lastUpdatedAt: agent.updated_at,
-  };
+  }
 }
 
-export function sliceTrendWindow(trend: AnalyticsData["trend"], hours: number) {
-  return trend.slice(Math.max(0, trend.length - hours));
+export function sliceTrendWindow(trend: AnalyticsData['trend'], hours: number) {
+  return trend.slice(Math.max(0, trend.length - hours))
 }
 
 export function filterBenchmarkTrendWindow(
   trend: AgentBenchmarkTrendPoint[],
   hours: number,
 ) {
-  const cutoff = Date.now() - hours * 60 * 60 * 1000;
+  const cutoff = Date.now() - hours * 60 * 60 * 1000
   const filtered = trend.filter((point) => {
     if (!point.completed_at) {
-      return false;
+      return false
     }
-    return new Date(point.completed_at).getTime() >= cutoff;
-  });
-  return filtered.length > 0 ? filtered : trend.slice(Math.max(0, trend.length - 8));
+    return new Date(point.completed_at).getTime() >= cutoff
+  })
+  return filtered.length > 0
+    ? filtered
+    : trend.slice(Math.max(0, trend.length - 8))
 }

@@ -1,19 +1,19 @@
-import { useRef, useCallback } from "react";
-import { Bot } from "lucide-react";
-import { RequestLogEntry, SortField, SortDirection } from "../types";
-import { formatTime, formatLatency, formatNumber } from "../utils";
-import { SortableHeader } from "@/components/ui/SortableHeader";
-import { ToolTypeBadge, StatusBadge } from "./Badges";
+import { Bot } from 'lucide-react'
+import { useCallback, useRef } from 'react'
+import { SortableHeader } from '@/components/ui/SortableHeader'
+import type { RequestLogEntry, SortDirection, SortField } from '../types'
+import { formatLatency, formatNumber, formatTime } from '../utils'
+import { StatusBadge, ToolTypeBadge } from './Badges'
 
 interface RequestTableProps {
-  requests: RequestLogEntry[];
-  total: number;
-  sortField: SortField;
-  sortDirection: SortDirection;
-  onSort: (field: SortField) => void;
-  isFetchingNextPage: boolean;
-  hasNextPage: boolean | undefined;
-  onFetchNextPage: () => void;
+  requests: RequestLogEntry[]
+  total: number
+  sortField: SortField
+  sortDirection: SortDirection
+  onSort: (field: SortField) => void
+  isFetchingNextPage: boolean
+  hasNextPage: boolean | undefined
+  onFetchNextPage: () => void
 }
 
 export function RequestTable({
@@ -26,15 +26,15 @@ export function RequestTable({
   hasNextPage,
   onFetchNextPage,
 }: RequestTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const handleScroll = useCallback(() => {
-    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return;
-    const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return
+    const { scrollTop, scrollHeight, clientHeight } = tableRef.current
     if (scrollHeight - scrollTop - clientHeight < 500) {
-      onFetchNextPage();
+      onFetchNextPage()
     }
-  }, [hasNextPage, isFetchingNextPage, onFetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, onFetchNextPage])
 
   return (
     <div
@@ -46,16 +46,40 @@ export function RequestTable({
         <thead className="bg-slate-800/50 sticky top-0 z-10">
           <tr>
             <th className="text-left">
-              <SortableHeader label="Time" field="time" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Time"
+                field="time"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="text-left">
-              <SortableHeader label="Type" field="type" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Type"
+                field="type"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="text-left">
-              <SortableHeader label="Tool" field="tool" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Tool"
+                field="tool"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="text-left">
-              <SortableHeader label="Agent" field="agent" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Agent"
+                field="agent"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Client
@@ -64,10 +88,22 @@ export function RequestTable({
               Endpoint
             </th>
             <th className="text-left">
-              <SortableHeader label="Status" field="status" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Status"
+                field="status"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="text-left">
-              <SortableHeader label="Latency" field="latency" currentField={sortField} direction={sortDirection} onSort={onSort} />
+              <SortableHeader
+                label="Latency"
+                field="latency"
+                currentField={sortField}
+                direction={sortDirection}
+                onSort={onSort}
+              />
             </th>
             <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Reason
@@ -76,7 +112,10 @@ export function RequestTable({
         </thead>
         <tbody className="divide-y divide-slate-800/50">
           {requests.map((req) => (
-            <tr key={req.id} className="hover:bg-slate-800/30 transition-colors">
+            <tr
+              key={req.id}
+              className="hover:bg-slate-800/30 transition-colors"
+            >
               <td className="px-4 py-3 text-xs text-slate-400 font-mono whitespace-nowrap">
                 {formatTime(req.created_at)}
               </td>
@@ -105,16 +144,22 @@ export function RequestTable({
               <td className="px-4 py-3">
                 <div>
                   <p className="text-sm text-slate-100">
-                    {req.client_display_name || "Unknown"}
+                    {req.client_display_name || 'Unknown'}
                   </p>
                   {req.request_source && (
-                    <p className="text-xs text-slate-500">{req.request_source}</p>
+                    <p className="text-xs text-slate-500">
+                      {req.request_source}
+                    </p>
                   )}
                 </div>
               </td>
               <td className="px-4 py-3">
-                <span className="text-xs font-mono text-slate-500 mr-2">{req.method}</span>
-                <span className="text-sm text-slate-100 font-mono">{req.endpoint}</span>
+                <span className="text-xs font-mono text-slate-500 mr-2">
+                  {req.method}
+                </span>
+                <span className="text-sm text-slate-100 font-mono">
+                  {req.endpoint}
+                </span>
               </td>
               <td className="px-4 py-3">
                 <StatusBadge code={req.status_code} />
@@ -123,7 +168,7 @@ export function RequestTable({
                 {formatLatency(req.latency_ms)}
               </td>
               <td className="px-4 py-3 text-sm text-amber-400 max-w-xs truncate">
-                {req.rejection_reason || "-"}
+                {req.rejection_reason || '-'}
               </td>
             </tr>
           ))}
@@ -143,9 +188,10 @@ export function RequestTable({
       {/* End of list indicator */}
       {!hasNextPage && requests.length > 0 && (
         <div className="flex items-center justify-center py-3 text-xs text-slate-500 bg-slate-900/30">
-          Showing all {formatNumber(requests.length)} of {formatNumber(total)} requests
+          Showing all {formatNumber(requests.length)} of {formatNumber(total)}{' '}
+          requests
         </div>
       )}
     </div>
-  );
+  )
 }

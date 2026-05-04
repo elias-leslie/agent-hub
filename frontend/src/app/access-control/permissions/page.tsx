@@ -1,19 +1,19 @@
-"use client";
+'use client'
 
-import { FormEvent, useCallback, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { FolderLock, Plus, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FolderLock, Plus, Zap } from 'lucide-react'
+import { type FormEvent, useCallback, useState } from 'react'
 import {
   createProjectPermission,
   fetchProjectPermissions,
-  updateProjectPermission,
-  type ProjectPermissionCreate,
   type ProjectPermission,
+  type ProjectPermissionCreate,
   type ProjectPermissionUpdate,
-} from "@/lib/api";
-import { TIER_CONFIG, TIERS, type Tier } from "./_components/tier-config";
-import { PermissionRow } from "./_components/PermissionRow";
+  updateProjectPermission,
+} from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { PermissionRow } from './_components/PermissionRow'
+import { TIER_CONFIG, TIERS, type Tier } from './_components/tier-config'
 
 // ─── Header summary pills ─────────────────────────────────────────────────────
 
@@ -21,43 +21,43 @@ function TierSummary({
   tierCounts,
   autoExecCount,
 }: {
-  tierCounts: Record<Tier, number>;
-  autoExecCount: number;
+  tierCounts: Record<Tier, number>
+  autoExecCount: number
 }) {
   return (
     <div className="flex items-center gap-2">
       {TIERS.map((t) => {
-        const count = tierCounts[t] || 0;
-        if (count === 0) return null;
-        const tc = TIER_CONFIG[t];
+        const count = tierCounts[t] || 0
+        if (count === 0) return null
+        const tc = TIER_CONFIG[t]
         return (
           <span
             key={t}
             className={cn(
-              "flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium",
+              'flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium',
               tc.bg,
               tc.color,
             )}
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", tc.dot)} />
+            <span className={cn('h-1.5 w-1.5 rounded-full', tc.dot)} />
             {count} {tc.label}
           </span>
-        );
+        )
       })}
       <span className="text-slate-600 text-[11px] mx-1">|</span>
       <span
         className={cn(
-          "flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium",
+          'flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium',
           autoExecCount > 0
-            ? "bg-emerald-500/10 text-emerald-400"
-            : "bg-slate-500/10 text-slate-400",
+            ? 'bg-emerald-500/10 text-emerald-400'
+            : 'bg-slate-500/10 text-slate-400',
         )}
       >
         <Zap className="h-3 w-3" />
         {autoExecCount} auto-exec
       </span>
     </div>
-  );
+  )
 }
 
 // ─── Permissions table ────────────────────────────────────────────────────────
@@ -66,60 +66,68 @@ function PermissionsTable({
   permissions,
   onUpdate,
 }: {
-  permissions: ProjectPermission[];
-  onUpdate: (projectId: string, update: ProjectPermissionUpdate) => void;
+  permissions: ProjectPermission[]
+  onUpdate: (projectId: string, update: ProjectPermissionUpdate) => void
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-800/80">
       <table className="w-full">
         <thead className="bg-slate-800/50">
           <tr>
-            {["Project", "Tier", "Auto Exec", "Execution Window", "Updated"].map(
-              (col) => (
-                <th
-                  key={col}
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
-                >
-                  {col}
-                </th>
-              ),
-            )}
+            {[
+              'Project',
+              'Tier',
+              'Auto Exec',
+              'Execution Window',
+              'Updated',
+            ].map((col) => (
+              <th
+                key={col}
+                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+              >
+                {col}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/50">
           {permissions.map((p) => (
-            <PermissionRow key={p.project_id} permission={p} onUpdate={onUpdate} />
+            <PermissionRow
+              key={p.project_id}
+              permission={p}
+              onUpdate={onUpdate}
+            />
           ))}
         </tbody>
       </table>
     </div>
-  );
+  )
 }
 
 function AddProjectPermissionForm({
   onCreate,
   isPending,
 }: {
-  onCreate: (payload: ProjectPermissionCreate) => void;
-  isPending: boolean;
+  onCreate: (payload: ProjectPermissionCreate) => void
+  isPending: boolean
 }) {
-  const [projectId, setProjectId] = useState("");
-  const [tier, setTier] = useState<Tier>("read");
-  const [autoExec, setAutoExec] = useState(false);
+  const [projectId, setProjectId] = useState('')
+  const [tier, setTier] = useState<Tier>('read')
+  const [autoExec, setAutoExec] = useState(false)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalized = projectId.trim();
-    if (!normalized) return;
+    event.preventDefault()
+    const normalized = projectId.trim()
+    if (!normalized) return
     onCreate({
       project_id: normalized,
       permission_tier: tier,
       auto_exec_enabled: autoExec,
-    });
-    setProjectId("");
-    setTier("read");
-    setAutoExec(false);
-  };
+    })
+    setProjectId('')
+    setTier('read')
+    setAutoExec(false)
+  }
 
   return (
     <form
@@ -169,89 +177,94 @@ function AddProjectPermissionForm({
         </button>
       </div>
     </form>
-  );
+  )
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProjectPermissionsPage() {
-  const queryClient = useQueryClient();
-  const [createError, setCreateError] = useState<string | null>(null);
+  const queryClient = useQueryClient()
+  const [createError, setCreateError] = useState<string | null>(null)
 
-  const { data: permissions, isLoading, error } = useQuery({
-    queryKey: ["project-permissions"],
+  const {
+    data: permissions,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['project-permissions'],
     queryFn: fetchProjectPermissions,
     refetchInterval: 30000,
-  });
+  })
 
   const mutation = useMutation({
     mutationFn: ({
       projectId,
       update,
     }: {
-      projectId: string;
-      update: ProjectPermissionUpdate;
+      projectId: string
+      update: ProjectPermissionUpdate
     }) => updateProjectPermission(projectId, update),
     onMutate: async ({ projectId, update }) => {
-      await queryClient.cancelQueries({ queryKey: ["project-permissions"] });
+      await queryClient.cancelQueries({ queryKey: ['project-permissions'] })
       const previous = queryClient.getQueryData<ProjectPermission[]>([
-        "project-permissions",
-      ]);
+        'project-permissions',
+      ])
       queryClient.setQueryData<ProjectPermission[]>(
-        ["project-permissions"],
+        ['project-permissions'],
         (old) =>
           old?.map((p) =>
             p.project_id === projectId ? { ...p, ...update } : p,
           ),
-      );
-      return { previous };
+      )
+      return { previous }
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(["project-permissions"], context.previous);
+        queryClient.setQueryData(['project-permissions'], context.previous)
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["project-permissions"] });
+      queryClient.invalidateQueries({ queryKey: ['project-permissions'] })
     },
-  });
+  })
 
   const createMutation = useMutation({
     mutationFn: createProjectPermission,
     onSuccess: () => {
-      setCreateError(null);
-      queryClient.invalidateQueries({ queryKey: ["project-permissions"] });
+      setCreateError(null)
+      queryClient.invalidateQueries({ queryKey: ['project-permissions'] })
     },
     onError: () => {
-      setCreateError("Failed to create project permission");
+      setCreateError('Failed to create project permission')
     },
-  });
+  })
 
   const handleUpdate = useCallback(
     (projectId: string, update: ProjectPermissionUpdate) => {
-      mutation.mutate({ projectId, update });
+      mutation.mutate({ projectId, update })
     },
     [mutation],
-  );
+  )
 
   const handleCreate = useCallback(
     (payload: ProjectPermissionCreate) => {
-      setCreateError(null);
-      createMutation.mutate(payload);
+      setCreateError(null)
+      createMutation.mutate(payload)
     },
     [createMutation],
-  );
+  )
 
   const tierCounts = permissions?.reduce(
     (acc, p) => {
-      const t = p.permission_tier as Tier;
-      acc[t] = (acc[t] || 0) + 1;
-      return acc;
+      const t = p.permission_tier as Tier
+      acc[t] = (acc[t] || 0) + 1
+      return acc
     },
     {} as Record<Tier, number>,
-  );
+  )
 
-  const autoExecCount = permissions?.filter((p) => p.auto_exec_enabled).length ?? 0;
+  const autoExecCount =
+    permissions?.filter((p) => p.auto_exec_enabled).length ?? 0
 
   return (
     <div className="page-shell">
@@ -271,7 +284,10 @@ export default function ProjectPermissionsPage() {
             )}
           </div>
           {tierCounts && (
-            <TierSummary tierCounts={tierCounts} autoExecCount={autoExecCount} />
+            <TierSummary
+              tierCounts={tierCounts}
+              autoExecCount={autoExecCount}
+            />
           )}
         </div>
       </header>
@@ -313,5 +329,5 @@ export default function ProjectPermissionsPage() {
         ) : null}
       </main>
     </div>
-  );
+  )
 }

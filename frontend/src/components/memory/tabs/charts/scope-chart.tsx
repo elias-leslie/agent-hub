@@ -1,13 +1,13 @@
-import { cn } from "@/lib/utils";
-import type { MemoryAnalyticsState } from "@/lib/memory-api";
-import { EmptyChart } from "../analytics-components";
+import type { MemoryAnalyticsState } from '@/lib/memory-api'
+import { cn } from '@/lib/utils'
+import { EmptyChart } from '../analytics-components'
 
 interface ScopeChartProps {
-  data: MemoryAnalyticsState["scope_distribution"];
+  data: MemoryAnalyticsState['scope_distribution']
 }
 
 export function ScopeChart({ data }: ScopeChartProps) {
-  if (data.length === 0) return <EmptyChart label="No scope data" />;
+  if (data.length === 0) return <EmptyChart label="No scope data" />
 
   return (
     <div className="space-y-3">
@@ -22,8 +22,8 @@ export function ScopeChart({ data }: ScopeChartProps) {
           <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-500",
-                d.scope === "global" ? "bg-indigo-500" : "bg-teal-500"
+                'h-full rounded-full transition-all duration-500',
+                d.scope === 'global' ? 'bg-indigo-500' : 'bg-teal-500',
               )}
               style={{ width: `${d.percentage}%` }}
             />
@@ -31,5 +31,5 @@ export function ScopeChart({ data }: ScopeChartProps) {
         </div>
       ))}
     </div>
-  );
+  )
 }

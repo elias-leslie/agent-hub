@@ -1,59 +1,64 @@
-import { AlertTriangle, CheckCircle2, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react'
 
-import type { AgentBenchmarkExperimentSummary } from "../types";
-import { ChartCard } from "./ChartCard";
+import type { AgentBenchmarkExperimentSummary } from '../types'
+import { ChartCard } from './ChartCard'
 
 interface BenchmarkExperimentSectionProps {
-  experiments: AgentBenchmarkExperimentSummary[];
+  experiments: AgentBenchmarkExperimentSummary[]
 }
 
 function decisionTone(decision: string) {
-  if (decision === "promote") {
+  if (decision === 'promote') {
     return {
       icon: CheckCircle2,
-      className: "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800",
-    };
+      className: 'bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800',
+    }
   }
-  if (decision === "rollback") {
+  if (decision === 'rollback') {
     return {
       icon: RotateCcw,
-      className: "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800",
-    };
+      className: 'bg-rose-950/30 text-rose-300 ring-1 ring-rose-800',
+    }
   }
   return {
     icon: AlertTriangle,
-    className: "bg-amber-950/30 text-amber-300 ring-1 ring-amber-800",
-  };
+    className: 'bg-amber-950/30 text-amber-300 ring-1 ring-amber-800',
+  }
 }
 
-function formatDelta(value: number | null, low: number | null, high: number | null, suffix = "") {
+function formatDelta(
+  value: number | null,
+  low: number | null,
+  high: number | null,
+  suffix = '',
+) {
   if (value === null || low === null || high === null) {
-    return "Pending";
+    return 'Pending'
   }
-  const signed = value > 0 ? `+${value}` : `${value}`;
-  return `${signed}${suffix} [${low}, ${high}]`;
+  const signed = value > 0 ? `+${value}` : `${value}`
+  return `${signed}${suffix} [${low}, ${high}]`
 }
 
-function formatMetric(value: number | null, suffix = "") {
+function formatMetric(value: number | null, suffix = '') {
   if (value === null) {
-    return "Pending";
+    return 'Pending'
   }
-  return `${value}${suffix}`;
+  return `${value}${suffix}`
 }
 
 export function BenchmarkExperimentSection({
   experiments,
 }: BenchmarkExperimentSectionProps) {
   if (experiments.length === 0) {
-    return null;
+    return null
   }
 
   return (
     <ChartCard title="Benchmark Experiments">
       <div className="grid gap-4 lg:grid-cols-2">
         {experiments.map((experiment) => {
-          const tone = decisionTone(experiment.decision);
-          const DecisionIcon = tone.icon;
+          const tone = decisionTone(experiment.decision)
+          const DecisionIcon = tone.icon
           return (
             <article
               key={experiment.experiment_key}
@@ -68,7 +73,9 @@ export function BenchmarkExperimentSection({
                     {experiment.suite_id}
                   </p>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${tone.className}`}>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${tone.className}`}
+                >
                   <DecisionIcon className="h-3.5 w-3.5" />
                   {experiment.decision}
                 </span>
@@ -89,10 +96,10 @@ export function BenchmarkExperimentSection({
                     {experiment.baseline.run_count} runs
                   </p>
                   <p className="mt-1 text-slate-300">
-                    Score {experiment.baseline.avg_score ?? "Pending"}
+                    Score {experiment.baseline.avg_score ?? 'Pending'}
                   </p>
                   <p className="text-slate-300">
-                    Pass {experiment.baseline.avg_pass_rate ?? "Pending"}%
+                    Pass {experiment.baseline.avg_pass_rate ?? 'Pending'}%
                   </p>
                   <p className="text-slate-300">
                     Tools {formatMetric(experiment.baseline.avg_tool_calls)}
@@ -106,10 +113,10 @@ export function BenchmarkExperimentSection({
                     {experiment.candidate.run_count} runs
                   </p>
                   <p className="mt-1 text-slate-300">
-                    Score {experiment.candidate.avg_score ?? "Pending"}
+                    Score {experiment.candidate.avg_score ?? 'Pending'}
                   </p>
                   <p className="text-slate-300">
-                    Pass {experiment.candidate.avg_pass_rate ?? "Pending"}%
+                    Pass {experiment.candidate.avg_pass_rate ?? 'Pending'}%
                   </p>
                   <p className="text-slate-300">
                     Tools {formatMetric(experiment.candidate.avg_tool_calls)}
@@ -135,7 +142,7 @@ export function BenchmarkExperimentSection({
                       experiment.pass_rate_delta.mean_delta,
                       experiment.pass_rate_delta.ci_low,
                       experiment.pass_rate_delta.ci_high,
-                      "%",
+                      '%',
                     )}
                   </dd>
                 </div>
@@ -152,22 +159,23 @@ export function BenchmarkExperimentSection({
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Reason</dt>
                   <dd className="text-right text-slate-200">
-                    {experiment.decision_reason ?? "Pending"}
+                    {experiment.decision_reason ?? 'Pending'}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Config stability</dt>
                   <dd className="text-right text-slate-200">
-                    {experiment.baseline.config_stable && experiment.candidate.config_stable
-                      ? "Frozen"
-                      : "Mixed"}
+                    {experiment.baseline.config_stable &&
+                    experiment.candidate.config_stable
+                      ? 'Frozen'
+                      : 'Mixed'}
                   </dd>
                 </div>
               </dl>
             </article>
-          );
+          )
         })}
       </div>
     </ChartCard>
-  );
+  )
 }

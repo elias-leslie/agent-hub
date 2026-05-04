@@ -1,67 +1,71 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 
-import { ChatPanel } from "@/components/chat";
+import { ChatPanel } from '@/components/chat'
 import {
+  type EmbedInboundMessage,
+  isEmbedded,
   listenForHostMessages,
   sendToHost,
-  isEmbedded,
-  type EmbedInboundMessage,
-} from "@/lib/embed/postmessage-bridge";
+} from '@/lib/embed/postmessage-bridge'
 
 function EmbedContent() {
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()
 
   // Initialize from URL params (fallback for simple integrations)
   const [agentSlug, setAgentSlug] = useState(
-    () => searchParams.get("agent") || searchParams.get("agentSlug") || "persona",
-  );
+    () =>
+      searchParams.get('agent') || searchParams.get('agentSlug') || 'persona',
+  )
   const [projectId, setProjectId] = useState(
-    () => searchParams.get("project") || searchParams.get("projectId") || "agent-hub",
-  );
+    () =>
+      searchParams.get('project') ||
+      searchParams.get('projectId') ||
+      'agent-hub',
+  )
   const [sessionId, setSessionId] = useState<string | undefined>(
-    () => searchParams.get("session") || undefined,
-  );
+    () => searchParams.get('session') || undefined,
+  )
 
   const handleSessionCreated = useCallback((id: string) => {
-    setSessionId(id);
-    sendToHost({ type: "session_created", payload: { sessionId: id } });
-  }, []);
+    setSessionId(id)
+    sendToHost({ type: 'session_created', payload: { sessionId: id } })
+  }, [])
 
   // Listen for postMessage commands from host
   useEffect(() => {
-    const allowedOrigins = searchParams.get("allowedOrigins")?.split(",") || [];
+    const allowedOrigins = searchParams.get('allowedOrigins')?.split(',') || []
 
     const cleanup = listenForHostMessages(
       (msg: EmbedInboundMessage) => {
         switch (msg.type) {
-          case "set_agent":
-            setAgentSlug(msg.payload.agentSlug);
-            break;
-          case "set_project":
-            setProjectId(msg.payload.projectId);
-            break;
-          case "set_session":
-            setSessionId(msg.payload.sessionId);
-            break;
-          case "send_message":
+          case 'set_agent':
+            setAgentSlug(msg.payload.agentSlug)
+            break
+          case 'set_project':
+            setProjectId(msg.payload.projectId)
+            break
+          case 'set_session':
+            setSessionId(msg.payload.sessionId)
+            break
+          case 'send_message':
             // Handled by dispatching to ChatPanel via ref (future enhancement)
-            break;
+            break
         }
       },
       allowedOrigins.length > 0 ? allowedOrigins : undefined,
-    );
+    )
 
     // Notify host that embed is ready
     if (isEmbedded()) {
-      sendToHost({ type: "ready" });
+      sendToHost({ type: 'ready' })
     }
 
-    return cleanup;
-  }, [searchParams]);
+    return cleanup
+  }, [searchParams])
 
   return (
     <div className="h-full flex flex-col">
@@ -74,7 +78,7 @@ function EmbedContent() {
         projectId={projectId}
       />
     </div>
-  );
+  )
 }
 
 export default function EmbedPage() {
@@ -88,5 +92,5 @@ export default function EmbedPage() {
     >
       <EmbedContent />
     </Suspense>
-  );
+  )
 }

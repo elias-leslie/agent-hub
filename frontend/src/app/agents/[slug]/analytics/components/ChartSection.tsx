@@ -1,18 +1,18 @@
 import {
-  LineChart,
+  CartesianGrid,
+  Legend,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import { ChartCard } from "./ChartCard";
-import type { AnalyticsData } from "../types";
+} from 'recharts'
+import type { AnalyticsData } from '../types'
+import { ChartCard } from './ChartCard'
 
 interface ChartSectionProps {
-  trend: AnalyticsData["trend"];
+  trend: AnalyticsData['trend']
 }
 
 export function ChartSection({ trend }: ChartSectionProps) {
@@ -26,12 +26,12 @@ export function ChartSection({ trend }: ChartSectionProps) {
               <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <Tooltip
-                formatter={(value) => [`${value} ms`, "Latency"]}
+                formatter={(value) => [`${value} ms`, 'Latency']}
                 contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "12px",
+                  backgroundColor: '#1e293b',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
                 }}
               />
               <Line
@@ -53,14 +53,18 @@ export function ChartSection({ trend }: ChartSectionProps) {
             <LineChart data={trend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 11 }}
+                stroke="#94a3b8"
+              />
               <Tooltip
-                formatter={(value) => [`${value}%`, "Success"]}
+                formatter={(value) => [`${value}%`, 'Success']}
                 contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "12px",
+                  backgroundColor: '#1e293b',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '12px',
                 }}
               />
               <Legend />
@@ -77,5 +81,5 @@ export function ChartSection({ trend }: ChartSectionProps) {
         </div>
       </ChartCard>
     </div>
-  );
+  )
 }

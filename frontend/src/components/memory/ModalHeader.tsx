@@ -1,4 +1,4 @@
-import { X, Settings } from "lucide-react";
+import { Settings, X } from 'lucide-react'
 
 export function ModalHeader({ onClose }: { onClose: () => void }) {
   return (
@@ -18,5 +18,5 @@ export function ModalHeader({ onClose }: { onClose: () => void }) {
         <X className="w-5 h-5" />
       </button>
     </div>
-  );
+  )
 }

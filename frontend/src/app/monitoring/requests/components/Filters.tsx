@@ -1,16 +1,16 @@
-import { Filter, Bot } from "lucide-react";
+import { Bot, Filter } from 'lucide-react'
 
 interface FiltersProps {
-  clientFilter: string;
-  setClientFilter: (value: string) => void;
-  agentFilter: string;
-  setAgentFilter: (value: string) => void;
-  toolTypeFilter: string | undefined;
-  setToolTypeFilter: (value: string | undefined) => void;
-  statusFilter: number | undefined;
-  setStatusFilter: (value: number | undefined) => void;
-  rejectedOnly: boolean;
-  setRejectedOnly: (value: boolean) => void;
+  clientFilter: string
+  setClientFilter: (value: string) => void
+  agentFilter: string
+  setAgentFilter: (value: string) => void
+  toolTypeFilter: string | undefined
+  setToolTypeFilter: (value: string | undefined) => void
+  statusFilter: number | undefined
+  setStatusFilter: (value: number | undefined) => void
+  rejectedOnly: boolean
+  setRejectedOnly: (value: boolean) => void
 }
 
 export function Filters({
@@ -33,7 +33,9 @@ export function Filters({
           type="text"
           placeholder="Filter by client ID..."
           value={clientFilter}
-          onChange={(e) => { setClientFilter(e.target.value); }}
+          onChange={(e) => {
+            setClientFilter(e.target.value)
+          }}
           className="bg-transparent border-none outline-none text-sm text-slate-100 placeholder-slate-500 w-36"
         />
       </div>
@@ -44,14 +46,18 @@ export function Filters({
           type="text"
           placeholder="Filter by agent..."
           value={agentFilter}
-          onChange={(e) => { setAgentFilter(e.target.value); }}
+          onChange={(e) => {
+            setAgentFilter(e.target.value)
+          }}
           className="bg-transparent border-none outline-none text-sm text-slate-100 placeholder-slate-500 w-32"
         />
       </div>
 
       <select
-        value={toolTypeFilter || ""}
-        onChange={(e) => { setToolTypeFilter(e.target.value || undefined); }}
+        value={toolTypeFilter || ''}
+        onChange={(e) => {
+          setToolTypeFilter(e.target.value || undefined)
+        }}
         className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50"
       >
         <option value="">All Tool Types</option>
@@ -61,8 +67,12 @@ export function Filters({
       </select>
 
       <select
-        value={statusFilter || ""}
-        onChange={(e) => { setStatusFilter(e.target.value ? parseInt(e.target.value) : undefined); }}
+        value={statusFilter || ''}
+        onChange={(e) => {
+          setStatusFilter(
+            e.target.value ? parseInt(e.target.value, 10) : undefined,
+          )
+        }}
         className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50"
       >
         <option value="">All Status Codes</option>
@@ -76,11 +86,13 @@ export function Filters({
         <input
           type="checkbox"
           checked={rejectedOnly}
-          onChange={(e) => { setRejectedOnly(e.target.checked); }}
+          onChange={(e) => {
+            setRejectedOnly(e.target.checked)
+          }}
           className="rounded bg-slate-700 border-slate-600 text-amber-500 focus:ring-amber-500/50"
         />
         <span className="text-sm text-slate-300">Rejected only</span>
       </label>
     </div>
-  );
+  )
 }

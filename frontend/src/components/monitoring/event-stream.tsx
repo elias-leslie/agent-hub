@@ -1,25 +1,25 @@
-"use client";
+'use client'
 
-import { useEffect, useRef } from "react";
 import {
-  MessageSquare,
-  CheckCircle,
   AlertCircle,
+  CheckCircle,
+  MessageSquare,
   Radio,
   Wrench,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { SessionEvent, LegacySessionEventType } from "@/types/events";
+} from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { cn } from '@/lib/utils'
+import type { LegacySessionEventType, SessionEvent } from '@/types/events'
 
 interface EventStreamProps {
   /** Events to display */
-  events: SessionEvent[];
+  events: SessionEvent[]
   /** Maximum height before scrolling */
-  maxHeight?: string;
+  maxHeight?: string
   /** Show timestamps */
-  showTimestamps?: boolean;
+  showTimestamps?: boolean
   /** Additional CSS classes */
-  className?: string;
+  className?: string
 }
 
 // Event type configuration
@@ -29,97 +29,97 @@ const EVENT_CONFIG: Record<
 > = {
   session_start: {
     icon: Radio,
-    color: "text-purple-500 bg-purple-900/30",
-    label: "Started",
+    color: 'text-purple-500 bg-purple-900/30',
+    label: 'Started',
   },
   message: {
     icon: MessageSquare,
-    color: "text-amber-500 bg-blue-900/30",
-    label: "Message",
+    color: 'text-amber-500 bg-blue-900/30',
+    label: 'Message',
   },
   tool_use: {
     icon: Wrench,
-    color: "text-amber-500 bg-amber-900/30",
-    label: "Tool",
+    color: 'text-amber-500 bg-amber-900/30',
+    label: 'Tool',
   },
   tool_result: {
     icon: CheckCircle,
-    color: "text-emerald-500 bg-emerald-900/30",
-    label: "Result",
+    color: 'text-emerald-500 bg-emerald-900/30',
+    label: 'Result',
   },
   complete: {
     icon: CheckCircle,
-    color: "text-green-500 bg-green-900/30",
-    label: "Complete",
+    color: 'text-green-500 bg-green-900/30',
+    label: 'Complete',
   },
   error: {
     icon: AlertCircle,
-    color: "text-red-500 bg-red-900/30",
-    label: "Error",
+    color: 'text-red-500 bg-red-900/30',
+    label: 'Error',
   },
-};
+}
 
 function formatTimestamp(timestamp: string): string {
   try {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
       hour12: false,
-    });
+    })
   } catch {
-    return "--:--:--";
+    return '--:--:--'
   }
 }
 
 function getEventSummary(event: SessionEvent): string {
-  const data = event.data;
+  const data = event.data
 
   switch (event.event_type) {
-    case "session_start":
-      if ("model" in data) {
-        return `Model: ${data.model}`;
+    case 'session_start':
+      if ('model' in data) {
+        return `Model: ${data.model}`
       }
-      return "Session started";
-    case "message":
-      if ("role" in data && "content" in data) {
+      return 'Session started'
+    case 'message':
+      if ('role' in data && 'content' in data) {
         const content =
           data.content.length > 50
-            ? data.content.slice(0, 50) + "..."
-            : data.content;
-        return `${data.role}: ${content}`;
+            ? `${data.content.slice(0, 50)}...`
+            : data.content
+        return `${data.role}: ${content}`
       }
-      return "Message";
-    case "tool_use":
-      if ("tool_name" in data) {
-        return `Tool: ${data.tool_name}`;
+      return 'Message'
+    case 'tool_use':
+      if ('tool_name' in data) {
+        return `Tool: ${data.tool_name}`
       }
-      return "Tool use";
-    case "tool_result":
-      if ("tool_name" in data && data.tool_name) {
-        return `Result: ${data.tool_name}`;
+      return 'Tool use'
+    case 'tool_result':
+      if ('tool_name' in data && data.tool_name) {
+        return `Result: ${data.tool_name}`
       }
-      return "Tool result";
-    case "complete":
-      if ("input_tokens" in data && "output_tokens" in data) {
-        return `Tokens: ${data.input_tokens} in / ${data.output_tokens} out`;
+      return 'Tool result'
+    case 'complete':
+      if ('input_tokens' in data && 'output_tokens' in data) {
+        return `Tokens: ${data.input_tokens} in / ${data.output_tokens} out`
       }
-      return "Completed";
-    case "error":
-      if ("error_message" in data) {
-        return data.error_message;
+      return 'Completed'
+    case 'error':
+      if ('error_message' in data) {
+        return data.error_message
       }
-      return "Error occurred";
+      return 'Error occurred'
     default:
-      return "Event";
+      return 'Event'
   }
 }
 
 interface EventItemProps {
-  event: SessionEvent;
-  showTimestamp?: boolean;
-  isLast?: boolean;
+  event: SessionEvent
+  showTimestamp?: boolean
+  isLast?: boolean
 }
 
 function EventItem({
@@ -127,9 +127,9 @@ function EventItem({
   showTimestamp = true,
   isLast = false,
 }: EventItemProps) {
-  const config = EVENT_CONFIG[event.event_type];
-  const Icon = config.icon;
-  const summary = getEventSummary(event);
+  const config = EVENT_CONFIG[event.event_type]
+  const Icon = config.icon
+  const summary = getEventSummary(event)
 
   return (
     <div className="relative flex gap-3">
@@ -141,7 +141,7 @@ function EventItem({
       {/* Icon */}
       <div
         className={cn(
-          "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          'relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
           config.color,
         )}
       >
@@ -166,7 +166,7 @@ function EventItem({
         </p>
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -177,29 +177,29 @@ function EventItem({
  */
 export function EventStream({
   events,
-  maxHeight = "400px",
+  maxHeight = '400px',
   showTimestamps = true,
   className,
 }: EventStreamProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const lastEventCountRef = useRef(events.length);
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const lastEventCountRef = useRef(events.length)
 
   // Auto-scroll to bottom when new events arrive
   useEffect(() => {
     if (events.length > lastEventCountRef.current && scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+        behavior: 'smooth',
+      })
     }
-    lastEventCountRef.current = events.length;
-  }, [events.length]);
+    lastEventCountRef.current = events.length
+  }, [events.length])
 
   if (events.length === 0) {
     return (
       <div
         className={cn(
-          "flex items-center justify-center p-8 text-muted-foreground",
+          'flex items-center justify-center p-8 text-muted-foreground',
           className,
         )}
       >
@@ -208,13 +208,13 @@ export function EventStream({
           <p className="text-sm">Waiting for events...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div
       ref={scrollRef}
-      className={cn("overflow-y-auto p-4", className)}
+      className={cn('overflow-y-auto p-4', className)}
       style={{ maxHeight }}
     >
       {events.map((event, index) => (
@@ -226,5 +226,5 @@ export function EventStream({
         />
       ))}
     </div>
-  );
+  )
 }

@@ -43,5 +43,5 @@ export default function SessionsLoading() {
         </div>
       </main>
     </div>
-  );
+  )
 }
