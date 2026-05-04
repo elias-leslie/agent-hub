@@ -7,7 +7,9 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from app.models import SessionEventType
 from app.services.context_tracker import log_token_usage
+from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_complete
 from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import estimate_cost
@@ -121,5 +123,12 @@ async def finalize_completion_result(
     else:
         session.health_detail = "completed"
     session.last_activity_at = datetime.now(UTC)
+    await store_child_session_lifecycle_event(
+        db,
+        session,
+        SessionEventType.CHILD_SESSION_RESULT,
+        summary="Child session completed",
+        status="completed",
+    )
 
     await db.commit()

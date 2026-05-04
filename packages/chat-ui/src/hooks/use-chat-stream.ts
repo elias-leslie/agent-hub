@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, StreamStatus } from "../types/chat";
-import type { StreamState } from "./chat-stream/types";
+import type { CompletionRequest, StreamState } from "./chat-stream/types";
 import { loadSession } from "./chat-stream/session-loader";
 import { sendMessage as sendMessageImpl } from "./chat-stream/send-message";
 import { generateId } from "./chat-stream/utils";
@@ -17,6 +17,9 @@ export interface ChatStreamApiConfig {
   projectId?: string;
   memoryGroupPrefix?: string;
   externalId?: string;
+  parentSessionId?: string;
+  sourceMetadata?: CompletionRequest["source_metadata"];
+  workContext?: CompletionRequest["work_context"];
   thinkingLevel?: string | null;
   currentBranch?: string | null;
 }
@@ -73,6 +76,9 @@ export function useChatStream(
     projectId = "agent-hub",
     memoryGroupPrefix = "agent:",
     externalId,
+    parentSessionId,
+    sourceMetadata,
+    workContext,
     thinkingLevel,
     currentBranch,
   } = apiConfig;
@@ -228,11 +234,14 @@ export function useChatStream(
         projectId: effectiveProjectId,
         memoryGroupPrefix,
         externalId,
+        parentSessionId,
+        sourceMetadata,
+        workContext,
         thinkingLevel,
         currentBranch,
       });
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
   );
 
   const cancelStream = useCallback(() => {

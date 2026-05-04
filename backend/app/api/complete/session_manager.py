@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message
 from app.models import Session as DBSession
+from app.models import SessionEventType
+from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.session_ingestion import SessionUpsertRequest, upsert_session
 
 from ._session_helpers import load_session, maybe_reset_persona_session, merge_cache_metrics
@@ -53,6 +55,12 @@ async def _create_session(
         ),
     )
     _apply_trace_id_metadata(session, trace_id)
+    if parent_session_id:
+        await store_child_session_lifecycle_event(
+            db,
+            session,
+            SessionEventType.CHILD_SESSION_STARTED,
+        )
     return session, [], True
 
 

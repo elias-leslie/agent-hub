@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.api.complete.orchestration_helpers import build_session_and_messages
+from app.api.complete.request_schemas import SourceMetadata, WorkContext
 from app.api.complete.request_setup import inject_memory, setup_session
+from app.api.complete.work_context import inject_work_context_message, work_context_to_prompt
 
 
 class _FakeContext:
@@ -38,6 +40,8 @@ def _request() -> SimpleNamespace:
         parent_session_id=None,
         current_branch=None,
         working_dir=None,
+        source_metadata=None,
+        work_context=None,
         session_id=None,
         agent_slug="coder",
         max_turns=1,
@@ -49,6 +53,28 @@ def _request() -> SimpleNamespace:
 
 def _resolved_agent(memory_config: dict[str, object] | None) -> SimpleNamespace:
     return SimpleNamespace(agent=SimpleNamespace(memory_config=memory_config, slug="coder"))
+
+
+def test_work_context_prompt_injects_project_task_context() -> None:
+    context = WorkContext(
+        mode="project_task",
+        project_id="summitflow",
+        project_name="SummitFlow",
+        task_id="task-123",
+        task_title="Build Work Chats",
+        pane_id="pane-1",
+        surface="work_chats",
+    )
+
+    prompt = work_context_to_prompt(context)
+    messages = inject_work_context_message([], context)
+
+    assert prompt is not None
+    assert "project: summitflow" in prompt
+    assert "task: task-123" in prompt
+    assert "pane: pane-1" in prompt
+    assert messages[0].role == "system"
+    assert messages[0].content == prompt
 
 
 @pytest.mark.asyncio
@@ -327,3 +353,52 @@ async def test_setup_session_forwards_trace_id_to_session_creation() -> None:
     get_args = mock_get_or_create.await_args
     assert get_args is not None
     assert get_args.kwargs["trace_id"] == "vantage:issue:iss-123:run:run-456"
+
+
+@pytest.mark.asyncio
+async def test_setup_session_binds_work_context_and_source_metadata() -> None:
+    request = _request()
+    request.work_context = WorkContext(
+        project_id="summitflow",
+        task_id="task-123",
+        pane_id="pane-1",
+        surface="work_chats",
+    )
+    request.source_metadata = SourceMetadata(
+        transport="web",
+        surface="work_chats",
+        pane_id="pane-1",
+        source_client="agent-hub/work-chats",
+    )
+
+    session = SimpleNamespace(id="sess-1")
+    with (
+        patch(
+            "app.api.complete.request_setup.get_or_create_session",
+            new_callable=AsyncMock,
+            return_value=(session, [], True),
+        ),
+        patch(
+            "app.api.complete.request_setup.bind_request_context",
+            new_callable=AsyncMock,
+        ) as mock_bind,
+        patch(
+            "app.api.complete.request_setup.publish_session_start",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await setup_session(
+            request=request,
+            provider="claude",
+            resolved_model="claude-sonnet-4-6",
+            db=AsyncMock(),
+            client_id="client-1",
+            request_source="test",
+        )
+
+    mock_bind.assert_awaited_once()
+    bind_args = mock_bind.await_args
+    assert bind_args is not None
+    assert bind_args.kwargs["session"] is session
+    assert bind_args.kwargs["work_context"] is request.work_context
+    assert bind_args.kwargs["source_metadata"] is request.source_metadata

@@ -59,6 +59,35 @@ class ResponseFormat(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
+
+
+class SourceMetadata(BaseModel):
+    """Per-event source metadata for transport/surface continuity."""
+
+    transport: str | None = Field(default=None, max_length=50)
+    surface: str | None = Field(default=None, max_length=100)
+    chat_id: str | None = Field(default=None, max_length=100)
+    message_id: str | None = Field(default=None, max_length=100)
+    pane_id: str | None = Field(default=None, max_length=100)
+    source_client: str | None = Field(default=None, max_length=100)
+
+
+class WorkContext(BaseModel):
+    """First-class work context injected into agent prompt context."""
+
+    mode: str = Field(default="general", max_length=50)
+    project_id: str | None = Field(default=None, max_length=100)
+    project_name: str | None = Field(default=None, max_length=200)
+    task_id: str | None = Field(default=None, max_length=100)
+    task_title: str | None = Field(default=None, max_length=500)
+    task_summary: str | None = Field(default=None, max_length=5000)
+    feedback_id: str | None = Field(default=None, max_length=100)
+    design_id: str | None = Field(default=None, max_length=100)
+    artifact_summary: str | None = Field(default=None, max_length=5000)
+    surface: str | None = Field(default=None, max_length=100)
+    pane_id: str | None = Field(default=None, max_length=100)
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -74,6 +103,14 @@ class CompletionRequest(BaseModel):
         default=None,
         max_length=100,
         description="Optional parent session ID used to attach spawned work as a child lane.",
+    )
+    source_metadata: SourceMetadata | None = Field(
+        default=None,
+        description="Transport/surface metadata stored on persisted session events.",
+    )
+    work_context: WorkContext | None = Field(
+        default=None,
+        description="First-class project/task/artifact context injected into the model prompt.",
     )
     project_id: str = Field(..., description="Project ID for session tracking (required)")
     external_id: str | None = Field(
