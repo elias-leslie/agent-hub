@@ -20,7 +20,7 @@ _Sessions: 3 | Last run: 2026-05-04 | State: HEALTHY_
 - 2026-05-04 follow-up claimed `task-851af567` slice `1.1` to clear remaining full-gate debt.
 - Current session resolved stale memory-policy test expectations, event/session test mocks, Grok/xAI seed defaults in live Agent Hub config plus generated seed export, and frontend Biome debt.
 - Verification: focused `st check pytest` 70 passed; `st check --quick --changed-only` passed ARCH/ruff/types/pytest/Biome/TSC; full `st check --check` passed ARCH/ruff/types/pytest 3368 passed/37 skipped, Biome, TSC, and Vitest 206 passed.
-- Closeout path: task `task-851af567` will be closed with `st done` after this audit update; no open agent-hub hygiene items remain.
+- Closeout: `st done task-851af567` committed task work, merged to `main`, removed checkpoint, and `st cleanup checkpoints --auto` pruned orphan task refs; final agent-hub pulse is clean with no unpublished work.
 
 ## Open Items
 - None.
