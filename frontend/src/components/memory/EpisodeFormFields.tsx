@@ -115,7 +115,7 @@ export function EpisodeFormFields({
             'focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500',
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
-          placeholder="e.g., use dt for tests"
+          placeholder="e.g., use st check"
         />
         <p className="text-xs text-slate-400">
           Short action phrase (~20 chars) shown in reference index:{' '}

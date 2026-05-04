@@ -43,7 +43,7 @@ describe('analyzeCompactness', () => {
 
   it('leaves lean content warning-free', () => {
     const report = analyzeCompactness(
-      '**Quality Checks**: Use dt for repo checks.',
+      '**Quality Checks**: Use st check for repo checks.',
       'memory',
     )
 
