@@ -7,7 +7,6 @@ import {
   History,
   LayoutDashboard,
   MessageSquare,
-  PanelsTopLeft,
   ScrollText,
   Shield,
   User,
@@ -23,12 +22,6 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  {
-    href: '/work-chats',
-    label: 'Work Chats',
-    icon: PanelsTopLeft,
-    description: 'Multi-pane work sessions',
-  },
   {
     href: '/chat',
     label: 'Chat',
