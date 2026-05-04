@@ -23,7 +23,7 @@ Build-it-right standards (apply to all changes):
 Required loop:
 
 0. Git hygiene (2 minutes max, not the session's work).
-   - `dt --check` — fix failures, commit clean state, move on.
+   - `st check --check` — fix failures, commit clean state, move on.
 
 1. Assess Jenny's effectiveness.
    - Is the heartbeat running? Check worker logs for recent heartbeat executions.
@@ -39,7 +39,7 @@ Required loop:
    - Memory utilization — citation rates, reference quality, low-yield references.
    - Feedback pipeline — unaddressed friction, improvement ideas, patterns.
    - Scheduled jobs — are they firing? Producing results?
-   - `dt --check` — quality gate across all projects.
+   - `st check --check` — quality gate across all projects.
 
 3. Find the highest-leverage gap. Always look deeper than surface health:
    - **Jenny's prompt quality**: Are her heartbeat instructions driving the right behavior? Is the completion review catching issues?
@@ -53,7 +53,7 @@ Required loop:
 4. Fix it. Build it right.
    - Prefer fixing the source over patching symptoms.
    - Delete stale/misleading code before adding new code.
-   - `dt --check` must pass after every change.
+   - `st check --check` must pass after every change.
    - `rebuild.sh agent-hub` after code changes.
    - `commit.sh --push --msg "..."` after each verified code improvement; use `commit.sh --current --push` when the repo is already committed and only needs publish.
 

@@ -66,7 +66,7 @@ Thin canonical contract for `/persona` operator UX. Purpose: keep future work DR
 - Operator proof: `/persona` HUD lane count and Lanes inbox reflect that child session.
 - Redirect/interrupt proof: visible stop/redirect controls act on truthful session state.
 - Dynamic naming proof: new surfaces render configured persona name or neutral labels; no hardcoded persona literal added by new work.
-- Quality proof: `dt --check --changed-only` at minimum during iteration; full `dt --check` before closeout.
+- Quality proof: `st check --quick --changed-only` at minimum during iteration; full `st check --check` before closeout.
 
 ## References
 

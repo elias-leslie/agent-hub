@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 5 | Last run: 2026-05-04 | State: ISSUES_
+_Sessions: 6 | Last run: 2026-05-04 | State: ISSUES_
 
 ## Architecture
 - FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -31,10 +31,15 @@ _Sessions: 5 | Last run: 2026-05-04 | State: ISSUES_
 - `task-d8b9a77f` moved runtime-session streaming tool handling into `streaming_runtime_session.py`; `streaming_tool_loop.py` is now 156 lines and focused on legacy-loop orchestration/public entry. Focused streaming tool-loop tests passed.
 - `task-d5e78dde` moved persona runtime hook implementation behind `usePersonaRuntimeCore.ts`; public `usePersonaRuntime.ts` is now a 7-line compatibility facade. Verification: Biome, full frontend TSC, focused persona Vitest, browser `/persona` checks passed, and post-commit changed gate exited 0 with no changed paths; `st done` merged it to `main`.
 - Final recheck: `st ready --limit 50` returned zero ready tasks, `st feedback summary` reported 198 total feedback items, `st feedback list --limit 50` returned 50 open items, `st cleanup status` reported agent-hub clean, and CodeRabbit/review-bot search found no live references outside audit history.
+- 2026-05-04 continuation: parallel read-only sidecars swept feedback duplicates and code/config drift while local work merged exact duplicate feedback clusters. Final feedback summary reported 174 total records with open clusters still led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`; `st ready --limit 50` returned `READY[0]`.
+- Updated live quality-gate guidance from legacy `dt` to `st check` in contributor docs, arena/persona docs, orchestrated worker prompt generation, memory path regression expectations, and benchmark dispatch readiness cases. Historical task exports, task plans, logs, and applied migrations with old `dt` text were left unchanged as history or generated artifacts.
+- Reported feedback `c86c6059` after `st check --changed-only` crashed with `IndexError`; live valid changed-file gate is `st check --quick --changed-only`.
 
 ## Open Items
-- [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - feedback `a8e0e474` and open feedback backlog need triage authority/queue shaping - impact: visible feedback remains too easy to accumulate without disposition.
+- [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - exact duplicate clusters were merged in bulk, but many open feedback items remain and some near-duplicate clusters need policy/product judgment before merging across component/type boundaries - impact: visible feedback still accumulates without full disposition.
 ## Completed
+- [AH-AUDIT-030] 2026-05-04 - Merged exact duplicate feedback clusters across praise/friction/idea groups, including repeated `dt`, feedback-search, precision-search, timeout-summary, citation-tracking, auto-project-detection, and tool-registry items.
+- [AH-AUDIT-029] 2026-05-04 - Replaced live legacy `dt` quality-gate guidance with `st check` equivalents in scripts and docs; ruff, types, changed gate, and stale-reference search passed for touched files.
 - [AH-AUDIT-009] 2026-05-04 - Exhausted current ready maintainability queue after schema/CRUD/tool/memory-review/chat/streaming/persona slices; final `st ready --limit 50` returned `READY[0]`.
 - [AH-AUDIT-028] 2026-05-04 - Reduced persona runtime public hook file to a compatibility facade over `usePersonaRuntimeCore.ts`; Biome, TSC, focused persona Vitest, and production browser `/persona` check passed.
 - [AH-AUDIT-027] 2026-05-04 - Split runtime-session streaming tool loop out of `streaming_tool_loop.py`; focused streaming tests and changed gate passed.

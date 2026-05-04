@@ -21,7 +21,7 @@ Project setup and service commands are documented in [README.md](README.md).
 Quality checks should use the project wrappers:
 
 ```bash
-dt --check --changed-only
+st check --quick --changed-only
 ```
 
 When you need to verify runtime behavior, use the same backend, worker, and

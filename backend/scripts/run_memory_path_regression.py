@@ -234,8 +234,8 @@ def _validate_startup_commands(target: str, result: RunnerResult) -> ProbeResult
         or memory_lookup_cmd.startswith("st memory get")
     ):
         reasons.append("memory_lookup_cmd should start with `st memory search` or `st memory get`")
-    if not _string(data.get("quality_check_cmd")).startswith("dt"):
-        reasons.append("quality_check_cmd should start with `dt`")
+    if not _string(data.get("quality_check_cmd")).startswith("st check"):
+        reasons.append("quality_check_cmd should start with `st check`")
     status = "pass" if not reasons else "fail"
     return ProbeResult(target=target, case="startup_commands", status=status, reasons=reasons, data=data, evidence=result.evidence)
 
