@@ -1,11 +1,12 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 1 | Last run: 2026-05-04 | State: ISSUES_
+_Sessions: 2 | Last run: 2026-05-04 | State: ISSUES_
 
 ## Architecture
 - FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
 - Next.js frontend in `frontend`; packages under `packages/` provide shared client/UI SDKs.
 - Bundled Docker stack exposes frontend on `3003` and backend on `8003`; native run uses backend worker plus frontend dev server.
 - Project targets Python 3.13+, Node 20+, pnpm 10.28.0.
+- Persona operator runtime tool surface is owned by `backend/app/services/tools/persona_tool_surface.py`; shared broad tool registries are not persona hot-load authority.
 
 ## Project Tooling Notes
 - Use `st` for dev workflow and repo gates. `st check` owns pytest, vitest, Biome, Ruff, TSC, and related checks.
@@ -17,6 +18,10 @@ _Sessions: 1 | Last run: 2026-05-04 | State: ISSUES_
 ## Active Work Context
 - 2026-05-04 recurring hygiene session reviewed `st pulse`, session ownership, `st ready`, and active feedback.
 - `st ready` showed P1 `task-17eba047` plus multiple P2 health/refactor items; none claimed yet.
+- 2026-05-04 hygiene session claimed P1 `task-17eba047`; all five subtasks now pass and task context reports `COMPLETE_READY:yes`.
+- Implemented persona tool-surface guardrails: source-of-truth allowlist, provisioning filter, persona permission display, wrapper gating, contract doc, and focused tests.
+- Pre-close critique ran after one transient DB-pool 500; verdict `NEEDS_REVISION` because task package lacked closeout evidence at critique time. Evidence and verdict were logged afterward.
+- Verification this session: focused `st check pytest` 70 passed; `st check --quick --changed-only` passed ARCH/ruff/types/pytest; full `st check --check` still red only on AH-AUDIT-003 debt.
 - Reviewed `task-851af567`; fixed its backend raw-subprocess architecture slice and logged progress to the task.
 - Active feedback list has 20 visible open items, mostly CLI/session/tooling friction.
 - Preflight: no overlaps; one unrelated writer owned generated/package paths, so this session avoided those paths.
@@ -29,9 +34,11 @@ _Sessions: 1 | Last run: 2026-05-04 | State: ISSUES_
 ## Completed
 - [AH-AUDIT-001] 2026-05-04 - Created project-local audit file with architecture, tooling, coordination, task, feedback, and verification context.
 - [AH-AUDIT-002] 2026-05-04 - Consolidated runtime subprocess spawns behind `app.utils.safe_subprocess` to remove raw route/workflow/tool spawns from changed paths.
+- [AH-AUDIT-004] 2026-05-04 - Collapsed persona operator tool surface to tiered core tools with code/doc source of truth and regression tests.
 
 ## Decisions
 - Treat missing top-level `st cleanroom` as live CLI drift; use current `st check cleanroom -- ...` shape for cleanroom commands.
 - Keep raw subprocess implementation centralized in `backend/app/utils/safe_subprocess.py`; route/workflow/tool code should call that wrapper.
+- No persona direct-tool exceptions are kept in the operator surface. Shared backend/non-persona registries may stay broad, but persona provisioning filters before deferred catalog exposure.
 
 ## Human Follow-up

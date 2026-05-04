@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -181,7 +182,7 @@ class TestInjectAgentMandates:
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_project_permissions_block_lists_visible_persona_tools(
+    async def test_project_permissions_block_lists_visible_tools_for_non_persona(
         self,
         mock_agent: AgentDTO,
     ) -> None:
@@ -212,6 +213,45 @@ class TestInjectAgentMandates:
             "Allowed tools: inspect_session, query_sessions, read_file, review_improvement_signals"
             in result.system_content
         )
+
+    @pytest.mark.asyncio
+    async def test_persona_project_permissions_block_renders_operator_tool_names(self) -> None:
+        persona_agent = AgentDTO(
+            id=9,
+            slug="persona",
+            name="Persona",
+            description=None,
+            system_prompt="Persona prompt",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.1,
+            thinking_level="low",
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=True,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        perm = SimpleNamespace(project_id="agent-hub", permission_tier="write")
+
+        with patch(
+            "app.services.agent_routing_utils._fetch_permissions",
+            new=AsyncMock(return_value=(perm, [perm])),
+        ):
+            result = await inject_agent_mandates(persona_agent, project_id="agent-hub")
+
+        assert "Allowed tools: Read, Write, Edit" in result.system_content
+        assert "read_file" not in result.system_content
+        assert "write_file" not in result.system_content
 
     @pytest.mark.asyncio
     async def test_persona_runtime_uses_shared_runtime_prompt_stack(self) -> None:
