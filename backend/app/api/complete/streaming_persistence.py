@@ -8,6 +8,8 @@ import time
 from datetime import UTC, datetime
 
 from app.models import Session as DBSession
+from app.models import SessionEventType
+from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_message, publish_tool_result, publish_tool_use
 from app.services.session_live_activity import mark_session_completed
 
@@ -30,6 +32,7 @@ async def save_messages_to_db(
     model: str,
     agent_used: str | None,
     stream_start: float,
+    source_metadata: dict[str, object] | None = None,
 ) -> None:
     """Save streamed messages to the database using a fresh session."""
     if not accumulated_content:
@@ -49,6 +52,7 @@ async def save_messages_to_db(
                 model_used=model,
                 agent_id=agent_used,
                 duration_ms=stream_duration_ms,
+                source_metadata=source_metadata,
             )
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:
@@ -136,6 +140,7 @@ async def mirror_stream_tool_use(
             tool_input,
             model_used=ctx.model_used or ctx.model,
             agent_id=ctx.agent_used,
+            **(ctx.source_metadata or {}),
         )
 
     await _with_fresh_session(ctx.session_id, _update)
@@ -170,6 +175,7 @@ async def mirror_stream_tool_result(
             duration_ms=duration_ms,
             model_used=ctx.model_used or ctx.model,
             agent_id=ctx.agent_used,
+            **(ctx.source_metadata or {}),
         )
 
     await _with_fresh_session(ctx.session_id, _update)
@@ -194,6 +200,13 @@ async def close_one_shot_session(session_id: str) -> None:
                     termination_reason="streaming_one_shot_closed",
                 )
                 session.last_activity_at = datetime.now(UTC)
+                await store_child_session_lifecycle_event(
+                    fresh_db,
+                    session,
+                    SessionEventType.CHILD_SESSION_RESULT,
+                    summary="Child session completed",
+                    status="completed",
+                )
                 await fresh_db.commit()
                 logger.info("Streaming: closed one-shot session %s", session_id)
     except Exception as close_err:
@@ -328,6 +341,7 @@ async def _persist_completion(
         model=ctx.model,
         agent_used=ctx.agent_used,
         stream_start=ctx.stream_start,
+        source_metadata=ctx.source_metadata,
     )
     await _track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
     if ctx.is_new_session and ctx.is_one_shot:

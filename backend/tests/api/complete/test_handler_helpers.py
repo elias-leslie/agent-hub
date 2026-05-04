@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from app.api.complete._session_helpers import update_session_metadata
 from app.api.complete.handler_helpers import save_and_track
-from app.api.complete.schemas import CompletionRequest, MessageInput
+from app.api.complete.schemas import CompletionRequest, MessageInput, SourceMetadata
 
 
 def test_completion_request_accepts_high_turn_budgets() -> None:
@@ -38,6 +38,12 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="hello")],
         project_id="test-project",
+        source_metadata=SourceMetadata(
+            transport="web",
+            surface="work_chats",
+            pane_id="pane-1",
+            source_client="agent-hub/work-chats",
+        ),
     )
     result = SimpleNamespace(
         content="done",
@@ -80,12 +86,27 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
             is_new_session=True,
         )
 
-    assert mock_save_events.await_args.args[6] == "claude-haiku-4-5"
-    assert mock_observability.await_args.kwargs["orchestration_path"] == "single_turn"
-    assert mock_observability.await_args.kwargs["requested_max_turns"] == 1
-    assert mock_observability.await_args.kwargs["provider"] == "claude"
-    assert mock_cost.call_args.args[2] == "claude-haiku-4-5"
-    assert mock_log_tokens.await_args.args[2] == "claude-haiku-4-5"
+    save_events_args = mock_save_events.await_args
+    assert save_events_args is not None
+    observability_args = mock_observability.await_args
+    assert observability_args is not None
+    log_tokens_args = mock_log_tokens.await_args
+    assert log_tokens_args is not None
+    cost_args = mock_cost.call_args
+    assert cost_args is not None
+
+    assert save_events_args.args[6] == "claude-haiku-4-5"
+    assert save_events_args.kwargs["source_metadata"] == {
+        "transport": "web",
+        "surface": "work_chats",
+        "pane_id": "pane-1",
+        "source_client": "agent-hub/work-chats",
+    }
+    assert observability_args.kwargs["orchestration_path"] == "single_turn"
+    assert observability_args.kwargs["requested_max_turns"] == 1
+    assert observability_args.kwargs["provider"] == "claude"
+    assert cost_args.args[2] == "claude-haiku-4-5"
+    assert log_tokens_args.args[2] == "claude-haiku-4-5"
     assert session.model == "claude-haiku-4-5"
     assert session.provider == "claude"
     assert "claude-haiku-4-5" in session.models_used

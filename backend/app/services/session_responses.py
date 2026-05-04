@@ -165,6 +165,12 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
             model_used=e.model_used,
             agent_id=e.agent_id,
             agent_name=e.agent_name,
+            transport=e.transport,
+            surface=e.surface,
+            chat_id=e.chat_id,
+            message_id=e.message_id,
+            pane_id=e.pane_id,
+            source_client=e.source_client,
             created_at=e.created_at,
         )
         for e in events

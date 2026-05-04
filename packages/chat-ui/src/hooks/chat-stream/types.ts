@@ -68,6 +68,28 @@ export interface CompletionRequest {
   max_turns?: number;
   project_id: string;
   external_id?: string;
+  parent_session_id?: string;
+  source_metadata?: {
+    transport?: string;
+    surface?: string;
+    chat_id?: string;
+    message_id?: string;
+    pane_id?: string;
+    source_client?: string;
+  };
+  work_context?: {
+    mode?: string;
+    project_id?: string;
+    project_name?: string;
+    task_id?: string;
+    task_title?: string;
+    task_summary?: string;
+    feedback_id?: string;
+    design_id?: string;
+    artifact_summary?: string;
+    surface?: string;
+    pane_id?: string;
+  };
   thinking_level?: string;
   current_branch?: string;
   stream: boolean;

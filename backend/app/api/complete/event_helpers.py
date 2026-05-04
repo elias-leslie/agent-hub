@@ -23,6 +23,7 @@ async def _save_user_message_events(
     user_messages: list[MessageInput],
     input_tokens: int,
     agent_id: str | None,
+    source_metadata: dict[str, object] | None = None,
 ) -> None:
     """Store only the last user/system message (prior turns already persisted)."""
     user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
@@ -37,6 +38,7 @@ async def _save_user_message_events(
         tokens=input_tokens,
         agent_id=agent_id,
         agent_name=agent_id,
+        **(source_metadata or {}),
     )
 
 
@@ -47,6 +49,7 @@ async def _save_thinking_event(
     thinking_tokens: int | None,
     model_used: str | None,
     agent_id: str | None,
+    source_metadata: dict[str, object] | None = None,
 ) -> None:
     """Store the thinking event when thinking content is present."""
     if thinking_content:
@@ -58,6 +61,7 @@ async def _save_thinking_event(
             model_used=model_used,
             agent_id=agent_id,
             agent_name=agent_id,
+            **(source_metadata or {}),
         )
 
 
@@ -73,10 +77,19 @@ async def save_events(
     thinking_tokens: int | None = None,
     agent_id: str | None = None,
     duration_ms: int | None = None,
+    source_metadata: dict[str, object] | None = None,
 ) -> None:
     """Save user messages, thinking, and assistant response as events."""
-    await _save_user_message_events(db, session_id, user_messages, input_tokens, agent_id)
-    await _save_thinking_event(db, session_id, thinking_content, thinking_tokens, model_used, agent_id)
+    await _save_user_message_events(db, session_id, user_messages, input_tokens, agent_id, source_metadata)
+    await _save_thinking_event(
+        db,
+        session_id,
+        thinking_content,
+        thinking_tokens,
+        model_used,
+        agent_id,
+        source_metadata,
+    )
     await store_message_event(
         db=db,
         session_id=session_id,
@@ -87,5 +100,6 @@ async def save_events(
         agent_id=agent_id,
         agent_name=agent_id,
         duration_ms=duration_ms,
+        **(source_metadata or {}),
     )
     await db.commit()

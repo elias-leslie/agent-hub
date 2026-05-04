@@ -39,6 +39,7 @@ from app.api.site_health_check import router as site_health_check_router
 from app.api.tasks import router as tasks_router
 from app.api.wake import router as wake_router
 from app.api.webhooks import router as webhooks_router
+from app.api.work_chats import router as work_chats_router
 
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
@@ -76,5 +77,6 @@ router.include_router(tasks_router)
 router.include_router(wake_router)  # Has its own prefix /wake and tags
 router.include_router(heartbeat_router)  # Has its own prefix /heartbeat and tags
 router.include_router(site_health_check_router)  # Has its own prefix /site-health-check and tags
+router.include_router(work_chats_router)
 
 __all__ = ["router"]

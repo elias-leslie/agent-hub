@@ -23,6 +23,8 @@ interface ChatPanelProps {
   onSessionCreated?: (sessionId: string) => void;
   onClear?: () => void;
   initialPrompt?: string;
+  autoSendPrompt?: string | null;
+  autoSendKey?: string | number | null;
   title?: string;
   apiConfig?: ChatStreamApiConfig;
   fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
@@ -44,6 +46,8 @@ export function ChatPanel({
   onSessionCreated,
   onClear,
   initialPrompt,
+  autoSendPrompt,
+  autoSendKey,
   title = "Agent Hub",
   apiConfig,
   fetchFn,
@@ -72,10 +76,15 @@ export function ChatPanel({
   } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, apiConfig });
 
   const [showDebug, setShowDebug] = useState(false);
+  const lastNotifiedSessionId = useRef<string | null>(null);
 
   // Notify parent when a new session is created
   useEffect(() => {
     if (currentSessionId && onSessionCreated) {
+      if (lastNotifiedSessionId.current === currentSessionId) {
+        return;
+      }
+      lastNotifiedSessionId.current = currentSessionId;
       onSessionCreated(currentSessionId);
     }
   }, [currentSessionId, onSessionCreated]);
@@ -144,6 +153,7 @@ export function ChatPanel({
 
   const isStreaming = status === "streaming" || status === "reconnecting" || status === "cancelling";
   const isBusy = status !== "idle" && status !== "error";
+  const lastAutoSendKey = useRef<string | number | null>(null);
   const lastAssistantMessage = useMemo(
     () => [...messages].reverse().find((m) => m.role === "assistant") ?? null,
     [messages],
@@ -172,6 +182,17 @@ export function ChatPanel({
     if (!targetSessionId) return;
     void resumeSession(targetSessionId);
   }, [currentSessionId, resumeSession, sessionId]);
+
+  useEffect(() => {
+    if (!autoSendPrompt || autoSendKey === null || autoSendKey === undefined || isBusy) {
+      return;
+    }
+    if (lastAutoSendKey.current === autoSendKey) {
+      return;
+    }
+    lastAutoSendKey.current = autoSendKey;
+    sendMessage(autoSendPrompt);
+  }, [autoSendKey, autoSendPrompt, isBusy, sendMessage]);
 
   return (
     <div className="flex flex-row h-full">

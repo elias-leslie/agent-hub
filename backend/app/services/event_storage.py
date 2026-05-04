@@ -100,6 +100,131 @@ def _sanitize_event_value(value: Any) -> Any:
     return value
 
 
+_CHILD_SESSION_EVENT_TYPES = {
+    SessionEventType.CHILD_SESSION_STARTED,
+    SessionEventType.CHILD_SESSION_UPDATE,
+    SessionEventType.CHILD_SESSION_BLOCKED,
+    SessionEventType.CHILD_SESSION_RESULT,
+}
+
+
+def _source_metadata_from_session(session: Session) -> dict[str, Any]:
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    source_metadata = metadata.get("source_metadata")
+    return source_metadata if isinstance(source_metadata, dict) else {}
+
+
+def _child_session_payload(
+    child_session: Session,
+    *,
+    child_event: SessionEvent | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "child_session_id": child_session.id,
+        "status": status or child_session.status,
+        "agent_slug": child_session.agent_slug,
+        "project_id": child_session.project_id,
+        "external_id": child_session.external_id,
+        "summary": child_session.summary_oneliner,
+        "workstream_status": child_session.workstream_status,
+        "current_branch": child_session.current_branch,
+        "observed_write_paths": child_session.observed_write_paths or [],
+    }
+    if child_event is not None:
+        payload.update(
+            {
+                "child_event_id": child_event.id,
+                "child_event_type": child_event.event_type,
+                "child_event_content": child_event.content,
+                "tool_name": child_event.tool_name,
+            }
+        )
+    return payload
+
+
+def _child_session_summary(
+    child_session: Session,
+    event_type: str,
+    child_event: SessionEvent | None,
+) -> str:
+    child_label = child_session.agent_slug or child_session.id[:8]
+    if event_type == SessionEventType.CHILD_SESSION_STARTED:
+        return f"Child session {child_session.id} started ({child_label})"
+    if event_type == SessionEventType.CHILD_SESSION_BLOCKED:
+        detail = child_event.content if child_event is not None else child_session.health_detail
+        return f"Child session {child_session.id} blocked: {detail or child_label}"
+    if event_type == SessionEventType.CHILD_SESSION_RESULT:
+        detail = child_session.summary_oneliner or child_session.health_detail or child_session.status
+        return f"Child session {child_session.id} result: {detail}"
+    detail = child_event.content if child_event is not None and child_event.content else child_session.health_detail
+    return f"Child session {child_session.id} update: {detail or child_label}"
+
+
+async def store_child_session_lifecycle_event(
+    db: AsyncSession,
+    child_session: Session,
+    event_type: str,
+    *,
+    child_event: SessionEvent | None = None,
+    summary: str | None = None,
+    status: str | None = None,
+) -> SessionEvent | None:
+    """Store a child-lane lifecycle event on the parent supervisor session."""
+    parent_session_id = getattr(child_session, "parent_session_id", None)
+    if not parent_session_id:
+        return None
+    if event_type not in _CHILD_SESSION_EVENT_TYPES:
+        return None
+    source_metadata = _source_metadata_from_session(child_session)
+    return await store_event(
+        db=db,
+        session_id=parent_session_id,
+        event_type=event_type,
+        content=summary or _child_session_summary(child_session, event_type, child_event),
+        tool_output=_child_session_payload(child_session, child_event=child_event, status=status),
+        agent_id=child_session.agent_slug,
+        agent_name=child_session.agent_slug,
+        transport=source_metadata.get("transport"),
+        surface=source_metadata.get("surface"),
+        chat_id=source_metadata.get("chat_id"),
+        message_id=source_metadata.get("message_id"),
+        pane_id=source_metadata.get("pane_id"),
+        source_client=source_metadata.get("source_client"),
+    )
+
+
+async def _mirror_child_event_to_parent(
+    db: AsyncSession,
+    child_session: Session | None,
+    child_event: SessionEvent,
+) -> None:
+    if child_session is None or not getattr(child_session, "parent_session_id", None):
+        return
+    if child_event.event_type in _CHILD_SESSION_EVENT_TYPES:
+        return
+    event_type: str | None
+    if child_event.event_type == SessionEventType.ERROR:
+        event_type = SessionEventType.CHILD_SESSION_BLOCKED
+    elif child_event.event_type in {
+        SessionEventType.ASSISTANT_MESSAGE,
+        SessionEventType.THINKING,
+        SessionEventType.TOOL_USE,
+        SessionEventType.TOOL_RESULT,
+    }:
+        event_type = SessionEventType.CHILD_SESSION_UPDATE
+    else:
+        event_type = None
+    if event_type is None:
+        return
+    await store_child_session_lifecycle_event(
+        db,
+        child_session,
+        event_type,
+        child_event=child_event,
+    )
+
+
 def _reconcile_session_from_event(
     session: Session,
     *,
@@ -213,6 +338,12 @@ async def store_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
     session: Session | None = None,
 ) -> SessionEvent:
     """Store a single event to the database.
@@ -230,12 +361,20 @@ async def store_event(
     model_used = _sanitize_event_value(model_used)
     agent_id = _sanitize_event_value(agent_id)
     agent_name = _sanitize_event_value(agent_name)
+    transport = _sanitize_event_value(transport)
+    surface = _sanitize_event_value(surface)
+    chat_id = _sanitize_event_value(chat_id)
+    message_id = _sanitize_event_value(message_id)
+    pane_id = _sanitize_event_value(pane_id)
+    source_client = _sanitize_event_value(source_client)
 
     event = SessionEvent(
         session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
         role=role, content=content, tool_name=tool_name, tool_input=tool_input,
         tool_output=tool_output, tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        transport=transport, surface=surface, chat_id=chat_id,
+        message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
     db.add(event)
 
@@ -253,6 +392,7 @@ async def store_event(
         )
 
     await _maybe_extract_narration(db, session_id, event_type, content, parent_session)
+    await _mirror_child_event_to_parent(db, parent_session, event)
     return event
 
 
@@ -266,6 +406,12 @@ async def store_message_event(
     agent_id: str | None = None,
     agent_name: str | None = None,
     duration_ms: int | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
 ) -> SessionEvent:
     """Store a message event (user, assistant, or system)."""
     event_type_map = {
@@ -278,6 +424,8 @@ async def store_message_event(
         event_type=event_type_map.get(role, SessionEventType.USER_MESSAGE),
         role=role, content=content, tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        transport=transport, surface=surface, chat_id=chat_id,
+        message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
 
 
@@ -289,12 +437,20 @@ async def store_thinking_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
 ) -> SessionEvent:
     """Store a thinking/reasoning event."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.THINKING,
         content=thinking_content, tokens=tokens,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        transport=transport, surface=surface, chat_id=chat_id,
+        message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
 
 
@@ -307,12 +463,20 @@ async def store_tool_use_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
 ) -> SessionEvent:
     """Store a tool use event."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.TOOL_USE,
         tool_name=tool_name, tool_input=tool_input, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        transport=transport, surface=surface, chat_id=chat_id,
+        message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
 
 
@@ -342,6 +506,12 @@ async def store_tool_result_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
 ) -> SessionEvent:
     """Store a tool result event."""
     output_data = tool_output if isinstance(tool_output, dict) else {"result": tool_output}
@@ -350,6 +520,8 @@ async def store_tool_result_event(
         tool_name=tool_name, content=_extract_tool_result_content(output_data),
         tool_output=output_data, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        transport=transport, surface=surface, chat_id=chat_id,
+        message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
 
 
