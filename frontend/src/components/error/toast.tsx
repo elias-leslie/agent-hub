@@ -147,6 +147,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const Icon = TOAST_ICONS[toast.type]
+  const handleDismiss = useCallback(() => {
+    setIsLeaving(true)
+    setTimeout(onDismiss, 200)
+  }, [onDismiss])
 
   // Enter animation
   useEffect(() => {
@@ -163,13 +167,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
     }, toast.duration)
 
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast.duration])
-
-  const handleDismiss = () => {
-    setIsLeaving(true)
-    setTimeout(onDismiss, 200)
-  }
+  }, [toast.duration, handleDismiss])
 
   const typeStyles = {
     success: {

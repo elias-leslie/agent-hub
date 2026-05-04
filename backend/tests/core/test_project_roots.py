@@ -44,7 +44,7 @@ def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
     with (
         patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
         patch(
-            "app.core.project_roots.subprocess.run",
+            "app.core.project_roots.run_process",
             return_value=SimpleNamespace(returncode=0, stdout=str(tmp_path), stderr=""),
         ),
         patch("pathlib.Path.exists", return_value=True),
@@ -63,7 +63,7 @@ def test_resolve_project_root_falls_back_when_st_times_out(tmp_path: Path) -> No
         patch("app.core.project_roots._CANONICAL_WORKSPACE_ROOT", tmp_path),
         patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
         patch(
-            "app.core.project_roots.subprocess.run",
+            "app.core.project_roots.run_process",
             side_effect=subprocess.TimeoutExpired(["st", "projects", "root", "summitflow"], timeout=5),
         ),
     ):

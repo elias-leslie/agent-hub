@@ -97,7 +97,7 @@ export function SessionDropdown({
     if (isOpen && hasFetched && refreshTrigger > 0) {
       fetchSessions()
     }
-  }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchSessions, hasFetched, isOpen, refreshTrigger])
 
   // Click-outside dismissal
   useEffect(() => {
