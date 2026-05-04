@@ -27,12 +27,13 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - Reported new control-plane feedback `c48903d1` after `st context task-04380626` hit an import error in `cli.commands.tasks_context`.
 - `task-354906ba` split `backend/app/services/tools/_executor_io_tasks.py` into a 40-line facade plus focused plan/cleanup/dispatch modules; all new modules are under 300 lines. Focused executor/persona tool tests passed 100 tests.
 - `task-7984080d` split `backend/app/services/memory/review_agent.py` into a 47-line facade plus focused selection, prompt, call, decision, apply, and runner modules; all helper modules are under 300 lines. Focused memory review/scheduler tests passed 28 tests.
-- Stop condition for this run: remaining safe work exists, but after multiple committed refactor batches current context/tool budget makes another broad frontend/API slice unsafe. Exact remaining queue is in Open Items; next action is claim `task-69c7fa38`, `task-d8b9a77f`, or `task-d5e78dde` from a fresh context.
+- `task-69c7fa38` split chat sidebar UI out of `frontend/src/app/chat/page.tsx`; page is now 262 lines and focused on state/data wiring. Verification: Biome, full frontend TSC, changed gate, and browser checks for `/chat` passed with zero console/network errors.
 
 ## Open Items
 - [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - feedback `a8e0e474` and open feedback backlog need triage authority/queue shaping - impact: visible feedback remains too easy to accumulate without disposition.
-- [AH-AUDIT-009] [MEDIUM] [OPEN] Maintainability backlog remains after schema/CRUD/tool/memory-review slices - ready refactors `task-69c7fa38`, `task-d8b9a77f`, `task-d5e78dde`; failed refactors need disposition - impact: large modules and failed cleanup attempts.
+- [AH-AUDIT-009] [MEDIUM] [OPEN] Maintainability backlog remains after schema/CRUD/tool/memory-review/chat slices - ready refactors `task-d8b9a77f`, `task-d5e78dde`; failed refactors need disposition - impact: large modules and failed cleanup attempts.
 ## Completed
+- [AH-AUDIT-026] 2026-05-04 - Split chat sidebar out of `frontend/src/app/chat/page.tsx`; page is 262 lines, frontend checks passed, and browser `/chat` checks had zero console/network errors.
 - [AH-AUDIT-025] 2026-05-04 - Split memory `review_agent.py` into focused selection, prompt, reviewer-call, decision parsing, application, and runner modules while preserving facade imports; focused tests and changed gate passed.
 - [AH-AUDIT-024] 2026-05-04 - Split `_executor_io_tasks.py` into focused plan, cleanup, and dispatch guard modules while preserving the import facade; focused tests and changed gate passed.
 - [AH-AUDIT-023] 2026-05-04 - Completed project memory-yield audit for `task-04380626`: removed duplicate zero-citation refs `05cc0918`/`b23f83b0`, narrowed `f0eb55a5`, and verified memory status plus persona preview signal.
