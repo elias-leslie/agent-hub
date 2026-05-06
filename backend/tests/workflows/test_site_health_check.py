@@ -27,42 +27,69 @@ from app.workflows.site_health_check import (
 
 
 class TestGetFrontendUrl:
-    def test_returns_configured_host_url_when_not_in_docker(self) -> None:
-        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
-            "app.workflows.site_health_check.settings.host", "192.168.8.244"
-        ), patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.234"):
-            url = _get_frontend_url("summitflow")
+    pytestmark = pytest.mark.asyncio
+
+    async def test_uses_project_index_host_before_stale_settings(self, tmp_path: Path) -> None:
+        project_dir = tmp_path / "agent-hub"
+        project_dir.mkdir()
+        (project_dir / ".index.yaml").write_text(
+            yaml.safe_dump({"network": {"host_ip": "192.168.8.244"}})
+        )
+        with (
+            patch.dict("os.environ", {"PROJECTS_BASE_PATH": str(tmp_path)}),
+            patch("app.workflows.site_health_check._IN_DOCKER", False),
+            patch("app.workflows.site_health_check.settings.host", "192.168.8.234"),
+            patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.234"),
+        ):
+            url = await _get_frontend_url("agent-hub")
+        assert url == "http://192.168.8.244:3003"
+
+    async def test_returns_configured_host_url_when_not_in_docker(self, tmp_path: Path) -> None:
+        with (
+            patch.dict("os.environ", {"PROJECTS_BASE_PATH": str(tmp_path)}),
+            patch("app.workflows.site_health_check._IN_DOCKER", False),
+            patch("app.workflows.site_health_check.settings.host", "192.168.8.244"),
+            patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.234"),
+        ):
+            url = await _get_frontend_url("summitflow")
         assert url == "http://192.168.8.244:3001"
 
-
-    def test_uses_st_browser_host_when_host_is_loopback(self) -> None:
-        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
-            "app.workflows.site_health_check.settings.host", "127.0.0.1"
-        ), patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.245"):
-            url = _get_frontend_url("agent-hub")
+    async def test_uses_st_browser_host_when_host_is_loopback(self, tmp_path: Path) -> None:
+        with (
+            patch.dict("os.environ", {"PROJECTS_BASE_PATH": str(tmp_path)}),
+            patch("app.workflows.site_health_check._IN_DOCKER", False),
+            patch("app.workflows.site_health_check.settings.host", "127.0.0.1"),
+            patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.245"),
+        ):
+            url = await _get_frontend_url("agent-hub")
         assert url == "http://192.168.8.245:3003"
 
-
-    def test_falls_back_to_st_browser_host_when_host_missing(self) -> None:
-        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
-            "app.workflows.site_health_check.settings.host", ""
-        ), patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.245"):
-            url = _get_frontend_url("agent-hub")
+    async def test_falls_back_to_st_browser_host_when_host_missing(self, tmp_path: Path) -> None:
+        with (
+            patch.dict("os.environ", {"PROJECTS_BASE_PATH": str(tmp_path)}),
+            patch("app.workflows.site_health_check._IN_DOCKER", False),
+            patch("app.workflows.site_health_check.settings.host", ""),
+            patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.245"),
+        ):
+            url = await _get_frontend_url("agent-hub")
         assert url == "http://192.168.8.245:3003"
 
-    def test_returns_service_name_url_when_in_docker(self) -> None:
+    async def test_returns_service_name_url_when_in_docker(self) -> None:
         with patch("app.workflows.site_health_check._IN_DOCKER", True):
-            url = _get_frontend_url("agent-hub")
+            url = await _get_frontend_url("agent-hub")
         assert url == "http://agent-hub-web:3003"
 
-    def test_all_known_projects_produce_urls(self) -> None:
+    async def test_all_known_projects_produce_urls(self, tmp_path: Path) -> None:
         from app.workflows.site_health_check import FRONTEND_SERVICES
 
-        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
-            "app.workflows.site_health_check.settings.host", "192.168.8.244"
-        ), patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.234"):
+        with (
+            patch.dict("os.environ", {"PROJECTS_BASE_PATH": str(tmp_path)}),
+            patch("app.workflows.site_health_check._IN_DOCKER", False),
+            patch("app.workflows.site_health_check.settings.host", "192.168.8.244"),
+            patch("app.workflows.site_health_check.settings.st_browser_host", "192.168.8.234"),
+        ):
             for project_id in FRONTEND_SERVICES:
-                url = _get_frontend_url(project_id)
+                url = await _get_frontend_url(project_id)
                 assert url.startswith("http://192.168.8.244:")
 
 

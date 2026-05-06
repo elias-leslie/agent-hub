@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
@@ -23,6 +24,8 @@ from app.utils.safe_subprocess import create_process
 logger = logging.getLogger(__name__)
 
 _BROWSER_CDP_PORT = 9222
+_WORKSPACE_BASE = Path("/srv/workspaces/projects")
+_LOOPBACK_HOSTS = {"", "127.0.0.1", "localhost"}
 
 _IN_DOCKER = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
 
@@ -48,22 +51,60 @@ _ACTIONABLE_FINDING_RE = re.compile(
 )
 
 
-def _get_frontend_url(project_id: str) -> str:
-    """Return base URL for a project's frontend.
+async def _read_project_index(project_id: str) -> dict[str, Any] | None:
+    """Read a project's canonical index metadata."""
+    index_path = _projects_base_path() / project_id / ".index.yaml"
 
-    When browser automation runs through the shared Chrome on the test VM, that remote
-    browser cannot reach the host's own loopback interface. In the native runtime we
-    therefore use the configured app host so the browser can reach the frontend over the
-    network; inside Docker we still use the frontend service name.
-    """
-    service_name, port = FRONTEND_SERVICES[project_id]
+    def _read() -> dict[str, Any] | None:
+        if not index_path.is_file():
+            return None
+        data = yaml.safe_load(index_path.read_text())
+        return data if isinstance(data, dict) else None
+
+    try:
+        return await asyncio.to_thread(_read)
+    except Exception:
+        logger.debug("Failed to read project index for %s", project_id, exc_info=True)
+        return None
+
+
+def _projects_base_path() -> Path:
+    return Path(os.environ.get("PROJECTS_BASE_PATH", str(_WORKSPACE_BASE)))
+
+
+def _index_frontend_host(data: dict[str, Any] | None) -> str:
+    if not data:
+        return ""
+
+    network = data.get("network")
+    if isinstance(network, dict):
+        host_ip = network.get("host_ip")
+        if isinstance(host_ip, str) and host_ip.strip():
+            return host_ip.strip()
+
+    urls = data.get("urls")
+    if isinstance(urls, dict):
+        frontend_url = urls.get("frontend")
+        if isinstance(frontend_url, str) and frontend_url.strip():
+            hostname = urlparse(frontend_url).hostname or ""
+            if hostname and hostname not in _LOOPBACK_HOSTS:
+                return hostname
+    return ""
+
+
+def _settings_frontend_host() -> str:
     configured_host = settings.host.strip()
     browser_host = settings.st_browser_host.strip()
-    host = (
-        service_name
-        if _IN_DOCKER
-        else (browser_host if configured_host in {"", "127.0.0.1", "localhost"} else configured_host)
-    )
+    return browser_host if configured_host in _LOOPBACK_HOSTS else configured_host
+
+
+async def _get_frontend_url(project_id: str) -> str:
+    """Return base URL for a project's frontend."""
+    service_name, port = FRONTEND_SERVICES[project_id]
+    if _IN_DOCKER:
+        return f"http://{service_name}:{port}"
+    index_host = _index_frontend_host(await _read_project_index(project_id))
+    host = index_host or _settings_frontend_host()
     return f"http://{host}:{port}"
 
 
@@ -115,8 +156,7 @@ async def _run_browser_cmd(*args: str, timeout: int = 30) -> str:
 
 def _get_page_paths(project_id: str) -> list[str]:
     """Read page paths from project's .index.yaml, filtering dynamic routes. Falls back to ["/"]."""
-    base_path = Path(os.environ.get("PROJECTS_BASE_PATH", str(Path.home())))
-    index_path = base_path / project_id / ".index.yaml"
+    index_path = _projects_base_path() / project_id / ".index.yaml"
     if not index_path.exists():
         logger.warning("Index file not found for %s at %s; defaulting to '/'", project_id, index_path)
         return ["/"]
@@ -352,9 +392,9 @@ async def analyze_captures(
         return f"Error analyzing {project_id}: {e}", True
 
 
-async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
+async def _check_project(project_id: str, port: int, url: str | None = None) -> tuple[str, bool]:
     """Run browser captures and vision analysis for a project. Returns (findings_text, has_issues)."""
-    url = _get_frontend_url(project_id)
+    url = url or await _get_frontend_url(project_id)
     page_paths = _get_page_paths(project_id)
     try:
         captures = await run_browser_captures(project_id, url, page_paths)
@@ -471,13 +511,13 @@ async def single_project_health_check_task(
     if not port:
         return {"status": "skipped", "error": f"Unknown project: {project_id}"}
 
-    url = _get_frontend_url(project_id)
+    url = await _get_frontend_url(project_id)
     if not await _poll_service_ready(url):
         ctx.log(f"Service {project_id} not ready at {url} after 60s")
         return {"status": "error", "error": f"Service not ready: {url}"}
 
     ctx.log(f"Checking {project_id} at {url}")
-    findings, has_issues = await _check_project(project_id, port)
+    findings, has_issues = await _check_project(project_id, port, url)
 
     if has_issues:
         result = HealthCheckResult(
@@ -522,8 +562,9 @@ async def site_health_check_task(input: BaseModel, ctx: Context) -> dict[str, An
         projects_with_issues = 0
 
         for project_id, port in FRONTEND_PORTS.items():
-            ctx.log(f"Checking {project_id} at {_get_frontend_url(project_id)}")
-            findings, has_issues = await _check_project(project_id, port)
+            url = await _get_frontend_url(project_id)
+            ctx.log(f"Checking {project_id} at {url}")
+            findings, has_issues = await _check_project(project_id, port, url)
             project_findings[project_id] = findings
             if has_issues:
                 projects_with_issues += 1
