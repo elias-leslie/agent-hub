@@ -248,23 +248,21 @@ async def websocket_endpoint(
 
 
 async def _resolve_voice_agent() -> tuple[str, float]:
-    """Resolve model and temperature from the voice-responder agent config.
-
-    Falls back to CLAUDE_SONNET / 0.7 if agent not found.
-    """
-    from app.constants import CLAUDE_SONNET
-
+    """Resolve model and temperature from the voice-responder agent config."""
     try:
         from app.db import _get_session_factory
-        from app.services.agent_service import get_agent_service
+        from app.services.adaptive_model_router import RoutingContext
+        from app.services.agent_routing_utils import resolve_agent
 
-        agent_service = get_agent_service()
         session_factory = _get_session_factory()
         async with session_factory() as db:
-            agent = await agent_service.get_by_slug(db, "voice-responder")
-            if agent:
-                return agent.primary_model_id, agent.temperature
-    except Exception:
-        logger.warning("Failed to resolve voice-responder agent, using defaults")
+            resolved = await resolve_agent(
+                "voice-responder",
+                db,
+                RoutingContext(workload_profile="voice_response", requires_audio=True),
+            )
+            return resolved.model, resolved.agent.temperature
+    except Exception as exc:
+        raise RuntimeError("Failed to resolve voice-responder agent") from exc
 
-    return CLAUDE_SONNET, 0.7
+    raise RuntimeError("voice-responder agent not found")

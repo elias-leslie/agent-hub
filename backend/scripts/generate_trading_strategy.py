@@ -1,25 +1,14 @@
-"""
-Generate a trading strategy configuration using the Anthropic Python SDK.
+"""Generate a trading strategy configuration through Agent Hub agent routing.
 
-Features demonstrated:
-1. anthropic SDK with model claude-opus-4-6
-2. Adaptive thinking: thinking={"type": "adaptive"}
-3. Streaming with .get_final_message()
-4. Structured outputs via Pydantic (client.messages.parse())
-5. Full TradingStrategyConfig schema as final output
-
-Authentication: Uses Claude OAuth token from the Agent Hub credential store.
-Proxy: Routes through OpenRouter (anthropic/claude-opus-4.6 = claude-opus-4-6).
-
-Fallback: If the API returns 402 (budget exhausted), generates a deterministic
-strategy from the research summary without making additional API calls.
+Agent Hub owns the model and provider chain for the trade-manager agent. If the
+agent call fails, this script falls back to deterministic strategy assembly.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import re
+import os
 import sys
 from pathlib import Path
 from typing import Literal
@@ -30,15 +19,15 @@ from dotenv import load_dotenv
 
 load_dotenv(Path.home() / ".env.local")
 
-import anthropic  # noqa: E402
+from agent_hub import AsyncAgentHubClient  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
-from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
-from app.models import Credential  # noqa: E402
-from app.storage.credentials import decrypt_value  # noqa: E402
+
+PROJECT_ID = "portfolio-ai"
+AGENT_SLUG = "trade-manager"
+CLIENT_NAME = "agent-hub-trading-strategy"
+REQUEST_SOURCE = "agent-hub-script"
 
 # ---------------------------------------------------------------------------
 # Full output Pydantic schema for the trading strategy config
@@ -162,81 +151,6 @@ RESEARCH_SUMMARY = {
 
 
 # ---------------------------------------------------------------------------
-# Credential retrieval
-# ---------------------------------------------------------------------------
-
-
-async def get_api_credentials() -> tuple[str, str]:
-    """
-    Retrieve API credentials from the Agent Hub credential store.
-    Returns (api_key, base_url) for the Anthropic SDK client.
-    """
-    settings = get_settings()
-    db_url = settings.agent_hub_db_url.replace("postgresql://", "postgresql+asyncpg://")
-    engine = create_async_engine(db_url)
-    async_session = sessionmaker(engine, class_=AsyncSession)
-
-    async with async_session() as session:
-        result = await session.execute(select(Credential))
-        creds = result.scalars().all()
-
-        cred_map: dict[str, str] = {}
-        for c in creds:
-            cred_map[f"{c.provider}:{c.credential_type}"] = decrypt_value(c.value_encrypted)
-
-        # OpenRouter proxies Anthropic API with native Anthropic SDK support
-        openrouter_key = cred_map.get("openrouter:api_key")
-        if openrouter_key:
-            return openrouter_key, "https://openrouter.ai/api"
-
-    raise RuntimeError("No valid API credentials found")
-
-
-# ---------------------------------------------------------------------------
-# API call helpers with 402 budget handling
-# ---------------------------------------------------------------------------
-
-
-def call_with_budget_retry(
-    fn,
-    model: str,
-    max_tokens: int,
-    *,
-    min_tokens: int = 10,
-    **kwargs,
-):
-    """
-    Execute an API call function with budget-aware retry.
-    If 402 'can only afford X tokens' is returned, retries with affordable amount.
-    """
-    for _attempt in range(3):
-        try:
-            return fn(model=model, max_tokens=max_tokens, **kwargs)
-        except anthropic.APIStatusError as e:
-            if e.status_code != 402:
-                raise
-            # Extract affordable count from error message
-            match = re.search(r"can only afford (\d+)", str(e))
-            if match:
-                affordable = int(match.group(1)) - 2
-                if affordable < min_tokens:
-                    raise RuntimeError(
-                        f"API budget exhausted for {model}: "
-                        f"only {affordable} tokens available (need {min_tokens}). "
-                        f"Original error: {e}"
-                    ) from e
-                print(
-                    f"  [Budget: {model} limited to {affordable} tokens, retrying]",
-                    file=sys.stderr,
-                )
-                max_tokens = affordable
-                continue
-            # Prompt tokens exceeded or other 402
-            raise
-    raise RuntimeError(f"Failed after 3 attempts for {model}")
-
-
-# ---------------------------------------------------------------------------
 # Deterministic fallback — generates CoreSignal from research summary
 # ---------------------------------------------------------------------------
 
@@ -252,9 +166,11 @@ def generate_core_signal_deterministic() -> CoreSignal:
     - Neutral technicals at all MAs = no momentum confirmation either direction
     - Overall: HOLD existing positions, reduce on any rally, DCA slowly on dips
     """
-    fear = RESEARCH_SUMMARY["macro"]["fear_greed_score"]
-    valuation = RESEARCH_SUMMARY["fundamentals"]["valuation_tier"]
-    phase = RESEARCH_SUMMARY["macro"]["sector_rotation_phase"]
+    macro = RESEARCH_SUMMARY["macro"]
+    fundamentals = RESEARCH_SUMMARY["fundamentals"]
+    fear = int(macro["fear_greed_score"])
+    valuation = str(fundamentals["valuation_tier"])
+    phase = str(macro["sector_rotation_phase"])
 
     # Signal determination: extreme fear + recession + overvalued = hold/reduce
     if fear <= 15 and valuation == "overvalued" and phase == "recession":
@@ -296,15 +212,14 @@ _FALLBACK_ANALYSIS = (
 )
 
 
-def _build_client(api_key: str, base_url: str, is_openrouter: bool) -> anthropic.Anthropic:
-    return anthropic.Anthropic(
-        api_key=api_key,
-        base_url=base_url if is_openrouter else None,
-        default_headers=(
-            {"HTTP-Referer": "https://agent.summitflow.dev", "X-Title": "Agent Hub Trading Strategy"}
-            if is_openrouter else None
-        ),
-    )
+def _agent_hub_base_url() -> str:
+    settings = get_settings()
+    return os.getenv("AGENT_HUB_URL") or f"http://127.0.0.1:{settings.port}"
+
+
+def _agent_hub_client_id() -> str | None:
+    settings = get_settings()
+    return settings.portfolio_client_id or settings.agent_hub_dashboard_client_id or None
 
 
 def _compact_research_context() -> str:
@@ -320,59 +235,71 @@ def _compact_research_context() -> str:
     )
 
 
-def _stream_analysis(client: anthropic.Anthropic, model: str, research_ctx: str) -> tuple[str, bool]:
-    """Step 1: Streaming call with adaptive thinking. Returns (analysis_text, used_api)."""
-    print("\n[Step 1] Streaming analysis — thinking: adaptive, using .get_final_message()", file=sys.stderr)
+async def _stream_analysis(client: AsyncAgentHubClient, research_ctx: str) -> tuple[str, str, bool]:
+    """Step 1: Ask the trade-manager agent for concise analysis."""
+    print("\n[Step 1] Analysis via Agent Hub agent: trade-manager", file=sys.stderr)
     try:
         prompt = f"{research_ctx}\n1-2 sentence recommendation: trading signal (hold/reduce/buy/sell), conviction, primary risk. Be direct."
-        with client.messages.stream(
-            model=model, max_tokens=78, thinking={"type": "adaptive"},
-            system="You are a concise quantitative trading analyst.",
+        response = await client.complete(
+            agent_slug=AGENT_SLUG,
+            project_id=PROJECT_ID,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            msg = stream.get_final_message()
-
-        analysis_text = ""
-        for block in msg.content:
-            if block.type == "thinking":
-                print(f"  [Thinking block: {len(getattr(block, 'thinking', ''))} chars]", file=sys.stderr)
-            elif block.type == "text":
-                analysis_text = block.text
-        print(f"  Analysis: {analysis_text[:120]}...", file=sys.stderr)
-        print(f"  Usage: {msg.usage}", file=sys.stderr)
-        return analysis_text, True
-    except anthropic.APIStatusError as e:
-        if e.status_code == 402:
-            print(f"  [402: API budget insufficient for {model} — using fallback analysis]", file=sys.stderr)
-            return _FALLBACK_ANALYSIS, False
-        raise
-
-
-def _parse_core_signal(client: anthropic.Anthropic, model: str, analysis_text: str) -> tuple[CoreSignal, bool]:
-    """Step 2: Structured output via client.messages.parse(). Returns (core_signal, used_api)."""
-    print("\n[Step 2] Structured output — client.messages.parse() with Pydantic CoreSignal schema", file=sys.stderr)
-    try:
-        prompt = f"VTI: {analysis_text[:80]}. Signal: hold, medium. Strategy: defensive_accumulation. stop 8%, tp 12%."
-        resp = client.messages.parse(
-            model=model, max_tokens=78, thinking={"type": "adaptive"},
-            messages=[{"role": "user", "content": prompt}], output_format=CoreSignal,
+            purpose="trading_strategy_analysis",
+            temperature=0.1,
+            thinking_level="medium",
+            use_memory=False,
         )
-        core: CoreSignal | None = None
-        for block in resp.content:
-            if hasattr(block, "parsed_output") and block.parsed_output is not None:
-                core = block.parsed_output
-                break
+        analysis_text = response.content.strip()
+        print(f"  Analysis: {analysis_text[:120]}...", file=sys.stderr)
+        print(f"  Served model: {response.model}", file=sys.stderr)
+        return analysis_text, response.model, True
+    except Exception as exc:
+        print(f"  [Agent call failed: {exc} — using fallback analysis]", file=sys.stderr)
+        return _FALLBACK_ANALYSIS, f"agent:{AGENT_SLUG}", False
+
+
+def _extract_json_object(content: str) -> dict[str, object] | None:
+    start = content.find("{")
+    end = content.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        payload = json.loads(content[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+async def _parse_core_signal(client: AsyncAgentHubClient, analysis_text: str) -> tuple[CoreSignal, str, bool]:
+    """Step 2: Ask the agent for CoreSignal JSON and validate with Pydantic."""
+    print("\n[Step 2] Structured CoreSignal via Agent Hub", file=sys.stderr)
+    try:
+        prompt = (
+            "Return only a JSON object matching this schema: "
+            '{"signal":"buy|sell|hold|reduce","conviction":"low|medium|high",'
+            '"strategy_type":"string","stop_loss_pct":8.0,"take_profit_pct":12.0}.\n\n'
+            f"VTI analysis: {analysis_text[:500]}"
+        )
+        response = await client.complete(
+            agent_slug=AGENT_SLUG,
+            project_id=PROJECT_ID,
+            messages=[{"role": "user", "content": prompt}],
+            purpose="trading_strategy_core_signal",
+            temperature=0.1,
+            thinking_level="medium",
+            response_format={"type": "json_object"},
+            use_memory=False,
+        )
+        payload = _extract_json_object(response.content)
+        core = CoreSignal.model_validate(payload) if payload else None
         print(f"  Parsed: {core}", file=sys.stderr)
-        print(f"  Usage: {resp.usage}", file=sys.stderr)
-        return core or generate_core_signal_deterministic(), core is not None
-    except (anthropic.APIStatusError, Exception) as e:
-        err_str = str(e)
-        if "402" in err_str or "budget" in err_str.lower() or "credits" in err_str.lower():
-            print("  [402: API budget insufficient — using deterministic fallback]", file=sys.stderr)
-            core = generate_core_signal_deterministic()
-            print(f"  Deterministic result: {core}", file=sys.stderr)
-            return core, False
-        raise
+        print(f"  Served model: {response.model}", file=sys.stderr)
+        return core or generate_core_signal_deterministic(), response.model, core is not None
+    except Exception as exc:
+        print(f"  [Structured agent call failed: {exc} — using deterministic fallback]", file=sys.stderr)
+        core = generate_core_signal_deterministic()
+        print(f"  Deterministic result: {core}", file=sys.stderr)
+        return core, f"agent:{AGENT_SLUG}", False
 
 
 def _api_status_label(model: str, stream_used: bool, parse_used: bool) -> str:
@@ -382,11 +309,7 @@ def _api_status_label(model: str, stream_used: bool, parse_used: bool) -> str:
         return f"Streaming analysis used live API call to {model}. parse() used deterministic fallback (API budget exhausted)."
     if parse_used:
         return f"parse() used live API call to {model}. Streaming analysis used deterministic fallback (API budget exhausted)."
-    return (
-        f"Both steps used deterministic fallback analysis. Target model: {model} (claude-opus-4-6). "
-        "OpenRouter free-tier daily budget for claude-opus-4.6 was exhausted during development testing. "
-        "Monthly credits: $9.93 remaining. API code structure is correct and fully functional — budget is the sole constraint."
-    )
+    return f"Both steps used deterministic fallback analysis. Target route: {model}."
 
 
 def _build_strategy_config(
@@ -462,20 +385,21 @@ def _build_strategy_config(
 
 
 async def generate_trading_strategy() -> TradingStrategyConfig:
-    api_key, base_url = await get_api_credentials()
-    is_openrouter = "openrouter" in base_url
-    model = "anthropic/claude-opus-4.6" if is_openrouter else "claude-opus-4-6"
-    client = _build_client(api_key, base_url, is_openrouter)
-
-    print("Generating VTI trading strategy — Anthropic Python SDK (claude-opus-4-6)", file=sys.stderr)
-    print(f"Model: {model} via {'OpenRouter proxy' if is_openrouter else 'Anthropic API direct'}", file=sys.stderr)
-
-    research_ctx = _compact_research_context()
-    analysis_text, stream_used_api = _stream_analysis(client, model, research_ctx)
-    core, parse_used_api = _parse_core_signal(client, model, analysis_text)
+    print("Generating VTI trading strategy via Agent Hub agent: trade-manager", file=sys.stderr)
+    async with AsyncAgentHubClient(
+        base_url=_agent_hub_base_url(),
+        client_name=CLIENT_NAME,
+        client_id=_agent_hub_client_id(),
+        request_source=REQUEST_SOURCE,
+        cli_command="generate_trading_strategy",
+    ) as client:
+        research_ctx = _compact_research_context()
+        analysis_text, analysis_model, stream_used_api = await _stream_analysis(client, research_ctx)
+        core, parse_model, parse_used_api = await _parse_core_signal(client, analysis_text)
 
     print("\n[Step 3] Assembling full TradingStrategyConfig...", file=sys.stderr)
-    return _build_strategy_config(core, model, stream_used_api, parse_used_api)
+    served_route = parse_model if parse_used_api else analysis_model
+    return _build_strategy_config(core, served_route, stream_used_api, parse_used_api)
 
 
 async def main():

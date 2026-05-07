@@ -4,9 +4,11 @@ CRUD operations for managing agent configurations.
 """
 
 import logging
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard, get_agent_benchmark_run
@@ -21,9 +23,24 @@ from app.api.schemas.agent_schemas import (
     AgentMetricsListResponse,
     AgentPreviewResponse,
     AgentResponse,
+    AgentRoutingResponse,
+    AgentRoutingUpdateRequest,
     AgentUpdateRequest,
+    AgentWorkloadRoutingUpdateRequest,
+    ManualRoutePayload,
+    ManualRouteResponse,
+    WorkloadProfileSummary,
+    WorkloadRoutingModeResponse,
 )
 from app.db import get_db
+from app.models import (
+    AgentRoutingProfile,
+    AgentWorkloadRoutingMode,
+    ManualModelRoute,
+    ModelCatalogEntry,
+    WorkloadProfile,
+)
+from app.services.adaptive_model_router import ensure_adaptive_routing_seed_data
 from app.services.agent_service import AgentDTO, get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.memory.context_builder_settings import resolve_effective_memory_config
@@ -142,6 +159,128 @@ def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPr
     )
 
 
+def _manual_route_response(route: ManualModelRoute) -> ManualRouteResponse:
+    return ManualRouteResponse(
+        id=route.id,
+        workload_profile=route.workload_profile,
+        primary_model_id=route.primary_model_id,
+        fallback_models=list(route.fallback_models or []),
+        escalation_model_id=route.escalation_model_id,
+        reason=route.reason,
+        owner=route.owner,
+        expires_at=route.expires_at.isoformat() if route.expires_at else None,
+        allow_health_fallback=route.allow_health_fallback,
+        enabled=route.enabled,
+    )
+
+
+async def _model_exists(db: AsyncSession, model_id: str | None) -> bool:
+    if not model_id:
+        return True
+    return bool(await db.scalar(select(ModelCatalogEntry.id).where(ModelCatalogEntry.id == model_id)))
+
+
+async def _validate_manual_route_payload(db: AsyncSession, payload: ManualRoutePayload) -> None:
+    model_ids = [payload.primary_model_id, *payload.fallback_models]
+    if payload.escalation_model_id:
+        model_ids.append(payload.escalation_model_id)
+    for model_id in model_ids:
+        if not await _model_exists(db, model_id):
+            raise HTTPException(status_code=400, detail=f"Model '{model_id}' not found in catalog")
+
+
+def _parse_expires_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="expires_at must be ISO-8601") from e
+
+
+async def _upsert_manual_route(
+    db: AsyncSession,
+    *,
+    agent_slug: str,
+    workload_profile: str | None,
+    payload: ManualRoutePayload,
+) -> ManualModelRoute:
+    await _validate_manual_route_payload(db, payload)
+    route = await db.scalar(
+        select(ManualModelRoute).where(
+            ManualModelRoute.agent_slug == agent_slug,
+            ManualModelRoute.workload_profile == workload_profile,
+            ManualModelRoute.enabled == True,  # noqa: E712
+        )
+    )
+    if route is None:
+        route = ManualModelRoute(agent_slug=agent_slug, workload_profile=workload_profile)
+        db.add(route)
+    route.primary_model_id = payload.primary_model_id
+    route.fallback_models = list(payload.fallback_models)
+    route.escalation_model_id = payload.escalation_model_id
+    route.reason = payload.reason
+    route.owner = payload.owner
+    route.expires_at = _parse_expires_at(payload.expires_at)
+    route.allow_health_fallback = payload.allow_health_fallback
+    route.enabled = True
+    return route
+
+
+async def _build_routing_response(db: AsyncSession, agent_slug: str) -> AgentRoutingResponse:
+    await ensure_adaptive_routing_seed_data(db)
+    profile = await db.get(AgentRoutingProfile, agent_slug)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"Routing profile for '{agent_slug}' not found")
+    overrides = (
+        await db.execute(
+            select(AgentWorkloadRoutingMode)
+            .where(AgentWorkloadRoutingMode.agent_slug == agent_slug)
+            .order_by(AgentWorkloadRoutingMode.workload_profile)
+        )
+    ).scalars().all()
+    routes = (
+        await db.execute(
+            select(ManualModelRoute)
+            .where(ManualModelRoute.agent_slug == agent_slug)
+            .order_by(ManualModelRoute.workload_profile.nullsfirst(), ManualModelRoute.id)
+        )
+    ).scalars().all()
+    workload_profiles = (
+        await db.execute(select(WorkloadProfile).order_by(WorkloadProfile.key))
+    ).scalars().all()
+    return AgentRoutingResponse(
+        agent_slug=profile.agent_slug,
+        default_routing_mode=profile.default_routing_mode,
+        risk_tier=profile.risk_tier,
+        cost_policy=profile.cost_policy,
+        subscription_policy=profile.subscription_policy,
+        exploration_policy=profile.exploration_policy,
+        quality_floor=profile.quality_floor,
+        workload_profiles=[
+            WorkloadProfileSummary(
+                key=workload.key,
+                label=workload.label,
+                risk_tier=workload.risk_tier,
+                default_routing_mode=workload.default_routing_mode,
+            )
+            for workload in workload_profiles
+        ],
+        workload_overrides=[
+            WorkloadRoutingModeResponse(
+                workload_profile=override.workload_profile,
+                routing_mode=override.routing_mode,
+                canary_percent=override.canary_percent,
+                reason=override.reason,
+                owner=override.owner,
+                enabled=override.enabled,
+            )
+            for override in overrides
+        ],
+        manual_routes=[_manual_route_response(route) for route in routes],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -193,6 +332,86 @@ async def get_agent(
     """Get a single agent by slug."""
     agent = await _require_agent(db, slug, active_only=False)
     return await _build_agent_response(db, agent)
+
+
+@router.get("/{slug}/routing", response_model=AgentRoutingResponse)
+async def get_agent_routing(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentRoutingResponse:
+    """Get adaptive routing profile and manual routes for one agent."""
+    await _require_agent(db, slug, active_only=False)
+    return await _build_routing_response(db, slug)
+
+
+@router.put("/{slug}/routing", response_model=AgentRoutingResponse)
+async def update_agent_routing(
+    slug: str,
+    request: AgentRoutingUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentRoutingResponse:
+    """Update agent-level adaptive routing policy."""
+    await _require_agent(db, slug, active_only=False)
+    await ensure_adaptive_routing_seed_data(db)
+    profile = await db.get(AgentRoutingProfile, slug)
+    if profile is None:
+        profile = AgentRoutingProfile(agent_slug=slug)
+        db.add(profile)
+    if request.default_routing_mode is not None:
+        profile.default_routing_mode = request.default_routing_mode
+    if request.risk_tier is not None:
+        profile.risk_tier = request.risk_tier
+    if request.cost_policy is not None:
+        profile.cost_policy = request.cost_policy
+    if request.subscription_policy is not None:
+        profile.subscription_policy = request.subscription_policy
+    if request.exploration_policy is not None:
+        profile.exploration_policy = request.exploration_policy
+    if request.quality_floor is not None:
+        profile.quality_floor = request.quality_floor
+    if request.manual_route is not None:
+        await _upsert_manual_route(db, agent_slug=slug, workload_profile=None, payload=request.manual_route)
+    await db.commit()
+    return await _build_routing_response(db, slug)
+
+
+@router.put("/{slug}/routing/workloads/{workload_profile}", response_model=AgentRoutingResponse)
+async def update_agent_workload_routing(
+    slug: str,
+    workload_profile: str,
+    request: AgentWorkloadRoutingUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentRoutingResponse:
+    """Update workload-specific routing policy for one agent."""
+    await _require_agent(db, slug, active_only=False)
+    await ensure_adaptive_routing_seed_data(db)
+    if not await db.scalar(select(WorkloadProfile.key).where(WorkloadProfile.key == workload_profile)):
+        raise HTTPException(status_code=404, detail=f"Workload profile '{workload_profile}' not found")
+    override = await db.scalar(
+        select(AgentWorkloadRoutingMode).where(
+            AgentWorkloadRoutingMode.agent_slug == slug,
+            AgentWorkloadRoutingMode.workload_profile == workload_profile,
+        )
+    )
+    if override is None:
+        override = AgentWorkloadRoutingMode(agent_slug=slug, workload_profile=workload_profile)
+        db.add(override)
+    if request.routing_mode is not None:
+        override.routing_mode = request.routing_mode
+    elif not override.routing_mode:
+        override.routing_mode = "auto_shadow"
+    if request.canary_percent is not None:
+        override.canary_percent = request.canary_percent
+    override.reason = request.reason
+    override.owner = request.owner
+    override.enabled = request.enabled
+    if request.manual_route is not None:
+        await _upsert_manual_route(db, agent_slug=slug, workload_profile=workload_profile, payload=request.manual_route)
+    await db.commit()
+    return await _build_routing_response(db, slug)
 
 
 @router.post("", response_model=AgentResponse, status_code=201)

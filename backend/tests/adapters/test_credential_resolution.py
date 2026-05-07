@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +11,7 @@ from app.services.credential_manager import CredentialManager
 
 
 @pytest.fixture(autouse=True)
-def _reset_credential_manager_singleton() -> None:
+def _reset_credential_manager_singleton() -> Generator[None]:
     CredentialManager.reset()
     try:
         yield
@@ -240,5 +241,20 @@ class TestCredentialsAPIValidation:
         from app.adapters.registry import list_providers
 
         providers = set(list_providers())
-        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu", "nvidia", "cloudflare"}
+        expected = {
+            "claude",
+            "cloudflare",
+            "codex",
+            "deepseek",
+            "gemini",
+            "kimi-code",
+            "local",
+            "minimax",
+            "moonshot",
+            "nvidia",
+            "openai",
+            "openrouter",
+            "xai",
+            "zhipu",
+        }
         assert expected == providers

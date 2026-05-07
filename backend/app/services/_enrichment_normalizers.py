@@ -21,7 +21,7 @@ LIVEBENCH_IF_TASKS = [
 def _bare_model_id(model_id: str) -> str:
     """Strip provider prefix from a catalog model_id.
 
-    ``openai/gpt-5.2`` → ``gpt-5.2``, ``claude-sonnet-4-6`` → ``claude-sonnet-4-6``.
+    Provider-prefixed ids drop only the routing prefix; canonical model ids stay unchanged.
     """
     return model_id.rsplit("/", 1)[-1]
 
@@ -29,9 +29,7 @@ def _bare_model_id(model_id: str) -> str:
 def _normalize_bfcl_name(name: str) -> str:
     """Normalize a BFCL model name to a bare model ID.
 
-    "Claude-Opus-4-5-20251101 (FC)" → "claude-opus-4-5"
-    "Gemini-3-Pro-Preview (Prompt)" → "gemini-3-pro-preview"
-    "GLM-4.6 (FC thinking)" → "glm-4.6"
+    Provider benchmark labels normalize to comparable lowercase ids.
     """
     name = re.sub(r"\s*\(.*?\)\s*$", "", name).strip()
     name = name.lower()
@@ -42,9 +40,7 @@ def _normalize_bfcl_name(name: str) -> str:
 def _normalize_livebench_name(name: str) -> str:
     """Normalize a LiveBench model name to a bare model ID.
 
-    "claude-opus-4-5-20251101-thinking-64k-high-effort" → "claude-opus-4-5"
-    "claude-sonnet-4-5-20250929" → "claude-sonnet-4-5"
-    "claude-haiku-4-5-20251001" → "claude-haiku-4-5"
+    Dated suffixes and benchmark-mode suffixes are removed before matching.
     """
     name = name.strip().lower()
     name = re.sub(r"-\d{8,}.*$", "", name)

@@ -6,12 +6,24 @@ Tables:
 - session_events: Full session event timeline (messages, tool calls, etc.)
 - credentials: Encrypted API credentials
 - cost_logs: Token usage and cost tracking
-- llm_models: LLM model registry (centralized model definitions)
+- models/model_aliases: DB-backed LLM model catalog and aliases
 """
 
 from __future__ import annotations
 
-# Import all models for easy access
+from .adaptive_routing import (
+    AgentRoutingProfile,
+    AgentWorkloadRoutingMode,
+    CapabilityDimension,
+    ManualModelRoute,
+    ModelAvailability,
+    ModelCapabilityScore,
+    ModelWorkloadPerformance,
+    ProviderEntitlement,
+    RoutingDecision,
+    RoutingPolicyVersion,
+    WorkloadProfile,
+)
 from .agent import Agent, AgentVersion
 from .agent_benchmark import (
     AgentBenchmarkAttempt,
@@ -20,14 +32,13 @@ from .agent_benchmark import (
     AgentRegressionCluster,
 )
 from .agent_performance_log import AgentPerformanceLog
-
-# Import Base first
 from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
+from .model_catalog import ModelAlias, ModelCatalogEntry
 from .model_catalog_sync_state import ModelCatalogSyncState
 from .model_enrichment import ModelEnrichment
 from .narration_tag import NarrationTag
@@ -58,29 +69,41 @@ __all__ = [
     "AgentPerformanceLog",
     "AgentPrompt",
     "AgentRegressionCluster",
+    "AgentRoutingProfile",
     "AgentVersion",
+    "AgentWorkloadRoutingMode",
     "Base",
+    "CapabilityDimension",
     "Client",
     "ClientControl",
     "CostLog",
     "Credential",
     "FeedbackItem",
     "FeedbackVote",
+    "ManualModelRoute",
     "Memory",
     "MemoryInjectionMetric",
     "MemoryReviewRun",
     "MemoryRevision",
     "MemorySettings",
+    "ModelAlias",
+    "ModelAvailability",
+    "ModelCapabilityScore",
+    "ModelCatalogEntry",
     "ModelCatalogSyncState",
     "ModelEnrichment",
+    "ModelWorkloadPerformance",
     "NarrationTag",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",
     "Prompt",
     "PromptRevision",
+    "ProviderEntitlement",
     "PushSubscription",
     "RequestLog",
+    "RoutingDecision",
+    "RoutingPolicyVersion",
     "Session",
     "SessionBinding",
     "SessionEvent",
@@ -90,4 +113,5 @@ __all__ = [
     "UsageStatLog",
     "WebhookSubscription",
     "WorkflowScheduleControl",
+    "WorkloadProfile",
 ]

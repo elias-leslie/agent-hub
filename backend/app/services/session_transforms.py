@@ -81,6 +81,12 @@ def _message_count(events: list[Any]) -> int:
     )
 
 
+def _routing_metadata(session: Session) -> dict[str, Any]:
+    provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    routing = provider_metadata.get("routing")
+    return routing if isinstance(routing, dict) else {}
+
+
 def _status_provenance(session: Session, live_activity: Any | None) -> tuple[str, bool]:
     live_status = getattr(live_activity, "status", None) if live_activity is not None else None
     if live_status is None and isinstance(live_activity, dict):
@@ -216,6 +222,7 @@ def build_session_response(
 
     model_info = session_model_info(session)
     attribution = session_attribution(session)
+    routing = _routing_metadata(session)
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     batch_task_ids = [
         str(task_id).strip()
@@ -241,6 +248,13 @@ def build_session_response(
         effective_model_display_name=resolve_model_display_name(model_info["effective_model"]),
         fallback_used=model_info["fallback_used"],
         fallback_reason=model_info["fallback_reason"],
+        routing_mode=optional_str(routing.get("routing_mode")),
+        workload_profile=optional_str(routing.get("workload_profile")),
+        routing_decision_id=optional_str(routing.get("routing_decision_id")),
+        auto_candidate_model_id=optional_str(routing.get("auto_candidate_model_id")),
+        routing_canary_percent=routing.get("routing_canary_percent")
+        if isinstance(routing.get("routing_canary_percent"), (int, float))
+        else None,
         status=session.status,
         agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",

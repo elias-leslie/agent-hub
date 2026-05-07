@@ -12,6 +12,9 @@ export interface ModelCost {
   output_per_m: number
   pricing_unit: ModelPricingUnit
   unit_price: number | null
+  cache_read_per_million: number | null
+  cache_write_per_million: number | null
+  service_tiers: Record<string, number>
   source: 'catalog' | 'enrichment'
 }
 

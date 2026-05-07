@@ -22,15 +22,19 @@ def test_all_supported_providers_registered() -> None:
     providers = set(registry.list_providers())
     assert providers == {
         "claude",
+        "cloudflare",
         "gemini",
         "codex",
+        "deepseek",
+        "kimi-code",
+        "local",
+        "moonshot",
         "openai",
         "openrouter",
         "xai",
         "zhipu",
         "minimax",
         "nvidia",
-        "cloudflare",
     }
 
 
@@ -52,6 +56,7 @@ def test_get_provider_for_model_supports_legacy_cloudcode_ids() -> None:
     assert registry.get_provider_for_model("cloudcode/claude-sonnet-4-6") == "claude"
     assert registry.get_provider_for_model("cc/sonnet") == "claude"
     assert registry.get_provider_for_model("gemini-3-flash-preview") == "gemini"
+    assert registry.get_provider_for_model("kimi-code/kimi-for-coding") == "kimi-code"
 
 
 def test_capabilities_reflect_supported_stack() -> None:
@@ -59,10 +64,10 @@ def test_capabilities_reflect_supported_stack() -> None:
     assert registry.supports_tools("claude") is True
     assert registry.supports_tools("gemini") is True
     assert registry.supports_tools("codex") is True
-    assert registry.supports_tools("xai", "xai/grok-4.20-reasoning") is True
-    assert registry.supports_tools("xai", "xai/grok-4.20-multi-agent") is False
+    assert registry.supports_tools("xai", "xai/grok-4.20-0309-reasoning") is True
+    assert registry.supports_tools("xai", "xai/grok-4.20-multi-agent-0309") is False
     assert registry.supports_thinking("gemini") is True
-    assert registry.supports_thinking("xai", "xai/grok-4.20-multi-agent") is True
+    assert registry.supports_thinking("xai", "xai/grok-4.20-multi-agent-0309") is True
     assert registry.supports_thinking("openai") is False
     assert registry.supports_cache_retention("claude") is True
     assert registry.supports_cache_retention("gemini") is False
@@ -75,7 +80,16 @@ def test_list_providers_with_capability() -> None:
     assert {"claude", "gemini", "codex", "openai"}.issubset(tool_providers)
 
     thinking_providers = set(registry.list_providers_with("thinking"))
-    assert thinking_providers == {"claude", "gemini", "minimax", "nvidia"}
+    assert thinking_providers == {
+        "claude",
+        "deepseek",
+        "gemini",
+        "kimi-code",
+        "local",
+        "minimax",
+        "moonshot",
+        "nvidia",
+    }
 
 
 def test_register_custom_provider() -> None:

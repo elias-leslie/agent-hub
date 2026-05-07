@@ -24,6 +24,9 @@ const models: ModelInfo[] = [
       output_per_m: 75,
       pricing_unit: 'per_million_tokens',
       unit_price: null,
+      cache_read_per_million: null,
+      cache_write_per_million: null,
+      service_tiers: {},
       source: 'catalog',
     },
     scores: {

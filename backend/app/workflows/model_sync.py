@@ -1,7 +1,7 @@
 """Model enrichment sync — daily cron to fetch external benchmark data.
 
-Runs once daily at 6 AM UTC, fetching from models.dev and benchmarks.json
-to enrich the static MODEL_CATALOG with external scores and pricing.
+Runs once daily at 6 AM UTC, fetching external pricing/benchmark data
+to enrich DB-backed model catalog rows.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ class ModelSyncResult(BaseModel):
     status: str
     enriched: int = 0
     total: int = 0
+    availability_changed: int = 0
     error: str | None = None
 
 
@@ -52,17 +53,26 @@ async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str
 
     try:
         from app.db import async_session
+        from app.services.adaptive_model_router import refresh_catalog_model_availability
         from app.services.model_enrichment_service import sync_all
 
         async with async_session() as db:
             result = await sync_all(db)
+            availability_changed = await refresh_catalog_model_availability(db)
+            if availability_changed:
+                await db.commit()
 
         out = ModelSyncResult(
             status=result.get("status", "success"),
             enriched=result.get("enriched", 0),
             total=result.get("total", 0),
+            availability_changed=availability_changed,
         )
-        ctx.log(f"Model sync complete: {out.enriched}/{out.total} enriched")
+        ctx.log(
+            "Model sync complete: "
+            f"{out.enriched}/{out.total} enriched, "
+            f"{out.availability_changed} availability rows changed"
+        )
         return out.model_dump()
 
     except Exception as e:

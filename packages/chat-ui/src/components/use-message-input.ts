@@ -27,6 +27,7 @@ export interface MessageInputProps {
   initialPrompt?: string;
   fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
   modelsEndpoint?: string;
+  allowModelMentions?: boolean;
 }
 
 export function useMessageInput(props: MessageInputProps) {
@@ -43,6 +44,7 @@ export function useMessageInput(props: MessageInputProps) {
     initialPrompt,
     fetchFn = fetch,
     modelsEndpoint = "/api/models",
+    allowModelMentions = true,
   } = props;
 
   const [input, setInput] = useState(initialPrompt || "");
@@ -50,7 +52,7 @@ export function useMessageInput(props: MessageInputProps) {
   const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
-  const allModels = useModels(fetchFn, modelsEndpoint);
+  const allModels = useModels(fetchFn, allowModelMentions ? modelsEndpoint : null);
 
   const {
     showMentionPopup,
@@ -169,12 +171,12 @@ export function useMessageInput(props: MessageInputProps) {
   }, [onEditCancel]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (handleMentionNavigation(e.key)) {
+    if (allowModelMentions && handleMentionNavigation(e.key)) {
       e.preventDefault();
       return;
     }
 
-    if (showMentionPopup && (e.key === "Enter" || e.key === "Tab")) {
+    if (allowModelMentions && showMentionPopup && (e.key === "Enter" || e.key === "Tab")) {
       e.preventDefault();
       if (filteredModels[mentionSelectedIndex]) {
         selectModel(filteredModels[mentionSelectedIndex]);
@@ -191,7 +193,7 @@ export function useMessageInput(props: MessageInputProps) {
       e.preventDefault();
       cancelEditing();
     }
-  }, [handleMentionNavigation, showMentionPopup, filteredModels, mentionSelectedIndex, selectModel, handleSend, editingMessage, onEditCancel, cancelEditing]);
+  }, [allowModelMentions, handleMentionNavigation, showMentionPopup, filteredModels, mentionSelectedIndex, selectModel, handleSend, editingMessage, onEditCancel, cancelEditing]);
 
   return {
     input,

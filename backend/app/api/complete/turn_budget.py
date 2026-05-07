@@ -3,7 +3,19 @@
 from __future__ import annotations
 
 _OPENAI_COMPAT_TOOL_PROVIDERS = frozenset(
-    {"openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "codex"}
+    {
+        "cloudflare",
+        "codex",
+        "deepseek",
+        "local",
+        "minimax",
+        "moonshot",
+        "nvidia",
+        "openai",
+        "openrouter",
+        "xai",
+        "zhipu",
+    }
 )
 _MIN_TOOL_COMPLETION_TURNS = 3
 

@@ -11,7 +11,8 @@ async def main() -> None:
         # Simple completion
         print("=== Simple Completion ===")
         response = await client.complete(
-            model="claude-sonnet-4-6",
+            agent_slug="chat",
+            project_id="demo",
             messages=[{"role": "user", "content": "What is 2 + 2?"}],
         )
         print(f"Response: {response.content}")
@@ -20,7 +21,8 @@ async def main() -> None:
         # Streaming
         print("=== Streaming ===")
         async for chunk in client.stream_sse(
-            model="claude-sonnet-4-6",
+            agent_slug="chat",
+            project_id="demo",
             messages=[{"role": "user", "content": "Count from 1 to 5"}],
         ):
             print(chunk.content, end="", flush=True)
@@ -28,19 +30,19 @@ async def main() -> None:
 
         # Session management
         print("=== Session Management ===")
-        async with client.session(
+        response = await client.complete(
+            agent_slug="chat",
             project_id="demo",
-            provider="claude",
-            model="claude-sonnet-4-6",
-        ) as session:
-            response = await session.complete("My favorite color is blue.")
-            print(f"Response 1: {response.content}")
-
-            response = await session.complete("What is my favorite color?")
-            print(f"Response 2: {response.content}")
-
-            history = await session.get_history()
-            print(f"History: {len(history)} messages\n")
+            messages=[{"role": "user", "content": "My favorite color is blue."}],
+        )
+        print(f"Response 1: {response.content}")
+        response = await client.complete(
+            agent_slug="chat",
+            project_id="demo",
+            session_id=response.session_id,
+            messages=[{"role": "user", "content": "What is my favorite color?"}],
+        )
+        print(f"Response 2: {response.content}\n")
 
         # Vision example (with placeholder image)
         print("=== Vision API ===")

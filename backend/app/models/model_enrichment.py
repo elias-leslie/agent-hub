@@ -1,4 +1,4 @@
-"""Model enrichment — external benchmark data overlay on static catalog."""
+"""Model enrichment — external benchmark data overlay on DB model catalog."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from .base import Base
 
 
 class ModelEnrichment(Base):
-    """Stores external benchmark/pricing data as an overlay on MODEL_CATALOG.
+    """Stores external benchmark/pricing data as an overlay on models.
 
-    Each row corresponds to a model_id in the static catalog and stores
+    Each row corresponds to a model_id in the DB-backed catalog and stores
     enrichment data fetched from external sources (models.dev, benchmarks.json).
     """
 

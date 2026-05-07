@@ -39,7 +39,7 @@ def test_get_model_entry_resolves_new_claude_opus_4_7_alias() -> None:
 
 def test_gemini_flash_lite_models_support_agentic_extraction() -> None:
     for model_id, expected_cost in [
-        ("gemini-3.1-flash-lite-preview", (0.25, 1.5)),
+        ("gemini-3.1-flash-lite", (0.25, 1.5)),
         ("gemini-2.5-flash-lite", (0.1, 0.4)),
     ]:
         entry = get_model_entry(model_id)
@@ -150,7 +150,7 @@ def test_build_model_info_preserves_per_image_pricing() -> None:
 
 
 def test_build_catalog_health_reads_sync_state_discovery() -> None:
-    entry = get_model_entry("xai/grok-4.20-reasoning")
+    entry = get_model_entry("xai/grok-4.20-0309-reasoning")
     assert entry is not None
 
     enrichment = ModelEnrichment(
@@ -179,6 +179,7 @@ def test_build_catalog_health_reads_sync_state_discovery() -> None:
     )
 
     health = _build_catalog_health(
+        entries=[entry],
         enrichments={entry.id: enrichment},
         sync_state=sync_state,
         last_sync=datetime.now(UTC),

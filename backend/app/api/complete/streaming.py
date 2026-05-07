@@ -130,6 +130,11 @@ async def stream_completion(
     max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
     working_dir: str | None = None,
     source_metadata: dict[str, object] | None = None,
+    routing_mode: str | None = None,
+    workload_profile: str | None = None,
+    routing_decision_id: str | None = None,
+    auto_candidate_model_id: str | None = None,
+    routing_canary_percent: float | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -146,7 +151,10 @@ async def stream_completion(
         thinking_config = get_thinking_config(model, thinking_level, provider)
         if thinking_config:
             stream_kwargs.update(thinking_config)
-        elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
+        elif provider not in {
+            "cloudflare", "codex", "deepseek", "local", "minimax",
+            "moonshot", "nvidia", "openai", "openrouter", "xai", "zhipu",
+        }:
             stream_kwargs["thinking_level"] = thinking_level
     ctx = StreamContext.open(
         session_id=session_id,
@@ -161,11 +169,26 @@ async def stream_completion(
         is_one_shot=is_one_shot,
         project_id=project_id,
         source_metadata=source_metadata,
+        routing_mode=routing_mode,
+        workload_profile=workload_profile,
+        routing_decision_id=routing_decision_id,
+        auto_candidate_model_id=auto_candidate_model_id,
+        routing_canary_percent=routing_canary_percent,
     )
     stream_kwargs["abort_event"] = ctx.cancel_event
     if working_dir:
         stream_kwargs["working_dir"] = working_dir
-    yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
+    connected_chunk = StreamingChunk(
+        type="connected",
+        seq=ctx.next_seq(),
+        session_id=session_id,
+        routing_mode=routing_mode,
+        workload_profile=workload_profile,
+        routing_decision_id=routing_decision_id,
+        auto_candidate_model_id=auto_candidate_model_id,
+        routing_canary_percent=routing_canary_percent,
+    )
+    yield f"data: {connected_chunk.model_dump_json()}\n\n"
     try:
         effective_tool_turns = resolve_tool_max_turns(provider, max_tool_turns) if tools else max_tool_turns
         inner = _choose_inner_stream(

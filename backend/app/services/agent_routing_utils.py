@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import ProviderAdapter
 from app.adapters.registry import get_adapter as registry_get_adapter
 from app.adapters.registry import get_provider_for_model
+from app.services.adaptive_model_router import RoutingContext, resolve_model_route
 from app.services.agent_dto import AgentDTO
 from app.services.agent_service import get_agent_service
 
@@ -22,7 +23,11 @@ def get_adapter(provider: str) -> ProviderAdapter:
     return registry_get_adapter(provider)
 
 
-async def resolve_agent(slug: str, db: AsyncSession) -> ResolvedAgent:
+async def resolve_agent(
+    slug: str,
+    db: AsyncSession,
+    routing_context: RoutingContext | None = None,
+) -> ResolvedAgent:
     """Resolve agent slug to agent config, model, and provider. Raises 404 if not found."""
     service = get_agent_service()
     agent = await service.get_by_slug(db, slug)
@@ -31,10 +36,28 @@ async def resolve_agent(slug: str, db: AsyncSession) -> ResolvedAgent:
             status_code=404,
             detail={"error": {"message": f"Agent '{slug}' not found", "type": "invalid_request_error", "code": "agent_not_found"}},
         )
-    model = agent.primary_model_id
+    routed_agent, route = await resolve_model_route(db, agent, routing_context)
+    model = routed_agent.primary_model_id
     provider = get_provider_for_model(model)
-    logger.info(f"Agent routing: {slug} -> {model} ({provider})")
-    return ResolvedAgent(agent=agent, model=model, provider=provider)
+    logger.info(
+        "Agent routing: %s -> %s (%s) mode=%s workload=%s decision=%s",
+        slug,
+        model,
+        provider,
+        route.mode,
+        route.workload_profile,
+        route.decision_id,
+    )
+    return ResolvedAgent(
+        agent=routed_agent,
+        model=model,
+        provider=provider,
+        routing_mode=route.mode,
+        workload_profile=route.workload_profile,
+        routing_decision_id=route.decision_id,
+        auto_candidate_model_id=route.auto_candidate_model_id,
+        routing_canary_percent=route.canary_percent,
+    )
 
 
 async def inject_agent_mandates(

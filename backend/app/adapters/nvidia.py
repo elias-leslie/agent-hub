@@ -9,7 +9,10 @@ from app.adapters.openai_compat import OpenAICompatibleAdapter
 # NVIDIA NIM uses the original vendor namespace, not a flat nvidia/ prefix.
 _NVIDIA_MODEL_MAP: dict[str, str] = {
     "qwen3.5-397b-a17b": "qwen/qwen3.5-397b-a17b",
+    "deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
+    "kimi-k2.6": "moonshotai/kimi-k2.6",
     "kimi-k2.5": "moonshotai/kimi-k2.5",
+    "minimax-m2.7": "minimaxai/minimax-m2.7",
     "minimax-m2.5": "minimaxai/minimax-m2.5",
 }
 

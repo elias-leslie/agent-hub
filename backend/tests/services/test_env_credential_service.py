@@ -27,6 +27,10 @@ class TestLoadEnvCredentialsIntoCache:
                 "openrouter-key",
             ),
             patch(
+                "app.services.env_credential_service.settings.kimi_code_api_key",
+                "kimi-code-key",
+            ),
+            patch(
                 "app.services.env_credential_service.settings.gemini_api_key",
                 "",
             ),
@@ -36,10 +40,12 @@ class TestLoadEnvCredentialsIntoCache:
         credential_manager = CredentialManager.get_instance()
         assert changed == [
             "claude:api_key",
+            "kimi-code:api_key",
             "openai:api_key",
             "openrouter:api_key",
         ]
         assert credential_manager.get_api_key("claude") == "anthropic-key"
+        assert credential_manager.get_api_key("kimi-code") == "kimi-code-key"
         assert credential_manager.get_api_key("openai") == "openai-key"
         assert credential_manager.get_api_key("openrouter") == "openrouter-key"
 
@@ -58,6 +64,10 @@ class TestLoadEnvCredentialsIntoCache:
             ),
             patch(
                 "app.services.env_credential_service.settings.openrouter_api_key",
+                "",
+            ),
+            patch(
+                "app.services.env_credential_service.settings.kimi_code_api_key",
                 "",
             ),
             patch(
@@ -89,6 +99,10 @@ class TestLoadEnvCredentialsIntoCache:
             ),
             patch(
                 "app.services.env_credential_service.settings.openrouter_api_key",
+                "",
+            ),
+            patch(
+                "app.services.env_credential_service.settings.kimi_code_api_key",
                 "",
             ),
             patch(

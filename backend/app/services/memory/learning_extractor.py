@@ -40,21 +40,25 @@ async def _run_llm_extraction(prompt: str) -> list[ExtractedLearning]:
     """Call the learning-extractor agent and parse the response."""
     from app.api.complete.core import complete_internal
     from app.db import _get_session_factory
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
+    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_routing_utils import resolve_agent
 
-    agent_service = get_agent_service()
     session_factory = _get_session_factory()
     async with session_factory() as db:
-        agent = await agent_service.get_by_slug(db, "learning-extractor")
-        if not agent:
+        try:
+            resolved = await resolve_agent(
+                "learning-extractor",
+                db,
+                RoutingContext(workload_profile="memory_curation"),
+            )
+        except Exception:
             logger.error("learning-extractor agent not found")
             return []
-        provider = get_provider_for_model(agent.primary_model_id)
+        agent = resolved.agent
         response = await complete_internal(
             messages=[{"role": "user", "content": prompt}],
-            model=agent.primary_model_id,
-            provider=provider,
+            model=resolved.model,
+            provider=resolved.provider,
             temperature=agent.temperature,
             project_id="agent-hub",
             db=db,

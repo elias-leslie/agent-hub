@@ -1,33 +1,15 @@
 /**
- * Model display name lookup for chat-ui package.
- * Single source within this standalone package — avoids duplication
- * across message-utils.ts and hooks/chat-stream/utils.ts.
+ * Model display formatting for chat-ui package.
+ * Current names come from /api/models; this fallback only prettifies unknown
+ * telemetry ids without maintaining a second model catalog.
  */
-
-const MODEL_NAMES: Record<string, string> = {
-  "claude-sonnet-4-6": "Claude Sonnet 4.6",
-  "claude-opus-4-6": "Claude Opus 4.6",
-  "claude-haiku-4-5": "Claude Haiku 4.5",
-  "gemini-3-flash-preview": "Gemini 3 Flash",
-  "gemini-3-pro-preview": "Gemini 3 Pro",
-  "gemini-3.1-pro-preview": "Gemini 3.1 Pro",
-  // Short forms (from Claude Code CLI)
-  "sonnet-4-6": "Claude Sonnet 4.6",
-  "opus-4-6": "Claude Opus 4.6",
-  "haiku-4-5": "Claude Haiku 4.5",
-  // Legacy display-only (old session data)
-  "claude-sonnet-4-5": "Claude Sonnet 4.5",
-  "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-  "claude-opus-4-5": "Claude Opus 4.5",
-  "claude-opus-4-5-20250514": "Claude Opus 4.5",
-  "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
-};
 
 export function formatModelName(modelId?: string): string {
   if (!modelId) return "Assistant";
-  // Strip provider prefixes like "cloudcode/"
   const normalized = modelId.includes("/") ? modelId.split("/").pop()! : modelId;
-  return MODEL_NAMES[normalized] || MODEL_NAMES[modelId] || modelId;
+  return normalized
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export const MODEL_ALIAS_ENTRIES: Record<string, { model: string; label: string }> = {

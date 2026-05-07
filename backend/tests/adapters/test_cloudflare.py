@@ -109,9 +109,23 @@ class TestCloudflareAdapter:
         mock_client.models.list.assert_called_once()
 
     def test_model_map_coverage(self) -> None:
-        """All 5 LLM models should be in the model map."""
-        assert len(_CLOUDFLARE_MODEL_MAP) == 5
-        expected_keys = {"llama-4-scout-17b", "qwen3-30b", "qwq-32b", "mistral-small-3.1-24b", "qwen2.5-coder-32b"}
+        """All registered Cloudflare LLM models should be in the model map."""
+        expected_keys = {
+            "gemma-4-26b",
+            "glm-4.7-flash",
+            "gpt-oss-120b",
+            "gpt-oss-20b",
+            "granite-4.0-h-micro",
+            "kimi-k2.5",
+            "kimi-k2.6",
+            "llama-4-scout-17b",
+            "mistral-small-3.1-24b",
+            "nemotron-3-120b",
+            "qwen2.5-coder-32b",
+            "qwen3-30b",
+            "qwq-32b",
+        }
+        assert len(_CLOUDFLARE_MODEL_MAP) == len(expected_keys)
         assert set(_CLOUDFLARE_MODEL_MAP.keys()) == expected_keys
         # All values should start with @cf/
         for value in _CLOUDFLARE_MODEL_MAP.values():

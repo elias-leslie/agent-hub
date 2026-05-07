@@ -114,7 +114,7 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
     WorkflowScheduleDefinition(
         schedule_id="model_enrichment_sync",
         label="Model enrichment sync",
-        description="Refreshes model benchmark and pricing enrichment data.",
+        description="Refreshes model benchmark, pricing, catalog, and routable availability data.",
         cron="0 6 * * *",
         category="catalog",
     ),

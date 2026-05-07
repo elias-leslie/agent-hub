@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from app.adapters.base import Message
 from app.api.complete.helpers import parse_mention
+from app.services.adaptive_model_router import RoutingContext
 from app.services.agent_routing import get_provider_for_model as get_provider
 from app.services.agent_routing import (
     inject_agent_mandates,
@@ -56,7 +57,26 @@ async def resolve_agent_and_model(
                 status_code=400,
                 detail="Database connection required for agent routing.",
             )
-        resolved_agent = await resolve_agent(request.agent_slug, db)
+        work_context = request.work_context.model_dump(exclude_none=True) if request.work_context else None
+        response_type = request.response_format.type if request.response_format else None
+        resolved_agent = await resolve_agent(
+            request.agent_slug,
+            db,
+            RoutingContext(
+                request_id=request_hash,
+                session_id=request.session_id,
+                project_id=request.project_id,
+                task_type=request.task_type,
+                phase=request.phase,
+                workload_profile=request.workload_profile,
+                work_context=work_context,
+                has_tools=bool(request.tools or request.execute_tools),
+                requires_json=response_type == "json_object",
+                has_vision_input=_messages_have_vision(request.messages),
+                routing_mode_override=request.routing_mode_override,
+                canary_percent=request.routing_canary_percent,
+            ),
+        )
         resolved_model = resolved_agent.model
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug
@@ -86,6 +106,19 @@ async def resolve_agent_and_model(
         provider = get_provider(resolved_model)
 
     return resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used
+
+
+def _messages_have_vision(messages: list[Any]) -> bool:
+    for message in messages:
+        content = getattr(message, "content", None)
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") in {"image", "input_image"}:
+                return True
+            if isinstance(block, dict) and isinstance(block.get("source"), dict):
+                return True
+    return False
 
 
 def apply_mention_override(

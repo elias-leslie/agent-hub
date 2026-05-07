@@ -14,7 +14,7 @@ from agent_hub._memory import AsyncMemoryOperationsMixin
 from agent_hub._sessions import AsyncSessionOperationsMixin
 from agent_hub._streaming import stream_completion_sse
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
-from agent_hub.constants import DEFAULT_IMAGE_MODEL
+from agent_hub.constants import DEFAULT_IMAGE_AGENT
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -333,8 +333,8 @@ class AsyncAgentHubClient(
         *,
         project_id: str,
         purpose: str | None = None,
-        agent_slug: str | None = None,
-        model: str = DEFAULT_IMAGE_MODEL,
+        agent_slug: str | None = DEFAULT_IMAGE_AGENT,
+        model: str | None = None,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: str | None = None,

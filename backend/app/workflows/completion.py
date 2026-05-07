@@ -132,16 +132,15 @@ async def _wake_persona_on_autocode_failure(
 ) -> None:
     """Fire-and-forget wake for persona on autocode task failure."""
     from app.db import async_session
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
+    from app.services.agent_routing_utils import resolve_agent
     from app.workflows.persona_wake import dispatch_wake
 
     async with async_session() as db:
-        agent_service = get_agent_service()
-        agent = await agent_service.get_by_slug(db, "persona")
+        resolved = await resolve_agent("persona", db)
+        agent = resolved.agent
         if not agent:
             return
-        provider = get_provider_for_model(agent.primary_model_id)
+        provider = resolved.provider
 
     error_snippet = error[:2000]
     prompt = (
@@ -159,7 +158,7 @@ async def _wake_persona_on_autocode_failure(
 
     dispatch_wake(
         agent_slug="persona",
-        model=agent.primary_model_id,
+        model=resolved.model,
         provider=provider,
         temperature=agent.temperature,
         prompt=prompt,

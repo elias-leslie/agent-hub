@@ -47,20 +47,16 @@ async def _resolve_persona(
     project_id: str = HEARTBEAT_PROJECT,
 ) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
     """Return (model, provider, temperature, thinking_level, system_content, memory_config)."""
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_routing_utils import inject_agent_mandates
-    from app.services.agent_service import get_agent_service
+    from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
 
-    agent_service = get_agent_service()
-    agent = await agent_service.get_by_slug(db, "persona")
-    if not agent:
-        raise RuntimeError("Persona agent not found in database")
-    provider = get_provider_for_model(agent.primary_model_id)
+    resolved = await resolve_agent("persona", db)
+    agent = resolved.agent
+    provider = resolved.provider
     mandate = await inject_agent_mandates(
         agent, db, prompt_mode="full", project_id=project_id, task_type="heartbeat"
     )
     return (
-        agent.primary_model_id,
+        resolved.model,
         provider,
         agent.temperature,
         agent.thinking_level,

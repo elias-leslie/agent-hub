@@ -14,7 +14,6 @@ from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
@@ -25,8 +24,9 @@ from app.adapters.minimax_image import MinimaxImageAdapter
 from app.adapters.nvidia_image import NvidiaImageAdapter
 from app.constants import GEMINI_IMAGE, MODEL_CATALOG_BY_ID
 from app.db import get_db
-from app.models import Agent
 from app.models import Session as DBSession
+from app.services.adaptive_model_router import RoutingContext
+from app.services.agent_routing_utils import resolve_agent
 from app.services.events import publish_complete, publish_session_start
 from app.services.session_live_activity import mark_session_completed
 
@@ -43,9 +43,9 @@ class ImageGenerationRequest(BaseModel):
 
     prompt: str = Field(..., description="Text description of desired image")
     project_id: str = Field(..., description="Project ID for session tracking (required)")
-    model: str = Field(
-        default=GEMINI_IMAGE,
-        description="Model identifier for image generation",
+    model: str | None = Field(
+        default=None,
+        description="Deprecated direct model override for image generation",
     )
     size: str = Field(default="1024x1024", description="Image dimensions")
     style: str | None = Field(default=None, description="Style hint (e.g., photorealistic)")
@@ -58,8 +58,8 @@ class ImageGenerationRequest(BaseModel):
         description="MIME type of the reference image",
     )
     agent_slug: str | None = Field(
-        default=None,
-        description="Agent slug for agent-based image generation (optional)",
+        default="image-gen",
+        description="Agent slug for image generation routing",
     )
 
 
@@ -111,35 +111,45 @@ def _is_known_non_image_model(model_id: str) -> bool:
 
 async def _resolve_model_chain(
     db: AsyncSession,
-    request_model: str,
+    request_model: str | None,
     agent_slug: str | None,
 ) -> list[str]:
     """Build ordered model chain for image generation (primary + fallbacks)."""
-    chain = [request_model]
+    chain = [request_model] if request_model else []
 
     if agent_slug:
-        row = await db.execute(
-            select(Agent).where(Agent.slug == agent_slug, Agent.is_active.is_(True))
-        )
-        agent = row.scalar_one_or_none()
-        if agent:
-            primary = agent.primary_model_id or request_model
+        try:
+            resolved = await resolve_agent(
+                agent_slug,
+                db,
+                RoutingContext(workload_profile="image_generation"),
+            )
+        except HTTPException:
+            resolved = None
+        if resolved:
+            primary = resolved.model or request_model
             # If caller left default model, honor agent primary first.
-            if request_model == GEMINI_IMAGE:
-                chain = [primary, *(agent.fallback_models or [])]
+            if not request_model or request_model == GEMINI_IMAGE:
+                chain = [primary, *(resolved.agent.fallback_models or [])]
             else:
-                chain = [request_model, *(agent.fallback_models or [])]
+                chain = [request_model, *(resolved.agent.fallback_models or [])]
 
     seen: set[str] = set()
     filtered: list[str] = []
     for model_id in chain:
+        if not model_id:
+            continue
         if model_id in seen:
             continue
         seen.add(model_id)
         if _is_known_non_image_model(model_id):
             continue
         filtered.append(model_id)
-    return filtered or [request_model]
+    if filtered:
+        return filtered
+    if request_model:
+        return [request_model]
+    raise ValueError("No image model resolved; configure the image-gen agent.")
 
 
 async def _create_image_session(
@@ -147,6 +157,7 @@ async def _create_image_session(
     project_id: str,
     model: str,
     provider: str,
+    agent_slug: str | None,
 ) -> DBSession:
     """Create a session for image generation."""
     session_id = str(uuid.uuid4())
@@ -155,6 +166,7 @@ async def _create_image_session(
         project_id=project_id,
         provider=provider,
         model=model,
+        agent_slug=agent_slug,
         status="active",
         session_type="image_generation",
     )
@@ -269,13 +281,17 @@ async def generate_image(
     Routes to Gemini, NVIDIA NIM, MiniMax, or Cloudflare based on the model prefix.
     Creates a session for tracking.
     """
-    provider = request.model.split("/")[0] if "/" in request.model else "gemini"
     http_request.state.used_fallback = False
     http_request.state.fallback_model = None
+    model_chain = await _resolve_model_chain(db, request.model, request.agent_slug)
+    requested_model = request.model or model_chain[0]
+    provider = requested_model.split("/")[0] if "/" in requested_model else "gemini"
 
-    session = await _create_image_session(db, request.project_id, request.model, provider)
+    session = await _create_image_session(
+        db, request.project_id, requested_model, provider, request.agent_slug
+    )
     session_id = session.id
-    await publish_session_start(session_id, request.model, request.project_id)
+    await publish_session_start(session_id, requested_model, request.project_id)
 
     ref_image_bytes: bytes | None = None
     if request.reference_image:
@@ -285,7 +301,6 @@ async def generate_image(
             raise HTTPException(status_code=400, detail=f"Invalid base64 reference_image: {e}") from e
 
     try:
-        model_chain = await _resolve_model_chain(db, request.model, request.agent_slug)
         result = await _try_generate_with_fallback(model_chain, request, ref_image_bytes, http_request)
         return await _complete_image_generation(session, db, result, session_id)
 

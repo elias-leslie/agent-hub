@@ -20,6 +20,7 @@ from app.workflows.scheduled import (
     data_retention_task,
     feedback_cleanup_task,
     memory_cleanup_task,
+    memory_governance_task,
     session_cleanup_task,
     tier_optimizer_task,
 )
@@ -46,6 +47,7 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     session_cleanup_task,
     tier_optimizer_task,
     memory_cleanup_task,
+    memory_governance_task,
     feedback_cleanup_task,
     data_retention_task,
     webhook_delivery_task,

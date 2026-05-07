@@ -78,7 +78,7 @@ def _decrypt_masked(value_encrypted: str) -> str:
 class CredentialCreate(BaseModel):
     """Request body for creating a credential."""
 
-    provider: str = Field(..., max_length=100, description="Provider name (claude, codex, gemini, minimax, nvidia, openrouter, openai, xai, zhipu)")
+    provider: str = Field(..., max_length=100, description="Provider name (claude, cloudflare, codex, deepseek, gemini, local, minimax, moonshot, nvidia, openrouter, openai, xai, zhipu)")
     credential_type: str = Field(..., max_length=50, description="Type: api_key, oauth_token, refresh_token")
     value: str = Field(..., min_length=1, max_length=10000, description="Credential value (will be encrypted)")
 

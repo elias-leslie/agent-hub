@@ -21,16 +21,15 @@ from app.adapters.errors import with_retry
 from app.adapters.openai_compat import OpenAICompatibleAdapter
 
 _XAI_CACHE_HEADER = "x-grok-conv-id"
-_XAI_MULTI_AGENT_MODEL = "grok-4.20-multi-agent"
+_XAI_MULTI_AGENT_MODEL = "grok-4.20-multi-agent-0309"
 _XAI_RESPONSES_API_MODELS = {_XAI_MULTI_AGENT_MODEL}
 _XAI_MODEL_NORMALIZATION = {
-    "grok-4.1-fast": "grok-4-1-fast-reasoning",
-    "grok-4-1-fast": "grok-4-1-fast-reasoning",
-    "grok-4-1-fast-non-reasoning": "grok-4-1-fast-reasoning",
-    "grok-4.20": "grok-4.20-reasoning",
-    "grok-4.20-beta-latest": "grok-4.20-reasoning",
-    "grok-4.20-beta-latest-non-reasoning": "grok-4.20-reasoning",
-    "grok-4.20-beta-0309-non-reasoning": "grok-4.20-reasoning",
+    "grok-4.20": "grok-4.20-0309-reasoning",
+    "grok-4.20-reasoning": "grok-4.20-0309-reasoning",
+    "grok-4.20-beta-latest": "grok-4.20-0309-reasoning",
+    "grok-4.20-beta-latest-non-reasoning": "grok-4.20-0309-reasoning",
+    "grok-4.20-beta-0309-non-reasoning": "grok-4.20-0309-reasoning",
+    "grok-4.20-multi-agent": _XAI_MULTI_AGENT_MODEL,
     "grok-4.20-multi-agent-beta-0309": _XAI_MULTI_AGENT_MODEL,
 }
 

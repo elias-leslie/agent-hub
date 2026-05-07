@@ -15,11 +15,12 @@ from app.constants.models import PROVIDER_NAMES
 logger = logging.getLogger(__name__)
 
 # Derive recognized @mention prefixes from PROVIDER_NAMES (single source of truth).
-# Both "provider" (e.g. @claude-sonnet) and "provider/" (e.g. @cloudflare/flux-1-schnell) forms.
+# Both bare provider and provider-prefixed forms.
 _MENTION_PREFIXES: tuple[str, ...] = tuple(
     prefix for p in PROVIDER_NAMES for prefix in (p, f"{p}/")
 )
-_EXACT_MODEL_IDS: dict[str, str] = {entry.id.lower(): entry.id for entry in MODEL_CATALOG}
+def _exact_model_ids() -> dict[str, str]:
+    return {entry.id.lower(): entry.id for entry in MODEL_CATALOG}
 
 
 def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None]:
@@ -80,7 +81,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     """Extract @model mention from message content.
 
     Supports aliases (@sonnet, @opus, @flash, etc.) and provider-prefixed models
-    (@cloudflare/qwen2.5-coder-32b, @nvidia/flux-1, etc.). Provider prefixes are
+    Provider-prefixed mentions are
     derived dynamically from PROVIDER_NAMES — adding a provider there auto-enables
     @mention support with zero changes here.
 
@@ -96,7 +97,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     mention = match.group(1).lower().rstrip(".")
     resolved_model = MODEL_ALIASES.get(mention)
     if not resolved_model:
-        resolved_model = _EXACT_MODEL_IDS.get(mention)
+        resolved_model = _exact_model_ids().get(mention)
     if not resolved_model and "/" in mention and any(mention.startswith(p) for p in _MENTION_PREFIXES):
         resolved_model = mention
 

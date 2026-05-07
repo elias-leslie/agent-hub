@@ -6,19 +6,6 @@ from typing import Any
 
 from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
-from app.constants import MODEL_ALIASES
-
-# Build OpenRouter alias -> API model ID mapping from the central registry.
-# Registry IDs are like "openrouter/x-ai/grok-code-fast-1" but the OpenRouter API
-# expects "x-ai/grok-code-fast-1" (no openrouter/ prefix).
-_OR_ALIAS_MAP: dict[str, str] = {}
-for _alias, _model_id in MODEL_ALIASES.items():
-    if _model_id.startswith("openrouter/"):
-        _OR_ALIAS_MAP[_alias] = _model_id[len("openrouter/"):]
-
-# Legacy aliases not in the registry
-_OR_ALIAS_MAP["or/sonnet"] = "anthropic/claude-3.5-sonnet"
-_OR_ALIAS_MAP["or/gpt4o"] = "openai/gpt-4o"
 
 
 def resolve_openrouter_model(model: str) -> str:
@@ -33,9 +20,17 @@ def resolve_openrouter_model(model: str) -> str:
     if model.startswith("openrouter/"):
         return model[len("openrouter/"):]
 
-    # Check alias map (derived from constants.MODEL_ALIASES)
-    if model in _OR_ALIAS_MAP:
-        return _OR_ALIAS_MAP[model]
+    from app.constants import MODEL_ALIASES
+
+    resolved = MODEL_ALIASES.get(model)
+    if resolved and resolved.startswith("openrouter/"):
+        return resolved[len("openrouter/"):]
+    legacy_aliases = {
+        "or/sonnet": "anthropic/claude-3.5-sonnet",
+        "or/gpt4o": "openai/gpt-4o",
+    }
+    if model in legacy_aliases:
+        return legacy_aliases[model]
 
     return model
 

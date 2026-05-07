@@ -170,6 +170,22 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Task type for triggered reference injection (e.g., 'database', 'frontend', 'backend')",
     )
+    workload_profile: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Optional Agent Hub workload profile for adaptive model routing.",
+    )
+    routing_mode_override: str | None = Field(
+        default=None,
+        pattern="^(manual_locked|auto_shadow|auto_canary|auto)$",
+        description="Advanced Agent Hub routing mode override. Normal clients should omit this.",
+    )
+    routing_canary_percent: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Advanced auto_canary percentage for this request.",
+    )
     phase: str | None = Field(
         default=None,
         description="Subtask phase for phase-triggered reference injection (e.g., 'planning', 'implementation', 'review')",

@@ -79,11 +79,12 @@ async function fetchModels(fetchFn: (url: string, options?: RequestInit) => Prom
 
 export function useModels(
   fetchFn: (url: string, options?: RequestInit) => Promise<Response> = fetch,
-  modelsEndpoint: string = "/api/models",
+  modelsEndpoint: string | null = "/api/models",
 ): ModelOption[] {
   const { data } = useQuery({
     queryKey: ["models", modelsEndpoint],
-    queryFn: () => fetchModels(fetchFn, modelsEndpoint),
+    queryFn: () => fetchModels(fetchFn, modelsEndpoint || "/api/models"),
+    enabled: Boolean(modelsEndpoint),
     staleTime: Infinity,
     gcTime: Infinity,
   });

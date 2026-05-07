@@ -154,6 +154,19 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""
+    deepseek_api_key: str = ""
+    kimi_code_api_key: str = ""
+    moonshot_api_key: str = ""
+    minimax_api_key: str = ""
+    xai_api_key: str = ""
+    zhipu_api_key: str = ""
+    nvidia_api_key: str = ""
+    cloudflare_api_key: str = ""
+    cloudflare_account_id: str = ""
+
+    # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
+    local_openai_base_url: str = "http://127.0.0.1:11434/v1"
+    local_openai_api_key: str = ""
 
 
 

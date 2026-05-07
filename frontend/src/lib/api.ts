@@ -31,9 +31,12 @@ export {
 // Re-export all agent-detail-related exports
 export {
   fetchAgent,
+  fetchAgentRouting,
   fetchModels,
   fetchPreview,
   updateAgent,
+  updateAgentRouting,
+  updateAgentWorkloadRouting,
 } from './api/agent-detail'
 // Re-export all agents-related exports (list & metrics)
 export {

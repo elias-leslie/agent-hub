@@ -33,6 +33,9 @@ class ModelCostInfo(BaseModel):
         "per_million_characters",
     ] = "per_million_tokens"
     unit_price: float | None = None
+    cache_read_per_million: float | None = None
+    cache_write_per_million: float | None = None
+    service_tiers: dict[str, float] = Field(default_factory=dict)
     source: str = "catalog"
 
 

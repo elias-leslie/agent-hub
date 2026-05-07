@@ -122,8 +122,8 @@ async def _summarize_messages(
 
     from app.adapters.base import Message
     from app.adapters.registry import get_adapter
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
+    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_routing_utils import resolve_agent
 
     conversation_text = "\n".join(
         f"{m.get('role', 'unknown').upper()}: {m.get('content', '')}"
@@ -131,24 +131,29 @@ async def _summarize_messages(
     )
 
     try:
-        agent_service = get_agent_service()
-        agent = await agent_service.get_by_slug(db, _COMPACTOR_AGENT_SLUG)
-        if not agent:
+        try:
+            resolved = await resolve_agent(
+                _COMPACTOR_AGENT_SLUG,
+                db,
+                RoutingContext(workload_profile="summarization"),
+            )
+        except Exception:
             logger.warning("Context compactor agent not found")
             return None
+        agent = resolved.agent
 
         system_content = (agent.system_prompt or "").strip()
         if not system_content:
             logger.warning("Context compactor agent has no system prompt")
             return None
 
-        adapter = get_adapter(get_provider_for_model(agent.primary_model_id))
+        adapter = get_adapter(resolved.provider)
         request_messages = [Message(role="system", content=system_content)]
         request_messages.append(Message(role="user", content=conversation_text))
 
         result = await adapter.complete(
             messages=request_messages,
-            model=agent.primary_model_id,
+            model=resolved.model,
             max_tokens=_SUMMARY_MAX_TOKENS,
             temperature=agent.temperature,
             thinking_level=agent.thinking_level,
@@ -160,7 +165,7 @@ async def _summarize_messages(
                 from app.services.context_tracker import log_token_usage
                 from app.services.token_counter import estimate_cost
 
-                billed_model = result.model or agent.primary_model_id
+                billed_model = result.model or resolved.model
                 cost = estimate_cost(result.input_tokens, result.output_tokens, billed_model)
                 await log_token_usage(
                     db, session_id, billed_model,

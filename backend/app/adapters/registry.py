@@ -108,6 +108,22 @@ def _ensure_registered() -> None:
         from app.adapters.minimax import MinimaxAdapter
         return MinimaxAdapter()
 
+    def _kimi_code() -> ProviderAdapter:
+        from app.adapters.kimi_code import KimiCodeAdapter
+        return KimiCodeAdapter()
+
+    def _moonshot() -> ProviderAdapter:
+        from app.adapters.moonshot import MoonshotAdapter
+        return MoonshotAdapter()
+
+    def _deepseek() -> ProviderAdapter:
+        from app.adapters.deepseek import DeepSeekAdapter
+        return DeepSeekAdapter()
+
+    def _local() -> ProviderAdapter:
+        from app.adapters.local import LocalAdapter
+        return LocalAdapter()
+
     def _nvidia() -> ProviderAdapter:
         from app.adapters.nvidia import NvidiaAdapter
         return NvidiaAdapter()
@@ -140,7 +156,20 @@ def _ensure_registered() -> None:
         supports_tool_execution=True,
     ))
     register("minimax", _minimax, ProviderCapabilities(
-        supports_tool_execution=False, supports_thinking=True,
+        supports_tool_execution=True, supports_thinking=True,
+    ))
+    register("kimi-code", _kimi_code, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+    ))
+    register("moonshot", _moonshot, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+        supports_images=True,
+    ))
+    register("deepseek", _deepseek, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+    ))
+    register("local", _local, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
     ))
     register("nvidia", _nvidia, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
@@ -225,7 +254,7 @@ def get_provider_for_model(model: str) -> str:
     prefix/name-based detection for models not in the catalog.
 
     Args:
-        model: Model ID or alias (e.g., "claude-sonnet-4-6", "xai/grok-code-fast-1")
+        model: Model ID or alias (e.g., "claude-sonnet-4-6", "xai/grok-4.3")
 
     Returns:
         Provider name (e.g., "claude", "gemini", "openai")
@@ -247,7 +276,11 @@ def get_provider_for_model(model: str) -> str:
         ("openai/", "openai"),
         ("xai/", "xai"),
         ("zhipu/", "zhipu"),
+        ("kimi-code/", "kimi-code"),
         ("minimax/", "minimax"),
+        ("moonshot/", "moonshot"),
+        ("deepseek/", "deepseek"),
+        ("local/", "local"),
         ("nvidia/", "nvidia"),
         ("cloudflare/", "cloudflare"),
     ]
@@ -262,6 +295,11 @@ def get_provider_for_model(model: str) -> str:
         ("gpt", "openai"),
         ("grok", "xai"),
         ("glm", "zhipu"),
+        ("kimi-for-coding", "kimi-code"),
+        ("kimi", "moonshot"),
+        ("minimax", "minimax"),
+        ("deepseek", "deepseek"),
+        ("qwen", "local"),
     ]
     for name, provider in name_map:
         if name in model_lower:
