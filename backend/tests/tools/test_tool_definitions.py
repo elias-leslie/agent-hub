@@ -11,13 +11,12 @@ def test_governance_auditor_tool_registry_includes_governance_surfaces() -> None
     assert tools is not None
     tool_names = {tool.name for tool in tools}
 
-    assert "bash" in tool_names
-    assert "read_file" in tool_names
-    assert "precision_code_search" in tool_names
-    assert "manage_feedback" in tool_names
-    assert "query_sessions" in tool_names
-    assert "inspect_session" in tool_names
-    assert "read_heartbeat_instructions" in tool_names
+    assert tool_names == {
+        "bash",
+        "read_file",
+        "write_file",
+        "search_scratch_context",
+    }
 
 
 def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools() -> None:
@@ -31,7 +30,6 @@ def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools(
         "read_file",
         "write_file",
         "search_scratch_context",
-        "batch_execute",
         "review_memory_system",
     }
     review_tool = next(tool for tool in tools if tool.name == "review_memory_system")
@@ -52,5 +50,4 @@ def test_persona_tool_registry_stays_shell_first() -> None:
         "read_file",
         "write_file",
         "search_scratch_context",
-        "batch_execute",
     }

@@ -13,7 +13,12 @@ import {
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { PermissionRow } from './_components/PermissionRow'
-import { TIER_CONFIG, TIERS, type Tier } from './_components/tier-config'
+import {
+  normalizeTier,
+  TIER_CONFIG,
+  TIERS,
+  type Tier,
+} from './_components/tier-config'
 
 // ─── Header summary pills ─────────────────────────────────────────────────────
 
@@ -256,7 +261,7 @@ export default function ProjectPermissionsPage() {
 
   const tierCounts = permissions?.reduce(
     (acc, p) => {
-      const t = p.permission_tier as Tier
+      const t = normalizeTier(p.permission_tier)
       acc[t] = (acc[t] || 0) + 1
       return acc
     },

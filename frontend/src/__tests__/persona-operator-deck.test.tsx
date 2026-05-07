@@ -181,7 +181,7 @@ describe('PersonaOperatorDeck', () => {
     mockFetchProjectPermissions.mockResolvedValue([
       {
         project_id: 'agent-hub',
-        permission_tier: 'write',
+        permission_tier: 'full',
         auto_exec_enabled: false,
         execution_start_hour: 0,
         execution_end_hour: 24,
@@ -192,7 +192,7 @@ describe('PersonaOperatorDeck', () => {
     ])
     mockFetchExecutionPermission.mockResolvedValue({
       allowed: true,
-      permission_tier: 'write',
+      permission_tier: 'full',
       auto_exec_enabled: false,
       in_time_window: true,
       reason: 'allowed',

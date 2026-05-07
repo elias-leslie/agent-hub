@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.projects import get_known_roots
 from app.db import async_session, get_db
-from app.models.project_permission import VALID_PERMISSION_TIERS
+from app.models.project_permission import VALID_PERMISSION_TIERS, normalize_permission_tier
 from app.services.project_permission_service import (
     ExecutionPermissionResult,
     check_execution_permission,
@@ -48,7 +48,7 @@ class ProjectPermissionResponse(BaseModel):
 class ProjectPermissionUpdate(BaseModel):
     """Request schema for updating a project permission."""
 
-    permission_tier: str | None = Field(default=None, description="off, read, write, yolo")
+    permission_tier: str | None = Field(default=None, description="off, read, full")
     auto_exec_enabled: bool | None = None
     execution_start_hour: int | None = Field(default=None, ge=0, le=23)
     execution_end_hour: int | None = Field(default=None, ge=1, le=24)
@@ -62,7 +62,7 @@ class ProjectPermissionCreate(BaseModel):
     """Request schema for creating a project permission."""
 
     project_id: str = Field(min_length=1)
-    permission_tier: str = Field(default="read", description="off, read, write, yolo")
+    permission_tier: str = Field(default="read", description="off, read, full")
     auto_exec_enabled: bool = False
     execution_start_hour: int = Field(default=0, ge=0, le=23)
     execution_end_hour: int = Field(default=24, ge=1, le=24)
@@ -90,7 +90,7 @@ class ExecutionPermissionResponse(BaseModel):
 def _to_response(perm: Any) -> ProjectPermissionResponse:
     return ProjectPermissionResponse(
         project_id=perm.project_id,
-        permission_tier=perm.permission_tier,
+        permission_tier=normalize_permission_tier(perm.permission_tier) or perm.permission_tier,
         auto_exec_enabled=perm.auto_exec_enabled,
         execution_start_hour=perm.execution_start_hour,
         execution_end_hour=perm.execution_end_hour,
@@ -128,7 +128,8 @@ async def create_permission(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectPermissionResponse:
     """Create a new project permission row."""
-    if payload.permission_tier not in VALID_PERMISSION_TIERS:
+    permission_tier = normalize_permission_tier(payload.permission_tier)
+    if permission_tier is None:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid tier '{payload.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
@@ -144,7 +145,7 @@ async def create_permission(
         perm = await create_project_permission(
             db,
             payload.project_id,
-            permission_tier=payload.permission_tier,
+            permission_tier=permission_tier,
             auto_exec_enabled=payload.auto_exec_enabled,
             execution_start_hour=payload.execution_start_hour,
             execution_end_hour=payload.execution_end_hour,
@@ -180,7 +181,12 @@ async def update_permission(
 ) -> ProjectPermissionResponse:
     """Update permission for a project (tier, auto_exec, hours, root_path)."""
     # Validate tier
-    if update.permission_tier is not None and update.permission_tier not in VALID_PERMISSION_TIERS:
+    permission_tier = (
+        normalize_permission_tier(update.permission_tier)
+        if update.permission_tier is not None
+        else None
+    )
+    if update.permission_tier is not None and permission_tier is None:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid tier '{update.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
@@ -199,8 +205,8 @@ async def update_permission(
 
     # Build kwargs, only passing fields that were set
     kwargs: dict[str, Any] = {}
-    if update.permission_tier is not None:
-        kwargs["permission_tier"] = update.permission_tier
+    if permission_tier is not None:
+        kwargs["permission_tier"] = permission_tier
     if update.auto_exec_enabled is not None:
         kwargs["auto_exec_enabled"] = update.auto_exec_enabled
     if update.execution_start_hour is not None:

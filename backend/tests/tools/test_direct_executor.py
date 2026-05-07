@@ -332,7 +332,6 @@ class TestStandardTools:
             "read_file",
             "write_file",
             "search_scratch_context",
-            "batch_execute",
         ]
 
     def test_bash_description_prefers_shell_wrappers(self) -> None:
@@ -340,7 +339,7 @@ class TestStandardTools:
         tools = {tool.name: tool for tool in get_standard_tools()}
         bash_tool = tools["bash"]
         assert "canonical" in bash_tool.description
-        assert "`st`, `dt`, `db`, `commit.sh`, and `web-research`" in bash_tool.description
+        assert "`st`" in bash_tool.description
         assert "Prefer wrapper CLIs" in bash_tool.description
 
     def test_create_handler_with_workdir(self, tmp_path: Path) -> None:

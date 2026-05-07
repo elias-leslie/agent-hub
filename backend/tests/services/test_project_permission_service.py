@@ -40,30 +40,27 @@ class TestTierTools:
     def test_read_tier_has_read_tools(self):
         tools = get_tools_for_tier("read")
         assert "read_file" in tools
-        assert "consult_agent" in tools
-        assert "precision_code_search" in tools
-        assert "research_web" in tools
-        assert "search_web" in tools
-        assert "fetch_web_page" in tools
-        # Should NOT have write tools
+        assert "search_scratch_context" not in tools
+        assert "precision_code_search" not in tools
+        assert "search_web" not in tools
         assert "write_file" not in tools
         assert "bash" not in tools
 
-    def test_write_tier_includes_read_tools(self):
+    def test_full_tier_includes_core_tools(self):
         read_tools = get_tools_for_tier("read")
-        write_tools = get_tools_for_tier("write")
-        assert read_tools.issubset(write_tools)
-        assert "write_file" in write_tools
-        # Should NOT have yolo tools
-        assert "bash" not in write_tools
+        full_tools = get_tools_for_tier("full")
+        assert read_tools.issubset(full_tools)
+        assert "bash" in full_tools
+        assert "batch_execute" not in full_tools
+        assert "search_scratch_context" in full_tools
+        assert "write_file" in full_tools
+        assert "send_push" not in full_tools
+        assert "schedule_job" not in full_tools
 
-    def test_yolo_tier_includes_all_tools(self):
-        write_tools = get_tools_for_tier("write")
-        yolo_tools = get_tools_for_tier("yolo")
-        assert write_tools.issubset(yolo_tools)
-        assert "bash" in yolo_tools
-        assert "send_push" in yolo_tools
-        assert "schedule_job" in yolo_tools
+    def test_legacy_write_and_yolo_alias_full(self):
+        full_tools = get_tools_for_tier("full")
+        assert get_tools_for_tier("write") == full_tools
+        assert get_tools_for_tier("yolo") == full_tools
 
     def test_unknown_tier_returns_empty(self):
         assert get_tools_for_tier("nonexistent") == frozenset()
@@ -72,17 +69,14 @@ class TestTierTools:
         """Each higher tier includes all tools from lower tiers."""
         off = TIER_TOOLS["off"]
         read = TIER_TOOLS["read"]
-        write = TIER_TOOLS["write"]
-        yolo = TIER_TOOLS["yolo"]
+        full = TIER_TOOLS["full"]
         assert off.issubset(read)
-        assert read.issubset(write)
-        assert write.issubset(yolo)
+        assert read.issubset(full)
 
     def test_each_tier_adds_new_tools(self):
         """Each higher tier adds at least one tool not in the previous."""
         assert len(TIER_TOOLS["read"]) > len(TIER_TOOLS["off"])
-        assert len(TIER_TOOLS["write"]) > len(TIER_TOOLS["read"])
-        assert len(TIER_TOOLS["yolo"]) > len(TIER_TOOLS["write"])
+        assert len(TIER_TOOLS["full"]) > len(TIER_TOOLS["read"])
 
 
 # ---------------------------------------------------------------------------
@@ -170,10 +164,10 @@ class TestUpdateProjectPermission:
             new_callable=AsyncMock,
         ):
             result = await update_project_permission(
-                mock_db, "proj", permission_tier="yolo"
+                mock_db, "proj", permission_tier="full"
             )
             assert result is not None
-            assert result.permission_tier == "yolo"
+            assert result.permission_tier == "full"
             mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -237,11 +231,11 @@ class TestUpdateProjectPermission:
             ) as mock_invalidate_client_cache,
         ):
             result = await update_project_permission(
-                mock_db, "test2", permission_tier="yolo"
+                mock_db, "test2", permission_tier="full"
             )
 
         assert result is not None
-        assert result.permission_tier == "yolo"
+        assert result.permission_tier == "full"
         assert summitflow_client.allowed_projects == '["summitflow", "test2"]'
         assert backend_client.allowed_projects == '["summitflow", "agent-hub", "test2"]'
         assert other_client.allowed_projects == '["portfolio-ai"]'
@@ -251,7 +245,7 @@ class TestUpdateProjectPermission:
 
     @pytest.mark.asyncio
     async def test_removes_disabled_project_from_summitflow_clients(self):
-        mock_perm = _make_permission("test2", "yolo")
+        mock_perm = _make_permission("test2", "full")
         summitflow_client = MagicMock()
         summitflow_client.id = "client-summitflow"
         summitflow_client.display_name = "SummitFlow"
@@ -321,13 +315,13 @@ class TestCreateProjectPermission:
             result = await create_project_permission(
                 mock_db,
                 "test2",
-                permission_tier="yolo",
+                permission_tier="full",
                 auto_exec_enabled=True,
             )
 
         assert result is created["perm"]
         assert created["perm"].project_id == "test2"
-        assert created["perm"].permission_tier == "yolo"
+        assert created["perm"].permission_tier == "full"
         assert created["perm"].auto_exec_enabled is True
         assert created["perm"].root_path == "/srv/workspaces/projects/test2"
         mock_db.commit.assert_awaited_once()
@@ -349,8 +343,8 @@ class TestReconcileRegisteredProjectAccess:
     async def test_repairs_missing_registered_project_access(self):
         permissions = [
             _make_permission("agent-hub", "read"),
-            _make_permission("summitflow", "yolo"),
-            _make_permission("test1", "yolo"),
+            _make_permission("summitflow", "full"),
+            _make_permission("test1", "full"),
             _make_permission("vantage", "read"),
             _make_permission("old-project", "off"),
         ]
@@ -400,8 +394,8 @@ class TestReconcileRegisteredProjectAccess:
     async def test_noops_when_registered_access_is_aligned(self):
         permissions = [
             _make_permission("agent-hub", "read"),
-            _make_permission("summitflow", "yolo"),
-            _make_permission("test1", "yolo"),
+            _make_permission("summitflow", "full"),
+            _make_permission("test1", "full"),
             _make_permission("vantage", "read"),
         ]
         summitflow_client = MagicMock()
@@ -496,7 +490,7 @@ class TestReconcileRegisteredProjectAccess:
             result = await create_project_permission(
                 mock_db,
                 "test2",
-                permission_tier="yolo",
+                permission_tier="full",
                 auto_exec_enabled=True,
             )
 
@@ -522,7 +516,7 @@ class TestDeleteProjectPermission:
 
     @pytest.mark.asyncio
     async def test_removes_registered_project_access_for_summitflow_clients(self):
-        mock_perm = _make_permission("test2", "yolo")
+        mock_perm = _make_permission("test2", "full")
         summitflow_client = MagicMock()
         summitflow_client.id = "client-summitflow"
         summitflow_client.display_name = "SummitFlow"
@@ -581,59 +575,59 @@ class TestCheckToolAllowed:
             assert reason == "allowed"
 
     @pytest.mark.asyncio
-    async def test_tool_search_allowed_at_read_tier(self):
+    async def test_tool_search_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "tool_search")
-            assert allowed is True
-            assert reason == "allowed"
+            assert allowed is False
+            assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_search_scratch_context_allowed_at_read_tier(self):
+    async def test_search_scratch_context_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "search_scratch_context")
-            assert allowed is True
-            assert reason == "allowed"
+            assert allowed is False
+            assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_search_web_allowed_at_read_tier(self):
+    async def test_search_web_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "search_web")
-            assert allowed is True
-            assert reason == "allowed"
+            assert allowed is False
+            assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_research_web_allowed_at_read_tier(self):
+    async def test_research_web_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "research_web")
-            assert allowed is True
-            assert reason == "allowed"
+            assert allowed is False
+            assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_fetch_web_page_allowed_at_read_tier(self):
+    async def test_fetch_web_page_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "fetch_web_page")
-            assert allowed is True
-            assert reason == "allowed"
+            assert allowed is False
+            assert "not permitted" in reason
 
     @pytest.mark.asyncio
     async def test_denied_tool_at_read_tier(self):
@@ -647,24 +641,34 @@ class TestCheckToolAllowed:
             assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_yolo_tier_allows_bash(self):
+    async def test_full_tier_allows_bash(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
-            return_value="yolo",
+            return_value="full",
         ):
             allowed, _ = await check_tool_allowed("proj", "bash")
             assert allowed is True
 
     @pytest.mark.asyncio
-    async def test_yolo_tier_allows_batch_execute(self):
+    async def test_full_tier_allows_scratch_lookup(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
-            return_value="yolo",
+            return_value="full",
+        ):
+            allowed, _ = await check_tool_allowed("proj", "search_scratch_context")
+            assert allowed is True
+
+    @pytest.mark.asyncio
+    async def test_full_tier_denies_batch_execute(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="full",
         ):
             allowed, _ = await check_tool_allowed("proj", "batch_execute")
-            assert allowed is True
+            assert allowed is False
 
     @pytest.mark.asyncio
     async def test_off_tier_denies_everything(self):
@@ -724,18 +728,20 @@ class TestPersonaToolSets:
         ):
             assert tool in _PERSONA_INTERNAL
 
-    def test_visible_read_tier_includes_memory_review_surface(self):
+    def test_visible_read_tier_stays_core_only(self):
         tools = get_visible_tools_for_tier("read")
 
-        assert "review_memory_system" in tools
+        assert tools == frozenset({"read_file"})
 
     def test_operational_contains_agency_tools(self):
         for tool in (
             "manage_tasks",
             "schedule_job",
+            "list_scheduled_jobs",
             "cancel_scheduled_job",
             "send_push",
             "steer_consultation",
+            "list_consultations",
             "cancel_consultation",
             "inspect_session",
         ):
@@ -781,8 +787,8 @@ class TestPersonaToolTierExemption:
             assert "persona-internal" in reason
 
     @pytest.mark.asyncio
-    async def test_operational_tool_allowed_at_write_tier(self):
-        """schedule_job should be tier-exempt at write tier too."""
+    async def test_operational_tool_allowed_at_legacy_write_tier(self):
+        """schedule_job should tolerate legacy write alias."""
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
@@ -793,7 +799,7 @@ class TestPersonaToolTierExemption:
             assert "persona-internal" in reason
 
     @pytest.mark.asyncio
-    async def test_manage_tasks_overview_allowed_at_read_tier(self):
+    async def test_manage_tasks_overview_denied_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
@@ -802,8 +808,8 @@ class TestPersonaToolTierExemption:
             allowed, reason = await check_tool_allowed(
                 "proj", "manage_tasks", tool_input={"action": "overview"},
             )
-            assert allowed is True
-            assert "persona-internal" in reason
+            assert allowed is False
+            assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     async def test_manage_tasks_dispatch_denied_at_read_tier(self):
@@ -816,8 +822,7 @@ class TestPersonaToolTierExemption:
                 "proj", "manage_tasks", tool_input={"action": "dispatch"},
             )
             assert allowed is False
-            assert "requires yolo tier" in reason
-            assert "dispatch" in reason
+            assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     async def test_dispatch_agent_denied_at_read_tier(self):
@@ -828,7 +833,7 @@ class TestPersonaToolTierExemption:
         ):
             allowed, reason = await check_tool_allowed("proj", "dispatch_agent")
             assert allowed is False
-            assert "requires yolo tier" in reason
+            assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     async def test_persona_tool_denied_at_off_tier(self):
@@ -876,7 +881,7 @@ class TestCheckExecutionPermission:
     @pytest.mark.asyncio
     async def test_allowed_when_all_conditions_met(self):
         mock_perm = _make_permission(
-            "proj", "yolo", auto_exec=True, start_hour=0, end_hour=24
+            "proj", "full", auto_exec=True, start_hour=0, end_hour=24
         )
         mock_db = AsyncMock()
         mock_result = MagicMock()
@@ -901,7 +906,7 @@ class TestCheckExecutionPermission:
 
     @pytest.mark.asyncio
     async def test_denied_when_auto_exec_disabled(self):
-        mock_perm = _make_permission("proj", "yolo", auto_exec=False)
+        mock_perm = _make_permission("proj", "full", auto_exec=False)
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_perm
@@ -930,7 +935,7 @@ class TestCheckExecutionPermission:
         bad_hour = (current_hour + 12) % 24
         mock_perm = _make_permission(
             "proj",
-            "yolo",
+            "full",
             auto_exec=True,
             start_hour=bad_hour,
             end_hour=(bad_hour + 1) % 24 or 24,
@@ -975,7 +980,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_full_day_window_allows_at_midnight(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=0, end_hour=24)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=0, end_hour=24)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(0):
             result = await check_execution_permission(db, "p")
@@ -984,7 +989,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_full_day_window_allows_at_noon(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=0, end_hour=24)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=0, end_hour=24)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(12):
             result = await check_execution_permission(db, "p")
@@ -993,7 +998,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_full_day_window_allows_at_hour_23(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=0, end_hour=24)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=0, end_hour=24)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(23):
             result = await check_execution_permission(db, "p")
@@ -1004,7 +1009,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_allows_at_23(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(23):
             result = await check_execution_permission(db, "p")
@@ -1013,7 +1018,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_allows_at_midnight(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(0):
             result = await check_execution_permission(db, "p")
@@ -1022,7 +1027,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_allows_at_3am(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(3):
             result = await check_execution_permission(db, "p")
@@ -1031,7 +1036,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_allows_at_start_boundary(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(22):
             result = await check_execution_permission(db, "p")
@@ -1041,7 +1046,7 @@ class TestTimeWindowEdgeCases:
     @pytest.mark.asyncio
     async def test_overnight_window_denies_at_end_boundary(self):
         """End hour is exclusive, so hour=6 should be outside the 22-6 window."""
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(6):
             result = await check_execution_permission(db, "p")
@@ -1051,7 +1056,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_denies_at_noon(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(12):
             result = await check_execution_permission(db, "p")
@@ -1060,7 +1065,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_overnight_window_denies_at_21(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=22, end_hour=6)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=22, end_hour=6)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(21):
             result = await check_execution_permission(db, "p")
@@ -1072,7 +1077,7 @@ class TestTimeWindowEdgeCases:
     @pytest.mark.asyncio
     async def test_midnight_zero_zero_denies_at_midnight(self):
         """start=0, end=0 is a zero-length window and should never allow."""
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=0, end_hour=0)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=0, end_hour=0)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(0):
             result = await check_execution_permission(db, "p")
@@ -1082,7 +1087,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_midnight_zero_zero_denies_at_noon(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=0, end_hour=0)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=0, end_hour=0)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(12):
             result = await check_execution_permission(db, "p")
@@ -1094,7 +1099,7 @@ class TestTimeWindowEdgeCases:
     @pytest.mark.asyncio
     async def test_same_hour_denies_at_that_hour(self):
         """start=10, end=10 is zero-length and should deny even at hour 10."""
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=10, end_hour=10)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=10, end_hour=10)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(10):
             result = await check_execution_permission(db, "p")
@@ -1104,7 +1109,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_same_hour_denies_at_other_hour(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=10, end_hour=10)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=10, end_hour=10)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(15):
             result = await check_execution_permission(db, "p")
@@ -1115,7 +1120,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_normal_window_allows_inside(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=9, end_hour=17)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=9, end_hour=17)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(12):
             result = await check_execution_permission(db, "p")
@@ -1125,7 +1130,7 @@ class TestTimeWindowEdgeCases:
     @pytest.mark.asyncio
     async def test_normal_window_allows_at_start_boundary(self):
         """Start hour is inclusive."""
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=9, end_hour=17)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=9, end_hour=17)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(9):
             result = await check_execution_permission(db, "p")
@@ -1135,7 +1140,7 @@ class TestTimeWindowEdgeCases:
     @pytest.mark.asyncio
     async def test_normal_window_denies_at_end_boundary(self):
         """End hour is exclusive."""
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=9, end_hour=17)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=9, end_hour=17)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(17):
             result = await check_execution_permission(db, "p")
@@ -1144,7 +1149,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_normal_window_denies_before_start(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=9, end_hour=17)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=9, end_hour=17)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(8):
             result = await check_execution_permission(db, "p")
@@ -1155,7 +1160,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_single_hour_window_allows_at_that_hour(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=10, end_hour=11)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=10, end_hour=11)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(10):
             result = await check_execution_permission(db, "p")
@@ -1163,7 +1168,7 @@ class TestTimeWindowEdgeCases:
 
     @pytest.mark.asyncio
     async def test_single_hour_window_denies_adjacent(self):
-        perm = _make_permission("p", "yolo", auto_exec=True, start_hour=10, end_hour=11)
+        perm = _make_permission("p", "full", auto_exec=True, start_hour=10, end_hour=11)
         db = _mock_db_with_permission(perm)
         with _patch_current_hour(11):
             result = await check_execution_permission(db, "p")

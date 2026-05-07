@@ -122,7 +122,7 @@ async def test_agent_wake_stores_summary_for_completed_session():
         session_id="sess-wake-1",
         content="Investigated checkout and found valid in-progress work.",
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -203,7 +203,7 @@ async def test_agent_wake_forwards_parent_session_id():
         session_id="sess-wake-2",
         content="Recovered stale task state.",
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -266,7 +266,7 @@ async def test_agent_wake_forwards_lane_metadata():
         session_id="sess-wake-3",
         content="Finished task-lane validation.",
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -333,7 +333,7 @@ async def test_agent_wake_falls_back_to_project_root_when_working_dir_missing():
         session_id="sess-wake-4",
         content="Closed the task from the project root.",
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -398,7 +398,7 @@ async def test_agent_wake_skips_replayed_step_run() -> None:
     )
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=_mock_execute_result(existing))
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
 
     with (
         patch("app.db.async_session", _mock_async_session(mock_db)),
@@ -458,7 +458,7 @@ async def test_agent_wake_logs_missing_progress_tags_for_task_session() -> None:
         session_id="sess-wake-tags-1",
         content="Implemented the lane fix.",
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -528,7 +528,7 @@ async def test_agent_wake_skips_tag_gap_log_when_both_tags_present() -> None:
             "[[S:completed:Validated the task checkpoint and finished the requested fix.]]"
         ),
     )
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (
@@ -582,7 +582,7 @@ async def test_agent_wake_skips_tag_gap_log_when_both_tags_present() -> None:
 async def test_agent_wake_rolls_back_and_closes_on_cancellation() -> None:
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
-    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_perm = SimpleNamespace(permission_tier="full")
     mock_persona = SimpleNamespace(limits=None)
 
     with (

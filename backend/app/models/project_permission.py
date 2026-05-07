@@ -9,8 +9,26 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
 
-# Valid permission tiers (cumulative)
-VALID_PERMISSION_TIERS = ("off", "read", "write", "yolo")
+# Canonical project trust tiers.
+#
+# Legacy values are accepted at API/cache/DB boundaries only so old clients and
+# unmigrated rows do not break during deploy.
+VALID_PERMISSION_TIERS = ("off", "read", "full")
+LEGACY_PERMISSION_TIER_ALIASES = {
+    "write": "full",
+    "yolo": "full",
+}
+ACCEPTED_PERMISSION_TIERS = VALID_PERMISSION_TIERS + tuple(LEGACY_PERMISSION_TIER_ALIASES)
+
+
+def normalize_permission_tier(tier: str | None) -> str | None:
+    """Return canonical permission tier, or None for missing/invalid input."""
+    if tier is None:
+        return None
+    normalized = tier.strip().lower()
+    if normalized in VALID_PERMISSION_TIERS:
+        return normalized
+    return LEGACY_PERMISSION_TIER_ALIASES.get(normalized)
 
 
 class ProjectPermission(Base):

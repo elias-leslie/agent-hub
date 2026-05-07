@@ -8,7 +8,7 @@ import { buildApiUrl, fetchApi } from '../api-config'
 
 export interface ProjectPermission {
   project_id: string
-  permission_tier: 'off' | 'read' | 'write' | 'yolo'
+  permission_tier: 'off' | 'read' | 'full'
   auto_exec_enabled: boolean
   execution_start_hour: number
   execution_end_hour: number
@@ -18,7 +18,7 @@ export interface ProjectPermission {
 }
 
 export interface ProjectPermissionUpdate {
-  permission_tier?: 'off' | 'read' | 'write' | 'yolo'
+  permission_tier?: 'off' | 'read' | 'full'
   auto_exec_enabled?: boolean
   execution_start_hour?: number
   execution_end_hour?: number
@@ -27,7 +27,7 @@ export interface ProjectPermissionUpdate {
 
 export interface ProjectPermissionCreate {
   project_id: string
-  permission_tier?: 'off' | 'read' | 'write' | 'yolo'
+  permission_tier?: 'off' | 'read' | 'full'
   auto_exec_enabled?: boolean
   execution_start_hour?: number
   execution_end_hour?: number

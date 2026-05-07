@@ -18,7 +18,7 @@ vi.mock('@/lib/api', () => ({
 const mockPermissions = [
   {
     project_id: 'agent-hub',
-    permission_tier: 'yolo' as const,
+    permission_tier: 'full' as const,
     auto_exec_enabled: true,
     execution_start_hour: 0,
     execution_end_hour: 24,
@@ -65,7 +65,7 @@ describe('ProjectPermissionsPage', () => {
       target: { value: 'test2' },
     })
     fireEvent.change(screen.getByDisplayValue('Read'), {
-      target: { value: 'yolo' },
+      target: { value: 'full' },
     })
     fireEvent.click(screen.getByLabelText('Auto Exec'))
     fireEvent.click(screen.getByRole('button', { name: 'Add Project' }))
@@ -76,7 +76,7 @@ describe('ProjectPermissionsPage', () => {
 
     expect(vi.mocked(createProjectPermission).mock.calls[0]?.[0]).toEqual({
       project_id: 'test2',
-      permission_tier: 'yolo',
+      permission_tier: 'full',
       auto_exec_enabled: true,
     })
   })

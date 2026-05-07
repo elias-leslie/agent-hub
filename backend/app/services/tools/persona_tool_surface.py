@@ -10,27 +10,26 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Literal
 
-PersonaToolTier = Literal["off", "read", "write", "yolo"]
+PersonaToolTier = Literal["off", "read", "full"]
 
-PERSONA_TOOL_TIERS: tuple[PersonaToolTier, ...] = ("off", "read", "write", "yolo")
+PERSONA_TOOL_TIERS: tuple[PersonaToolTier, ...] = ("off", "read", "full")
 
 PERSONA_RUNTIME_TOOL_ORDER: tuple[str, ...] = (
     "bash",
     "read_file",
     "write_file",
     "search_scratch_context",
-    "batch_execute",
 )
 
 
 def normalize_persona_tool_tier(tier: str | None) -> PersonaToolTier:
     """Normalize permission tier labels, failing closed for persona surfaces."""
-    if tier is None:
+    from app.models.project_permission import normalize_permission_tier
+
+    canonical_tier = normalize_permission_tier(tier)
+    if canonical_tier is None:
         return "off"
-    normalized = tier.strip().lower()
-    if normalized in PERSONA_TOOL_TIERS:
-        return normalized  # type: ignore[return-value]
-    return "off"
+    return canonical_tier  # type: ignore[return-value]
 
 
 def infer_persona_tool_tier_from_visible_tools(
@@ -41,9 +40,7 @@ def infer_persona_tool_tier_from_visible_tools(
         return "off"
     visible = set(visible_tool_names)
     if "bash" in visible:
-        return "yolo"
-    if "write_file" in visible:
-        return "write"
+        return "full"
     if "read_file" in visible:
         return "read"
     return "off"

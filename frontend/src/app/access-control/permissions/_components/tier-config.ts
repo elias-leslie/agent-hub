@@ -1,4 +1,4 @@
-import { BookOpen, Flame, Pencil, ShieldOff } from 'lucide-react'
+import { BookOpen, ShieldCheck, ShieldOff } from 'lucide-react'
 
 export const TIER_CONFIG = {
   off: {
@@ -17,30 +17,27 @@ export const TIER_CONFIG = {
     bg: 'bg-blue-500/10',
     border: 'border-l-blue-500',
     dot: 'bg-blue-500',
-    description: 'Read files, consult agents',
+    description: 'Read files only',
   },
-  write: {
-    label: 'Write',
-    icon: Pencil,
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-    border: 'border-l-amber-500',
-    dot: 'bg-amber-500',
-    description: 'Read + write files',
-  },
-  yolo: {
-    label: 'YOLO',
-    icon: Flame,
+  full: {
+    label: 'Full',
+    icon: ShieldCheck,
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10',
     border: 'border-l-emerald-500',
     dot: 'bg-emerald-500',
-    description: 'Full access including bash',
+    description: 'Trusted project access',
   },
 } as const
 
 export type Tier = keyof typeof TIER_CONFIG
-export const TIERS: Tier[] = ['off', 'read', 'write', 'yolo']
+export const TIERS: Tier[] = ['off', 'read', 'full']
+
+export function normalizeTier(tier: string): Tier {
+  if (tier === 'write' || tier === 'yolo') return 'full'
+  if (tier === 'off' || tier === 'read' || tier === 'full') return tier
+  return 'off'
+}
 
 export function formatHour(hour: number): string {
   if (hour === 0 || hour === 24) return '12:00 AM'

@@ -11,7 +11,6 @@ def test_provision_standard_tools_uses_minimal_shell_first_baseline() -> None:
         "read_file",
         "write_file",
         "search_scratch_context",
-        "batch_execute",
     ]
 
 
@@ -51,7 +50,7 @@ def test_persona_read_tier_keeps_project_visible_runtime_tools_hot_loaded() -> N
     assert [tool["name"] for tool in result.catalog_tools] == ["read_file"]
 
 
-def test_persona_write_tier_keeps_project_visible_runtime_tools_hot_loaded() -> None:
+def test_persona_full_tier_keeps_project_visible_runtime_tools_hot_loaded() -> None:
     result = provision_standard_tools(
         True,
         None,
@@ -77,7 +76,7 @@ def test_persona_write_tier_keeps_project_visible_runtime_tools_hot_loaded() -> 
     ]
 
 
-def test_persona_yolo_tier_keeps_shell_first_tools_visible() -> None:
+def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
     result = provision_standard_tools(
         True,
         None,
@@ -88,7 +87,6 @@ def test_persona_yolo_tier_keeps_shell_first_tools_visible() -> None:
             "read_file",
             "write_file",
             "search_scratch_context",
-            "batch_execute",
             "dispatch_agent",
             "manage_tasks",
             "query_sessions",
@@ -100,7 +98,6 @@ def test_persona_yolo_tier_keeps_shell_first_tools_visible() -> None:
         "read_file",
         "write_file",
         "search_scratch_context",
-        "batch_execute",
     ]
 
     assert [tool["name"] for tool in result.catalog_tools] == [
@@ -108,7 +105,7 @@ def test_persona_yolo_tier_keeps_shell_first_tools_visible() -> None:
     ]
 
 
-def test_memory_curator_yolo_tier_exposes_workspace_tools_and_memory_review() -> None:
+def test_memory_curator_full_tier_exposes_workspace_tools_and_memory_review() -> None:
     result = provision_standard_tools(
         True,
         None,

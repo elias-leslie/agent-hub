@@ -1,7 +1,7 @@
 """Integration tests for the permission + budget enforcement chain.
 
 Tests the two enforcement layers working together in the completion pipeline:
-1. Project permissions -- tier-based tool filtering (off/read/write/yolo)
+1. Project permissions -- tier-based tool filtering (off/read/full)
 2. Cost budgets -- per-project daily/monthly USD limits via Redis
 
 All infrastructure (DB, Redis, LLM) is mocked. These tests validate that the
@@ -340,7 +340,7 @@ class TestEnforcementChain:
                 new_callable=AsyncMock,
             ),
         ):
-            # "bash" is a yolo-only tool, should be denied at "read" tier
+            # "bash" is a full-tier tool, should be denied at "read" tier
             allowed, reason = await check_tool_allowed(
                 TEST_PROJECT_ID, "bash", db=mock_db
             )
@@ -526,22 +526,22 @@ class TestEnforcementChainTierToolMatrix:
             ("off", "read_file", False),
             ("off", "write_file", False),
             ("off", "bash", False),
-            # "read" tier allows read tools, blocks write/yolo
+            # "read" tier allows read tools, blocks write/full tools
             ("read", "read_file", True),
-            ("read", "consult_agent", True),
+            ("read", "search_scratch_context", False),
+            ("read", "consult_agent", False),
             ("read", "write_file", False),
             ("read", "bash", False),
-            # "write" tier allows read + write, blocks yolo
-            ("write", "read_file", True),
-            ("write", "write_file", True),
-            ("write", "bash", False),
-            ("write", "send_push", False),
-            # "yolo" tier allows everything
-            ("yolo", "read_file", True),
-            ("yolo", "write_file", True),
+            # "full" tier allows core project tools
+            ("full", "read_file", True),
+            ("full", "write_file", True),
+            ("full", "bash", True),
+            ("full", "search_scratch_context", True),
+            ("full", "batch_execute", False),
+            ("full", "consult_agent", False),
+            # Legacy labels normalize to full.
+            ("write", "bash", True),
             ("yolo", "bash", True),
-            ("yolo", "send_push", True),
-            ("yolo", "schedule_job", True),
         ],
     )
     async def test_enforcement_tier_tool_matrix(
@@ -585,6 +585,7 @@ class TestEnforcementChainEdgeCases:
         result = await check_project_budget(TEST_PROJECT_ID, db=mock_db)
 
         assert result.allowed is False
+        assert result.reason is not None
         assert "budget check error" in result.reason
 
     @pytest.mark.asyncio
@@ -643,5 +644,5 @@ class TestEnforcementChainEdgeCases:
         result = await check_project_budget("nonexistent-project-xyz", db=mock_db)
 
         assert result.allowed is False
+        assert result.reason is not None
         assert "no permission record" in result.reason
-
