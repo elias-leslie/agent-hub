@@ -2499,7 +2499,7 @@ class TestManageTasks:
 
         assert "Reconcile skipped for task-42: no completed sessions to justify closure" in result
         assert "Treat this as queue/checkpoint state, not closure residue." in result
-        assert 'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.' in result
+        assert "Use `st context`, `st sessions`, and `st pulse` to keep the project moving." in result
         mock_bash.assert_awaited_once_with("st -P summitflow context task-42 --compact")
 
     @pytest.mark.asyncio
@@ -2722,7 +2722,7 @@ class TestManageTasks:
         assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
         assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert completed.workstream_status == "retired"
-        assert "Retired via manage_tasks(action=\"retire_lane\")" in completed.workstream_note
+        assert "Retired via task lane retire action" in completed.workstream_note
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio

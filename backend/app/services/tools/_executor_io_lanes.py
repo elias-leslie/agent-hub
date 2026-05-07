@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _FINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "failed"}
 _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
-_RETIRE_NOTE = 'Retired via manage_tasks(action="retire_lane")'
+_RETIRE_NOTE = "Retired via task lane retire action"
 _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
 _NO_CODE_CHANGES_PHRASE = "no files changed vs base branch"
 _STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
@@ -422,7 +422,7 @@ def _no_completed_sessions_message(
     task_detail = f" (task={task_status})" if task_status else ""
     next_step = (
         ' Treat this as queue/checkpoint state, not closure residue. '
-        'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.'
+        'Use `st context`, `st sessions`, and `st pulse` to keep the project moving.'
         if task_status == "blocked"
         else ""
     )
@@ -519,7 +519,7 @@ async def _reconcile_task_lane(
         orphan = await _recover_orphan_running_task(bash_fn, task_id, project_id, task_status)
         return orphan or (
             f"Reconcile skipped for {task_id}: no linked Agent Hub sessions found. "
-            'Use manage_tasks(action="get_context") or query_sessions() first.'
+            "Use `st context` and `st session-events` first."
         )
 
     sessions, active_sessions, task_status = await _retire_stale_active_sessions(

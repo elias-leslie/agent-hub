@@ -41,12 +41,16 @@ def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools(
     assert review_tool.input_schema["properties"]["batch_limit"]["maximum"] == 10
 
 
-def test_persona_tool_registry_includes_memory_review_surface() -> None:
+def test_persona_tool_registry_stays_shell_first() -> None:
     tools = get_agent_tool_specs("persona")
 
     assert tools is not None
     tool_names = {tool.name for tool in tools}
 
-    assert "review_memory_system" in tool_names
-    assert "consult_agent" in tool_names
-    assert "dispatch_agent" in tool_names
+    assert tool_names == {
+        "bash",
+        "read_file",
+        "write_file",
+        "search_scratch_context",
+        "batch_execute",
+    }

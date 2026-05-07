@@ -67,7 +67,7 @@ def dispatch_result_text(agent_slug: str, is_coding_agent: bool, task: str) -> s
     return (
         f"{warning}Dispatched {agent_slug} ({kind}). "
         f"Results will appear in your next heartbeat context, "
-        f"or use query_sessions(agent_slug='{agent_slug}') to check status."
+        f"or use `st sessions list --agent {agent_slug}` and `st session-events` to check status."
     )
 
 

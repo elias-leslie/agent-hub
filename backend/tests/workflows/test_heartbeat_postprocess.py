@@ -182,7 +182,7 @@ class TestDetectFollowupReason:
         reason = _detect_followup_reason(
             "HEARTBEAT_OK — Routine sweep complete.",
             "",
-            '\n<workstream_inventory>\n- task-1 | state=stale_running_task | next=manage_tasks(action="reconcile")\n</workstream_inventory>',
+            "\n<workstream_inventory>\n- task-1 | state=stale_running_task | next=bash: st context task-1 then st session-events -T task-1 --page-size 100\n</workstream_inventory>",
         )
 
         assert reason == "stale_running_task"

@@ -135,8 +135,21 @@ class TestResolveAgent:
         mock_db = AsyncMock()
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=mock_agent)
+        route = SimpleNamespace(
+            mode="manual",
+            workload_profile=None,
+            decision_id=None,
+            auto_candidate_model_id=None,
+            canary_percent=0,
+        )
 
-        with patch("app.services.agent_routing_utils.get_agent_service", return_value=mock_service):
+        with (
+            patch("app.services.agent_routing_utils.get_agent_service", return_value=mock_service),
+            patch(
+                "app.services.agent_routing_utils.resolve_model_route",
+                AsyncMock(return_value=(mock_agent, route)),
+            ),
+        ):
             result = await resolve_agent("coder", mock_db)
 
         assert isinstance(result, ResolvedAgent)
@@ -252,7 +265,7 @@ class TestInjectAgentMandates:
         assert "Allowed tools:" in result.system_content
         assert "read_file" in result.system_content
         assert "write_file" in result.system_content
-        assert "query_sessions" in result.system_content
+        assert "query_sessions" not in result.system_content
         assert "dispatch_agent" not in result.system_content
 
     @pytest.mark.asyncio

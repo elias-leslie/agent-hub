@@ -76,27 +76,32 @@ async def _get_persona_timezone() -> str:
     try:
         async with async_session() as db:
             persona = await get_persona(db)
+            if not persona:
+                return _DEFAULT_TIMEZONE
+            user_profile = (
+                dict(persona.user_profile)
+                if isinstance(persona.user_profile, dict)
+                else {}
+            )
+            limits = dict(persona.limits) if isinstance(persona.limits, dict) else {}
+            user_context = await get_persona_user_context_document(db)
     except Exception:
         logger.debug("Could not fetch persona for timezone; using default")
         return _DEFAULT_TIMEZONE
 
-    if not persona:
-        return _DEFAULT_TIMEZONE
-
     from app.services.persona_documents import get_user_profile_timezone
 
-    profile_timezone = get_user_profile_timezone(persona.user_profile)
+    profile_timezone = get_user_profile_timezone(user_profile)
     if profile_timezone and _validate_iana_timezone(profile_timezone):
         return profile_timezone
 
-    if persona.limits and isinstance(persona.limits, dict):
-        tz_value = persona.limits.get("timezone")
+    if limits:
+        tz_value = limits.get("timezone")
         if tz_value and isinstance(tz_value, str):
             if _validate_iana_timezone(tz_value):
                 return tz_value
             logger.warning("Invalid timezone in persona.limits: %s", tz_value)
 
-    user_context = await get_persona_user_context_document(db)
     if user_context:
         match = _IANA_TZ_PATTERN.search(user_context)
         if match and _validate_iana_timezone(match.group(1)):
