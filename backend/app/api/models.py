@@ -21,7 +21,6 @@ from app.api.models_catalog_schemas import (
     ModelsResponse,
 )
 from app.api.models_latency_schemas import LatencyStatsResponse, ModelLatencyStats
-from app.constants import MODEL_CATALOG
 from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
 from app.db import get_db
@@ -125,6 +124,9 @@ def _build_model_info(
             output_per_m=output_per_m,
             pricing_unit=e.cost.pricing_unit,
             unit_price=e.cost.unit_price,
+            cache_read_per_million=e.cost.cache_read_per_million,
+            cache_write_per_million=e.cost.cache_write_per_million,
+            service_tiers=e.cost.service_tiers,
             source=cost_source,
         ),
         context_window=e.context_window,
@@ -152,14 +154,15 @@ def _build_model_info(
 
 def _build_catalog_health(
     *,
+    entries: list[ModelEntry],
     enrichments: dict[str, ModelEnrichment],
     sync_state: ModelEnrichment | object | None,
     last_sync: datetime | None,
 ) -> CatalogHealthInfo:
-    enriched_models = sum(1 for entry in MODEL_CATALOG if entry.id in enrichments)
+    enriched_models = sum(1 for entry in entries if entry.id in enrichments)
     live_priced_models = sum(
         1
-        for entry in MODEL_CATALOG
+        for entry in entries
         if (
             (enrichment := enrichments.get(entry.id)) is not None
             and (enrichment.ext_input_per_m is not None or enrichment.ext_output_per_m is not None)
@@ -174,11 +177,11 @@ def _build_catalog_health(
     discovery = CatalogDiscoveryInfo.model_validate(discovery_raw or {}) if discovery_raw else None
 
     return CatalogHealthInfo(
-        total_models=len(MODEL_CATALOG),
+        total_models=len(entries),
         enriched_models=enriched_models,
-        unenriched_models=len(MODEL_CATALOG) - enriched_models,
+        unenriched_models=len(entries) - enriched_models,
         models_with_live_pricing=live_priced_models,
-        models_missing_live_pricing=len(MODEL_CATALOG) - live_priced_models,
+        models_missing_live_pricing=len(entries) - live_priced_models,
         is_stale=is_stale,
         stale_after_hours=_CATALOG_STALE_AFTER_HOURS,
         sync_status=getattr(sync_state, "status", None),
@@ -195,14 +198,20 @@ async def list_models() -> ModelsResponse:
 
     from app.db import async_session
     from app.models.agent_performance_log import AgentPerformanceLog
+    from app.services.model_catalog_service import (
+        get_model_catalog_entries,
+        refresh_runtime_model_catalog,
+    )
     from app.services.model_enrichment_service import get_all_enrichments, get_catalog_sync_state
 
     sync_state = None
     try:
         async with async_session() as db:
+            await refresh_runtime_model_catalog(db)
+            entries = await get_model_catalog_entries(db)
             enrichments = await get_all_enrichments(db)
             sync_state = await get_catalog_sync_state(db)
-            models = [_build_model_info(e, enrichments.get(e.id)) for e in MODEL_CATALOG]
+            models = [_build_model_info(e, enrichments.get(e.id)) for e in entries]
             last_sync = None
             if sync_state and getattr(sync_state, "synced_at", None):
                 last_sync = sync_state.synced_at
@@ -211,16 +220,21 @@ async def list_models() -> ModelsResponse:
                 if synced_times:
                     last_sync = max(synced_times)
             catalog_health = _build_catalog_health(
+                entries=entries,
                 enrichments=enrichments,
                 sync_state=sync_state,
                 last_sync=last_sync,
             )
     except Exception:
         logger.warning("Failed to load model enrichments", exc_info=True)
+        from app.constants import MODEL_CATALOG
+
+        entries = list(MODEL_CATALOG)
         enrichments = {}
-        models = [_build_model_info(e, None) for e in MODEL_CATALOG]
+        models = [_build_model_info(e, None) for e in entries]
         last_sync = None
         catalog_health = _build_catalog_health(
+            entries=entries,
             enrichments=enrichments,
             sync_state=sync_state,
             last_sync=last_sync,
@@ -239,7 +253,7 @@ async def list_models() -> ModelsResponse:
     except Exception:
         logger.debug("Failed to query last model review timestamp", exc_info=True)
 
-    present_providers = {e.provider for e in MODEL_CATALOG}
+    present_providers = {e.provider for e in entries}
     providers = {p: PROVIDER_NAMES.get(p, p.capitalize()) for p in sorted(present_providers)}
 
     return ModelsResponse(

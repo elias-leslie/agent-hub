@@ -12,7 +12,7 @@ from agent_hub._image import generate_image_sync
 from agent_hub._memory import MemoryOperationsMixin
 from agent_hub._sessions import SessionOperationsMixin
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
-from agent_hub.constants import DEFAULT_IMAGE_MODEL
+from agent_hub.constants import DEFAULT_IMAGE_AGENT
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -235,8 +235,8 @@ class AgentHubClient(
         *,
         project_id: str,
         purpose: str | None = None,
-        agent_slug: str | None = None,
-        model: str = DEFAULT_IMAGE_MODEL,
+        agent_slug: str | None = DEFAULT_IMAGE_AGENT,
+        model: str | None = None,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: str | None = None,

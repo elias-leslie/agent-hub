@@ -32,7 +32,7 @@ def get_thinking_level(model: str, thinking_level: str | None) -> types.Thinking
     """Convert thinking_level to Gemini-compatible value.
 
     Args:
-        model: Model name (e.g., "gemini-3-pro-preview")
+        model: Model name (e.g., "gemini-3.1-pro-preview")
         thinking_level: User-specified thinking level (minimal/low/medium/high/ultrathink)
 
     Returns:

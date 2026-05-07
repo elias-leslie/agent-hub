@@ -44,7 +44,7 @@ class SessionEvent:
     Event-specific data fields:
 
     SESSION_START:
-        - model: str - Model identifier (e.g., "claude-sonnet-4-6")
+        - model: str - Served model telemetry from Agent Hub catalog
         - project_id: str | None - Project for cost tracking
 
     MESSAGE (memory-relevant):

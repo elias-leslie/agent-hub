@@ -24,6 +24,7 @@ from app.services.events import stop_all_stream_bridges
 from app.services.first_party_client_service import reconcile_first_party_clients
 from app.services.memory.scope_normalization import normalize_legacy_scope_rows
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
+from app.services.model_catalog_service import refresh_runtime_model_catalog
 from app.services.project_permission_service import reconcile_registered_project_access
 from app.services.telemetry import init_telemetry
 
@@ -87,17 +88,26 @@ async def _startup() -> None:
 
     try:
         async with async_session() as db:
-            changed_agent_slugs = await reconcile_agent_models_to_available_providers(db)
-        if changed_agent_slugs:
+            seeded_models = await refresh_runtime_model_catalog(db)
+        if seeded_models:
+            logger.warning("Seeded %d model catalog row(s)/alias(es) into DB", seeded_models)
+        else:
+            logger.info("Model catalog loaded from DB")
+    except Exception as e:
+        logger.warning("Failed model catalog DB load at startup: %s", e)
+
+    try:
+        async with async_session() as db:
+            changed_routing_rows = await reconcile_agent_models_to_available_providers(db)
+        if changed_routing_rows:
             logger.warning(
-                "Reconciled %d agent model chain(s) to available providers: %s",
-                len(changed_agent_slugs),
-                ", ".join(changed_agent_slugs),
+                "Seeded/refreshed adaptive routing metadata: %s",
+                ", ".join(changed_routing_rows),
             )
         else:
-            logger.info("Agent model chains already align with available providers")
+            logger.info("Adaptive routing metadata already aligned")
     except Exception as e:
-        logger.warning("Failed agent model reconciliation at startup: %s", e)
+        logger.warning("Failed adaptive routing reconciliation at startup: %s", e)
 
     try:
         async with async_session() as db:

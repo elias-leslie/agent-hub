@@ -64,6 +64,11 @@ export interface ChatMessage {
   agentProvider?: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
   /** Agent slug or effective model identifier used for display. */
   agentModel?: string;
+  routingMode?: string;
+  workloadProfile?: string;
+  routingDecisionId?: string;
+  autoCandidateModel?: string;
+  routingCanaryPercent?: number;
   /** Target agent slug specified via @mention (for user messages) */
   targetModel?: string;
   /** Group ID for parallel responses to the same user message */
@@ -126,6 +131,11 @@ export interface StreamMessage {
   output_tokens?: number;
   thinking_tokens?: number;
   finish_reason?: string;
+  routing_mode?: string;
+  workload_profile?: string;
+  routing_decision_id?: string;
+  auto_candidate_model_id?: string;
+  routing_canary_percent?: number;
   error?: string;
   // Output usage fields (on 'done')
   max_tokens_requested?: number;

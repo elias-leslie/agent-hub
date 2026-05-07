@@ -105,13 +105,17 @@ async def update_agent_model(
     thinking_level: str | None,
     change_reason: str | None,
 ) -> str:
-    """Update an agent's model configuration."""
+    """Update an agent's manual routing model chain and inference knobs."""
     if not agent_slug:
         return "Error: agent_slug required for update_agent_model"
     if not any([primary_model_id, fallback_models, escalation_model_id,
                 temperature is not None, thinking_level]):
         return "Error: at least one setting to update required"
     try:
+        from sqlalchemy import select
+
+        from app.db import async_session
+        from app.models import AgentRoutingProfile, ManualModelRoute
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
@@ -122,11 +126,49 @@ async def update_agent_model(
         )
         resolved_escalation = _resolve_catalog_model_id(escalation_model_id)
 
-        updated = await _do_update_agent_model(
-            agent_service, agent_slug,
-            resolved_primary, resolved_fallbacks, resolved_escalation,
-            temperature, thinking_level, change_reason,
-        )
+        async with async_session() as db:
+            agent = await agent_service.get_by_slug(db, agent_slug)
+            if not agent:
+                return f"Error: Agent '{agent_slug}' not found"
+
+            updated = agent
+            if temperature is not None or thinking_level:
+                updated = await agent_service.update(
+                    db,
+                    agent.id,
+                    temperature=temperature,
+                    thinking_level=thinking_level,
+                    changed_by="persona",
+                    change_reason=change_reason or "Routing/inference update by persona",
+                )
+                if not updated:
+                    return f"Error: Failed to update agent '{agent_slug}'"
+
+            if any([resolved_primary, resolved_fallbacks is not None, resolved_escalation]):
+                primary = resolved_primary or agent.primary_model_id
+                fallbacks = resolved_fallbacks if resolved_fallbacks is not None else list(agent.fallback_models or [])
+                route = await db.scalar(
+                    select(ManualModelRoute).where(
+                        ManualModelRoute.agent_slug == agent_slug,
+                        ManualModelRoute.workload_profile.is_(None),
+                        ManualModelRoute.enabled == True,  # noqa: E712
+                    )
+                )
+                if route is None:
+                    route = ManualModelRoute(agent_slug=agent_slug, workload_profile=None)
+                    db.add(route)
+                route.primary_model_id = primary
+                route.fallback_models = fallbacks
+                route.escalation_model_id = resolved_escalation if escalation_model_id is not None else agent.escalation_model_id
+                route.reason = change_reason or "Manual route update by persona"
+                route.owner = "persona"
+                route.enabled = True
+                profile = await db.get(AgentRoutingProfile, agent_slug)
+                if profile is None:
+                    profile = AgentRoutingProfile(agent_slug=agent_slug)
+                    db.add(profile)
+                profile.default_routing_mode = "manual_locked"
+            await db.commit()
 
         if updated is None:
             return f"Error: Agent '{agent_slug}' not found"

@@ -44,22 +44,26 @@ async def call_llm_for_ratings(session_id: str, prompt: str) -> str:
     """
     from app.api.complete.core import complete_internal
     from app.db import _get_session_factory
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
+    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_routing_utils import resolve_agent
 
-    agent_service = get_agent_service()
     session_factory = _get_session_factory()
     async with session_factory() as db:
-        agent = await agent_service.get_by_slug(db, "memory-rater")
-        if not agent:
+        try:
+            resolved = await resolve_agent(
+                "memory-rater",
+                db,
+                RoutingContext(workload_profile="memory_curation"),
+            )
+        except Exception:
             logger.warning("memory-rater agent not found, skipping rating")
             return ""
 
-        provider = get_provider_for_model(agent.primary_model_id)
+        agent = resolved.agent
         result = await complete_internal(
             messages=[{"role": "user", "content": prompt}],
-            model=agent.primary_model_id,
-            provider=provider,
+            model=resolved.model,
+            provider=resolved.provider,
             temperature=agent.temperature,
             project_id="agent-hub",
             db=db,

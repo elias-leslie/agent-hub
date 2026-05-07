@@ -24,6 +24,14 @@ _CLOUDFLARE_MODEL_MAP: dict[str, str] = {
     "qwq-32b": "@cf/qwen/qwq-32b",
     "mistral-small-3.1-24b": "@cf/mistralai/mistral-small-3.1-24b-instruct",
     "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
+    "glm-4.7-flash": "@cf/zai-org/glm-4.7-flash",
+    "kimi-k2.6": "@cf/moonshotai/kimi-k2.6",
+    "kimi-k2.5": "@cf/moonshotai/kimi-k2.5",
+    "gpt-oss-120b": "@cf/openai/gpt-oss-120b",
+    "gpt-oss-20b": "@cf/openai/gpt-oss-20b",
+    "gemma-4-26b": "@cf/google/gemma-4-26b-a4b-it",
+    "granite-4.0-h-micro": "@cf/ibm-granite/granite-4.0-h-micro",
+    "nemotron-3-120b": "@cf/nvidia/nemotron-3-120b-a12b",
 }
 
 

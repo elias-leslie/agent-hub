@@ -166,6 +166,97 @@ class AgentListResponse(BaseModel):
     total: int
 
 
+class ManualRoutePayload(BaseModel):
+    """Manual model route write payload."""
+
+    primary_model_id: str = Field(..., min_length=1, max_length=200)
+    fallback_models: list[str] = Field(default_factory=list)
+    escalation_model_id: str | None = Field(default=None, max_length=200)
+    reason: str = Field(..., min_length=1)
+    owner: str | None = Field(default=None, max_length=100)
+    expires_at: str | None = None
+    allow_health_fallback: bool = False
+
+
+class AgentRoutingUpdateRequest(BaseModel):
+    """Update agent-level routing behavior."""
+
+    default_routing_mode: str | None = Field(
+        default=None,
+        pattern="^(manual_locked|auto_shadow|auto_canary|auto)$",
+    )
+    risk_tier: str | None = Field(default=None, pattern="^(low|normal|elevated|critical)$")
+    cost_policy: str | None = Field(default=None, max_length=40)
+    subscription_policy: str | None = Field(default=None, max_length=40)
+    exploration_policy: str | None = Field(default=None, max_length=40)
+    quality_floor: float | None = Field(default=None, ge=0, le=100)
+    manual_route: ManualRoutePayload | None = None
+
+
+class AgentWorkloadRoutingUpdateRequest(BaseModel):
+    """Update workload-specific routing behavior."""
+
+    routing_mode: str | None = Field(
+        default=None,
+        pattern="^(manual_locked|auto_shadow|auto_canary|auto)$",
+    )
+    canary_percent: float | None = Field(default=None, ge=0, le=100)
+    reason: str | None = None
+    owner: str | None = Field(default=None, max_length=100)
+    enabled: bool = True
+    manual_route: ManualRoutePayload | None = None
+
+
+class ManualRouteResponse(BaseModel):
+    """Manual route response."""
+
+    id: int
+    workload_profile: str | None
+    primary_model_id: str
+    fallback_models: list[str]
+    escalation_model_id: str | None
+    reason: str | None
+    owner: str | None
+    expires_at: str | None
+    allow_health_fallback: bool
+    enabled: bool
+
+
+class WorkloadRoutingModeResponse(BaseModel):
+    """Workload routing override response."""
+
+    workload_profile: str
+    routing_mode: str
+    canary_percent: float
+    reason: str | None
+    owner: str | None
+    enabled: bool
+
+
+class WorkloadProfileSummary(BaseModel):
+    """Available workload profile summary."""
+
+    key: str
+    label: str
+    risk_tier: str
+    default_routing_mode: str
+
+
+class AgentRoutingResponse(BaseModel):
+    """Agent routing policy response."""
+
+    agent_slug: str
+    default_routing_mode: str
+    risk_tier: str
+    cost_policy: str
+    subscription_policy: str
+    exploration_policy: str
+    quality_floor: float | None
+    workload_profiles: list[WorkloadProfileSummary]
+    workload_overrides: list[WorkloadRoutingModeResponse]
+    manual_routes: list[ManualRouteResponse]
+
+
 class AgentPreviewSection(BaseModel):
     """One ordered section in the assembled runtime preview."""
 

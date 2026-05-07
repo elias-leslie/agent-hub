@@ -38,6 +38,7 @@ async def build_cached_completion_response(
     context_usage_info: ContextUsageInfo | None,
     memory_facts_injected: int,
     is_new_session: bool = False,
+    routing_metadata: dict[str, object | None] | None = None,
 ) -> CompletionResponse:
     """Handle cached response."""
     logger.info(f"Returning cached response for {resolved_model}")
@@ -50,6 +51,7 @@ async def build_cached_completion_response(
     return make_completion_response(
         cached, session_id, context_usage_info, output_usage,
         from_cache=True, memory_facts_injected=memory_facts_injected,
+        **(routing_metadata or {}),
     )
 
 
@@ -73,6 +75,7 @@ async def process_completion_result(
     external_id: str | None = None,
     duration_ms: int | None = None,
     effective_thinking_level: str | None = None,
+    routing_metadata: dict[str, object | None] | None = None,
 ) -> CompletionResponse:
     """Process completion result and build response."""
     await cache_result_if_needed(result, request, resolved_model, messages_dict, skip_cache)
@@ -111,4 +114,5 @@ async def process_completion_result(
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
         cited_uuids=cited_uuids,
+        **(routing_metadata or {}),
     )

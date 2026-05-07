@@ -56,6 +56,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     onEditCancel,
     onVoiceChange,
     onEnabledChange,
+    allowModelMentions = true,
   } = props;
 
   return (
@@ -135,7 +136,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
           />
         </div>
 
-        {!isStreaming && !voiceWsUrl && (
+        {allowModelMentions && !isStreaming && !voiceWsUrl && (
           <ModelTriggerButton onClick={triggerMentionPopup} disabled={disabled} />
         )}
 

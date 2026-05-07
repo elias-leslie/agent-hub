@@ -20,7 +20,7 @@ class TestSession:
             method="POST",
             json={
                 "content": "Hello! I'm Claude.",
-                "model": "claude-sonnet-4-6-20250514",
+                "model": "served-model",
                 "provider": "claude",
                 "usage": {"input_tokens": 10, "output_tokens": 8, "total_tokens": 18},
                 "session_id": "test-session",
@@ -35,7 +35,7 @@ class TestSession:
                 session_id="test-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             response = await session.complete("Hello!")
@@ -60,7 +60,7 @@ class TestSession:
                 session_id="test-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             await session.add_message("system", "You are a helpful assistant.")
@@ -81,7 +81,7 @@ class TestSession:
                 "id": "test-session",
                 "project_id": "test-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -110,7 +110,7 @@ class TestSession:
                 session_id="test-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             history = await session.get_history()
@@ -131,7 +131,7 @@ class TestSession:
                 "id": "test-session",
                 "project_id": "test-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:05:00Z",
@@ -145,7 +145,7 @@ class TestSession:
                 session_id="test-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             session_data = await session.refresh()
@@ -168,7 +168,7 @@ class TestSession:
                 session_id="test-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             await session.close()
@@ -187,7 +187,7 @@ class TestSessionContext:
                 "id": "new-session-id",
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -199,11 +199,11 @@ class TestSessionContext:
             async with client.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             ) as session:
                 assert session.session_id == "new-session-id"
                 assert session.project_id == "my-project"
-                assert session.model == "claude-sonnet-4-6"
+                assert session.model == "legacy-direct-model"
 
     @pytest.mark.asyncio
     async def test_session_context_resume_session(self, httpx_mock: HTTPXMock) -> None:
@@ -215,7 +215,7 @@ class TestSessionContext:
                 "id": "existing-session",
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T10:00:00Z",
                 "updated_at": "2026-01-06T11:00:00Z",
@@ -235,7 +235,7 @@ class TestSessionContext:
             async with client.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
                 session_id="existing-session",
             ) as session:
                 assert session.session_id == "existing-session"
@@ -252,7 +252,7 @@ class TestSessionContext:
                 "id": "persistent-session",
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -265,7 +265,7 @@ class TestSessionContext:
             method="POST",
             json={
                 "content": "First response",
-                "model": "claude-sonnet-4-6-20250514",
+                "model": "served-model",
                 "provider": "claude",
                 "usage": {"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
                 "session_id": "persistent-session",
@@ -278,7 +278,7 @@ class TestSessionContext:
             method="POST",
             json={
                 "content": "Second response",
-                "model": "claude-sonnet-4-6-20250514",
+                "model": "served-model",
                 "provider": "claude",
                 "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
                 "session_id": "persistent-session",
@@ -290,7 +290,7 @@ class TestSessionContext:
             async with client.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             ) as session:
                 response1 = await session.complete("Hello")
                 response2 = await session.complete("Continue")
@@ -335,7 +335,7 @@ class TestSessionStreaming:
                 session_id="stream-session",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             )
 
             chunks = []
@@ -369,7 +369,7 @@ class TestSessionPersistence:
                 "id": session_id,
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -382,7 +382,7 @@ class TestSessionPersistence:
             method="POST",
             json={
                 "content": "Hi!",
-                "model": "claude-sonnet-4-6-20250514",
+                "model": "served-model",
                 "provider": "claude",
                 "usage": {"input_tokens": 5, "output_tokens": 3, "total_tokens": 8},
                 "session_id": session_id,
@@ -398,7 +398,7 @@ class TestSessionPersistence:
                 "id": session_id,
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:01:00Z",
@@ -426,7 +426,7 @@ class TestSessionPersistence:
             async with client1.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
             ) as session1:
                 await session1.complete("Hello")
                 assert session1.session_id == session_id
@@ -440,7 +440,7 @@ class TestSessionPersistence:
                 "id": session_id,
                 "project_id": "my-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-6",
+                "model": "legacy-direct-model",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:01:00Z",
@@ -467,7 +467,7 @@ class TestSessionPersistence:
             async with client2.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="legacy-direct-model",
                 session_id=session_id,
             ) as session2:
                 history = await session2.get_history()

@@ -5,6 +5,16 @@
 import type { ChatMessage, ToolExecution, StreamMessage } from "../../types/chat";
 import type { StreamState } from "./types";
 
+function routePatch(data: StreamMessage, message: ChatMessage): Partial<ChatMessage> {
+  return {
+    routingMode: data.routing_mode ?? message.routingMode,
+    workloadProfile: data.workload_profile ?? message.workloadProfile,
+    routingDecisionId: data.routing_decision_id ?? message.routingDecisionId,
+    autoCandidateModel: data.auto_candidate_model_id ?? message.autoCandidateModel,
+    routingCanaryPercent: data.routing_canary_percent ?? message.routingCanaryPercent,
+  };
+}
+
 /**
  * Handles incoming stream events and updates message state accordingly.
  */
@@ -21,6 +31,24 @@ export function handleStreamEvent(
     case "connected":
       if (data.session_id) {
         setCurrentSessionId(data.session_id);
+      }
+      if (
+        data.routing_mode ||
+        data.workload_profile ||
+        data.routing_decision_id ||
+        data.auto_candidate_model_id ||
+        data.routing_canary_percent !== undefined
+      ) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                ...m,
+                ...routePatch(data, m),
+              }
+              : m,
+          ),
+        );
       }
       break;
 
@@ -60,6 +88,7 @@ export function handleStreamEvent(
               maxTokensRequested: data.max_tokens_requested,
               modelLimit: data.model_limit,
               truncationWarning: data.truncation_warning,
+              ...routePatch(data, m),
               statusLabel: "Complete",
             }
             : m,
@@ -81,6 +110,7 @@ export function handleStreamEvent(
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
               thinkingTokens: data.thinking_tokens,
+              ...routePatch(data, m),
               statusLabel: "Cancelled",
             }
             : m,

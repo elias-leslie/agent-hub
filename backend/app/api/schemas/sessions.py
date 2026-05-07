@@ -168,6 +168,11 @@ class SessionResponse(BaseModel):
     effective_model_display_name: str | None = Field(default=None, description="Human-readable effective model name")
     fallback_used: bool = Field(default=False, description="Whether execution fell back away from the requested model")
     fallback_reason: str | None = Field(default=None, description="Why the primary model was abandoned, if known")
+    routing_mode: str | None = Field(default=None, description="Latest Agent Hub routing mode")
+    workload_profile: str | None = Field(default=None, description="Latest resolved workload profile")
+    routing_decision_id: str | None = Field(default=None, description="Latest routing decision audit id")
+    auto_candidate_model_id: str | None = Field(default=None, description="Latest auto-route candidate model")
+    routing_canary_percent: float | None = Field(default=None, description="Latest auto-canary percent")
     status: str
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")

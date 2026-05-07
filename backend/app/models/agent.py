@@ -39,7 +39,7 @@ class Agent(Base):
     system_prompt: Mapped[str] = mapped_column(Text)  # The agent's system prompt
     primary_model_id: Mapped[str] = mapped_column(
         String(100)
-    )  # Default model (e.g., "claude-sonnet-4-6")
+    )  # Agent Hub catalog model ID
     fallback_models: Mapped[list[str]] = mapped_column(JSON, default=list)  # Ordered fallback list
     escalation_model_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True

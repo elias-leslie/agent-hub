@@ -18,6 +18,7 @@ from app.models import (
     CostLog,
     Session,
 )
+from app.services.adaptive_model_router import update_performance_from_verifier_outcome
 
 SUITE_ID = "work-chats-verifier"
 RUN_KIND = "verifier_outcome"
@@ -305,6 +306,14 @@ async def record_verifier_outcome(
         raw_content=report_excerpt,
     )
     db.add(benchmark_attempt)
+    await update_performance_from_verifier_outcome(
+        db,
+        agent_slug=agent_slug,
+        model_id=model_id,
+        workload_profile=_workload_profile_for_agent(agent_slug),
+        score=float(score),
+        passed=score >= 80,
+    )
 
     return VerifierOutcomeResult(
         benchmark_id=benchmark_id,
@@ -317,3 +326,25 @@ async def record_verifier_outcome(
         feedback_type=feedback_type,
         created=True,
     )
+
+
+def _workload_profile_for_agent(agent_slug: str) -> str:
+    if agent_slug == "persona":
+        return "jenny_planning"
+    if agent_slug == "verifier":
+        return "verifier"
+    if agent_slug in {
+        "analyst",
+        "equity-analyst",
+        "financial-document-reviewer",
+        "governance-auditor",
+        "investment-committee",
+        "market-pulse-analyst",
+        "market-pulse-scout",
+        "risk-manager",
+        "trade-manager",
+    }:
+        return "finance_research"
+    if agent_slug in {"coder", "debugger", "refactor", "optimizer", "dependency-manager"}:
+        return "coding_impl"
+    return "general"

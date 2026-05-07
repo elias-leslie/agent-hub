@@ -40,6 +40,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def apply_routing_metadata(session: DBSession | None, resolved_agent: ResolvedAgent | None) -> None:
+    """Store latest Agent Hub routing metadata on the session row."""
+    if session is None or resolved_agent is None:
+        return
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    metadata["routing"] = {
+        "routing_mode": resolved_agent.routing_mode,
+        "workload_profile": resolved_agent.workload_profile,
+        "routing_decision_id": resolved_agent.routing_decision_id,
+        "auto_candidate_model_id": resolved_agent.auto_candidate_model_id,
+        "routing_canary_percent": resolved_agent.routing_canary_percent,
+    }
+    session.provider_metadata = metadata
+
+
 def _memory_block_len(progressive_context: Any, field_name: str) -> int:
     """Return the size of a progressive-context block, tolerating legacy test doubles."""
     return len(getattr(progressive_context, field_name, []))

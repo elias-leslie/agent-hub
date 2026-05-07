@@ -180,8 +180,8 @@ class CommitteeRoundtableService:
                 {
                     "seat_key": seat.key,
                     "agent_slug": seat.agent_slug,
-                    "model_id": seat.model_id,
-                    "provider": str(payload.get("provider") or self._provider_from_model(seat.model_id)),
+                    "model_id": payload.get("model"),
+                    "provider": str(payload.get("provider") or self._provider_from_model(payload.get("model"))),
                     "symbol": symbol,
                     "window_days": request.window_days,
                     "direction_label": self._direction(item.get("direction_label"), prob_up, expected_move_pct),

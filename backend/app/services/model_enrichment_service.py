@@ -1,6 +1,6 @@
 """Model enrichment service — fetches external benchmark/pricing data.
 
-Enriches the static MODEL_CATALOG with data from:
+Enriches DB-backed model catalog rows with data from:
 - models.dev API (model metadata + pricing)
 - arimxyer/models benchmarks.json (coding, reasoning, instruction)
 - BFCL leaderboard (tool_use / function calling accuracy)
@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants import MODEL_CATALOG
 from app.constants.models import PROVIDER_NAMES
 from app.models.model_catalog_sync_state import ModelCatalogSyncState
 from app.models.model_enrichment import ModelEnrichment
@@ -88,10 +87,14 @@ _SYNC_STATE_ID = 1
 _DISCOVERY_PROVIDER_ALIASES: dict[str, set[str]] = {
     "claude": {"anthropic", "claude"},
     "cloudflare": {"cloudflare", "workersai"},
+    "deepseek": {"deepseek"},
     "gemini": {"gemini", "google", "googleaistudio", "googledeepmind"},
+    "local": {"local", "ollama", "vllm", "llamacpp"},
     "minimax": {"minimax"},
+    "moonshot": {"kimi", "moonshot", "moonshotai"},
     "nvidia": {"nim", "nvidia"},
     "openai": {"openai"},
+    "openrouter": {"openrouter"},
     "xai": {"xai"},
     "zhipu": {"bigmodel", "zai", "zhipu"},
 }
@@ -119,9 +122,12 @@ def _canonical_catalog_provider(dev_entry: dict[str, Any]) -> str | None:
     return None
 
 
-def _build_discovery_summary(models_dev_data: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_discovery_summary(
+    models_dev_data: list[dict[str, Any]],
+    catalog_entries: list[ModelEntry],
+) -> dict[str, Any]:
     """Summarize unmatched external models for providers we already track."""
-    catalog_ids = {_bare_model_id(entry.id) for entry in MODEL_CATALOG}
+    catalog_ids = {_bare_model_id(entry.id) for entry in catalog_entries}
     matched_catalog_providers: set[str] = set()
 
     for dev_entry in models_dev_data:
@@ -282,8 +288,15 @@ async def _fetch_all_sources() -> tuple[
 async def sync_all(db: AsyncSession) -> dict[str, Any]:
     """Sync all catalog models with external data sources.
 
-    Fetches from all 4 sources, matches against MODEL_CATALOG, and upserts.
+    Fetches from all 4 sources, matches against DB catalog rows, and upserts.
     """
+    from app.services.model_catalog_service import (
+        get_model_catalog_entries,
+        refresh_runtime_model_catalog,
+    )
+
+    await refresh_runtime_model_catalog(db)
+    catalog_entries = await get_model_catalog_entries(db)
     models_dev_data, benchmark_data, bfcl_data, livebench_data = await _fetch_all_sources()
 
     source_counts = {
@@ -292,19 +305,19 @@ async def sync_all(db: AsyncSession) -> dict[str, Any]:
         "bfcl": len(bfcl_data),
         "livebench": len(livebench_data),
     }
-    discovery_summary = _build_discovery_summary(models_dev_data)
+    discovery_summary = _build_discovery_summary(models_dev_data, catalog_entries)
 
     if not any(source_counts.values()):
         return {
             "status": "no_data",
             "enriched": 0,
-            "total": len(MODEL_CATALOG),
+            "total": len(catalog_entries),
             "sources": source_counts,
             "discovery": discovery_summary,
         }
 
     enriched_count = 0
-    for entry in MODEL_CATALOG:
+    for entry in catalog_entries:
         result = await enrich_model(
             db, entry.id, models_dev_data, benchmark_data,
             bfcl_data, livebench_data, entry,
@@ -324,12 +337,12 @@ async def sync_all(db: AsyncSession) -> dict[str, Any]:
 
     logger.info(
         "Model enrichment sync complete: %d/%d enriched",
-        enriched_count, len(MODEL_CATALOG),
+        enriched_count, len(catalog_entries),
     )
     return {
         "status": "success",
         "enriched": enriched_count,
-        "total": len(MODEL_CATALOG),
+        "total": len(catalog_entries),
         "sources": source_counts,
         "discovery": discovery_summary,
         "synced_at": now.isoformat(),

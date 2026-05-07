@@ -185,7 +185,10 @@ async def execute_without_db(
         thinking_config = get_thinking_config(resolved_model, thinking_level, provider)
         if thinking_config:
             extra_kwargs.update(thinking_config)
-        elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
+        elif provider not in {
+            "cloudflare", "codex", "deepseek", "local", "minimax",
+            "moonshot", "nvidia", "openai", "openrouter", "xai", "zhipu",
+        }:
             extra_kwargs["thinking_level"] = thinking_level
 
     debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")

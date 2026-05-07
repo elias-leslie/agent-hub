@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from agent_hub.constants import DEFAULT_IMAGE_MODEL
+from agent_hub.constants import DEFAULT_IMAGE_AGENT
 from agent_hub._utils import handle_error
 from agent_hub.models import ImageGenerationResponse
 
@@ -15,8 +15,8 @@ def generate_image_sync(
     prompt: str,
     project_id: str,
     purpose: str | None = None,
-    agent_slug: str | None = None,
-    model: str = DEFAULT_IMAGE_MODEL,
+    agent_slug: str | None = DEFAULT_IMAGE_AGENT,
+    model: str | None = None,
     size: str = "1024x1024",
     style: str | None = None,
     reference_image: str | None = None,
@@ -30,7 +30,8 @@ def generate_image_sync(
         prompt: Text description of desired image.
         project_id: Project ID for session tracking.
         purpose: Purpose of this generation.
-        model: Model identifier for image generation.
+        agent_slug: Agent slug for image generation routing.
+        model: Deprecated direct model override.
         size: Image dimensions.
         style: Style hint.
 
@@ -40,9 +41,10 @@ def generate_image_sync(
     payload: dict[str, Any] = {
         "prompt": prompt,
         "project_id": project_id,
-        "model": model,
         "size": size,
     }
+    if model:
+        payload["model"] = model
     if purpose:
         payload["purpose"] = purpose
     if agent_slug:
@@ -68,8 +70,8 @@ async def generate_image_async(
     prompt: str,
     project_id: str,
     purpose: str | None = None,
-    agent_slug: str | None = None,
-    model: str = DEFAULT_IMAGE_MODEL,
+    agent_slug: str | None = DEFAULT_IMAGE_AGENT,
+    model: str | None = None,
     size: str = "1024x1024",
     style: str | None = None,
     reference_image: str | None = None,
@@ -83,7 +85,8 @@ async def generate_image_async(
         prompt: Text description of desired image.
         project_id: Project ID for session tracking.
         purpose: Purpose of this generation.
-        model: Model identifier for image generation.
+        agent_slug: Agent slug for image generation routing.
+        model: Deprecated direct model override.
         size: Image dimensions.
         style: Style hint.
 
@@ -93,9 +96,10 @@ async def generate_image_async(
     payload: dict[str, Any] = {
         "prompt": prompt,
         "project_id": project_id,
-        "model": model,
         "size": size,
     }
+    if model:
+        payload["model"] = model
     if purpose:
         payload["purpose"] = purpose
     if agent_slug:

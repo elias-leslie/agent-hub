@@ -46,7 +46,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     ) as mock_bootstrap_default_agents, patch(
         "app.main.reconcile_agent_models_to_available_providers",
         new_callable=AsyncMock,
-        return_value=["persona", "ideator-public"],
+        return_value=["adaptive-routing:42"],
     ) as mock_reconcile_agent_models, patch(
         "app.main.reconcile_first_party_clients",
         new_callable=AsyncMock,
@@ -73,10 +73,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     mock_init_health_prober.assert_called_once_with()
     assert "Loaded 1 env-backed credential override(s): openai:api_key" in caplog.text
     assert "Seeded 39 default agent(s) for a fresh database" in caplog.text
-    assert (
-        "Reconciled 2 agent model chain(s) to available providers: persona, ideator-public"
-        in caplog.text
-    )
+    assert "Seeded/refreshed adaptive routing metadata: adaptive-routing:42" in caplog.text
     assert "Reconciled 1 first-party client registration(s): portfolio-client" in caplog.text
     assert (
         "Reconciled registered project access for 2 SummitFlow-owned client(s): "
@@ -140,7 +137,7 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     mock_init_health_prober.assert_called_once_with()
     assert "No env-backed credential overrides configured" in caplog.text
     assert "Failed default agent bootstrap at startup: seed boom" in caplog.text
-    assert "Failed agent model reconciliation at startup: model boom" in caplog.text
+    assert "Failed adaptive routing reconciliation at startup: model boom" in caplog.text
     assert "Failed first-party client reconciliation at startup: first-party boom" in caplog.text
     assert "Failed registered project access reconciliation at startup: boom" in caplog.text
     assert "Provider health tracker initialized for 1 providers" in caplog.text

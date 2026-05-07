@@ -16,7 +16,11 @@ export interface ProviderInfo {
 const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, 'id'>> = {
   claude: { name: 'Claude', hint: 'Anthropic — OAuth or API key', oauth: true },
   codex: { name: 'Codex', hint: 'ChatGPT subscription OAuth', oauth: true },
+  deepseek: { name: 'DeepSeek', hint: 'DeepSeek API key' },
   gemini: { name: 'Gemini', hint: 'Google AI API key' },
+  'kimi-code': { name: 'Kimi Code', hint: 'Kimi Code subscription key' },
+  local: { name: 'Local', hint: 'Local OpenAI-compatible endpoint key' },
+  moonshot: { name: 'Moonshot', hint: 'Moonshot/Kimi API key' },
   openai: { name: 'OpenAI', hint: 'OpenAI platform API key' },
   openrouter: { name: 'OpenRouter', hint: 'OpenRouter API key' },
   xai: { name: 'xAI', hint: 'xAI (Grok) API key' },
@@ -88,7 +92,10 @@ export function filterVisibleSettingsProviders(
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   claude: { dot: 'bg-amber-400', bg: 'border-amber-500/20' },
   codex: { dot: 'bg-emerald-400', bg: 'border-emerald-500/20' },
+  deepseek: { dot: 'bg-cyan-400', bg: 'border-cyan-500/20' },
   gemini: { dot: 'bg-blue-400', bg: 'border-blue-500/20' },
+  local: { dot: 'bg-slate-400', bg: 'border-slate-500/20' },
+  moonshot: { dot: 'bg-violet-400', bg: 'border-violet-500/20' },
   openai: { dot: 'bg-green-400', bg: 'border-green-500/20' },
   openrouter: { dot: 'bg-purple-400', bg: 'border-purple-500/20' },
   xai: { dot: 'bg-red-400', bg: 'border-red-500/20' },

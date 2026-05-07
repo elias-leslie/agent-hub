@@ -13,7 +13,22 @@ import time
 logger = logging.getLogger(__name__)
 
 # Valid agent types supported by the platform
-VALID_AGENT_TYPES = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu", "minimax", "nvidia"}
+VALID_AGENT_TYPES = {
+    "claude",
+    "cloudflare",
+    "codex",
+    "deepseek",
+    "gemini",
+    "kimi-code",
+    "local",
+    "minimax",
+    "moonshot",
+    "nvidia",
+    "openai",
+    "openrouter",
+    "xai",
+    "zhipu",
+}
 
 # ---------------------------------------------------------------------------
 # Dynamic project data — derived from project_permissions table

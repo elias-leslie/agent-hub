@@ -80,6 +80,13 @@ export async function loadSession(
       agentName: m.agent_display_name || m.agent_name,
       agentModel: m.model_display_name || m.model_used,
       ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
+      ...(m.role === "assistant" && session.routing_mode ? { routingMode: session.routing_mode } : {}),
+      ...(m.role === "assistant" && session.workload_profile ? { workloadProfile: session.workload_profile } : {}),
+      ...(m.role === "assistant" && session.routing_decision_id ? { routingDecisionId: session.routing_decision_id } : {}),
+      ...(m.role === "assistant" && session.auto_candidate_model_id ? { autoCandidateModel: session.auto_candidate_model_id } : {}),
+      ...(m.role === "assistant" && session.routing_canary_percent !== undefined && session.routing_canary_percent !== null
+        ? { routingCanaryPercent: session.routing_canary_percent }
+        : {}),
       ...(m.thinking ? { thinking: m.thinking } : {}),
       ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
       ...(uniqueToolExecutionsByMessage.has(m.id)

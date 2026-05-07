@@ -367,6 +367,19 @@ async def build_done_sse(
     input_tokens: int = getattr(event, "input_tokens", None) or 0
     output_tokens: int = getattr(event, "output_tokens", None) or 0
     cost_usd = await _persist_completion(ctx, accumulated_content, input_tokens, output_tokens)
+    if ctx.routing_decision_id:
+        from app.db import async_session
+        from app.services.adaptive_model_router import mark_routing_decision_completed
+
+        async with async_session() as db:
+            await mark_routing_decision_completed(
+                db,
+                ctx.routing_decision_id,
+                status="completed",
+                latency_ms=int((time.monotonic() - ctx.stream_start) * 1000),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
 
     from app.constants.catalog import MODEL_CATALOG_BY_ID
 
@@ -387,6 +400,11 @@ async def build_done_sse(
         model_used=ctx.model_used,
         model_display_name=display_name,
         fallback_used=ctx.fallback_used if ctx.agent_used else None,
+        routing_mode=ctx.routing_mode,
+        workload_profile=ctx.workload_profile,
+        routing_decision_id=ctx.routing_decision_id,
+        auto_candidate_model_id=ctx.auto_candidate_model_id,
+        routing_canary_percent=ctx.routing_canary_percent,
         cost_usd=cost_usd,
         thinking_tokens=getattr(event, "thinking_tokens", None),
     )

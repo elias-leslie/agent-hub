@@ -139,9 +139,7 @@ async def _execute_agent_turn(job: Any) -> JobExecutionResult:
     from app.api.complete.core import complete_internal
     from app.db import async_session
     from app.services._persona_crud import get_persona_limit
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_routing_utils import inject_agent_mandates
-    from app.services.agent_service import get_agent_service
+    from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
     from app.services.persona_service import get_persona
 
     skip = await _check_project_permission()
@@ -149,11 +147,9 @@ async def _execute_agent_turn(job: Any) -> JobExecutionResult:
         return JobExecutionResult(output=skip)
 
     async with async_session() as db:
-        agent = await get_agent_service().get_by_slug(db, "persona")
-        if not agent:
-            return JobExecutionResult(output="Error: persona agent not found")
-
-        provider = get_provider_for_model(agent.primary_model_id)
+        resolved = await resolve_agent("persona", db)
+        agent = resolved.agent
+        provider = resolved.provider
         mandate = await inject_agent_mandates(
             agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT, task_type="scheduled_job"
         )
@@ -166,7 +162,7 @@ async def _execute_agent_turn(job: Any) -> JobExecutionResult:
 
         result = await complete_internal(
             messages=messages,
-            model=agent.primary_model_id,
+            model=resolved.model,
             provider=provider,
             temperature=agent.temperature,
             project_id=SCHEDULER_PROJECT,
@@ -211,17 +207,17 @@ def _scheduled_self_honing_paths(now: datetime | None = None) -> tuple[Path, Pat
 
 async def _resolve_self_honing_models() -> tuple[list[str], list[str]]:
     from app.db import async_session
-    from app.services.agent_service import get_agent_service
+    from app.services.agent_routing_utils import resolve_agent
 
     async with async_session() as db:
-        agent_service = get_agent_service()
-        persona = await agent_service.get_by_slug(db, "persona")
-        if persona is None:
-            raise RuntimeError("persona agent not found")
-        supervisor = await agent_service.get_by_slug(db, "supervisor")
+        persona = await resolve_agent("persona", db)
+        try:
+            supervisor = await resolve_agent("supervisor", db)
+        except Exception:
+            supervisor = None
 
-    reviewer_models = [supervisor.primary_model_id] if supervisor and supervisor.primary_model_id else []
-    return [persona.primary_model_id], reviewer_models
+    reviewer_models = [supervisor.model] if supervisor else []
+    return [persona.model], reviewer_models
 
 
 async def _active_self_honing_conflicts() -> list[dict[str, Any]]:

@@ -14,7 +14,7 @@ async def main() -> None:
         response = await client.post(
             f"{BASE_URL}/complete",
             json={
-                "model": "claude-sonnet-4-6",
+                "agent_slug": "chat",
                 "messages": [{"role": "user", "content": "My name is Alice."}],
                 "project_id": "demo",
             },
@@ -29,8 +29,9 @@ async def main() -> None:
         response = await client.post(
             f"{BASE_URL}/complete",
             json={
-                "model": "claude-sonnet-4-6",
+                "agent_slug": "chat",
                 "messages": [{"role": "user", "content": "What is my name?"}],
+                "project_id": "demo",
                 "session_id": session_id,
             },
             timeout=30.0,

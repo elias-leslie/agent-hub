@@ -5,6 +5,9 @@ export const EMPTY_MODEL_COST: ModelCost = {
   output_per_m: 0,
   pricing_unit: 'per_million_tokens',
   unit_price: null,
+  cache_read_per_million: null,
+  cache_write_per_million: null,
+  service_tiers: {},
   source: 'catalog',
 }
 
@@ -67,6 +70,17 @@ function unitLabel(pricingUnit: ModelCost['pricing_unit']): string {
   }
 }
 
+function cacheLabel(cost: ModelCost): string | null {
+  const parts: string[] = []
+  if (typeof cost.cache_read_per_million === 'number') {
+    parts.push(`cache ${formatUsd(cost.cache_read_per_million)}`)
+  }
+  if (typeof cost.cache_write_per_million === 'number') {
+    parts.push(`write ${formatUsd(cost.cache_write_per_million)}`)
+  }
+  return parts.length ? parts.join(' / ') : null
+}
+
 export function formatModelPricing(cost: ModelCost): {
   primary: string
   secondary: string
@@ -93,7 +107,7 @@ export function formatModelPricing(cost: ModelCost): {
 
   return {
     primary: `${formatUsd(cost.input_per_m)} / ${formatUsd(cost.output_per_m)}`,
-    secondary: unitLabel(cost.pricing_unit),
+    secondary: cacheLabel(cost) ?? unitLabel(cost.pricing_unit),
     source: pricingSourceLabel(cost.source),
   }
 }
@@ -101,7 +115,7 @@ export function formatModelPricing(cost: ModelCost): {
 export function formatCatalogModelPricing(
   model: Pick<CatalogModel, 'cost' | 'availability'>,
 ): { primary: string; secondary: string; source: string } {
-  if (model.availability === 'codex_only') {
+  if (model.availability === 'codex_oauth_subscription') {
     return {
       primary: 'Codex OAuth',
       secondary: 'API pricing pending',

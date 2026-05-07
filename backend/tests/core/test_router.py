@@ -62,7 +62,7 @@ class TestModelRouter:
     def test_init_default_chain(self):
         """Test default provider chain."""
         router = ModelRouter()
-        assert router._provider_chain == ["claude", "gemini", "minimax", "nvidia", "openrouter"]
+        assert router._provider_chain == ["claude", "gemini", "minimax", "kimi-code", "nvidia", "openrouter"]
 
     def test_init_custom_chain(self):
         """Test custom provider chain."""

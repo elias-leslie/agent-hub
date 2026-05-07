@@ -24,8 +24,18 @@ def load_env_credentials_into_cache() -> list[str]:
 
     single_value_credentials = [
         ("claude", "api_key", settings.anthropic_api_key),
+        ("cloudflare", "api_key", settings.cloudflare_api_key),
+        ("cloudflare", "account_id", settings.cloudflare_account_id),
+        ("deepseek", "api_key", settings.deepseek_api_key),
+        ("kimi-code", "api_key", settings.kimi_code_api_key),
+        ("local", "api_key", settings.local_openai_api_key),
+        ("minimax", "api_key", settings.minimax_api_key),
+        ("moonshot", "api_key", settings.moonshot_api_key),
+        ("nvidia", "api_key", settings.nvidia_api_key),
         ("openai", "api_key", settings.openai_api_key),
         ("openrouter", "api_key", settings.openrouter_api_key),
+        ("xai", "api_key", settings.xai_api_key),
+        ("zhipu", "api_key", settings.zhipu_api_key),
     ]
 
     for provider, credential_type, raw_value in single_value_credentials:

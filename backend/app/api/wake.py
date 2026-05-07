@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,16 +40,15 @@ class WakeResponse(BaseModel):
 @router.post("", response_model=WakeResponse)
 async def wake_agent(request: WakeRequest, db: AsyncSession = Depends(get_db)) -> WakeResponse:
     """Wake an agent with context. Runs completion asynchronously."""
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
+    from app.services.agent_routing_utils import resolve_agent
 
-    agent_service = get_agent_service()
-    agent = await agent_service.get_by_slug(db, request.agent_slug)
-    if not agent:
+    try:
+        resolved = await resolve_agent(request.agent_slug, db)
+    except HTTPException:
         return WakeResponse(status="error", message=f"Agent '{request.agent_slug}' not found")
-
-    model = agent.primary_model_id
-    provider = get_provider_for_model(model)
+    agent = resolved.agent
+    model = resolved.model
+    provider = resolved.provider
 
     # Build contextual prompt
     prompt = f"[Wake: {request.event_type}] {request.context}"

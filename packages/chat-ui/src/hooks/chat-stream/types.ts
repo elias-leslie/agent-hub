@@ -31,6 +31,11 @@ export interface SessionData {
   id: string;
   project_id?: string;
   provider?: string;
+  routing_mode?: string | null;
+  workload_profile?: string | null;
+  routing_decision_id?: string | null;
+  auto_candidate_model_id?: string | null;
+  routing_canary_percent?: number | null;
   messages?: Array<{
     id: number;
     role: string;

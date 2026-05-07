@@ -29,11 +29,11 @@ class TestXAIAdapter:
         adapter = XAIAdapter(api_key="test-key")
         assert adapter._resolve_model("xai/grok-code-fast-1") == "grok-code-fast-1"
         assert adapter._resolve_model("xai/grok-4-1-fast-reasoning") == "grok-4-1-fast-reasoning"
-        assert adapter._resolve_model("xai/grok-4-1-fast-non-reasoning") == "grok-4-1-fast-reasoning"
-        assert adapter._resolve_model("xai/grok-4.1-fast") == "grok-4-1-fast-reasoning"
-        assert adapter._resolve_model("xai/grok-4.20") == "grok-4.20-reasoning"
-        assert adapter._resolve_model("xai/grok-4.20-beta-latest-non-reasoning") == "grok-4.20-reasoning"
-        assert adapter._resolve_model("xai/grok-4.20-multi-agent-beta-0309") == "grok-4.20-multi-agent"
+        assert adapter._resolve_model("xai/grok-4-1-fast-non-reasoning") == "grok-4-1-fast-non-reasoning"
+        assert adapter._resolve_model("xai/grok-4.1-fast") == "grok-4.1-fast"
+        assert adapter._resolve_model("xai/grok-4.20") == "grok-4.20-0309-reasoning"
+        assert adapter._resolve_model("xai/grok-4.20-beta-latest-non-reasoning") == "grok-4.20-0309-reasoning"
+        assert adapter._resolve_model("xai/grok-4.20-multi-agent-beta-0309") == "grok-4.20-multi-agent-0309"
 
     @patch("app.adapters.openai_compat.AsyncOpenAI")
     def test_model_resolution_passthrough(self, mock_openai_class: MagicMock) -> None:

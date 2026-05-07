@@ -35,7 +35,7 @@ AGENT_EXPORT_FIELDS = [
 ]
 
 # Agents to mark inactive on fresh install
-DEACTIVATE_SLUGS = ["worker", "auditor"]
+DEACTIVATE_SLUGS = ["auditor"]
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 
 PROMPT_EXPORT_FIELDS = [

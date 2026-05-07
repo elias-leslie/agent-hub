@@ -25,12 +25,12 @@ def _resolve_model(model: str) -> ModelEntry | None:
     # Exact match first
     if model in MODEL_CATALOG_BY_ID:
         return MODEL_CATALOG_BY_ID[model]
-    # Prefix match (e.g. "claude-sonnet-4-6-20261231" → "claude-sonnet-4-6")
+    # Prefix match for dated provider telemetry ids.
     model_lower = model.lower()
     for entry in MODEL_CATALOG:
         if model_lower.startswith(entry.id):
             return entry
-    # Substring match (e.g. "claude-sonnet-4" in "claude-sonnet-4-6")
+    # Substring match for provider variants.
     for entry in MODEL_CATALOG:
         if entry.id.startswith(model_lower) or model_lower in entry.id:
             return entry

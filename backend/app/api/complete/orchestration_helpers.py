@@ -16,6 +16,7 @@ from app.api.complete.execution import build_agentic_response, get_thinking_leve
 from app.api.complete.handlers import process_completion_result
 from app.api.complete.helpers import validate_json_response
 from app.api.complete.request_setup import (
+    apply_routing_metadata,
     build_message_list,
     check_cache,
     check_context_limits,
@@ -24,6 +25,7 @@ from app.api.complete.request_setup import (
 )
 from app.api.complete.resolution import inject_agent_system_prompt
 from app.api.complete.schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
+from app.services.adaptive_model_router import mark_routing_decision_completed
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -35,6 +37,18 @@ if TYPE_CHECKING:
 
 # Type alias for the session-build return value
 _SessionResult = tuple[bool, str, "DBSession | None", bool, list[Any], list[Any], int, list[str], ContextUsageInfo | None, Any]
+
+
+def _routing_metadata(resolved_agent: ResolvedAgent | None) -> dict[str, object | None]:
+    if resolved_agent is None:
+        return {}
+    return {
+        "routing_mode": resolved_agent.routing_mode,
+        "workload_profile": resolved_agent.workload_profile,
+        "routing_decision_id": resolved_agent.routing_decision_id,
+        "auto_candidate_model_id": resolved_agent.auto_candidate_model_id,
+        "routing_canary_percent": resolved_agent.routing_canary_percent,
+    }
 
 
 async def build_session_and_messages(
@@ -53,6 +67,7 @@ async def build_session_and_messages(
     session_id, session, ctx_msgs, is_new_session = await setup_session(
         request, provider, resolved_model, db, client_id, source
     )
+    apply_routing_metadata(session, resolved_agent)
     all_messages, messages_dict = build_message_list(request, ctx_msgs)
     messages_dict = inject_agent_system_prompt(messages_dict, mandate)
     messages_dict, memory_facts_injected, loaded_memory_uuids = await inject_memory(
@@ -72,6 +87,7 @@ async def process_result(
     db: AsyncSession | None, session: DBSession | None, skip_cache: bool,
     messages_dict: list[Any], ctx_info: ContextUsageInfo | None, memory_facts: int,
     loaded_uuids_in: list[str], agent_used: str | None, is_new_session: bool, duration_ms: int,
+    resolved_agent: ResolvedAgent | None,
     effective_thinking_level: str | None = None,
 ) -> CompletionResponse | JSONResponse:
     """Unpack result, validate JSON schema, and finalize response."""
@@ -87,13 +103,24 @@ async def process_result(
         is_valid, err = validate_json_response(cr.content, rf.schema_)
         if not is_valid:
             raise HTTPException(status_code=400, detail=f"Model output does not match JSON schema: {err}")
-    return await process_completion_result(
+    response = await process_completion_result(
         cr, request, resolved_model, sid, db, session, skip_cache, messages_dict,
         ctx_info, memory_facts, loaded_uuids, agent_used,
         model_used, fallback_used, fallback_reason, is_new_session=is_new_session,
         external_id=request.external_id, duration_ms=duration_ms,
         effective_thinking_level=effective_thinking_level,
+        routing_metadata=_routing_metadata(resolved_agent),
     )
+    await mark_routing_decision_completed(
+        db,
+        getattr(resolved_agent, "routing_decision_id", None),
+        status="completed",
+        latency_ms=duration_ms,
+        input_tokens=getattr(cr, "input_tokens", None),
+        output_tokens=getattr(cr, "output_tokens", None),
+        fallback_reason=fallback_reason,
+    )
+    return response
 
 
 def _record_fallback_on_request(http_request: Request | None, result: Any) -> None:
@@ -160,10 +187,23 @@ async def execute_and_respond(
             http_request,
         )
         if is_agentic and hasattr(result, "turns"):
-            return build_agentic_response(result, ctx_info, effective_thinking_level, agent_used, False, request.trace_id)
+            await mark_routing_decision_completed(
+                db,
+                getattr(resolved_agent, "routing_decision_id", None),
+                status="completed",
+                latency_ms=duration_ms,
+                input_tokens=getattr(result, "input_tokens", None),
+                output_tokens=getattr(result, "output_tokens", None),
+                fallback_reason=getattr(result, "fallback_reason", None),
+            )
+            response = build_agentic_response(result, ctx_info, effective_thinking_level, agent_used, False, request.trace_id)
+            for key, value in _routing_metadata(resolved_agent).items():
+                setattr(response, key, value)
+            return response
         return await process_result(
             request, result, resolved_model, session_id, db, session, skip_cache,
             messages_dict, ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, duration_ms,
+            resolved_agent,
             effective_thinking_level=effective_thinking_level,
         )
     except asyncio.CancelledError as e:

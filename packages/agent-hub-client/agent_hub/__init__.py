@@ -23,22 +23,14 @@ Example usage:
 
 from agent_hub.client import AgentHubClient, AsyncAgentHubClient
 from agent_hub.constants import (
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS,
-    CLAUDE_SONNET,
-    CODEX_GPT_5_5,
-    DEFAULT_CLAUDE_MODEL,
-    DEFAULT_GEMINI_MODEL,
-    DEFAULT_IMAGE_MODEL,
-    FAST_CLAUDE_MODEL,
-    FAST_GEMINI_MODEL,
-    GEMINI_3_1_FLASH_LITE,
-    GEMINI_3_1_PRO,
-    GEMINI_FLASH,
-    GEMINI_IMAGE,
-    GEMINI_PRO,
-    REASONING_CLAUDE_MODEL,
-    REASONING_GEMINI_MODEL,
+    CHAT_AGENT,
+    CODER_AGENT,
+    DEFAULT_AGENT,
+    DEFAULT_IMAGE_AGENT,
+    IMAGE_AGENT,
+    PROMPT_BUILDER_AGENT,
+    REASONER_AGENT,
+    REVIEWER_AGENT,
 )
 from agent_hub.exceptions import (
     AgentHubError,
@@ -70,7 +62,7 @@ from agent_hub.models import (
 )
 from agent_hub.session import Session, SessionContext
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     # Clients
     "AgentHubClient",
@@ -78,23 +70,15 @@ __all__ = [
     # Session management
     "Session",
     "SessionContext",
-    # Model constants
-    "CLAUDE_SONNET",
-    "CLAUDE_OPUS",
-    "CLAUDE_HAIKU",
-    "GEMINI_FLASH",
-    "GEMINI_PRO",
-    "GEMINI_3_1_PRO",
-    "GEMINI_3_1_FLASH_LITE",
-    "GEMINI_IMAGE",
-    "CODEX_GPT_5_5",
-    "DEFAULT_CLAUDE_MODEL",
-    "DEFAULT_GEMINI_MODEL",
-    "DEFAULT_IMAGE_MODEL",
-    "REASONING_CLAUDE_MODEL",
-    "REASONING_GEMINI_MODEL",
-    "FAST_CLAUDE_MODEL",
-    "FAST_GEMINI_MODEL",
+    # Agent slug constants
+    "CHAT_AGENT",
+    "CODER_AGENT",
+    "REASONER_AGENT",
+    "REVIEWER_AGENT",
+    "IMAGE_AGENT",
+    "PROMPT_BUILDER_AGENT",
+    "DEFAULT_AGENT",
+    "DEFAULT_IMAGE_AGENT",
     # Models
     "AgentProgress",
     "CacheInfo",
