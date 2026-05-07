@@ -11,7 +11,7 @@ describe('PersonaBlockerPanel', () => {
         heartbeatIntervalMinutes={30}
         selectedProject={{
           project_id: 'agent-hub',
-          permission_tier: 'write',
+          permission_tier: 'full',
           auto_exec_enabled: false,
           execution_start_hour: 0,
           execution_end_hour: 24,

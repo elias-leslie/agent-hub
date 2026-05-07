@@ -212,9 +212,6 @@ class TestInjectAgentMandates:
                     return_value=frozenset(
                         {
                             "read_file",
-                            "inspect_session",
-                            "query_sessions",
-                            "review_improvement_signals",
                         }
                     )
                 ),
@@ -223,7 +220,7 @@ class TestInjectAgentMandates:
             result = await inject_agent_mandates(mock_agent, project_id="agent-hub")
 
         assert (
-            "Allowed tools: inspect_session, query_sessions, read_file, review_improvement_signals"
+            "Allowed tools: read_file"
             in result.system_content
         )
 
@@ -254,7 +251,7 @@ class TestInjectAgentMandates:
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
-        perm = SimpleNamespace(project_id="agent-hub", permission_tier="write")
+        perm = SimpleNamespace(project_id="agent-hub", permission_tier="full")
 
         with patch(
             "app.services.agent_routing_utils._fetch_permissions",

@@ -67,7 +67,7 @@ def _mock_async_session(persona):
 
 def _allow_execution_permission_patch(
     *,
-    permission_tier: str = "yolo",
+    permission_tier: str = "full",
     auto_exec_enabled: bool = True,
     in_time_window: bool = True,
     reason: str = "allowed",
@@ -866,7 +866,7 @@ class TestSteerConsultation:
     """Tests for steer_consultation tool."""
 
     @pytest.mark.asyncio
-    async def test_consult_agent_enables_read_only_research_tools(self):
+    async def test_consult_agent_uses_minimal_read_only_tools(self):
         from app.services.tools._executor_consultation import consult_agent
 
         mock_result = MagicMock()
@@ -925,13 +925,7 @@ class TestSteerConsultation:
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
         assert kwargs["parent_session_id"] == "parent-session-123"
-        assert tool_names == {
-            "fetch_web_page",
-            "precision_code_search",
-            "read_file",
-            "research_web",
-            "search_web",
-        }
+        assert tool_names == {"read_file"}
 
     @pytest.mark.asyncio
     async def test_sends_followup(self):
@@ -994,13 +988,7 @@ class TestSteerConsultation:
         assert kwargs["thinking_level"] == "low"
         assert kwargs["use_memory"] is True
         assert kwargs["memory_group_id"] == "project-test-project"
-        assert tool_names == {
-            "fetch_web_page",
-            "precision_code_search",
-            "read_file",
-            "research_web",
-            "search_web",
-        }
+        assert tool_names == {"read_file"}
 
     @pytest.mark.asyncio
     async def test_no_project_id_error(self):

@@ -96,7 +96,7 @@ def _build_can_use_tool(
     """Build a can_use_tool callback with real runtime permission layers.
 
     Composes hooks in order:
-      1. Project permission tier (off/read/write/yolo)
+      1. Project permission tier (off/read/full)
       2. Cross-project path enforcement
 
     Checkout boundary enforcement is handled separately via settings-based

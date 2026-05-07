@@ -8,7 +8,7 @@ import { HourSelect } from './HourSelect'
 import { SaveFlash } from './SaveFlash'
 import { TierSelect } from './TierSelect'
 import { Toggle } from './Toggle'
-import { TIER_CONFIG, type Tier } from './tier-config'
+import { normalizeTier, TIER_CONFIG } from './tier-config'
 
 export function PermissionRow({
   permission,
@@ -19,7 +19,7 @@ export function PermissionRow({
 }) {
   const [savingField, setSavingField] = useState<string | null>(null)
   const [errorField, setErrorField] = useState<string | null>(null)
-  const tier = permission.permission_tier as Tier
+  const tier = normalizeTier(permission.permission_tier)
   const tierConfig = TIER_CONFIG[tier]
 
   const handleUpdate = useCallback(

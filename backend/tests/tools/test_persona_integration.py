@@ -724,7 +724,7 @@ class TestPersonaToolTierExemption:
         assert "tier-exempt" in reason
 
     @pytest.mark.asyncio
-    async def test_manage_tasks_overview_allowed_at_read_tier(self):
+    async def test_manage_tasks_overview_denied_at_read_tier(self):
         from app.services.project_permission_service import check_tool_allowed
 
         with patch(
@@ -738,8 +738,8 @@ class TestPersonaToolTierExemption:
                 tool_input={"action": "overview"},
             )
 
-        assert allowed is True
-        assert "tier-exempt" in reason
+        assert allowed is False
+        assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     async def test_manage_tasks_dispatch_denied_at_read_tier(self):
@@ -757,7 +757,7 @@ class TestPersonaToolTierExemption:
             )
 
         assert allowed is False
-        assert "requires yolo tier" in reason
+        assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     async def test_dispatch_agent_denied_at_read_tier(self):
@@ -771,7 +771,7 @@ class TestPersonaToolTierExemption:
             allowed, reason = await check_tool_allowed("persona-sandbox", "dispatch_agent")
 
         assert allowed is False
-        assert "requires yolo tier" in reason
+        assert "direct helper tool disabled" in reason
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + SAFE_PERSONA_OPERATIONAL + ["manage_tasks", "dispatch_agent"])
@@ -804,14 +804,14 @@ class TestPersonaToolTierExemption:
         assert allowed is False
 
     @pytest.mark.asyncio
-    async def test_bash_allowed_at_yolo_tier(self):
-        """bash allowed at yolo tier."""
+    async def test_bash_allowed_at_full_tier(self):
+        """bash allowed at full tier."""
         from app.services.project_permission_service import check_tool_allowed
 
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
-            return_value="yolo",
+            return_value="full",
         ):
             allowed, _reason = await check_tool_allowed("persona-sandbox", "bash")
 
@@ -872,12 +872,12 @@ class TestToolHandlerPipeline:
         assert "denied" in result.content.lower()
 
     @pytest.mark.asyncio
-    async def test_handler_allows_bash_at_yolo_tier(self, tmp_path: Path):
-        """bash allowed at yolo tier."""
+    async def test_handler_allows_bash_at_full_tier(self, tmp_path: Path):
+        """bash allowed at full tier."""
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
-            return_value="yolo",
+            return_value="full",
         ):
             handler = create_direct_handler(
                 working_dir=str(tmp_path), project_id="persona-sandbox"
@@ -911,7 +911,7 @@ class TestToolHandlerPipeline:
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
-            return_value="yolo",
+            return_value="full",
         ):
             handler = create_direct_handler(
                 working_dir=str(tmp_path), project_id="persona-sandbox"
@@ -1251,12 +1251,12 @@ class TestDispatchableToolsComplete:
 
         tool_names = {t.name for t in PERSONA_EXTRA_TOOLS}
         # Every persona tool should be either in _PERSONA_TOOLS (tier-exempt)
-        # or available in the yolo tier (standard tools)
-        yolo_tools = TIER_TOOLS["yolo"]
+        # or available in the full tier (standard tools)
+        full_tools = TIER_TOOLS["full"]
         for name in tool_names:
-            assert name in _PERSONA_TOOLS or name in yolo_tools, (
+            assert name in _PERSONA_TOOLS or name in full_tools, (
                 f"Tool '{name}' not reachable — missing from both "
-                f"_PERSONA_TOOLS exemption set and yolo tier"
+                f"_PERSONA_TOOLS exemption set and full tier"
             )
 
     def test_send_push_in_dispatchable(self):

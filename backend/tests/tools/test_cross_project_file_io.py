@@ -83,7 +83,7 @@ async def test_direct_executor_writes_cross_project_file_when_target_project_all
         ),
         patch(
             "app.services.tools._cross_project_hook._resolve_tier",
-            new=AsyncMock(return_value="yolo"),
+            new=AsyncMock(return_value="full"),
         ),
     ):
         executor = DirectToolExecutor(working_dir=str(agent_hub), project_id="agent-hub")

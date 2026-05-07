@@ -98,7 +98,7 @@ class TestProjectPermissionHookFailClosed:
         with patch(
             "app.services.project_permission_service.check_tool_allowed",
             new_callable=AsyncMock,
-            return_value=(False, "manage_tasks action requires yolo tier: 'dispatch'"),
+            return_value=(False, "direct helper tool disabled; use bash with st"),
         ) as mock_check:
             decision = await hook(tool_call)
 

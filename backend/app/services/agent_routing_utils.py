@@ -109,15 +109,13 @@ async def inject_agent_mandates(
 
 _TIER_DESCRIPTIONS: dict[str, str] = {
     "off": "You have NO access to this project. Do not attempt any tool calls.",
-    "read": "You have READ-ONLY access. You may use read_file and other exposed read-only tools. Do NOT write files or execute commands.",
-    "write": "You have READ+WRITE access. You may read and write files. Do NOT use bash or execute commands.",
-    "yolo": "You have FULL access including bash execution.",
+    "read": "You have READ-ONLY access. You may use read_file only. Do NOT write files or execute commands.",
+    "full": "You have FULL trusted-project access including bash execution.",
 }
 _TIER_LABELS: dict[str, str] = {
     "off": "off (all access blocked)",
     "read": "read (read-only, writes blocked)",
-    "write": "write (read + write files, no bash)",
-    "yolo": "yolo (full access)",
+    "full": "full (trusted project access)",
 }
 
 
@@ -150,12 +148,15 @@ async def _fetch_permissions(project_id: str, db: AsyncSession | None):
 
 
 def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
+    from app.models.project_permission import normalize_permission_tier
+
     other_perms = [p for p in all_perms if p.project_id != project_id]
     if not other_perms:
         return []
     lines = ["", "Cross-project permissions (enforced on read_file/write_file, best-effort on bash):"]
     for p in other_perms:
-        lines.append(f"- {p.project_id}: {_TIER_LABELS.get(p.permission_tier, p.permission_tier)}")
+        tier = normalize_permission_tier(p.permission_tier) or p.permission_tier
+        lines.append(f"- {p.project_id}: {_TIER_LABELS.get(tier, tier)}")
     lines += ["", "Note: Use read_file/write_file for cross-project file access — these are permission-enforced. bash commands referencing restricted project paths will also be blocked."]
     return lines
 
@@ -167,12 +168,13 @@ async def _build_project_permissions_block(
     agent_slug: str | None = None,
 ) -> str | None:
     try:
+        from app.models.project_permission import normalize_permission_tier
         from app.services.project_permission_service import get_visible_tools_for_project
 
         perm, all_perms = await _fetch_permissions(project_id, db)
         if perm is None:
             return None
-        tier = perm.permission_tier
+        tier = normalize_permission_tier(perm.permission_tier) or perm.permission_tier
         if agent_slug == "persona":
             from app.services.tools.persona_tool_surface import (
                 format_persona_operator_tools_for_tier,

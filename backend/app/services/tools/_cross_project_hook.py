@@ -7,7 +7,7 @@ allows it.
 Enforcement matrix:
     off  → DENY all (read_file, write_file, bash)
     read → ALLOW read_file, DENY write_file, DENY bash
-    write/yolo → ALLOW all
+    full → ALLOW all
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 async def _resolve_tier(proj_id: str) -> str | None:
     """Return the permission tier for *proj_id*, using the cache when possible."""
+    from app.models.project_permission import normalize_permission_tier
     from app.services.project_permission_service import (
         _get_cached_tier,
         get_project_permission,
@@ -31,13 +32,13 @@ async def _resolve_tier(proj_id: str) -> str | None:
 
     tier = await _get_cached_tier(proj_id)
     if tier is not None:
-        return tier
+        return normalize_permission_tier(tier)
 
     from app.db import async_session
 
     async with async_session() as db:
         perm = await get_project_permission(db, proj_id)
-        return perm.permission_tier if perm else None
+        return normalize_permission_tier(perm.permission_tier) if perm else None
 
 
 def _path_within_root(resolved_path: str, root: str) -> bool:

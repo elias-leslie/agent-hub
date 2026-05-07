@@ -22,7 +22,11 @@ from app.constants.projects import invalidate_project_cache
 from app.core.project_roots import resolve_project_root
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.models.client import Client
-from app.models.project_permission import VALID_PERMISSION_TIERS, ProjectPermission
+from app.models.project_permission import (
+    VALID_PERMISSION_TIERS,
+    ProjectPermission,
+    normalize_permission_tier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +50,13 @@ _redis: aioredis.Redis | None = None
 _REASON_ALLOWED = "allowed"
 _REASON_PERSONA_EXEMPT = "persona-internal tool (tier-exempt)"
 _REASON_TIER_OFF = "project permission tier is off"
-_REASON_MANAGE_TASKS_YOLO = "manage_tasks action requires yolo tier"
-_REASON_DISPATCH_AGENT_YOLO = "dispatch_agent requires yolo tier"
+_REASON_DIRECT_HELPER_DISABLED = "direct helper tool disabled; use bash with st"
 
 # Reason strings for execution permission results
 _EXEC_REASON_ALLOWED = "allowed"
 _EXEC_REASON_PROJECT_NOT_FOUND = "project_not_found"
 _EXEC_REASON_TIER_OFF = "permission_tier_off"
+_EXEC_REASON_INVALID_TIER = "invalid_permission_tier"
 _EXEC_REASON_AUTO_EXEC_DISABLED = "auto_exec_disabled"
 _EXEC_REASON_OUTSIDE_HOURS = "outside_execution_hours"
 
@@ -96,18 +100,19 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "manage_feedback",
 })
 
-# Persona-operational tools — the persona's agency capabilities that don't modify
-# project code. Safe coordination tools stay tier-exempt so the persona can
-# operate during heartbeat/scheduler workflows regardless of the project's
-# read/write tier. Tools that can launch or mutate project work are checked
-# separately below.
+# Persona-operational tools — agency capabilities that do not directly modify
+# project code. Safe coordination tools stay tier-exempt so persona workflows
+# can operate regardless of read/full tier. Legacy direct dispatch/task helpers
+# are blocked below; project work goes through bash-invoked `st`.
 _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_tasks",
     "manage_backups",
     "schedule_job",
+    "list_scheduled_jobs",
     "cancel_scheduled_job",
     "send_push",
     "steer_consultation",
+    "list_consultations",
     "cancel_consultation",
     "dispatch_agent",
     "query_sessions",
@@ -129,60 +134,20 @@ _SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "search_persona_history",
 })
 
-_VISIBLE_PERSONA_TOOLS_BY_TIER: dict[str, frozenset[str]] = {
-    "off": frozenset(),
-    "read": _PERSONA_INTERNAL | _SAFE_PERSONA_OPERATIONAL,
-    "write": _PERSONA_INTERNAL | _SAFE_PERSONA_OPERATIONAL,
-    "yolo": _PERSONA_TOOLS,
-}
-
-_READ_SAFE_MANAGE_TASK_ACTIONS: frozenset[str] = frozenset({
-    "overview",
-    "get_context",
-    "cleanup_status",
-})
-
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
-    "consult_agent",
-    "precision_code_search",
-    "research_web",
-    "search_web",
-    "fetch_web_page",
-    "tool_search",
-    "search_scratch_context",
-    "read_personality",
-    "read_user_context",
-    "list_scheduled_jobs",
-    "list_consultations",
 })
 
-_WRITE_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
-    "write_file",
-    "write_personality",
-    "write_user_context",
-    "mark_memory_relevant",
-    "mark_memory_irrelevant",
-    "manage_memory_tags",
-    "submit_onboarding",
-})
-
-_YOLO_TOOLS: frozenset[str] = _WRITE_TOOLS | frozenset({
+_FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
     "bash",
-    "batch_execute",
-    "send_push",
-    "manage_tasks",
-    "schedule_job",
-    "cancel_scheduled_job",
-    "steer_consultation",
-    "cancel_consultation",
+    "search_scratch_context",
+    "write_file",
 })
 
 TIER_TOOLS: dict[str, frozenset[str]] = {
     "off": frozenset(),
     "read": _READ_TOOLS,
-    "write": _WRITE_TOOLS,
-    "yolo": _YOLO_TOOLS,
+    "full": _FULL_TOOLS,
 }
 
 
@@ -190,24 +155,23 @@ def get_tools_for_tier(tier: str) -> frozenset[str]:
     """Return the set of allowed tool names for a permission tier.
 
     Args:
-        tier: One of "off", "read", "write", "yolo"
+        tier: One of "off", "read", "full"; legacy "write"/"yolo" map to "full".
 
     Returns:
         Frozen set of allowed tool names. Empty set for "off".
     """
-    return TIER_TOOLS.get(tier, frozenset())
+    canonical_tier = normalize_permission_tier(tier)
+    return TIER_TOOLS.get(canonical_tier or "", frozenset())
 
 
 def get_visible_tools_for_tier(tier: str) -> frozenset[str]:
     """Return tools that should be exposed up front for a project tier.
 
-    This differs from runtime permission checks for persona tools: expose only
-    the subset that is always callable for the tier. Tools like manage_tasks
-    and dispatch_agent stay hidden until yolo because their runtime policy is
-    action-sensitive or tier-sensitive and otherwise create visible-but-denied
-    tool churn.
+    Runtime permission checks still recognize persona-internal tools, but they
+    are not part of the default model-visible project tool surface.
     """
-    return get_tools_for_tier(tier) | _VISIBLE_PERSONA_TOOLS_BY_TIER.get(tier, frozenset())
+    canonical_tier = normalize_permission_tier(tier)
+    return get_tools_for_tier(canonical_tier or "")
 
 
 async def get_visible_tools_for_project(
@@ -235,7 +199,7 @@ async def _get_cached_tier(project_id: str) -> str | None:
         r = _get_redis()
         data = await r.get(_cache_key(project_id))
         if data:
-            return json.loads(data).get("tier")
+            return normalize_permission_tier(json.loads(data).get("tier"))
     except Exception as e:
         logger.debug("Permission cache read error: %s", e)
     return None
@@ -248,7 +212,7 @@ async def _set_cache(project_id: str, tier: str, auto_exec: bool) -> None:
         await r.setex(
             _cache_key(project_id),
             _CACHE_TTL,
-            json.dumps({"tier": tier, "auto_exec": auto_exec}),
+            json.dumps({"tier": normalize_permission_tier(tier) or tier, "auto_exec": auto_exec}),
         )
     except Exception as e:
         logger.debug("Permission cache write error: %s", e)
@@ -379,7 +343,9 @@ async def reconcile_registered_project_access(db: AsyncSession) -> list[str]:
     permissions = list(permission_result.scalars().all())
     managed_project_ids = [perm.project_id for perm in permissions]
     enabled_project_ids = [
-        perm.project_id for perm in permissions if str(perm.permission_tier).strip().lower() != "off"
+        perm.project_id
+        for perm in permissions
+        if normalize_permission_tier(str(perm.permission_tier)) != "off"
     ]
 
     client_result = await db.execute(select(Client))
@@ -408,10 +374,14 @@ async def reconcile_registered_project_access(db: AsyncSession) -> list[str]:
     return changed_client_ids
 
 
-def _validate_tier(tier: str) -> None:
-    """Raise ValueError if tier is not a recognised permission tier."""
-    if tier not in VALID_PERMISSION_TIERS:
-        raise ValueError(f"Invalid tier: {tier}")
+def _coerce_tier(tier: str) -> str:
+    """Return canonical permission tier or raise ValueError."""
+    canonical_tier = normalize_permission_tier(tier)
+    if canonical_tier is None:
+        raise ValueError(
+            f"Invalid tier: {tier}. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}"
+        )
+    return canonical_tier
 
 
 async def create_project_permission(
@@ -435,7 +405,7 @@ async def create_project_permission(
     if existing is not None:
         raise ValueError(f"Project permission already exists for '{project_id}'")
 
-    _validate_tier(permission_tier)
+    permission_tier = _coerce_tier(permission_tier)
 
     resolved_root_path = root_path
     if resolved_root_path is None:
@@ -494,8 +464,7 @@ def _apply_optional_fields(
 ) -> None:
     """Mutate perm in-place for any non-sentinel kwargs; validate tier when provided."""
     if permission_tier is not None:
-        _validate_tier(permission_tier)
-        perm.permission_tier = permission_tier
+        perm.permission_tier = _coerce_tier(permission_tier)
     if auto_exec_enabled is not None:
         perm.auto_exec_enabled = auto_exec_enabled
     if execution_start_hour is not None:
@@ -570,7 +539,7 @@ async def _load_perm_from_db(
             return None
         return _PermissionSnapshot(
             project_id=perm.project_id,
-            permission_tier=perm.permission_tier,
+            permission_tier=normalize_permission_tier(perm.permission_tier) or perm.permission_tier,
             auto_exec_enabled=perm.auto_exec_enabled,
             execution_start_hour=perm.execution_start_hour,
             execution_end_hour=perm.execution_end_hour,
@@ -581,27 +550,16 @@ async def _resolve_project_tier(
     project_id: str, db: AsyncSession | None,
 ) -> str | None:
     """Return the cached or persisted permission tier for a project."""
-    tier = await _get_cached_tier(project_id)
+    tier = normalize_permission_tier(await _get_cached_tier(project_id))
     if tier is not None:
         return tier
     perm = await _load_perm_from_db(project_id, db)
-    return perm.permission_tier if perm else None
+    return normalize_permission_tier(perm.permission_tier) if perm else None
 
 
 # ---------------------------------------------------------------------------
 # Tool permission checks (hot path)
 # ---------------------------------------------------------------------------
-
-def _normalize_action(tool_input: dict[str, Any] | None) -> str | None:
-    """Return a normalized tool action string, or None when absent."""
-    if not tool_input:
-        return None
-    action = tool_input.get("action")
-    if not isinstance(action, str):
-        return None
-    normalized = action.strip().lower()
-    return normalized or None
-
 
 async def _check_persona_tool_allowed(
     project_id: str,
@@ -615,17 +573,8 @@ async def _check_persona_tool_allowed(
         return False, _REASON_TIER_OFF
     if tool_name in _PERSONA_INTERNAL or tool_name in _SAFE_PERSONA_OPERATIONAL:
         return True, _REASON_PERSONA_EXEMPT
-    if tool_name == "manage_tasks":
-        action = _normalize_action(tool_input)
-        if action in _READ_SAFE_MANAGE_TASK_ACTIONS:
-            return True, _REASON_PERSONA_EXEMPT
-        if tier == "yolo":
-            return True, _REASON_ALLOWED
-        return False, f"{_REASON_MANAGE_TASKS_YOLO}: '{action or 'unknown'}'"
-    if tool_name == "dispatch_agent":
-        if tier == "yolo":
-            return True, _REASON_ALLOWED
-        return False, _REASON_DISPATCH_AGENT_YOLO
+    if tool_name in {"manage_tasks", "dispatch_agent"}:
+        return False, _REASON_DIRECT_HELPER_DISABLED
     return True, _REASON_PERSONA_EXEMPT
 
 
@@ -649,7 +598,14 @@ async def check_tool_allowed(
             return await _check_persona_tool_allowed(project_id, tool_name, tool_input, db)
 
         # Regular tool: cache → DB → check
-        tier = await _get_cached_tier(project_id)
+        cached_tier = await _get_cached_tier(project_id)
+        tier = normalize_permission_tier(cached_tier)
+        if cached_tier is not None and tier is None:
+            logger.warning(
+                "Unrecognized cached tier '%s' for project %s — denying tool '%s'",
+                cached_tier, project_id, tool_name,
+            )
+            return False, f"unrecognized permission tier '{cached_tier}'"
         if tier is None:
             perm = await _load_perm_from_db(project_id, db)
             if perm is None:
@@ -658,8 +614,9 @@ async def check_tool_allowed(
                     project_id, tool_name,
                 )
                 return False, f"no permission record for project '{project_id}'"
-            tier = perm.permission_tier
-            await _set_cache(project_id, tier, perm.auto_exec_enabled)
+            tier = normalize_permission_tier(perm.permission_tier)
+            if tier is not None:
+                await _set_cache(project_id, tier, perm.auto_exec_enabled)
 
         if tier not in TIER_TOOLS:
             logger.warning(
@@ -719,11 +676,13 @@ async def check_execution_permission(
     if perm is None:
         return R(False, _TIER_UNKNOWN, False, False, _EXEC_REASON_PROJECT_NOT_FOUND)
 
-    tier = perm.permission_tier
+    tier = normalize_permission_tier(perm.permission_tier) or _TIER_UNKNOWN
     auto_exec = perm.auto_exec_enabled
 
     if tier == "off":
         return R(False, tier, auto_exec, False, _EXEC_REASON_TIER_OFF)
+    if tier == _TIER_UNKNOWN:
+        return R(False, tier, auto_exec, False, _EXEC_REASON_INVALID_TIER)
 
     if not auto_exec:
         return R(False, tier, auto_exec, True, _EXEC_REASON_AUTO_EXEC_DISABLED)
