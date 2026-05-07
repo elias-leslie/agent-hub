@@ -18,8 +18,8 @@ BASH_TOOL = Tool(
     name="bash",
     description=(
         "Execute a bash command in the working directory. "
-        "Use for running tests, git operations, system commands, and canonical "
-        "project wrappers such as `st`, `dt`, `db`, `commit.sh`, and `web-research`. "
+        "Use for running tests, version-control operations, system commands, and canonical "
+        "project wrappers such as `st`. "
         "Prefer wrapper CLIs over ad hoc raw commands when wrappers already exist."
     ),
     input_schema={
@@ -34,7 +34,7 @@ BASH_TOOL = Tool(
     },
     category="workspace",
     search_keywords=["shell", "command", "test", "git"],
-    usage_examples=["Run the changed-file quality gate with `dt -q -d`."],
+    usage_examples=["Run the changed-file quality gate with `st check --quick --changed-only`."],
 )
 
 SEARCH_SCRATCH_CONTEXT_TOOL = Tool(
@@ -159,8 +159,8 @@ CONSULT_AGENT_TOOL = Tool(
         "`precision_code_search`, `search_web`, and `fetch_web_page`, but not bash, writes, "
         "or autonomous dispatch. Check direct sources first. Do not use it for exact rule text "
         "or file/project facts you can retrieve with `st memory get/search`, `read_file`, or "
-        "search tools. Your agent roster shows available agents. Use consult_agent for bounded "
-        "advice; use dispatch_agent to run an agent with full tool access."
+        "search tools. Your agent roster shows available agents. Use consult_agent only for "
+        "bounded advice; use bash with `st` for project work and orchestration."
     ),
     input_schema={
         "type": "object",

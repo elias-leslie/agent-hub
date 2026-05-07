@@ -27,7 +27,6 @@ from app.services.tools._persona_tools import (
     MANAGE_TASKS_TOOL,
     MARK_MEMORY_IRRELEVANT_TOOL,
     MARK_MEMORY_RELEVANT_TOOL,
-    PERSONA_EXTRA_TOOLS,
     QUERY_SESSIONS_TOOL,
     READ_HEARTBEAT_INSTRUCTIONS_TOOL,
     READ_PERSONALITY_TOOL,
@@ -106,9 +105,6 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "ideator-public": [SUBMIT_IDEA_TOOL],
     "persona": [
         *STANDARD_TOOLS,
-        CONSULT_AGENT_TOOL,
-        SEND_PUSH_TOOL,
-        *PERSONA_EXTRA_TOOLS,
     ],
     "governance-auditor": [
         *STANDARD_TOOLS,
