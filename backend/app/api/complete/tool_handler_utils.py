@@ -12,6 +12,7 @@ from app.models import Session as DBSession
 from app.services.session_health import health_detail_for_error, update_session_health
 
 from .closeout_policy import detached_agent_hub_rebuild_closeout
+from .runtime_session_registry import RuntimeSessionRegistry
 from .tool_event_processor import process_tool_event
 from .tool_models import ToolExecutionResult
 from .tool_progress import ProgressTracker
@@ -239,9 +240,13 @@ async def _run_tool_loop(
         session_id=session_id,
         agent_slug=state.agent_slug,
     )
-    terminal_error_message, _ = await _execute_event_stream(
-        runtime_session, state, session_id, db, tracker, model, project_id,
-    )
+    RuntimeSessionRegistry.register(session_id, runtime_session)
+    try:
+        terminal_error_message, _ = await _execute_event_stream(
+            runtime_session, state, session_id, db, tracker, model, project_id,
+        )
+    finally:
+        RuntimeSessionRegistry.unregister(session_id, runtime_session)
     if terminal_error_message:
         return build_error_result(
             Exception(terminal_error_message), model, provider, session_id, loaded_memory_uuids,

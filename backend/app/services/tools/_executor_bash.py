@@ -6,7 +6,11 @@ for bash commands executed by agents.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+import signal
+from contextlib import suppress
 from pathlib import Path
 
 from app.services.persona_policy import (
@@ -20,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Maximum output size to return
 MAX_OUTPUT_SIZE = 100_000
+PROCESS_CANCEL_GRACE_SECONDS = 2.0
 
 
 def get_persona_block_reason(command: str, agent_slug: str | None) -> str | None:
@@ -54,6 +59,7 @@ async def run_bash(
     if guard_block_reason:
         return guard_block_reason
 
+    process = None
     try:
         process = await create_bash_process(
             command,
@@ -74,5 +80,26 @@ async def run_bash(
 
         return output or "(no output)"
 
+    except asyncio.CancelledError:
+        if process is not None:
+            await _terminate_cancelled_process(process)
+        raise
     except Exception as e:
         return f"Error executing command: {e}"
+
+
+async def _terminate_cancelled_process(process: asyncio.subprocess.Process) -> None:
+    """Terminate a cancelled bash command and its process group."""
+    if process.returncode is not None:
+        return
+
+    with suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGTERM)
+    with suppress(asyncio.TimeoutError):
+        await asyncio.wait_for(process.wait(), timeout=PROCESS_CANCEL_GRACE_SECONDS)
+        return
+
+    with suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+    with suppress(Exception):
+        await process.wait()
