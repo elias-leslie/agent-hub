@@ -290,6 +290,7 @@ async def resolve_agent_and_model(
             include_roles=request.include_roles,
             include_mandates=include_mandates,
             include_guardrails=include_guardrails,
+            prompt_mode=request.prompt_mode or "full",
             project_id=request.project_id,
             task_type=request.task_type,
         )

@@ -69,6 +69,13 @@ def test_work_context_prompt_injects_project_task_context() -> None:
         task_title="Build Work Chats",
         pane_id="pane-1",
         surface="work_chats",
+        adhoc_spec={
+            "task_type": "project_task",
+            "routing_judgment": {
+                "workload_profile": "coding_impl",
+                "capabilities": {"coding": 0.9},
+            },
+        },
     )
 
     prompt = work_context_to_prompt(context)
@@ -83,6 +90,7 @@ def test_work_context_prompt_injects_project_task_context() -> None:
     assert "verifier_enabled: True" in prompt
     assert "task: task-123" in prompt
     assert "pane: pane-1" in prompt
+    assert '"workload_profile":"coding_impl"' in prompt
     assert messages[0].role == "system"
     assert messages[0].content == prompt
 
@@ -294,6 +302,60 @@ async def test_build_session_and_messages_records_reference_breakdown_on_non_str
         "reference_selected_uuids": ["ref-selected-1"],
         "reference_index_uuids": [],
     }
+
+
+@pytest.mark.asyncio
+async def test_build_session_and_messages_compacts_before_context_limit_check() -> None:
+    request = _request()
+    request.use_memory = False
+    db = AsyncMock()
+    session = SimpleNamespace(id="sess-123")
+    compacted_messages = [{"role": "system", "content": "compact summary"}]
+
+    with (
+        patch(
+            "app.api.complete.orchestration_helpers.setup_session",
+            new_callable=AsyncMock,
+            return_value=("sess-123", session, [], False),
+        ),
+        patch(
+            "app.api.complete.orchestration_helpers.inject_agent_system_prompt",
+            side_effect=lambda messages, _mandate: messages,
+        ),
+        patch(
+            "app.api.complete.orchestration_helpers.compact_context_if_needed",
+            new_callable=AsyncMock,
+            return_value=(compacted_messages, True),
+        ) as mock_compact,
+        patch(
+            "app.api.complete.orchestration_helpers.check_context_limits",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_check_context,
+        patch(
+            "app.api.complete.orchestration_helpers.check_cache",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_check_cache,
+    ):
+        result = await build_session_and_messages(
+            request=request,
+            provider="claude",
+            resolved_model="claude-sonnet-4-6",
+            resolved_agent=_resolved_agent(None),
+            mandate=None,
+            db=db,
+            client_id="client-1",
+            source="pytest",
+            skip_cache=True,
+        )
+
+    mock_compact.assert_awaited_once()
+    mock_check_context.assert_awaited_once_with(
+        db, session, "sess-123", "claude-sonnet-4-6", compacted_messages
+    )
+    mock_check_cache.assert_awaited_once_with(True, "claude-sonnet-4-6", compacted_messages, 1.0)
+    assert result[5] == compacted_messages
 
 
 @pytest.mark.asyncio

@@ -12,7 +12,12 @@ from fastapi.responses import StreamingResponse
 from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session, stream_completion
 from app.api.complete.execution import get_thinking_level
-from app.api.complete.request_setup import apply_read_only_metadata, apply_routing_metadata
+from app.api.complete.request_setup import (
+    apply_adhoc_metadata,
+    apply_read_only_metadata,
+    apply_routing_metadata,
+    compact_context_if_needed,
+)
 from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
@@ -74,6 +79,7 @@ async def _setup_streaming_session(
             trace_id=request.trace_id,
         )
         session_id = stream_session.id
+        apply_adhoc_metadata(stream_session, request)
         apply_read_only_metadata(stream_session, request.read_only)
         await bind_request_context(
             db,
@@ -166,6 +172,34 @@ async def _inject_streaming_memory(
         return messages
 
 
+async def _compact_streaming_context(
+    messages: list[Message],
+    resolved_model: str,
+    session_id: str,
+    db: AsyncSession | None,
+) -> list[Message]:
+    """Compact long resumed streaming context before execution."""
+    if db is None:
+        return messages
+
+    messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+    compacted, was_compacted = await compact_context_if_needed(
+        db,
+        session_id,
+        resolved_model,
+        messages_dict,
+    )
+    if not was_compacted:
+        return messages
+    return [
+        Message(
+            role=cast(Literal["user", "assistant", "system"], m["role"]),
+            content=m["content"],
+        )
+        for m in compacted
+    ]
+
+
 def _build_sse_response(
     messages: list[Message],
     resolved_model: str,
@@ -251,6 +285,7 @@ async def handle_streaming_request(
     )
     messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
     messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent)
+    messages = await _compact_streaming_context(messages, resolved_model, session_id, db)
     thinking_level = get_thinking_level(request, messages, resolved_agent)
     visible_tool_names = None
     if db and request.project_id:

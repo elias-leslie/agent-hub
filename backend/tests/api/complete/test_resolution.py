@@ -22,6 +22,7 @@ def _request() -> SimpleNamespace:
     return SimpleNamespace(
         agent_slug="note-titler",
         include_roles=None,
+        prompt_mode=None,
         project_id="agent-hub",
         task_type="chat",
         model=None,

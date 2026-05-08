@@ -282,6 +282,15 @@ class CompletionRequest(BaseModel):
             "assigned prompts are injected. Example: ['system', 'autocode']"
         ),
     )
+    prompt_mode: str | None = Field(
+        default=None,
+        pattern="^(full|chat|none)$",
+        description=(
+            "Runtime prompt profile. full includes persona context; chat uses assigned "
+            "prompt roles without heavyweight persona/evolution context; none disables "
+            "agent prompt injection."
+        ),
+    )
     stream: bool = Field(
         default=False,
         description="Enable SSE streaming. Returns text/event-stream with data: {json} format.",
