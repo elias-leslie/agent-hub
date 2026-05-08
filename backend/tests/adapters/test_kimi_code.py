@@ -10,6 +10,7 @@ import pytest
 from app.adapters.base import AuthenticationError
 from app.adapters.kimi_code import KimiCodeAdapter
 from app.adapters.types import Message
+from app.services.tools.base import ToolResult
 
 
 def test_kimi_code_adapter_uses_subscription_endpoint() -> None:
@@ -89,6 +90,56 @@ async def test_kimi_code_complete_with_tools_executes_tool_loop(mock_anthropic: 
     second_call_messages = mock_client.messages.create.await_args_list[1].kwargs["messages"]
     assert second_call_messages[-1]["content"] == [
         {"type": "tool_result", "tool_use_id": "toolu_1", "content": "readme contents"}
+    ]
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.kimi_code.anthropic.AsyncAnthropic")
+async def test_kimi_code_complete_with_tools_preserves_tool_error_metadata(
+    mock_anthropic: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_client.close = AsyncMock()
+    mock_client.messages.create = AsyncMock(
+        side_effect=[
+            _message_response("", [_tool_block("toolu_err", "bash", {"command": "bad"})]),
+            _message_response("Stopped"),
+        ]
+    )
+    mock_anthropic.return_value = mock_client
+    tool_handler = AsyncMock(
+        return_value=ToolResult(
+            tool_use_id="toolu_err",
+            content="Error: command failed",
+            is_error=True,
+            duration_ms=17,
+        )
+    )
+
+    adapter = KimiCodeAdapter(api_key="kc-test")
+    events = [
+        event
+        async for event in adapter.complete_with_tools(
+            messages=[Message(role="user", content="Run command")],
+            model="kimi-code/kimi-for-coding",
+            tools=[{"name": "bash", "description": "Run shell", "input_schema": {"type": "object"}}],
+            tool_handler=tool_handler,
+            max_turns=3,
+            temperature=0,
+        )
+    ]
+
+    assert events[1].type == "tool_result"
+    assert events[1].is_error is True
+    assert events[1].duration_ms == 17
+    second_call_messages = mock_client.messages.create.await_args_list[1].kwargs["messages"]
+    assert second_call_messages[-1]["content"] == [
+        {
+            "type": "tool_result",
+            "tool_use_id": "toolu_err",
+            "content": "Error: command failed",
+            "is_error": True,
+        }
     ]
 
 

@@ -44,6 +44,7 @@ from app.adapters.codex_sse import (
     iter_stream_events,
 )
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
+from app.adapters.tool_result_payload import normalize_tool_handler_result
 
 logger = logging.getLogger(__name__)
 _EMPTY_FINAL_RESPONSE_MSG = (
@@ -319,13 +320,21 @@ async def _dispatch_tool_calls(
         input_items.append(_assistant_tool_call_item(tool_call.id, tool_call.name, tool_call.input, turn))
         yield StreamEvent(type="tool_use", tool_id=tool_call.id, tool_name=tool_call.name, tool_input=tool_call.input)
         try:
-            tool_result_str = await tool_handler(tool_call.name, tool_call.input)
+            tool_result = normalize_tool_handler_result(
+                await tool_handler(tool_call.name, tool_call.input)
+            )
         except Exception as exc:
             logger.error("Tool handler raised an exception for %r: %s", tool_call.name, exc)
             yield StreamEvent(type="error", error=str(exc))
             return
-        yield StreamEvent(type="tool_result", tool_id=tool_call.id, content=tool_result_str)
-        input_items.append(_tool_result_item(tool_call.id, tool_result_str))
+        yield StreamEvent(
+            type="tool_result",
+            tool_id=tool_call.id,
+            content=tool_result.content,
+            is_error=tool_result.is_error,
+            duration_ms=tool_result.duration_ms,
+        )
+        input_items.append(_tool_result_item(tool_call.id, tool_result.content))
 
 
 class _CodexResponseSession:

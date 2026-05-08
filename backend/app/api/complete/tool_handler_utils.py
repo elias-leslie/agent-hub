@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
+
+_REPEATED_TOOL_RESULT_THRESHOLD = 5
 
 
 def _extract_tool_metadata(
@@ -52,6 +55,8 @@ class _ExecutionState:
     event_turn: int = 0
     awaiting_tool_results: bool = False
     terminal_finish_reason: str | None = None
+    last_tool_result_signature: tuple[str, str, str] | None = None
+    repeated_tool_result_count: int = 0
 
 
 def _init_execution_state(
@@ -103,6 +108,40 @@ def _check_tool_result_event(
     return False
 
 
+def _stable_tool_input(tool_input: dict[str, Any]) -> str:
+    try:
+        return json.dumps(tool_input, sort_keys=True, default=str)
+    except TypeError:
+        return str(tool_input)
+
+
+def _check_repeated_tool_result(
+    event: Any,
+    state: _ExecutionState,
+    tool_use_metadata: dict[str, dict[str, Any]],
+) -> str | None:
+    tool_name, tool_input = _extract_tool_metadata(
+        tool_use_metadata,
+        getattr(event, "tool_use_id", None),
+    )
+    signature = (
+        tool_name,
+        _stable_tool_input(tool_input),
+        str(getattr(event, "content", "") or ""),
+    )
+    if signature == state.last_tool_result_signature:
+        state.repeated_tool_result_count += 1
+    else:
+        state.last_tool_result_signature = signature
+        state.repeated_tool_result_count = 1
+    if state.repeated_tool_result_count < _REPEATED_TOOL_RESULT_THRESHOLD:
+        return None
+    return (
+        "Repeated identical tool result "
+        f"{state.repeated_tool_result_count} times for {tool_name}; stopping tool loop."
+    )
+
+
 async def _process_event(
     event: Any,
     state: _ExecutionState,
@@ -133,8 +172,15 @@ async def _process_event(
     event_type = getattr(event, "type", None)
     if event_type == "result":
         _check_result_event(event, state)
-    elif event_type == "tool_result" and _check_tool_result_event(event, state, tool_use_metadata, project_id):
-        return terminal_error_message, True
+    elif event_type == "tool_result":
+        repeat_error = _check_repeated_tool_result(event, state, tool_use_metadata)
+        if repeat_error and terminal_error_message is None:
+            await update_session_health(
+                db, session_id, health_detail_for_error(repeat_error), commit=True,
+            )
+            return repeat_error, True
+        if _check_tool_result_event(event, state, tool_use_metadata, project_id):
+            return terminal_error_message, True
 
     if error_message and terminal_error_message is None:
         # Record the terminal error, but keep draining the provider stream so
