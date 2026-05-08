@@ -55,6 +55,7 @@ async def create_process(
         stderr=asyncio.subprocess.PIPE,
         env=env,
         close_fds=False,
+        start_new_session=True,
     )
 
 
@@ -72,4 +73,5 @@ async def create_bash_process(
         stderr=asyncio.subprocess.PIPE,
         env=env,
         close_fds=False,
+        start_new_session=True,
     )

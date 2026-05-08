@@ -10,6 +10,8 @@ from app.api._session_request_identity import (
     enrich_session_heartbeat_request,
     enrich_session_upsert_request,
 )
+from app.api.complete.runtime_session_registry import RuntimeSessionRegistry
+from app.api.complete.streaming_context import StreamContext
 from app.api.schemas.sessions import (
     CloseSessionResponse,
     CreateSessionEventRequest,
@@ -358,6 +360,8 @@ async def close_session(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
+    StreamContext.cancel(session.id)
+    await RuntimeSessionRegistry.cancel(session.id)
     status, message = await close_session_if_active(db, session)
     return CloseSessionResponse(id=session.id, status=status, message=message)
 
