@@ -140,6 +140,7 @@ _READ_TOOLS: frozenset[str] = frozenset({
 
 _FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
     "bash",
+    "edit_file",
     "search_scratch_context",
     "write_file",
 })
@@ -554,7 +555,14 @@ async def _resolve_project_tier(
     if tier is not None:
         return tier
     perm = await _load_perm_from_db(project_id, db)
-    return normalize_permission_tier(perm.permission_tier) if perm else None
+    if not perm:
+        return None
+    raw_tier = getattr(perm, "permission_tier", None)
+    if inspect.isawaitable(raw_tier):
+        raw_tier = await raw_tier
+    if not isinstance(raw_tier, str):
+        return None
+    return normalize_permission_tier(raw_tier)
 
 
 # ---------------------------------------------------------------------------

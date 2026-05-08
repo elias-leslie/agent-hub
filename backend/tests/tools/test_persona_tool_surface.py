@@ -22,6 +22,7 @@ def test_persona_runtime_tool_contract_uses_project_visible_surface() -> None:
     assert full_tools == (
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
     )

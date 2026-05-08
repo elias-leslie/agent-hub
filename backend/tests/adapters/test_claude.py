@@ -8,8 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import Message, ProviderError, RateLimitError
+from app.adapters.base import CompletionResult, Message, ProviderError, RateLimitError
 from app.adapters.claude import ClaudeAdapter
+from app.adapters.claude_direct import (
+    _apply_optional_create_kwargs,
+    _build_create_kwargs,
+    _create_with_temperature_retry,
+    _raise_direct_api_error,
+)
 from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_utils import build_claude_prompt
 from app.constants.models import CLAUDE_SONNET
@@ -62,6 +68,52 @@ class TestClaudeAdapter:
             result = await adapter.health_check()
             assert result is True
 
+    @pytest.mark.asyncio
+    async def test_complete_uses_direct_api_for_vision_with_cli_available(
+        self,
+        mock_cli_available: None,
+    ) -> None:
+        """Claude CLI is text-only; vision content should use direct API when credentials exist."""
+        mock_cm = MagicMock()
+        mock_cm.get.return_value = "oauth-token"
+        mock_cm.get_api_key.return_value = None
+        direct_result = CompletionResult(
+            content="{}",
+            model=CLAUDE_SONNET,
+            provider="claude",
+            input_tokens=1,
+            output_tokens=1,
+        )
+        with (
+            patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
+            patch("app.adapters.claude.complete_direct", new_callable=AsyncMock, return_value=direct_result) as direct,
+            patch("app.adapters.claude.complete_oauth", new_callable=AsyncMock) as oauth,
+        ):
+            adapter = ClaudeAdapter()
+            result = await adapter.complete(
+                [
+                    Message(
+                        role="user",
+                        content=[
+                            {"type": "text", "text": "Read this image."},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": "abc",
+                                },
+                            },
+                        ],
+                    )
+                ],
+                model=CLAUDE_SONNET,
+            )
+
+        assert result is direct_result
+        direct.assert_awaited_once()
+        oauth.assert_not_called()
+
     def test_health_check_no_cli(self, mock_no_cli: None) -> None:
         """Test that initialization fails without CLI, no token, and no API key."""
         mock_cm = MagicMock()
@@ -72,6 +124,61 @@ class TestClaudeAdapter:
             pytest.raises(ValueError),
         ):
             ClaudeAdapter()
+
+
+class TestClaudeDirectApi:
+    """Tests for direct Anthropic API request shaping."""
+
+    def test_build_create_kwargs_omits_deprecated_temperature_for_opus_47(self) -> None:
+        kwargs = _build_create_kwargs("claude-opus-4-7", [], "", 4096, 0.1, "none")
+        assert "temperature" not in kwargs
+
+    def test_build_create_kwargs_keeps_temperature_for_supported_models(self) -> None:
+        kwargs = _build_create_kwargs("claude-sonnet-4-6", [], "", 4096, 0.1, "none")
+        assert kwargs["temperature"] == 0.1
+
+    def test_apply_optional_create_kwargs_adds_thinking_to_non_stream_calls(self) -> None:
+        kwargs = {"model": "claude-opus-4-7", "messages": [], "max_tokens": 6000}
+        _apply_optional_create_kwargs(kwargs, {"thinking_level": "high"})
+        assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 4096}
+
+    @pytest.mark.asyncio
+    async def test_create_retries_without_deprecated_temperature(self) -> None:
+        response = object()
+
+        class FakeMessages:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            async def create(self, **kwargs: object) -> object:
+                self.calls.append(kwargs)
+                if len(self.calls) == 1:
+                    raise Exception("`temperature` is deprecated for this model.")
+                return response
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.messages = FakeMessages()
+
+        client = FakeClient()
+        result = await _create_with_temperature_retry(
+            client,
+            {"model": "claude-new", "messages": [], "temperature": 0.1},
+        )
+
+        assert result is response
+        assert client.messages.calls[0]["temperature"] == 0.1
+        assert "temperature" not in client.messages.calls[1]
+
+    def test_direct_api_rate_limit_maps_to_router_rate_limit(self) -> None:
+        class FakeRateLimit(Exception):
+            status_code = 429
+
+        with pytest.raises(RateLimitError) as exc_info:
+            _raise_direct_api_error(FakeRateLimit("limited"), "claude")
+
+        assert exc_info.value.provider == "claude"
+        assert exc_info.value.status_code == 429
 
 
 class TestClaudeTimeout:
@@ -127,7 +234,7 @@ class TestClaudeOAuthLimitHandling:
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.query = AsyncMock(return_value=None)
         fake_sdk_module = ModuleType("claude_agent_sdk")
-        fake_sdk_module.ClaudeSDKClient = MagicMock(return_value=mock_client)
+        fake_sdk_module.ClaudeSDKClient = MagicMock(return_value=mock_client)  # type: ignore[attr-defined]
 
         async def fake_process_response_stream(
             client: object,

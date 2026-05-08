@@ -9,6 +9,7 @@ def test_provision_standard_tools_uses_minimal_shell_first_baseline() -> None:
     assert [tool["name"] for tool in result.loaded_tools] == [
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
     ]
@@ -59,6 +60,7 @@ def test_persona_full_tier_keeps_project_visible_runtime_tools_hot_loaded() -> N
         defer_tool_loading=True,
         visible_tool_names={
             "read_file",
+            "edit_file",
             "write_file",
             "query_sessions",
             "inspect_session",
@@ -68,10 +70,12 @@ def test_persona_full_tier_keeps_project_visible_runtime_tools_hot_loaded() -> N
 
     assert [tool["name"] for tool in result.loaded_tools] == [
         "read_file",
+        "edit_file",
         "write_file",
     ]
     assert [tool["name"] for tool in result.catalog_tools] == [
         "read_file",
+        "edit_file",
         "write_file",
     ]
 
@@ -85,6 +89,7 @@ def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
         visible_tool_names={
             "bash",
             "read_file",
+            "edit_file",
             "write_file",
             "search_scratch_context",
             "dispatch_agent",
@@ -96,6 +101,7 @@ def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
     assert [tool["name"] for tool in result.loaded_tools] == [
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
     ]
@@ -111,12 +117,13 @@ def test_memory_curator_full_tier_exposes_workspace_tools_and_memory_review() ->
         None,
         agent_slug="memory-curator",
         project_id="agent-hub",
-        visible_tool_names={"bash", "read_file", "write_file", "review_memory_system"},
+        visible_tool_names={"bash", "read_file", "edit_file", "write_file", "review_memory_system"},
     )
 
     assert [tool["name"] for tool in result.loaded_tools] == [
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "review_memory_system",
     ]
