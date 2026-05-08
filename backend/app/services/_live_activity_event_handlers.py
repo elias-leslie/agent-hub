@@ -85,6 +85,8 @@ def handle_tool_result_event(
     live_activity["termination_reason"] = None
     if not isinstance(tool_output, dict):
         return
+    if is_error and tool_output.get("content"):
+        live_activity["last_tool_error_excerpt"] = str(tool_output.get("content") or "").strip()[:300]
     exit_code = tool_output.get("exit_code")
     if isinstance(exit_code, int):
         live_activity["last_command_exit_code"] = exit_code

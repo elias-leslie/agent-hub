@@ -62,7 +62,6 @@ describe('chat stream sendMessage', () => {
         project_id: 'summitflow',
         tools_enabled: true,
         execute_tools: true,
-        max_turns: 80,
         external_id: 'task-123',
         parent_session_id: 'parent-session',
         source_metadata: {

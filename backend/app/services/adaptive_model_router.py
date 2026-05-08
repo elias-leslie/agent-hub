@@ -142,6 +142,12 @@ class RoutingContext:
     max_context_tokens: int | None = None
     routing_mode_override: str | None = None
     canary_percent: float = 0.0
+    adhoc: bool = False
+    routing_requirements: dict[str, float] | None = None
+    routing_constraints: dict[str, Any] | None = None
+    routing_risk_tier: str | None = None
+    routing_cost_preference: str | None = None
+    routing_exclude_providers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -164,6 +170,10 @@ class ModelRoute:
     @property
     def chain(self) -> list[str]:
         return _unique([self.primary_model_id, *self.fallback_models, *( [self.escalation_model_id] if self.escalation_model_id else [])])
+
+
+class RoutingSelectionError(RuntimeError):
+    """Raised when no model satisfies routing constraints."""
 
 
 async def ensure_adaptive_routing_seed_data(db: AsyncSession) -> int:
@@ -520,6 +530,23 @@ async def _infer_workload(db: AsyncSession, agent: AgentDTO, context: RoutingCon
         maybe_workload = context.work_context.get("workload_profile") or context.work_context.get("workload")
         if isinstance(maybe_workload, str) and await _workload_exists(db, maybe_workload):
             return maybe_workload
+    runtime_requirements = context.routing_requirements or {}
+    if runtime_requirements:
+        weighted = {key for key, value in runtime_requirements.items() if float(value or 0) > 0}
+        if {"code_review", "verification"} & weighted:
+            return "code_review" if "code_review" in weighted else "verifier"
+        if {"coding", "swe_agentic", "tool_use"} & weighted:
+            return "coding_impl"
+        if {"financial_analysis", "market_analysis"} & weighted:
+            return "finance_research"
+        if "data_research" in weighted:
+            return "deep_research"
+        if "data_analysis" in weighted:
+            return "data_analysis"
+        if "ux_design" in weighted:
+            return "ui_design"
+    if context.adhoc:
+        return "general"
     task_type = (context.task_type or "").lower()
     phase = (context.phase or "").lower()
     if agent.slug == "persona":
@@ -609,6 +636,8 @@ def _mode_from_policy(
 ) -> RoutingMode:
     if context.routing_mode_override in ROUTING_MODES:
         return context.routing_mode_override  # type: ignore[return-value]
+    if context.adhoc:
+        return "auto"
     if override and override.routing_mode in ROUTING_MODES:
         return override.routing_mode  # type: ignore[return-value]
     if profile.default_routing_mode == "manual_locked":
@@ -693,10 +722,17 @@ async def _auto_route(
         row.model_id: row
         for row in (await db.execute(select(ModelAvailability).where(ModelAvailability.enabled == True))).scalars().all()  # noqa: E712
     }
+    entitlement_rows = {
+        row.provider: row
+        for row in (await db.execute(select(ProviderEntitlement).where(ProviderEntitlement.enabled == True))).scalars().all()  # noqa: E712
+    }
     capability_scores = await _load_model_capability_scores(db)
     perf_scores = await _load_performance_scores(db, agent.slug, workload.key)
     requirements = dict(workload.requirement_deltas or {})
     constraints = dict(workload.hard_constraints or {})
+    for key, value in (context.routing_requirements or {}).items():
+        requirements[key] = max(float(requirements.get(key, 0)), float(value))
+    constraints.update(context.routing_constraints or {})
     if context.requires_json:
         requirements["strict_json"] = max(float(requirements.get("strict_json", 0)), 0.8)
     if context.has_tools:
@@ -704,17 +740,42 @@ async def _auto_route(
         requirements["tool_use"] = max(float(requirements.get("tool_use", 0)), 0.7)
     if context.has_vision_input:
         constraints["vision"] = True
+    risk_tier = context.routing_risk_tier or workload.risk_tier
+    excluded_providers = {provider.lower() for provider in context.routing_exclude_providers}
     scored: list[tuple[float, ModelCatalogEntry, dict[str, Any]]] = []
     for row in rows:
+        if row.provider.lower() in excluded_providers:
+            continue
         availability = availability_rows.get(row.id)
         if availability and (not availability.routable or not availability.enabled):
             continue
         if not _model_satisfies_constraints(row, constraints, context):
             continue
-        score, breakdown = _score_model(row, requirements, capability_scores.get(row.id, {}), perf_scores.get(row.id), workload.risk_tier)
+        entitlement = entitlement_rows.get(row.provider)
+        subscription_backed = bool(
+            entitlement
+            and (
+                entitlement.auth_mode in {"oauth_subscription", "subscription"}
+                or (entitlement.metadata_ or {}).get("subscription_first")
+            )
+        )
+        score, breakdown = _score_model(
+            row,
+            requirements,
+            capability_scores.get(row.id, {}),
+            perf_scores.get(row.id),
+            risk_tier,
+            cost_preference=context.routing_cost_preference,
+            subscription_backed=subscription_backed,
+        )
         scored.append((score, row, breakdown))
     scored.sort(key=lambda item: item[0], reverse=True)
     if not scored:
+        if context.adhoc:
+            raise RoutingSelectionError(
+                f"No routable model candidates for adhoc workload '{workload.key}' "
+                f"after constraints/exclusions."
+            )
         logger.warning("No auto-route candidates for agent=%s workload=%s; using manual chain", agent.slug, workload.key)
         return manual_chain
     primary = scored[0][1]
@@ -722,7 +783,9 @@ async def _auto_route(
     score_breakdown = {
         "score": scored[0][0],
         "requirements": requirements,
-        "risk_tier": workload.risk_tier,
+        "risk_tier": risk_tier,
+        "cost_preference": context.routing_cost_preference or "balanced",
+        "excluded_providers": sorted(excluded_providers),
         "primary": scored[0][2],
         "candidates": [
             {"model_id": row.id, "provider": row.provider, "score": round(score, 3)}
@@ -792,6 +855,9 @@ def _score_model(
     capability_scores: dict[str, float],
     perf: ModelWorkloadPerformance | None,
     risk_tier: str,
+    *,
+    cost_preference: str | None = None,
+    subscription_backed: bool = False,
 ) -> tuple[float, dict[str, Any]]:
     base_scores = {
         "coding": row.score_coding,
@@ -839,11 +905,17 @@ def _score_model(
         final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - reliability_penalty
     else:
         observed_weight = 0.15 if perf_score is not None else 0.0
-        cost_penalty = min(8.0, max(0.0, (row.cost_input_per_m + row.cost_output_per_m) / 10.0))
+        cost_multiplier = {"quality": 0.25, "balanced": 1.0, "low_cost": 2.0}.get(cost_preference or "balanced", 1.0)
+        raw_cost = max(0.0, row.cost_input_per_m + row.cost_output_per_m)
+        cost_penalty = min(16.0, (raw_cost / 10.0) * cost_multiplier)
+        if subscription_backed:
+            cost_penalty *= 0.2
         final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - cost_penalty - reliability_penalty
     return final, {
         "fit": round(fit, 3),
         "observed": perf_score,
+        "cost_preference": cost_preference or "balanced",
+        "subscription_backed": subscription_backed,
         "reliability_penalty": round(reliability_penalty, 3),
         "scores": {dim: round(base_scores.get(dim, 0.0), 3) for dim in requirements},
     }
@@ -904,6 +976,12 @@ async def _record_routing_decision(
                 "requires_json": context.requires_json,
                 "has_vision_input": context.has_vision_input,
                 "canary_percent": canary_percent,
+                "adhoc": context.adhoc,
+                "routing_requirements": context.routing_requirements or {},
+                "routing_constraints": context.routing_constraints or {},
+                "routing_risk_tier": context.routing_risk_tier,
+                "routing_cost_preference": context.routing_cost_preference,
+                "routing_exclude_providers": list(context.routing_exclude_providers),
                 "work_context_mode": (context.work_context or {}).get("mode"),
             },
             candidates=auto_route.score_breakdown.get("candidates", []),

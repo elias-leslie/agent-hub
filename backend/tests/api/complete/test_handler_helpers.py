@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.api.complete._session_helpers import update_session_metadata
 from app.api.complete.handler_helpers import save_and_track
+from app.api.complete.request_schemas import DEFAULT_AGENTIC_MAX_TURNS
 from app.api.complete.schemas import CompletionRequest, MessageInput, SourceMetadata
 
 
@@ -21,6 +22,27 @@ def test_completion_request_accepts_high_turn_budgets() -> None:
     )
 
     assert request.max_turns == 5000
+
+
+def test_completion_request_execute_tools_uses_generous_default_turn_fuse() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hello")],
+        project_id="test-project",
+        execute_tools=True,
+    )
+
+    assert request.max_turns == DEFAULT_AGENTIC_MAX_TURNS
+
+
+def test_completion_request_execute_tools_upgrades_legacy_single_turn_value() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hello")],
+        project_id="test-project",
+        execute_tools=True,
+        max_turns=1,
+    )
+
+    assert request.max_turns == DEFAULT_AGENTIC_MAX_TURNS
 
 
 def test_completion_request_rejects_non_positive_turn_budgets() -> None:

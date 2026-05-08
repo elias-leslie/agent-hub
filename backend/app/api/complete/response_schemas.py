@@ -77,6 +77,10 @@ class CompletionResponse(BaseModel):
         default=None,
         description="Progress log from agentic execution (only when max_turns > 1 or execute_tools=True)",
     )
+    error_summary: dict[str, Any] | None = Field(
+        default=None,
+        description="Compact failure-first summary for agent/tool diagnostics.",
+    )
     trace_id: str | None = Field(
         default=None,
         description="Trace ID for event correlation",

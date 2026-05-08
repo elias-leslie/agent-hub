@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+
+DEFAULT_AGENTIC_MAX_TURNS = 5000
 
 
 class MessageInput(BaseModel):
@@ -72,6 +74,55 @@ class SourceMetadata(BaseModel):
     source_client: str | None = Field(default=None, max_length=100)
 
 
+class RoutingPreferences(BaseModel):
+    """Runtime routing preferences; callers describe constraints, not model IDs."""
+
+    exclude_providers: list[str] = Field(
+        default_factory=list,
+        description="Provider names to exclude from automatic routing for this request.",
+    )
+    cost_preference: str | None = Field(
+        default=None,
+        pattern="^(quality|balanced|low_cost)$",
+        description="Routing cost bias. quality minimizes cost pressure; low_cost increases it.",
+    )
+
+
+class RoutingJudgment(BaseModel):
+    """Structured model-selection judgment produced by caller/Jenny/router."""
+
+    workload_profile: str | None = Field(default=None, max_length=100)
+    risk_tier: str | None = Field(default=None, pattern="^(low|normal|elevated|critical)$")
+    capabilities: dict[str, float] = Field(
+        default_factory=dict,
+        description="Weighted needs such as coding=1.0, tool_use=0.8, reasoning=0.7.",
+    )
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    rationale: str | None = Field(default=None, max_length=2000)
+
+
+class AdhocWorkSpec(BaseModel):
+    """Runtime work specification for unregistered adaptive agent runs."""
+
+    title: str | None = Field(default=None, max_length=300)
+    prompt: str | None = Field(default=None, max_length=100000)
+    task_type: str | None = Field(default=None, max_length=100)
+    workload_profile: str | None = Field(default=None, max_length=100)
+    risk_tier: str | None = Field(default=None, pattern="^(low|normal|elevated|critical)$")
+    tool_mode: str | None = Field(default=None, pattern="^(read_only|write)$")
+    capabilities: dict[str, float] = Field(
+        default_factory=dict,
+        description="Capability weights such as coding=1.0, tool_use=0.8, research=0.6.",
+    )
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    context: str | dict[str, Any] | None = None
+    memories: str | list[str] | None = None
+    expected_output: str | list[str] | None = None
+    routing_judgment: RoutingJudgment | None = None
+    routing: RoutingPreferences | None = None
+
+
 class WorkContext(BaseModel):
     """First-class work context injected into agent prompt context."""
 
@@ -91,6 +142,10 @@ class WorkContext(BaseModel):
     artifact_summary: str | None = Field(default=None, max_length=5000)
     surface: str | None = Field(default=None, max_length=100)
     pane_id: str | None = Field(default=None, max_length=100)
+    adhoc_spec: dict[str, Any] | None = Field(
+        default=None,
+        description="Adhoc WorkSpec snapshot persisted for replay/debug.",
+    )
 
 
 class CompletionRequest(BaseModel):
@@ -198,6 +253,23 @@ class CompletionRequest(BaseModel):
             "loads agent config from database, injects mandates, and uses fallback chains."
         ),
     )
+    adhoc: bool = Field(
+        default=False,
+        description="Use a synthetic unregistered adhoc execution identity with automatic model routing.",
+    )
+    adhoc_spec: AdhocWorkSpec | None = Field(
+        default=None,
+        description="Optional structured runtime WorkSpec for adhoc routing and session replay.",
+    )
+    routing_exclude_providers: list[str] | None = Field(
+        default=None,
+        description="Provider names to exclude from automatic routing for this request.",
+    )
+    routing_cost_preference: str | None = Field(
+        default=None,
+        pattern="^(quality|balanced|low_cost)$",
+        description="Runtime cost/quality routing preference.",
+    )
     disable_agent_fallbacks: bool = Field(
         default=False,
         description="Disable agent fallback and escalation models; require the resolved/requested model to execute directly.",
@@ -228,6 +300,10 @@ class CompletionRequest(BaseModel):
         default=False,
         description="Execute tool calls in an agentic loop. When True, tools are executed and results fed back.",
     )
+    read_only: bool = Field(
+        default=False,
+        description="Mark this tool-loop run as read-only for ownership and live-lane diagnostics.",
+    )
     trace_id: str | None = Field(
         default=None,
         max_length=200,
@@ -244,6 +320,18 @@ class CompletionRequest(BaseModel):
         description="Run agentic completion asynchronously via background worker. "
         "Returns 202 with task_id for polling. Only applies to agentic requests.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_agentic_turn_defaults(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if not data.get("execute_tools"):
+            return data
+        raw_turns = data.get("max_turns")
+        if raw_turns is None or raw_turns == 1:
+            return {**data, "max_turns": DEFAULT_AGENTIC_MAX_TURNS}
+        return data
 
 
 class EstimateRequest(BaseModel):

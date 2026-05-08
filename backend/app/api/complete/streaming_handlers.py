@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session, stream_completion
 from app.api.complete.execution import get_thinking_level
-from app.api.complete.request_setup import apply_routing_metadata
+from app.api.complete.request_setup import apply_read_only_metadata, apply_routing_metadata
 from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
@@ -74,6 +74,7 @@ async def _setup_streaming_session(
             trace_id=request.trace_id,
         )
         session_id = stream_session.id
+        apply_read_only_metadata(stream_session, request.read_only)
         await bind_request_context(
             db,
             session=stream_session,

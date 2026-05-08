@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .citation_tracker import track_citations
+from .error_summary import build_error_summary
 from .tool_models import ToolExecutionResult
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ def _build_success_result(
     tool_calls_count: int,
     finish_reason: str | None,
     progress_log: list[Any] | None,
+    tool_result_summaries: list[str] | None,
     fallback_used: bool,
     fallback_reason: str | None,
 ) -> ToolExecutionResult:
@@ -61,6 +63,14 @@ def _build_success_result(
         tool_calls_count=tool_calls_count,
         status="success",
         progress_log=progress_log or [],
+        tool_result_summaries=tool_result_summaries or [],
+        error_summary=build_error_summary(
+            execution_status="success",
+            execution_error=None,
+            final_finish_reason=finish_reason,
+            progress_log=progress_log or [],
+            tool_result_summaries=tool_result_summaries or [],
+        ),
         model_used=model,
         requested_model=model,
         requested_provider=provider,
@@ -84,6 +94,7 @@ async def finalize_result(
     tool_calls_count: int = 0,
     finish_reason: str | None = "end_turn",
     progress_log: list[Any] | None = None,
+    tool_result_summaries: list[str] | None = None,
     fallback_used: bool = False,
     fallback_reason: str | None = None,
 ) -> ToolExecutionResult:
@@ -95,7 +106,7 @@ async def finalize_result(
         content, model, provider, session_id, estimated_input_tokens, loaded_memory_uuids,
         cited_uuids, estimated_output_tokens, thinking_content,
         thinking_tokens, turn, tool_calls_count, finish_reason, progress_log,
-        fallback_used, fallback_reason,
+        tool_result_summaries, fallback_used, fallback_reason,
     )
 
 
@@ -124,6 +135,11 @@ def build_error_result(
         error=str(error),
         turns=turns,
         tool_calls_count=tool_calls_count,
+        error_summary=build_error_summary(
+            execution_status="error",
+            execution_error=str(error),
+            final_finish_reason="error",
+        ),
         model_used=model,
         requested_model=model,
         requested_provider=provider,

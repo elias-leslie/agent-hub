@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.registry import get_adapter
 from app.services.response_cache import get_response_cache
 
+from .error_summary import build_error_summary
 from .multi_turn_executor import execute_multi_turn
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result
@@ -119,6 +120,14 @@ async def _finalize_loop_result(
 ) -> CompletionInternalResult:
     """Finalize a normalized loop outcome through the shared completion path."""
     effective_model = getattr(outcome.final_result, "model_used", None) or req.model
+    if not getattr(outcome.final_result, "error_summary", None):
+        outcome.final_result.error_summary = build_error_summary(
+            execution_status=outcome.execution_status,
+            execution_error=outcome.execution_error,
+            final_finish_reason=outcome.final_finish_reason,
+            progress_log=outcome.progress_log,
+            tool_result_summaries=getattr(outcome.final_result, "tool_result_summaries", None),
+        )
     await finalize_completion_result(
         req.db,
         req.session,
