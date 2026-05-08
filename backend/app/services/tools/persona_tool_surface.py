@@ -17,6 +17,7 @@ PERSONA_TOOL_TIERS: tuple[PersonaToolTier, ...] = ("off", "read", "full")
 PERSONA_RUNTIME_TOOL_ORDER: tuple[str, ...] = (
     "bash",
     "read_file",
+    "edit_file",
     "write_file",
     "search_scratch_context",
 )

@@ -146,7 +146,11 @@ async def update_agent_model(
 
             if any([resolved_primary, resolved_fallbacks is not None, resolved_escalation]):
                 primary = resolved_primary or agent.primary_model_id
-                fallbacks = resolved_fallbacks if resolved_fallbacks is not None else list(agent.fallback_models or [])
+                fallbacks = (
+                    resolved_fallbacks
+                    if resolved_fallbacks is not None
+                    else list(getattr(agent, "fallback_models", None) or [])
+                )
                 route = await db.scalar(
                     select(ManualModelRoute).where(
                         ManualModelRoute.agent_slug == agent_slug,
@@ -154,21 +158,26 @@ async def update_agent_model(
                         ManualModelRoute.enabled == True,  # noqa: E712
                     )
                 )
-                if route is None:
+                if not isinstance(route, ManualModelRoute):
                     route = ManualModelRoute(agent_slug=agent_slug, workload_profile=None)
                     db.add(route)
                 route.primary_model_id = primary
                 route.fallback_models = fallbacks
-                route.escalation_model_id = resolved_escalation if escalation_model_id is not None else agent.escalation_model_id
+                route.escalation_model_id = (
+                    resolved_escalation
+                    if escalation_model_id is not None
+                    else getattr(agent, "escalation_model_id", None)
+                )
                 route.reason = change_reason or "Manual route update by persona"
                 route.owner = "persona"
                 route.enabled = True
                 profile = await db.get(AgentRoutingProfile, agent_slug)
-                if profile is None:
+                if not isinstance(profile, AgentRoutingProfile):
                     profile = AgentRoutingProfile(agent_slug=agent_slug)
                     db.add(profile)
                 profile.default_routing_mode = "manual_locked"
-                metadata = dict(profile.metadata_ or {})
+                raw_metadata = profile.metadata_ if isinstance(profile.metadata_, dict) else {}
+                metadata = dict(raw_metadata)
                 metadata["source"] = "manual_override"
                 profile.metadata_ = metadata
             await db.commit()
@@ -178,12 +187,13 @@ async def update_agent_model(
         if not updated:
             return f"Error: Failed to update agent '{agent_slug}'"
 
+        version = getattr(updated, "version", getattr(agent, "version", "unknown"))
         changes = _build_changes_summary(
             resolved_primary, resolved_fallbacks, resolved_escalation,
             temperature, thinking_level,
         )
         return (
-            f"Agent '{agent_slug}' updated (version {updated.version}). "
+            f"Agent '{agent_slug}' updated (version {version}). "
             f"Changes: {', '.join(changes)}. Reason: {change_reason or 'N/A'}"
         )
     except Exception as e:

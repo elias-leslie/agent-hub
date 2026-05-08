@@ -29,7 +29,7 @@ class TestOpenRouterAdapter:
         )
 
         # Registry-derived aliases
-        assert resolve_openrouter_model("or/kimi") == "moonshotai/kimi-k2.5"
+        assert resolve_openrouter_model("or/kimi") == "moonshotai/kimi-k2.6"
 
         # Legacy aliases
         assert resolve_openrouter_model("or/sonnet") == "anthropic/claude-3.5-sonnet"

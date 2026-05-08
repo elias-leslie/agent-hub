@@ -17,7 +17,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -84,7 +84,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
       "strategies": {},
@@ -175,7 +175,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -211,7 +211,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
       "strategies": {},
@@ -249,7 +249,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "strategies": {},
       "temperature": 0.1,
@@ -433,7 +433,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -736,7 +736,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-opus-4-7",
       "strategies": {},
@@ -876,7 +876,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
       "strategies": {},
@@ -955,7 +955,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
@@ -992,7 +992,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "strategies": {},
       "temperature": 0.1,
@@ -1006,7 +1006,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -1042,7 +1042,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "escalation_model_id": "claude-opus-4-7",
@@ -1076,7 +1076,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-opus-4-7",
       "strategies": {},
@@ -1149,7 +1149,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -1217,7 +1217,7 @@
       "primary_model_id": "gemini-3-flash-preview",
       "fallback_models": [
         "claude-sonnet-4-6",
-        "xai/grok-4.3",
+        "codex/gpt-5.4-mini",
         "codex/gpt-5.4"
       ],
       "strategies": {},
@@ -1249,7 +1249,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "strategies": {},
@@ -1314,7 +1314,7 @@
       "primary_model_id": "minimax/MiniMax-M2.7",
       "fallback_models": [
         "kimi-code/kimi-for-coding",
-        "xai/grok-4.20-0309-reasoning",
+        "codex/gpt-5.5",
         "claude-sonnet-4-6"
       ],
       "escalation_model_id": "claude-opus-4-7",
@@ -1425,7 +1425,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
       "strategies": {},
@@ -1701,7 +1701,7 @@
       "fallback_models": [
         "minimax/MiniMax-M2.7",
         "claude-sonnet-4-6",
-        "xai/grok-4.3"
+        "codex/gpt-5.4-mini"
       ],
       "escalation_model_id": "claude-sonnet-4-6",
       "strategies": {},

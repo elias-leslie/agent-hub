@@ -431,7 +431,7 @@ def test_build_prompt_from_task_context_generates_task_contract():
     assert "You are working in the `agent-hub` shared project checkout." in prompt
     assert "Use exactly one Agent subagent named `task-analyst`" in prompt
     assert "`backend/cli/lib/autosnapshot.py`" in prompt
-    assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
+    assert "`st check pytest -- backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
     assert "Second pass must reduce file size and remove banner comments." in prompt
     assert "Stay inside this claimed checkout: `/tmp/task-123`." in prompt

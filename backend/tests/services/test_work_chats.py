@@ -75,7 +75,7 @@ async def test_record_verifier_outcome_persists_performance_and_benchmark_signal
     )
     db = AsyncMock()
     db.add = MagicMock()
-    db.scalar = AsyncMock(side_effect=[None, builder])
+    db.scalar = AsyncMock(side_effect=[None, builder, None])
     cost_result = MagicMock()
     cost_result.one_or_none.return_value = SimpleNamespace(input_tokens=120, output_tokens=30)
     db.execute = AsyncMock(return_value=cost_result)
