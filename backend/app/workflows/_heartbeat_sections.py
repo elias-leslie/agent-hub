@@ -31,12 +31,14 @@ async def _get_agent_roster_summary() -> str:
             return ""
 
         coding_agents = sorted(a.slug for a in agents if a.is_coding_agent)
-        general_agents = sorted(a.slug for a in agents if not a.is_coding_agent)
-        lines = [f"Total active agents: {len(agents)}"]
+        general_count = sum(1 for a in agents if not a.is_coding_agent)
+        lines = [
+            f"Active agents: {len(agents)}; coding={len(coding_agents)}; general={general_count}"
+        ]
         if coding_agents:
             lines.append(f"Coding ({len(coding_agents)}): {', '.join(coding_agents)}")
-        if general_agents:
-            lines.append(f"General ({len(general_agents)}): {', '.join(general_agents)}")
+        if general_count:
+            lines.append("General roster: inspect with `st agents list` for exact dispatch fit.")
         body = "\n".join(lines)
         logger.info("Agent roster summary: %d agents", len(agents))
         return f"\n<agent_roster>\n{body}\n</agent_roster>"
