@@ -49,25 +49,6 @@ _TOOL_SPECS: tuple[_ToolCapabilitySpec, ...] = (
             "graph", "commit", "jj", "vcs", "backup", "vm",
         ),
     ),
-    _ToolCapabilitySpec(
-        name="db",
-        help_command=("db", "--help"),
-        fallback_description="Database CLI",
-        command_allowlist=("tables", "schema", "query", "exec", "migrate status", "migrate upgrade"),
-    ),
-    _ToolCapabilitySpec(
-        name="web-research",
-        help_command=("web-research", "--help"),
-        fallback_description="Shared public-web lookup wrapper",
-        command_allowlist=("search", "research", "fetch"),
-    ),
-    _ToolCapabilitySpec(
-        name="rebuild.sh",
-        help_command=("rebuild.sh", "--help"),
-        fallback_description="Project rebuild helper",
-        flag_allowlist=("--detach", "--include-all-workers"),
-        require_project=True,
-    ),
 )
 
 

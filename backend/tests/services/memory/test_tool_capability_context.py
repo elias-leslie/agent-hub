@@ -37,7 +37,9 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
     assert "quick:" in rendered
     assert "st pulse --gate" in rendered
     assert "check" in rendered
-    assert "rebuild.sh" in rendered
+    assert "rebuild.sh" not in rendered
+    assert "web-research" not in rendered
+    assert "tool: db" not in rendered
 
 
 def test_format_tool_capability_context_skips_project_only_and_frontend_tools_when_not_applicable() -> None:
@@ -86,7 +88,8 @@ def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> N
         )
 
     assert "tool: st" in rendered
-    assert "tool: rebuild.sh" in rendered
+    assert "tool: rebuild.sh" not in rendered
+    assert "web-research" not in rendered
 
 
 def test_format_tool_capability_context_omits_cli_wrappers_without_bash() -> None:

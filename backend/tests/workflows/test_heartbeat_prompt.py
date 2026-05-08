@@ -31,6 +31,7 @@ from app.workflows._heartbeat_data import (
     _query_recent_workstream_sessions,
 )
 from app.workflows._heartbeat_recall import HeartbeatRecallSections
+from app.workflows._heartbeat_sessions import _query_active_sessions
 
 
 def _mock_async_session_with_rows(rows: list[object]):
@@ -1371,9 +1372,134 @@ class TestActiveSpecialistInventory:
 
         assert [row["session_id"] for row in result] == ["sess-live"]
 
+    @pytest.mark.asyncio
+    async def test_query_materializes_specialists_before_db_session_closes(self) -> None:
+        class DetachSensitiveSession:
+            def __init__(self, now: datetime) -> None:
+                self.attached = True
+                self.id = "sess-live"
+                self.project_id = "agent-hub"
+                self.parent_session_id = "parent-live"
+                self.request_source = "dispatch"
+                self.created_at = now - timedelta(minutes=3)
+
+            def _read(self, value: object) -> object:
+                if not self.attached:
+                    raise AssertionError("ORM row read after DB session closed")
+                return value
+
+            @property
+            def agent_slug(self) -> str:
+                return str(self._read("reviewer"))
+
+        now = datetime.now(UTC)
+        row = DetachSensitiveSession(now)
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [row]
+        mock_result.scalars.return_value = mock_scalars
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def session_factory():
+            try:
+                yield mock_db
+            finally:
+                row.attached = False
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch("app.services.session_live_activity.is_session_actionably_active", return_value=True),
+        ):
+            result = await _query_active_specialist_sessions("agent-hub", now=now)
+
+        assert result == [
+            {
+                "session_id": "sess-live",
+                "agent_slug": "reviewer",
+                "project_id": "agent-hub",
+                "parent_session_id": "parent-live",
+                "request_source": "dispatch",
+                "created_at": now - timedelta(minutes=3),
+                "age_minutes": 3,
+            }
+        ]
+
 
 class TestActiveSessionInventory:
     """Tests for active session inventory in heartbeat prompt context."""
+
+    @pytest.mark.asyncio
+    async def test_query_materializes_active_sessions_before_db_session_closes(self) -> None:
+        class DetachSensitiveSession:
+            def __init__(self, now: datetime) -> None:
+                self.attached = True
+                self._created_at = now - timedelta(minutes=10)
+                self._last_activity_at = now - timedelta(minutes=2)
+
+            def _read(self, value: object) -> object:
+                if not self.attached:
+                    raise AssertionError("ORM row read after DB session closed")
+                return value
+
+            @property
+            def agent_slug(self) -> str:
+                return str(self._read("coder"))
+
+            @property
+            def external_id(self) -> str:
+                return str(self._read("task-live"))
+
+            @property
+            def current_branch(self) -> None:
+                self._read(None)
+                return None
+
+            @property
+            def health_detail(self) -> str:
+                return str(self._read("executing_tool:Bash"))
+
+            @property
+            def last_activity_at(self) -> datetime:
+                return self._read(self._last_activity_at)  # type: ignore[return-value]
+
+            @property
+            def created_at(self) -> datetime:
+                return self._read(self._created_at)  # type: ignore[return-value]
+
+        now = datetime.now(UTC)
+        row = DetachSensitiveSession(now)
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(row, True, 4)]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def session_factory():
+            try:
+                yield mock_db
+            finally:
+                row.attached = False
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch("app.services.session_live_activity.is_session_actionably_active", return_value=True),
+        ):
+            result, collected_at = await _query_active_sessions("agent-hub", now=now)
+
+        assert collected_at == now
+        assert result == [
+            {
+                "agent_slug": "coder",
+                "task_ref": "task-live",
+                "health_detail": "executing_tool:Bash",
+                "last_activity_at": now - timedelta(minutes=2),
+                "turn_count": 4,
+                "idle_minutes": 2,
+                "is_stale": False,
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_query_excludes_dead_candidate_sessions(self) -> None:

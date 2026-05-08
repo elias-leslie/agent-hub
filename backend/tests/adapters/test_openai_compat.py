@@ -10,6 +10,7 @@ from app.adapters._openai_compat_helpers import (
     convert_messages,
     handle_provider_error,
     normalize_responses_content,
+    strip_visible_reasoning_tags,
 )
 from app.adapters.base import CompletionResult, Message
 from app.adapters.openai_compat import OpenAICompatibleAdapter
@@ -165,6 +166,16 @@ class TestOpenAICompatibleAdapter:
         assert result.provider == "test-provider"
         assert result.input_tokens == 10
         assert result.output_tokens == 5
+
+    def test_strip_visible_reasoning_tags_removes_provider_leaked_think_block(self) -> None:
+        content = "<think>\ninternal plan\n</think>\n\nVisible answer."
+
+        assert strip_visible_reasoning_tags(content) == "Visible answer."
+
+    def test_strip_visible_reasoning_tags_preserves_nonleading_think_text(self) -> None:
+        content = "Return code: `value = '<think>literal</think>'`"
+
+        assert strip_visible_reasoning_tags(content) == content
 
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")

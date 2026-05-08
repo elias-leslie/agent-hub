@@ -153,14 +153,14 @@ async def _query_active_sessions(
                 .limit(_ACTIVE_SESSION_PREFILTER_LIMIT)
             )
         ).all()
-    sessions = [
-        _map_active_session_row(
-            session, is_coding_agent=is_coding_agent,
-            turn_count=turn_count_value, now=collected_at,
-        )
-        for session, is_coding_agent, turn_count_value in rows
-        if is_session_actionably_active(session)
-    ]
+        sessions = [
+            _map_active_session_row(
+                session, is_coding_agent=is_coding_agent,
+                turn_count=turn_count_value, now=collected_at,
+            )
+            for session, is_coding_agent, turn_count_value in rows
+            if is_session_actionably_active(session)
+        ]
     return sessions[:_ACTIVE_SESSION_DISPLAY_LIMIT], collected_at
 
 
@@ -207,20 +207,20 @@ async def _query_active_specialist_sessions(
                 .limit(50)
             )
         ).scalars().all()
-    return [
-        {
-            "session_id": row.id,
-            "agent_slug": row.agent_slug,
-            "project_id": row.project_id,
-            "parent_session_id": row.parent_session_id,
-            "request_source": row.request_source,
-            "created_at": row.created_at,
-            "age_minutes": int((collected_at - row.created_at).total_seconds() / 60),
-        }
-        for row in raw_rows
-        if row.agent_slug != PERSONA_SLUG
-        if is_session_actionably_active(row, has_specialist_lane=True)
-    ]
+        return [
+            {
+                "session_id": row.id,
+                "agent_slug": row.agent_slug,
+                "project_id": row.project_id,
+                "parent_session_id": row.parent_session_id,
+                "request_source": row.request_source,
+                "created_at": row.created_at,
+                "age_minutes": int((collected_at - row.created_at).total_seconds() / 60),
+            }
+            for row in raw_rows
+            if row.agent_slug != PERSONA_SLUG
+            if is_session_actionably_active(row, has_specialist_lane=True)
+        ]
 
 
 def _format_specialist_group_line(

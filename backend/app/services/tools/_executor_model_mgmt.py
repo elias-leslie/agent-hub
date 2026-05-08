@@ -168,6 +168,9 @@ async def update_agent_model(
                     profile = AgentRoutingProfile(agent_slug=agent_slug)
                     db.add(profile)
                 profile.default_routing_mode = "manual_locked"
+                metadata = dict(profile.metadata_ or {})
+                metadata["source"] = "manual_override"
+                profile.metadata_ = metadata
             await db.commit()
 
         if updated is None:
