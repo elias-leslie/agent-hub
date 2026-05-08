@@ -64,6 +64,20 @@ def _mock_async_session_with_scalars(rows: list[object]):
     return _session, mock_db
 
 
+def _mock_async_session_with_fetchall(rows: list[object]):
+    """Create an async_session context manager whose execute().fetchall() yields rows."""
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = rows
+    mock_db.execute.return_value = mock_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    return _session, mock_db
+
+
 class _FakeGitStatusResponse:
     def __init__(self, payload: dict[str, object]) -> None:
         self._payload = payload
@@ -89,6 +103,73 @@ class _FakeAsyncClient:
     async def get(self, url: str) -> _FakeGitStatusResponse:
         self.requested_urls.append(url)
         return self._response
+
+
+class TestHeartbeatCompactContext:
+    @pytest.mark.asyncio
+    async def test_project_access_summary_groups_projects_without_path_repetition(self, tmp_path):
+        from app.workflows._heartbeat_project import get_project_access_summary
+
+        (tmp_path / "agent-hub").mkdir()
+        (tmp_path / "summitflow").mkdir()
+        rows = [
+            SimpleNamespace(
+                project_id="agent-hub",
+                permission_tier="full",
+                auto_exec_enabled=True,
+            ),
+            SimpleNamespace(
+                project_id="summitflow",
+                permission_tier="full",
+                auto_exec_enabled=True,
+            ),
+            SimpleNamespace(
+                project_id="a-term",
+                permission_tier="read",
+                auto_exec_enabled=False,
+            ),
+        ]
+        session_factory, _mock_db = _mock_async_session_with_fetchall(rows)
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch("app.workflows._heartbeat_project._WORKSPACE_BASE", tmp_path),
+            patch(
+                "app.workflows._heartbeat_project._read_project_ports",
+                side_effect=lambda project_id: "8003/3003" if project_id == "agent-hub" else "",
+            ),
+        ):
+            result = await get_project_access_summary()
+
+        assert "- full auto-exec: agent-hub(8003/3003), summitflow" in result
+        assert "- read manual: a-term" in result
+        assert f"- local path: {tmp_path}/<project-id> when present" in result
+        assert str(tmp_path / "agent-hub") not in result
+
+    @pytest.mark.asyncio
+    async def test_agent_roster_omits_general_slug_dump(self):
+        from app.workflows._heartbeat_sections import _get_agent_roster_summary
+
+        agents = [
+            SimpleNamespace(slug="coder", is_coding_agent=True),
+            SimpleNamespace(slug="worker", is_coding_agent=True),
+            SimpleNamespace(slug="researcher", is_coding_agent=False),
+            SimpleNamespace(slug="reviewer", is_coding_agent=False),
+        ]
+        session_factory, _mock_db = _mock_async_session_with_fetchall([])
+        agent_service = MagicMock()
+        agent_service.list_agents = AsyncMock(return_value=agents)
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch("app.services.agent_service.get_agent_service", return_value=agent_service),
+        ):
+            result = await _get_agent_roster_summary()
+
+        assert "Active agents: 4; coding=2; general=2" in result
+        assert "Coding (2): coder, worker" in result
+        assert "General roster: inspect with `st agents list`" in result
+        assert "researcher" not in result
 
 
 class TestGetGitStatusSummary:

@@ -52,7 +52,7 @@ def _read_project_api_url(project_id: str) -> str:
 
 
 async def get_project_access_summary() -> str:
-    """Build a summary of project access tiers with paths and ports for the heartbeat prompt."""
+    """Build a compact summary of project access tiers for the heartbeat prompt."""
     from sqlalchemy import text
 
     from app.db import async_session
@@ -73,20 +73,24 @@ async def get_project_access_summary() -> str:
     if not rows:
         return "Your project access: (no projects configured)"
 
-    lines = ["Your project access:"]
+    groups: dict[tuple[str, str], list[str]] = {}
     for row in rows:
         auto = "auto-exec" if row.auto_exec_enabled else "manual"
-        parts = [f"{row.project_id}: {row.permission_tier} ({auto})"]
+        label = str(row.project_id)
         workspace_path = _WORKSPACE_BASE / row.project_id
         if workspace_path.is_dir():
-            parts.append(str(workspace_path))
             ports = _read_project_ports(row.project_id)
             if ports:
-                parts.append(ports)
-        lines.append(f"- {' | '.join(parts)}")
+                label = f"{label}({ports})"
+        groups.setdefault((str(row.permission_tier), auto), []).append(label)
+
+    lines = ["Project access:"]
+    for (tier, auto), project_ids in sorted(groups.items()):
+        lines.append(f"- {tier} {auto}: {', '.join(project_ids)}")
+    lines.append(f"- local path: {_WORKSPACE_BASE}/<project-id> when present")
     lines.append(
-        "\nCross-project inspection: use `st` CLI commands — they work from any directory."
-        " Do not cd into project directories or use relative paths from persona-sandbox."
+        "Cross-project inspection: use `st` from any directory; no cd or "
+        "persona-sandbox-relative paths."
     )
     return "\n".join(lines)
 
