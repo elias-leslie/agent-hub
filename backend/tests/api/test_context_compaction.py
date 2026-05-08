@@ -12,7 +12,7 @@ from app.api.complete.context_compaction import maybe_compact_context
 # Patch targets at the source modules (imports are inside the function body)
 _TOKEN_COUNTER = "app.services.token_counter"
 _ADAPTER_REGISTRY = "app.adapters.registry"
-_AGENT_SERVICE = "app.services.agent_service"
+_AGENT_ROUTING = "app.services.agent_routing_utils"
 
 
 def _make_compactor_agent() -> SimpleNamespace:
@@ -22,6 +22,14 @@ def _make_compactor_agent() -> SimpleNamespace:
         temperature=0.2,
         thinking_level=None,
         system_prompt="Summarize earlier conversation concisely.",
+    )
+
+
+def _make_resolved_compactor_agent() -> SimpleNamespace:
+    return SimpleNamespace(
+        agent=_make_compactor_agent(),
+        model="claude-haiku-4-5",
+        provider="claude",
     )
 
 
@@ -80,9 +88,6 @@ class TestMaybeCompactContext:
         mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
-        mock_agent_service = MagicMock()
-        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
-
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -97,8 +102,9 @@ class TestMaybeCompactContext:
                 return_value=mock_adapter,
             ),
             patch(
-                f"{_AGENT_SERVICE}.get_agent_service",
-                return_value=mock_agent_service,
+                f"{_AGENT_ROUTING}.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=_make_resolved_compactor_agent(),
             ),
             patch(
                 "app.services.context_tracker.log_token_usage",
@@ -139,9 +145,6 @@ class TestMaybeCompactContext:
         mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
-        mock_agent_service = MagicMock()
-        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
-
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -156,8 +159,9 @@ class TestMaybeCompactContext:
                 return_value=mock_adapter,
             ),
             patch(
-                f"{_AGENT_SERVICE}.get_agent_service",
-                return_value=mock_agent_service,
+                f"{_AGENT_ROUTING}.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=_make_resolved_compactor_agent(),
             ),
             patch(
                 "app.services.context_tracker.log_token_usage",
@@ -185,9 +189,6 @@ class TestMaybeCompactContext:
 
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(side_effect=Exception("Adapter error"))
-        mock_agent_service = MagicMock()
-        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
-
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -202,8 +203,9 @@ class TestMaybeCompactContext:
                 return_value=mock_adapter,
             ),
             patch(
-                f"{_AGENT_SERVICE}.get_agent_service",
-                return_value=mock_agent_service,
+                f"{_AGENT_ROUTING}.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=_make_resolved_compactor_agent(),
             ),
         ):
             result, compacted = await maybe_compact_context(
@@ -226,9 +228,6 @@ class TestMaybeCompactContext:
         mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
-        mock_agent_service = MagicMock()
-        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
-
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -243,8 +242,9 @@ class TestMaybeCompactContext:
                 return_value=mock_adapter,
             ),
             patch(
-                f"{_AGENT_SERVICE}.get_agent_service",
-                return_value=mock_agent_service,
+                f"{_AGENT_ROUTING}.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=_make_resolved_compactor_agent(),
             ),
             patch(
                 "app.services.context_tracker.log_token_usage",

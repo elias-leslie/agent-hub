@@ -11,6 +11,7 @@ from app.workflows.scheduled import (
     data_retention_task,
     feedback_cleanup_task,
     memory_cleanup_task,
+    memory_governance_task,
     session_cleanup_task,
     tier_optimizer_task,
 )
@@ -37,6 +38,7 @@ def test_ops_workflows_match_maintenance_runtime() -> None:
         session_cleanup_task,
         tier_optimizer_task,
         memory_cleanup_task,
+        memory_governance_task,
         feedback_cleanup_task,
         data_retention_task,
         webhook_delivery_task,
