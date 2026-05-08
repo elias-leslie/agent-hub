@@ -11,6 +11,13 @@ interface SendMessageParams {
   content: string;
   targetAgents?: string[];
   agentSlug: string;
+  adhoc?: boolean;
+  adhocSpec?: CompletionRequest["adhoc_spec"];
+  routingExcludeProviders?: string[];
+  routingCostPreference?: CompletionRequest["routing_cost_preference"];
+  includeRoles?: string[];
+  promptMode?: CompletionRequest["prompt_mode"];
+  useMemory?: boolean;
   messages: ChatMessage[];
   temperature: number;
   sessionId?: string;
@@ -43,6 +50,13 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
     content,
     targetAgents,
     agentSlug,
+    adhoc = false,
+    adhocSpec,
+    routingExcludeProviders,
+    routingCostPreference,
+    includeRoles,
+    promptMode,
+    useMemory,
     messages,
     temperature,
     sessionId,
@@ -70,7 +84,11 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   setError(null);
   setStatus("connecting");
 
-  const effectiveAgents = targetAgents && targetAgents.length > 0 ? targetAgents : [agentSlug];
+  const effectiveAgents = adhoc
+    ? ["adhoc"]
+    : targetAgents && targetAgents.length > 0
+      ? targetAgents
+      : [agentSlug];
 
   // Add user message
   const userMessage: ChatMessage = {
@@ -122,8 +140,19 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
 
     await Promise.all(
       effectiveAgents.map((targetAgent, index) => {
+        const resolvedAdhocSpec =
+          adhoc && adhocSpec ? { ...adhocSpec, prompt: adhocSpec.prompt ?? content } : undefined;
         const requestBody: CompletionRequest = {
-          agent_slug: targetAgent,
+          agent_slug: adhoc ? undefined : targetAgent,
+          adhoc: adhoc || undefined,
+          adhoc_spec: resolvedAdhocSpec,
+          routing_exclude_providers:
+            routingExcludeProviders && routingExcludeProviders.length > 0
+              ? routingExcludeProviders
+              : undefined,
+          routing_cost_preference: routingCostPreference || undefined,
+          include_roles: includeRoles && includeRoles.length > 0 ? includeRoles : undefined,
+          prompt_mode: promptMode || undefined,
           messages: messageHistory,
           temperature,
           session_id: sessionId,
@@ -140,7 +169,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           thinking_level: thinkingLevel || undefined,
           current_branch: currentBranch || undefined,
           stream: true,
-          use_memory: true,
+          use_memory: useMemory ?? !adhoc,
           memory_group_id: `${memoryGroupPrefix}${targetAgent}`,
         };
 

@@ -88,6 +88,7 @@ async def inject_agent_mandates(
             include_roles=include_roles,
             task_type=task_type,
             project_id=project_id,
+            prompt_mode=prompt_mode,
             include_global_prompts=True,
             include_mandates=include_mandates,
             include_guardrails=include_guardrails,

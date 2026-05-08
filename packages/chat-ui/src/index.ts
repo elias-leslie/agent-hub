@@ -30,6 +30,7 @@ export { cn } from './lib/utils';
 
 export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecution } from './types/chat';
 export type { ChatStreamApiConfig } from './hooks/use-chat-stream';
+export type { AdhocWorkSpec, PromptMode, RoutingJudgment, RoutingPreferences } from './hooks/chat-stream/types';
 export type { ActivityState, ToolCall, ThinkingContent, ActivityIndicatorProps } from './components/activity-indicator';
 export type { ModelOption, ModelScores, ModelCost, ModelCapabilities, ModelEnrichment } from './components/use-models';
 export type { VoiceOption } from './hooks/use-voice-preferences';

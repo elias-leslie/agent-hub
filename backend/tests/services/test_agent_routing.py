@@ -325,6 +325,7 @@ class TestInjectAgentMandates:
             include_roles=None,
             task_type="heartbeat",
             project_id=None,
+            prompt_mode="full",
             include_global_prompts=True,
             include_mandates=True,
             include_guardrails=True,
@@ -391,10 +392,73 @@ class TestInjectAgentMandates:
             include_roles=None,
             task_type="wake",
             project_id=None,
+            prompt_mode="full",
             include_global_prompts=True,
             include_mandates=True,
             include_guardrails=True,
             include_persona_context=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_inject_agent_mandates_chat_mode_skips_full_persona_context(self):
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=9,
+            slug="persona",
+            name="Jenny",
+            description=None,
+            system_prompt="Coordinate work.",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.2,
+            thinking_level="medium",
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=False,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        mock_db = AsyncMock()
+        with (
+            patch(
+                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
+                new=AsyncMock(return_value=[]),
+            ) as collect_runtime_prompt_sections,
+            patch(
+                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
+                return_value="<agent_persona>chat</agent_persona>",
+            ),
+        ):
+            result = await inject_agent_mandates(
+                agent,
+                mock_db,
+                include_roles=["system", "persona-personality", "persona-user-context"],
+                prompt_mode="chat",
+            )
+
+        assert result.system_content == "<agent_persona>chat</agent_persona>"
+        collect_runtime_prompt_sections.assert_awaited_once_with(
+            mock_db,
+            agent,
+            include_roles=["system", "persona-personality", "persona-user-context"],
+            task_type=None,
+            project_id=None,
+            prompt_mode="chat",
+            include_global_prompts=True,
+            include_mandates=True,
+            include_guardrails=True,
+            include_persona_context=False,
         )
 
     @pytest.mark.asyncio

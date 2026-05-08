@@ -299,6 +299,29 @@ async def check_context_limits(
     return context_usage_info
 
 
+async def compact_context_if_needed(
+    db: AsyncSession | None,
+    session_id: str,
+    resolved_model: str,
+    messages_dict: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], bool]:
+    """Compact long request context before limit checks/execution."""
+    if db is None:
+        return messages_dict, False
+
+    from .context_compaction import maybe_compact_context
+
+    compacted, was_compacted = await maybe_compact_context(
+        messages_dict,
+        resolved_model,
+        session_id=session_id,
+        db=db,
+    )
+    if was_compacted:
+        logger.info("Compacted request context before execution for session=%s", session_id)
+    return compacted, was_compacted
+
+
 async def check_cache(
     skip_cache: bool,
     resolved_model: str,

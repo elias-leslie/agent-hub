@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from app.adapters.base import Message
@@ -31,6 +32,7 @@ def work_context_to_prompt(work_context: Any | None) -> str | None:
         "artifact_summary": "artifact_summary",
         "surface": "surface",
         "pane_id": "pane",
+        "adhoc_spec": "adhoc_spec",
     }
     lines = [
         "<work_context>",
@@ -39,6 +41,8 @@ def work_context_to_prompt(work_context: Any | None) -> str | None:
     for key, label in labels.items():
         value = data.get(key)
         if value is not None and str(value).strip():
+            if isinstance(value, dict):
+                value = json.dumps(value, separators=(",", ":"), sort_keys=True)
             lines.append(f"{label}: {value}")
     lines.append("</work_context>")
     return "\n".join(lines)

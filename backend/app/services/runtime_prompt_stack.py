@@ -136,6 +136,7 @@ async def collect_runtime_prompt_sections(
     include_roles: list[str] | None = None,
     task_type: str | None = None,
     project_id: str | None = None,
+    prompt_mode: str = "full",
     include_global_prompts: bool = True,
     include_mandates: bool = True,
     include_guardrails: bool = True,
@@ -171,6 +172,7 @@ async def collect_runtime_prompt_sections(
         include_roles=include_roles,
         exclude_roles=get_runtime_excluded_prompt_roles(
             agent_slug=getattr(agent, "slug", None),
+            prompt_mode=prompt_mode,
             task_type=task_type,
         ),
     )

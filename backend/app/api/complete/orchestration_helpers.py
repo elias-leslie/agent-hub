@@ -20,6 +20,7 @@ from app.api.complete.request_setup import (
     build_message_list,
     check_cache,
     check_context_limits,
+    compact_context_if_needed,
     inject_memory,
     setup_session,
 )
@@ -72,6 +73,9 @@ async def build_session_and_messages(
     messages_dict = inject_agent_system_prompt(messages_dict, mandate)
     messages_dict, memory_facts_injected, loaded_memory_uuids = await inject_memory(
         request, messages_dict, session_id, resolved_agent, db
+    )
+    messages_dict, _was_compacted = await compact_context_if_needed(
+        db, session_id, resolved_model, messages_dict
     )
     context_usage_info = await check_context_limits(db, session, session_id, resolved_model, messages_dict)
     cached = await check_cache(skip_cache, resolved_model, messages_dict, request.temperature)
