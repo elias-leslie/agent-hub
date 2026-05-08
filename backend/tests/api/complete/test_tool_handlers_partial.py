@@ -392,6 +392,77 @@ async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_tool_loop_stops_repeated_identical_tool_results() -> None:
+    state = _ExecutionState(agent_slug="debugger", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            for index in range(6):
+                tool_id = f"tool-{index}"
+                yield types.SimpleNamespace(
+                    type="assistant",
+                    message=types.SimpleNamespace(
+                        content=[
+                            types.SimpleNamespace(
+                                type="tool_use",
+                                name="bash",
+                                input={"command": "python probe.py"},
+                                id=tool_id,
+                            )
+                        ]
+                    ),
+                ), None
+                yield types.SimpleNamespace(
+                    type="tool_result",
+                    tool_use_id=tool_id,
+                    content="same probe output",
+                    is_error=False,
+                    duration_ms=5,
+                ), None
+
+        async def aclose(self) -> None:
+            return None
+
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
+    with (
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_result",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=adapter,
+            state=state,
+            provider="kimi-code",
+            model="kimi-code/kimi-for-coding",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            session_id="session-repeat",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=50,
+            project_id="agent-hub",
+        )
+
+    assert result is not None
+    assert result.status == "error"
+    assert "Repeated identical tool result 5 times for bash" in (result.error or "")
+    assert state.tool_calls_count == 5
+
+
+@pytest.mark.asyncio
 async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_queue() -> None:
     state = _ExecutionState(agent_slug="persona", messages_for_adapter=[])
     tracker = AsyncMock()

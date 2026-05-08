@@ -41,7 +41,9 @@ def adapt_stream_event(
     if event.type == "tool_result":
         tool_id = getattr(event, "tool_id", "") or ""
         start = timing_state.pop(tool_id, None)
-        duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+        duration_ms = getattr(event, "duration_ms", None)
+        if duration_ms is None and start is not None:
+            duration_ms = int((time.monotonic() - start) * 1000)
         is_error = bool(getattr(event, "is_error", False) or getattr(event, "error", None))
         return ToolEvent(
             type="tool_result",
@@ -87,7 +89,7 @@ def create_tool_handler(
     tool_catalog: list[dict[str, Any]] | None = None,
 ) -> Any:
     """Create an async tool_handler callback for StreamEvent-based providers."""
-    from app.services.tools.base import ToolCall
+    from app.services.tools.base import ToolCall, ToolResult
     from app.services.tools.tool_handler import create_direct_handler
 
     handler = create_direct_handler(
@@ -98,14 +100,14 @@ def create_tool_handler(
         tool_catalog=tool_catalog,
     )
 
-    async def tool_handler(tool_name: str, tool_input: dict[str, Any]) -> str:
+    async def tool_handler(tool_name: str, tool_input: dict[str, Any]) -> ToolResult:
         tool_call = ToolCall(
             id=f"openai_{tool_name}_{id(tool_input)}",
             name=tool_name,
             input=tool_input,
         )
         result = await handler.execute(tool_call)
-        return result.content
+        return result
 
     return tool_handler
 

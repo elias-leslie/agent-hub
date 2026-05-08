@@ -26,6 +26,7 @@ from app.adapters.claude_direct import (
     _stream_events,
     convert_messages,
 )
+from app.adapters.tool_result_payload import normalize_tool_handler_result
 
 logger = logging.getLogger(__name__)
 
@@ -244,13 +245,24 @@ class KimiCodeAdapter(ProviderAdapter):
                             tool_name=tool_name,
                             tool_input=tool_input,
                         )
-                        tool_result = await tool_handler(tool_name, tool_input)
-                        yield StreamEvent(type="tool_result", tool_id=tool_id, content=tool_result)
-                        tool_result_blocks.append({
+                        tool_result = normalize_tool_handler_result(
+                            await tool_handler(tool_name, tool_input)
+                        )
+                        yield StreamEvent(
+                            type="tool_result",
+                            tool_id=tool_id,
+                            content=tool_result.content,
+                            is_error=tool_result.is_error,
+                            duration_ms=tool_result.duration_ms,
+                        )
+                        result_block = {
                             "type": "tool_result",
                             "tool_use_id": tool_id,
-                            "content": tool_result,
-                        })
+                            "content": tool_result.content,
+                        }
+                        if tool_result.is_error:
+                            result_block["is_error"] = True
+                        tool_result_blocks.append(result_block)
                     api_messages.append({"role": "user", "content": tool_result_blocks})
                     continue
 

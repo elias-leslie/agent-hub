@@ -32,6 +32,8 @@ class StreamEvent:
     tool_id: str | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
+    is_error: bool = False
+    duration_ms: int | None = None
     # CloudCode PA: thoughtSignature required on functionCall parts when thinking is enabled
     thought_signature: str | None = None
     # Turn lifecycle (emitted by tool execution loops)

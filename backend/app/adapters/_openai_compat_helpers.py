@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import CompletionResult, Message, ProviderError, StreamEvent, ToolCallResult
+from app.adapters.tool_result_payload import normalize_tool_handler_result
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI, AsyncStream
@@ -145,9 +146,15 @@ async def execute_tool_calls(
         yield StreamEvent(type="content", content=result.content)
     for tc in result.tool_calls or []:
         yield StreamEvent(type="tool_use", tool_id=tc.id, tool_name=tc.name, tool_input=tc.input)
-        tool_result_str = await tool_handler(tc.name, tc.input)
-        yield StreamEvent(type="tool_result", tool_id=tc.id, content=tool_result_str)
-        openai_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_str})
+        tool_result = normalize_tool_handler_result(await tool_handler(tc.name, tc.input))
+        yield StreamEvent(
+            type="tool_result",
+            tool_id=tc.id,
+            content=tool_result.content,
+            is_error=tool_result.is_error,
+            duration_ms=tool_result.duration_ms,
+        )
+        openai_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result.content})
 
 
 def _to_openai_tool(tool: dict[str, Any]) -> dict[str, Any]:
