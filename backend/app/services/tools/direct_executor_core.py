@@ -21,6 +21,9 @@ from app.services.tools._executor_file_io import (
     _is_path_allowed as _check_path_allowed,
 )
 from app.services.tools._executor_file_io import (
+    edit_file as _edit_file,
+)
+from app.services.tools._executor_file_io import (
     read_file as _read_file,
 )
 from app.services.tools._executor_file_io import (
@@ -79,6 +82,7 @@ class DirectToolExecutor:
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
         "bash", "read_file", "write_file", "search_scratch_context", "batch_execute",
+        "edit_file",
         "consult_agent", "dispatch_agent",
         "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
         "read_personality", "write_personality",
@@ -172,7 +176,13 @@ class DirectToolExecutor:
         if name == "read_file":
             return await self.read_file(**{k: v for k, v in args.items() if k in ("path", "offset", "limit")})
         if name == "write_file":
-            return await self.write_file(**{k: v for k, v in args.items() if k in ("path", "content")})
+            return await self.write_file(
+                **{k: v for k, v in args.items() if k in ("path", "content", "allow_large_truncate")}
+            )
+        if name == "edit_file":
+            return await self.edit_file(
+                **{k: v for k, v in args.items() if k in ("path", "old_text", "new_text", "replace_all")}
+            )
         if name == "search_scratch_context":
             return await self.search_scratch_context(
                 **{
@@ -351,7 +361,7 @@ class DirectToolExecutor:
             return f"Error: {block_reason}"
         return await _read_file(path, self.working_dir, allowed_root, offset, limit)
 
-    async def write_file(self, path: str, content: str) -> str:
+    async def write_file(self, path: str, content: str, allow_large_truncate: bool = False) -> str:
         """Write a file."""
         allowed_root, permission_block = await self._allowed_root_for_file_tool(path, write=True)
         if permission_block:
@@ -364,7 +374,43 @@ class DirectToolExecutor:
         )
         if block_reason:
             return f"Error: Write blocked: {block_reason}"
-        return await _write_file(path, content, self.working_dir, allowed_root)
+        return await _write_file(
+            path,
+            content,
+            self.working_dir,
+            allowed_root,
+            allow_large_truncate=allow_large_truncate,
+        )
+
+    async def edit_file(
+        self,
+        path: str,
+        old_text: str,
+        new_text: str,
+        replace_all: bool = False,
+    ) -> str:
+        """Edit an existing file by replacing exact text."""
+        allowed_root, permission_block = await self._allowed_root_for_file_tool(path, write=True)
+        if permission_block:
+            return f"Error: {permission_block}"
+
+        async def _guard(updated_content: str) -> str | None:
+            return await scan_runtime_sensitive_content(
+                path,
+                updated_content,
+                repo_root=str(self.working_dir),
+                tool_name="edit_file",
+            )
+
+        return await _edit_file(
+            path,
+            old_text,
+            new_text,
+            self.working_dir,
+            allowed_root,
+            replace_all=replace_all,
+            content_guard=_guard,
+        )
 
     async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:
         """Consult another agent for advice without executing tools."""

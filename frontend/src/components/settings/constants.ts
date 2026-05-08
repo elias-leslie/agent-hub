@@ -94,6 +94,7 @@ export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   codex: { dot: 'bg-emerald-400', bg: 'border-emerald-500/20' },
   deepseek: { dot: 'bg-cyan-400', bg: 'border-cyan-500/20' },
   gemini: { dot: 'bg-blue-400', bg: 'border-blue-500/20' },
+  'kimi-code': { dot: 'bg-pink-400', bg: 'border-pink-500/20' },
   local: { dot: 'bg-slate-400', bg: 'border-slate-500/20' },
   moonshot: { dot: 'bg-violet-400', bg: 'border-violet-500/20' },
   openai: { dot: 'bg-green-400', bg: 'border-green-500/20' },

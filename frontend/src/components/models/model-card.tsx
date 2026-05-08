@@ -48,13 +48,19 @@ function formatSyncMoment(value: string | null | undefined): string | null {
   })
 }
 
+const DEFAULT_PROVIDER_COLOR = {
+  dot: 'bg-slate-400',
+  bg: 'border-slate-500/20',
+} as const
+
 export function ModelCard({
   model,
   isSelected,
   onSelect,
   onExpand,
 }: ModelCardProps) {
-  const providerColor = PROVIDER_COLORS[model.provider]
+  const providerColor =
+    PROVIDER_COLORS[model.provider] ?? DEFAULT_PROVIDER_COLOR
   const hasEnrichment = !!model.enrichment
   const pricing = formatCatalogModelPricing(model)
   const syncedAt = formatSyncMoment(model.enrichment?.synced_at)

@@ -197,7 +197,7 @@ async def close_one_shot_session(session_id: str) -> None:
                 mark_session_completed(
                     session,
                     summary="Streaming one-shot completed",
-                    termination_reason="streaming_one_shot_closed",
+                    termination_reason=None,
                 )
                 session.last_activity_at = datetime.now(UTC)
                 await store_child_session_lifecycle_event(

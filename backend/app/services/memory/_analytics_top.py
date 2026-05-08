@@ -11,6 +11,7 @@ from app.services.memory_utility_score import utility_score_sql_expr
 from .analytics_models import TopMemory
 
 ALLOWED_SORT_FIELDS = {"utility_score", "referenced_count", "loaded_count", "helpful_count", "lifecycle_score"}
+TIER_NAMES = {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}
 
 _SORT_EXPR_MAP = {
     "referenced_count": lambda: Memory.referenced_count,
@@ -45,25 +46,39 @@ async def get_top_memories_query(
 
     sort_expr = _build_sort_expr(sort_by)
     order = _build_order(sort_by, sort_expr)
+    utility_expr = utility_score_sql_expr(Memory.loaded_count, Memory.referenced_count)
 
-    stmt = select(Memory).where(Memory.status == "active").order_by(order).limit(limit)
+    stmt = (
+        select(
+            Memory.id,
+            Memory.content,
+            Memory.tier,
+            Memory.loaded_count,
+            Memory.referenced_count,
+            Memory.lifecycle_score,
+            utility_expr.label("utility_score"),
+        )
+        .where(Memory.status == "active")
+        .order_by(order)
+        .limit(limit)
+    )
     if group_id:
         stmt = stmt.where(Memory.group_id == group_id)
 
     async with async_session() as session:
-        rows = list((await session.execute(stmt)).scalars().all())
+        rows = (await session.execute(stmt)).all()
 
     return [
         TopMemory(
-            uuid=str(mem.id),
-            content=(mem.content or "")[:120],
-            injection_tier=mem.injection_tier,
-            utility_score=round(mem.utility_score, 4),
-            loaded_count=mem.loaded_count,
-            referenced_count=mem.referenced_count,
-            lifecycle_score=round(mem.lifecycle_score, 4) if mem.lifecycle_score is not None else None,
+            uuid=str(row.id),
+            content=(row.content or "")[:120],
+            injection_tier=TIER_NAMES.get(row.tier, "reference"),
+            utility_score=round(float(row.utility_score or 0), 4),
+            loaded_count=row.loaded_count,
+            referenced_count=row.referenced_count,
+            lifecycle_score=round(row.lifecycle_score, 4) if row.lifecycle_score is not None else None,
         )
-        for mem in rows
+        for row in rows
     ]
 
 
