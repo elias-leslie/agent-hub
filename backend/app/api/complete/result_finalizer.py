@@ -90,6 +90,7 @@ async def finalize_completion_result(
         execution_error=execution_error,
         turns_completed=getattr(final_result, "turns", None),
         tool_calls_count=getattr(final_result, "tool_calls_count", 0) or 0,
+        error_summary=getattr(final_result, "error_summary", None),
     )
 
     cost = estimate_cost(total_input_tokens, total_output_tokens, effective_model)

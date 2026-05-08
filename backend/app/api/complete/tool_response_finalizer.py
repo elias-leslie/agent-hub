@@ -179,6 +179,7 @@ async def finalize_response(
         tool_calls_count=tool_calls_count,
         finish_reason=finish_reason,
         progress_log=tracker.log,
+        tool_result_summaries=tool_result_summaries or [],
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
     )

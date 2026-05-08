@@ -214,6 +214,7 @@ TOOL_TO_COMPONENT: dict[str, str] = {
     "st memory": "sf.cli.memory",
     "st search": "sf.search",
     "st complete": "ah.completion",
+    "st agent": "ah.completion",
     # Infrastructure
     "restart.sh": "sf.scripts",
     "rebuild.sh": "sf.scripts",

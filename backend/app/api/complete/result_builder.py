@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .error_summary import build_error_summary
 from .tool_handlers import AgentProgress
 
 
@@ -63,6 +64,14 @@ def build_completion_result(
         Dict with all result attributes
     """
     turns = _resolve_turns(progress_log, final_result)
+    tool_result_summaries = getattr(final_result, "tool_result_summaries", None) or []
+    error_summary = getattr(final_result, "error_summary", None) or build_error_summary(
+        execution_status=execution_status,
+        execution_error=execution_error,
+        final_finish_reason=final_finish_reason,
+        progress_log=progress_log,
+        tool_result_summaries=tool_result_summaries,
+    )
 
     return {
         "content": final_content,
@@ -86,6 +95,7 @@ def build_completion_result(
         "error": execution_error,
         "container_id": current_container_id,
         "progress_log": progress_log,
+        "error_summary": error_summary,
         "model_used": getattr(final_result, "model_used", None) or model,
         "fallback_used": bool(getattr(final_result, "fallback_used", False)),
         "requested_model": getattr(final_result, "requested_model", None) or model,

@@ -44,6 +44,8 @@ class ToolExecutionResult:
     error: str | None = None
     container_id: str | None = None
     progress_log: list[AgentProgress] = field(default_factory=list)
+    tool_result_summaries: list[str] = field(default_factory=list)
+    error_summary: dict[str, Any] | None = None
     model_used: str | None = None
     fallback_used: bool = False
     requested_model: str | None = None

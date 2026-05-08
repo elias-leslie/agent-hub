@@ -25,6 +25,7 @@ def build_execution_observability(
     execution_error: str | None,
     turns_completed: int | None,
     tool_calls_count: int,
+    error_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build structured execution metadata for DB/session-event observability."""
     effective_turn_budget = _effective_turn_budget(
@@ -32,7 +33,7 @@ def build_execution_observability(
         provider=provider,
         requested_max_turns=requested_max_turns,
     )
-    return {
+    execution = {
         "orchestration_path": orchestration_path,
         "requested_max_turns": requested_max_turns,
         "effective_turn_budget": effective_turn_budget,
@@ -52,6 +53,9 @@ def build_execution_observability(
         "client_id": getattr(session, "client_id", None),
         "request_source": getattr(session, "request_source", None),
     }
+    if error_summary:
+        execution["error_summary"] = error_summary
+    return execution
 
 
 async def persist_execution_observability(
@@ -68,6 +72,7 @@ async def persist_execution_observability(
     execution_error: str | None,
     turns_completed: int | None,
     tool_calls_count: int,
+    error_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist execution metadata to the session row and a tool_audit event."""
     execution = build_execution_observability(
@@ -80,6 +85,7 @@ async def persist_execution_observability(
         execution_error=execution_error,
         turns_completed=turns_completed,
         tool_calls_count=tool_calls_count,
+        error_summary=error_summary,
     )
     metadata = dict(session.provider_metadata or {})
     metadata["execution"] = execution

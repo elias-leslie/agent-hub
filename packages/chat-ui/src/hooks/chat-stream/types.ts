@@ -70,7 +70,6 @@ export interface CompletionRequest {
   working_dir?: string;
   tools_enabled: boolean;
   execute_tools?: boolean;
-  max_turns?: number;
   project_id: string;
   external_id?: string;
   parent_session_id?: string;

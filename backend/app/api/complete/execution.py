@@ -288,6 +288,7 @@ def build_agentic_response(
         ]
         if internal_result.progress_log
         else None,
+        error_summary=internal_result.error_summary,
         trace_id=trace_id,
         cited_uuids=internal_result.cited_uuids,
     )

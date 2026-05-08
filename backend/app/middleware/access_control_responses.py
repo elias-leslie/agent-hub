@@ -16,7 +16,7 @@ def missing_headers_response(missing_headers: list[str]) -> JSONResponse:
             "agent_instructions": {
                 "severity": "MANDATORY",
                 "action": "STOP - Do not attempt to call this API without proper identification.",
-                "guidance": "All Agent Hub API calls require X-Client-Id and X-Request-Source headers. Register a client via the Agent Hub dashboard or use the proper CLI tools (st complete) which handle identification.",
+                "guidance": "All Agent Hub API calls require X-Client-Id and X-Request-Source headers. Register a client via the Agent Hub dashboard or use the proper CLI tools (st complete for one-shot, st agent for tool-loop runs) which handle identification.",
                 "reason": "This access control exists to track and attribute resource usage.",
             },
         },

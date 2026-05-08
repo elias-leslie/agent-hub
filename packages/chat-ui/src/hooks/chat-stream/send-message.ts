@@ -7,8 +7,6 @@ import type { StreamState, CompletionRequest, MessageHistoryEntry } from "./type
 import { formatModelName, generateId } from "./utils";
 import { processStreamWithReconnect } from "./stream-processor";
 
-const TOOL_ENABLED_MAX_TURNS = 80;
-
 interface SendMessageParams {
   content: string;
   targetAgents?: string[];
@@ -131,10 +129,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           session_id: sessionId,
           working_dir: workingDir,
           tools_enabled: toolsEnabled,
-          // Streaming tool execution keys off execute_tools/max_turns on the
-          // backend. tools_enabled alone is ignored by the request schema.
+          // Streaming tool execution keys off execute_tools; Agent Hub owns the
+          // generous internal turn fuse.
           execute_tools: toolsEnabled,
-          max_turns: toolsEnabled ? TOOL_ENABLED_MAX_TURNS : 1,
           project_id: projectId,
           external_id: externalId,
           parent_session_id: parentSessionId,

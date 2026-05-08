@@ -412,3 +412,40 @@ async def test_setup_session_binds_work_context_and_source_metadata() -> None:
     assert bind_args.kwargs["session"] is session
     assert bind_args.kwargs["work_context"] is request.work_context
     assert bind_args.kwargs["source_metadata"] is request.source_metadata
+
+
+@pytest.mark.asyncio
+async def test_setup_session_marks_read_only_without_write_ownership() -> None:
+    request = _request()
+    request.read_only = True
+
+    session = SimpleNamespace(
+        id="sess-read",
+        provider_metadata={},
+        declared_scope_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
+    )
+    with (
+        patch(
+            "app.api.complete.request_setup.get_or_create_session",
+            new_callable=AsyncMock,
+            return_value=(session, [], True),
+        ),
+        patch(
+            "app.api.complete.request_setup.publish_session_start",
+            new_callable=AsyncMock,
+        ),
+    ):
+        await setup_session(
+            request=request,
+            provider="claude",
+            resolved_model="claude-sonnet-4-6",
+            db=AsyncMock(),
+            client_id="client-1",
+            request_source="test",
+        )
+
+    assert session.provider_metadata["execution_mode"] == "read_only"
+    assert session.provider_metadata["read_only"] is True
+    assert session.scope_confidence == "observed_read"
