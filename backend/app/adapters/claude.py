@@ -24,6 +24,10 @@ from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_OPUS_4_7, CLA
 logger = logging.getLogger(__name__)
 
 
+def _messages_have_image_content(messages: list[Message]) -> bool:
+    return any(message.has_images() for message in messages)
+
+
 class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
     """Adapter for Claude models with dual authentication modes.
 
@@ -101,6 +105,13 @@ class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
         cm = get_credential_manager()
         return cm.get("claude", "oauth_token") is not None or cm.get_api_key("claude") is not None
 
+    def _should_use_direct_api(self, messages: list[Message]) -> bool:
+        """Use direct API for multimodal requests; CLI prompt transport is text-only."""
+        return self._use_direct_api or (
+            _messages_have_image_content(messages)
+            and (self._has_oauth_token or self._has_api_key)
+        )
+
     @property
     def auth_mode(self) -> str:
         """Return current authentication mode."""
@@ -135,7 +146,7 @@ class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Claude via direct API or CLI."""
-        if self._use_direct_api:
+        if self._should_use_direct_api(messages):
             return await complete_direct(
                 messages=messages,
                 model=model,
@@ -174,7 +185,7 @@ class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Claude via CLI (Agent SDK) or direct API."""
-        if self._use_direct_api:
+        if self._should_use_direct_api(messages):
             async for event in stream_direct(
                 messages=messages,
                 model=model,

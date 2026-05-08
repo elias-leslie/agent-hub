@@ -14,6 +14,7 @@ def test_governance_auditor_tool_registry_includes_governance_surfaces() -> None
     assert tool_names == {
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
     }
@@ -28,6 +29,7 @@ def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools(
     assert tool_names == {
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
         "review_memory_system",
@@ -48,6 +50,7 @@ def test_persona_tool_registry_stays_shell_first() -> None:
     assert tool_names == {
         "bash",
         "read_file",
+        "edit_file",
         "write_file",
         "search_scratch_context",
     }

@@ -1,6 +1,7 @@
 """Tests for /generate-image endpoint."""
 
 import base64
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -26,6 +27,17 @@ def reset_adapter_cache():
     clear_image_adapter_cache()
     yield
     clear_image_adapter_cache()
+
+
+@pytest.fixture(autouse=True)
+def mock_image_agent_route():
+    resolved = SimpleNamespace(
+        model=GEMINI_IMAGE,
+        provider="gemini",
+        agent=SimpleNamespace(fallback_models=[]),
+    )
+    with patch("app.api.image.resolve_agent", new_callable=AsyncMock, return_value=resolved):
+        yield
 
 
 class TestImageGenerationEndpoint:

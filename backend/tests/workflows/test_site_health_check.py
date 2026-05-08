@@ -348,14 +348,14 @@ async def test_wake_persona_dispatches_one_project_scoped_wake_per_actionable_pr
     async def _session():
         yield db
 
-    agent_service = SimpleNamespace(
-        get_by_slug=AsyncMock(
-            return_value=SimpleNamespace(
-                primary_model_id="codex/gpt-5.4",
-                temperature=0.2,
-                thinking_level="medium",
-            )
-        )
+    resolved_persona = SimpleNamespace(
+        model="codex/gpt-5.4",
+        provider="codex",
+        agent=SimpleNamespace(
+            primary_model_id="codex/gpt-5.4",
+            temperature=0.2,
+            thinking_level="medium",
+        ),
     )
     result = HealthCheckResult(
         status="issues_found",
@@ -370,8 +370,11 @@ async def test_wake_persona_dispatches_one_project_scoped_wake_per_actionable_pr
 
     with (
         patch("app.db.async_session", _session),
-        patch("app.services.agent_service.get_agent_service", return_value=agent_service),
-        patch("app.services.agent_routing.get_provider_for_model", return_value="codex"),
+        patch(
+            "app.services.agent_routing_utils.resolve_agent",
+            new_callable=AsyncMock,
+            return_value=resolved_persona,
+        ),
         patch("app.workflows.persona_wake.agent_wake_task.run_no_wait") as mock_run_no_wait,
     ):
         await _wake_persona_with_site_findings(result)

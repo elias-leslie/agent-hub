@@ -138,7 +138,7 @@ def seed_alias_overrides() -> dict[str, str]:
         # Bare provider names resolve to current default model for that provider.
         "claude": CLAUDE_SONNET,
         "cloudflare": CF_GLM_4_7_FLASH,
-        "codex": CODEX_GPT_5_4_MINI,
+        "codex": CODEX_GPT_5_5,
         "deepseek": DEEPSEEK_V4_FLASH,
         "gemini": GEMINI_3_1_FLASH_LITE,
         "kimi-code": KIMI_CODE_FOR_CODING,

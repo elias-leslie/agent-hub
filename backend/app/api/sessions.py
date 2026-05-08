@@ -25,7 +25,7 @@ from app.api.schemas.sessions import (
     SessionPromoteResponse,
     SessionResponse,
 )
-from app.db import async_session, get_db
+from app.db import get_db
 from app.services.session_helpers import (
     build_event_responses,
     build_session_list_items,
@@ -196,39 +196,39 @@ async def heartbeat_existing_session(
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
     """Get a session by ID with all events."""
-    async with async_session() as db:
-        try:
-            session = await get_session_with_events(db, session_id)
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        return await build_full_session_response(db, session)
+    try:
+        session = await get_session_with_events(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return await build_full_session_response(db, session)
 
 
 @router.get("/sessions/{session_id}/events", response_model=SessionEventsResponse)
 async def get_session_events(
     session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
     event_type: Annotated[str | None, Query(description="Filter by event type")] = None,
     turn: Annotated[int | None, Query(description="Filter by turn number")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
 ) -> SessionEventsResponse:
     """Get session events with filtering and pagination."""
-    async with async_session() as db:
-        try:
-            await get_session_or_404(db, session_id)
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        events, total, max_turn = await query_session_events(
-            db, session_id, event_type, turn, page, page_size
-        )
-        return SessionEventsResponse(
-            session_id=session_id,
-            events=build_event_responses(events),
-            total=total,
-            max_turn=max_turn,
-        )
+    try:
+        await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    events, total, max_turn = await query_session_events(
+        db, session_id, event_type, turn, page, page_size
+    )
+    return SessionEventsResponse(
+        session_id=session_id,
+        events=build_event_responses(events),
+        total=total,
+        max_turn=max_turn,
+    )
 
 
 @router.post(
@@ -299,6 +299,7 @@ async def delete_session(
 
 @router.get("/sessions", response_model=SessionListResponse)
 async def list_sessions(
+    db: Annotated[AsyncSession, Depends(get_db)],
     project_id: Annotated[str | None, Query(description="Filter by project")] = None,
     status: Annotated[str | None, Query(description="Filter by status")] = None,
     agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
@@ -310,43 +311,42 @@ async def list_sessions(
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
     stored_status = _normalize_session_status_filter(status)
-    async with async_session() as db:
-        raw_stats = await list_sessions_with_stats(
-            db,
-            project_id=project_id,
-            status=stored_status,
-            agent_slug=agent_slug,
-            session_type=session_type,
-            page=page,
-            page_size=page_size,
-            parent_session_id=parent_session_id,
-            external_id=external_id,
-        )
-        sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
-            _normalize_list_sessions_stats(raw_stats)
-        )
-        if status and status.strip().lower() in _SESSION_LIVE_STATUS_ALIASES:
-            sessions = [session for session in sessions if _session_matches_live_status_alias(session, status)]
-            total = len(sessions)
-        owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
-            db,
-            {session.project_id for session in sessions},
-        )
-        return SessionListResponse(
-            sessions=build_session_list_items(
-                sessions,
-                msg_counts,
-                token_stats,
-                event_counts=event_counts,
-                child_counts=child_counts,
-                active_child_counts=active_child_counts,
-                owner_session_ids=owner_session_ids,
-                specialist_session_ids=specialist_session_ids,
-            ),
-            total=total,
-            page=page,
-            page_size=page_size,
-        )
+    raw_stats = await list_sessions_with_stats(
+        db,
+        project_id=project_id,
+        status=stored_status,
+        agent_slug=agent_slug,
+        session_type=session_type,
+        page=page,
+        page_size=page_size,
+        parent_session_id=parent_session_id,
+        external_id=external_id,
+    )
+    sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
+        _normalize_list_sessions_stats(raw_stats)
+    )
+    if status and status.strip().lower() in _SESSION_LIVE_STATUS_ALIASES:
+        sessions = [session for session in sessions if _session_matches_live_status_alias(session, status)]
+        total = len(sessions)
+    owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
+        db,
+        {session.project_id for session in sessions},
+    )
+    return SessionListResponse(
+        sessions=build_session_list_items(
+            sessions,
+            msg_counts,
+            token_stats,
+            event_counts=event_counts,
+            child_counts=child_counts,
+            active_child_counts=active_child_counts,
+            owner_session_ids=owner_session_ids,
+            specialist_session_ids=specialist_session_ids,
+        ),
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/sessions/{session_id}/close", response_model=CloseSessionResponse)
