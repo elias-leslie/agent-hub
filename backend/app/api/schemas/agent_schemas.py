@@ -187,7 +187,10 @@ class AgentRoutingUpdateRequest(BaseModel):
     )
     risk_tier: str | None = Field(default=None, pattern="^(low|normal|elevated|critical)$")
     cost_policy: str | None = Field(default=None, max_length=40)
-    subscription_policy: str | None = Field(default=None, max_length=40)
+    subscription_policy: str | None = Field(
+        default=None,
+        pattern="^(prefer_subscription|require_subscription|subscription_only|allow_any)$",
+    )
     exploration_policy: str | None = Field(default=None, max_length=40)
     quality_floor: float | None = Field(default=None, ge=0, le=100)
     manual_route: ManualRoutePayload | None = None

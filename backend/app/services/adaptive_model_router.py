@@ -35,7 +35,44 @@ logger = logging.getLogger(__name__)
 RoutingMode = Literal["manual_locked", "auto_shadow", "auto_canary", "auto"]
 
 ROUTING_MODES: set[str] = {"manual_locked", "auto_shadow", "auto_canary", "auto"}
-SYSTEM_DEFAULT_MODE: RoutingMode = "auto_shadow"
+SYSTEM_DEFAULT_MODE: RoutingMode = "auto"
+PROFILE_METADATA_SOURCE = "auto-routing-enable-v1"
+MANAGED_PROFILE_SOURCES = {"migration", "startup_seed"}
+
+PROVIDER_ROUTING_METADATA: dict[str, dict[str, Any]] = {
+    "claude": {
+        "subscription_first": True,
+        "routine_auto_penalty": 2.0,
+        "notes": "Use Claude subscription for strong fit, but reserve Opus-heavy work for protected/escalation paths.",
+    },
+    "codex": {
+        "subscription_first": True,
+        "routine_auto_penalty": 8.0,
+        "notes": "Reserve Codex subscription for protected, verification, escalation, or explicit quality-biased routing.",
+    },
+    "kimi-code": {
+        "subscription_first": True,
+        "coding_auto_bonus": 4.0,
+        "code_review_auto_bonus": 2.0,
+        "noncoding_auto_penalty": 5.0,
+        "notes": "Preferred routine coding subscription path while Codex quota is conserved.",
+    },
+    "minimax": {
+        "subscription_first": True,
+        "routine_auto_bonus": 2.0,
+        "planning_auto_bonus": 4.0,
+        "reasoning_auto_bonus": 2.0,
+        "prompt_auto_bonus": 2.0,
+        "notes": "Preferred routine planning/reasoning subscription path when fit is close.",
+    },
+    "gemini": {
+        "subscription_first": False,
+        "routine_auto_bonus": 1.0,
+        "utility_auto_bonus": 8.0,
+        "vision_auto_bonus": 3.0,
+        "notes": "Useful low-cost/free-tier utility path.",
+    },
+}
 
 CRITICAL_AGENT_SLUGS = {
     "persona",
@@ -67,11 +104,7 @@ UTILITY_AGENT_SLUGS = {
     "summarizer",
 }
 
-LOW_RISK_CANARY_OVERRIDES: tuple[tuple[str, str, float], ...] = (
-    ("note-formatter", "summarization", 5.0),
-    ("note-titler", "summarization", 5.0),
-    ("summarizer", "summarization", 5.0),
-)
+LOW_RISK_CANARY_OVERRIDES: tuple[tuple[str, str, float], ...] = ()
 
 DIMENSION_SEEDS: tuple[tuple[str, str, str, str, str, float], ...] = (
     ("coding", "Coding", "quality", "score", "up", 0.20),
@@ -104,23 +137,24 @@ DIMENSION_SEEDS: tuple[tuple[str, str, str, str, str, float], ...] = (
 )
 
 WORKLOAD_SEEDS: dict[str, dict[str, Any]] = {
-    "general": {"label": "General", "requirements": {}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
+    "general": {"label": "General", "requirements": {}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "planning": {"label": "Planning/Orchestration", "requirements": {"planning_orchestration": 1.0, "reasoning": 0.7, "instruction": 0.5}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
     "jenny_planning": {"label": "Jenny Planning", "requirements": {"planning_orchestration": 1.0, "tool_use": 0.7, "reasoning": 0.8}, "constraints": {}, "risk": "critical", "verifier": "required", "mode": "manual_locked"},
-    "coding_impl": {"label": "Coding Implementation", "requirements": {"coding": 1.0, "swe_agentic": 0.9, "tool_use": 0.7}, "constraints": {"tool_use": True}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
-    "code_review": {"label": "Code Review", "requirements": {"code_review": 1.0, "reasoning": 0.8, "strict_json": 0.4}, "constraints": {}, "risk": "elevated", "verifier": "optional", "mode": "auto_shadow"},
+    "coding_impl": {"label": "Coding Implementation", "requirements": {"coding": 1.0, "swe_agentic": 0.9, "tool_use": 0.7}, "constraints": {"tool_use": True}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "code_review": {"label": "Code Review", "requirements": {"code_review": 1.0, "reasoning": 0.8, "strict_json": 0.4}, "constraints": {}, "risk": "elevated", "verifier": "optional", "mode": "auto"},
     "verifier": {"label": "Verifier", "requirements": {"verification": 1.0, "reasoning": 0.9, "strict_json": 0.8}, "constraints": {}, "risk": "critical", "verifier": "required", "mode": "manual_locked"},
     "finance_research": {"label": "Finance Research", "requirements": {"financial_analysis": 1.0, "data_research": 0.8, "reasoning": 0.9}, "constraints": {}, "risk": "critical", "verifier": "required", "mode": "manual_locked"},
     "trade_strategy": {"label": "Trade Strategy", "requirements": {"financial_analysis": 1.0, "market_analysis": 0.9, "reasoning": 1.0}, "constraints": {}, "risk": "critical", "verifier": "required", "mode": "manual_locked"},
     "market_scan": {"label": "Market Scan", "requirements": {"market_analysis": 1.0, "data_research": 0.8, "summarization": 0.4}, "constraints": {}, "risk": "critical", "verifier": "required", "mode": "manual_locked"},
-    "data_analysis": {"label": "Data Analysis", "requirements": {"data_analysis": 1.0, "math": 0.6, "reasoning": 0.6}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
-    "deep_research": {"label": "Deep Research", "requirements": {"data_research": 1.0, "reasoning": 0.8, "long_context": 0.6}, "constraints": {}, "risk": "elevated", "verifier": "optional", "mode": "auto_shadow"},
-    "prompt_building": {"label": "Prompt Building", "requirements": {"prompt_building": 1.0, "instruction": 0.8}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
-    "summarization": {"label": "Summarization", "requirements": {"summarization": 1.0, "instruction": 0.5, "latency": 0.4}, "constraints": {}, "risk": "low", "verifier": "optional", "mode": "auto_shadow"},
-    "memory_curation": {"label": "Memory Curation", "requirements": {"memory_curation": 1.0, "summarization": 0.7, "instruction": 0.6}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
-    "ui_design": {"label": "UI Design", "requirements": {"ux_design": 1.0, "vision": 0.5, "instruction": 0.5}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
-    "vision_qa": {"label": "Vision QA", "requirements": {"vision": 1.0, "reasoning": 0.5}, "constraints": {"vision": True}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
+    "data_analysis": {"label": "Data Analysis", "requirements": {"data_analysis": 1.0, "math": 0.6, "reasoning": 0.6}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "deep_research": {"label": "Deep Research", "requirements": {"data_research": 1.0, "reasoning": 0.8, "long_context": 0.6}, "constraints": {}, "risk": "elevated", "verifier": "optional", "mode": "auto"},
+    "prompt_building": {"label": "Prompt Building", "requirements": {"prompt_building": 1.0, "instruction": 0.8}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "summarization": {"label": "Summarization", "requirements": {"summarization": 1.0, "instruction": 0.5, "latency": 0.4}, "constraints": {}, "risk": "low", "verifier": "optional", "mode": "auto"},
+    "memory_curation": {"label": "Memory Curation", "requirements": {"memory_curation": 1.0, "summarization": 0.7, "instruction": 0.6}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "ui_design": {"label": "UI Design", "requirements": {"ux_design": 1.0, "vision": 0.5, "instruction": 0.5}, "constraints": {}, "risk": "normal", "verifier": "optional", "mode": "auto"},
+    "vision_qa": {"label": "Vision QA", "requirements": {"vision": 1.0, "reasoning": 0.5}, "constraints": {"vision": True}, "risk": "normal", "verifier": "optional", "mode": "auto"},
     "image_generation": {"label": "Image Generation", "requirements": {"image_generation": 1.0, "ux_design": 0.4}, "constraints": {"image_generation": True}, "risk": "normal", "verifier": "optional", "mode": "manual_locked"},
-    "voice_response": {"label": "Voice Response", "requirements": {"audio": 1.0, "latency": 0.7, "instruction": 0.6}, "constraints": {"audio": True}, "risk": "normal", "verifier": "optional", "mode": "auto_shadow"},
+    "voice_response": {"label": "Voice Response", "requirements": {"audio": 1.0, "latency": 0.7, "instruction": 0.6}, "constraints": {"audio": True}, "risk": "normal", "verifier": "optional", "mode": "auto"},
 }
 
 
@@ -195,9 +229,37 @@ async def ensure_adaptive_routing_seed_data(db: AsyncSession) -> int:
         )
         inserted += 1
 
-    existing_workloads = set((await db.execute(select(WorkloadProfile.key))).scalars().all())
+    existing_workloads = {
+        workload.key: workload
+        for workload in (await db.execute(select(WorkloadProfile))).scalars().all()
+    }
     for key, data in WORKLOAD_SEEDS.items():
-        if key in existing_workloads:
+        workload = existing_workloads.get(key)
+        if workload is not None:
+            before = (
+                workload.label,
+                workload.requirement_deltas,
+                workload.hard_constraints,
+                workload.risk_tier,
+                workload.verifier_policy,
+                workload.default_routing_mode,
+            )
+            workload.label = data["label"]
+            workload.requirement_deltas = data["requirements"]
+            workload.hard_constraints = data["constraints"]
+            workload.risk_tier = data["risk"]
+            workload.verifier_policy = data["verifier"]
+            workload.default_routing_mode = data["mode"]
+            after = (
+                workload.label,
+                workload.requirement_deltas,
+                workload.hard_constraints,
+                workload.risk_tier,
+                workload.verifier_policy,
+                workload.default_routing_mode,
+            )
+            if before != after:
+                inserted += 1
             continue
         db.add(
             WorkloadProfile(
@@ -246,18 +308,48 @@ async def _ensure_agent_profiles_and_manual_routes(db: AsyncSession) -> int:
     }
     active_agent_slugs = {agent.slug for agent in agents}
     for agent in agents:
+        critical = agent.slug in CRITICAL_AGENT_SLUGS
+        expected_mode: RoutingMode = "manual_locked" if critical else SYSTEM_DEFAULT_MODE
+        expected_risk = "critical" if critical else "normal"
+        expected_exploration = "disabled" if critical else "auto"
         if agent.slug not in existing_profiles:
-            critical = agent.slug in CRITICAL_AGENT_SLUGS
             db.add(
                 AgentRoutingProfile(
                     agent_slug=agent.slug,
-                    default_routing_mode="manual_locked" if critical else "auto_shadow",
-                    risk_tier="critical" if critical else "normal",
-                    exploration_policy="disabled" if critical else "shadow_only",
-                    metadata_={"source": "startup_seed"},
+                    default_routing_mode=expected_mode,
+                    risk_tier=expected_risk,
+                    exploration_policy=expected_exploration,
+                    cost_policy="subscription_first",
+                    subscription_policy="prefer_subscription",
+                    metadata_={"source": PROFILE_METADATA_SOURCE},
                 )
             )
             inserted += 1
+        else:
+            profile = await db.get(AgentRoutingProfile, agent.slug)
+            if profile is not None and _should_reconcile_profile(profile, critical):
+                before = (
+                    profile.default_routing_mode,
+                    profile.risk_tier,
+                    profile.exploration_policy,
+                    profile.metadata_,
+                )
+                profile.default_routing_mode = expected_mode
+                profile.risk_tier = expected_risk
+                profile.exploration_policy = expected_exploration
+                profile.cost_policy = profile.cost_policy or "subscription_first"
+                profile.subscription_policy = profile.subscription_policy or "prefer_subscription"
+                metadata = dict(profile.metadata_ or {})
+                metadata["source"] = PROFILE_METADATA_SOURCE
+                profile.metadata_ = metadata
+                after = (
+                    profile.default_routing_mode,
+                    profile.risk_tier,
+                    profile.exploration_policy,
+                    profile.metadata_,
+                )
+                if before != after:
+                    inserted += 1
         if agent.slug not in existing_manual:
             db.add(
                 ManualModelRoute(
@@ -292,6 +384,17 @@ async def _ensure_agent_profiles_and_manual_routes(db: AsyncSession) -> int:
     return inserted
 
 
+def _should_reconcile_profile(profile: AgentRoutingProfile, critical: bool) -> bool:
+    """Return true when startup may manage profile mode defaults."""
+    metadata = profile.metadata_ or {}
+    source = metadata.get("source")
+    if source in {"manual_override", "user_override"}:
+        return False
+    if critical:
+        return True
+    return source in MANAGED_PROFILE_SOURCES or profile.default_routing_mode == "auto_shadow"
+
+
 async def refresh_catalog_model_availability(db: AsyncSession) -> int:
     """Refresh availability rows for active catalog models using configured credentials."""
     credential_manager = get_credential_manager()
@@ -300,10 +403,24 @@ async def refresh_catalog_model_availability(db: AsyncSession) -> int:
         (row.model_id, row.provider): row
         for row in (await db.execute(select(ModelAvailability))).scalars().all()
     }
-    entitlement_by_provider = await _refresh_provider_entitlements(db, {model.provider for model in models})
     changed = 0
+    entitlement_by_provider, entitlement_changes = await _refresh_provider_entitlements(
+        db,
+        {model.provider for model in models},
+    )
+    changed += entitlement_changes
+    active_entitled_providers = set(
+        (
+            await db.execute(
+                select(ProviderEntitlement.provider).where(
+                    ProviderEntitlement.enabled == True,  # noqa: E712
+                    ProviderEntitlement.status == "active",
+                )
+            )
+        ).scalars().all()
+    )
     for model in models:
-        available = _provider_available(model.provider, credential_manager)
+        available = _provider_available(model.provider, credential_manager) or model.provider in active_entitled_providers
         row = existing_rows.get((model.id, model.provider))
         snapshot = {
             "vision": bool(model.has_vision),
@@ -358,7 +475,7 @@ async def resolve_model_route(
     canary_percent = _canary_percent_from_policy(context, override)
     manual = await _get_manual_route(db, agent.slug, workload_key)
     manual_chain = _manual_chain(agent, manual)
-    auto_route = await _auto_route(db, agent, workload, context, manual_chain)
+    auto_route = await _auto_route(db, agent, workload, profile, context, manual_chain)
     execute_auto = mode == "auto" or (mode == "auto_canary" and _canary_hit(agent.slug, workload_key, context, canary_percent))
     if mode in {"manual_locked", "auto_shadow"}:
         selected = manual_chain
@@ -470,35 +587,54 @@ async def update_performance_from_verifier_outcome(
     row.confidence = min(1.0, row.confidence + 0.05)
 
 
-async def _refresh_provider_entitlements(db: AsyncSession, providers: set[str]) -> dict[str, int]:
+async def _refresh_provider_entitlements(db: AsyncSession, providers: set[str]) -> tuple[dict[str, int], int]:
     credential_manager = get_credential_manager()
     rows = {
         row.provider: row
         for row in (await db.execute(select(ProviderEntitlement).where(ProviderEntitlement.enabled == True))).scalars().all()  # noqa: E712
     }
     ids: dict[str, int] = {}
+    changed = 0
     for provider in providers:
         available = _provider_available(provider, credential_manager)
         auth_mode = _provider_auth_mode(provider)
+        metadata = _provider_entitlement_metadata(provider)
         row = rows.get(provider)
         if row is None:
+            metadata["last_credential_probe"] = "active" if available else "missing"
             row = ProviderEntitlement(
                 provider=provider,
                 auth_mode=auth_mode,
                 status="active" if available else "missing",
                 discovery_source="credential_cache",
-                metadata_={"subscription_first": provider in {"codex", "claude", "kimi-code", "minimax"}},
+                metadata_=metadata,
                 enabled=True,
                 last_verified_at=datetime.now(UTC),
             )
             db.add(row)
             await db.flush()
+            changed += 1
         else:
+            before = (row.auth_mode, row.status, row.metadata_)
+            existing_status = row.status
+            probe_status = "active" if available else "missing"
             row.auth_mode = auth_mode
-            row.status = "active" if available else "missing"
+            row.status = "active" if available else existing_status
+            row.metadata_ = {
+                **metadata,
+                **(row.metadata_ or {}),
+                "last_credential_probe": probe_status,
+            }
             row.last_verified_at = datetime.now(UTC)
+            if before != (row.auth_mode, row.status, row.metadata_):
+                changed += 1
         ids[provider] = row.id
-    return ids
+    return ids, changed
+
+
+def _provider_entitlement_metadata(provider: str) -> dict[str, Any]:
+    default = {"subscription_first": provider in {"codex", "claude", "kimi-code", "minimax"}}
+    return {**default, **PROVIDER_ROUTING_METADATA.get(provider, {})}
 
 
 def _provider_auth_mode(provider: str) -> str:
@@ -539,6 +675,8 @@ async def _infer_workload(db: AsyncSession, agent: AgentDTO, context: RoutingCon
             return "coding_impl"
         if {"financial_analysis", "market_analysis"} & weighted:
             return "finance_research"
+        if "planning_orchestration" in weighted:
+            return "planning"
         if "data_research" in weighted:
             return "deep_research"
         if "data_analysis" in weighted:
@@ -567,6 +705,10 @@ async def _infer_workload(db: AsyncSession, agent: AgentDTO, context: RoutingCon
         return "vision_qa"
     if "review" in task_type or phase == "review" or agent.slug in {"reviewer", "critic"}:
         return "code_review"
+    if agent.slug in {"planner", "supervisor", "task-sweep-orchestrator", "triager", "complexity-assessor"}:
+        return "planning"
+    if agent.slug in {"researcher", "analyst", "reasoner"}:
+        return "deep_research"
     if "research" in task_type:
         return "deep_research"
     if "data" in task_type:
@@ -610,7 +752,10 @@ async def _get_agent_profile(db: AsyncSession, agent: AgentDTO) -> AgentRoutingP
         agent_slug=agent.slug,
         default_routing_mode="manual_locked" if critical else SYSTEM_DEFAULT_MODE,
         risk_tier="critical" if critical else "normal",
-        exploration_policy="disabled" if critical else "shadow_only",
+        cost_policy="subscription_first",
+        subscription_policy="prefer_subscription",
+        exploration_policy="disabled" if critical else "auto",
+        metadata_={"source": PROFILE_METADATA_SOURCE},
     )
 
 
@@ -714,6 +859,7 @@ async def _auto_route(
     db: AsyncSession,
     agent: AgentDTO,
     workload: WorkloadProfile,
+    profile: AgentRoutingProfile,
     context: RoutingContext,
     manual_chain: _RouteCandidate,
 ) -> _RouteCandidate:
@@ -741,13 +887,16 @@ async def _auto_route(
     if context.has_vision_input:
         constraints["vision"] = True
     risk_tier = context.routing_risk_tier or workload.risk_tier
+    cost_policy = _effective_cost_policy(context.routing_cost_preference, profile.cost_policy)
+    subscription_policy = profile.subscription_policy or "prefer_subscription"
+    quality_floor = profile.quality_floor
     excluded_providers = {provider.lower() for provider in context.routing_exclude_providers}
     scored: list[tuple[float, ModelCatalogEntry, dict[str, Any]]] = []
     for row in rows:
         if row.provider.lower() in excluded_providers:
             continue
         availability = availability_rows.get(row.id)
-        if availability and (not availability.routable or not availability.enabled):
+        if not _availability_allows_routing(availability):
             continue
         if not _model_satisfies_constraints(row, constraints, context):
             continue
@@ -759,15 +908,22 @@ async def _auto_route(
                 or (entitlement.metadata_ or {}).get("subscription_first")
             )
         )
+        if subscription_policy in {"require_subscription", "subscription_only"} and not subscription_backed:
+            continue
         score, breakdown = _score_model(
             row,
             requirements,
             capability_scores.get(row.id, {}),
             perf_scores.get(row.id),
             risk_tier,
-            cost_preference=context.routing_cost_preference,
+            cost_policy=cost_policy,
+            subscription_policy=subscription_policy,
             subscription_backed=subscription_backed,
+            provider_policy=entitlement.metadata_ if entitlement else {},
+            workload_requirements=requirements,
         )
+        if quality_floor is not None and breakdown["fit_raw"] < float(quality_floor):
+            continue
         scored.append((score, row, breakdown))
     scored.sort(key=lambda item: item[0], reverse=True)
     if not scored:
@@ -784,7 +940,9 @@ async def _auto_route(
         "score": scored[0][0],
         "requirements": requirements,
         "risk_tier": risk_tier,
-        "cost_preference": context.routing_cost_preference or "balanced",
+        "cost_policy": cost_policy,
+        "subscription_policy": subscription_policy,
+        "quality_floor": quality_floor,
         "excluded_providers": sorted(excluded_providers),
         "primary": scored[0][2],
         "candidates": [
@@ -849,6 +1007,18 @@ def _model_satisfies_constraints(row: ModelCatalogEntry, constraints: dict[str, 
     return not (context.max_context_tokens and row.context_window < context.max_context_tokens)
 
 
+def _availability_allows_routing(availability: ModelAvailability | None) -> bool:
+    return bool(availability and availability.enabled and availability.routable)
+
+
+def _effective_cost_policy(requested: str | None, profile_policy: str | None) -> str:
+    if requested in {"quality", "balanced", "low_cost"}:
+        return requested
+    if profile_policy in {"quality", "balanced", "low_cost", "subscription_first"}:
+        return profile_policy
+    return "balanced"
+
+
 def _score_model(
     row: ModelCatalogEntry,
     requirements: dict[str, float],
@@ -856,8 +1026,11 @@ def _score_model(
     perf: ModelWorkloadPerformance | None,
     risk_tier: str,
     *,
-    cost_preference: str | None = None,
+    cost_policy: str = "balanced",
+    subscription_policy: str = "prefer_subscription",
     subscription_backed: bool = False,
+    provider_policy: dict[str, Any] | None = None,
+    workload_requirements: dict[str, float] | None = None,
 ) -> tuple[float, dict[str, Any]]:
     base_scores = {
         "coding": row.score_coding,
@@ -897,28 +1070,93 @@ def _score_model(
     if perf:
         reliability_penalty += (perf.timeout_rate or 0.0) * 0.25
         reliability_penalty += (perf.fallback_rate or 0.0) * 0.10
+    adjustment_multiplier = 0.5 if risk_tier == "elevated" else 1.0
+    routing_adjustment = 0.0
     if risk_tier == "critical":
         observed_weight = 0.30 if perf_score is not None else 0.0
         final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - reliability_penalty
     elif risk_tier == "elevated":
         observed_weight = 0.20 if perf_score is not None else 0.0
-        final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - reliability_penalty
+        routing_adjustment = _routing_policy_adjustment(
+            cost_policy,
+            subscription_policy,
+            subscription_backed,
+            provider_policy,
+            workload_requirements or requirements,
+            penalty_multiplier=adjustment_multiplier,
+        )
+        final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - reliability_penalty + routing_adjustment
     else:
         observed_weight = 0.15 if perf_score is not None else 0.0
-        cost_multiplier = {"quality": 0.25, "balanced": 1.0, "low_cost": 2.0}.get(cost_preference or "balanced", 1.0)
+        cost_multiplier = {
+            "quality": 0.25,
+            "balanced": 1.0,
+            "low_cost": 2.0,
+            "subscription_first": 0.75,
+        }.get(cost_policy, 1.0)
         raw_cost = max(0.0, row.cost_input_per_m + row.cost_output_per_m)
         cost_penalty = min(16.0, (raw_cost / 10.0) * cost_multiplier)
         if subscription_backed:
             cost_penalty *= 0.2
-        final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - cost_penalty - reliability_penalty
+        routing_adjustment = _routing_policy_adjustment(
+            cost_policy,
+            subscription_policy,
+            subscription_backed,
+            provider_policy,
+            workload_requirements or requirements,
+            penalty_multiplier=adjustment_multiplier,
+        )
+        final = (fit * (1.0 - observed_weight)) + ((perf_score or 0.0) * observed_weight) - cost_penalty - reliability_penalty + routing_adjustment
     return final, {
+        "fit_raw": fit,
         "fit": round(fit, 3),
         "observed": perf_score,
-        "cost_preference": cost_preference or "balanced",
+        "cost_policy": cost_policy,
+        "subscription_policy": subscription_policy,
         "subscription_backed": subscription_backed,
         "reliability_penalty": round(reliability_penalty, 3),
+        "routing_adjustment": round(routing_adjustment, 3),
         "scores": {dim: round(base_scores.get(dim, 0.0), 3) for dim in requirements},
     }
+
+
+def _routing_policy_adjustment(
+    cost_policy: str,
+    subscription_policy: str,
+    subscription_backed: bool,
+    provider_policy: dict[str, Any] | None,
+    requirements: dict[str, float],
+    *,
+    penalty_multiplier: float,
+) -> float:
+    policy = provider_policy or {}
+    weighted = {key for key, value in requirements.items() if float(value or 0) > 0}
+    adjustment = 0.0
+    if subscription_policy == "prefer_subscription" and subscription_backed:
+        adjustment += 1.0
+    if cost_policy == "quality":
+        penalty_multiplier *= 0.25
+    if cost_policy == "low_cost" and not subscription_backed:
+        adjustment -= 2.0
+    adjustment += float(policy.get("routine_auto_bonus") or 0.0)
+    if {"coding", "swe_agentic"} & weighted:
+        adjustment += float(policy.get("coding_auto_bonus") or 0.0)
+    elif "code_review" in weighted:
+        adjustment += float(policy.get("code_review_auto_bonus") or 0.0)
+    else:
+        adjustment -= float(policy.get("noncoding_auto_penalty") or 0.0) * penalty_multiplier
+    if {"summarization", "memory_curation", "latency"} & weighted:
+        adjustment += float(policy.get("utility_auto_bonus") or 0.0)
+    if "vision" in weighted:
+        adjustment += float(policy.get("vision_auto_bonus") or 0.0)
+    if "planning_orchestration" in weighted:
+        adjustment += float(policy.get("planning_auto_bonus") or 0.0)
+    if {"reasoning", "data_research", "data_analysis"} & weighted:
+        adjustment += float(policy.get("reasoning_auto_bonus") or 0.0)
+    if "prompt_building" in weighted:
+        adjustment += float(policy.get("prompt_auto_bonus") or 0.0)
+    adjustment -= float(policy.get("routine_auto_penalty") or 0.0) * penalty_multiplier
+    return adjustment
 
 
 def _provider_diverse_fallbacks(scored: list[tuple[float, ModelCatalogEntry, dict[str, Any]]], primary_provider: str, *, limit: int) -> list[str]:

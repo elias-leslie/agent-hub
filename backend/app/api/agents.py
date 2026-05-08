@@ -359,8 +359,12 @@ async def update_agent_routing(
     if profile is None:
         profile = AgentRoutingProfile(agent_slug=slug)
         db.add(profile)
+    fields_set = getattr(request, "model_fields_set", set())
     if request.default_routing_mode is not None:
         profile.default_routing_mode = request.default_routing_mode
+        metadata = dict(profile.metadata_ or {})
+        metadata["source"] = "user_override"
+        profile.metadata_ = metadata
     if request.risk_tier is not None:
         profile.risk_tier = request.risk_tier
     if request.cost_policy is not None:
@@ -369,10 +373,13 @@ async def update_agent_routing(
         profile.subscription_policy = request.subscription_policy
     if request.exploration_policy is not None:
         profile.exploration_policy = request.exploration_policy
-    if request.quality_floor is not None:
+    if "quality_floor" in fields_set:
         profile.quality_floor = request.quality_floor
     if request.manual_route is not None:
         await _upsert_manual_route(db, agent_slug=slug, workload_profile=None, payload=request.manual_route)
+        metadata = dict(profile.metadata_ or {})
+        metadata["source"] = "manual_override"
+        profile.metadata_ = metadata
     await db.commit()
     return await _build_routing_response(db, slug)
 

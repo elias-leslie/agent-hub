@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 
 logger = logging.getLogger(__name__)
+
+_LEADING_REASONING_RE = re.compile(r"\A\s*<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
 
 
 def _image_data_uri(source: object) -> str | None:
@@ -237,7 +240,7 @@ def parse_completion_response(response: ChatCompletion, provider_name: str) -> C
     reasoning = getattr(choice.message, "reasoning_content", None)
     if raw_content is None and reasoning:
         raw_content = reasoning
-    content = str(raw_content) if raw_content is not None else ""
+    content = strip_visible_reasoning_tags(str(raw_content) if raw_content is not None else "")
     tool_calls = [parse_tool_call(tc) for tc in choice.message.tool_calls] if choice.message.tool_calls else None
     return CompletionResult(
         content=content,
@@ -249,6 +252,11 @@ def parse_completion_response(response: ChatCompletion, provider_name: str) -> C
         raw_response=response,
         tool_calls=tool_calls,
     )
+
+
+def strip_visible_reasoning_tags(content: str) -> str:
+    """Remove one provider-leaked leading XML-ish reasoning block."""
+    return _LEADING_REASONING_RE.sub("", content, count=1).strip()
 
 
 def _chunk_to_event(chunk: ChatCompletionChunk) -> StreamEvent | None:

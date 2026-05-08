@@ -87,7 +87,7 @@ class WorkloadProfile(Base):
     hard_constraints: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     risk_tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default="normal")
     verifier_policy: Mapped[str] = mapped_column(String(40), nullable=False, server_default="optional")
-    default_routing_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="auto_shadow")
+    default_routing_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="auto")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -103,7 +103,7 @@ class AgentRoutingProfile(Base):
     agent_slug: Mapped[str] = mapped_column(
         String(100), ForeignKey("agents.slug", ondelete="CASCADE"), primary_key=True
     )
-    default_routing_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="auto_shadow")
+    default_routing_mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="auto")
     risk_tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default="normal")
     cost_policy: Mapped[str] = mapped_column(String(40), nullable=False, server_default="subscription_first")
     subscription_policy: Mapped[str] = mapped_column(String(40), nullable=False, server_default="prefer_subscription")
