@@ -5,14 +5,16 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, NoReturn
 
 from app.adapters.base import (
     CompletionResult,
     Message,
     ProviderError,
+    RateLimitError,
     StreamEvent,
 )
+from app.adapters.errors import extract_retry_delay
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,15 @@ VALID_BLOCK_FIELDS: dict[str, set[str]] = {
     "tool_use": {"type", "id", "name", "input"},
     "tool_result": {"type", "tool_use_id", "content", "is_error"},
     "image": {"type", "source"},
+}
+
+MODELS_WITH_DEPRECATED_TEMPERATURE = {"claude-opus-4-7"}
+DIRECT_THINKING_BUDGETS: dict[str, int] = {
+    "low": 1024,
+    "medium": 2048,
+    "high": 4096,
+    "xhigh": 8192,
+    "ultrathink": 8192,
 }
 
 
@@ -263,9 +274,76 @@ def _build_create_kwargs(
     }
     if system_text:
         create_kwargs["system"] = apply_cache_control(system_text, cache_retention)
-    if temperature != 1.0:
+    if temperature != 1.0 and api_model not in MODELS_WITH_DEPRECATED_TEMPERATURE:
         create_kwargs["temperature"] = temperature
     return create_kwargs
+
+
+def _apply_optional_create_kwargs(
+    create_kwargs: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> None:
+    tools = kwargs.get("tools")
+    if tools:
+        create_kwargs["tools"] = tools
+
+    thinking_level = kwargs.get("thinking_level")
+    if thinking_level:
+        create_kwargs["max_tokens"] = max(int(create_kwargs["max_tokens"]), 2048)
+        thinking_config = _get_direct_thinking_config(
+            str(thinking_level),
+            max_tokens=int(create_kwargs["max_tokens"]),
+        )
+        if thinking_config:
+            create_kwargs["thinking"] = thinking_config
+
+
+def _get_direct_thinking_config(
+    thinking_level: str,
+    max_tokens: int,
+) -> dict[str, object] | None:
+    target_budget = DIRECT_THINKING_BUDGETS.get(thinking_level)
+    if target_budget is None:
+        return None
+    available_budget = max(max_tokens - 1024, 1024)
+    return {"type": "enabled", "budget_tokens": min(target_budget, available_budget)}
+
+
+def _is_temperature_deprecated_error(error: Exception) -> bool:
+    return "`temperature` is deprecated" in str(error)
+
+
+async def _create_with_temperature_retry(
+    client: Any,
+    create_kwargs: dict[str, Any],
+) -> Any:
+    try:
+        return await client.messages.create(**create_kwargs)
+    except Exception as exc:
+        if "temperature" not in create_kwargs or not _is_temperature_deprecated_error(exc):
+            raise
+        retry_kwargs = dict(create_kwargs)
+        retry_kwargs.pop("temperature", None)
+        logger.info("Claude direct API rejected temperature; retrying without it")
+        return await client.messages.create(**retry_kwargs)
+
+
+def _raise_direct_api_error(error: Exception, provider_name: str) -> NoReturn:
+    status_code = getattr(error, "status_code", None)
+    if status_code == 429 or type(error).__name__ == "RateLimitError":
+        raise RateLimitError(
+            provider=provider_name,
+            retry_after=extract_retry_delay(error),
+            quota_details={"message": str(error)},
+        ) from error
+
+    retriable = bool(isinstance(status_code, int) and status_code >= 500)
+    raise ProviderError(
+        f"Claude direct API error: {error}",
+        provider=provider_name,
+        retriable=retriable,
+        status_code=status_code if isinstance(status_code, int) else None,
+    ) from error
 
 
 def _parse_completion_response(
@@ -314,10 +392,16 @@ async def complete_direct(
         api_model, api_messages, system_text,
         max_tokens or 4096, temperature, cache_retention,
     )
+    _apply_optional_create_kwargs(create_kwargs, kwargs)
 
     client = _build_client(credential, cred_type)
     try:
-        response = await client.messages.create(**create_kwargs)
+        try:
+            response = await _create_with_temperature_retry(client, create_kwargs)
+        except ProviderError:
+            raise
+        except Exception as error:
+            _raise_direct_api_error(error, provider_name)
         return _parse_completion_response(response, api_model, provider_name, start_time)
     finally:
         await client.close()
@@ -380,19 +464,7 @@ async def stream_direct(
         api_model, api_messages, system_text,
         max_tokens or 4096, temperature, cache_retention,
     )
-
-    tools = kwargs.get("tools")
-    if tools:
-        create_kwargs["tools"] = tools
-
-    thinking_level = kwargs.get("thinking_level")
-    if thinking_level:
-        from app.adapters.claude_utils import get_claude_thinking_config
-
-        thinking_config = get_claude_thinking_config(thinking_level)
-        if thinking_config:
-            create_kwargs["thinking"] = thinking_config
-            create_kwargs["max_tokens"] = max(create_kwargs["max_tokens"], 1024)
+    _apply_optional_create_kwargs(create_kwargs, kwargs)
 
     abort_event: asyncio.Event | None = kwargs.get("abort_event")
 
