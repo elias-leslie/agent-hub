@@ -135,6 +135,13 @@ def _build_outcome_summary(records: list[dict[str, Any]]) -> OutcomeSummary:
     )
 
 
+def _record_value(record: Any, key: str, default: Any = None) -> Any:
+    """Read a field from a row snapshot or ORM object."""
+    if isinstance(record, dict):
+        return record.get(key, default)
+    return getattr(record, key, default)
+
+
 def _accumulate_injection_record(
     record: Any,
     period: str,
@@ -143,12 +150,12 @@ def _accumulate_injection_record(
     normalized: list[dict[str, Any]],
 ) -> None:
     """Accumulate one injection record into variant and period buckets."""
-    loaded = record.memories_loaded or []
-    cited = record.memories_cited or []
-    task_succeeded = record.task_succeeded
+    loaded = _record_value(record, "memories_loaded") or []
+    cited = _record_value(record, "memories_cited") or []
+    task_succeeded = _record_value(record, "task_succeeded")
     normalized.append({"task_succeeded": task_succeeded})
 
-    variant = record.variant or "BASELINE"
+    variant = _record_value(record, "variant") or "BASELINE"
     vb = variant_data[variant]
     vb["count"] += 1
     if task_succeeded is True:
@@ -157,12 +164,12 @@ def _accumulate_injection_record(
         vb["fail"] += 1
     else:
         vb["unknown"] += 1
-    vb["latency_sum"] += record.injection_latency_ms or 0
-    vb["tokens_sum"] += record.total_tokens or 0
+    vb["latency_sum"] += _record_value(record, "injection_latency_ms") or 0
+    vb["tokens_sum"] += _record_value(record, "total_tokens") or 0
     vb["loaded_sum"] += len(loaded)
     vb["cited_sum"] += len(cited)
 
-    period_key = _format_period_key(record.created_at, period)
+    period_key = _format_period_key(_record_value(record, "created_at"), period)
     pb = period_data[period_key]
     pb["count"] += 1
     if task_succeeded is True:
@@ -221,8 +228,16 @@ async def _fetch_injection_records(
     variant_filter: str | None,
     project_id_filter: str | None,
 ) -> list[Any]:
-    """Execute the injection metrics query and return raw ORM records."""
-    query = select(MemoryInjectionMetric).where(
+    """Execute the injection metrics query and return detached-safe snapshots."""
+    query = select(
+        MemoryInjectionMetric.memories_loaded,
+        MemoryInjectionMetric.memories_cited,
+        MemoryInjectionMetric.task_succeeded,
+        MemoryInjectionMetric.variant,
+        MemoryInjectionMetric.injection_latency_ms,
+        MemoryInjectionMetric.total_tokens,
+        MemoryInjectionMetric.created_at,
+    ).where(
         MemoryInjectionMetric.created_at >= start_date,
         MemoryInjectionMetric.created_at <= end_date,
     )
@@ -232,7 +247,7 @@ async def _fetch_injection_records(
         query = query.where(MemoryInjectionMetric.project_id == project_id_filter)
     async with async_session() as session:
         result = await session.execute(query)
-        return list(result.scalars().all())
+        return [dict(row) for row in result.mappings().all()]
 
 
 async def get_recent_usage_totals(lookback_delta: timedelta) -> dict[str, int]:

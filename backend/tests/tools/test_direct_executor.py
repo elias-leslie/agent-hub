@@ -262,6 +262,55 @@ class TestDirectToolExecutor:
         assert written_file.read_text() == "test content"
 
     @pytest.mark.asyncio
+    async def test_edit_file_replaces_unique_text(
+        self,
+        executor: DirectToolExecutor,
+        tmp_path: Path,
+    ) -> None:
+        """Edit tool replaces focused existing text."""
+        test_file = tmp_path / "component.tsx"
+        test_file.write_text("const label = 'old'\nexport { label }\n")
+
+        result = await executor.edit_file(
+            "component.tsx",
+            "const label = 'old'",
+            "const label = 'new'",
+        )
+
+        assert "successfully edited" in result.lower()
+        assert test_file.read_text() == "const label = 'new'\nexport { label }\n"
+
+    @pytest.mark.asyncio
+    async def test_edit_file_rejects_ambiguous_old_text(
+        self,
+        executor: DirectToolExecutor,
+        tmp_path: Path,
+    ) -> None:
+        """Edit tool requires unique context unless replace_all is explicit."""
+        test_file = tmp_path / "component.tsx"
+        test_file.write_text("status\nstatus\n")
+
+        result = await executor.edit_file("component.tsx", "status", "state")
+
+        assert "matched 2 times" in result
+        assert test_file.read_text() == "status\nstatus\n"
+
+    @pytest.mark.asyncio
+    async def test_write_file_blocks_large_truncation(
+        self,
+        executor: DirectToolExecutor,
+        tmp_path: Path,
+    ) -> None:
+        """Full-file write refuses likely accidental truncation of large files."""
+        test_file = tmp_path / "large.tsx"
+        test_file.write_text("x" * 20_000)
+
+        result = await executor.write_file("large.tsx", "x" * 1_000)
+
+        assert "refusing large destructive overwrite" in result.lower()
+        assert test_file.read_text() == "x" * 20_000
+
+    @pytest.mark.asyncio
     async def test_write_file_creates_dirs(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
         """Test that write creates parent directories."""
         result = await executor.write_file("subdir/nested/file.txt", "nested content")
@@ -330,6 +379,7 @@ class TestStandardTools:
         assert names == [
             "bash",
             "read_file",
+            "edit_file",
             "write_file",
             "search_scratch_context",
         ]

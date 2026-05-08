@@ -129,9 +129,47 @@ READ_FILE_TOOL = Tool(
     usage_examples=["Read a backend module before editing it."],
 )
 
+EDIT_FILE_TOOL = Tool(
+    name="edit_file",
+    description=(
+        "Edit an existing file by replacing exact old_text with new_text. "
+        "Use this for targeted source changes, especially in large files."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "File path (absolute or relative to working directory)",
+            },
+            "old_text": {
+                "type": "string",
+                "description": "Exact text to replace. Include enough surrounding context to make it unique.",
+            },
+            "new_text": {
+                "type": "string",
+                "description": "Replacement text",
+            },
+            "replace_all": {
+                "type": "boolean",
+                "description": "Replace all matches. Default false rejects ambiguous old_text.",
+                "default": False,
+            },
+        },
+        "required": ["path", "old_text", "new_text"],
+    },
+    category="workspace",
+    search_keywords=["edit file", "replace text", "patch"],
+    usage_examples=["Replace one focused function body after reading the target lines."],
+)
+
 WRITE_FILE_TOOL = Tool(
     name="write_file",
-    description="Write content to a file. Creates parent directories if needed.",
+    description=(
+        "Write content to a file. Creates parent directories if needed. "
+        "For existing large source files, prefer edit_file; destructive large truncation is blocked "
+        "unless allow_large_truncate=true is intentional."
+    ),
     input_schema={
         "type": "object",
         "properties": {
@@ -142,6 +180,11 @@ WRITE_FILE_TOOL = Tool(
             "content": {
                 "type": "string",
                 "description": "Content to write to the file",
+            },
+            "allow_large_truncate": {
+                "type": "boolean",
+                "description": "Permit intentional whole-file replacement that greatly shrinks a large existing file.",
+                "default": False,
             },
         },
         "required": ["path", "content"],
@@ -369,6 +412,7 @@ FETCH_WEB_PAGE_TOOL = Tool(
 STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,
+    EDIT_FILE_TOOL,
     WRITE_FILE_TOOL,
     SEARCH_SCRATCH_CONTEXT_TOOL,
 ]
