@@ -28,8 +28,8 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
     MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
-    MemoryConsumerProfile.CLAUDE_SESSION_START: (28, 6),
-    MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
+    MemoryConsumerProfile.CLAUDE_SESSION_START: (12, 3),
+    MemoryConsumerProfile.CODEX_STARTUP: (12, 3),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_PREVIEW: False,
@@ -38,8 +38,8 @@ _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_CODING: True,
     MemoryConsumerProfile.AGENT_OPERATOR: True,
     MemoryConsumerProfile.AGENT_PROMPTOPS: True,
-    MemoryConsumerProfile.CLAUDE_SESSION_START: True,
-    MemoryConsumerProfile.CODEX_STARTUP: True,
+    MemoryConsumerProfile.CLAUDE_SESSION_START: False,
+    MemoryConsumerProfile.CODEX_STARTUP: False,
 }
 
 

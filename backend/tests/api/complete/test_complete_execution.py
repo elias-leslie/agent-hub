@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -166,6 +167,80 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
     assert result.model_used == "gemini-2.5-pro"
     assert result.fallback_used is True
     assert result.fallback_reason == "ProviderError: primary blew up"
+
+
+@pytest.mark.asyncio
+async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
+    req = SimpleNamespace(
+        temperature=0.0,
+        project_id="agent-hub",
+        external_id=None,
+        memory_group_id=None,
+        enable_caching=True,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+        messages=[],
+        max_turns=2,
+        execute_tools=True,
+        working_dir=None,
+        trace_id=None,
+        task_type=None,
+        phase=None,
+        agent_slug="explorer",
+    )
+    agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            fallback_models=["codex/gpt-5.4"],
+            timeout_seconds=None,
+        )
+    )
+    success = CompletionInternalResult(
+        content="done",
+        model="codex/gpt-5.4",
+        provider="codex",
+        input_tokens=1,
+        output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
+    )
+    calls: list[str] = []
+
+    async def fake_run_internal(*args, **kwargs):
+        model_id = args[1]
+        calls.append(model_id)
+        if model_id == "nvidia/kimi-k2.6":
+            await asyncio.sleep(10)
+        return success
+
+    with (
+        patch("app.api.complete.complete_execution._DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS", 0.01),
+        patch("app.api.complete.complete_execution._run_internal", new=AsyncMock(side_effect=fake_run_internal)),
+    ):
+        from app.api.complete.complete_execution import _run_with_agentic_fallback
+
+        result = await _run_with_agentic_fallback(
+            req=req,
+            primary_model="nvidia/kimi-k2.6",
+            provider="nvidia",
+            agent=agent,
+            msgs=[],
+            db=AsyncMock(),
+            sid="sess-1",
+            client_id=None,
+            source=None,
+            thinking=None,
+            tools=None,
+            fmt=None,
+            skip_cache=False,
+        )
+
+    assert calls == ["nvidia/kimi-k2.6", "codex/gpt-5.4"]
+    assert result.model_used == "codex/gpt-5.4"
+    assert result.fallback_used is True
+    assert result.fallback_reason == "TimeoutError: Agentic model turn timed out after 0.01s"
 
 
 @pytest.mark.asyncio
