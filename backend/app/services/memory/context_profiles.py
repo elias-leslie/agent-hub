@@ -19,6 +19,7 @@ class MemoryConsumerProfile(StrEnum):
     AGENT_PROMPTOPS = "agent_promptops"
     CLAUDE_SESSION_START = "claude_session_start"
     CODEX_STARTUP = "codex_startup"
+    GEMINI_STARTUP = "gemini_startup"
 
 
 _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
@@ -28,8 +29,9 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
     MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
-    MemoryConsumerProfile.CLAUDE_SESSION_START: (28, 6),
-    MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
+    MemoryConsumerProfile.CLAUDE_SESSION_START: (8, 2),
+    MemoryConsumerProfile.CODEX_STARTUP: (8, 2),
+    MemoryConsumerProfile.GEMINI_STARTUP: (8, 2),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_PREVIEW: False,
@@ -38,8 +40,9 @@ _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_CODING: True,
     MemoryConsumerProfile.AGENT_OPERATOR: True,
     MemoryConsumerProfile.AGENT_PROMPTOPS: True,
-    MemoryConsumerProfile.CLAUDE_SESSION_START: True,
-    MemoryConsumerProfile.CODEX_STARTUP: True,
+    MemoryConsumerProfile.CLAUDE_SESSION_START: False,
+    MemoryConsumerProfile.CODEX_STARTUP: False,
+    MemoryConsumerProfile.GEMINI_STARTUP: False,
 }
 
 

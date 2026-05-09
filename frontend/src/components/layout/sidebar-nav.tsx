@@ -2,6 +2,7 @@ import {
   Activity,
   Bot,
   Brain,
+  BrainCircuit,
   Cpu,
   FlaskConical,
   History,
@@ -81,6 +82,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Memory',
     icon: Brain,
     description: 'Knowledge graph',
+  },
+  {
+    href: '/runtime-context',
+    label: 'Runtime Context',
+    icon: BrainCircuit,
+    description: 'CLI/TUI injection',
   },
   {
     href: '/access-control',

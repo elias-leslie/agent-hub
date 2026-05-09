@@ -93,6 +93,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
         source_description=ep.get("source_description"),
         auto_inject=bool(ep.get("auto_inject", False)),
+        display_order=_safe_int(ep.get("display_order")) or 50,
         context_kind=normalize_context_kind(
             ep.get("context_kind"),
             memory_type=ep.get("memory_type"),
@@ -143,6 +144,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
             source_description=ep.get("source_description"),
             auto_inject=bool(ep.get("auto_inject", False)),
+            display_order=_safe_int(ep.get("display_order")) or 50,
             context_kind=normalize_context_kind(
                 ep.get("context_kind"),
                 memory_type=ep.get("memory_type"),
@@ -188,6 +190,7 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
         source_description=ep.get("source_description"),
         auto_inject=bool(ep.get("auto_inject", False)),
+        display_order=_safe_int(ep.get("display_order")) or 50,
         context_kind=normalize_context_kind(
             ep.get("context_kind"),
             memory_type=ep.get("memory_type"),
