@@ -2,6 +2,7 @@ import { fetchApi } from '@/lib/api-config'
 
 export type RuntimeSourceType = 'prompt' | 'memory'
 export type RuntimeOverrideMode = 'include' | 'exclude' | 'order'
+export type RuntimeTierOverride = 'L0' | 'L1' | 'L2'
 
 export interface RuntimeContextProfile {
   consumer_profile: string
@@ -15,6 +16,7 @@ export interface RuntimeContextOverridePayload {
   position: number
   enabled: boolean
   note?: string | null
+  tier_override?: RuntimeTierOverride | null
 }
 
 export interface RuntimeContextOverride extends RuntimeContextOverridePayload {
@@ -34,6 +36,12 @@ export interface RuntimeContextBlock {
   mode: RuntimeOverrideMode
   position: number
   tier: string | null
+  // Effective L0/L1/L2 render tier (null for prompt blocks).
+  render_tier?: string | null
+  // Per-memory render-mode preference (full | compact | summary | null).
+  render_mode?: 'full' | 'compact' | 'summary' | null
+  // Resolved per-profile/per-project tier override, if any.
+  tier_override?: RuntimeTierOverride | null
 }
 
 export interface RuntimeContextPreview {

@@ -303,6 +303,7 @@ class TestSaveLearningEndpoint:
                 "exclude_audience_tags": ["narrow-output"],
             },
             change_reason="Learning properties updated",
+            render_mode=None,
         )
 
 

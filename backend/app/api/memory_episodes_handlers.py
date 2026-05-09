@@ -164,6 +164,7 @@ async def handle_update_episode_properties(
             context_kind=finals["final_context_kind"],
             applicability=finals["final_applicability"],
             summary=finals["final_summary"],
+            render_mode=finals["final_render_mode"],
             message=f"Updated: {', '.join(messages)}",
             version=version,
         )

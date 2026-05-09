@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -10,6 +11,8 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+RenderMode = Literal["full", "compact", "summary"]
 
 
 class TagsResponse(BaseModel):
@@ -91,3 +94,43 @@ async def get_distinct_tags_endpoint() -> DistinctTagsResponse:
 
     tags = await get_all_distinct_tags()
     return DistinctTagsResponse(tags=tags, count=len(tags))
+
+
+class BulkRenderModeRequest(BaseModel):
+    uuids: list[str]
+    render_mode: RenderMode | None = Field(
+        None,
+        description=(
+            "New render mode for the listed episodes. None / null clears the "
+            "override and reverts to auto/profile-driven tier selection."
+        ),
+    )
+
+
+class BulkRenderModeResponse(BaseModel):
+    updated: int
+    failed: int
+
+
+@router.post("/episodes/bulk-render-mode", response_model=BulkRenderModeResponse)
+async def bulk_render_mode_endpoint(body: BulkRenderModeRequest) -> BulkRenderModeResponse:
+    """Bulk-set the per-memory render_mode preference on a list of episodes."""
+    from app.services.memory.episode_property_setters import set_episode_render_mode
+
+    if not body.uuids:
+        raise HTTPException(status_code=400, detail="uuids must be non-empty")
+
+    updated = 0
+    failed = 0
+    for uuid in body.uuids:
+        try:
+            ok = await set_episode_render_mode(uuid, body.render_mode)
+            if ok:
+                updated += 1
+            else:
+                failed += 1
+        except Exception:
+            logger.debug("Failed to set render_mode for episode %s", uuid, exc_info=True)
+            failed += 1
+
+    return BulkRenderModeResponse(updated=updated, failed=failed)

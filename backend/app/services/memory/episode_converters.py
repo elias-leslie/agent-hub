@@ -129,6 +129,7 @@ def convert_raw_episode_to_memory_episode(
             tier=_get_attr_or_key(ep, "tier") or tier,
         ),
         applicability=normalize_applicability(_get_attr_or_key(ep, "applicability")),
+        render_mode=_get_attr_or_key(ep, "render_mode"),
     )
 
 

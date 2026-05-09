@@ -99,6 +99,7 @@ async def set_episode_properties(
     applicability: dict[str, object] | None,
     *,
     change_reason: str | None = None,
+    render_mode: str | None = None,
 ) -> None:
     """Set additional properties on episode if provided."""
     if not uuid or (
@@ -107,6 +108,7 @@ async def set_episode_properties(
         and not trigger_phases
         and not context_kind
         and not applicability
+        and render_mode is None
     ):
         return
 
@@ -114,6 +116,7 @@ async def set_episode_properties(
         set_episode_applicability,
         set_episode_context_kind,
         set_episode_pinned,
+        set_episode_render_mode,
         set_episode_trigger_phases,
         set_episode_trigger_task_types,
     )
@@ -128,3 +131,5 @@ async def set_episode_properties(
         await set_episode_context_kind(uuid, context_kind, change_reason=change_reason)
     if applicability is not None:
         await set_episode_applicability(uuid, applicability, change_reason=change_reason)
+    if render_mode is not None:
+        await set_episode_render_mode(uuid, render_mode, change_reason=change_reason)

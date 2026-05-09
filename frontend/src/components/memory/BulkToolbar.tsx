@@ -1,10 +1,29 @@
 'use client'
 
-import { ChevronDown, Download, Loader2, Tag, Trash2, X } from 'lucide-react'
+import {
+  ChevronDown,
+  Download,
+  Loader2,
+  Sparkles,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
-import type { MemoryCategory } from '@/lib/memory-api'
+import type { MemoryCategory, RenderMode } from '@/lib/memory-api'
 import { CATEGORY_CONFIG } from '@/lib/memory-config'
 import { cn } from '@/lib/utils'
+
+const RENDER_MODE_CHOICES: Array<{
+  value: RenderMode | null
+  label: string
+  hint: string
+}> = [
+  { value: null, label: 'Auto', hint: 'profile decides' },
+  { value: 'full', label: 'Full text', hint: 'L2' },
+  { value: 'compact', label: 'Compact', hint: 'L1' },
+  { value: 'summary', label: 'Summary', hint: 'L0' },
+]
 
 export function BulkToolbar({
   selectedCount,
@@ -14,6 +33,7 @@ export function BulkToolbar({
   onClear,
   onTierChange,
   onBulkTag,
+  onBulkRenderMode,
   isDeleting,
 }: {
   selectedCount: number
@@ -27,6 +47,10 @@ export function BulkToolbar({
     addTags: string[],
     removeTags: string[],
   ) => Promise<void>
+  onBulkRenderMode?: (
+    ids: string[],
+    renderMode: RenderMode | null,
+  ) => Promise<void>
   isDeleting: boolean
 }) {
   const [tierDropdownOpen, setTierDropdownOpen] = useState(false)
@@ -34,6 +58,8 @@ export function BulkToolbar({
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [isTagging, setIsTagging] = useState(false)
+  const [renderDropdownOpen, setRenderDropdownOpen] = useState(false)
+  const [isChangingRenderMode, setIsChangingRenderMode] = useState(false)
 
   if (selectedCount === 0) return null
 
@@ -45,6 +71,17 @@ export function BulkToolbar({
     } finally {
       setIsChangingTier(false)
       setTierDropdownOpen(false)
+    }
+  }
+
+  const handleRenderModeChange = async (mode: RenderMode | null) => {
+    if (!onBulkRenderMode) return
+    setIsChangingRenderMode(true)
+    try {
+      await onBulkRenderMode([...selectedIds], mode)
+    } finally {
+      setIsChangingRenderMode(false)
+      setRenderDropdownOpen(false)
     }
   }
 
@@ -112,12 +149,51 @@ export function BulkToolbar({
         </div>
       )}
 
+      {onBulkRenderMode && (
+        <div className="relative">
+          <button
+            onClick={() => {
+              setRenderDropdownOpen(!renderDropdownOpen)
+              setTierDropdownOpen(false)
+              setTagDropdownOpen(false)
+            }}
+            disabled={isDeleting || isChangingRenderMode}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+          >
+            {isChangingRenderMode ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-amber-300" />
+            )}
+            Render
+          </button>
+          {renderDropdownOpen && (
+            <div className="absolute bottom-full mb-2 left-0 w-52 rounded-lg border border-slate-700 bg-slate-900 shadow-xl overflow-hidden">
+              {RENDER_MODE_CHOICES.map((choice) => (
+                <button
+                  key={choice.label}
+                  onClick={() => handleRenderModeChange(choice.value)}
+                  disabled={isChangingRenderMode}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                >
+                  <span className="text-slate-200">{choice.label}</span>
+                  <span className="text-[10px] text-slate-500 ml-auto">
+                    {choice.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {onBulkTag && (
         <div className="relative">
           <button
             onClick={() => {
               setTagDropdownOpen(!tagDropdownOpen)
               setTierDropdownOpen(false)
+              setRenderDropdownOpen(false)
             }}
             disabled={isDeleting || isTagging}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"

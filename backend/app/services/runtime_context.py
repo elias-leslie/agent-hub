@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -15,13 +16,17 @@ from app.models.prompt import Prompt
 from app.models.runtime_context import RuntimeContextOverride
 from app.services.memory.budget import count_tokens
 from app.services.memory.context_builder import build_progressive_context
-from app.services.memory.context_builder_tiers import get_rendered_content
+from app.services.memory.context_builder_tiers import (
+    apply_render_tier,
+    get_rendered_content,
+)
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
 from app.services.memory.repository import MemoryRepository
 from app.services.memory.service import MemoryScope, MemorySearchResult
 
 RuntimeSourceType = Literal["prompt", "memory"]
 RuntimeOverrideMode = Literal["include", "exclude", "order"]
+RuntimeTierOverride = Literal["L0", "L1", "L2"]
 
 KNOWN_RUNTIME_PROFILES = (
     "codex_startup",
@@ -37,6 +42,7 @@ class RuntimeContextOverridePayload(BaseModel):
     position: int = Field(50, ge=1, le=9999)
     enabled: bool = True
     note: str | None = None
+    tier_override: RuntimeTierOverride | None = None
 
 
 class RuntimeContextOverrideResponse(RuntimeContextOverridePayload):
@@ -56,6 +62,12 @@ class RuntimeContextBlockResponse(BaseModel):
     mode: RuntimeOverrideMode
     position: int
     tier: str | None = None
+    # Effective L0/L1/L2 render tier for memory blocks (None for prompt blocks).
+    render_tier: str | None = None
+    # User-set per-memory render preference, surfaced for UI display.
+    render_mode: str | None = None
+    # Resolved per-profile/per-project tier override, if any.
+    tier_override: RuntimeTierOverride | None = None
 
 
 class RuntimeContextPreviewResponse(BaseModel):
@@ -78,6 +90,7 @@ class _ResolvedOverride:
     note: str | None
     project_id: str | None
     id: str
+    tier_override: str | None = None
 
 
 def _override_response(row: RuntimeContextOverride) -> RuntimeContextOverrideResponse:
@@ -91,6 +104,7 @@ def _override_response(row: RuntimeContextOverride) -> RuntimeContextOverrideRes
         position=row.position,
         enabled=row.enabled,
         note=row.note,
+        tier_override=row.tier_override,
     )
 
 
@@ -135,6 +149,7 @@ async def replace_runtime_context_overrides(
             position=item.position,
             enabled=item.enabled,
             note=item.note,
+            tier_override=item.tier_override,
         )
         db.add(row)
         rows.append(row)
@@ -239,6 +254,7 @@ def _resolve_overrides(rows: list[RuntimeContextOverride]) -> list[_ResolvedOver
             note=row.note,
             project_id=row.project_id,
             id=row.id,
+            tier_override=row.tier_override,
         )
     return list(resolved.values())
 
@@ -320,6 +336,12 @@ async def _build_memory_blocks(
     forced_items = await _fetch_forced_memory_items(db, forced_ids)
     auto_items.extend((item, _tier_for_memory(item), 0) for item in forced_items)
 
+    # Apply per-profile/per-project tier overrides before reading rendered content.
+    for item, _block_tier, _index in auto_items:
+        ovr = override_by_key.get(("memory", item.uuid))
+        if ovr and ovr.tier_override:
+            apply_render_tier(item, ovr.tier_override, "user_override")
+
     blocks: list[RuntimeContextBlockResponse] = []
     for item, tier, index in auto_items:
         if ("memory", item.uuid) in excluded:
@@ -339,6 +361,9 @@ async def _build_memory_blocks(
                 mode=(override.mode if override else "order"),
                 position=position,
                 tier=tier,
+                render_tier=item.render_tier,
+                render_mode=item.render_mode,
+                tier_override=override.tier_override if override else None,
             )
         )
     return blocks
@@ -382,6 +407,41 @@ def _default_memory_position(tier: str, item: MemorySearchResult, index: int) ->
 
 def _source_sort(source_type: str) -> int:
     return 0 if source_type == "prompt" else 1
+
+
+async def apply_tier_overrides_to_context(
+    db: AsyncSession,
+    *,
+    consumer_profile: str | None,
+    project_id: str | None,
+    items: Iterable[MemorySearchResult],
+) -> None:
+    """Re-tier MemorySearchResults using per-profile runtime overrides.
+
+    Used by both the runtime-context HTTP path (frontend preview) and the
+    in-process CLI path (SessionStart hook -> memory-client -> progressive
+    context CLI) so that user-set tier overrides reach every consumer.
+
+    No-ops when consumer_profile is None or no override carries a
+    tier_override for any of the items.
+    """
+    if not consumer_profile:
+        return
+    items_list = list(items)
+    if not items_list:
+        return
+    rows = await _load_override_rows(
+        db, consumer_profile=consumer_profile, project_id=project_id
+    )
+    if not rows:
+        return
+    by_id = {item.uuid: item for item in items_list if item and item.uuid}
+    for ovr in _resolve_overrides(rows):
+        if not ovr.enabled or ovr.source_type != "memory" or not ovr.tier_override:
+            continue
+        target = by_id.get(ovr.source_id)
+        if target is not None:
+            apply_render_tier(target, ovr.tier_override, "user_override")
 
 
 def _render_blocks(blocks: list[RuntimeContextBlockResponse]) -> str:

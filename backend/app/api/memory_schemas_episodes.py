@@ -1,6 +1,7 @@
 """Memory API schemas - Episode CRUD operations."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +11,8 @@ from app.services.memory.memory_models import (
     MemoryContextKind,
 )
 from app.services.memory.service import MemorySource
+
+RenderMode = Literal["full", "compact", "summary"]
 
 
 class AddEpisodeRequest(BaseModel):
@@ -66,6 +69,7 @@ class EpisodeDetailResponse(BaseModel):
     trigger_task_types: list[str] = Field(default_factory=list)
     trigger_phases: list[str] = Field(default_factory=list)
     summary: str | None = Field(None, description="Short action phrase for TOON index (~20 chars)")
+    render_mode: RenderMode | None = None
     review_status: str = "pending"
     sensitivity_tier: str = "normal"
     last_reviewed_at: datetime | None = None
@@ -138,6 +142,13 @@ class UpdateEpisodePropertiesRequest(BaseModel):
         max_length=40,
         description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')",
     )
+    render_mode: RenderMode | None = Field(
+        None,
+        description=(
+            "Per-memory render expansion preference. 'full'/'compact'/'summary' "
+            "force the corresponding tier across all profiles; null = auto."
+        ),
+    )
     change_reason: str | None = Field(None, description="Why these properties changed")
 
 
@@ -154,6 +165,7 @@ class UpdateEpisodePropertiesResponse(BaseModel):
     context_kind: MemoryContextKind | None = None
     applicability: MemoryApplicability | None = None
     summary: str | None = None
+    render_mode: RenderMode | None = None
     message: str
     version: int | None = None
 

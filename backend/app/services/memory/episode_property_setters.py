@@ -129,6 +129,27 @@ async def set_episode_display_order(
     )
 
 
+async def set_episode_render_mode(
+    episode_uuid: str,
+    render_mode: str | None,
+    *,
+    change_reason: str | None = None,
+) -> bool:
+    """Set render_mode on a memory record.
+
+    Valid values: 'full', 'compact', 'summary', or None (auto/profile-driven).
+    """
+    if render_mode is not None and render_mode not in ("full", "compact", "summary"):
+        raise ValueError(
+            f"Invalid render_mode {render_mode!r}; must be 'full', 'compact', 'summary', or None"
+        )
+    return await _set_episode_property(
+        episode_uuid, "render_mode", render_mode,
+        f"set render_mode={render_mode}",
+        change_reason=change_reason,
+    )
+
+
 async def set_episode_trigger_task_types(
     episode_uuid: str,
     trigger_task_types: list[str],

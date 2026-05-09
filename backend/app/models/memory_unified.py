@@ -79,6 +79,9 @@ class Memory(Base):
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     auto_inject: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     display_order: Mapped[int] = mapped_column(Integer, server_default="50")
+    # User-set per-memory render expansion preference; NULL = auto/profile-driven.
+    # Values: 'full' (force L2), 'compact' (force L1), 'summary' (force L0).
+    render_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     # Conditional injection
     trigger_task_types: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)

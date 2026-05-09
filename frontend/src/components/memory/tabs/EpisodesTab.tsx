@@ -98,6 +98,7 @@ export function EpisodesTab() {
     handleBulkDeleteClick,
     handleBulkTierChange,
     handleBulkTag,
+    handleBulkRenderMode,
     handleConfirmDelete,
     handleToggleExpand,
     closeDeleteModal,
@@ -281,6 +282,7 @@ export function EpisodesTab() {
           onClear={clearSelection}
           onTierChange={handleBulkTierChange}
           onBulkTag={handleBulkTag}
+          onBulkRenderMode={handleBulkRenderMode}
           isDeleting={isDeleting}
         />
       )}

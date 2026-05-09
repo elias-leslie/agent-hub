@@ -24,6 +24,9 @@ class RuntimeContextOverride(Base):
     source_type: Mapped[str] = mapped_column(String(20), nullable=False)
     source_id: Mapped[str] = mapped_column(String(120), nullable=False)
     mode: Mapped[str] = mapped_column(String(20), nullable=False, server_default="include")
+    # User-forced render tier for this memory in this profile/project.
+    # NULL = no tier override; values: 'L0', 'L1', 'L2'.
+    tier_override: Mapped[str | None] = mapped_column(String(8), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="50")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -29,6 +29,7 @@ def record_to_get_dict(record: dict[str, Any]) -> dict[str, Any]:
         "trigger_task_types": record.get("trigger_task_types") or [],
         "trigger_phases": record.get("trigger_phases") or [],
         "summary": record.get("summary"),
+        "render_mode": record.get("render_mode"),
         "context_kind": record.get("context_kind") or "reference",
         "applicability": record.get("applicability") or {},
         "loaded_count": record.get("loaded_count", 0),

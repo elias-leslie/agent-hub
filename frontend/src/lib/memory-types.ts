@@ -56,7 +56,12 @@ export interface MemoryEpisode {
   trigger_phases?: string[]
   context_kind?: MemoryContextKind
   applicability?: MemoryApplicability
+  // Per-memory render expansion preference (null = auto/profile-driven).
+  render_mode?: RenderMode | null
 }
+
+// Per-memory render expansion preference; controls L0/L1/L2 across all profiles.
+export type RenderMode = 'full' | 'compact' | 'summary'
 
 // Sort options for memory list
 export type MemorySortBy =
@@ -154,6 +159,7 @@ export interface UpdateEpisodePropertiesRequest {
   summary?: string
   context_kind?: MemoryContextKind
   applicability?: MemoryApplicability
+  render_mode?: RenderMode | null
 }
 
 // Update episode properties response
@@ -168,6 +174,7 @@ export interface UpdateEpisodePropertiesResponse {
   summary?: string
   context_kind?: MemoryContextKind
   applicability?: MemoryApplicability
+  render_mode?: RenderMode | null
   message: string
 }
 

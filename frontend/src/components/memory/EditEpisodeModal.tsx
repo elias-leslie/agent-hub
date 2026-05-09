@@ -35,6 +35,8 @@ export function EditEpisodeModal({
     setApplicability,
     triggerPhases,
     setTriggerPhases,
+    renderMode,
+    setRenderMode,
     isSaving,
     error,
     hasChanges,
@@ -99,6 +101,8 @@ export function EditEpisodeModal({
             onApplicabilityChange={setApplicability}
             triggerPhases={triggerPhases}
             onTriggerPhasesChange={setTriggerPhases}
+            renderMode={renderMode}
+            onRenderModeChange={setRenderMode}
             episodeUuid={episode.uuid}
             disabled={isSaving}
           />

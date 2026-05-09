@@ -2,7 +2,11 @@
 
 import { FileText, Pin } from 'lucide-react'
 import { CompactnessMeter } from '@/components/CompactnessMeter'
-import type { MemoryApplicability, MemoryContextKind } from '@/lib/memory-api'
+import type {
+  MemoryApplicability,
+  MemoryContextKind,
+  RenderMode,
+} from '@/lib/memory-api'
 import { cn } from '@/lib/utils'
 
 interface EpisodeFormFieldsProps {
@@ -18,9 +22,38 @@ interface EpisodeFormFieldsProps {
   onApplicabilityChange: (value: MemoryApplicability) => void
   triggerPhases: string[]
   onTriggerPhasesChange: (value: string[]) => void
+  renderMode: RenderMode | null
+  onRenderModeChange: (value: RenderMode | null) => void
   episodeUuid: string
   disabled?: boolean
 }
+
+const RENDER_MODE_OPTIONS: Array<{
+  value: '' | RenderMode
+  label: string
+  description: string
+}> = [
+  {
+    value: '',
+    label: 'Auto (profile decides)',
+    description: 'Uses the consumer profile’s default tier rules.',
+  },
+  {
+    value: 'full',
+    label: 'Full text (L2)',
+    description: 'Always inject the full content of this memory.',
+  },
+  {
+    value: 'compact',
+    label: 'Compact (L1)',
+    description: 'Inject the compact ~220-character overview.',
+  },
+  {
+    value: 'summary',
+    label: 'One-line summary (L0)',
+    description: 'Inject only the ~72-character summary.',
+  },
+]
 
 const CONTEXT_KIND_OPTIONS: Array<{
   value: MemoryContextKind
@@ -76,6 +109,8 @@ export function EpisodeFormFields({
   onApplicabilityChange,
   triggerPhases,
   onTriggerPhasesChange,
+  renderMode,
+  onRenderModeChange,
   episodeUuid,
   disabled,
 }: EpisodeFormFieldsProps) {
@@ -158,6 +193,39 @@ export function EpisodeFormFields({
         <p className="text-xs text-slate-400">
           Pinned episodes are always included when memory and this category are
           enabled, regardless of budget limits.
+        </p>
+      </div>
+
+      {/* Render Mode */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-slate-300">
+          Render Mode
+        </label>
+        <select
+          value={renderMode ?? ''}
+          onChange={(e) => {
+            const value = e.target.value
+            onRenderModeChange(value === '' ? null : (value as RenderMode))
+          }}
+          disabled={disabled}
+          className={cn(
+            'w-full px-3 py-2.5 rounded-lg text-sm',
+            'bg-slate-800/50 border border-slate-700 text-slate-100',
+            'focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+        >
+          {RENDER_MODE_OPTIONS.map((option) => (
+            <option key={option.value || 'auto'} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-400">
+          {RENDER_MODE_OPTIONS.find(
+            (option) => option.value === (renderMode ?? ''),
+          )?.description ??
+            'Override the auto-tiering for this memory across all profiles.'}
         </p>
       </div>
 
