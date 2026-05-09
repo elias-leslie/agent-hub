@@ -87,7 +87,7 @@ class SaveLearningRequest(BaseModel):
     )
     injection_tier: InjectionTier = Field(
         InjectionTier.REFERENCE,
-        description="Injection tier (mandate, guardrail, reference)",
+        description="Injection tier (mandate, guardrail, reference, archive)",
     )
     confidence: int = Field(
         80,
