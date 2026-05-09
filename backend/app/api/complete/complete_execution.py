@@ -27,6 +27,7 @@ _NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None, st
 _ToolsAPI = list[dict[str, object]] | None
 _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
+_DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS = 240.0
 
 
 def _fallbacks_enabled(req: CompletionRequest, agent: ResolvedAgent | None) -> bool:
@@ -49,6 +50,38 @@ def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _Non
         tool_calls=r.tool_calls, container=r.container,
     )
     return (cr, model, False, r.memory_uuids, r.session_id, r.fallback_reason)
+
+
+def _agentic_timeout_seconds(agent: ResolvedAgent | None) -> float | None:
+    """Return the per-turn timeout for agentic model calls."""
+    if agent is None:
+        return None
+    configured = getattr(agent.agent, "timeout_seconds", None)
+    if configured is not None:
+        return float(configured)
+    return _DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS
+
+
+async def _run_internal_with_timeout(
+    req: CompletionRequest, model: str, provider: str, agent: ResolvedAgent | None,
+    msgs: _MsgsDict, db: AsyncSession, sid: str | None, client_id: str | None,
+    source: str | None, thinking: str | None, tools: _ToolsAPI, fmt: _FmtDict,
+    skip_cache: bool, is_agentic: bool,
+) -> CompletionInternalResult | _NonAgenticResult:
+    """Run internal completion with the configured agentic model-turn timeout."""
+    coro = _run_internal(
+        req, model, provider, agent, msgs, db, sid, client_id, source,
+        thinking, tools, fmt, skip_cache, is_agentic,
+    )
+    if not is_agentic:
+        return await coro
+    timeout = _agentic_timeout_seconds(agent)
+    if timeout is None:
+        return await coro
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except TimeoutError as exc:
+        raise TimeoutError(f"Agentic model turn timed out after {timeout:g}s") from exc
 
 
 async def _run_internal(
@@ -86,7 +119,10 @@ async def _run_with_agentic_fallback(
     for model_id in [primary_model, *agent.agent.fallback_models]:
         try:
             fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
-            raw = await _run_internal(req, model_id, fb_provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, True)
+            raw = await _run_internal_with_timeout(
+                req, model_id, fb_provider, agent, msgs, db, sid, client_id, source,
+                thinking, tools, fmt, skip_cache, True,
+            )
             assert isinstance(raw, CompletionInternalResult)
             raw.requested_model = primary_model
             raw.requested_provider = provider
@@ -115,7 +151,10 @@ async def _dispatch_db(
     """Route DB execution to fallback-aware or standard handler."""
     if is_agentic and _fallbacks_enabled(req, agent):
         return await _run_with_agentic_fallback(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache)
-    return await _run_internal(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, is_agentic)
+    return await _run_internal_with_timeout(
+        req, model, provider, agent, msgs, db, sid, client_id, source,
+        thinking, tools, fmt, skip_cache, is_agentic,
+    )
 
 
 async def execute_completion(
