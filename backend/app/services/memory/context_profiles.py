@@ -30,7 +30,7 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
     MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
     MemoryConsumerProfile.CLAUDE_SESSION_START: (8, 2),
-    MemoryConsumerProfile.CODEX_STARTUP: (8, 2),
+    MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
     MemoryConsumerProfile.GEMINI_STARTUP: (8, 2),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
