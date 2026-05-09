@@ -20,6 +20,7 @@ const TIER_DOT_COLORS: Record<string, string> = {
   mandate: 'bg-red-500',
   guardrail: 'bg-amber-500',
   reference: 'bg-blue-500',
+  archive: 'bg-slate-500',
 }
 
 export function TopMemoriesTable({
