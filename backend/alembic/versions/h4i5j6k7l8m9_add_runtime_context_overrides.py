@@ -79,7 +79,7 @@ def upgrade() -> None:
         ),
         {"content": AGENTIC_CLI_PROMPT},
     )
-    for profile in ("codex_startup", "claude_session_start"):
+    for profile in ("codex_startup", "claude_session_start", "gemini_startup"):
         conn.execute(
             sa.text(
                 """
