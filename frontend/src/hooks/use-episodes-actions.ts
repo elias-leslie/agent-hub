@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { bulkTag } from '@/lib/api/memory-tags'
-import type { MemoryCategory } from '@/lib/memory-api'
+import { bulkSetRenderMode, bulkTag } from '@/lib/api/memory-tags'
+import type { MemoryCategory, RenderMode } from '@/lib/memory-api'
 import { batchUpdateTier } from '@/lib/memory-api'
 
 interface UseEpisodesActionsProps {
@@ -48,6 +48,14 @@ export function useEpisodesActions({
     [refresh],
   )
 
+  const handleBulkRenderMode = useCallback(
+    async (ids: string[], renderMode: RenderMode | null) => {
+      await bulkSetRenderMode(ids, renderMode)
+      refresh()
+    },
+    [refresh],
+  )
+
   const handleConfirmDelete = useCallback(async () => {
     if (pendingDeleteId) {
       await deleteOne(pendingDeleteId)
@@ -79,6 +87,7 @@ export function useEpisodesActions({
     handleBulkDeleteClick,
     handleBulkTierChange,
     handleBulkTag,
+    handleBulkRenderMode,
     handleConfirmDelete,
     handleToggleExpand,
     closeDeleteModal,

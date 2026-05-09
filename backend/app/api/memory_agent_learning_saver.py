@@ -85,6 +85,7 @@ async def store_learning_episode(
         request.context_kind.value if request.context_kind is not None else None,
         request.applicability.model_dump() if request.applicability is not None else None,
         change_reason=request.change_reason or "Learning properties updated",
+        render_mode=request.render_mode,
     )
 
     return new_uuid, status.value

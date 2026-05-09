@@ -1,6 +1,6 @@
 """Pydantic schemas for memory agent tools endpoints."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -116,6 +116,13 @@ class SaveLearningRequest(BaseModel):
     applicability: MemoryApplicability | None = Field(
         None,
         description="Audience targeting rules for this memory",
+    )
+    render_mode: Literal["full", "compact", "summary"] | None = Field(
+        None,
+        description=(
+            "Per-memory render expansion preference. 'full'/'compact'/'summary' force "
+            "the corresponding tier across all profiles; null = auto."
+        ),
     )
     change_reason: str | None = Field(None, description="Why this learning is being recorded")
 

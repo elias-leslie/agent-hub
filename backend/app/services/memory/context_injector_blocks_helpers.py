@@ -100,6 +100,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
             tier=ep.get("tier"),
         ),
         applicability=normalize_applicability(ep.get("applicability")),
+        render_mode=ep.get("render_mode"),
     )
 
 
@@ -197,4 +198,5 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
             tier=ep.get("tier"),
         ),
         applicability=normalize_applicability(ep.get("applicability")),
+        render_mode=ep.get("render_mode"),
     )

@@ -4,6 +4,7 @@ import type {
   MemoryCategory,
   MemoryContextKind,
   MemoryEpisode,
+  RenderMode,
 } from '@/lib/memory-api'
 import {
   addEpisode,
@@ -75,11 +76,15 @@ export function useEpisodeEditor({
   const [triggerPhases, setTriggerPhases] = useState<string[]>(
     episode.trigger_phases ?? [],
   )
+  const [renderMode, setRenderMode] = useState<RenderMode | null>(
+    episode.render_mode ?? null,
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const initialApplicability = cloneApplicability(episode.applicability)
   const initialTriggerPhases = episode.trigger_phases ?? []
+  const initialRenderMode = episode.render_mode ?? null
 
   const hasChanges =
     content !== episode.content ||
@@ -88,7 +93,8 @@ export function useEpisodeEditor({
     summary !== (episode.summary ?? '') ||
     contextKind !== (episode.context_kind ?? 'reference') ||
     !applicabilityEqual(applicability, initialApplicability) ||
-    !arraysEqual(triggerPhases, initialTriggerPhases)
+    !arraysEqual(triggerPhases, initialTriggerPhases) ||
+    renderMode !== initialRenderMode
 
   async function handleSave() {
     if (!hasChanges) {
@@ -133,6 +139,7 @@ export function useEpisodeEditor({
         trigger_phases?: string[]
         context_kind?: MemoryContextKind
         applicability?: MemoryApplicability
+        render_mode?: RenderMode | null
       } = {}
       if (pinnedChanged || (contentOrTierChanged && pinned)) {
         propsToUpdate.pinned = pinned
@@ -164,6 +171,12 @@ export function useEpisodeEditor({
       ) {
         propsToUpdate.applicability = applicability
       }
+      if (
+        renderMode !== initialRenderMode ||
+        (contentOrTierChanged && renderMode !== null)
+      ) {
+        propsToUpdate.render_mode = renderMode
+      }
       if (Object.keys(propsToUpdate).length > 0) {
         await updateEpisodeProperties(newUuid, propsToUpdate)
       }
@@ -193,6 +206,8 @@ export function useEpisodeEditor({
     setApplicability,
     triggerPhases,
     setTriggerPhases,
+    renderMode,
+    setRenderMode,
     isSaving,
     error,
     hasChanges,

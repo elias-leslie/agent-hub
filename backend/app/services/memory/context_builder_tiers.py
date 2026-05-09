@@ -24,6 +24,12 @@ _L1_MAX_CHARS = 220
 _FULL_TEXT_TOKEN_THRESHOLD = 24
 _QUERY_MATCH_THRESHOLD = 3
 
+RENDER_MODE_TO_TIER: dict[str, str] = {
+    "full": PROMPT_TIER_L2,
+    "compact": PROMPT_TIER_L1,
+    "summary": PROMPT_TIER_L0,
+}
+
 
 def get_rendered_content(item: MemorySearchResult) -> str:
     """Return the currently selected prompt text for a memory item."""
@@ -56,7 +62,7 @@ def plan_context_render_tiers(
                 query_terms=query_terms,
                 force_full_tags=force_full_tags,
             )
-            _apply_render_tier(item, tier, reason)
+            apply_render_tier(item, tier, reason)
 
 
 def demote_item_to_fit_budget(item: MemorySearchResult) -> bool:
@@ -67,10 +73,10 @@ def demote_item_to_fit_budget(item: MemorySearchResult) -> bool:
     """
     current_tier = item.render_tier or PROMPT_TIER_L2
     if current_tier == PROMPT_TIER_L2:
-        _apply_render_tier(item, PROMPT_TIER_L1, _budget_reason(item.render_reason))
+        apply_render_tier(item, PROMPT_TIER_L1, _budget_reason(item.render_reason))
         return True
     if current_tier == PROMPT_TIER_L1:
-        _apply_render_tier(item, PROMPT_TIER_L0, _budget_reason(item.render_reason))
+        apply_render_tier(item, PROMPT_TIER_L0, _budget_reason(item.render_reason))
         return True
     return False
 
@@ -130,6 +136,11 @@ def _select_initial_tier(
     query_terms: set[str],
     force_full_tags: set[str],
 ) -> tuple[str, str]:
+    # User-set per-memory render preference wins over auto/profile rules,
+    # but is itself superseded by per-profile runtime overrides applied later.
+    if item.render_mode and item.render_mode in RENDER_MODE_TO_TIER:
+        return RENDER_MODE_TO_TIER[item.render_mode], "memory_render_mode"
+
     if force_full_tags and force_full_tags.intersection(item.tags):
         return PROMPT_TIER_L2, "consumer_profile_tag"
 
@@ -158,7 +169,7 @@ def _select_initial_tier(
     return PROMPT_TIER_L1, "selected_reference"
 
 
-def _apply_render_tier(item: MemorySearchResult, tier: str, reason: str | None) -> None:
+def apply_render_tier(item: MemorySearchResult, tier: str, reason: str | None) -> None:
     item.render_tier = tier
     item.overview = item.overview or _build_overview(item.content)
     item.render_reason = reason

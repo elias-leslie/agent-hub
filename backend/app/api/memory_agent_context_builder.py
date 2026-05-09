@@ -44,6 +44,35 @@ async def build_progressive_context_with_variant(
         variant=variant_value,
     )
 
+    # Apply per-profile/per-project tier overrides so the in-process CLI/hook
+    # delivery path honors the same UI controls as the runtime-context preview.
+    if consumer_profile:
+        from app.db import async_session
+        from app.services.runtime_context import apply_tier_overrides_to_context
+
+        items = (
+            list(context.mandates)
+            + list(context.guardrails)
+            + list(context.reference_index)
+            + list(context.reference)
+        )
+        if items:
+            try:
+                async with async_session() as db:
+                    await apply_tier_overrides_to_context(
+                        db,
+                        consumer_profile=consumer_profile,
+                        project_id=project_id or scope_id,
+                        items=items,
+                    )
+            except Exception:
+                logger.warning(
+                    "Failed to apply runtime tier overrides for profile=%s project=%s",
+                    consumer_profile,
+                    project_id or scope_id,
+                    exc_info=True,
+                )
+
     context.debug_info["variant"] = variant_value
     return context, variant_value
 

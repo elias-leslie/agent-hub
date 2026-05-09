@@ -27,6 +27,7 @@ def _override(**overrides):
         position=50,
         enabled=True,
         note=None,
+        tier_override=None,
     )
     for key, value in overrides.items():
         setattr(row, key, value)

@@ -100,6 +100,9 @@ class MemorySearchResult(BaseModel):
     rendered_content: str | None = None
     render_tier: str | None = None
     render_reason: str | None = None
+    # User-set per-memory render preference; consumed by _select_initial_tier.
+    # Values: 'full' | 'compact' | 'summary' | None (auto).
+    render_mode: str | None = None
     source: MemorySource
     relevance_score: float
     created_at: datetime
@@ -164,6 +167,7 @@ class MemoryEpisode(BaseModel):
     trigger_phases: list[str] = []
     context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
     applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
+    render_mode: str | None = None
 
 
 class MemoryListResult(BaseModel):

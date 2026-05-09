@@ -47,6 +47,7 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "pinned": mem.pinned,
         "auto_inject": mem.auto_inject,
         "display_order": mem.display_order,
+        "render_mode": getattr(mem, "render_mode", None),
         "trigger_task_types": mem.trigger_task_types or [],
         "trigger_phases": mem.trigger_phases or [],
         "loaded_count": mem.loaded_count,

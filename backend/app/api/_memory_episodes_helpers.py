@@ -35,6 +35,7 @@ async def _apply_scalar_properties(
         set_episode_context_kind,
         set_episode_display_order,
         set_episode_pinned,
+        set_episode_render_mode,
         set_episode_trigger_phases,
         set_episode_trigger_task_types,
     )
@@ -70,6 +71,16 @@ async def _apply_scalar_properties(
         await _apply_property_setter(full_uuid, set_episode_context_kind(full_uuid, request.context_kind.value, change_reason=cr))
         finals["final_context_kind"] = request.context_kind
         messages.append(f"context_kind={request.context_kind.value}")
+
+    # render_mode uses field-presence detection: explicit null clears the override,
+    # field absence leaves it untouched.
+    if "render_mode" in request.model_fields_set:
+        await _apply_property_setter(
+            full_uuid,
+            set_episode_render_mode(full_uuid, request.render_mode, change_reason=cr),
+        )
+        finals["final_render_mode"] = request.render_mode
+        messages.append(f"render_mode={request.render_mode or 'auto'}")
 
 
 async def _apply_complex_properties(
@@ -111,6 +122,7 @@ async def apply_episode_properties(
         "final_context_kind": None,
         "final_applicability": None,
         "final_summary": None,
+        "final_render_mode": None,
     }
     messages: list[str] = []
     await _apply_scalar_properties(full_uuid, request, finals, messages)
