@@ -47,6 +47,7 @@ from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt, PromptRevision
 from .push_subscription import PushSubscription
+from .runtime_context import RuntimeContextOverride
 from .session import (
     CostLog,
     Session,
@@ -104,6 +105,7 @@ __all__ = [
     "RequestLog",
     "RoutingDecision",
     "RoutingPolicyVersion",
+    "RuntimeContextOverride",
     "Session",
     "SessionBinding",
     "SessionEvent",

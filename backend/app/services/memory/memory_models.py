@@ -115,6 +115,7 @@ class MemorySearchResult(BaseModel):
     last_accessed_at: datetime | None = None
     source_description: str | None = None
     auto_inject: bool = False
+    display_order: int = 50
     context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
     applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
 
