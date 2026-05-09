@@ -1,18 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RuntimeContextPage from '@/app/runtime-context/page'
+import { ToastProvider } from '@/components/error/toast'
 import { fetchPrompts } from '@/lib/api/prompts'
 import {
   fetchRuntimeOverrides,
   fetchRuntimePreview,
-  fetchRuntimeProfiles,
   replaceRuntimeOverrides,
 } from '@/lib/api/runtime-context'
 import { fetchMemoryList } from '@/lib/memory/episodes'
 import { createQueryClientWrapper } from './test-utils'
 
 vi.mock('@/lib/api/runtime-context', () => ({
-  fetchRuntimeProfiles: vi.fn(),
   fetchRuntimeOverrides: vi.fn(),
   fetchRuntimePreview: vi.fn(),
   replaceRuntimeOverrides: vi.fn(),
@@ -28,7 +27,7 @@ vi.mock('@/lib/memory/episodes', () => ({
 
 const preview = {
   consumer_profile: 'codex_startup',
-  project_id: 'summitflow',
+  project_id: null,
   query: 'startup context',
   total_tokens: 42,
   rendered: '## Agentic CLI Startup Core\nDirect concise.',
@@ -61,16 +60,20 @@ const preview = {
   overrides: [],
 }
 
+function renderPage() {
+  const QueryWrapper = createQueryClientWrapper()
+  return render(
+    <QueryWrapper>
+      <ToastProvider>
+        <RuntimeContextPage />
+      </ToastProvider>
+    </QueryWrapper>,
+  )
+}
+
 describe('RuntimeContextPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(fetchRuntimeProfiles).mockResolvedValue([
-      { consumer_profile: 'codex_startup', label: 'Codex Startup' },
-      {
-        consumer_profile: 'claude_session_start',
-        label: 'Claude Session Start',
-      },
-    ])
     vi.mocked(fetchRuntimeOverrides).mockResolvedValue([])
     vi.mocked(fetchRuntimePreview).mockResolvedValue(preview)
     vi.mocked(replaceRuntimeOverrides).mockResolvedValue([])
@@ -100,7 +103,7 @@ describe('RuntimeContextPage', () => {
   })
 
   it('renders preview blocks and rendered context', async () => {
-    render(<RuntimeContextPage />, { wrapper: createQueryClientWrapper() })
+    renderPage()
 
     await waitFor(() => {
       expect(
@@ -112,28 +115,42 @@ describe('RuntimeContextPage', () => {
     expect(screen.getAllByText(/Direct concise/).length).toBeGreaterThan(0)
   })
 
+  it('does not expose profile/project/query controls', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
+    expect(screen.queryByText(/^Profile$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Project$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Query$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Task Type$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Phase$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Override Layer/)).not.toBeInTheDocument()
+  })
+
   it('saves an exclude override from the block list', async () => {
-    render(<RuntimeContextPage />, { wrapper: createQueryClientWrapper() })
+    renderPage()
 
     await waitFor(() => {
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getAllByTitle('Exclude')[1])
+    // Memory row's exclude toggle (prompt row is index 0).
+    const excludeButtons = screen.getAllByTitle('Exclude')
+    fireEvent.click(excludeButtons[excludeButtons.length - 1])
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
         expect.objectContaining({
           consumerProfile: 'codex_startup',
-          projectId: 'summitflow',
-          overrides: [
+          overrides: expect.arrayContaining([
             expect.objectContaining({
               source_type: 'memory',
               source_id: 'mem-1',
               mode: 'exclude',
             }),
-          ],
+          ]),
         }),
       )
     })
+    const lastCall = vi.mocked(replaceRuntimeOverrides).mock.calls.at(-1)?.[0]
+    expect(lastCall?.projectId).toBeUndefined()
   })
 })
