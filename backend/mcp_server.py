@@ -89,7 +89,7 @@ async def save_learning(
     Args:
         content: The knowledge or instruction to save.
         summary: Short action phrase (~20 chars) for the index (e.g. "use sf-commit").
-        tier: The injection tier (mandate, guardrail, reference).
+        tier: The injection tier (mandate, guardrail, reference, archive).
         confidence: Confidence score (0-100).
     """
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
