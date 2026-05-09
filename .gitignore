@@ -75,6 +75,10 @@ graphify-out/manifest.json
 graphify-out/.graphify_*.json
 graphify-out/.graphify_root
 graphify-out/graph.html.skipped.txt
+graphify-out/GRAPH_REPORT.md
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
 
 # Vendored packages
 packages/graphiti/
