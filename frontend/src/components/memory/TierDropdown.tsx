@@ -79,30 +79,35 @@ export function TierDropdown({
             className="absolute top-full left-0 mt-1 z-50 w-40 rounded-lg border border-slate-700 bg-slate-900 shadow-lg overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {(['mandate', 'guardrail', 'reference'] as MemoryCategory[]).map(
-              (tier) => {
-                const config = CATEGORY_CONFIG[tier]
-                const isSelected = tier === currentCategory
-                return (
-                  <button
-                    key={tier}
-                    onClick={() => handleTierChange(tier)}
-                    disabled={isUpdatingTier}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors',
-                      'hover:bg-slate-800',
-                      isSelected && 'bg-slate-800',
-                    )}
-                  >
-                    <span>{config.icon}</span>
-                    <span className={config.color}>{config.label}</span>
-                    {isSelected && (
-                      <Check className="w-3 h-3 ml-auto text-emerald-500" />
-                    )}
-                  </button>
-                )
-              },
-            )}
+            {(
+              [
+                'mandate',
+                'guardrail',
+                'reference',
+                'archive',
+              ] as MemoryCategory[]
+            ).map((tier) => {
+              const config = CATEGORY_CONFIG[tier]
+              const isSelected = tier === currentCategory
+              return (
+                <button
+                  key={tier}
+                  onClick={() => handleTierChange(tier)}
+                  disabled={isUpdatingTier}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors',
+                    'hover:bg-slate-800',
+                    isSelected && 'bg-slate-800',
+                  )}
+                >
+                  <span>{config.icon}</span>
+                  <span className={config.color}>{config.label}</span>
+                  {isSelected && (
+                    <Check className="w-3 h-3 ml-auto text-emerald-500" />
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

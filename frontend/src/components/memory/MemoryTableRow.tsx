@@ -84,6 +84,7 @@ export function MemoryTableRow({
       mandate: 'border-l-red-400',
       guardrail: 'border-l-amber-400',
       reference: 'border-l-amber-400',
+      archive: 'border-l-slate-400',
     }[item.category] || ''
 
   return (

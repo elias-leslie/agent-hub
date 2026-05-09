@@ -6,7 +6,7 @@
 export type MemoryScope = 'global' | 'project' | 'task'
 
 // Memory category types (tier-first taxonomy)
-export type MemoryCategory = 'mandate' | 'guardrail' | 'reference'
+export type MemoryCategory = 'mandate' | 'guardrail' | 'reference' | 'archive'
 
 export type MemoryContextKind =
   | 'policy'

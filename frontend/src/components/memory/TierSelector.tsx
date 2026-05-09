@@ -16,6 +16,7 @@ const TIER_DESCRIPTIONS: Record<MemoryCategory, string> = {
   mandate: 'Always injected',
   guardrail: 'Always injected',
   reference: 'On-demand',
+  archive: 'Cold storage',
 }
 
 export function TierSelector({ value, onChange, disabled }: TierSelectorProps) {
@@ -53,36 +54,41 @@ export function TierSelector({ value, onChange, disabled }: TierSelectorProps) {
             className="absolute top-full left-0 right-0 mt-1 z-50 rounded-lg border border-slate-700 bg-slate-900 shadow-lg overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {(['mandate', 'guardrail', 'reference'] as MemoryCategory[]).map(
-              (t) => {
-                const config = CATEGORY_CONFIG[t]
-                const isSelected = t === value
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => {
-                      onChange(t)
-                      setIsOpen(false)
-                    }}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
-                      'hover:bg-slate-800',
-                      isSelected && 'bg-slate-800',
-                    )}
-                  >
-                    <span className="text-base">{config.icon}</span>
-                    <span className={config.color}>{config.label}</span>
-                    <span className="text-xs text-slate-400 ml-1">
-                      {TIER_DESCRIPTIONS[t]}
-                    </span>
-                    {isSelected && (
-                      <Check className="w-4 h-4 ml-auto text-emerald-500" />
-                    )}
-                  </button>
-                )
-              },
-            )}
+            {(
+              [
+                'mandate',
+                'guardrail',
+                'reference',
+                'archive',
+              ] as MemoryCategory[]
+            ).map((t) => {
+              const config = CATEGORY_CONFIG[t]
+              const isSelected = t === value
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    onChange(t)
+                    setIsOpen(false)
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors',
+                    'hover:bg-slate-800',
+                    isSelected && 'bg-slate-800',
+                  )}
+                >
+                  <span className="text-base">{config.icon}</span>
+                  <span className={config.color}>{config.label}</span>
+                  <span className="text-xs text-slate-400 ml-1">
+                    {TIER_DESCRIPTIONS[t]}
+                  </span>
+                  {isSelected && (
+                    <Check className="w-4 h-4 ml-auto text-emerald-500" />
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

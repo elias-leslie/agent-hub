@@ -2,12 +2,14 @@ export const TIER_COLORS: Record<string, string> = {
   mandate: '#ef4444',
   guardrail: '#f59e0b',
   reference: '#3b82f6',
+  archive: '#64748b',
 }
 
 export const TIER_LABELS: Record<string, string> = {
   mandate: 'Mandate',
   guardrail: 'Guardrail',
   reference: 'Reference',
+  archive: 'Archive',
 }
 
 export type ColorVariant =

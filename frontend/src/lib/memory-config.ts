@@ -39,6 +39,13 @@ export const CATEGORY_CONFIG: Record<
     bg: 'bg-blue-500/10 border-blue-400/40',
     description: 'On-demand — triggered or searched',
   },
+  archive: {
+    icon: '🗄️',
+    label: 'Archive',
+    color: 'text-slate-400',
+    bg: 'bg-slate-500/10 border-slate-400/40',
+    description: 'Cold storage — demoted, low-priority',
+  },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
