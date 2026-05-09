@@ -30,11 +30,12 @@ class MemoryScope(StrEnum):
 
 
 class MemoryCategory(StrEnum):
-    """Tier-first categories for memory episodes (mandate/guardrail/reference)."""
+    """Tier-first categories for memory episodes."""
 
     MANDATE = "mandate"  # Critical rules that must always be followed
     GUARDRAIL = "guardrail"  # Anti-patterns and things to avoid
     REFERENCE = "reference"  # Best practices and patterns
+    ARCHIVE = "archive"  # Demoted reference (lower lifecycle stickiness)
 
 
 class MemoryContextKind(StrEnum):
@@ -55,11 +56,13 @@ class InjectionTier(StrEnum):
     - MANDATE: Critical rules that must always be followed (always injected)
     - GUARDRAIL: Anti-patterns and things to avoid (high priority)
     - REFERENCE: Best practices and patterns (included if budget permits)
+    - ARCHIVE: Demoted reference; faster decay, lower stickiness (see lifecycle_score.TIER_CONFIGS)
     """
 
     MANDATE = "mandate"
     GUARDRAIL = "guardrail"
     REFERENCE = "reference"
+    ARCHIVE = "archive"
 
 
 class EpisodeStatus(StrEnum):

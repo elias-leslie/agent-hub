@@ -23,15 +23,19 @@ def filter_by_score(results: list[dict[str, Any]], min_score: float) -> list[dic
     return [r for r in results if get_result_score(r) >= min_score]
 
 
+_TIER_TO_CATEGORY = {
+    "mandate": MemoryCategory.MANDATE,
+    "guardrail": MemoryCategory.GUARDRAIL,
+    "reference": MemoryCategory.REFERENCE,
+    "archive": MemoryCategory.ARCHIVE,
+}
+
+
 def map_tier_to_category(tier: str | int | None) -> MemoryCategory:
     """Map injection tier (string or int) to memory category."""
     if isinstance(tier, int):
         tier = TIER_REVERSE.get(tier, "reference")
-    if tier == "mandate":
-        return MemoryCategory.MANDATE
-    elif tier == "guardrail":
-        return MemoryCategory.GUARDRAIL
-    return MemoryCategory.REFERENCE
+    return _TIER_TO_CATEGORY.get(tier or "", MemoryCategory.REFERENCE)
 
 
 def build_search_result_from_dict(
