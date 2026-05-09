@@ -18,6 +18,7 @@ _TIER_TO_CATEGORY = {
     "mandate": MemoryCategory.MANDATE,
     "guardrail": MemoryCategory.GUARDRAIL,
     "reference": MemoryCategory.REFERENCE,
+    "archive": MemoryCategory.ARCHIVE,
 }
 
 
