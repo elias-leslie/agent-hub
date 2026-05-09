@@ -338,8 +338,8 @@ async def _try_model_analysis(
     temperature: float,
     project_id: str,
     db: Any,
-) -> tuple[str, bool] | None:
-    """Attempt analysis with a single model. Returns (content, has_issues) or None on failure."""
+) -> tuple[str, bool] | tuple[None, str]:
+    """Attempt analysis with a single model. Returns (content, has_issues) or (None, reason)."""
     from app.adapters.registry import get_provider_for_model
     from app.api.complete.core import complete_internal
 
@@ -362,7 +362,7 @@ async def _try_model_analysis(
         return content[:4000], _findings_have_issues(content)
     except Exception as e:
         logger.warning("Model %s failed for %s: %s", model, project_id, e)
-        return None
+        return None, str(e)
 
 
 async def analyze_captures(
@@ -382,11 +382,13 @@ async def analyze_captures(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ]
+            failures: list[str] = []
             for model in models:
                 result = await _try_model_analysis(model, messages, resolved.agent.temperature, project_id, db)
-                if result is not None:
+                if result[0] is not None:
                     return result
-            return f"All models failed for {project_id}", True
+                failures.append(f"{model}: {result[1]}")
+            return f"All models failed for {project_id}. Details: {'; '.join(failures)}", True
     except Exception as e:
         logger.warning("Site check analysis failed for %s: %s", project_id, e)
         return f"Error analyzing {project_id}: {e}", True
