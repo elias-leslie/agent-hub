@@ -122,3 +122,17 @@ class TestContextBuilderFetcher:
         assert result is not None
         assert result.uuid == "pinned-demoted"
         assert result.pinned is True
+
+    def test_mandate_episode_to_result_propagates_render_mode(self) -> None:
+        result = mandate_episode_to_result(
+            {
+                "uuid": "with-render-mode",
+                "content": "A mandate whose author chose summary rendering.",
+                "summary": "be terse",
+                "render_mode": "summary",
+            },
+            set(),
+        )
+
+        assert result is not None
+        assert result.render_mode == "summary"
