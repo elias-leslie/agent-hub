@@ -66,8 +66,17 @@ async def handle_add_episode(
         bypass_compactness=request.bypass_compactness,
     )
     if not result.success:
+        # Validation failures (Caveman gate, verbose patterns, etc.) are user
+        # input errors — return 422 so the UI can surface the message and
+        # offer the bypass_compactness override.
+        message = result.validation_error or "Failed to add episode"
         raise HTTPException(
-            status_code=500, detail=f"Failed to add episode: {result.validation_error}"
+            status_code=422,
+            detail={
+                "error": "validation_error",
+                "message": message,
+                "details": [{"message": message}],
+            },
         )
 
     new_uuid = result.uuid or ""

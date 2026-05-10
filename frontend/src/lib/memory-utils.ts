@@ -25,7 +25,14 @@ export async function apiFetch<T>(
   const response = await fetchApi(url, options)
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.detail || `${errorPrefix}: ${response.status}`)
+    // Agent-hub's exception handler returns {error, message, details}; older
+    // routes use FastAPI's default {detail}. Read both so the actual message
+    // reaches the UI (and "Save anyway" can detect the Caveman-gate phrase).
+    const message =
+      (typeof error.message === 'string' && error.message) ||
+      (typeof error.detail === 'string' && error.detail) ||
+      `${errorPrefix}: ${response.status}`
+    throw new Error(message)
   }
   return response.json()
 }
