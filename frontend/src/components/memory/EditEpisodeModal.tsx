@@ -29,16 +29,11 @@ export function EditEpisodeModal({
     setPinned,
     summary,
     setSummary,
-    contextKind,
-    setContextKind,
-    applicability,
-    setApplicability,
-    triggerPhases,
-    setTriggerPhases,
     renderMode,
     setRenderMode,
     isSaving,
     error,
+    canBypass,
     hasChanges,
     handleSave,
   } = useEpisodeEditor({ episode, onSaved, onClose })
@@ -95,12 +90,6 @@ export function EditEpisodeModal({
             onPinnedChange={setPinned}
             content={content}
             onContentChange={setContent}
-            contextKind={contextKind}
-            onContextKindChange={setContextKind}
-            applicability={applicability}
-            onApplicabilityChange={setApplicability}
-            triggerPhases={triggerPhases}
-            onTriggerPhasesChange={setTriggerPhases}
             renderMode={renderMode}
             onRenderModeChange={setRenderMode}
             episodeUuid={episode.uuid}
@@ -113,15 +102,6 @@ export function EditEpisodeModal({
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
-
-          {/* Info Box */}
-          <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-800">
-            <p className="text-xs text-amber-400">
-              <strong>Note:</strong> Editing creates a new memory with the
-              updated content while preserving usage statistics (helpful/harmful
-              counts, load count, etc.).
-            </p>
-          </div>
         </div>
 
         {/* Footer */}
@@ -142,9 +122,24 @@ export function EditEpisodeModal({
             >
               Cancel
             </button>
+            {canBypass && (
+              <button
+                type="button"
+                onClick={() => handleSave({ bypassCompactness: true })}
+                disabled={isSaving || !hasChanges || !content.trim()}
+                title="Skip the strict-Caveman compactness gate for this save"
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium text-amber-200 transition-colors flex items-center gap-2',
+                  'border border-amber-700 bg-amber-900/20 hover:bg-amber-900/30',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+              >
+                Save anyway
+              </button>
+            )}
             <button
               type="button"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={isSaving || !hasChanges || !content.trim()}
               className={cn(
                 'px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors flex items-center gap-2',

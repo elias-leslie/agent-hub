@@ -83,6 +83,7 @@ class EpisodeCreator:
         sensitivity_tier: str = "normal",
         changed_by: str | None = None,
         change_reason: str | None = None,
+        bypass_compactness: bool = False,
     ) -> CreateResult:
         """
         Create a new memory episode in PostgreSQL.
@@ -124,6 +125,7 @@ class EpisodeCreator:
             sensitivity_tier=sensitivity_tier,
             changed_by=changed_by,
             change_reason=change_reason,
+            bypass_compactness=bypass_compactness,
         )
 
     async def batch_create(

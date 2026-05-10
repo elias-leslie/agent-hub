@@ -63,6 +63,7 @@ async def handle_add_episode(
         sensitivity_tier=enrichment.sensitivity_tier,
         changed_by="api",
         change_reason=request.change_reason or "Episode added",
+        bypass_compactness=request.bypass_compactness,
     )
     if not result.success:
         raise HTTPException(

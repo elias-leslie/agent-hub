@@ -137,6 +137,15 @@ async def _startup() -> None:
     except Exception as e:
         logger.warning("Failed registered project access reconciliation at startup: %s", e)
 
+    try:
+        from app.services.compactness_policy import load_policy_from_db
+        async with async_session() as db:
+            policy = await load_policy_from_db(db)
+        logger.info("Loaded compactness policy: memory<=%d chars, sentence<=%d words",
+                    policy.memory_max_chars, policy.max_sentence_words)
+    except Exception as e:
+        logger.warning("Failed to load compactness policy at startup: %s", e)
+
     from app.services.health_prober import init_health_prober
     prober = init_health_prober()
     logger.info("Provider health tracker initialized for %d providers (passive mode)", len(prober._providers))

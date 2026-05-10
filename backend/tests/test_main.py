@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.main import _startup
+from app.services.compactness_policy import DEFAULTS as COMPACTNESS_DEFAULTS
 
 
 def _mock_async_session(mock_db: AsyncMock):
@@ -59,6 +60,10 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
+    ), patch(
+        "app.services.compactness_policy.load_policy_from_db",
+        new_callable=AsyncMock,
+        return_value=COMPACTNESS_DEFAULTS,
     ), patch(
         "app.services.health_prober.init_health_prober", return_value=prober
     ) as mock_init_health_prober:
@@ -124,6 +129,10 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
+    ), patch(
+        "app.services.compactness_policy.load_policy_from_db",
+        new_callable=AsyncMock,
+        return_value=COMPACTNESS_DEFAULTS,
     ), patch(
         "app.services.health_prober.init_health_prober", return_value=prober
     ) as mock_init_health_prober:
