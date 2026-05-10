@@ -134,8 +134,10 @@ async def copy_episode_stats(
 
     Copies loaded_count, referenced_count, helpful_count, harmful_count,
     pinned, auto_inject, display_order, summary, trigger_task_types,
-    trigger_phases, and tags.
-    Used when editing memories (delete + recreate) to preserve feedback data.
+    trigger_phases, tags, and created_at. Used when editing memories
+    (delete + recreate) to preserve feedback data AND list position — the
+    memory list sorts on (display_order, created_at desc), so without
+    copying created_at the edited memory would jump within its bucket.
 
     Args:
         source_uuid: UUID of the memory to copy stats from
@@ -154,22 +156,25 @@ async def copy_episode_stats(
             )
             return False
 
-        ok = await repo.update(
-            target_uuid,
-            loaded_count=source.get("loaded_count", 0),
-            referenced_count=source.get("referenced_count", 0),
-            helpful_count=source.get("helpful_count", 0),
-            harmful_count=source.get("harmful_count", 0),
-            pinned=source.get("pinned", False),
-            auto_inject=source.get("auto_inject", False),
-            display_order=source.get("display_order", 50),
-            summary=source.get("summary"),
-            trigger_task_types=source.get("trigger_task_types"),
-            trigger_phases=source.get("trigger_phases"),
-            tags=source.get("tags"),
-            context_kind=source.get("context_kind", "reference"),
-            applicability=source.get("applicability") or {},
-        )
+        update_kwargs: dict[str, object] = {
+            "loaded_count": source.get("loaded_count", 0),
+            "referenced_count": source.get("referenced_count", 0),
+            "helpful_count": source.get("helpful_count", 0),
+            "harmful_count": source.get("harmful_count", 0),
+            "pinned": source.get("pinned", False),
+            "auto_inject": source.get("auto_inject", False),
+            "display_order": source.get("display_order", 50),
+            "summary": source.get("summary"),
+            "trigger_task_types": source.get("trigger_task_types"),
+            "trigger_phases": source.get("trigger_phases"),
+            "tags": source.get("tags"),
+            "context_kind": source.get("context_kind", "reference"),
+            "applicability": source.get("applicability") or {},
+        }
+        source_created_at = source.get("created_at")
+        if source_created_at is not None:
+            update_kwargs["created_at"] = source_created_at
+        ok = await repo.update(target_uuid, **update_kwargs)
 
         if ok:
             logger.debug("Copied stats from %s to %s", source_uuid[:8], target_uuid[:8])
