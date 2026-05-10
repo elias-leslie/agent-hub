@@ -1,11 +1,35 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MemoryTab } from '@/app/agents/[slug]/components/MemoryTab'
 import type { Agent } from '@/app/agents/[slug]/types'
+import {
+  fetchRuntimePolicy,
+  updateRuntimePolicy,
+} from '@/lib/api/runtime-context'
 import { createQueryClientWrapper } from './test-utils'
 
+vi.mock('@/lib/api/runtime-context', () => ({
+  fetchRuntimePolicy: vi.fn(),
+  updateRuntimePolicy: vi.fn(),
+}))
+
 const wrapper = createQueryClientWrapper()
+
+beforeEach(() => {
+  vi.mocked(fetchRuntimePolicy).mockResolvedValue({
+    consumer_profile: 'agent_runtime',
+    mandate_limit: 8,
+    guardrail_limit: 16,
+    reference_limit: 4,
+  })
+  vi.mocked(updateRuntimePolicy).mockResolvedValue({
+    consumer_profile: 'agent_runtime',
+    mandate_limit: 12,
+    guardrail_limit: 16,
+    reference_limit: 4,
+  })
+})
 
 function makeFormData(overrides: Partial<Agent> = {}): Partial<Agent> {
   return {
@@ -146,6 +170,106 @@ describe('MemoryTab', () => {
     expect(
       screen.getByRole('button', { name: 'Memory Injection' }),
     ).not.toBeDisabled()
+  })
+
+  it('hides the "Edit profile defaults" link when custom settings are off', () => {
+    const updateField = vi.fn()
+    render(
+      <MemoryTab
+        formData={makeFormData({ memory_config: null })}
+        updateField={updateField}
+      />,
+      { wrapper },
+    )
+    expect(
+      screen.queryByRole('button', { name: /Edit profile defaults/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens the policy modal scoped to the inherited profile and saves caps', async () => {
+    const updateField = vi.fn()
+    render(
+      <MemoryTab
+        formData={makeFormData({
+          memory_config: {
+            injection_enabled: true,
+            project_index_enabled: true,
+            tool_capabilities_enabled: true,
+            include_mandates: true,
+            include_guardrails: true,
+            include_references: true,
+            reference_index_enabled: true,
+            continuity_enabled: false,
+            continuity_max_sessions: 5,
+            audience_tags: [],
+            exclude_tags: [],
+            exclude_memory_uuids: [],
+            runtime_consumer_profile: 'agent_coding',
+          },
+        })}
+        updateField={updateField}
+      />,
+      { wrapper },
+    )
+
+    const link = screen.getByRole('button', {
+      name: /Edit profile defaults/,
+    })
+    fireEvent.click(link)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Policy caps · agent_coding/)).toBeInTheDocument()
+    })
+
+    await waitFor(() => {
+      expect(fetchRuntimePolicy).toHaveBeenCalledWith({
+        consumerProfile: 'agent_coding',
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(updateRuntimePolicy).toHaveBeenCalledWith(
+        expect.objectContaining({ consumerProfile: 'agent_coding' }),
+      )
+    })
+  })
+
+  it('falls back to agent_runtime when no profile override is set', async () => {
+    const updateField = vi.fn()
+    render(
+      <MemoryTab
+        formData={makeFormData({
+          memory_config: {
+            injection_enabled: true,
+            project_index_enabled: true,
+            tool_capabilities_enabled: true,
+            include_mandates: true,
+            include_guardrails: true,
+            include_references: true,
+            reference_index_enabled: true,
+            continuity_enabled: false,
+            continuity_max_sessions: 5,
+            audience_tags: [],
+            exclude_tags: [],
+            exclude_memory_uuids: [],
+          },
+        })}
+        updateField={updateField}
+      />,
+      { wrapper },
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Edit profile defaults/ }),
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Policy caps · agent_runtime/),
+      ).toBeInTheDocument()
+    })
   })
 
   it('updates consumer profile overrides through routing inputs', () => {

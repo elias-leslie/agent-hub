@@ -19,7 +19,11 @@ interface Props {
   refreshing?: boolean
   resetting?: boolean
   hasOverrides: boolean
-  // Profile whose injection caps the policy panel edits.
+  // Profile whose injection caps the policy panel edits. This surface is
+  // CLI/TUI boot context only (Codex/Claude/Gemini session start), so callers
+  // pass `agent_startup` here. Other profiles (agent_coding, agent_visual,
+  // etc.) are edited via the per-agent memory config instead — do not widen
+  // this topbar to other profiles.
   profile: string
   // Project picker — empty array hides the select.
   projects?: ProjectOption[]
