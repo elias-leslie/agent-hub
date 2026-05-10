@@ -63,13 +63,22 @@ class EpisodeValidator:
     )
 
     @classmethod
-    def validate_content(cls, content: str, tier: str | None = None) -> None:
+    def validate_content(
+        cls,
+        content: str,
+        tier: str | None = None,
+        *,
+        bypass_compactness: bool = False,
+    ) -> None:
         """
         Validate episode content for conciseness and declarative style.
 
         Args:
             content: Episode content to validate
             tier: Optional tier for exact header enforcement
+            bypass_compactness: When true, skip the strict-Caveman gate. Other
+                rules (header, atomic structure, custom delimiters, verbose
+                patterns) still run. Used by the UI "Save anyway" override.
 
         Raises:
             EpisodeValidationError: If content fails validation (header, conversational, delimiters)
@@ -128,21 +137,30 @@ class EpisodeValidator:
                 detected_patterns=["Custom Delimiters"],
             )
 
-        try:
-            validate_compactness(content, kind="memory")
-        except CompactnessValidationError as exc:
-            raise EpisodeValidationError(
-                message="Episode failed strict Caveman gate. " + "; ".join(exc.errors),
-                detected_patterns=list(exc.errors),
-            ) from exc
+        if not bypass_compactness:
+            try:
+                validate_compactness(content, kind="memory")
+            except CompactnessValidationError as exc:
+                raise EpisodeValidationError(
+                    message="Episode failed strict Caveman gate. " + "; ".join(exc.errors),
+                    detected_patterns=list(exc.errors),
+                ) from exc
 
     @classmethod
-    def validate_content_simple(cls, content: str) -> str | None:
+    def validate_content_simple(
+        cls,
+        content: str,
+        *,
+        bypass_compactness: bool = False,
+    ) -> str | None:
         """
         Lightweight validation for generated learnings.
 
         Returns error message if invalid, None if valid.
         Used by episode_creator_core for lightweight validation.
+
+        bypass_compactness: When true, skip the strict-Caveman gate. Used by
+        the UI "Save anyway" override.
         """
         content_lower = content.lower()
         detected = []
@@ -159,10 +177,11 @@ class EpisodeValidator:
                 "Content is too verbose. Write declarative facts, not conversational advice. "
                 f"Detected patterns: {', '.join(repr(p) for p in detected)}"
             )
-        try:
-            validate_compactness(content, kind="memory")
-        except CompactnessValidationError as exc:
-            return "Episode failed strict Caveman gate. " + "; ".join(exc.errors)
+        if not bypass_compactness:
+            try:
+                validate_compactness(content, kind="memory")
+            except CompactnessValidationError as exc:
+                return "Episode failed strict Caveman gate. " + "; ".join(exc.errors)
         return None
 
     @classmethod

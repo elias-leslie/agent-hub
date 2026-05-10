@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from app.services.compactness_policy import get_policy
+
 ContentKind = Literal["prompt", "memory"]
 
 FILLER_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -99,6 +101,7 @@ def _article_ratio(words: list[str]) -> float:
 
 
 def analyze_compactness(content: str, *, kind: ContentKind) -> CompactnessReport:
+    policy = get_policy()
     chars = len(content)
     lines = _line_count(content)
     tokens = _estimate_tokens(content)
@@ -110,14 +113,14 @@ def analyze_compactness(content: str, *, kind: ContentKind) -> CompactnessReport
     article_ratio = _article_ratio(prose_words)
 
     if kind == "prompt":
-        if tokens > 350:
+        if tokens > policy.prompt_max_tokens:
             warnings.append(f"large prompt ({tokens} tok). Hot-path prompts pay this every turn.")
-        if lines > 80:
+        if lines > policy.prompt_max_lines:
             warnings.append(f"long prompt ({lines} lines). Collapse repeated examples and overlap.")
     else:
-        if chars > 280:
+        if chars > policy.memory_max_chars:
             warnings.append(f"long memory ({chars} chars). Keep one atomic rule; split if needed.")
-        if lines > 4:
+        if lines > policy.memory_max_lines:
             warnings.append(f"multi-line memory ({lines} lines). Prefer one short rule body.")
 
     if filler_hits:
@@ -135,18 +138,31 @@ def analyze_compactness(content: str, *, kind: ContentKind) -> CompactnessReport
     if OFFER_BACK_PATTERN.search(content):
         errors.append("offer-back phrasing found. Remove optional follow-up or helper language.")
 
-    if prose_words and len(prose_words) >= 80 and article_ratio > 0.085:
+    if (
+        prose_words
+        and len(prose_words) >= policy.article_ratio_min_words
+        and article_ratio > policy.max_article_ratio
+    ):
         errors.append(
             f"article-heavy prose ({article_ratio:.1%}). Drop articles and compress sentence shape."
         )
 
-    long_sentences = [sentence for sentence in sentences if len(WORD_PATTERN.findall(sentence)) > 24]
+    long_sentences = [
+        sentence
+        for sentence in sentences
+        if len(WORD_PATTERN.findall(sentence)) > policy.max_sentence_words
+    ]
     if long_sentences:
         errors.append("long prose sentences found. Split into short direct lines or bullets.")
 
     if sentences:
-        average_sentence_words = sum(len(WORD_PATTERN.findall(sentence)) for sentence in sentences) / len(sentences)
-        if len(prose_words) >= 120 and average_sentence_words > 16:
+        average_sentence_words = sum(
+            len(WORD_PATTERN.findall(sentence)) for sentence in sentences
+        ) / len(sentences)
+        if (
+            len(prose_words) >= policy.avg_sentence_min_words
+            and average_sentence_words > policy.max_avg_sentence_words
+        ):
             errors.append(
                 f"average sentence too long ({average_sentence_words:.1f} words). Compress prose."
             )

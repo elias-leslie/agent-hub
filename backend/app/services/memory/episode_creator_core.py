@@ -119,9 +119,10 @@ async def create_episode_internal(
     sensitivity_tier: str,
     changed_by: str | None,
     change_reason: str | None,
+    bypass_compactness: bool = False,
 ) -> CreateResult:
     """Internal implementation of episode creation."""
-    if (result := validate_content(content, config)) is not None:
+    if (result := validate_content(content, config, bypass_compactness=bypass_compactness)) is not None:
         return result
 
     if (result := await _check_duplicate(content, config)) is not None:

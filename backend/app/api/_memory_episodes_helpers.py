@@ -173,7 +173,11 @@ async def _build_content_update(
         else str(existing_episode.get("injection_tier") or "reference")
     )
     try:
-        EpisodeValidator.validate_content(request.content, tier=effective_tier)
+        EpisodeValidator.validate_content(
+            request.content,
+            tier=effective_tier,
+            bypass_compactness=getattr(request, "bypass_compactness", False),
+        )
     except EpisodeValidationError as e:
         raise HTTPException(
             status_code=422,

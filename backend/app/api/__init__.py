@@ -9,6 +9,7 @@ from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
 from app.api.arena import router as arena_router
+from app.api.compactness import router as compactness_router
 from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
 from app.api.dashboard_stats import router as dashboard_stats_router
@@ -74,6 +75,7 @@ router.include_router(providers_router)  # Has its own prefix /providers and tag
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
 router.include_router(push_router)  # Has its own prefix /push and tags
 router.include_router(runtime_context_router)
+router.include_router(compactness_router)
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
 router.include_router(wake_router)  # Has its own prefix /wake and tags

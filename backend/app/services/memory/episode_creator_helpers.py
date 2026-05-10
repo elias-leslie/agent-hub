@@ -20,11 +20,18 @@ logger = logging.getLogger(__name__)
 MAX_SOURCE_COMPACT_CONTENT_CHARS = 420
 
 
-def validate_content(content: str, config: IngestionConfig) -> CreateResult | None:
+def validate_content(
+    content: str,
+    config: IngestionConfig,
+    *,
+    bypass_compactness: bool = False,
+) -> CreateResult | None:
     """Return a failure CreateResult if validation fails, else None."""
     if not config.validate:
         return None
-    validation_error = EpisodeValidator.validate_content_simple(content)
+    validation_error = EpisodeValidator.validate_content_simple(
+        content, bypass_compactness=bypass_compactness
+    )
     if validation_error:
         return CreateResult(success=False, validation_error=validation_error)
     if config == LEARNING:

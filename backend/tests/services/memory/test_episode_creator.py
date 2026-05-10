@@ -101,6 +101,25 @@ class TestEpisodeCreatorValidation:
         assert "strict caveman gate" in str(exc.value).lower()
         assert "example markers found" in str(exc.value).lower()
 
+    def test_bypass_compactness_skips_caveman_gate(self) -> None:
+        # Long-sentence error normally fails the gate; bypass should let it through.
+        long_content = (
+            "**Topic**: Use the canonical runbook entry today before any other "
+            "operator action because every fallback path eventually flows back."
+        )
+        EpisodeValidator.validate_content(
+            long_content, tier="mandate", bypass_compactness=True
+        )
+
+    def test_bypass_compactness_still_enforces_other_rules(self) -> None:
+        # Bypass should NOT skip header/atomic/verbose/delimiter rules.
+        with pytest.raises(EpisodeValidationError):
+            EpisodeValidator.validate_content(
+                "no header here",
+                tier="mandate",
+                bypass_compactness=True,
+            )
+
     def test_rejects_missing_bold_topic_header_when_tier_is_provided(self):
         """Tier-aware validation should still require a bold topic header."""
         with pytest.raises(EpisodeValidationError) as exc:

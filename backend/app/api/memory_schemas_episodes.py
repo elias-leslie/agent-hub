@@ -41,6 +41,10 @@ class AddEpisodeRequest(BaseModel):
         description="Audience targeting rules for this memory",
     )
     change_reason: str | None = Field(None, description="Why this memory was created")
+    bypass_compactness: bool = Field(
+        False,
+        description="UI override: skip the strict-Caveman compactness gate for this save.",
+    )
 
 
 class AddEpisodeResponse(BaseModel):
@@ -102,6 +106,10 @@ class UpdateEpisodeRequest(BaseModel):
         description="Updated injection tier (mandate/guardrail/reference/archive)",
     )
     change_reason: str | None = Field(None, description="Why this episode was updated")
+    bypass_compactness: bool = Field(
+        False,
+        description="UI override: skip the strict-Caveman compactness gate for this save.",
+    )
 
 
 class UpdateEpisodeResponse(BaseModel):
