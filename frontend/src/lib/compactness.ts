@@ -9,6 +9,30 @@ export interface CompactnessReport {
   warnings: string[]
 }
 
+export interface CompactnessThresholds {
+  memory_max_chars: number
+  memory_max_lines: number
+  prompt_max_tokens: number
+  prompt_max_lines: number
+  max_sentence_words: number
+  max_avg_sentence_words: number
+  avg_sentence_min_words: number
+  max_article_ratio_permille: number
+  article_ratio_min_words: number
+}
+
+export const COMPACTNESS_DEFAULTS: CompactnessThresholds = {
+  memory_max_chars: 280,
+  memory_max_lines: 4,
+  prompt_max_tokens: 350,
+  prompt_max_lines: 80,
+  max_sentence_words: 24,
+  max_avg_sentence_words: 16,
+  avg_sentence_min_words: 120,
+  max_article_ratio_permille: 85,
+  article_ratio_min_words: 80,
+}
+
 const FILLER_PATTERNS: Array<[string, RegExp]> = [
   ['just', /\bjust\b/i],
   ['really', /\breally\b/i],
@@ -72,6 +96,7 @@ function extractSentences(content: string): string[] {
 export function analyzeCompactness(
   content: string,
   kind: CompactnessKind,
+  policy: CompactnessThresholds = COMPACTNESS_DEFAULTS,
 ): CompactnessReport {
   const chars = content.length
   const lines = lineCount(content)
@@ -83,23 +108,23 @@ export function analyzeCompactness(
   const sentences = extractSentences(content)
 
   if (kind === 'prompt') {
-    if (tokens > 350) {
+    if (tokens > policy.prompt_max_tokens) {
       warnings.push(
         `large prompt (${tokens} tok). Hot-path prompts pay this every turn.`,
       )
     }
-    if (lines > 80) {
+    if (lines > policy.prompt_max_lines) {
       warnings.push(
         `long prompt (${lines} lines). Collapse repeated examples and overlap.`,
       )
     }
   } else {
-    if (chars > 280) {
+    if (chars > policy.memory_max_chars) {
       warnings.push(
         `long memory (${chars} chars). Keep one atomic rule; split if needed.`,
       )
     }
-    if (lines > 4) {
+    if (lines > policy.memory_max_lines) {
       warnings.push(
         `multi-line memory (${lines} lines). Prefer one short rule body.`,
       )
@@ -134,10 +159,10 @@ export function analyzeCompactness(
     )
   }
 
-  if (words.length >= 80) {
+  if (words.length >= policy.article_ratio_min_words) {
     const articleRatio =
       words.filter((word) => ARTICLE_WORDS.has(word)).length / words.length
-    if (articleRatio > 0.085) {
+    if (articleRatio > policy.max_article_ratio_permille / 1000) {
       errors.push(
         `article-heavy prose (${(articleRatio * 100).toFixed(1)}%). Drop articles and compress sentence shape.`,
       )
@@ -147,17 +172,20 @@ export function analyzeCompactness(
   const sentenceLengths = sentences.map(
     (sentence) => sentence.match(WORD_PATTERN)?.length ?? 0,
   )
-  if (sentenceLengths.some((count) => count > 24)) {
+  if (sentenceLengths.some((count) => count > policy.max_sentence_words)) {
     errors.push(
       'long prose sentences found. Split into short direct lines or bullets.',
     )
   }
 
-  if (words.length >= 120 && sentenceLengths.length > 0) {
+  if (
+    words.length >= policy.avg_sentence_min_words &&
+    sentenceLengths.length > 0
+  ) {
     const averageSentenceWords =
       sentenceLengths.reduce((sum, count) => sum + count, 0) /
       sentenceLengths.length
-    if (averageSentenceWords > 16) {
+    if (averageSentenceWords > policy.max_avg_sentence_words) {
       errors.push(
         `average sentence too long (${averageSentenceWords.toFixed(1)} words). Compress prose.`,
       )
