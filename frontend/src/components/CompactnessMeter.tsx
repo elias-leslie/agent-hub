@@ -1,8 +1,14 @@
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, Minimize2 } from 'lucide-react'
 
-import { analyzeCompactness, type CompactnessKind } from '@/lib/compactness'
+import { fetchCompactnessPolicy } from '@/lib/api/compactness'
+import {
+  analyzeCompactness,
+  COMPACTNESS_DEFAULTS,
+  type CompactnessKind,
+} from '@/lib/compactness'
 import { cn } from '@/lib/utils'
 
 interface CompactnessMeterProps {
@@ -16,7 +22,16 @@ export function CompactnessMeter({
   kind,
   className,
 }: CompactnessMeterProps) {
-  const report = analyzeCompactness(content, kind)
+  const policyQuery = useQuery({
+    queryKey: ['compactness', 'policy'],
+    queryFn: fetchCompactnessPolicy,
+    staleTime: 60_000,
+  })
+  const report = analyzeCompactness(
+    content,
+    kind,
+    policyQuery.data ?? COMPACTNESS_DEFAULTS,
+  )
   const blocked = report.errors.length > 0
   const healthy = !blocked && report.warnings.length === 0
 
