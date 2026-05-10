@@ -14,6 +14,7 @@ class PromptCreateRequest(BaseModel):
     description: str | None = None
     is_global: bool = False
     enabled: bool = True
+    boot_eligible: bool = False
     exclude_agents: list[str] = Field(default_factory=list)
 
 
@@ -24,6 +25,7 @@ class PromptUpdateRequest(BaseModel):
     description: str | None = None
     is_global: bool | None = None
     enabled: bool | None = None
+    boot_eligible: bool | None = None
     exclude_agents: list[str] | None = None
     change_reason: str | None = None
 
@@ -36,6 +38,7 @@ class PromptResponse(BaseModel):
     description: str | None
     is_global: bool
     enabled: bool
+    boot_eligible: bool = False
     exclude_agents: list[str]
     owner_agent_slug: str | None = None
     prompt_type: str | None = None
@@ -59,6 +62,7 @@ class PromptRevisionResponse(BaseModel):
     description: str | None
     is_global: bool
     enabled: bool
+    boot_eligible: bool = False
     exclude_agents: list[str]
     owner_agent_id: int | None
     prompt_type: str | None = None

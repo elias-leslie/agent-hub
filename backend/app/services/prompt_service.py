@@ -49,6 +49,7 @@ async def record_prompt_revision(
         description=prompt.description,
         is_global=prompt.is_global,
         enabled=prompt.enabled,
+        boot_eligible=prompt.boot_eligible,
         exclude_agents=list(prompt.exclude_agents or []),
         owner_agent_id=prompt.owner_agent_id,
         prompt_type=prompt.prompt_type,
@@ -97,6 +98,7 @@ async def create_prompt(
     description: str | None = None,
     is_global: bool = False,
     enabled: bool = True,
+    boot_eligible: bool = False,
     exclude_agents: list[str] | None = None,
     owner_agent_id: int | None = None,
     prompt_type: str = "standard",
@@ -113,6 +115,7 @@ async def create_prompt(
         description=description,
         is_global=is_global,
         enabled=enabled,
+        boot_eligible=boot_eligible,
         exclude_agents=exclude_agents or [],
         owner_agent_id=owner_agent_id,
         prompt_type=prompt_type,
@@ -151,6 +154,7 @@ async def update_prompt(
         "description",
         "is_global",
         "enabled",
+        "boot_eligible",
         "slug",
         "exclude_agents",
     }
@@ -279,6 +283,7 @@ async def restore_prompt_revision(
     prompt.description = revision.description
     prompt.is_global = revision.is_global
     prompt.enabled = revision.enabled
+    prompt.boot_eligible = revision.boot_eligible
     prompt.exclude_agents = list(revision.exclude_agents or [])
 
     await db.flush()

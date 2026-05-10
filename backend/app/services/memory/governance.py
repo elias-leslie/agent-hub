@@ -21,7 +21,7 @@ from .applicability import (
 from .context_builder_settings import default_agent_memory_config, normalize_memory_config
 from .repository import TIER_REVERSE
 
-_STARTUP_CONSUMER_PROFILES = {"codex_startup", "claude_session_start"}
+_STARTUP_CONSUMER_PROFILES = {"agent_startup"}
 _WARN_THRESHOLDS = {
     "untargeted_reference_count": 40,
     "oversized_policy_count": 12,

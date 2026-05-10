@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
-CODEX_STARTUP_FULL_TAG = "codex_startup_full"
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+
+# Memory tag that signals a memory should render at full detail when delivered
+# to any startup consumer. Tag string kept as `codex_startup_full` to avoid
+# rewriting existing memory tags during the unified-startup migration.
+AGENT_STARTUP_FULL_TAG = "codex_startup_full"
+CODEX_STARTUP_FULL_TAG = AGENT_STARTUP_FULL_TAG
 
 
 class MemoryConsumerProfile(StrEnum):
@@ -17,9 +27,13 @@ class MemoryConsumerProfile(StrEnum):
     AGENT_CODING = "agent_coding"
     AGENT_OPERATOR = "agent_operator"
     AGENT_PROMPTOPS = "agent_promptops"
-    CLAUDE_SESSION_START = "claude_session_start"
-    CODEX_STARTUP = "codex_startup"
-    GEMINI_STARTUP = "gemini_startup"
+    AGENT_STARTUP = "agent_startup"
+
+
+# Legacy per-CLI startup profile names that all resolve to AGENT_STARTUP.
+_LEGACY_STARTUP_ALIASES: frozenset[str] = frozenset(
+    {"claude_session_start", "codex_startup", "gemini_startup"}
+)
 
 
 _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
@@ -29,9 +43,7 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
     MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
-    MemoryConsumerProfile.CLAUDE_SESSION_START: (8, 2),
-    MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
-    MemoryConsumerProfile.GEMINI_STARTUP: (8, 2),
+    MemoryConsumerProfile.AGENT_STARTUP: (28, 6),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_PREVIEW: False,
@@ -40,9 +52,7 @@ _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_CODING: True,
     MemoryConsumerProfile.AGENT_OPERATOR: True,
     MemoryConsumerProfile.AGENT_PROMPTOPS: True,
-    MemoryConsumerProfile.CLAUDE_SESSION_START: False,
-    MemoryConsumerProfile.CODEX_STARTUP: False,
-    MemoryConsumerProfile.GEMINI_STARTUP: False,
+    MemoryConsumerProfile.AGENT_STARTUP: False,
 }
 
 
@@ -50,6 +60,8 @@ def resolve_consumer_profile(consumer_profile: str | None) -> MemoryConsumerProf
     """Normalize caller-provided profile names to a known profile."""
     if not consumer_profile:
         return MemoryConsumerProfile.AGENT_RUNTIME
+    if consumer_profile in _LEGACY_STARTUP_ALIASES:
+        return MemoryConsumerProfile.AGENT_STARTUP
     try:
         return MemoryConsumerProfile(consumer_profile)
     except ValueError:
@@ -59,8 +71,8 @@ def resolve_consumer_profile(consumer_profile: str | None) -> MemoryConsumerProf
 def full_render_tags_for_profile(consumer_profile: str | None) -> set[str]:
     """Return memory tags that should render at full detail for a profile."""
     profile = resolve_consumer_profile(consumer_profile)
-    if profile == MemoryConsumerProfile.CODEX_STARTUP:
-        return {CODEX_STARTUP_FULL_TAG}
+    if profile == MemoryConsumerProfile.AGENT_STARTUP:
+        return {AGENT_STARTUP_FULL_TAG}
     return set()
 
 
@@ -70,9 +82,96 @@ def priority_tags_for_profile(consumer_profile: str | None) -> set[str]:
 
 
 def policy_limits_for_profile(consumer_profile: str | None) -> tuple[int, int]:
-    """Return mandate/guardrail caps for any policy-summary consumer."""
+    """Return mandate/guardrail caps from the Python fallback dict.
+
+    Prefer `resolve_policy_limits` (async) when DB access is available — it
+    layers per-agent memory_config overrides on top of DB-backed per-profile
+    defaults, falling back to this dict only when the row is missing.
+    """
     profile = resolve_consumer_profile(consumer_profile)
     return _PROFILE_POLICY_LIMITS.get(profile, (0, 0))
+
+
+# In-process cache for DB-backed per-profile policy rows. Keyed by
+# consumer_profile value; tuple is (mandate, guardrail, reference) where each
+# element is an int|None (None = uncapped). Invalidated by upsert path.
+_POLICY_CACHE: dict[str, tuple[int | None, int | None, int | None]] | None = None
+
+
+def invalidate_policy_cache() -> None:
+    """Clear the in-process policy cache (called from the PUT endpoint)."""
+    global _POLICY_CACHE
+    _POLICY_CACHE = None
+
+
+async def _load_policy_cache(db: AsyncSession) -> dict[str, tuple[int | None, int | None, int | None]]:
+    # Imported lazily to avoid circular import at module load.
+    from app.models.runtime_context import RuntimeContextProfilePolicy
+
+    rows = (await db.execute(select(RuntimeContextProfilePolicy))).scalars().all()
+    return {
+        row.consumer_profile: (row.mandate_limit, row.guardrail_limit, row.reference_limit)
+        for row in rows
+    }
+
+
+async def _ensure_policy_cache(db: AsyncSession | None) -> dict[str, tuple[int | None, int | None, int | None]]:
+    global _POLICY_CACHE
+    if _POLICY_CACHE is not None:
+        return _POLICY_CACHE
+    if db is not None:
+        _POLICY_CACHE = await _load_policy_cache(db)
+        return _POLICY_CACHE
+    async for session in get_db():
+        _POLICY_CACHE = await _load_policy_cache(session)
+        return _POLICY_CACHE
+    return {}
+
+
+def _coerce_int_limit(value: Any, fallback: int) -> int:
+    """Coerce a memory_config override value to an int cap (0 = uncapped).
+
+    Accepts int (including 0 = uncapped) or None. Anything else falls back to
+    the resolved profile default.
+    """
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, int):
+        return max(value, 0)
+    return fallback
+
+
+async def resolve_policy_limits(
+    consumer_profile: str | None,
+    memory_config: dict[str, Any] | None = None,
+    db: AsyncSession | None = None,
+) -> tuple[int, int, int]:
+    """Resolve effective (mandate, guardrail, reference) caps.
+
+    Resolution chain: per-agent `memory_config` (mandate_limit, guardrail_limit,
+    reference_limit) → DB profile policy row → Python fallback dict. Returned
+    integers use 0 = uncapped semantics so callers can pass directly to
+    `_limit_by_rendered_token_budget`.
+    """
+    profile = resolve_consumer_profile(consumer_profile)
+    py_mandate, py_guardrail = _PROFILE_POLICY_LIMITS.get(profile, (0, 0))
+    py_reference = 0  # No Python-fallback reference cap today.
+
+    cache = await _ensure_policy_cache(db)
+    db_mandate, db_guardrail, db_reference = cache.get(profile.value, (None, None, None))
+    mandate_default = py_mandate if db_mandate is None else db_mandate
+    guardrail_default = py_guardrail if db_guardrail is None else db_guardrail
+    reference_default = py_reference if db_reference is None else db_reference
+
+    if memory_config is None:
+        return mandate_default, guardrail_default, reference_default
+
+    mandate = _coerce_int_limit(memory_config.get("mandate_limit"), mandate_default)
+    guardrail = _coerce_int_limit(memory_config.get("guardrail_limit"), guardrail_default)
+    reference = _coerce_int_limit(memory_config.get("reference_limit"), reference_default)
+    return mandate, guardrail, reference
 
 
 def summarize_policies_for_profile(consumer_profile: str | None) -> bool:

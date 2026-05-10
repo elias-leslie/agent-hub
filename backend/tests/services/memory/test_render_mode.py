@@ -146,7 +146,7 @@ class TestAutoBehaviorPreserved:
             reference_index=[],
             references=[],
             query="",
-            consumer_profile=MemoryConsumerProfile.CODEX_STARTUP.value,
+            consumer_profile=MemoryConsumerProfile.AGENT_STARTUP.value,
         )
         assert item.render_tier == PROMPT_TIER_L0
         assert item.render_reason == "policy_summary"
@@ -159,7 +159,7 @@ class TestAutoBehaviorPreserved:
             reference_index=[],
             references=[],
             query="",
-            consumer_profile=MemoryConsumerProfile.CODEX_STARTUP.value,
+            consumer_profile=MemoryConsumerProfile.AGENT_STARTUP.value,
         )
         assert item.render_tier == PROMPT_TIER_L2
         assert item.render_reason == "consumer_profile_tag"
@@ -172,7 +172,7 @@ class TestAutoBehaviorPreserved:
             reference_index=[],
             references=[],
             query="",
-            consumer_profile=MemoryConsumerProfile.CODEX_STARTUP.value,
+            consumer_profile=MemoryConsumerProfile.AGENT_STARTUP.value,
         )
         assert item.render_tier == PROMPT_TIER_L0
         assert item.render_reason == "memory_render_mode"

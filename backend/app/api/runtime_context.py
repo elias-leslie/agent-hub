@@ -15,9 +15,13 @@ from app.services.runtime_context import (
     RuntimeContextOverridePayload,
     RuntimeContextOverrideResponse,
     RuntimeContextPreviewResponse,
+    RuntimeContextProfilePolicyResponse,
+    RuntimeContextProfilePolicyUpdate,
+    get_runtime_context_profile_policy,
     list_runtime_context_overrides,
     render_runtime_context,
     replace_runtime_context_overrides,
+    upsert_runtime_context_profile_policy,
 )
 
 router = APIRouter(prefix="/runtime-context", tags=["runtime-context"])
@@ -85,6 +89,29 @@ async def put_runtime_context_overrides(
         overrides=request.overrides,
     )
     return RuntimeContextOverrideListResponse(overrides=overrides)
+
+
+@router.get("/{consumer_profile}/policy", response_model=RuntimeContextProfilePolicyResponse)
+async def get_runtime_context_policy(
+    consumer_profile: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> RuntimeContextProfilePolicyResponse:
+    return await get_runtime_context_profile_policy(
+        db, consumer_profile=consumer_profile
+    )
+
+
+@router.put("/{consumer_profile}/policy", response_model=RuntimeContextProfilePolicyResponse)
+async def put_runtime_context_policy(
+    consumer_profile: str,
+    payload: RuntimeContextProfilePolicyUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> RuntimeContextProfilePolicyResponse:
+    return await upsert_runtime_context_profile_policy(
+        db, consumer_profile=consumer_profile, payload=payload
+    )
 
 
 @router.get("/{consumer_profile}/preview", response_model=RuntimeContextPreviewResponse)

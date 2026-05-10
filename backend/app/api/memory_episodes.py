@@ -63,7 +63,7 @@ async def add_episode(
 @router.get("/list", response_model=MemoryListResult)
 async def list_episodes(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-    limit: Annotated[int, Query(ge=1, le=300, description="Max episodes per page")] = 50,
+    limit: Annotated[int, Query(ge=1, description="Max episodes per page")] = 50,
     cursor: Annotated[str | None, Query(description="Timestamp cursor for pagination")] = None,
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
     all_groups: Annotated[bool, Query(description="Include all groups instead of current scope")] = False,

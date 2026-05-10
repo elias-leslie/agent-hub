@@ -417,8 +417,7 @@ def test_build_memory_review_prompt_includes_assignment_context() -> None:
         governance_snapshot={"health_status": "healthy"},
     )
 
-    assert "codex_startup" in prompt
-    assert "claude_session_start" in prompt
+    assert "agent_startup" in prompt
     assert "Use st search before repo spelunking." in prompt
 
 

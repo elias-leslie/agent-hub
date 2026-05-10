@@ -77,6 +77,7 @@ def _prompt_to_response(p: object) -> PromptResponse:
         description=p.description,
         is_global=p.is_global,
         enabled=p.enabled,
+        boot_eligible=bool(p.boot_eligible),
         exclude_agents=p.exclude_agents or [],
         owner_agent_slug=owner_agent.slug if owner_agent else None,
         prompt_type=p.prompt_type,
@@ -100,6 +101,7 @@ def _revision_to_response(revision: object) -> PromptRevisionResponse:
         description=revision.description,
         is_global=revision.is_global,
         enabled=revision.enabled,
+        boot_eligible=bool(revision.boot_eligible),
         exclude_agents=revision.exclude_agents or [],
         owner_agent_id=revision.owner_agent_id,
         prompt_type=revision.prompt_type,
@@ -152,6 +154,7 @@ async def create_prompt_endpoint(
             description=request.description,
             is_global=request.is_global,
             enabled=request.enabled,
+            boot_eligible=request.boot_eligible,
             exclude_agents=request.exclude_agents,
             changed_by="api",
         )

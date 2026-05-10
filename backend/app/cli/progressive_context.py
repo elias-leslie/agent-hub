@@ -40,7 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Run a memory context status probe.")
     status_parser.add_argument("--project", help="Project ID for project-scoped probe")
     status_parser.add_argument("--branch", help="Optional current branch for the probe")
-    status_parser.add_argument("--consumer-profile", default="claude_session_start", help="Consumer profile to test")
+    status_parser.add_argument("--consumer-profile", default="agent_startup", help="Consumer profile to test")
     status_parser.add_argument("--query", default="memory status probe", help="Probe query")
     status_parser.add_argument("--json", action="store_true", help="Emit raw JSON")
 

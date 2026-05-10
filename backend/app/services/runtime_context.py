@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory_unified import Memory
 from app.models.prompt import Prompt
-from app.models.runtime_context import RuntimeContextOverride
+from app.models.runtime_context import (
+    RuntimeContextOverride,
+    RuntimeContextProfilePolicy,
+)
 from app.services.memory.budget import count_tokens
 from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_builder_tiers import (
@@ -21,18 +24,25 @@ from app.services.memory.context_builder_tiers import (
     get_rendered_content,
 )
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
+from app.services.memory.context_profiles import (
+    _PROFILE_POLICY_LIMITS,
+    invalidate_policy_cache,
+    resolve_consumer_profile,
+)
+from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.repository import MemoryRepository
 from app.services.memory.service import MemoryScope, MemorySearchResult
+from app.services.memory.settings import get_memory_settings
+from app.services.memory.st_usage_memory import get_recent_st_usage_memory
+from app.services.memory.tool_capability_context import format_tool_capability_context
+from app.services.project_permission_service import get_visible_tools_for_project
 
 RuntimeSourceType = Literal["prompt", "memory"]
 RuntimeOverrideMode = Literal["include", "exclude", "order"]
+RuntimeBlockSource = Literal["auto", "pinned"]
 RuntimeTierOverride = Literal["L0", "L1", "L2"]
 
-KNOWN_RUNTIME_PROFILES = (
-    "codex_startup",
-    "claude_session_start",
-    "gemini_startup",
-)
+KNOWN_RUNTIME_PROFILES = ("agent_startup",)
 
 
 class RuntimeContextOverridePayload(BaseModel):
@@ -59,6 +69,12 @@ class RuntimeContextBlockResponse(BaseModel):
     content: str
     token_count: int
     origin: Literal["auto", "override"]
+    # New: explicit "where did this come from" — auto (tier rule / boot_eligible)
+    # or pinned (manual include override).
+    source: RuntimeBlockSource = "auto"
+    # New: short tag explaining auto-injection ("tier:mandate", "boot_eligible", ...).
+    # None when source is pinned.
+    auto_reason: str | None = None
     mode: RuntimeOverrideMode
     position: int
     tier: str | None = None
@@ -68,6 +84,12 @@ class RuntimeContextBlockResponse(BaseModel):
     render_mode: str | None = None
     # Resolved per-profile/per-project tier override, if any.
     tier_override: RuntimeTierOverride | None = None
+    # New: where the block lives — "global" or "project:<id>" for memories;
+    # "global" for prompts (we don't currently scope prompts per project).
+    scope: str | None = None
+    scope_id: str | None = None
+    # New: free-form tags surfaced for filtering in the library.
+    tags: list[str] = Field(default_factory=list)
 
 
 class RuntimeContextPreviewResponse(BaseModel):
@@ -75,9 +97,19 @@ class RuntimeContextPreviewResponse(BaseModel):
     project_id: str | None
     query: str
     total_tokens: int
+    # New: configured budget ceiling for this profile (memory.total_budget).
+    budget_tokens: int = 0
     rendered: str
     blocks: list[RuntimeContextBlockResponse]
+    # New: blocks the user has explicitly excluded — surfaced for UI restore.
+    excluded: list[RuntimeContextBlockResponse] = Field(default_factory=list)
     overrides: list[RuntimeContextOverrideResponse]
+    # Computed boot-context blocks rendered alongside prompts/memories at session
+    # start (project_index_block + tool_capability_block in
+    # context_injector_ops.finalize_injection). Surfaced separately so the UI
+    # can label them; total_tokens already accounts for them.
+    project_index: str = ""
+    tool_capabilities: str = ""
 
 
 @dataclass(frozen=True)
@@ -178,15 +210,15 @@ async def render_runtime_context(
         for item in overrides
         if item.enabled
     }
-    excluded = {
+    excluded_keys = {
         (item.source_type, item.source_id)
         for item in overrides
         if item.enabled and item.mode == "exclude"
     }
 
-    blocks: list[RuntimeContextBlockResponse] = []
-    blocks.extend(await _build_prompt_blocks(db, overrides, excluded))
-    blocks.extend(await _build_memory_blocks(
+    candidates: list[RuntimeContextBlockResponse] = []
+    candidates.extend(await _build_prompt_blocks(db, overrides, override_by_key, excluded_keys))
+    candidates.extend(await _build_memory_blocks(
         db,
         consumer_profile=consumer_profile,
         project_id=project_id,
@@ -196,19 +228,71 @@ async def render_runtime_context(
         include_global=include_global,
         overrides=overrides,
         override_by_key=override_by_key,
-        excluded=excluded,
+        excluded=excluded_keys,
     ))
-    blocks.sort(key=lambda block: (block.position, _source_sort(block.source_type), block.source_id))
-    rendered = _render_blocks(blocks)
+    candidates.sort(key=lambda block: (block.position, _source_sort(block.source_type), block.source_id))
+
+    rendered_blocks = [block for block in candidates if block.mode != "exclude"]
+    excluded_blocks = [block for block in candidates if block.mode == "exclude"]
+    rendered = _render_blocks(rendered_blocks)
+
+    project_index_block, tool_capability_block = await _compute_auxiliary_blocks(
+        consumer_profile=consumer_profile,
+        project_id=project_id,
+        task_type=task_type,
+    )
+    full_rendered = "\n".join(
+        chunk for chunk in (project_index_block, tool_capability_block, rendered) if chunk
+    )
+
+    settings = await get_memory_settings(db)
     return RuntimeContextPreviewResponse(
         consumer_profile=consumer_profile,
         project_id=project_id,
         query=query,
-        total_tokens=count_tokens(rendered),
+        total_tokens=count_tokens(full_rendered),
+        budget_tokens=settings.total_budget,
         rendered=rendered,
-        blocks=blocks,
+        blocks=rendered_blocks,
+        excluded=excluded_blocks,
         overrides=[_override_response(row) for row in override_rows],
+        project_index=project_index_block,
+        tool_capabilities=tool_capability_block,
     )
+
+
+async def _compute_auxiliary_blocks(
+    *,
+    consumer_profile: str,
+    project_id: str | None,
+    task_type: str | None,
+) -> tuple[str, str]:
+    """Mirror context_injector_ops.run_injection_operation auxiliary blocks.
+
+    The frontend preview must match what an agent actually receives at
+    session start, which prepends project_index + tool_capabilities to the
+    rendered prompts/memories.
+    """
+    project_index_block = format_project_index_context(
+        project_id, consumer_profile=consumer_profile, task_type=task_type
+    )
+    visible_tool_names = (
+        await get_visible_tools_for_project(project_id) if project_id else frozenset()
+    )
+    bash_available = ("bash" in visible_tool_names) if project_id else None
+    st_usage_memory = (
+        await get_recent_st_usage_memory(project_id=project_id, task_type=task_type)
+        if bash_available is not False
+        else None
+    )
+    tool_capability_block = format_tool_capability_context(
+        consumer_profile=consumer_profile,
+        task_type=task_type,
+        project_id=project_id,
+        bash_available=bash_available,
+        st_quick=st_usage_memory.quick if st_usage_memory else None,
+    )
+    return project_index_block, tool_capability_block
 
 
 async def _load_override_rows(
@@ -262,25 +346,34 @@ def _resolve_overrides(rows: list[RuntimeContextOverride]) -> list[_ResolvedOver
 async def _build_prompt_blocks(
     db: AsyncSession,
     overrides: list[_ResolvedOverride],
+    override_by_key: dict[tuple[str, str], _ResolvedOverride],
     excluded: set[tuple[str, str]],
 ) -> list[RuntimeContextBlockResponse]:
-    prompt_overrides = [
-        item
+    pinned_slugs = {
+        item.source_id
         for item in overrides
         if item.enabled and item.source_type == "prompt" and item.mode == "include"
-    ]
-    if not prompt_overrides:
-        return []
-    slugs = [item.source_id for item in prompt_overrides]
-    result = await db.execute(select(Prompt).where(Prompt.slug.in_(slugs), Prompt.enabled.is_(True)))
-    prompts = {prompt.slug: prompt for prompt in result.scalars().all()}
+    }
+    # Boot-eligible prompts auto-inject; pinned-via-override prompts also appear.
+    stmt = select(Prompt).where(Prompt.enabled.is_(True)).where(
+        or_(Prompt.boot_eligible.is_(True), Prompt.slug.in_(list(pinned_slugs)))
+        if pinned_slugs
+        else Prompt.boot_eligible.is_(True)
+    )
+    result = await db.execute(stmt)
+    prompts = list(result.scalars().all())
+
     blocks: list[RuntimeContextBlockResponse] = []
-    for item in prompt_overrides:
-        if ("prompt", item.source_id) in excluded:
-            continue
-        prompt = prompts.get(item.source_id)
-        if prompt is None:
-            continue
+    for prompt in prompts:
+        key = ("prompt", prompt.slug)
+        ovr = override_by_key.get(key)
+        is_pinned = bool(ovr and ovr.mode == "include")
+        is_excluded = key in excluded
+        position = ovr.position if ovr else _default_prompt_position(prompt)
+        tags = []
+        if prompt.prompt_type and prompt.prompt_type != "standard":
+            tags.append(prompt.prompt_type)
+        scope = "global" if prompt.is_global else "agent"
         blocks.append(
             RuntimeContextBlockResponse(
                 id=f"prompt:{prompt.slug}",
@@ -289,9 +382,14 @@ async def _build_prompt_blocks(
                 title=prompt.name,
                 content=prompt.content,
                 token_count=count_tokens(prompt.content),
-                origin="override",
-                mode="include",
-                position=item.position,
+                origin="override" if is_pinned else "auto",
+                source="pinned" if is_pinned else "auto",
+                auto_reason=None if is_pinned else "boot_eligible",
+                mode="exclude" if is_excluded else ("include" if is_pinned else "order"),
+                position=position,
+                scope=scope,
+                scope_id=None,
+                tags=tags,
             )
         )
     return blocks
@@ -334,6 +432,7 @@ async def _build_memory_blocks(
         and item.source_id not in selected
     ]
     forced_items = await _fetch_forced_memory_items(db, forced_ids)
+    forced_uuids = {item.uuid for item in forced_items}
     auto_items.extend((item, _tier_for_memory(item), 0) for item in forced_items)
 
     # Apply per-profile/per-project tier overrides before reading rendered content.
@@ -344,11 +443,17 @@ async def _build_memory_blocks(
 
     blocks: list[RuntimeContextBlockResponse] = []
     for item, tier, index in auto_items:
-        if ("memory", item.uuid) in excluded:
-            continue
-        override = override_by_key.get(("memory", item.uuid))
+        key = ("memory", item.uuid)
+        override = override_by_key.get(key)
+        is_excluded = key in excluded
+        is_pinned = item.uuid in forced_uuids or bool(
+            override and override.mode == "include"
+        )
         content = get_rendered_content(item)
         position = override.position if override else _default_memory_position(tier, item, index)
+        scope_value = item.scope.value if item.scope else None
+        memory_scope = scope_value or "global"
+        memory_scope_id = getattr(item, "scope_id", None)
         blocks.append(
             RuntimeContextBlockResponse(
                 id=f"memory:{item.uuid}",
@@ -357,13 +462,18 @@ async def _build_memory_blocks(
                 title=item.summary or item.content.splitlines()[0][:80],
                 content=content,
                 token_count=count_tokens(content),
-                origin="override" if override and override.mode == "include" else "auto",
-                mode=(override.mode if override else "order"),
+                origin="override" if is_pinned else "auto",
+                source="pinned" if is_pinned else "auto",
+                auto_reason=None if is_pinned else f"tier:{tier}",
+                mode="exclude" if is_excluded else (override.mode if override else "order"),
                 position=position,
                 tier=tier,
                 render_tier=item.render_tier,
                 render_mode=item.render_mode,
                 tier_override=override.tier_override if override else None,
+                scope=memory_scope,
+                scope_id=memory_scope_id,
+                tags=list(item.tags or []),
             )
         )
     return blocks
@@ -403,6 +513,13 @@ def _default_memory_position(tier: str, item: MemorySearchResult, index: int) ->
         "reference": 4000,
     }.get(tier, 5000)
     return base + item.display_order + index
+
+
+def _default_prompt_position(prompt: Prompt) -> int:
+    # Prompts render before memories — offset well below mandate base (1000).
+    # Sort by id so insertion order is deterministic; multiply to leave room
+    # for manual reordering between adjacent prompts.
+    return 100 + (prompt.id or 0) * 5
 
 
 def _source_sort(source_type: str) -> int:
@@ -448,6 +565,8 @@ def _render_blocks(blocks: list[RuntimeContextBlockResponse]) -> str:
     chunks: list[str] = []
     memory_lines: list[str] = []
     for block in blocks:
+        if block.mode == "exclude":
+            continue
         if block.source_type == "prompt":
             chunks.append(f"## {block.title}\n{block.content.strip()}")
             continue
@@ -458,3 +577,71 @@ def _render_blocks(blocks: list[RuntimeContextBlockResponse]) -> str:
     if memory_lines:
         chunks.append("## Runtime Memory\n" + "\n".join(memory_lines))
     return "\n\n".join(chunk for chunk in chunks if chunk.strip())
+
+
+class RuntimeContextProfilePolicyResponse(BaseModel):
+    consumer_profile: str
+    mandate_limit: int | None
+    guardrail_limit: int | None
+    reference_limit: int | None
+
+
+class RuntimeContextProfilePolicyUpdate(BaseModel):
+    """All limit fields are nullable; null = uncapped, integer = explicit cap."""
+
+    mandate_limit: int | None = None
+    guardrail_limit: int | None = None
+    reference_limit: int | None = None
+
+
+def _python_fallback_policy(consumer_profile: str) -> RuntimeContextProfilePolicyResponse:
+    profile = resolve_consumer_profile(consumer_profile)
+    mandate, guardrail = _PROFILE_POLICY_LIMITS.get(profile, (0, 0))
+    return RuntimeContextProfilePolicyResponse(
+        consumer_profile=profile.value,
+        mandate_limit=mandate or None,
+        guardrail_limit=guardrail or None,
+        reference_limit=None,
+    )
+
+
+async def get_runtime_context_profile_policy(
+    db: AsyncSession,
+    *,
+    consumer_profile: str,
+) -> RuntimeContextProfilePolicyResponse:
+    profile = resolve_consumer_profile(consumer_profile)
+    row = await db.get(RuntimeContextProfilePolicy, profile.value)
+    if row is None:
+        return _python_fallback_policy(consumer_profile)
+    return RuntimeContextProfilePolicyResponse(
+        consumer_profile=row.consumer_profile,
+        mandate_limit=row.mandate_limit,
+        guardrail_limit=row.guardrail_limit,
+        reference_limit=row.reference_limit,
+    )
+
+
+async def upsert_runtime_context_profile_policy(
+    db: AsyncSession,
+    *,
+    consumer_profile: str,
+    payload: RuntimeContextProfilePolicyUpdate,
+) -> RuntimeContextProfilePolicyResponse:
+    profile = resolve_consumer_profile(consumer_profile)
+    row = await db.get(RuntimeContextProfilePolicy, profile.value)
+    if row is None:
+        row = RuntimeContextProfilePolicy(consumer_profile=profile.value)
+        db.add(row)
+    row.mandate_limit = payload.mandate_limit
+    row.guardrail_limit = payload.guardrail_limit
+    row.reference_limit = payload.reference_limit
+    await db.commit()
+    await db.refresh(row)
+    invalidate_policy_cache()
+    return RuntimeContextProfilePolicyResponse(
+        consumer_profile=row.consumer_profile,
+        mandate_limit=row.mandate_limit,
+        guardrail_limit=row.guardrail_limit,
+        reference_limit=row.reference_limit,
+    )

@@ -66,10 +66,7 @@ def _should_include_tool(
     project_id: str | None,
 ) -> bool:
     profile = resolve_consumer_profile(consumer_profile)
-    if profile in {
-        MemoryConsumerProfile.CODEX_STARTUP,
-        MemoryConsumerProfile.CLAUDE_SESSION_START,
-    }:
+    if profile == MemoryConsumerProfile.AGENT_STARTUP:
         return spec.startup and _matches_task_filter(task_type, frontend_only=spec.frontend_only)
     if not spec.runtime:
         return False

@@ -39,6 +39,9 @@ class Prompt(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_global: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    boot_eligible: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     owner_agent_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=True
@@ -122,6 +125,9 @@ class PromptRevision(Base):
         String(50), nullable=False, default="standard", server_default="standard"
     )
     deletion_locked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    boot_eligible: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)

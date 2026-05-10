@@ -25,6 +25,9 @@ export interface RuntimeContextOverride extends RuntimeContextOverridePayload {
   project_id: string | null
 }
 
+export type RuntimeRenderMode = 'full' | 'compact' | 'summary'
+export type RuntimeBlockSource = 'auto' | 'pinned'
+
 export interface RuntimeContextBlock {
   id: string
   source_type: RuntimeSourceType
@@ -33,15 +36,24 @@ export interface RuntimeContextBlock {
   content: string
   token_count: number
   origin: 'auto' | 'override'
+  // Why this block is in (or excluded from) context.
+  source: RuntimeBlockSource
+  // Short tag explaining auto-injection (e.g. "tier:mandate", "boot_eligible").
+  auto_reason?: string | null
   mode: RuntimeOverrideMode
   position: number
   tier: string | null
   // Effective L0/L1/L2 render tier (null for prompt blocks).
   render_tier?: string | null
   // Per-memory render-mode preference (full | compact | summary | null).
-  render_mode?: 'full' | 'compact' | 'summary' | null
+  render_mode?: RuntimeRenderMode | null
   // Resolved per-profile/per-project tier override, if any.
   tier_override?: RuntimeTierOverride | null
+  // "global" or "project" for memories; "global" / "agent" for prompts.
+  scope?: string | null
+  scope_id?: string | null
+  // Free-form tags surfaced for filtering in the library.
+  tags?: string[]
 }
 
 export interface RuntimeContextPreview {
@@ -49,9 +61,16 @@ export interface RuntimeContextPreview {
   project_id: string | null
   query: string
   total_tokens: number
+  budget_tokens: number
   rendered: string
   blocks: RuntimeContextBlock[]
+  excluded: RuntimeContextBlock[]
   overrides: RuntimeContextOverride[]
+  // Computed auxiliary blocks (project index + tool capabilities) injected
+  // ahead of prompts/memories at session start. Surfaced for the rendered
+  // pane preview and inline rows.
+  project_index?: string | null
+  tool_capabilities?: string | null
 }
 
 export async function fetchRuntimeProfiles(): Promise<RuntimeContextProfile[]> {
@@ -95,6 +114,44 @@ export async function replaceRuntimeOverrides(params: {
   if (!res.ok) throw new Error('Failed to save runtime overrides')
   const data: { overrides: RuntimeContextOverride[] } = await res.json()
   return data.overrides
+}
+
+export interface RuntimeContextProfilePolicy {
+  consumer_profile: string
+  // Null = uncapped. Integer = explicit cap.
+  mandate_limit: number | null
+  guardrail_limit: number | null
+  reference_limit: number | null
+}
+
+export async function fetchRuntimePolicy(params: {
+  consumerProfile: string
+}): Promise<RuntimeContextProfilePolicy> {
+  const res = await fetchApi(
+    `/api/runtime-context/${params.consumerProfile}/policy`,
+  )
+  if (!res.ok) throw new Error('Failed to fetch runtime policy')
+  return res.json()
+}
+
+export async function updateRuntimePolicy(params: {
+  consumerProfile: string
+  payload: {
+    mandate_limit: number | null
+    guardrail_limit: number | null
+    reference_limit: number | null
+  }
+}): Promise<RuntimeContextProfilePolicy> {
+  const res = await fetchApi(
+    `/api/runtime-context/${params.consumerProfile}/policy`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params.payload),
+    },
+  )
+  if (!res.ok) throw new Error('Failed to save runtime policy')
+  return res.json()
 }
 
 export async function fetchRuntimePreview(params: {
