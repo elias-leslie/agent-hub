@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { PolicyModal } from '@/components/runtime-context/PolicyModal'
 import { fetchRuntimePolicy } from '@/lib/api/runtime-context'
 import { cn } from '@/lib/utils'
 import { Toggle } from './Toggle'
@@ -53,6 +55,7 @@ export function MemoryConfigSection({
   }
   const inputCommonClass =
     'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500 disabled:opacity-50'
+  const [policyModalOpen, setPolicyModalOpen] = useState(false)
 
   return (
     <div
@@ -307,12 +310,24 @@ export function MemoryConfigSection({
 
       {/* Per-agent injection caps. Blank = inherit profile default. */}
       <div className="space-y-3 rounded-lg border border-slate-700/70 bg-slate-900/40 p-4">
-        <div>
-          <p className="text-sm font-medium text-slate-200">Injection Caps</p>
-          <p className="text-xs text-slate-400">
-            Override per-tier item limits for this agent. Inherits from runtime
-            profile when blank. 0 means uncapped.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-200">Injection Caps</p>
+            <p className="text-xs text-slate-400">
+              Override per-tier item limits for this agent. Inherits from
+              runtime profile when blank. 0 means uncapped.
+            </p>
+          </div>
+          {!profileInputsDisabled ? (
+            <button
+              type="button"
+              onClick={() => setPolicyModalOpen(true)}
+              className="shrink-0 text-xs text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline cursor-pointer"
+              title={`Edit profile-level caps for ${inheritedProfile}`}
+            >
+              Edit profile defaults →
+            </button>
+          ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {(
@@ -399,6 +414,14 @@ export function MemoryConfigSection({
       </div>
 
       {/* Max Sessions (only visible when continuity is enabled) */}
+      {!profileInputsDisabled ? (
+        <PolicyModal
+          profile={inheritedProfile}
+          isOpen={policyModalOpen}
+          onClose={() => setPolicyModalOpen(false)}
+        />
+      ) : null}
+
       {config.continuity_enabled && (
         <div className="space-y-2 pl-2">
           <div className="flex items-center justify-between">
