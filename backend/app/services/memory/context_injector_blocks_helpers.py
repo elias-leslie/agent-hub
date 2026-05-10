@@ -152,6 +152,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
                 tier=ep.get("tier"),
             ),
             applicability=normalize_applicability(ep.get("applicability")),
+            render_mode=ep.get("render_mode"),
         )
     except Exception as e:
         logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
