@@ -21,4 +21,9 @@ export interface MemoryConfig extends Record<string, unknown> {
   consumer_profile?: string
   runtime_consumer_profile?: string
   preview_consumer_profile?: string
+  // Per-agent injection caps. Null/undefined = inherit from runtime profile
+  // policy. 0 = uncapped. Positive integer = explicit cap.
+  mandate_limit?: number | null
+  guardrail_limit?: number | null
+  reference_limit?: number | null
 }

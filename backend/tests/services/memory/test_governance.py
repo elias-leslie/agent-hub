@@ -26,7 +26,7 @@ async def test_collect_memory_governance_snapshot_summarizes_routing_quality() -
             trigger_task_types=["testing", "security"],
             loaded_count=25,
             applicability={
-                "consumer_profiles": ["codex_startup"],
+                "consumer_profiles": ["agent_startup"],
                 "exclude_consumer_profiles": [],
                 "agent_slugs": [],
                 "exclude_agent_slugs": [],
@@ -45,7 +45,7 @@ async def test_collect_memory_governance_snapshot_summarizes_routing_quality() -
             trigger_task_types=[],
             loaded_count=12,
             applicability={
-                "consumer_profiles": ["codex_startup"],
+                "consumer_profiles": ["agent_startup"],
                 "exclude_consumer_profiles": [],
                 "agent_slugs": ["persona"],
                 "exclude_agent_slugs": [],

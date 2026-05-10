@@ -281,7 +281,7 @@ export function EpisodeFormFields({
                 handleApplicabilityChange('consumer_profiles', e.target.value)
               }
               disabled={disabled}
-              placeholder="agent_coding, agent_operator, codex_startup"
+              placeholder="agent_coding, agent_operator, agent_startup"
               className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
             />
           </div>

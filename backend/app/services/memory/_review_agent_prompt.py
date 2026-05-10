@@ -125,7 +125,7 @@ def build_memory_review_prompt(
         "version to inject instead of full content. Preserve all hard directives and normative "
         "force (must, never, always, required, only, do not). Compact first; do not rely on "
         "dropping useful memories to save tokens.\n\n"
-        "Consumer profiles: codex_startup, claude_session_start, agent_coding, "
+        "Consumer profiles: agent_startup, agent_coding, "
         "agent_operator, agent_promptops, agent_general, agent_visual, agent_runtime.\n"
         "Policy memories should not be agent-targeted unless there is a strong reason. "
         "References and capabilities should be targeted when broad injection would bloat context.\n\n"

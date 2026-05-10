@@ -10,6 +10,7 @@ export interface Prompt {
   description: string | null
   is_global: boolean
   enabled: boolean
+  boot_eligible?: boolean
   exclude_agents: string[]
   owner_agent_slug: string | null
   prompt_type: string

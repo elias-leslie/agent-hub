@@ -32,9 +32,9 @@ from .context_builder_tiers import (
 )
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .context_profiles import (
-    policy_limits_for_profile,
     priority_tags_for_profile,
     query_reference_selection_default_for_profile,
+    resolve_policy_limits,
 )
 from .memory_models import MemoryContextKind
 from .scoring import MemoryScoreInput, score_memory
@@ -483,12 +483,13 @@ def _build_scopes_to_query(
     return scopes
 
 
-def _apply_priority_and_limits(
+async def _apply_priority_and_limits(
     context: ProgressiveContext,
     query: str,
     variant: str | None,
     variant_config: Any,
     consumer_profile: str | None,
+    memory_config: dict[str, Any] | None,
 ) -> None:
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
@@ -506,9 +507,15 @@ def _apply_priority_and_limits(
         context.mandates, context.guardrails, context.reference_index, context.reference,
         query, consumer_profile=consumer_profile,
     )
-    policy_mandate_limit, policy_guardrail_limit = policy_limits_for_profile(consumer_profile)
+    policy_mandate_limit, policy_guardrail_limit, policy_reference_limit = (
+        await resolve_policy_limits(consumer_profile, memory_config)
+    )
     context.mandates = _limit_by_rendered_token_budget(context.mandates, policy_mandate_limit)
     context.guardrails = _limit_by_rendered_token_budget(context.guardrails, policy_guardrail_limit)
+    if policy_reference_limit > 0:
+        context.reference = _limit_by_rendered_token_budget(
+            context.reference, policy_reference_limit
+        )
 
 
 async def build_progressive_context(
@@ -552,7 +559,9 @@ async def build_progressive_context(
             context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase
         )
     _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
-    _apply_priority_and_limits(context, query, variant, variant_config, consumer_profile)
+    await _apply_priority_and_limits(
+        context, query, variant, variant_config, consumer_profile, memory_config
+    )
     budget = _build_usage_snapshot(context)
     _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)
     return context

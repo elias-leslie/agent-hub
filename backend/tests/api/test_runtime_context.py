@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.prompt import Prompt
 from app.services.runtime_context import (
     RuntimeContextBlockResponse,
     RuntimeContextOverrideResponse,
     RuntimeContextPreviewResponse,
+    _build_prompt_blocks,
+    _default_prompt_position,
     _render_blocks,
     _resolve_overrides,
+    _ResolvedOverride,
 )
 
 
@@ -81,15 +85,140 @@ def test_render_blocks_groups_memory_lines() -> None:
     assert "[M:12345678] **Use st**: Use st for dev work." in rendered
 
 
+def test_render_blocks_skips_excluded() -> None:
+    rendered = _render_blocks(
+        [
+            RuntimeContextBlockResponse(
+                id="prompt:keep",
+                source_type="prompt",
+                source_id="keep",
+                title="Keep",
+                content="kept content",
+                token_count=2,
+                origin="auto",
+                mode="order",
+                position=10,
+            ),
+            RuntimeContextBlockResponse(
+                id="prompt:drop",
+                source_type="prompt",
+                source_id="drop",
+                title="Drop",
+                content="dropped content",
+                token_count=2,
+                origin="auto",
+                mode="exclude",
+                position=20,
+            ),
+        ]
+    )
+
+    assert "kept content" in rendered
+    assert "dropped content" not in rendered
+
+
+def test_default_prompt_position_orders_by_id() -> None:
+    a = SimpleNamespace(id=1)
+    b = SimpleNamespace(id=10)
+    assert _default_prompt_position(a) < _default_prompt_position(b)  # type: ignore[arg-type]
+    # Prompts must come before mandate-tier memories (base 1000).
+    assert _default_prompt_position(b) < 1000  # type: ignore[arg-type]
+
+
+def _make_prompt_row(slug: str, *, boot_eligible: bool, name: str = "P", row_id: int = 1) -> Prompt:
+    prompt = Prompt(
+        slug=slug,
+        name=name,
+        content=f"prompt body for {slug}",
+        description=None,
+        is_global=True,
+        enabled=True,
+        boot_eligible=boot_eligible,
+        exclude_agents=[],
+    )
+    prompt.id = row_id
+    prompt.prompt_type = "standard"
+    return prompt
+
+
+def _mock_db_returning(rows: list[Prompt]) -> AsyncMock:
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = rows
+    db.execute = AsyncMock(return_value=result)
+    return db
+
+
+@pytest.mark.asyncio
+async def test_build_prompt_blocks_auto_includes_boot_eligible() -> None:
+    db = _mock_db_returning([_make_prompt_row("auto-prompt", boot_eligible=True)])
+    blocks = await _build_prompt_blocks(db, overrides=[], override_by_key={}, excluded=set())
+    assert len(blocks) == 1
+    assert blocks[0].source == "auto"
+    assert blocks[0].auto_reason == "boot_eligible"
+    assert blocks[0].mode == "order"
+
+
+@pytest.mark.asyncio
+async def test_build_prompt_blocks_pin_marks_pinned() -> None:
+    pinned = _make_prompt_row("pinned-prompt", boot_eligible=False, row_id=2)
+    db = _mock_db_returning([pinned])
+    override = _ResolvedOverride(
+        source_type="prompt",
+        source_id="pinned-prompt",
+        mode="include",
+        position=42,
+        enabled=True,
+        note=None,
+        project_id=None,
+        id="ov-1",
+    )
+    blocks = await _build_prompt_blocks(
+        db,
+        overrides=[override],
+        override_by_key={("prompt", "pinned-prompt"): override},
+        excluded=set(),
+    )
+    assert len(blocks) == 1
+    assert blocks[0].source == "pinned"
+    assert blocks[0].auto_reason is None
+    assert blocks[0].position == 42
+    assert blocks[0].mode == "include"
+
+
+@pytest.mark.asyncio
+async def test_build_prompt_blocks_exclude_overrides_pin() -> None:
+    boot = _make_prompt_row("auto-prompt", boot_eligible=True, row_id=3)
+    db = _mock_db_returning([boot])
+    override = _ResolvedOverride(
+        source_type="prompt",
+        source_id="auto-prompt",
+        mode="exclude",
+        position=10,
+        enabled=True,
+        note=None,
+        project_id=None,
+        id="ov-x",
+    )
+    blocks = await _build_prompt_blocks(
+        db,
+        overrides=[override],
+        override_by_key={("prompt", "auto-prompt"): override},
+        excluded={("prompt", "auto-prompt")},
+    )
+    assert len(blocks) == 1
+    # Excluded boot-eligible prompts are still emitted as exclude-mode blocks
+    # so the UI can show & restore them.
+    assert blocks[0].mode == "exclude"
+
+
 @pytest.mark.asyncio
 async def test_profiles_endpoint_lists_agentic_cli_profiles(api_client) -> None:
     response = api_client.get("/api/runtime-context/profiles")
 
     assert response.status_code == 200
     profiles = [item["consumer_profile"] for item in response.json()["profiles"]]
-    assert "codex_startup" in profiles
-    assert "claude_session_start" in profiles
-    assert "gemini_startup" in profiles
+    assert "agent_startup" in profiles
 
 
 @pytest.mark.asyncio
@@ -127,6 +256,7 @@ async def test_preview_endpoint_returns_rendered_context(api_client) -> None:
         project_id="summitflow",
         query="startup context",
         total_tokens=12,
+        budget_tokens=3500,
         rendered="## Agentic CLI Startup Core\nDirect concise.",
         blocks=[
             RuntimeContextBlockResponse(
@@ -137,8 +267,29 @@ async def test_preview_endpoint_returns_rendered_context(api_client) -> None:
                 content="Direct concise.",
                 token_count=2,
                 origin="override",
+                source="pinned",
+                auto_reason=None,
                 mode="include",
                 position=10,
+                scope="global",
+                tags=["runtime_context"],
+            )
+        ],
+        excluded=[
+            RuntimeContextBlockResponse(
+                id="memory:dropped",
+                source_type="memory",
+                source_id="dropped-uuid",
+                title="Dropped memory",
+                content="ignored",
+                token_count=1,
+                origin="auto",
+                source="auto",
+                auto_reason="tier:reference",
+                mode="exclude",
+                position=4000,
+                tier="reference",
+                scope="global",
             )
         ],
         overrides=[],
@@ -151,6 +302,11 @@ async def test_preview_endpoint_returns_rendered_context(api_client) -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["total_tokens"] == 12
-    assert response.json()["blocks"][0]["source_id"] == "agentic-cli-startup-core"
+    body = response.json()
+    assert body["total_tokens"] == 12
+    assert body["budget_tokens"] == 3500
+    assert body["blocks"][0]["source_id"] == "agentic-cli-startup-core"
+    assert body["blocks"][0]["source"] == "pinned"
+    assert body["blocks"][0]["scope"] == "global"
+    assert body["excluded"][0]["source_id"] == "dropped-uuid"
     mock_render.assert_awaited_once()

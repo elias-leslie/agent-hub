@@ -168,8 +168,7 @@ async def get_progressive_context(
             description=(
                 "Caller profile for path-specific rendering "
                 "(agent_general, agent_visual, agent_coding, agent_operator, "
-                "agent_promptops, agent_runtime, agent_preview, "
-                "claude_session_start, codex_startup)"
+                "agent_promptops, agent_runtime, agent_preview, agent_startup)"
             )
         ),
     ] = None,

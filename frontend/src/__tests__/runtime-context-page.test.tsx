@@ -26,10 +26,11 @@ vi.mock('@/lib/memory/episodes', () => ({
 }))
 
 const preview = {
-  consumer_profile: 'codex_startup',
+  consumer_profile: 'agent_startup',
   project_id: null,
   query: 'startup context',
   total_tokens: 42,
+  budget_tokens: 3500,
   rendered: '## Agentic CLI Startup Core\nDirect concise.',
   blocks: [
     {
@@ -39,10 +40,14 @@ const preview = {
       title: 'Agentic CLI Startup Core',
       content: 'Direct concise.',
       token_count: 3,
-      origin: 'override' as const,
-      mode: 'include' as const,
+      origin: 'auto' as const,
+      source: 'auto' as const,
+      auto_reason: 'boot_eligible',
+      mode: 'order' as const,
       position: 10,
       tier: null,
+      scope: 'global',
+      tags: ['runtime_context'],
     },
     {
       id: 'memory:mem-1',
@@ -52,11 +57,17 @@ const preview = {
       content: 'Use st for covered workflows.',
       token_count: 7,
       origin: 'auto' as const,
+      source: 'auto' as const,
+      auto_reason: 'tier:mandate',
       mode: 'order' as const,
       position: 100,
       tier: 'mandate',
+      render_tier: 'L1' as const,
+      scope: 'global',
+      tags: [],
     },
   ],
+  excluded: [],
   overrides: [],
 }
 
@@ -86,6 +97,7 @@ describe('RuntimeContextPage', () => {
         description: null,
         is_global: true,
         enabled: true,
+        boot_eligible: true,
         exclude_agents: [],
         owner_agent_slug: null,
         prompt_type: 'runtime_context',
@@ -95,14 +107,38 @@ describe('RuntimeContextPage', () => {
       },
     ])
     vi.mocked(fetchMemoryList).mockResolvedValue({
-      episodes: [],
-      total: 0,
+      episodes: [
+        {
+          uuid: 'mem-1',
+          name: 'use-st',
+          content:
+            'FULL: Use st for every covered workflow including build, test, lint, and commit.',
+          source: 'system',
+          category: 'mandate',
+          scope: 'global',
+          scope_id: null,
+          source_description: null,
+          created_at: '2026-05-09T00:00:00Z',
+          updated_at: '2026-05-09T00:00:00Z',
+          version: null,
+          valid_at: '2026-05-09T00:00:00Z',
+          entities: [],
+          summary: 'Use st (library)',
+          loaded_count: 0,
+          referenced_count: 0,
+          helpful_count: 0,
+          harmful_count: 0,
+          utility_score: 0,
+          tags: [],
+        } as never,
+      ],
+      total: 1,
       cursor: null,
       has_more: false,
     })
   })
 
-  it('renders preview blocks and rendered context', async () => {
+  it('renders the boot reactor topbar and rendered blocks', async () => {
     renderPage()
 
     await waitFor(() => {
@@ -111,8 +147,10 @@ describe('RuntimeContextPage', () => {
       ).toBeGreaterThan(0)
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    expect(screen.getAllByText('42 tokens').length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Direct concise/).length).toBeGreaterThan(0)
+    // Token gauge surfaces both used and budget within the gauge region.
+    const gauge = screen.getByLabelText('Token gauge')
+    expect(gauge).toHaveTextContent('42')
+    expect(gauge).toHaveTextContent('3,500 tok')
   })
 
   it('does not expose profile/project/query controls', async () => {
@@ -126,20 +164,87 @@ describe('RuntimeContextPage', () => {
     expect(screen.queryByText(/Override Layer/)).not.toBeInTheDocument()
   })
 
-  it('saves an exclude override from the block list', async () => {
+  it('renders memory body inline but collapses prompt body by default on rendered rows', async () => {
     renderPage()
 
     await waitFor(() => {
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    // Memory row's exclude toggle (prompt row is index 0).
-    const excludeButtons = screen.getAllByTitle('Exclude')
+
+    const inlineBodies = screen.getAllByTestId('rendered-body-inline')
+    // Prompts collapse by default; only the memory body is inline at first.
+    expect(inlineBodies).toHaveLength(1)
+    expect(inlineBodies[0].textContent).toBe('Use st for covered workflows.')
+    expect(screen.queryByText('Direct concise.')).not.toBeInTheDocument()
+  })
+
+  it('exposes a chevron on prompts (collapse) and on compact memory rows (swap)', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
+
+    // Prompts in Rendered get a "Show prompt body" chevron (collapsed default).
+    expect(screen.getByTitle('Show prompt body')).toBeInTheDocument()
+    // Compact memory keeps the "Expand to full content" swap chevron.
+    expect(screen.getByTitle('Expand to full content')).toBeInTheDocument()
+    expect(screen.queryByTitle('Show rendered version')).not.toBeInTheDocument()
+  })
+
+  it('reveals prompt body when its chevron is clicked', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTitle('Show prompt body'))
+
+    await waitFor(() => {
+      const bodies = screen.getAllByTestId('rendered-body-inline')
+      // Memory body + revealed prompt body.
+      expect(bodies).toHaveLength(2)
+      expect(bodies.some((el) => el.textContent === 'Direct concise.')).toBe(
+        true,
+      )
+      expect(screen.getByTitle('Hide prompt body')).toBeInTheDocument()
+    })
+  })
+
+  it('swaps body text to full content when chevron is clicked on a compact row', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
+
+    const memoryBody = screen
+      .getAllByTestId('rendered-body-inline')
+      .find((el) => el.textContent === 'Use st for covered workflows.')
+    expect(memoryBody).toBeDefined()
+
+    const expand = screen.getByTitle('Expand to full content')
+    fireEvent.click(expand)
+
+    await waitFor(() => {
+      // Memory body still the only inline row (prompt stays collapsed).
+      expect(screen.getAllByTestId('rendered-body-inline')).toHaveLength(1)
+      expect(memoryBody?.textContent).toBe(
+        'FULL: Use st for every covered workflow including build, test, lint, and commit.',
+      )
+      // FULL meta badge appears while swapped.
+      expect(screen.getByText('FULL')).toBeInTheDocument()
+      // Chevron toggles to its "back to rendered" state.
+      expect(screen.getByTitle('Show rendered version')).toBeInTheDocument()
+    })
+  })
+
+  it('saves an exclude override when ✕ is clicked on a rendered row', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Use st')).toBeInTheDocument()
+    })
+    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
+    // Click the memory row's exclude (last rendered row).
     fireEvent.click(excludeButtons[excludeButtons.length - 1])
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
         expect.objectContaining({
-          consumerProfile: 'codex_startup',
+          consumerProfile: 'agent_startup',
           overrides: expect.arrayContaining([
             expect.objectContaining({
               source_type: 'memory',

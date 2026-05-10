@@ -41,9 +41,11 @@ MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     MEMORY_CONTEXT_HEADER_BASE
     + "\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)"
 )
-CODEX_STARTUP_FALLBACK_LINE = (
+STARTUP_FALLBACK_LINE = (
     "- If local memory lookup is unavailable in this shell, treat the full-text startup-critical rules below as authoritative for command-shape and workflow questions. Use repo-local evidence for implementation facts or explicit local overrides, not to dilute these rules."
 )
+# Backwards-compatible alias for the prior codex-only constant name.
+CODEX_STARTUP_FALLBACK_LINE = STARTUP_FALLBACK_LINE
 
 # Keep for backward compatibility
 MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
@@ -149,8 +151,8 @@ def _build_memory_context_header(
         lines.insert(1, "- Mandates/Guardrails below are authoritative - follow them exactly")
         if include_citations:
             lines.insert(2, "- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]")
-    if profile == MemoryConsumerProfile.CODEX_STARTUP:
-        lines.append(CODEX_STARTUP_FALLBACK_LINE)
+    if profile == MemoryConsumerProfile.AGENT_STARTUP:
+        lines.append(STARTUP_FALLBACK_LINE)
     return "\n".join(lines)
 
 

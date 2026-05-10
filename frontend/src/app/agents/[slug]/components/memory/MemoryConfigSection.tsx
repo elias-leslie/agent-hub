@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+import { fetchRuntimePolicy } from '@/lib/api/runtime-context'
 import { cn } from '@/lib/utils'
 import { Toggle } from './Toggle'
 import type { MemoryConfig } from './types'
@@ -10,8 +12,7 @@ const CONSUMER_PROFILE_SUGGESTIONS = [
   'agent_promptops',
   'agent_preview',
   'agent_runtime',
-  'claude_session_start',
-  'codex_startup',
+  'agent_startup',
 ] as const
 
 interface MemoryConfigSectionProps {
@@ -30,6 +31,28 @@ export function MemoryConfigSection({
   const referenceIndexDisabled =
     subordinateControlsDisabled || !config.include_references
   const profileInputsDisabled = !isCustomEnabled
+
+  // Resolve which runtime profile this agent inherits from for the helper
+  // text on per-agent limit overrides. Empty profile = unknown; the policy
+  // endpoint then resolves agent_runtime as the fallback.
+  const inheritedProfile =
+    config.runtime_consumer_profile ||
+    config.consumer_profile ||
+    'agent_runtime'
+  const policyQuery = useQuery({
+    queryKey: ['runtime-context', 'policy', inheritedProfile],
+    queryFn: () => fetchRuntimePolicy({ consumerProfile: inheritedProfile }),
+    enabled: isCustomEnabled,
+    staleTime: 60_000,
+  })
+  const formatInherit = (limit: number | null | undefined): string => {
+    if (limit === null || limit === undefined) {
+      return 'Profile cap: uncapped. Leave blank to inherit.'
+    }
+    return `Profile cap: ${limit}. Leave blank to inherit.`
+  }
+  const inputCommonClass =
+    'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500 disabled:opacity-50'
 
   return (
     <div
@@ -280,6 +303,79 @@ export function MemoryConfigSection({
           disabled={referenceIndexDisabled}
           ariaLabel="Passive Reference Index"
         />
+      </div>
+
+      {/* Per-agent injection caps. Blank = inherit profile default. */}
+      <div className="space-y-3 rounded-lg border border-slate-700/70 bg-slate-900/40 p-4">
+        <div>
+          <p className="text-sm font-medium text-slate-200">Injection Caps</p>
+          <p className="text-xs text-slate-400">
+            Override per-tier item limits for this agent. Inherits from runtime
+            profile when blank. 0 means uncapped.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {(
+            [
+              {
+                key: 'mandate_limit' as const,
+                label: 'Mandate Limit',
+                disabled:
+                  subordinateControlsDisabled || !config.include_mandates,
+                inheritValue: policyQuery.data?.mandate_limit ?? null,
+              },
+              {
+                key: 'guardrail_limit' as const,
+                label: 'Guardrail Limit',
+                disabled:
+                  subordinateControlsDisabled || !config.include_guardrails,
+                inheritValue: policyQuery.data?.guardrail_limit ?? null,
+              },
+              {
+                key: 'reference_limit' as const,
+                label: 'Reference Limit',
+                disabled:
+                  subordinateControlsDisabled || !config.include_references,
+                inheritValue: policyQuery.data?.reference_limit ?? null,
+              },
+            ] as const
+          ).map((field) => (
+            <div key={field.key} className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">
+                {field.label}
+              </label>
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                aria-label={field.label}
+                value={
+                  config[field.key] === null || config[field.key] === undefined
+                    ? ''
+                    : String(config[field.key])
+                }
+                onChange={(event) => {
+                  const raw = event.target.value.trim()
+                  if (raw === '') {
+                    onUpdateConfig({ [field.key]: undefined })
+                    return
+                  }
+                  const parsed = Number.parseInt(raw, 10)
+                  onUpdateConfig({
+                    [field.key]:
+                      Number.isNaN(parsed) || parsed < 0 ? undefined : parsed,
+                  })
+                }}
+                disabled={field.disabled}
+                placeholder="(inherit)"
+                className={inputCommonClass}
+              />
+              <p className="text-[11px] text-slate-500">
+                {formatInherit(field.inheritValue)}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Session Continuity */}

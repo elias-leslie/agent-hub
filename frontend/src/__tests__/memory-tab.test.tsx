@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { MemoryTab } from '@/app/agents/[slug]/components/MemoryTab'
 import type { Agent } from '@/app/agents/[slug]/types'
+import { createQueryClientWrapper } from './test-utils'
+
+const wrapper = createQueryClientWrapper()
 
 function makeFormData(overrides: Partial<Agent> = {}): Partial<Agent> {
   return {
@@ -64,6 +67,7 @@ describe('MemoryTab', () => {
         })}
         updateField={updateField}
       />,
+      { wrapper },
     )
 
     fireEvent.click(
@@ -76,7 +80,9 @@ describe('MemoryTab', () => {
   it('clears subordinate options when memory injection is turned off', () => {
     const updateField = vi.fn()
 
-    render(<MemoryTab formData={makeFormData()} updateField={updateField} />)
+    render(<MemoryTab formData={makeFormData()} updateField={updateField} />, {
+      wrapper,
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Memory Injection' }))
 
@@ -119,6 +125,7 @@ describe('MemoryTab', () => {
         })}
         updateField={updateField}
       />,
+      { wrapper },
     )
 
     expect(
@@ -144,7 +151,9 @@ describe('MemoryTab', () => {
   it('updates consumer profile overrides through routing inputs', () => {
     const updateField = vi.fn()
 
-    render(<MemoryTab formData={makeFormData()} updateField={updateField} />)
+    render(<MemoryTab formData={makeFormData()} updateField={updateField} />, {
+      wrapper,
+    })
 
     fireEvent.change(screen.getByLabelText('Runtime Profile Override'), {
       target: { value: 'agent_coding' },

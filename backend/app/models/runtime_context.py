@@ -11,6 +11,27 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
 
+class RuntimeContextProfilePolicy(Base):
+    """Per-profile injection caps for mandates / guardrails / references.
+
+    NULL on any limit column means uncapped; integers cap inclusively.
+    Per-agent memory_config overrides take precedence over these defaults.
+    """
+
+    __tablename__ = "runtime_context_profile_policies"
+
+    consumer_profile: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mandate_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    guardrail_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reference_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class RuntimeContextOverride(Base):
     """Human override for runtime context selection and ordering."""
 

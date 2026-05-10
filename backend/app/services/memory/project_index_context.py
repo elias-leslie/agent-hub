@@ -38,10 +38,7 @@ def _keys_for_profile(
 ) -> tuple[str, ...]:
     profile = resolve_consumer_profile(consumer_profile)
     keys = list(_RUNTIME_BASE_KEYS)
-    if profile in {
-        MemoryConsumerProfile.CODEX_STARTUP,
-        MemoryConsumerProfile.CLAUDE_SESSION_START,
-    } or task_type in _PAGE_TASK_TYPES:
+    if profile == MemoryConsumerProfile.AGENT_STARTUP or task_type in _PAGE_TASK_TYPES:
         keys.extend(_STARTUP_EXTRA_KEYS)
     return tuple(keys)
 
