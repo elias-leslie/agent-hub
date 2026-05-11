@@ -65,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
             f"tokens={response.total_tokens}"
         )
     else:
-        print(response.rendered)
+        chunks = [response.project_index, response.tool_capabilities, response.rendered]
+        print("\n".join(chunk for chunk in chunks if chunk))
     return 0
 
 
