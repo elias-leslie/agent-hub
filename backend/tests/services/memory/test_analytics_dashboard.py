@@ -190,3 +190,6 @@ async def test_get_memory_dashboard_separates_state_and_activity() -> None:
     assert dashboard.activity.st_usage.observed_commands == 5
     assert dashboard.activity.st_usage.help_rate == 0.2
     assert dashboard.activity.st_usage.quick_entries[0].command == "st pulse --gate"
+    # quick_entries here are still set by the test fixture; telemetry-only
+    # builders now emit [] but the dashboard surface still supports them
+    # when an analytics caller provides them directly.

@@ -70,46 +70,6 @@ class _ParsedStCommand:
     is_help: bool
 
 
-_STATIC_QUICK_USE: dict[str, str] = {
-    "pulse": "st pulse --gate | preflight; edit only if clear",
-    "queue": "project flag before command: st -P <project> ready --limit N; st feedback list --project <project> --status open --limit N; st sessions ownership -P <project> | queue + lanes",
-    "vcs": "st vcs doctor; st jj status | read-only VCS diagnostics",
-    "search": 'st search "query" | repo/code discovery',
-    "memory search": 'st memory search "query" | rules/history before retries',
-    "graph doctor": "st graph doctor --project <project> | Graphify health; auto-refreshes code graph",
-    "graph query": 'st graph query "question" --project <project> --budget 1200 | topology map',
-    "graph fallow": "st graph fallow audit --project <project> | compact JS/TS audit",
-    "check quick": "st check --quick --changed-only | changed repo gates",
-    "check full": "st check --check | full repo gates",
-    "web research": 'st web research --query "..." | public web verification',
-    "agents preview": "st agents preview <slug> --json | prompt/context size",
-    "sessions ownership": "st sessions ownership -P <project> | lane truth if blocked",
-    "service rebuild": "st service rebuild <project> --detach | rebuild/restart via st",
-    "db query": 'st db query -t "SELECT ..." | read DB safely',
-    "browser check": "st browser check <url> <png> | UI render verification",
-    "vm status": "st vm status <id> | inspect browser/test VM",
-    "tools catalog": "st tools catalog | canonical st replacements",
-}
-
-_BASE_KEYS = (
-    "pulse",
-    "queue",
-    "vcs",
-    "search",
-    "memory search",
-    "graph doctor",
-    "check quick",
-    "agents preview",
-)
-_TASK_KEYS: dict[str, tuple[str, ...]] = {
-    "frontend": ("browser check", "check quick"),
-    "ui-design": ("browser check", "check quick"),
-    "design-review": ("browser check",),
-    "database": ("db query",),
-    "devops": ("service rebuild", "vm status"),
-    "config": ("service rebuild",),
-    "verification": ("check full", "browser check"),
-}
 _CACHE: dict[tuple[str | None, str | None], tuple[datetime, StUsageMemory]] = {}
 
 
@@ -209,30 +169,13 @@ def parse_st_command(command: str | None) -> _ParsedStCommand | None:
     return _ParsedStCommand(top, is_help)
 
 
-def _seed_keys(task_type: str | None) -> list[str]:
-    keys = list(_BASE_KEYS)
-    for key in _TASK_KEYS.get(task_type or "", ()):
-        if key not in keys:
-            keys.append(key)
-    return keys
-
-
-def _split_quick_entry(line: str, *, source: str) -> StUsageQuickEntry:
-    command, sep, description = line.partition(" | ")
-    return StUsageQuickEntry(
-        command=command.strip(),
-        description=description.strip() if sep else "",
-        source=source,
-    )
-
-
 def _build_command_metric(key: str, stats: _CommandStats) -> StUsageCommandMetric:
     last_seen = stats.last_seen
     return StUsageCommandMetric(
         command_key=key,
         uses=stats.uses,
         help_lookups=stats.helps,
-        injected_example=_STATIC_QUICK_USE.get(key),
+        injected_example=None,
         last_seen=last_seen.isoformat() if last_seen is not None else None,
     )
 
@@ -243,7 +186,11 @@ def build_st_usage_memory_from_commands(
     task_type: str | None = None,
     max_entries: int = 8,
 ) -> StUsageMemory:
-    """Build quick-use memory from raw command strings plus curated fallback."""
+    """Build telemetry-only command usage memory for the analytics dashboard.
+
+    Tool-context injection is owned by `st tools manifest` via the @usage
+    registry; this function no longer seeds curated quick-use entries.
+    """
     stats: dict[str, _CommandStats] = {}
     observed = 0
     generated_at = datetime.now(UTC)
@@ -265,41 +212,19 @@ def build_st_usage_memory_from_commands(
         if bucket.last_seen is None or created_at > bucket.last_seen:
             bucket.last_seen = created_at
 
-    selected: list[str] = []
-    selected_keys: list[str] = []
-    for key in _seed_keys(task_type):
-        entry = _STATIC_QUICK_USE.get(key)
-        if entry and entry not in selected:
-            selected.append(entry)
-            selected_keys.append(key)
-
     ranked_keys = sorted(
         stats,
         key=lambda key: (stats[key].uses * 3 + stats[key].helps, stats[key].uses, key),
         reverse=True,
     )
-    for key in ranked_keys:
-        entry = _STATIC_QUICK_USE.get(key)
-        if entry and entry not in selected:
-            selected.append(entry)
-            selected_keys.append(key)
-        if len(selected) >= max_entries:
-            break
-
-    selected = selected[:max_entries]
-    selected_keys = selected_keys[:max_entries]
-    quick_entries = [
-        _split_quick_entry(line, source="learned" if key in stats and stats[key].uses > 0 else "fallback")
-        for key, line in zip(selected_keys, selected, strict=False)
-    ]
     command_metrics = [_build_command_metric(key, stats[key]) for key in ranked_keys[:max_entries]]
 
     return StUsageMemory(
-        quick=selected,
+        quick=[],
         observed=observed,
         help_count=sum(bucket.helps for bucket in stats.values()),
         generated_at=generated_at,
-        quick_entries=quick_entries,
+        quick_entries=[],
         command_metrics=command_metrics,
     )
 

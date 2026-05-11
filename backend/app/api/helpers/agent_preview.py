@@ -22,7 +22,6 @@ from app.services.memory.context_injector import (
 )
 from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.service import MemoryScope
-from app.services.memory.st_usage_memory import get_recent_st_usage_memory
 from app.services.memory.tool_capability_context import format_tool_capability_context
 from app.services.project_permission_service import get_visible_tools_for_project
 from app.services.runtime_prompt_stack import (
@@ -303,17 +302,11 @@ async def build_agent_preview(
             else frozenset()
         )
         bash_available = ("bash" in visible_tool_names) if project_id else None
-        st_usage_memory = (
-            await get_recent_st_usage_memory(project_id=project_id, task_type=task_type, db=db)
-            if bash_available is not False
-            else None
-        )
         tool_capability_block = format_tool_capability_context(
             consumer_profile=preview_consumer_profile,
             task_type=task_type,
             project_id=project_id,
             bash_available=bash_available,
-            st_quick=st_usage_memory.quick if st_usage_memory else None,
             agent_slug=agent.slug,
         )
         if tool_capability_block:
