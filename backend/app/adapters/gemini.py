@@ -15,6 +15,7 @@ from app.adapters.gemini_adapter_settings import (
 )
 from app.adapters.gemini_adapter_stream import sdk_stream_with_failover
 from app.adapters.gemini_utils import resolve_api_key, resolve_api_keys
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ class GeminiAdapter(ProviderAdapter):
         tools: list[dict[str, Any]],
         working_dir: str | None = None,
         max_tokens: int | None = None,
-        max_turns: int = 20,
+        max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
         project_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:

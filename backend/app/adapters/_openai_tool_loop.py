@@ -16,6 +16,7 @@ from app.adapters._openai_compat_helpers import (
     parse_completion_response,
 )
 from app.adapters.base import Message, StreamEvent
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -39,7 +40,7 @@ async def run_tool_loop(
     tools: list[dict[str, Any]],
     tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
     refresh_credentials: Callable[..., Awaitable[str | None]],
-    max_turns: int = 20,
+    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
     temperature: float = 1.0,
     max_tokens: int | None = None,
     **kwargs: Any,

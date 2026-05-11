@@ -29,6 +29,7 @@ from app.adapters.base import (
     ProviderAdapter,
     StreamEvent,
 )
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         model: str,
         tools: list[dict[str, Any]],
         tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
-        max_turns: int = 20,
+        max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Run an agentic tool-calling loop over the OpenAI-compatible API."""

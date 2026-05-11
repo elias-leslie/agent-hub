@@ -761,3 +761,28 @@ MODEL_CATALOG: list[ModelEntry] = [
         release_date="2025-01-01", family="leonardo",
     ),
 ]
+
+
+# Fallback used only when a model id is not registered in MODEL_CATALOG. Picked
+# so under-provisioning (truncated plans) is preferred over silent over-cap
+# rejection — current API ceilings for our completion models sit between 16k
+# and 128k. Adapters resolve via _MODEL_MAX_OUTPUT_TOKENS first.
+_MAX_OUTPUT_TOKENS_FALLBACK = 32_768
+
+
+_MODEL_MAX_OUTPUT_TOKENS: dict[str, int] = {
+    entry.id: entry.capabilities.max_output_tokens
+    for entry in MODEL_CATALOG
+    if entry.capabilities.max_output_tokens > 0
+}
+
+
+def get_max_output_tokens(model_id: str) -> int:
+    """Return the catalog's max_output_tokens for a model id, or the fallback.
+
+    Used by adapters whose upstream API requires an explicit max_tokens (notably
+    the Anthropic Messages API). Adapters where the provider treats max_tokens
+    as optional should not call this — they should send no cap and let the
+    provider use its native default.
+    """
+    return _MODEL_MAX_OUTPUT_TOKENS.get(model_id, _MAX_OUTPUT_TOKENS_FALLBACK)

@@ -45,6 +45,7 @@ from app.adapters.codex_sse import (
 )
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 from app.adapters.tool_result_payload import normalize_tool_handler_result
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 logger = logging.getLogger(__name__)
 _EMPTY_FINAL_RESPONSE_MSG = (
@@ -540,7 +541,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         model: str,
         tools: list[dict[str, Any]],
         tool_handler: ToolHandler,
-        max_turns: int = 20,
+        max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Run a tool-calling loop over the Codex Responses API."""

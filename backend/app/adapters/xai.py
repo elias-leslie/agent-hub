@@ -19,6 +19,7 @@ from app.adapters.base import (
 )
 from app.adapters.errors import with_retry
 from app.adapters.openai_compat import OpenAICompatibleAdapter
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 _XAI_CACHE_HEADER = "x-grok-conv-id"
 _XAI_MULTI_AGENT_MODEL = "grok-4.20-multi-agent-0309"
@@ -263,7 +264,7 @@ class XAIAdapter(OpenAICompatibleAdapter):
         model: str,
         tools: list[dict[str, Any]],
         tool_handler: Any,
-        max_turns: int = 20,
+        max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         resolved_model = self._resolve_model(model)
