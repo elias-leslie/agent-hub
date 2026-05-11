@@ -27,7 +27,6 @@ _NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None, st
 _ToolsAPI = list[dict[str, object]] | None
 _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
-_DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS = 240.0
 
 
 def _fallbacks_enabled(req: CompletionRequest, agent: ResolvedAgent | None) -> bool:
@@ -53,13 +52,15 @@ def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _Non
 
 
 def _agentic_timeout_seconds(agent: ResolvedAgent | None) -> float | None:
-    """Return the per-turn timeout for agentic model calls."""
+    """Return the per-turn timeout for agentic model calls.
+
+    Returns None unless the agent row explicitly sets timeout_seconds.
+    Open-ended agent turns are unbounded by default.
+    """
     if agent is None:
         return None
     configured = getattr(agent.agent, "timeout_seconds", None)
-    if configured is not None:
-        return float(configured)
-    return _DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS
+    return float(configured) if configured is not None else None
 
 
 async def _run_internal_with_timeout(

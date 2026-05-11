@@ -192,7 +192,7 @@ async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
     agent = SimpleNamespace(
         agent=SimpleNamespace(
             fallback_models=["codex/gpt-5.4"],
-            timeout_seconds=None,
+            timeout_seconds=0.01,
         )
     )
     success = CompletionInternalResult(
@@ -215,9 +215,9 @@ async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
             await asyncio.sleep(10)
         return success
 
-    with (
-        patch("app.api.complete.complete_execution._DEFAULT_AGENTIC_MODEL_TIMEOUT_SECONDS", 0.01),
-        patch("app.api.complete.complete_execution._run_internal", new=AsyncMock(side_effect=fake_run_internal)),
+    with patch(
+        "app.api.complete.complete_execution._run_internal",
+        new=AsyncMock(side_effect=fake_run_internal),
     ):
         from app.api.complete.complete_execution import _run_with_agentic_fallback
 
