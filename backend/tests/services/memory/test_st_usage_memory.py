@@ -25,7 +25,8 @@ def test_parse_st_command_tracks_help_without_using_help_as_key() -> None:
     assert parsed.is_help is True
 
 
-def test_build_st_usage_memory_combines_curated_base_and_tracked_subcommands() -> None:
+def test_build_st_usage_memory_is_telemetry_only_no_curated_seed() -> None:
+    """Quick-use seeding moved to `st tools manifest`; this surface emits telemetry only."""
     memory = build_st_usage_memory_from_commands(
         [
             "st agents preview coder --json",
@@ -39,13 +40,13 @@ def test_build_st_usage_memory_combines_curated_base_and_tracked_subcommands() -
     )
 
     assert memory.observed == 5
-    assert memory.quick[0].startswith("st pulse --gate")
-    assert any("st -P <project> ready" in entry for entry in memory.quick)
-    assert any("read-only VCS diagnostics" in entry for entry in memory.quick)
-    assert any(entry.startswith("st graph doctor") for entry in memory.quick)
-    assert any(entry.startswith("st agents preview") for entry in memory.quick)
-    assert any(entry.startswith("st browser check") for entry in memory.quick)
-    assert all("--help" not in entry for entry in memory.quick)
+    assert memory.help_count == 1
+    assert memory.quick == []
+    assert memory.quick_entries == []
+    metric_keys = {metric.command_key for metric in memory.command_metrics}
+    assert metric_keys == {"agents preview", "db query", "browser check", "memory search"}
+    for metric in memory.command_metrics:
+        assert metric.injected_example is None
 
 
 def test_parse_st_command_tracks_graph_subcommands_for_quick_use_memory() -> None:

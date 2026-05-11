@@ -28,7 +28,6 @@ from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .project_index_context import format_project_index_context
 from .service import MemoryScope
 from .settings import get_memory_settings
-from .st_usage_memory import get_recent_st_usage_memory
 from .tool_capability_context import format_tool_capability_context
 from .variants import assign_variant
 
@@ -262,25 +261,17 @@ async def run_injection_operation(
             else frozenset()
         )
         bash_available = ("bash" in visible_tool_names) if effective_project_id else None
-        st_usage_memory = (
-            await get_recent_st_usage_memory(project_id=effective_project_id, task_type=task_type)
-            if bash_available is not False
-            else None
-        )
         tool_capability_block = format_tool_capability_context(
             consumer_profile=consumer_profile,
             task_type=task_type,
             project_id=effective_project_id,
             bash_available=bash_available,
-            st_quick=st_usage_memory.quick if st_usage_memory else None,
             agent_slug=consumer_agent_slug,
         )
         if tool_capability_block:
             context.debug_info.update({
                 "tool_capabilities_included": True,
                 "tool_capabilities_chars": len(tool_capability_block),
-                "st_usage_observed": st_usage_memory.observed if st_usage_memory else 0,
-                "st_quick_entries": len(st_usage_memory.quick) if st_usage_memory else 0,
             })
     return await finalize_injection(
         messages, context, formatted, project_index_block, tool_capability_block,

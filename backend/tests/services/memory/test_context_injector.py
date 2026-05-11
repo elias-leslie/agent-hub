@@ -1,7 +1,6 @@
 """Tests for context injector module."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -934,7 +933,7 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
         ),
         patch(
             "app.services.memory.context_injector_ops.format_tool_capability_context",
-            return_value="<tool-capabilities>\ntools:\n  - tool: st\n</tool-capabilities>",
+            return_value="<tool-usage>\nmandates:\n  st.pulse:\n    cmd: st pulse --gate\n</tool-usage>",
         ),
         patch(
             "app.services.memory.context_injector_ops.assign_variant",
@@ -951,15 +950,6 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
         patch(
             "app.services.memory.context_injector_ops.get_visible_tools_for_project",
             new=AsyncMock(return_value=frozenset({"bash"})),
-        ),
-        patch(
-            "app.services.memory.context_injector_ops.get_recent_st_usage_memory",
-            new=AsyncMock(
-                return_value=SimpleNamespace(
-                    quick=["st pulse --gate | preflight; edit only if clear"],
-                    observed=2,
-                )
-            ),
         ),
     ):
         injected_messages, context = await run_injection_operation(
@@ -982,10 +972,10 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
             consumer_tags=None,
         )
 
-    assert "<tool-capabilities>" in injected_messages[0]["content"]
+    assert "<tool-usage>" in injected_messages[0]["content"]
     assert context.debug_info["tool_capabilities_included"] is True
-    assert context.debug_info["st_usage_observed"] == 2
-    assert context.debug_info["st_quick_entries"] == 1
+    assert "st_usage_observed" not in context.debug_info
+    assert "st_quick_entries" not in context.debug_info
 
 
 @pytest.mark.asyncio
