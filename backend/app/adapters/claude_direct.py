@@ -318,14 +318,16 @@ async def _create_with_temperature_retry(
     create_kwargs: dict[str, Any],
 ) -> Any:
     try:
-        return await client.messages.create(**create_kwargs)
+        async with client.messages.stream(**create_kwargs) as stream:
+            return await stream.get_final_message()
     except Exception as exc:
         if "temperature" not in create_kwargs or not _is_temperature_deprecated_error(exc):
             raise
         retry_kwargs = dict(create_kwargs)
         retry_kwargs.pop("temperature", None)
         logger.info("Claude direct API rejected temperature; retrying without it")
-        return await client.messages.create(**retry_kwargs)
+        async with client.messages.stream(**retry_kwargs) as stream:
+            return await stream.get_final_message()
 
 
 def _raise_direct_api_error(error: Exception, provider_name: str) -> NoReturn:

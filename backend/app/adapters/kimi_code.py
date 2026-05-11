@@ -134,7 +134,8 @@ class KimiCodeAdapter(ProviderAdapter):
             )
             client = self._build_client()
             try:
-                response = await client.messages.create(**create_kwargs)
+                async with client.messages.stream(**create_kwargs) as stream:
+                    response = await stream.get_final_message()
             except Exception as e:
                 logger.error("Kimi Code completion error: %s", e)
                 self._raise_provider_error(e)
@@ -224,7 +225,8 @@ class KimiCodeAdapter(ProviderAdapter):
                 )
                 create_kwargs["tools"] = [_to_anthropic_tool(tool) for tool in tools]
                 try:
-                    response = await client.messages.create(**create_kwargs)
+                    async with client.messages.stream(**create_kwargs) as stream:
+                        response = await stream.get_final_message()
                 except Exception as e:
                     logger.error("Kimi Code complete_with_tools error: %s", e)
                     yield StreamEvent(type="error", error=str(e))
