@@ -29,20 +29,16 @@ class EventSequencer:
 
     def get_turn_sequence(self, session_id: str) -> tuple[int, int]:
         """Get current turn and sequence, auto-incrementing sequence."""
-        if session_id not in self._sessions:
-            self._sessions[session_id] = {"turn": 1, "sequence": 0}
-        state = self._sessions[session_id]
+        state = self._sessions.setdefault(session_id, {"turn": 1, "sequence": 0})
         state["sequence"] += 1
         return state["turn"], state["sequence"]
 
     def next_turn(self, session_id: str) -> int:
         """Advance to next turn, reset sequence."""
-        if session_id not in self._sessions:
-            self._sessions[session_id] = {"turn": 1, "sequence": 0}
-        else:
-            self._sessions[session_id]["turn"] += 1
-            self._sessions[session_id]["sequence"] = 0
-        return self._sessions[session_id]["turn"]
+        state = self._sessions.setdefault(session_id, {"turn": 0, "sequence": 0})
+        state["turn"] += 1
+        state["sequence"] = 0
+        return state["turn"]
 
     def set_turn(self, session_id: str, turn: int, min_sequence: int = 0) -> None:
         """Set turn number (for resuming sessions).
@@ -98,6 +94,42 @@ def _sanitize_event_value(value: Any) -> Any:
             sanitized[sanitized_key] = _sanitize_event_value(item)
         return sanitized
     return value
+
+
+def _build_session_event(
+    session_id: str,
+    turn: int,
+    sequence: int,
+    event_type: str,
+    *,
+    role: str | None = None,
+    content: str | None = None,
+    tool_name: str | None = None,
+    tool_input: dict[str, Any] | None = None,
+    tool_output: dict[str, Any] | None = None,
+    tokens: int | None = None,
+    duration_ms: int | None = None,
+    model_used: str | None = None,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
+    transport: str | None = None,
+    surface: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+    pane_id: str | None = None,
+    source_client: str | None = None,
+) -> SessionEvent:
+    """Sanitize fields and construct a SessionEvent (no DB I/O)."""
+    s = _sanitize_event_value
+    return SessionEvent(
+        session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
+        role=s(role), content=s(content), tool_name=s(tool_name),
+        tool_input=s(tool_input), tool_output=s(tool_output),
+        tokens=tokens, duration_ms=duration_ms,
+        model_used=s(model_used), agent_id=s(agent_id), agent_name=s(agent_name),
+        transport=s(transport), surface=s(surface), chat_id=s(chat_id),
+        message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
+    )
 
 
 _CHILD_SESSION_EVENT_TYPES = {
@@ -225,38 +257,6 @@ async def _mirror_child_event_to_parent(
     )
 
 
-def _reconcile_session_from_event(
-    session: Session,
-    *,
-    event_type: str,
-    tool_name: str | None,
-    tool_input: dict[str, Any] | None,
-    model_used: str | None,
-    agent_id: str | None,
-) -> None:
-    if model_used:
-        session.models_used = _append_unique_string(getattr(session, "models_used", None), model_used)
-        if not agent_id:
-            session.model = model_used
-    if str(event_type) != SessionEventType.TOOL_USE:
-        return
-    provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
-    base_path = resolve_scope_base_path(provider_metadata, None)
-    observed_reads, observed_writes = extract_tool_scope_paths(
-        tool_name,
-        tool_input,
-        base_path=base_path,
-    )
-    if not observed_reads and not observed_writes:
-        return
-    apply_scope_state(
-        session,
-        base_path=base_path,
-        observed_read_paths=observed_reads,
-        observed_write_paths=observed_writes,
-    )
-
-
 async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int, int]:
     """Sync sequencer from DB if needed, return (turn, sequence)."""
     sequencer = get_sequencer()
@@ -270,33 +270,35 @@ async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int
     return sequencer.get_turn_sequence(session_id)
 
 
-def _touch_session(
-    parent_session: Session,
-    *,
-    event_type: str,
-    tool_name: str | None,
-    tool_input: dict[str, Any] | None,
-    tool_output: dict[str, Any] | None,
-    content: str | None,
-    model_used: str | None,
-    agent_id: str | None,
-) -> None:
-    _reconcile_session_from_event(
-        parent_session,
-        event_type=event_type,
-        tool_name=tool_name,
-        tool_input=tool_input,
-        model_used=model_used,
-        agent_id=agent_id,
-    )
+def _touch_session(parent_session: Session, event: SessionEvent) -> None:
+    if event.model_used:
+        parent_session.models_used = _append_unique_string(
+            getattr(parent_session, "models_used", None), event.model_used
+        )
+        if not event.agent_id:
+            parent_session.model = event.model_used
+    if str(event.event_type) == SessionEventType.TOOL_USE:
+        provider_metadata = (
+            parent_session.provider_metadata
+            if isinstance(parent_session.provider_metadata, dict)
+            else {}
+        )
+        base_path = resolve_scope_base_path(provider_metadata, None)
+        observed_reads, observed_writes = extract_tool_scope_paths(
+            event.tool_name, event.tool_input, base_path=base_path
+        )
+        if observed_reads or observed_writes:
+            apply_scope_state(
+                parent_session,
+                base_path=base_path,
+                observed_read_paths=observed_reads,
+                observed_write_paths=observed_writes,
+            )
     update_live_activity_for_event(
         parent_session,
-        event_type=event_type,
-        tool_name=tool_name,
-        tool_input=tool_input,
-        tool_output=tool_output,
-        content=content,
-        model_used=model_used,
+        event_type=event.event_type, tool_name=event.tool_name,
+        tool_input=event.tool_input, tool_output=event.tool_output,
+        content=event.content, model_used=event.model_used,
     )
     touched_at = datetime.now(UTC)
     parent_session.updated_at = touched_at
@@ -353,25 +355,11 @@ async def store_event(
     if turn is None or sequence is None:
         turn, sequence = await _resolve_turn_sequence(db, session_id)
 
-    role = _sanitize_event_value(role)
-    content = _sanitize_event_value(content)
-    tool_name = _sanitize_event_value(tool_name)
-    tool_input = _sanitize_event_value(tool_input)
-    tool_output = _sanitize_event_value(tool_output)
-    model_used = _sanitize_event_value(model_used)
-    agent_id = _sanitize_event_value(agent_id)
-    agent_name = _sanitize_event_value(agent_name)
-    transport = _sanitize_event_value(transport)
-    surface = _sanitize_event_value(surface)
-    chat_id = _sanitize_event_value(chat_id)
-    message_id = _sanitize_event_value(message_id)
-    pane_id = _sanitize_event_value(pane_id)
-    source_client = _sanitize_event_value(source_client)
-
-    event = SessionEvent(
-        session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
-        role=role, content=content, tool_name=tool_name, tool_input=tool_input,
-        tool_output=tool_output, tokens=tokens, duration_ms=duration_ms,
+    event = _build_session_event(
+        session_id, turn, sequence, event_type,
+        role=role, content=content, tool_name=tool_name,
+        tool_input=tool_input, tool_output=tool_output,
+        tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,
@@ -380,18 +368,9 @@ async def store_event(
 
     parent_session = session or await db.get(Session, session_id)
     if parent_session is not None:
-        _touch_session(
-            parent_session,
-            event_type=str(event_type),
-            tool_name=tool_name,
-            tool_input=tool_input,
-            tool_output=tool_output,
-            content=content,
-            model_used=model_used,
-            agent_id=agent_id,
-        )
+        _touch_session(parent_session, event)
 
-    await _maybe_extract_narration(db, session_id, event_type, content, parent_session)
+    await _maybe_extract_narration(db, session_id, event_type, event.content, parent_session)
     await _mirror_child_event_to_parent(db, parent_session, event)
     return event
 
