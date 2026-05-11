@@ -13,6 +13,7 @@ from typing import Any
 
 from app.adapters.base import Message, StreamEvent
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 
 def adapt_stream_event(
@@ -118,7 +119,7 @@ async def adapt_openai_stream(
     model: str,
     tools: list[dict[str, Any]],
     working_dir: str | None,
-    max_turns: int = 20,
+    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
     project_id: str | None = None,
     session_id: str | None = None,
     agent_slug: str | None = None,

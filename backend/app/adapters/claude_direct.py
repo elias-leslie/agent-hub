@@ -15,6 +15,7 @@ from app.adapters.base import (
     StreamEvent,
 )
 from app.adapters.errors import extract_retry_delay
+from app.constants.catalog_entries import get_max_output_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +290,6 @@ def _apply_optional_create_kwargs(
 
     thinking_level = kwargs.get("thinking_level")
     if thinking_level:
-        create_kwargs["max_tokens"] = max(int(create_kwargs["max_tokens"]), 2048)
         thinking_config = _get_direct_thinking_config(
             str(thinking_level),
             max_tokens=int(create_kwargs["max_tokens"]),
@@ -390,7 +390,7 @@ async def complete_direct(
     system_text, api_messages = convert_messages(messages)
     create_kwargs = _build_create_kwargs(
         api_model, api_messages, system_text,
-        max_tokens or 4096, temperature, cache_retention,
+        max_tokens or get_max_output_tokens(model), temperature, cache_retention,
     )
     _apply_optional_create_kwargs(create_kwargs, kwargs)
 
@@ -462,7 +462,7 @@ async def stream_direct(
     system_text, api_messages = convert_messages(messages)
     create_kwargs = _build_create_kwargs(
         api_model, api_messages, system_text,
-        max_tokens or 4096, temperature, cache_retention,
+        max_tokens or get_max_output_tokens(model), temperature, cache_retention,
     )
     _apply_optional_create_kwargs(create_kwargs, kwargs)
 

@@ -27,6 +27,8 @@ from app.adapters.claude_direct import (
     convert_messages,
 )
 from app.adapters.tool_result_payload import normalize_tool_handler_result
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
+from app.constants.catalog_entries import get_max_output_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +128,7 @@ class KimiCodeAdapter(ProviderAdapter):
                 self._resolve_model(model),
                 api_messages,
                 system_text,
-                max_tokens or 4096,
+                max_tokens or get_max_output_tokens(model),
                 temperature,
                 cache_retention,
             )
@@ -176,7 +178,7 @@ class KimiCodeAdapter(ProviderAdapter):
             self._resolve_model(model),
             api_messages,
             system_text,
-            max_tokens or 4096,
+            max_tokens or get_max_output_tokens(model),
             temperature,
             cache_retention,
         )
@@ -199,7 +201,7 @@ class KimiCodeAdapter(ProviderAdapter):
         model: str,
         tools: list[dict[str, Any]],
         tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
-        max_turns: int = 20,
+        max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         await self._refresh_credentials()
@@ -207,6 +209,7 @@ class KimiCodeAdapter(ProviderAdapter):
         api_model = self._resolve_model(model)
         temperature = float(kwargs.get("temperature", 1.0))
         max_tokens = kwargs.get("max_tokens")
+        resolved_max_tokens = max_tokens or get_max_output_tokens(model)
         empty_closeout_used = False
         client = self._build_client()
         try:
@@ -215,7 +218,7 @@ class KimiCodeAdapter(ProviderAdapter):
                     api_model,
                     api_messages,
                     system_text,
-                    max_tokens or 4096,
+                    resolved_max_tokens,
                     temperature,
                     "none",
                 )

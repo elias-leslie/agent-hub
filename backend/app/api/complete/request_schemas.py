@@ -6,9 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS as DEFAULT_AGENTIC_MAX_TURNS
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
-
-DEFAULT_AGENTIC_MAX_TURNS = 5000
 
 
 class MessageInput(BaseModel):
