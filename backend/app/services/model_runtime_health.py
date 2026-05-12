@@ -12,13 +12,18 @@ from app.models import ModelAvailability, ProviderEntitlement
 from app.services.llm_errors import RateLimitError
 
 _AUTH_MARKERS = ("invalid api key", "unauthorized", "401", "invalid bearer token")
-_QUOTA_MARKERS = (
+_PROVIDER_QUOTA_MARKERS = (
+    "insufficient credits",
+    "daily free allocation",
+    "used up your daily free allocation",
+    "402",
+)
+_RATE_LIMIT_MARKERS = (
     "429",
     "too many requests",
     "resource_exhausted",
     "quota",
-    "insufficient credits",
-    "402",
+    "rate limit",
 )
 _NOT_FOUND_MARKERS = ("404", "not found", "model_not_found")
 
@@ -34,12 +39,19 @@ class RuntimeFailureClassification:
 def classify_runtime_failure(error: BaseException) -> RuntimeFailureClassification:
     """Classify provider runtime errors into routing health decisions."""
     text = str(error).lower()
-    if isinstance(error, RateLimitError) or any(marker in text for marker in _QUOTA_MARKERS):
+    if any(marker in text for marker in _PROVIDER_QUOTA_MARKERS):
         return RuntimeFailureClassification(
             smoke_status="quota_or_rate_limited",
             provider_status="quota_exhausted",
             routable=False,
-            cooldown_seconds=getattr(error, "retry_after", None) or 300.0,
+            cooldown_seconds=3600.0,
+        )
+    if isinstance(error, RateLimitError) or any(marker in text for marker in _RATE_LIMIT_MARKERS):
+        return RuntimeFailureClassification(
+            smoke_status="quota_or_rate_limited",
+            provider_status=None,
+            routable=False,
+            cooldown_seconds=getattr(error, "retry_after", None) if isinstance(error, RateLimitError) else None,
         )
     if any(marker in text for marker in _AUTH_MARKERS):
         return RuntimeFailureClassification(
