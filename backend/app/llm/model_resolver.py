@@ -40,8 +40,8 @@ _PROVIDER_API: dict[str, Api] = {
 _PROVIDER_BASE_URL: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
     "claude": "https://api.anthropic.com",
-    "google": "https://generativelanguage.googleapis.com",
-    "gemini": "https://generativelanguage.googleapis.com",
+    "google": "",
+    "gemini": "",
     "openai": "https://api.openai.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "xai": "https://api.x.ai/v1",
