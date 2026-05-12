@@ -1,7 +1,7 @@
 """Completion API package."""
 
 from app.routing.registry import clear_cache as clear_adapter_cache
-from app.services.agent_routing import get_provider_for_model as get_provider
+from app.routing.registry import get_provider_for_model as get_provider
 
 from .async_endpoints import router as async_router
 from .core import (

@@ -1,14 +1,15 @@
 """Completion logic for Agent Routing Service."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import math
 import time
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.complete.types import CompletionInternalResult
 from app.routing.registry import list_providers
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
@@ -27,6 +28,9 @@ from app.services.model_runtime_health import (
 
 from .agent_routing_models import FallbackCompletionResult
 from .agent_routing_utils import get_provider_for_model
+
+if TYPE_CHECKING:
+    from app.api.complete.types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
 
