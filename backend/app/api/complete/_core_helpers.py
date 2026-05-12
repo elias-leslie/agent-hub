@@ -8,11 +8,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.memory.injection import inject_memory_context
 from app.services.response_cache import get_response_cache
 
 from .agent_loop import AgentLoopRequest, execute_agent_loop
 from .cache_handler import handle_cached_response
-from .memory_handler import inject_memory_context
 from .precision_search_guidance import maybe_inject_claude_tool_alias_guidance
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress
