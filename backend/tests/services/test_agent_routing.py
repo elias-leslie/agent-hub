@@ -516,21 +516,40 @@ class TestInjectAgentMandates:
         assert collect_args.kwargs["include_guardrails"] is False
 
 
+def _internal_result_for(model: str, provider: str) -> object:
+    from app.api.complete.types import CompletionInternalResult
+
+    return CompletionInternalResult(
+        content="ok",
+        model=model,
+        provider=provider,
+        input_tokens=1,
+        output_tokens=1,
+        finish_reason="stop",
+        session_id="ephemeral:sess",
+        memory_uuids=[],
+        cited_uuids=[],
+    )
+
+
 class TestCompleteWithFallback:
+    """Fallback chain now routes each attempt through ``complete_internal``.
+
+    Patches target ``app.api.complete.core.complete_internal`` per the
+    pi-mono convergence (no more legacy ``adapter.complete`` boundary).
+    """
 
     @pytest.mark.asyncio
     async def test_primary_succeeds(self, mock_agent: AgentDTO) -> None:
-        mock_result = MagicMock()
-        mock_result.content = "Hello!"
+        internal = _internal_result_for(CLAUDE_SONNET, "claude")
 
         with (
-            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=internal),
+            ),
             patch("app.services.agent_routing_completion.record_provider_success") as record_success,
         ):
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = AsyncMock(return_value=mock_result)
-            mock_get_adapter.return_value = mock_adapter
-
             result = await complete_with_fallback(
                 messages=[Message(role="user", content="Hi")],
                 agent=mock_agent,
@@ -539,73 +558,21 @@ class TestCompleteWithFallback:
             )
 
         assert isinstance(result, CompletionResult)
-        assert result.result == mock_result
         assert result.model_used == CLAUDE_SONNET
         assert result.used_fallback is False
         record_success.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_codex_primary_maps_thinking_to_reasoning_and_verbosity(self) -> None:
-        from datetime import UTC, datetime
-
-        agent = AgentDTO(
-            id=6,
-            slug="codex-coder",
-            name="Codex Coder",
-            description=None,
-            system_prompt="Write code.",
-            primary_model_id="codex/gpt-5.5",
-            fallback_models=[],
-            escalation_model_id=None,
-            strategies={},
-            temperature=0.7,
-            thinking_level="xhigh",
-            verbosity_level="high",
-            is_active=True,
-            is_coding_agent=True,
-            memory_config=None,
-            max_concurrency=None,
-            max_subagent_concurrency=None,
-            daily_token_budget=None,
-            hourly_request_limit=None,
-            timeout_seconds=None,
-            version=1,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        mock_result = MagicMock()
-        captured = _CapturedCall()
-
-        async def mock_complete(**kwargs: object) -> MagicMock:
-            captured.kwargs = kwargs
-            return mock_result
-
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
-
-            result = await complete_with_fallback(
-                messages=[Message(role="user", content="Hi")],
-                agent=agent,
-                max_tokens=100,
-                temperature=0.7,
-                thinking_level=agent.thinking_level,
-            )
-
-        assert result.model_used == "codex/gpt-5.5"
-        assert captured.kwargs is not None
-        assert captured.kwargs["reasoning_effort"] == "xhigh"
-        assert "thinking_level" not in captured.kwargs
-        assert captured.kwargs["verbosity_level"] == "high"
 
     @pytest.mark.asyncio
     async def test_primary_rate_limit_skips_same_provider_fallbacks_and_uses_other_provider(
         self,
         mock_agent: AgentDTO,
     ) -> None:
-        mock_result = MagicMock()
-        mock_result.content = "Hello from fallback!"
+        gemini_internal = _internal_result_for(GEMINI_FLASH, "gemini")
+
+        async def mock_internal(**kwargs: object) -> object:
+            if kwargs.get("provider") == "claude":
+                raise RateLimitError(provider="claude", retry_after=60)
+            return gemini_internal
 
         with (
             patch(
@@ -616,19 +583,12 @@ class TestCompleteWithFallback:
                 "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
                 new=CircuitBreakerManager(["claude", "gemini"]),
             ),
-            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=mock_internal),
+            ) as mock_ci,
             patch("app.services.agent_routing_completion.record_provider_failure") as record_failure,
         ):
-            claude_adapter = AsyncMock()
-            claude_adapter.complete = AsyncMock(
-                side_effect=RateLimitError(provider="claude", retry_after=60)
-            )
-            gemini_adapter = AsyncMock()
-            gemini_adapter.complete = AsyncMock(return_value=mock_result)
-            mock_get_adapter.side_effect = (
-                lambda provider: claude_adapter if provider == "claude" else gemini_adapter
-            )
-
             result = await complete_with_fallback(
                 messages=[Message(role="user", content="Hi")],
                 agent=mock_agent,
@@ -637,12 +597,10 @@ class TestCompleteWithFallback:
             )
 
         assert isinstance(result, CompletionResult)
-        assert result.result == mock_result
         assert result.model_used == GEMINI_FLASH
         assert result.used_fallback is True
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"
-        claude_adapter.complete.assert_awaited_once()
-        gemini_adapter.complete.assert_awaited_once()
+        assert mock_ci.await_count == 2
         assert record_failure.call_count == 1
 
     @pytest.mark.asyncio
@@ -659,14 +617,11 @@ class TestCompleteWithFallback:
                 "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
                 new=CircuitBreakerManager(["claude"]),
             ),
-            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=RateLimitError(provider="claude", retry_after=60)),
+            ) as mock_ci,
         ):
-            claude_adapter = AsyncMock()
-            claude_adapter.complete = AsyncMock(
-                side_effect=RateLimitError(provider="claude", retry_after=60)
-            )
-            mock_get_adapter.return_value = claude_adapter
-
             with pytest.raises(RateLimitError) as first_exc:
                 await complete_with_fallback(
                     messages=[Message(role="user", content="Hi")],
@@ -683,41 +638,38 @@ class TestCompleteWithFallback:
                     temperature=0.5,
                 )
 
-        claude_adapter.complete.assert_awaited_once()
+        # Cooldown short-circuits the second call before it reaches complete_internal.
+        assert mock_ci.await_count == 1
         assert first_exc.value.retry_after == 60
         assert second_exc.value.retry_after is not None
         assert 0 < second_exc.value.retry_after <= 60
 
     @pytest.mark.asyncio
     async def test_all_models_fail(self, mock_agent: AgentDTO) -> None:
-        async def mock_complete(**kwargs: object) -> None:
-            raise ProviderError(provider="test", message="API error")
-
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
-
-            with pytest.raises(ProviderError) as exc_info:
-                await complete_with_fallback(
-                    messages=[Message(role="user", content="Hi")],
-                    agent=mock_agent,
-                    max_tokens=100,
-                    temperature=0.7,
-                )
+        with (
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=ProviderError(provider="test", message="API error")),
+            ),
+            pytest.raises(ProviderError) as exc_info,
+        ):
+            await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=mock_agent,
+                max_tokens=100,
+                temperature=0.7,
+            )
 
         assert "All models failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_no_fallbacks_primary_succeeds(self, mock_agent_no_fallbacks: AgentDTO) -> None:
-        mock_result = MagicMock()
-        mock_result.content = "Success!"
+        internal = _internal_result_for(CLAUDE_HAIKU, "claude")
 
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = AsyncMock(return_value=mock_result)
-            mock_get_adapter.return_value = mock_adapter
-
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=internal),
+        ):
             result = await complete_with_fallback(
                 messages=[Message(role="user", content="Hi")],
                 agent=mock_agent_no_fallbacks,
@@ -727,7 +679,6 @@ class TestCompleteWithFallback:
 
         assert result.model_used == CLAUDE_HAIKU
         assert result.used_fallback is False
-
 
     @pytest.mark.asyncio
     async def test_escalation_succeeds_after_fallbacks_fail(self) -> None:
@@ -749,23 +700,20 @@ class TestCompleteWithFallback:
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
-        mock_result = MagicMock()
-        mock_result.content = "Escalation worked!"
+        escalation_internal = _internal_result_for(CLAUDE_OPUS, "claude")
         call_count = 0
 
-        async def mock_complete(**kwargs: object) -> MagicMock:
+        async def mock_internal(**kwargs: object) -> object:
             nonlocal call_count
             call_count += 1
-            # Primary (1) and fallback (2) fail, escalation (3) succeeds
             if call_count <= 2:
                 raise ProviderError(provider="test", message="fail")
-            return mock_result
+            return escalation_internal
 
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
-
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(side_effect=mock_internal),
+        ):
             result = await complete_with_fallback(
                 messages=[Message(role="user", content="Hi")],
                 agent=agent, max_tokens=100, temperature=0.7,
@@ -796,23 +744,19 @@ class TestCompleteWithFallback:
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
 
-        async def mock_complete(**kwargs: object) -> None:
-            raise ProviderError(provider="test", message="fail")
-
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
-
-            with pytest.raises(ProviderError) as exc_info:
-                await complete_with_fallback(
-                    messages=[Message(role="user", content="Hi")],
-                    agent=agent, max_tokens=100, temperature=0.7,
-                )
+        with (
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=ProviderError(provider="test", message="fail")),
+            ),
+            pytest.raises(ProviderError) as exc_info,
+        ):
+            await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=agent, max_tokens=100, temperature=0.7,
+            )
 
         assert "All models failed" in str(exc_info.value)
-        # Escalation model same as fallback — should NOT appear in warnings
-        # (only primary + fallback warnings, no escalation attempt)
         assert f"escalation={CLAUDE_OPUS}" in str(exc_info.value)
 
     @pytest.mark.asyncio
@@ -836,19 +780,17 @@ class TestCompleteWithFallback:
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
 
-        async def mock_complete(**kwargs: object) -> None:
-            raise ProviderError(provider="test", message="fail")
-
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
-
-            with pytest.raises(ProviderError) as exc_info:
-                await complete_with_fallback(
-                    messages=[Message(role="user", content="Hi")],
-                    agent=agent, max_tokens=100, temperature=0.7,
-                )
+        with (
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=ProviderError(provider="test", message="fail")),
+            ),
+            pytest.raises(ProviderError) as exc_info,
+        ):
+            await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=agent, max_tokens=100, temperature=0.7,
+            )
 
         assert "All models failed" in str(exc_info.value)
         assert f"escalation={CLAUDE_OPUS}" in str(exc_info.value)

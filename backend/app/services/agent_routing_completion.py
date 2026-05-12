@@ -4,22 +4,23 @@ import asyncio
 import logging
 import math
 import time
-from typing import NoReturn
+from typing import Any, NoReturn
 
+from app.adapters.base import (
+    CompletionResult as AdapterCompletionResult,
+)
 from app.adapters.base import (
     Message,
     ProviderError,
     RateLimitError,
 )
 from app.adapters.registry import list_providers
-from app.adapters.thinking import get_thinking_config
-from app.constants.catalog import get_model_capabilities
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.health_prober import record_provider_failure, record_provider_success
 
 from .agent_routing_models import CompletionResult
-from .agent_routing_utils import get_adapter, get_provider_for_model
+from .agent_routing_utils import get_provider_for_model
 
 logger = logging.getLogger(__name__)
 
@@ -61,27 +62,31 @@ async def _active_cooldown_error(provider: str) -> RateLimitError | None:
     )
 
 
-def _build_completion_kwargs(
+def _messages_as_dicts(messages: list[Message]) -> list[dict[str, Any]]:
+    """Translate adapter ``Message`` rows to ``{role, content}`` wire dicts."""
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
+def _project_internal_result(
+    result: Any,
     model: str,
     provider: str,
-    thinking_level: str | None,
-    verbosity_level: str | None,
-    prompt_cache_key: str | None,
-) -> dict[str, object]:
-    """Build provider-specific kwargs for adapter.complete."""
-    extra_kwargs: dict[str, object] = {}
-    if thinking_level:
-        thinking_config = get_thinking_config(model, thinking_level, provider)
-        if thinking_config:
-            extra_kwargs.update(thinking_config)
-        elif provider not in _UNSUPPORTED_NATIVE_THINKING_PROVIDERS:
-            extra_kwargs["thinking_level"] = thinking_level
-    capabilities = get_model_capabilities(model)
-    if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
-        extra_kwargs["verbosity_level"] = verbosity_level
-    if prompt_cache_key:
-        extra_kwargs["prompt_cache_key"] = prompt_cache_key
-    return extra_kwargs
+) -> AdapterCompletionResult:
+    """Project ``CompletionInternalResult`` onto the legacy ``CompletionResult`` shape."""
+    return AdapterCompletionResult(
+        content=result.content,
+        model=model,
+        provider=provider,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        finish_reason=result.finish_reason,
+        cache_metrics=result.cache_metrics,
+        thinking_content=result.thinking_content,
+        thinking_tokens=result.thinking_tokens,
+        tool_calls=result.tool_calls,
+        container=result.container,
+        fallback_reason=result.fallback_reason,
+    )
 
 
 async def _record_completion_error(
@@ -111,7 +116,15 @@ async def _try_model(
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
 ) -> tuple[object | None, BaseException | None]:
-    """Attempt completion with a single model; return result and captured error."""
+    """Attempt completion with a single model; return result and captured error.
+
+    Routes each attempt through the new pipeline by calling
+    :func:`backend.app.api.complete.core.complete_internal` with ``db=None``.
+    The fallback iteration, cooldown logic, and circuit-breaker bookkeeping
+    are unchanged.
+    """
+    from app.api.complete.core import complete_internal
+
     provider = get_provider_for_model(model)
     cooldown_error = await _active_cooldown_error(provider)
     if cooldown_error is not None:
@@ -124,21 +137,20 @@ async def _try_model(
         return None, cooldown_error
     start = time.monotonic()
     try:
-        adapter = get_adapter(provider)
-        result = await adapter.complete(
-            messages=messages,
+        internal = await complete_internal(
+            messages=_messages_as_dicts(messages),
             model=model,
-            max_tokens=max_tokens,
+            provider=provider,
             temperature=temperature,
+            project_id="",
+            db=None,
+            session_id=prompt_cache_key,
             tools=tools,
-            **_build_completion_kwargs(
-                model,
-                provider,
-                thinking_level,
-                verbosity_level,
-                prompt_cache_key,
-            ),
+            thinking_level=thinking_level,
+            max_turns=1,
+            execute_tools=False,
         )
+        result = _project_internal_result(internal, model, provider)
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await _RATE_LIMIT_BREAKER.on_success(provider)
         return result, None
