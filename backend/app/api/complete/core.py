@@ -161,6 +161,25 @@ async def complete_internal(
     requested_provider: str | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
+    from app.api.complete.orchestrator import is_new_pipeline_enabled
+
+    if is_new_pipeline_enabled() and not execute_tools and max_turns == 1:
+        from app.api.complete.new_pipeline import complete_internal_new_pipeline
+
+        return await complete_internal_new_pipeline(
+            messages=messages, model=model, provider=provider,
+            project_id=project_id, db=db,
+            session_id=session_id, external_id=external_id,
+            client_id=client_id, request_source=request_source,
+            parent_session_id=parent_session_id, agent_slug=agent_slug,
+            use_memory=use_memory, memory_group_id=memory_group_id,
+            task_type=task_type, phase=phase, memory_config=memory_config,
+            current_branch=current_branch, working_dir=working_dir,
+            trace_id=trace_id, requested_model=requested_model,
+            requested_provider=requested_provider,
+            execute_tools=execute_tools, max_turns=max_turns,
+        )
+
     user_messages_for_db = _ensure_user_messages(messages, user_messages_for_db)
     session, session_id, is_new, messages_dict = await setup_completion_session(
         db, session_id, project_id, provider, model,
