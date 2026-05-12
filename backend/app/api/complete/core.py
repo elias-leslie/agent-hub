@@ -35,13 +35,13 @@ from app.services.tools.base import ToolCaller
 from app.services.tools.tool_handler import create_direct_handler
 
 from .orchestrator import build_context_from_messages, run_completion
+from .progress import AgentProgress
 from .schemas import MessageInput  # re-export for back-compat callers
 from .session_repo import (
     get_or_create_session,  # re-export for back-compat callers
     setup_completion_session,
 )
 from .streaming import stream_completion  # re-export for back-compat callers
-from .tool_handlers import AgentProgress
 from .types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
