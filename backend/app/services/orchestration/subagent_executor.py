@@ -10,7 +10,7 @@ from textwrap import shorten
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from app.adapters.base import Message
+from app.services.llm_messages import Message
 from app.services.telemetry import get_current_trace_id, get_tracer
 
 from .subagent_models import SubagentConfig, SubagentResult

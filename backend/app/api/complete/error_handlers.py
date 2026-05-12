@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, NoReturn
 
 from fastapi import HTTPException
 
-from app.adapters.base import (
+from app.models import Session
+from app.services.events import publish_error
+from app.services.llm_errors import (
     AuthenticationError,
     ProviderError,
     RateLimitError,
 )
-from app.models import Session
-from app.services.events import publish_error
 from app.services.session_health import health_detail_for_error
 from app.services.session_live_activity import mark_session_terminal_state
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.adapters.base import Message
+from app.services.llm_messages import Message
 
 _LABELS: dict[str, str] = {
     "mode": "mode",

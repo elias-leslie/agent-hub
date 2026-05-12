@@ -7,8 +7,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
+from app.services.llm_messages import CompletionResult
 
 from .citation_tracker import track_citations_with_metrics
 from .handler_helpers import (

@@ -12,7 +12,6 @@ from typing import Any, Literal
 from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.registry import get_provider_for_model
 from app.models import (
     Agent,
     AgentRoutingProfile,
@@ -27,6 +26,7 @@ from app.models import (
     RoutingDecision,
     WorkloadProfile,
 )
+from app.routing.registry import get_provider_for_model
 from app.services.agent_dto import AgentDTO
 from app.services.credential_manager import get_credential_manager
 

@@ -8,8 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.adapters._claude_constants import MCP_TOOL_PREFIX
 from app.services.git_status_summary import RepoGitStatus
+from app.services.mcp_constants import MCP_TOOL_PREFIX
 from app.services.ownership_lanes import STALE_WORKSTREAM_IDLE_MINUTES
 
 if TYPE_CHECKING:

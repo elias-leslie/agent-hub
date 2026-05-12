@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from opentelemetry.trace import Status, StatusCode
 
-from app.adapters.base import Message
+from app.services.llm_messages import Message
 
 from .subagent import SubagentConfig, SubagentResult
 

@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import Message
 from app.api.complete.types import CompletionInternalResult
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
+from app.services.llm_messages import Message
 from app.services.orchestration.subagent import (
     SubagentConfig,
     SubagentManager,

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
 from .enrichment import enrich_memory_content
 from .episode_creator_models import BatchEpisodeRequest

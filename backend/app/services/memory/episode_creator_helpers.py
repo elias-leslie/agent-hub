@@ -5,6 +5,7 @@ Extracted to keep episode_creator_core.py focused on orchestration.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
@@ -156,8 +157,6 @@ def is_rate_limit_error(e: Exception) -> bool:
 
 def handle_rate_limit_error(e: Exception) -> CreateResult:
     """Build a CreateResult for Gemini rate-limit exceptions."""
-    from app.adapters.gemini_errors import extract_gemini_quota_details
-
     quota = extract_gemini_quota_details(e)
     quota_summary = ""
     if quota.get("quota_metric"):
@@ -172,3 +171,52 @@ def handle_rate_limit_error(e: Exception) -> CreateResult:
     )
     logger.warning("Gemini rate limit during embed%s: %s", quota_summary, e)
     return CreateResult(success=False, validation_error=detail)
+
+
+def extract_gemini_quota_details(e: Exception) -> dict[str, str]:
+    """Extract quota metadata from a Gemini API error."""
+    info: dict[str, str] = {}
+    details_obj = getattr(e, "details", None)
+    if details_obj and isinstance(details_obj, dict):
+        error_block = details_obj.get("error", details_obj)
+        info["status"] = str(error_block.get("status", ""))
+        info["message"] = str(error_block.get("message", ""))[:200]
+        for detail in error_block.get("details", []):
+            metadata = detail.get("metadata", {})
+            if "quota_metric" in metadata:
+                info["quota_metric"] = metadata["quota_metric"]
+            if "quota_limit_value" in metadata:
+                info["quota_limit"] = metadata["quota_limit_value"]
+            if "consumer" in metadata:
+                info["consumer"] = metadata["consumer"]
+            if detail.get("retryDelay"):
+                info["retry_delay"] = detail["retryDelay"]
+
+    response = getattr(e, "response", None)
+    if response and not info.get("quota_metric"):
+        body = getattr(response, "text", None)
+        if body and isinstance(body, str):
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                data = {}
+            error_block = data.get("error", data) if isinstance(data, dict) else {}
+            if isinstance(error_block, dict):
+                if not info.get("status"):
+                    info["status"] = str(error_block.get("status", ""))
+                if not info.get("message"):
+                    info["message"] = str(error_block.get("message", ""))[:200]
+                for detail in error_block.get("details", []):
+                    if not isinstance(detail, dict):
+                        continue
+                    metadata = detail.get("metadata", {})
+                    if isinstance(metadata, dict):
+                        if "quota_metric" in metadata:
+                            info["quota_metric"] = metadata["quota_metric"]
+                        if "quota_limit_value" in metadata:
+                            info["quota_limit"] = metadata["quota_limit_value"]
+                        if "consumer" in metadata:
+                            info["consumer"] = metadata["consumer"]
+                    if detail.get("retryDelay"):
+                        info["retry_delay"] = detail["retryDelay"]
+    return {k: v for k, v in info.items() if v}

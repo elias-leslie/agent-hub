@@ -21,7 +21,7 @@ from claude_agent_sdk.types import (
     ToolPermissionContext,
 )
 
-from app.adapters._claude_constants import MCP_SERVER_NAME
+from app.services.mcp_constants import MCP_SERVER_NAME
 from tests.benchmarks._shared import (
     BENCHMARK_PROMPT,
     BENCHMARK_TOOLS,

@@ -1,8 +1,8 @@
 """Tests for extended thinking data model support."""
 
 
-from app.adapters.base import CompletionResult, StreamEvent
 from app.constants.models import CLAUDE_SONNET
+from app.services.llm_messages import CompletionResult, StreamEvent
 
 
 class TestStreamEventThinking:

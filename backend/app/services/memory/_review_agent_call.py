@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
 from ._review_agent_prompt import REVIEW_SCHEMA
 

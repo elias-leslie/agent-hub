@@ -9,14 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.adapters.base import Message, ProviderError, RateLimitError
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_routing import (
     CompletionResult,
     MandateInjection,
     ResolvedAgent,
     complete_with_fallback,
-    get_adapter,
     get_provider_for_model,
     inject_agent_mandates,
     inject_system_prompt_into_messages,
@@ -24,6 +22,8 @@ from app.services.agent_routing import (
 )
 from app.services.agent_service import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
+from app.services.llm_errors import ProviderError, RateLimitError
+from app.services.llm_messages import Message
 from app.services.prompt_service import get_runtime_excluded_prompt_roles
 
 
@@ -107,25 +107,6 @@ class TestGetProviderForModel:
 
     def test_unknown_defaults_to_claude(self) -> None:
         assert get_provider_for_model("unknown-model") == "claude"
-
-
-class TestGetAdapter:
-
-    def test_claude_adapter(self) -> None:
-        from app.adapters.claude import ClaudeAdapter
-
-        adapter = get_adapter("claude")
-        assert isinstance(adapter, ClaudeAdapter)
-
-    def test_gemini_adapter(self) -> None:
-        from app.adapters.gemini import GeminiAdapter
-
-        adapter = get_adapter("gemini")
-        assert isinstance(adapter, GeminiAdapter)
-
-    def test_unknown_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown provider"):
-            get_adapter("unknown")
 
 
 class TestResolveAgent:

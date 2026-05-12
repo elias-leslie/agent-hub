@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 # Defaults (can be overridden per-agent via strategies JSON)
 _DEFAULT_THRESHOLD_PCT = 0.75
 _DEFAULT_KEEP_RECENT = 6
-_SUMMARY_MAX_TOKENS = 2000
 _COMPACTOR_AGENT_SLUG = "context-compactor"
 
 
@@ -112,16 +111,15 @@ async def _summarize_messages(
 ) -> str | None:
     """Summarize a list of messages using the configured compaction agent.
 
-    Uses a direct adapter call (not complete_internal) to avoid
-    recursive session creation and memory injection. Tokens are logged
-    to CostLog against the parent session for cost visibility.
+    Uses ``complete_internal(db=None)`` to avoid recursive session creation and
+    memory injection. Tokens are logged to CostLog against the parent session
+    for cost visibility.
     """
     if db is None:
         logger.warning("Context compaction skipped: database session unavailable")
         return None
 
-    from app.adapters.base import Message
-    from app.adapters.registry import get_adapter
+    from app.api.complete.core import complete_internal
     from app.services.adaptive_model_router import RoutingContext
     from app.services.agent_routing_utils import resolve_agent
 
@@ -147,15 +145,18 @@ async def _summarize_messages(
             logger.warning("Context compactor agent has no system prompt")
             return None
 
-        adapter = get_adapter(resolved.provider)
-        request_messages = [Message(role="system", content=system_content)]
-        request_messages.append(Message(role="user", content=conversation_text))
+        request_messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": conversation_text},
+        ]
 
-        result = await adapter.complete(
+        result = await complete_internal(
             messages=request_messages,
             model=resolved.model,
-            max_tokens=_SUMMARY_MAX_TOKENS,
+            provider=resolved.provider,
             temperature=agent.temperature,
+            project_id="",
+            db=None,
             thinking_level=agent.thinking_level,
         )
 

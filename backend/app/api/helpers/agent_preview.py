@@ -200,7 +200,7 @@ async def _build_task_prompt_preview(
         return None
 
     if task_type == "heartbeat":
-        from app.adapters.registry import get_provider_for_model
+        from app.routing.registry import get_provider_for_model
         from app.workflows._heartbeat_prompt import build_heartbeat_prompt
         from app.workflows._heartbeat_redis import get_model_review_status
 

@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import Message
 from app.api.complete import StreamingChunk, stream_completion
 from app.api.complete.streaming_context import StreamContext
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
@@ -26,6 +25,7 @@ from app.llm.types import (
     TextDeltaEvent,
     Usage,
 )
+from app.services.llm_messages import Message
 
 
 def _partial_message() -> AssistantMessage:

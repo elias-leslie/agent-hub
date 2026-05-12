@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters._claude_constants import build_mcp_tool_name
+from app.services.mcp_constants import build_mcp_tool_name
 from app.workflows._completion_review import CompletionReviewOutcome, review_persona_completion
 from app.workflows._heartbeat_recall import warm_heartbeat_recall_sections
 from app.workflows._session_postprocess import (

@@ -8,12 +8,12 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
 from app.models import SessionEventType, TruncationEvent
 from app.services.context_tracker import log_token_usage
 from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_complete, publish_message
+from app.services.llm_messages import CompletionResult
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import build_output_usage, estimate_cost

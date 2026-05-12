@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import AuthenticationError
+from app.services.llm_errors import AuthenticationError
 from app.services.memory.review_agent import (
     MemoryReviewDecision,
     _call_reviewer_agent,

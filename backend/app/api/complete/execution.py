@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.base import CompletionResult, Message
 from app.api.complete.helpers import should_enable_thinking
 from app.api.complete.schemas import (
     CompletionResponse,
@@ -15,6 +14,7 @@ from app.api.complete.schemas import (
     UsageInfo,
 )
 from app.services.agent_routing import complete_with_fallback
+from app.services.llm_messages import CompletionResult, Message
 
 if TYPE_CHECKING:
 

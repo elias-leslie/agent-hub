@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import CompletionResult, Message
 from app.constants.models import CLAUDE_SONNET
+from app.services.llm_messages import CompletionResult, Message
 from app.services.orchestration.parallel import (
     ParallelExecutor,
     ParallelResult,

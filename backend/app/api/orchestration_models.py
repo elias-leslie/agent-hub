@@ -4,9 +4,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.adapters.registry import ValidProvider
 from app.api.complete.request_schemas import ResponseFormat
 from app.api.complete.usage_schemas import ContextUsageInfo, OutputUsageInfo, UsageInfo
+from app.routing.registry import ValidProvider
 
 # ========== Subagent Models ==========
 
