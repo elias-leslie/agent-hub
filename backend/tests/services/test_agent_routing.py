@@ -497,20 +497,28 @@ class TestInjectAgentMandates:
         assert collect_args.kwargs["include_guardrails"] is False
 
 
-def _internal_result_for(model: str, provider: str) -> object:
+def _internal_result_for(
+    model: str,
+    provider: str,
+    *,
+    finish_reason: str = "stop",
+    error_message: str | None = None,
+) -> object:
     from app.api.complete.types import CompletionInternalResult
 
-    return CompletionInternalResult(
+    result = CompletionInternalResult(
         content="ok",
         model=model,
         provider=provider,
         input_tokens=1,
         output_tokens=1,
-        finish_reason="stop",
+        finish_reason=finish_reason,
         session_id="ephemeral:sess",
         memory_uuids=[],
         cited_uuids=[],
     )
+    result.message.error_message = error_message
+    return result
 
 
 class TestCompleteWithFallback:
@@ -583,6 +591,36 @@ class TestCompleteWithFallback:
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"
         assert mock_ci.await_count == 2
         assert record_failure.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_provider_error_finish_reason_triggers_fallback(
+        self,
+        mock_agent: AgentDTO,
+    ) -> None:
+        primary_error = _internal_result_for(
+            CLAUDE_SONNET,
+            "claude",
+            finish_reason="error",
+            error_message="provider returned empty error response",
+        )
+        fallback_success = _internal_result_for(CLAUDE_HAIKU, "claude")
+
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(side_effect=[primary_error, fallback_success]),
+        ) as mock_ci:
+            result = await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=mock_agent,
+                max_tokens=100,
+                temperature=0.7,
+            )
+
+        assert isinstance(result, FallbackCompletionResult)
+        assert result.model_used == CLAUDE_HAIKU
+        assert result.used_fallback is True
+        assert result.fallback_reason == "RuntimeError: provider returned empty error response"
+        assert mock_ci.await_count == 2
 
     @pytest.mark.asyncio
     async def test_provider_rate_limit_cooldown_blocks_immediate_retry(

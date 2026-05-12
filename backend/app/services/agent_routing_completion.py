@@ -44,6 +44,14 @@ def _format_fallback_reason(error: BaseException | None) -> str | None:
     return f"{type(error).__name__}: {error}"
 
 
+def _error_from_terminal_result(result: CompletionInternalResult) -> RuntimeError | None:
+    """Return an error when the provider encoded failure in the terminal message."""
+    if result.finish_reason not in ("error", "aborted"):
+        return None
+    message = result.message.error_message or f"Provider returned finish_reason={result.finish_reason}"
+    return RuntimeError(message)
+
+
 def _resolve_retry_after_seconds(error: RateLimitError) -> float:
     """Return the cooldown window to enforce for a provider rate limit."""
     retry_after = error.retry_after
@@ -135,6 +143,9 @@ async def _try_model(
             max_turns=1,
             execute_tools=False,
         )
+        terminal_error = _error_from_terminal_result(internal)
+        if terminal_error is not None:
+            raise terminal_error
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await _RATE_LIMIT_BREAKER.on_success(provider)
         return internal, None
