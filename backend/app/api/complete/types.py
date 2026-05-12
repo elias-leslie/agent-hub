@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .tool_handlers import AgentProgress
+from .progress import AgentProgress
 
 
 @dataclass
