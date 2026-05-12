@@ -1,25 +1,86 @@
 """Unit tests for /api/complete streaming mode.
 
-These are pure unit tests that don't hit any real services.
+These tests exercise the wire-format and lifecycle contract of
+``stream_completion`` after the Phase 4 cluster B migration, where the
+HTTP streaming path drives ``orchestrator.run_completion_stream``
+through ``sse_writer``. They do not hit any real service.
 """
+
+from __future__ import annotations
+
+import time
+from typing import cast
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import Message, StreamEvent
+from app.adapters.base import Message
 from app.api.complete import StreamingChunk, stream_completion
 from app.api.complete.streaming_context import StreamContext
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
+from app.llm.types import (
+    AssistantMessage,
+    DoneEvent,
+    ErrorEvent,
+    StopReason,
+    TextDeltaEvent,
+    Usage,
+)
+
+
+def _partial_message() -> AssistantMessage:
+    return AssistantMessage(
+        content=[],
+        api="anthropic-messages",
+        provider="claude",
+        model=CLAUDE_SONNET,
+        usage=Usage(),
+        stop_reason="stop",
+        timestamp=int(time.time() * 1000),
+    )
+
+
+def _done_event(
+    *,
+    finish_reason: str = "stop",
+    input_tokens: int = 5,
+    output_tokens: int = 2,
+) -> DoneEvent:
+    message = AssistantMessage(
+        content=[],
+        api="anthropic-messages",
+        provider="claude",
+        model=CLAUDE_SONNET,
+        usage=Usage(input=input_tokens, output=output_tokens),
+        stop_reason=cast(StopReason, finish_reason),
+        timestamp=int(time.time() * 1000),
+    )
+    return DoneEvent(reason="stop", message=message)
+
+
+def _error_event(text: str) -> ErrorEvent:
+    message = AssistantMessage(
+        content=[],
+        api="anthropic-messages",
+        provider="claude",
+        model=CLAUDE_SONNET,
+        usage=Usage(),
+        stop_reason="error",
+        timestamp=int(time.time() * 1000),
+        error_message=text,
+    )
+    return ErrorEvent(reason="error", error=message)
 
 
 class TestStreamingChunk:
-    """Tests for StreamingChunk model."""
+    """Tests for the StreamingChunk Pydantic schema."""
 
-    def test_content_chunk(self):
+    def test_content_chunk(self) -> None:
         chunk = StreamingChunk(type="content", content="Hello")
         assert chunk.type == "content"
         assert chunk.content == "Hello"
 
-    def test_done_chunk(self):
+    def test_done_chunk(self) -> None:
         chunk = StreamingChunk(
             type="done",
             model=CLAUDE_SONNET,
@@ -33,12 +94,12 @@ class TestStreamingChunk:
         assert chunk.model == CLAUDE_SONNET
         assert chunk.input_tokens == 10
 
-    def test_error_chunk(self):
+    def test_error_chunk(self) -> None:
         chunk = StreamingChunk(type="error", error="Something went wrong")
         assert chunk.type == "error"
         assert chunk.error == "Something went wrong"
 
-    def test_agent_routing_fields(self):
+    def test_agent_routing_fields(self) -> None:
         chunk = StreamingChunk(
             type="done",
             agent_used="coder",
@@ -50,165 +111,116 @@ class TestStreamingChunk:
         assert chunk.fallback_used is True
 
 
+def _patch_persistence():
+    """Patch the DB-side persistence helpers stream_completion calls on done."""
+    return (
+        patch(
+            "app.api.complete.streaming_persistence.save_messages_to_db",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.api.complete.streaming_persistence._track_citations",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.api.complete.streaming_persistence.close_one_shot_session",
+            new=AsyncMock(),
+        ),
+    )
+
+
 class TestStreamCompletionGenerator:
-    """Tests for _stream_completion generator."""
+    """Tests for stream_completion's wire-format contract."""
 
     @pytest.mark.asyncio
-    async def test_yields_sse_format(self):
-        """Test that generator yields proper SSE format."""
-        from unittest.mock import AsyncMock, patch
+    async def test_yields_sse_format(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield TextDeltaEvent(content_index=0, delta="Hello", partial=_partial_message())
+            yield _done_event()
 
-        # Create mock stream events
-        async def mock_stream(*args, **kwargs):
-            yield StreamEvent(type="content", content="Hello")
-            yield StreamEvent(
-                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
-            )
-
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            messages = [Message(role="user", content="Hi")]
+        save, citations, close = _patch_persistence()
+        with (
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
             chunks = []
-
             async for chunk in stream_completion(
-                messages=messages,
+                messages=[Message(role="user", content="Hi")],
                 model=CLAUDE_SONNET,
                 provider="claude",
-                max_tokens=100,
                 temperature=0.7,
                 session_id="test-session",
             ):
                 chunks.append(chunk)
 
-            # All chunks should be SSE format
-            for chunk in chunks:
-                assert chunk.startswith("data: "), f"Not SSE format: {chunk}"
-
-            # Should end with [DONE]
-            assert chunks[-1] == "data: [DONE]\n\n"
+        for chunk in chunks:
+            assert chunk.startswith("data: "), f"Not SSE format: {chunk}"
+        assert chunks[-1] == "data: [DONE]\n\n"
 
     @pytest.mark.asyncio
-    async def test_content_events(self):
-        """Test content events are properly formatted."""
-        from unittest.mock import AsyncMock, patch
+    async def test_content_events(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield TextDeltaEvent(content_index=0, delta="Hello", partial=_partial_message())
+            yield TextDeltaEvent(content_index=0, delta=" world", partial=_partial_message())
+            yield _done_event(input_tokens=5, output_tokens=3)
 
-        async def mock_stream(*args, **kwargs):
-            yield StreamEvent(type="content", content="Hello")
-            yield StreamEvent(type="content", content=" world")
-            yield StreamEvent(
-                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=3
-            )
-
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            messages = [Message(role="user", content="Hi")]
+        save, citations, close = _patch_persistence()
+        with (
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
             chunks = []
-
             async for chunk in stream_completion(
-                messages=messages,
+                messages=[Message(role="user", content="Hi")],
                 model=CLAUDE_SONNET,
                 provider="claude",
-                max_tokens=100,
                 temperature=0.7,
                 session_id="test-session",
             ):
                 chunks.append(chunk)
 
-            # Parse content chunks
-            content_chunks = [c for c in chunks if '"type":"content"' in c]
-            assert len(content_chunks) == 2
+        content_chunks = [c for c in chunks if '"type": "content"' in c]
+        assert len(content_chunks) == 2
 
     @pytest.mark.asyncio
-    async def test_stream_completion_forwards_abort_event_to_adapter_stream(self):
-        """Non-tool streaming should pass the registered cancel event to the adapter."""
-        from unittest.mock import AsyncMock, patch
+    async def test_stream_completion_unregisters_context_when_finished(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield _done_event()
 
-        captured: dict[str, object] = {}
-
-        async def mock_stream(*args, **kwargs):
-            captured.update(kwargs)
-            yield StreamEvent(
-                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
-            )
-
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            async for _ in stream_completion(
+        save, citations, close = _patch_persistence()
+        with (
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
+            async for _chunk in stream_completion(
                 messages=[Message(role="user", content="Hi")],
                 model=CLAUDE_SONNET,
                 provider="claude",
-                max_tokens=100,
-                temperature=0.7,
-                session_id="test-session",
-            ):
-                pass
-
-        assert "abort_event" in captured
-        assert captured["abort_event"] is not None
-
-    @pytest.mark.asyncio
-    async def test_stream_completion_unregisters_context_when_finished(self):
-        """Completed streams should release cancel ownership."""
-        from unittest.mock import AsyncMock, patch
-
-        async def mock_stream(*args, **kwargs):
-            yield StreamEvent(
-                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
-            )
-
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            async for _ in stream_completion(
-                messages=[Message(role="user", content="Hi")],
-                model=CLAUDE_SONNET,
-                provider="claude",
-                max_tokens=100,
                 temperature=0.7,
                 session_id="cleanup-session",
             ):
                 pass
 
+        # After the stream finishes, the cancel registry should not know this session.
         assert StreamContext.cancel("cleanup-session") is False
 
     @pytest.mark.asyncio
-    async def test_done_event_includes_metadata(self):
-        """Test done event includes all metadata."""
+    async def test_done_event_includes_metadata(self) -> None:
         import json
-        from unittest.mock import AsyncMock, patch
 
-        async def mock_stream(*args, **kwargs):
-            yield StreamEvent(
-                type="done",
-                finish_reason="end_turn",
-                input_tokens=10,
-                output_tokens=5,
-            )
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield _done_event(finish_reason="stop", input_tokens=10, output_tokens=5)
 
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            messages = [Message(role="user", content="Hi")]
+        save, citations, close = _patch_persistence()
+        with (
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
             chunks = []
-
             async for chunk in stream_completion(
-                messages=messages,
+                messages=[Message(role="user", content="Hi")],
                 model=CLAUDE_SONNET,
                 provider="claude",
-                max_tokens=100,
                 temperature=0.7,
                 session_id="test-session",
                 agent_used="coder",
@@ -217,94 +229,69 @@ class TestStreamCompletionGenerator:
             ):
                 chunks.append(chunk)
 
-            # Find done chunk
-            done_chunk = None
-            for c in chunks:
-                if '"type":"done"' in c:
-                    data = c.replace("data: ", "").strip()
-                    done_chunk = json.loads(data)
-                    break
+        done_chunk = None
+        for c in chunks:
+            if '"type": "done"' in c:
+                done_chunk = json.loads(c.replace("data: ", "").strip())
+                break
 
-            assert done_chunk is not None
-            assert done_chunk["model"] == CLAUDE_SONNET
-            assert done_chunk["provider"] == "claude"
-            assert done_chunk["session_id"] == "test-session"
-            assert done_chunk["agent_used"] == "coder"
-            assert done_chunk["input_tokens"] == 10
-            assert done_chunk["output_tokens"] == 5
-
-    @pytest.mark.asyncio
-    async def test_error_handling(self):
-        """Test error events are properly formatted."""
-        from unittest.mock import AsyncMock, patch
-
-        async def mock_stream(*args, **kwargs):
-            yield StreamEvent(type="error", error="API error occurred")
-
-        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
-            mock_adapter = AsyncMock()
-            mock_adapter.stream = mock_stream
-            mock_get_adapter.return_value = mock_adapter
-
-            messages = [Message(role="user", content="Hi")]
-            chunks = []
-
-            async for chunk in stream_completion(
-                messages=messages,
-                model=CLAUDE_SONNET,
-                provider="claude",
-                max_tokens=100,
-                temperature=0.7,
-                session_id="test-session",
-            ):
-                chunks.append(chunk)
-
-            # Should have error chunk
-            error_chunks = [c for c in chunks if '"type":"error"' in c]
-            assert len(error_chunks) == 1
-            assert "API error occurred" in error_chunks[0]
+        assert done_chunk is not None
+        assert done_chunk["model"] == CLAUDE_SONNET
+        assert done_chunk["provider"] == "claude"
+        assert done_chunk["session_id"] == "test-session"
+        assert done_chunk["agent_used"] == "coder"
+        assert done_chunk["input_tokens"] == 10
+        assert done_chunk["output_tokens"] == 5
+        assert done_chunk["finish_reason"] == "stop"
 
     @pytest.mark.asyncio
-    async def test_tool_stream_uses_shared_turn_budget(self):
-        """Streaming tool execution should use the same min-turn policy as non-streaming."""
-        from unittest.mock import AsyncMock, patch
+    async def test_error_handling(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield _error_event("API error occurred")
 
-        captured: dict[str, int] = {}
-
-        async def fake_tool_loop(
-            adapter: object,
-            messages: list[Message],
-            model: str,
-            max_tokens: int | None,
-            temperature: float,
-            stream_kwargs: dict[str, object],
-            content_buf: list[str],
-            ctx: object,
-            project_id: str | None,
-            max_tool_turns: int,
-        ):
-            captured["max_tool_turns"] = max_tool_turns
-            captured["has_abort_event"] = int(stream_kwargs.get("abort_event") is not None)
-            yield "data: done\n\n"
-
+        save, citations, close = _patch_persistence()
         with (
-            patch("app.api.complete.streaming.get_adapter") as mock_get_adapter,
-            patch("app.api.complete.streaming.iter_stream_sse_with_tools", new=fake_tool_loop),
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
-            mock_get_adapter.return_value = AsyncMock()
-
             chunks = []
             async for chunk in stream_completion(
                 messages=[Message(role="user", content="Hi")],
                 model=CLAUDE_SONNET,
-                provider="codex",
+                provider="claude",
                 temperature=0.7,
                 session_id="test-session",
-                tools=[{"name": "noop", "description": "noop", "input_schema": {"type": "object"}}],
-                max_tool_turns=1,
             ):
                 chunks.append(chunk)
 
-        assert captured["max_tool_turns"] == 3
-        assert captured["has_abort_event"] == 1
-        assert chunks[0].startswith("data: ")
+        error_chunks = [c for c in chunks if '"type": "error"' in c]
+        assert len(error_chunks) == 1
+        assert "API error occurred" in error_chunks[0]
+
+    @pytest.mark.asyncio
+    async def test_connected_event_includes_model_and_provider(self) -> None:
+        import json
+
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield _done_event()
+
+        save, citations, close = _patch_persistence()
+        with (
+            save, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
+            chunks = []
+            async for chunk in stream_completion(
+                messages=[Message(role="user", content="Hi")],
+                model=CLAUDE_SONNET,
+                provider="claude",
+                temperature=0.7,
+                session_id="connected-session",
+            ):
+                chunks.append(chunk)
+
+        first = json.loads(chunks[0].replace("data: ", "").strip())
+        assert first["type"] == "connected"
+        assert first["session_id"] == "connected-session"
+        assert first["model"] == CLAUDE_SONNET
+        assert first["provider"] == "claude"

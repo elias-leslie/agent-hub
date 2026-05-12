@@ -178,6 +178,23 @@ class SseWriter:
         payload.update(self._routing_meta)
         return _format_sse(payload)
 
+    def _format_done_with_extras(self, extras: dict[str, Any]) -> str:
+        """Emit a ``done`` event whose payload is built outside the writer.
+
+        The HTTP route's streaming path computes externally-observable
+        fields like ``cost_usd`` and ``model_display_name`` (from the
+        catalog + cost estimator) and pushes them in via ``extras``.
+        Routing/agent metadata is still merged from
+        :meth:`attach_routing`.
+        """
+        payload: dict[str, Any] = {
+            "type": "done",
+            "seq": self.next_seq(),
+            **self._routing_meta,
+            **extras,
+        }
+        return _format_sse(payload)
+
     def error(self, message: AssistantMessage) -> str:
         return _format_sse(
             {
