@@ -70,7 +70,10 @@ def _split_tagged_thinking(text: str) -> tuple[str, list[str]]:
         if tagged:
             thinking.append(tagged)
         pos = close_match.end()
-    return "".join(output), thinking
+    visible_text = "".join(output)
+    if thinking:
+        visible_text = visible_text.strip()
+    return visible_text, thinking
 
 
 def _assistant_text_and_tagged_thinking(message: AssistantMessage) -> tuple[str, list[str]]:
