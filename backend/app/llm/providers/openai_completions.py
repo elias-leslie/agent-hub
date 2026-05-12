@@ -657,6 +657,61 @@ def build_params(
     return params
 
 
+_OPENAI_CHAT_COMPLETIONS_PARAM_KEYS = {
+    "audio",
+    "frequency_penalty",
+    "function_call",
+    "functions",
+    "logit_bias",
+    "logprobs",
+    "max_completion_tokens",
+    "max_tokens",
+    "messages",
+    "metadata",
+    "modalities",
+    "model",
+    "n",
+    "parallel_tool_calls",
+    "prediction",
+    "presence_penalty",
+    "prompt_cache_key",
+    "prompt_cache_retention",
+    "reasoning_effort",
+    "response_format",
+    "safety_identifier",
+    "seed",
+    "service_tier",
+    "stop",
+    "store",
+    "stream_options",
+    "temperature",
+    "tool_choice",
+    "tools",
+    "top_logprobs",
+    "top_p",
+    "user",
+    "verbosity",
+    "web_search_options",
+}
+
+
+def _prepare_sdk_body(params: dict[str, Any]) -> dict[str, Any]:
+    """Move provider-specific Chat Completions fields into ``extra_body``."""
+    body: dict[str, Any] = {}
+    extra_body: dict[str, Any] = {}
+    for key, value in params.items():
+        if key in _OPENAI_CHAT_COMPLETIONS_PARAM_KEYS:
+            body[key] = value
+        else:
+            extra_body[key] = value
+    if extra_body:
+        existing = body.get("extra_body")
+        if isinstance(existing, dict):
+            extra_body = {**existing, **extra_body}
+        body["extra_body"] = extra_body
+    return body
+
+
 # ---------------------------------------------------------------------------
 # Client construction
 # ---------------------------------------------------------------------------
@@ -828,6 +883,7 @@ def stream_openai_completions(
 
             body = dict(params)
             body.pop("stream", None)
+            body = _prepare_sdk_body(body)
             iterator = await client.chat.completions.create(stream=True, **body, **request_options)
 
             stream.push(StartEvent(partial=output))

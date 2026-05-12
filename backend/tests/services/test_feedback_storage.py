@@ -243,7 +243,10 @@ class TestFindDuplicateCandidates:
         stmt, params = db.execute.await_args_list[0].args
         sql = str(stmt)
         assert "AND fi.project_id = :project_id" not in sql
-        assert "ORDER BY (fi.project_id = :project_id) DESC, rank DESC" in sql
+        assert "lower(fi.title) = lower(:title)" in sql
+        assert "ORDER BY (fi.project_id = :project_id) DESC" in sql
+        assert "(lower(fi.title) = lower(:title)) DESC" in sql
+        assert "rank DESC" in sql
         assert params["project_id"] == "agent-hub"
         assert result == [first, second]
 

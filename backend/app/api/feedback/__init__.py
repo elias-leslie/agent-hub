@@ -50,18 +50,20 @@ async def create_feedback(
         project_id=body.project_id,
         title=body.title,
     )
-    if body.vote_if_duplicate and body.session_id and candidates:
+    if body.vote_if_duplicate and candidates:
         canonical = candidates[0]
-        vote = await feedback_storage.vote_on_item(
-            db,
-            item_id=str(canonical.id),
-            session_id=body.session_id,
-            comment=body.description,
-            agent_slug=body.agent_slug,
-            model_used=body.model_used,
-        )
-        await db.commit()
-        await db.refresh(canonical)
+        vote = None
+        if body.session_id:
+            vote = await feedback_storage.vote_on_item(
+                db,
+                item_id=str(canonical.id),
+                session_id=body.session_id,
+                comment=body.description,
+                agent_slug=body.agent_slug,
+                model_used=body.model_used,
+            )
+            await db.commit()
+            await db.refresh(canonical)
         return FeedbackCreateResponse(
             item=FeedbackItemResponse.model_validate(canonical),
             created=False,
