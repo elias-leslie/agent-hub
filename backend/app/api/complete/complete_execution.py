@@ -21,6 +21,10 @@ from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing_models import ResolvedAgent
 from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message
+from app.services.model_runtime_health import (
+    record_model_runtime_failure,
+    record_model_runtime_success,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,13 @@ def _agentic_timeout_seconds(agent: ResolvedAgent | None) -> float | None:
         return None
     configured = getattr(agent.agent, "timeout_seconds", None)
     return float(configured) if configured is not None else None
+
+
+def _terminal_error_from_result(result: CompletionInternalResult) -> RuntimeError | None:
+    if result.finish_reason not in {"error", "aborted"}:
+        return None
+    message = result.message.error_message or f"Provider returned finish_reason={result.finish_reason}"
+    return RuntimeError(message)
 
 
 async def _run_internal_with_timeout(
@@ -110,7 +121,7 @@ async def _run_with_agentic_fallback(
     """Try primary model then fallback_models for agentic DB execution."""
     from app.routing.registry import get_provider_for_model
 
-    primary_error: ProviderError | asyncio.TimeoutError | None = None
+    primary_error: ProviderError | RuntimeError | asyncio.TimeoutError | None = None
     for model_id in [primary_model, *agent.agent.fallback_models]:
         try:
             fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
@@ -119,6 +130,9 @@ async def _run_with_agentic_fallback(
                 thinking, tools, fmt, skip_cache, True,
             )
             assert isinstance(raw, CompletionInternalResult)
+            terminal_error = _terminal_error_from_result(raw)
+            if terminal_error is not None:
+                raise terminal_error
             raw.requested_model = primary_model
             raw.requested_provider = provider
             if model_id != primary_model:
@@ -126,8 +140,10 @@ async def _run_with_agentic_fallback(
                 raw.fallback_used = True
                 raw.model_used = model_id
                 raw.fallback_reason = f"{type(primary_error).__name__}: {primary_error}" if primary_error else None
+            await record_model_runtime_success(db, model_id=model_id, provider=fb_provider)
             return raw
-        except (TimeoutError, ProviderError) as e:
+        except (TimeoutError, ProviderError, RuntimeError) as e:
+            await record_model_runtime_failure(db, model_id=model_id, provider=fb_provider, error=e)
             if model_id == primary_model:
                 primary_error = e
             logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
@@ -176,9 +192,13 @@ async def execute_completion(
     fmt = prepare_response_format(request)
     if _fallbacks_enabled(request, resolved_agent) and not is_agentic:
         result, model_used, fallback_used = await execute_with_fallback(
-            _to_messages(messages_dict), resolved_agent, tools, thinking,
+            _to_messages(messages_dict),
+            resolved_agent,
+            tools,
+            thinking,
             resolved_model=resolved_model,
             prompt_cache_key=session_id,
+            db=db,
         )
         return (
             result,

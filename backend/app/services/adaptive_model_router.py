@@ -74,6 +74,7 @@ PROVIDER_ROUTING_METADATA: dict[str, dict[str, Any]] = {
         "notes": "Useful low-cost/free-tier utility path.",
     },
 }
+_RUNTIME_FAILURE_PROVIDER_STATUSES = {"invalid_credentials", "quota_exhausted"}
 
 CRITICAL_AGENT_SLUGS = {
     "bear-researcher-v1",
@@ -442,8 +443,22 @@ async def refresh_catalog_model_availability(db: AsyncSession) -> int:
             )
         ).scalars().all()
     )
+    blocked_providers = set(
+        (
+            await db.execute(
+                select(ProviderEntitlement.provider).where(
+                    ProviderEntitlement.enabled == True,  # noqa: E712
+                    ProviderEntitlement.status.in_(_RUNTIME_FAILURE_PROVIDER_STATUSES),
+                )
+            )
+        ).scalars().all()
+    )
     for model in models:
-        available = _provider_available(model.provider, credential_manager) or model.provider in active_entitled_providers
+        provider_has_credentials = _provider_available(model.provider, credential_manager)
+        available = (
+            model.provider not in blocked_providers
+            and (provider_has_credentials or model.provider in active_entitled_providers)
+        )
         row = existing_rows.get((model.id, model.provider))
         snapshot = {
             "vision": bool(model.has_vision),
@@ -642,7 +657,11 @@ async def _refresh_provider_entitlements(db: AsyncSession, providers: set[str]) 
             existing_status = row.status
             probe_status = "active" if available else "missing"
             row.auth_mode = auth_mode
-            row.status = "active" if available else existing_status
+            row.status = (
+                existing_status
+                if available and existing_status in _RUNTIME_FAILURE_PROVIDER_STATUSES
+                else ("active" if available else existing_status)
+            )
             row.metadata_ = {
                 **metadata,
                 **(row.metadata_ or {}),
@@ -677,6 +696,11 @@ def _provider_available(provider: str, credential_manager: Any) -> bool:
         return bool(credential_manager.get("claude", "oauth_token") or shutil.which("claude"))
     if provider == "gemini":
         return bool(credential_manager.get_api_keys("gemini"))
+    if provider == "cloudflare":
+        return bool(
+            credential_manager.get_api_key("cloudflare")
+            and credential_manager.get("cloudflare", "account_id")
+        )
     if provider == "local":
         return bool(credential_manager.get("local", "api_key"))
     return bool(credential_manager.get_api_key(provider))
