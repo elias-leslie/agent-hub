@@ -40,8 +40,8 @@ _PROVIDER_API: dict[str, Api] = {
 _PROVIDER_BASE_URL: dict[str, str] = {
     "anthropic": "https://api.anthropic.com",
     "claude": "https://api.anthropic.com",
-    "google": "https://generativelanguage.googleapis.com",
-    "gemini": "https://generativelanguage.googleapis.com",
+    "google": "",
+    "gemini": "",
     "openai": "https://api.openai.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "xai": "https://api.x.ai/v1",
@@ -65,6 +65,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
     provider name from ``app.services.agent_routing.get_provider_for_model``.
     """
     resolved_id = resolve_model(model_id)
+    upstream_id = _upstream_model_id(resolved_id, provider)
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
     base_url = _PROVIDER_BASE_URL.get(provider, "")
@@ -72,7 +73,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
     if entry is None:
         # Catalog miss — return a minimal Model so the adapter can still try.
         return Model(
-            id=resolved_id,
+            id=upstream_id,
             name=resolved_id,
             api=api,
             provider=provider,
@@ -87,7 +88,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
     caps = entry.capabilities
     inputs: list = ["text"] + (["image"] if caps.has_vision else [])
     return Model(
-        id=resolved_id,
+        id=upstream_id,
         name=entry.name,
         api=api,
         provider=provider,
@@ -103,6 +104,13 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
         context_window=entry.context_window,
         max_tokens=caps.max_output_tokens,
     )
+
+
+def _upstream_model_id(model_id: str, provider: str) -> str:
+    prefix = f"{provider}/"
+    if model_id.startswith(prefix):
+        return model_id[len(prefix):]
+    return model_id
 
 
 __all__ = ["resolve_llm_model"]

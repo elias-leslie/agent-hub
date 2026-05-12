@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
 from app.models import AgentRoutingProfile, ModelAvailability, ModelCatalogEntry, WorkloadProfile
 from app.services.adaptive_model_router import (
     RoutingContext,
     _availability_allows_routing,
     _effective_cost_policy,
+    _infer_workload,
+    _manual_chain,
     _mode_from_policy,
     _score_model,
     _should_reconcile_profile,
@@ -221,3 +228,32 @@ def test_missing_or_disabled_availability_is_not_routable() -> None:
         _availability_allows_routing(ModelAvailability(model_id="ok", provider="test", enabled=True, routable=True))
         is True
     )
+
+
+@pytest.mark.asyncio
+async def test_trading_committee_agents_infer_finance_workloads(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def workload_exists(_db: object, _key: str) -> bool:
+        return True
+
+    monkeypatch.setattr(
+        "app.services.adaptive_model_router._workload_exists",
+        workload_exists,
+    )
+
+    fundamentals = SimpleNamespace(slug="fundamentals-v1", is_coding_agent=False)
+    trader = SimpleNamespace(slug="trader-v1", is_coding_agent=False)
+
+    assert await _infer_workload(AsyncMock(), fundamentals, RoutingContext()) == "finance_research"
+    assert await _infer_workload(AsyncMock(), trader, RoutingContext()) == "trade_strategy"
+
+
+def test_manual_chain_canonicalizes_legacy_agent_model_alias() -> None:
+    agent = SimpleNamespace(
+        primary_model_id="claude-haiku-4-5-20251001",
+        fallback_models=[],
+        escalation_model_id=None,
+    )
+
+    chain = _manual_chain(agent, None)
+
+    assert chain.primary_model_id == "claude-haiku-4-5"

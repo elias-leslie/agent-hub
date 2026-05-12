@@ -1,14 +1,16 @@
-"""Per-provider environment-variable lookup for API keys.
+"""Per-provider runtime credential lookup for API keys.
 
 Direct port of pi-mono ``packages/ai/src/env-api-keys.ts``.
 
 Bun-specific ``/proc/self/environ`` fallback is dropped (Python doesn't have
 the Bun-on-Linux empty-env bug). Vertex ADC + Bedrock multi-credential
-detection is preserved.
+detection is preserved. Agent Hub also accepts credentials loaded from the
+approved DB-backed credential cache.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -86,8 +88,51 @@ def find_env_keys(provider: str) -> list[str] | None:
     return found or None
 
 
+def _credential_providers(provider: str) -> tuple[str, ...]:
+    aliases = {
+        "anthropic": ("anthropic", "claude"),
+        "claude": ("claude", "anthropic"),
+        "codex": ("codex",),
+        "google": ("gemini", "google"),
+        "gemini": ("gemini", "google"),
+        "google-generative-ai": ("gemini", "google"),
+        "cloudflare-workers-ai": ("cloudflare",),
+        "cloudflare-ai-gateway": ("cloudflare",),
+        "kimi-coding": ("kimi-code", "kimi-coding"),
+        "moonshotai": ("moonshot", "moonshotai"),
+        "moonshotai-cn": ("moonshot", "moonshotai-cn"),
+    }
+    return aliases.get(provider, (provider,))
+
+
+def _get_cached_api_key(provider: str) -> str | None:
+    from app.services.credential_manager import get_credential_manager
+
+    manager = get_credential_manager()
+    for candidate in _credential_providers(provider):
+        if candidate in {"anthropic", "claude", "codex"}:
+            oauth_token = manager.get(candidate, "oauth_token")
+            if oauth_token:
+                return _extract_access_token(oauth_token)
+        api_key = manager.get_api_key(candidate)
+        if api_key:
+            return api_key
+    return None
+
+
+def _extract_access_token(raw_value: str) -> str:
+    try:
+        data = json.loads(raw_value)
+    except (json.JSONDecodeError, TypeError):
+        return raw_value
+    if not isinstance(data, dict):
+        return raw_value
+    token = data.get("access_token")
+    return token if isinstance(token, str) and token else raw_value
+
+
 def get_env_api_key(provider: str) -> str | None:
-    """Return the API key for ``provider`` from environment, or ``None``.
+    """Return the API key for ``provider`` from env/cache, or ``None``.
 
     Special cases:
 
@@ -99,6 +144,10 @@ def get_env_api_key(provider: str) -> str | None:
     env_keys = find_env_keys(provider)
     if env_keys:
         return os.environ.get(env_keys[0])
+
+    cached_key = _get_cached_api_key(provider)
+    if cached_key:
+        return cached_key
 
     if provider == "google-vertex":
         has_credentials = _has_vertex_adc_credentials()

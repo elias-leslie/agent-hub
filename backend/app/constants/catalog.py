@@ -168,6 +168,9 @@ def seed_alias_overrides() -> dict[str, str]:
         "cloudcode/claude-sonnet-4-6": CLAUDE_SONNET,
         "cloudcode/claude-opus-4-6-thinking": CLAUDE_OPUS_4_7,
         "cloudcode/claude-opus-4-7": CLAUDE_OPUS_4_7,
+
+        # Legacy dated Claude aliases retained in existing agent rows.
+        "claude-haiku-4-5-20251001": CLAUDE_HAIKU,
     }
 
 

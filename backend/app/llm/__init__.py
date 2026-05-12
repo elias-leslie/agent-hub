@@ -12,3 +12,11 @@ from __future__ import annotations
 
 # Load built-in provider registrations when the llm package is imported.
 from . import providers as providers
+
+
+def ensure_builtin_providers_registered() -> None:
+    """Ensure built-in provider modules are registered with the API registry."""
+    providers.register_builtin_providers()
+
+
+ensure_builtin_providers_registered()

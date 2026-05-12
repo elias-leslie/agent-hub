@@ -13,6 +13,8 @@ from app.api import router
 from app.config import settings
 from app.db import async_session
 from app.exception_handlers import setup_exception_handlers
+from app.llm import ensure_builtin_providers_registered
+from app.llm.api_registry import get_api_providers
 from app.middleware.access_control import AccessControlMiddleware
 from app.services.agent_bootstrap_service import bootstrap_default_agents
 from app.services.agent_model_reconciliation_service import (
@@ -38,6 +40,13 @@ logger = logging.getLogger(__name__)
 async def _startup() -> None:
     """Run all startup tasks."""
     logger.info("Starting agent-hub on port %d", settings.port)
+
+    ensure_builtin_providers_registered()
+    provider_apis = sorted(provider.api for provider in get_api_providers())
+    logger.info(
+        "LLM API providers registered: %s",
+        ", ".join(provider_apis) if provider_apis else "none",
+    )
 
     init_telemetry()
     logger.info("OpenTelemetry initialized")
