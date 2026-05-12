@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import CompletionResult, Message
+from app.adapters.base import Message
+from app.api.complete.types import CompletionInternalResult
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.orchestration.subagent import (
     SubagentConfig,
@@ -13,11 +14,33 @@ from app.services.orchestration.subagent import (
 )
 
 
-class TestSubagentConfig:
-    """Tests for SubagentConfig dataclass."""
+def _make_internal_result(
+    *,
+    content: str = "Test response",
+    provider: str = "claude",
+    model: str = CLAUDE_SONNET,
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+    thinking_content: str | None = None,
+    thinking_tokens: int | None = None,
+) -> CompletionInternalResult:
+    return CompletionInternalResult(
+        content=content,
+        model=model,
+        provider=provider,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        finish_reason="stop",
+        session_id="ephemeral:test",
+        memory_uuids=[],
+        cited_uuids=[],
+        thinking_content=thinking_content,
+        thinking_tokens=thinking_tokens,
+    )
 
+
+class TestSubagentConfig:
     def test_default_values(self):
-        """Test default configuration values."""
         config = SubagentConfig(name="test")
 
         assert config.name == "test"
@@ -29,7 +52,6 @@ class TestSubagentConfig:
         assert config.timeout_seconds is None
 
     def test_custom_values(self):
-        """Test custom configuration."""
         config = SubagentConfig(
             name="analyzer",
             provider="gemini",
@@ -46,10 +68,7 @@ class TestSubagentConfig:
 
 
 class TestSubagentResult:
-    """Tests for SubagentResult dataclass."""
-
     def test_completed_result(self):
-        """Test completed result structure."""
         result = SubagentResult(
             subagent_id="abc123",
             name="test",
@@ -66,7 +85,6 @@ class TestSubagentResult:
         assert result.error is None
 
     def test_error_result(self):
-        """Test error result structure."""
         result = SubagentResult(
             subagent_id="abc123",
             name="test",
@@ -83,7 +101,6 @@ class TestSubagentResult:
         assert result.error == "Connection failed"
 
     def test_result_with_thinking(self):
-        """Test result with extended thinking."""
         result = SubagentResult(
             subagent_id="abc123",
             name="test",
@@ -102,10 +119,7 @@ class TestSubagentResult:
 
 
 class TestSubagentManager:
-    """Tests for SubagentManager."""
-
     def test_initialization(self):
-        """Test manager initialization."""
         from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 
         manager = SubagentManager()
@@ -113,7 +127,6 @@ class TestSubagentManager:
         assert manager._default_gemini_model == GEMINI_FLASH
 
     def test_custom_default_models(self):
-        """Test custom default model configuration."""
         manager = SubagentManager(
             default_claude_model=CLAUDE_OPUS,
             default_gemini_model="gemini-3-pro",
@@ -121,55 +134,16 @@ class TestSubagentManager:
         assert manager._default_claude_model == CLAUDE_OPUS
         assert manager._default_gemini_model == "gemini-3-pro"
 
-    def test_get_adapter_claude(self):
-        """Test getting Claude adapter."""
-        manager = SubagentManager()
-        adapter = manager._get_adapter("claude")
-        assert adapter is not None
-
-    def test_get_adapter_gemini(self):
-        """Test getting Gemini adapter."""
-        with patch("app.services.orchestration.subagent.GeminiAdapter"):
-            manager = SubagentManager()
-            adapter = manager._get_adapter("gemini")
-            assert adapter is not None
-
-    def test_get_adapter_caching(self):
-        """Test adapter caching."""
-        manager = SubagentManager()
-        adapter1 = manager._get_adapter("claude")
-        adapter2 = manager._get_adapter("claude")
-        assert adapter1 is adapter2
-
-    def test_get_adapter_unknown(self):
-        """Test error for unknown provider."""
-        manager = SubagentManager()
-        with pytest.raises(ValueError, match="Unknown provider"):
-            manager._get_adapter("unknown")
-
     @pytest.mark.asyncio
     async def test_spawn_success(self):
-        """Test successful subagent spawn."""
         manager = SubagentManager()
         config = SubagentConfig(name="test")
 
-        mock_result = CompletionResult(
-            content="Test response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result()),
         ):
-            result = await manager.spawn(
-                task="Hello, please respond.",
-                config=config,
-            )
+            result = await manager.spawn(task="Hello, please respond.", config=config)
 
             assert result.status == "completed"
             assert result.content == "Test response"
@@ -178,22 +152,12 @@ class TestSubagentManager:
 
     @pytest.mark.asyncio
     async def test_spawn_with_context(self):
-        """Test spawn with context messages."""
         manager = SubagentManager()
         config = SubagentConfig(name="test", context_mode="full")
 
-        mock_result = CompletionResult(
-            content="Context aware response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=200,
-            output_tokens=60,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result(content="Context aware response", input_tokens=200, output_tokens=60)),
         ) as mock_complete:
             context = [
                 Message(role="user", content="Previous message"),
@@ -207,29 +171,18 @@ class TestSubagentManager:
             )
 
             assert result.status == "completed"
-            # Verify context was included in messages
             call_args = mock_complete.call_args
             messages = call_args.kwargs.get("messages")
-            assert len(messages) >= 3  # context + task
+            assert len(messages) >= 3
 
     @pytest.mark.asyncio
     async def test_spawn_with_context_defaults_to_focused_brief(self):
-        """Default context handling should narrow parent context into one brief."""
         manager = SubagentManager()
         config = SubagentConfig(name="test", max_context_messages=2, max_context_chars=120)
 
-        mock_result = CompletionResult(
-            content="Focused response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=120,
-            output_tokens=40,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result(content="Focused response", input_tokens=120, output_tokens=40)),
         ) as mock_complete:
             context = [
                 Message(role="system", content="Parent system rules."),
@@ -246,50 +199,36 @@ class TestSubagentManager:
 
             messages = mock_complete.call_args.kwargs["messages"]
             assert len(messages) == 2
-            assert messages[0].role == "user"
-            assert "Selected parent context:" in messages[0].content
-            assert "Parent system rules." not in messages[0].content
-            assert "First parent request." not in messages[0].content
-            assert "Intermediate parent reply." in messages[0].content
-            assert "Most recent parent request." in messages[0].content
-            assert messages[1].content == "Continue the conversation."
+            assert messages[0]["role"] == "user"
+            assert "Selected parent context:" in messages[0]["content"]
+            assert "Parent system rules." not in messages[0]["content"]
+            assert "First parent request." not in messages[0]["content"]
+            assert "Intermediate parent reply." in messages[0]["content"]
+            assert "Most recent parent request." in messages[0]["content"]
+            assert messages[1]["content"] == "Continue the conversation."
 
     @pytest.mark.asyncio
     async def test_spawn_with_system_prompt(self):
-        """Test spawn with custom system prompt."""
         manager = SubagentManager()
         config = SubagentConfig(
             name="test",
             system_prompt="You are a helpful assistant.",
         )
 
-        mock_result = CompletionResult(
-            content="Helpful response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result(content="Helpful response")),
         ) as mock_complete:
-            await manager.spawn(
-                task="Help me.",
-                config=config,
-            )
+            await manager.spawn(task="Help me.", config=config)
 
-            # Verify system prompt was included
             call_args = mock_complete.call_args
             messages = call_args.kwargs.get("messages")
-            assert messages[0].role == "system"
-            assert "helpful assistant" in messages[0].content
+            assert messages is not None
+            assert messages[0]["role"] == "system"
+            assert "helpful assistant" in messages[0]["content"]
 
     @pytest.mark.asyncio
     async def test_spawn_timeout(self):
-        """Test spawn timeout handling."""
         import asyncio
 
         manager = SubagentManager()
@@ -297,64 +236,41 @@ class TestSubagentManager:
 
         async def slow_complete(*args, **kwargs):
             await asyncio.sleep(1)
-            return CompletionResult(
-                content="Too late",
-                provider="claude",
-                model=CLAUDE_SONNET,
-                input_tokens=0,
-                output_tokens=0,
-            )
+            return _make_internal_result(content="Too late", input_tokens=0, output_tokens=0)
 
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
+        with patch(
+            "app.api.complete.core.complete_internal",
             new=slow_complete,
         ):
-            result = await manager.spawn(
-                task="This will timeout.",
-                config=config,
-            )
+            result = await manager.spawn(task="This will timeout.", config=config)
 
             assert result.status == "timeout"
+            assert result.error is not None
             assert "timed out" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_spawn_error(self):
-        """Test spawn error handling."""
         manager = SubagentManager()
         config = SubagentConfig(name="test")
 
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
+        with patch(
+            "app.api.complete.core.complete_internal",
             new=AsyncMock(side_effect=Exception("API error")),
         ):
-            result = await manager.spawn(
-                task="This will error.",
-                config=config,
-            )
+            result = await manager.spawn(task="This will error.", config=config)
 
             assert result.status == "error"
+            assert result.error is not None
             assert "API error" in result.error
 
     @pytest.mark.asyncio
     async def test_spawn_with_trace_id(self):
-        """Test spawn with trace ID."""
         manager = SubagentManager()
         config = SubagentConfig(name="test")
 
-        mock_result = CompletionResult(
-            content="Traced response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result(content="Traced response")),
         ):
             result = await manager.spawn(
                 task="Traced task.",
@@ -362,37 +278,22 @@ class TestSubagentManager:
                 trace_id="abc123trace",
             )
 
-            # Trace ID should be in result
             assert result.trace_id is not None
 
     @pytest.mark.asyncio
     async def test_spawn_background(self):
-        """Test background subagent spawning."""
         manager = SubagentManager()
         config = SubagentConfig(name="background")
 
-        mock_result = CompletionResult(
-            content="Background response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
-            new=AsyncMock(return_value=mock_result),
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result(content="Background response")),
         ):
-            subagent_id = await manager.spawn_background(
-                task="Background task.",
-                config=config,
-            )
+            subagent_id = await manager.spawn_background(task="Background task.", config=config)
 
             assert subagent_id is not None
             assert manager.active_count == 1
 
-            # Get result
             result = await manager.get_result(subagent_id)
             assert result is not None
             assert result.status == "completed"
@@ -400,7 +301,6 @@ class TestSubagentManager:
 
     @pytest.mark.asyncio
     async def test_cancel_background(self):
-        """Test canceling background subagent."""
         import asyncio
 
         manager = SubagentManager()
@@ -408,60 +308,36 @@ class TestSubagentManager:
 
         async def slow_complete(*args, **kwargs):
             await asyncio.sleep(10)
-            return CompletionResult(
-                content="Never happens",
-                provider="claude",
-                model=CLAUDE_SONNET,
-                input_tokens=0,
-                output_tokens=0,
-            )
+            return _make_internal_result(content="Never happens", input_tokens=0, output_tokens=0)
 
-        with patch.object(
-            manager._get_adapter("claude"),
-            "complete",
+        with patch(
+            "app.api.complete.core.complete_internal",
             new=slow_complete,
         ):
-            subagent_id = await manager.spawn_background(
-                task="Will be cancelled.",
-                config=config,
-            )
+            subagent_id = await manager.spawn_background(task="Will be cancelled.", config=config)
 
             assert manager.active_count == 1
 
-            # Cancel it
             cancelled = manager.cancel(subagent_id)
             assert cancelled is True
             assert manager.active_count == 0
 
     def test_cancel_nonexistent(self):
-        """Test canceling non-existent subagent."""
         manager = SubagentManager()
         cancelled = manager.cancel("nonexistent")
         assert cancelled is False
 
 
 class TestSubagentCostTracking:
-    """Tests for orchestration cost tracking."""
-
     @pytest.mark.asyncio
     async def test_cost_logged_when_project_id_set(self):
-        """When project_id is set, cost logging should be called after completion."""
         manager = SubagentManager()
         config = SubagentConfig(name="test", project_id="agent-hub")
 
-        mock_result = CompletionResult(
-            content="Response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
         with (
-            patch.object(
-                manager._get_adapter("claude"),
-                "complete",
-                new=AsyncMock(return_value=mock_result),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_internal_result()),
             ),
             patch(
                 "app.services.orchestration.subagent_executor._log_subagent_cost",
@@ -481,23 +357,13 @@ class TestSubagentCostTracking:
 
     @pytest.mark.asyncio
     async def test_cost_not_logged_without_project_id(self):
-        """When project_id is not set, cost logging should not be called."""
         manager = SubagentManager()
         config = SubagentConfig(name="test")
 
-        mock_result = CompletionResult(
-            content="Response",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
         with (
-            patch.object(
-                manager._get_adapter("claude"),
-                "complete",
-                new=AsyncMock(return_value=mock_result),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_internal_result()),
             ),
             patch(
                 "app.services.orchestration.subagent_executor._log_subagent_cost",
@@ -511,23 +377,13 @@ class TestSubagentCostTracking:
 
     @pytest.mark.asyncio
     async def test_cost_not_logged_on_zero_tokens(self):
-        """Cost logging should skip when tokens are zero (error/timeout)."""
         manager = SubagentManager()
         config = SubagentConfig(name="test", project_id="agent-hub")
 
-        mock_result = CompletionResult(
-            content="",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=0,
-            output_tokens=0,
-        )
-
         with (
-            patch.object(
-                manager._get_adapter("claude"),
-                "complete",
-                new=AsyncMock(return_value=mock_result),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_internal_result(content="", input_tokens=0, output_tokens=0)),
             ),
             patch(
                 "app.services.orchestration.subagent_executor._log_subagent_cost",
@@ -541,23 +397,13 @@ class TestSubagentCostTracking:
 
     @pytest.mark.asyncio
     async def test_cost_logging_failure_does_not_propagate(self):
-        """Cost logging failure should not affect subagent result."""
         manager = SubagentManager()
         config = SubagentConfig(name="test", project_id="agent-hub")
 
-        mock_result = CompletionResult(
-            content="Success",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
-
         with (
-            patch.object(
-                manager._get_adapter("claude"),
-                "complete",
-                new=AsyncMock(return_value=mock_result),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_internal_result(content="Success")),
             ),
             patch(
                 "app.services.orchestration.subagent_executor._log_subagent_cost",
@@ -565,7 +411,6 @@ class TestSubagentCostTracking:
                 side_effect=Exception("DB connection failed"),
             ),
         ):
-            # Should NOT raise despite cost logging failure
             result = await manager.spawn(task="Test task.", config=config)
             assert result.status == "completed"
             assert result.content == "Success"

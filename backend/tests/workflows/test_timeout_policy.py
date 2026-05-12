@@ -13,7 +13,7 @@ from app.api.orchestration_models import SubagentRequest
 from app.api.schemas.agent_schemas import AgentCreateRequest, AgentUpdateRequest
 from app.constants.models import CLAUDE_SONNET
 from app.services.agent_crud import apply_agent_updates
-from app.services.orchestration.subagent_executor import _call_adapter
+from app.services.orchestration.subagent_executor import _call_pipeline
 from app.services.orchestration.subagent_models import SubagentConfig
 
 
@@ -28,9 +28,16 @@ def _make_agent_create_request(**overrides) -> AgentCreateRequest:
     return AgentCreateRequest.model_validate(payload)
 
 
-class _FakeAdapter:
-    def __init__(self, result) -> None:
-        self.complete = AsyncMock(return_value=result)
+def _make_completion_result():
+    return SimpleNamespace(
+        content="ok",
+        provider="claude",
+        model="model",
+        input_tokens=1,
+        output_tokens=1,
+        thinking_content=None,
+        thinking_tokens=None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -143,30 +150,36 @@ async def test_subagent_endpoint_passes_timeout_seconds_through(subagent_request
 
 
 @pytest.mark.asyncio
-async def test_call_adapter_skips_wait_for_when_timeout_is_none() -> None:
-    adapter = _FakeAdapter(SimpleNamespace(content="ok", provider="claude", model="model", input_tokens=1, output_tokens=1, thinking_content=None, thinking_tokens=None))
+async def test_call_pipeline_skips_wait_for_when_timeout_is_none() -> None:
     config = SubagentConfig(name="test", timeout_seconds=None)
+    fake_complete = AsyncMock(return_value=_make_completion_result())
 
     with pytest.MonkeyPatch.context() as mp:
+        import app.api.complete.core as core_mod
+
+        mp.setattr(core_mod, "complete_internal", fake_complete)
         wait_for = AsyncMock(side_effect=AssertionError("wait_for should not be used"))
         mp.setattr(asyncio, "wait_for", wait_for)
-        result = await _call_adapter(adapter, [], "model", config)
+        result = await _call_pipeline([], "model", "claude", config)
 
     assert result.content == "ok"
     wait_for.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_call_adapter_uses_wait_for_for_positive_timeout() -> None:
-    adapter = _FakeAdapter(SimpleNamespace(content="ok", provider="claude", model="model", input_tokens=1, output_tokens=1, thinking_content=None, thinking_tokens=None))
+async def test_call_pipeline_uses_wait_for_for_positive_timeout() -> None:
     config = SubagentConfig(name="test", timeout_seconds=12)
+    fake_complete = AsyncMock(return_value=_make_completion_result())
 
     async def fake_wait_for(coro, timeout):
         assert timeout == 12
         return await coro
 
     with pytest.MonkeyPatch.context() as mp:
+        import app.api.complete.core as core_mod
+
+        mp.setattr(core_mod, "complete_internal", fake_complete)
         mp.setattr(asyncio, "wait_for", fake_wait_for)
-        result = await _call_adapter(adapter, [], "model", config)
+        result = await _call_pipeline([], "model", "claude", config)
 
     assert result.content == "ok"

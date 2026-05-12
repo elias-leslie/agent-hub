@@ -10,7 +10,7 @@ from textwrap import shorten
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from app.adapters.base import Message, ProviderAdapter
+from app.adapters.base import Message
 from app.services.telemetry import get_current_trace_id, get_tracer
 
 from .subagent_models import SubagentConfig, SubagentResult
@@ -127,43 +127,40 @@ def build_messages(
     config: SubagentConfig,
     context: list[Message] | None = None,
 ) -> list[Message]:
-    """Build message list with isolated context.
-
-    Args:
-        task: The task description.
-        config: Subagent configuration.
-        context: Optional context messages.
-
-    Returns:
-        List of messages with system prompt, context, and task.
-    """
+    """Build message list with isolated context."""
     messages: list[Message] = []
 
-    # Add system prompt
     if config.system_prompt:
         messages.append(Message(role="system", content=config.system_prompt))
 
-    # Add context messages if provided
     if context:
         messages.extend(_shape_context_messages(context, config))
 
-    # Add the task as user message
     messages.append(Message(role="user", content=task))
 
     return messages
 
 
-async def _call_adapter(
-    adapter: ProviderAdapter,
+def _messages_to_dicts(messages: list[Message]) -> list[dict[str, object]]:
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
+async def _call_pipeline(
     messages: list[Message],
     model: str,
+    provider: str,
     config: SubagentConfig,
 ):
-    """Invoke adapter.complete with optional timeout."""
-    coro = adapter.complete(
-        messages=messages,
+    """Invoke complete_internal with optional timeout, in DB-less mode."""
+    from app.api.complete.core import complete_internal
+
+    coro = complete_internal(
+        messages=_messages_to_dicts(messages),
         model=model,
+        provider=provider,
         temperature=config.temperature,
+        project_id=config.project_id or "",
+        db=None,
         thinking_level=config.thinking_level,
         tools=config.tools,
     )
@@ -262,15 +259,15 @@ async def _handle_success(span, subagent_id, config, model, started_at,
 
 
 async def _execute_in_span(
-    span, subagent_id, task, config, adapter, model,
+    span, subagent_id, task, config, model,
     context, parent_id, effective_trace_id, started_at,
 ) -> SubagentResult:
-    """Run the adapter call inside an already-active span and return a result."""
+    """Run the pipeline call inside an already-active span and return a result."""
     messages = build_messages(task, config, context)
     span.set_attribute("subagent.message_count", len(messages))
 
     try:
-        result = await _call_adapter(adapter, messages, model, config)
+        result = await _call_pipeline(messages, model, config.provider, config)
         return await _handle_success(
             span, subagent_id, config, model, started_at,
             result, effective_trace_id, parent_id,
@@ -309,7 +306,6 @@ async def _execute_in_span(
 async def execute_subagent(
     task: str,
     config: SubagentConfig,
-    adapter: ProviderAdapter,
     model: str,
     context: list[Message] | None = None,
     parent_id: str | None = None,
@@ -346,6 +342,6 @@ async def execute_subagent(
         )
 
         return await _execute_in_span(
-            span, subagent_id, task, config, adapter, model,
+            span, subagent_id, task, config, model,
             context, parent_id, effective_trace_id, started_at,
         )
