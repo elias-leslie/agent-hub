@@ -156,10 +156,12 @@ def _detect_compat(model: Model[Any]) -> _Compat:
     )
     is_cf_workers = provider == "cloudflare-workers-ai" or "api.cloudflare.com" in base_url
     is_cf_gateway = provider == "cloudflare-ai-gateway" or "gateway.ai.cloudflare.com" in base_url
+    is_minimax = provider == "minimax" or "api.minimax.io" in base_url
 
     is_non_standard = (
         provider == "cerebras"
         or "cerebras.ai" in base_url
+        or is_minimax
         or provider == "xai"
         or "api.x.ai" in base_url
         or is_together
@@ -174,7 +176,7 @@ def _detect_compat(model: Model[Any]) -> _Compat:
     )
 
     use_max_tokens = (
-        "chutes.ai" in base_url or is_moonshot or is_cf_gateway or is_together
+        "chutes.ai" in base_url or is_minimax or is_moonshot or is_cf_gateway or is_together
     )
     is_grok = provider == "xai" or "api.x.ai" in base_url
     is_deepseek = provider == "deepseek" or "deepseek.com" in base_url
@@ -200,8 +202,8 @@ def _detect_compat(model: Model[Any]) -> _Compat:
     return _Compat(
         supports_store=not is_non_standard,
         supports_developer_role=not is_non_standard,
-        supports_reasoning_effort=not (is_grok or is_zai or is_moonshot or is_together or is_cf_gateway),
-        supports_usage_in_streaming=True,
+        supports_reasoning_effort=not (is_minimax or is_grok or is_zai or is_moonshot or is_together or is_cf_gateway),
+        supports_usage_in_streaming=not is_minimax,
         max_tokens_field=("max_tokens" if use_max_tokens else "max_completion_tokens"),
         requires_tool_result_name=False,
         requires_assistant_after_tool_result=False,

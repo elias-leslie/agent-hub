@@ -27,14 +27,14 @@ _PROVIDER_API: dict[str, Api] = {
     "xai": "openai-completions",
     "zhipu": "openai-completions",
     "minimax": "openai-completions",
-    "kimi-code": "openai-completions",
+    "kimi-code": "anthropic-messages",
     "moonshot": "openai-completions",
     "moonshotai": "openai-completions",
     "deepseek": "openai-completions",
     "local": "openai-completions",
     "nvidia": "openai-completions",
     "cloudflare": "openai-completions",
-    "codex": "anthropic-messages",  # codex = Anthropic OAuth per D7
+    "codex": "openai-codex-responses",
 }
 
 # Provider → default base URL. Per-model overrides happen via Model.base_url.
@@ -47,15 +47,15 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "openrouter": "https://openrouter.ai/api/v1",
     "xai": "https://api.x.ai/v1",
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-    "minimax": "https://api.minimaxi.com/v1",
-    "kimi-code": "https://api.moonshot.ai/v1",
+    "minimax": "https://api.minimax.io/v1",
+    "kimi-code": "https://api.kimi.com/coding/",
     "moonshot": "https://api.moonshot.ai/v1",
     "moonshotai": "https://api.moonshot.ai/v1",
     "deepseek": "https://api.deepseek.com/v1",
     "local": "http://localhost:8080/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
-    "codex": "https://api.anthropic.com",
+    "codex": "https://chatgpt.com/backend-api/codex/responses",
 }
 
 _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
@@ -112,6 +112,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
 
     caps = entry.capabilities
     inputs: list = ["text"] + (["image"] if caps.has_vision else [])
+    headers = {"User-Agent": "agent-hub/1.0"} if provider == "kimi-code" else None
     return Model(
         id=upstream_id,
         name=entry.name,
@@ -128,6 +129,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
         ),
         context_window=entry.context_window,
         max_tokens=caps.max_output_tokens,
+        headers=headers,
     )
 
 
