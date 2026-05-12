@@ -29,10 +29,10 @@ class MandateInjection:
 
 
 @dataclass
-class CompletionResult:
+class FallbackCompletionResult:
     """Result of completion with fallback."""
 
-    result: Any  # Adapter result
+    result: Any  # CompletionInternalResult
     model_used: str  # Model that produced the result
     used_fallback: bool  # Whether fallback was used
     fallback_reason: str | None = None  # Why the primary model was abandoned

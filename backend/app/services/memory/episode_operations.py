@@ -29,6 +29,7 @@ async def get_episode(driver: Any, episode_uuid: str) -> dict[str, Any] | None:
     Returns:
         Dict with memory details, or None if not found
     """
+    del driver
     repo = get_memory_repository()
     try:
         data = await repo.get_as_dict(episode_uuid)
@@ -52,6 +53,7 @@ async def batch_get_episodes(
     Returns:
         Dict mapping UUID to memory detail dict
     """
+    del driver
     if not episode_uuids:
         return {}
     repo = get_memory_repository()
@@ -84,6 +86,7 @@ async def fetch_episodes_filtered(
     Returns:
         Tuple of (list of episode-like objects, has_more flag)
     """
+    del driver
     repo = get_memory_repository()
 
     # Map category to tier for filtering
@@ -128,6 +131,7 @@ async def text_search_episodes(
     Returns:
         List of episode-like objects matching the search
     """
+    del driver
     repo = get_memory_repository()
 
     # Map category to tier name for filtering

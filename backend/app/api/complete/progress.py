@@ -17,9 +17,8 @@ class AgentProgress:
     """Progress update during agent execution.
 
     Mirrors the legacy ``app.api.complete.tool_models.AgentProgress`` shape
-    that downstream code re-exported via ``tool_handlers``. The HTTP
-    response converts these into the ``AgentProgressInfo`` Pydantic model
-    defined in ``app.api.orchestration_models``.
+    that downstream code re-exported via ``tool_handlers``. The HTTP response
+    schema now uses this same type, avoiding a duplicate progress model.
     """
 
     turn: int

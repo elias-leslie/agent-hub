@@ -1,4 +1,4 @@
-"""Core types for provider adapters."""
+"""Legacy wire helpers retained outside the deleted text adapters."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,30 +14,6 @@ class ThinkingLevel(StrEnum):
     HIGH = "high"
     XHIGH = "xhigh"
     ULTRATHINK = "ultrathink"
-
-
-@dataclass
-class StreamEvent:
-    """Event from streaming completion."""
-
-    type: Literal["content", "done", "error", "thinking", "tool_use", "tool_result", "turn_start", "turn_end"]
-    content: str = ""
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    finish_reason: str | None = None
-    error: str | None = None
-    # Extended thinking support
-    thinking_tokens: int | None = None  # Tokens used for thinking
-    # Tool use support (for streaming tool calls back to frontend)
-    tool_id: str | None = None
-    tool_name: str | None = None
-    tool_input: dict[str, Any] | None = None
-    is_error: bool = False
-    duration_ms: int | None = None
-    # CloudCode PA: thoughtSignature required on functionCall parts when thinking is enabled
-    thought_signature: str | None = None
-    # Turn lifecycle (emitted by tool execution loops)
-    turn: int | None = None
 
 
 @dataclass
@@ -108,25 +84,3 @@ class ContainerState:
 
     id: str
     expires_at: str  # ISO timestamp
-
-
-@dataclass
-class CompletionResult:
-    """Result from a completion request."""
-
-    content: str
-    model: str
-    provider: str
-    input_tokens: int
-    output_tokens: int
-    finish_reason: str | None = None
-    raw_response: Any = None
-    cache_metrics: CacheMetrics | None = None
-    # Programmatic tool calling fields
-    tool_calls: list[ToolCallResult] | None = None
-    container: ContainerState | None = None
-    # Extended thinking fields
-    thinking_content: str | None = None
-    thinking_tokens: int | None = None
-    # Why the primary model was abandoned, when fallback routing succeeded.
-    fallback_reason: str | None = None

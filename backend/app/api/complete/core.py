@@ -66,10 +66,6 @@ def _assistant_thinking(message: AssistantMessage) -> tuple[str | None, int | No
     return thinking, len(thinking) // 4
 
 
-def _assistant_tool_calls(message: AssistantMessage) -> list[ToolCall]:
-    return [block for block in message.content if isinstance(block, ToolCall)]
-
-
 def _make_tool_runner(
     *,
     working_dir: str | None,
@@ -184,21 +180,13 @@ async def complete_internal(
     cited_uuids = await extract_cited_uuids(content, memory_group_id) if use_memory else []
 
     return CompletionInternalResult(
-        content=content,
-        model=model,
-        provider=provider,
-        input_tokens=message.usage.input,
-        output_tokens=message.usage.output,
+        message=message,
         finish_reason=message.stop_reason,
         session_id=session_id,
         memory_uuids=loaded_memory_uuids,
         cited_uuids=cited_uuids,
         thinking_content=thinking_content,
         thinking_tokens=thinking_tokens,
-        tool_calls=[
-            {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
-            for tc in _assistant_tool_calls(message)
-        ] or None,
         turns=result.turns,
         tool_calls_count=result.tool_calls_count,
         model_used=model,

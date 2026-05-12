@@ -53,7 +53,7 @@ class CompletionInput(BaseModel):
     user_messages_for_db: list[dict[str, Any]] | None = Field(default=None)
 
 
-class CompletionResult(BaseModel):
+class CompletionWorkflowResult(BaseModel):
     task_id: str
     content: str = ""
     model: str = "unknown"

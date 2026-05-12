@@ -11,7 +11,7 @@ import pytest
 from app.api.complete.execution import build_agentic_response, execute_with_fallback
 from app.api.complete.types import CompletionInternalResult
 from app.services.llm_errors import ProviderError
-from app.services.llm_messages import CompletionResult, Message
+from app.services.llm_messages import Message
 
 
 @pytest.mark.asyncio
@@ -26,12 +26,16 @@ async def test_execute_with_fallback_attaches_primary_failure_reason_to_result()
             verbosity_level=None,
         ),
     )
-    adapter_result = CompletionResult(
+    adapter_result = CompletionInternalResult(
         content="ok",
         model="codex/gpt-5.4",
         provider="codex",
         input_tokens=1,
         output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-fallback",
+        memory_uuids=[],
+        cited_uuids=[],
     )
     fallback_result = SimpleNamespace(
         result=adapter_result,
@@ -69,12 +73,16 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
             verbosity_level=None,
         ),
     )
-    adapter_result = CompletionResult(
+    adapter_result = CompletionInternalResult(
         content="ok",
         model="claude-sonnet-4-6",
         provider="claude",
         input_tokens=1,
         output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-direct",
+        memory_uuids=[],
+        cited_uuids=[],
     )
     direct_override_result = SimpleNamespace(
         result=adapter_result,
@@ -373,12 +381,16 @@ async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() ->
         cache_ttl=None,
         container_id=None,
     )
-    adapter_result = CompletionResult(
+    adapter_result = CompletionInternalResult(
         content="ok",
         model="claude-sonnet-4-6",
         provider="claude",
         input_tokens=5,
         output_tokens=7,
+        finish_reason="stop",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
     )
 
     with patch(

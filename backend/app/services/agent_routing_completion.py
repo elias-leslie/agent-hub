@@ -6,6 +6,7 @@ import math
 import time
 from typing import Any, NoReturn
 
+from app.api.complete.types import CompletionInternalResult
 from app.routing.registry import list_providers
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
@@ -14,13 +15,10 @@ from app.services.llm_errors import (
     RateLimitError,
 )
 from app.services.llm_messages import (
-    CompletionResult as AdapterCompletionResult,
-)
-from app.services.llm_messages import (
     Message,
 )
 
-from .agent_routing_models import CompletionResult
+from .agent_routing_models import FallbackCompletionResult
 from .agent_routing_utils import get_provider_for_model
 
 logger = logging.getLogger(__name__)
@@ -76,28 +74,6 @@ def _messages_as_dicts(messages: list[Message]) -> list[dict[str, Any]]:
     return [{"role": m.role, "content": m.content} for m in messages]
 
 
-def _project_internal_result(
-    result: Any,
-    model: str,
-    provider: str,
-) -> AdapterCompletionResult:
-    """Project ``CompletionInternalResult`` onto the legacy ``CompletionResult`` shape."""
-    return AdapterCompletionResult(
-        content=result.content,
-        model=model,
-        provider=provider,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        finish_reason=result.finish_reason,
-        cache_metrics=result.cache_metrics,
-        thinking_content=result.thinking_content,
-        thinking_tokens=result.thinking_tokens,
-        tool_calls=result.tool_calls,
-        container=result.container,
-        fallback_reason=result.fallback_reason,
-    )
-
-
 async def _record_completion_error(
     provider: str,
     model: str,
@@ -124,7 +100,7 @@ async def _try_model(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
-) -> tuple[object | None, BaseException | None]:
+) -> tuple[CompletionInternalResult | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error.
 
     Routes each attempt through the new pipeline by calling
@@ -159,10 +135,9 @@ async def _try_model(
             max_turns=1,
             execute_tools=False,
         )
-        result = _project_internal_result(internal, model, provider)
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await _RATE_LIMIT_BREAKER.on_success(provider)
-        return result, None
+        return internal, None
     except _COMPLETION_ERRORS as error:
         await _record_completion_error(provider, model, error, start)
         return None, error
@@ -177,8 +152,8 @@ async def _try_primary(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
-    """Try the primary model; return CompletionResult or None on failure."""
+) -> FallbackCompletionResult | None:
+    """Try the primary model; return fallback result or None on failure."""
     result, error = await _try_model(
         messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
@@ -203,7 +178,7 @@ async def _try_fallbacks(
     verbosity_level: str | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
+) -> FallbackCompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
     for fallback_model in agent.fallback_models or []:
@@ -237,7 +212,7 @@ async def _try_escalation(
     tried_models: set[str] | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
+) -> FallbackCompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
     blocked_providers = blocked_providers or set()
@@ -269,9 +244,9 @@ def _completion_result(
     model_used: str,
     used_fallback: bool,
     fallback_reason: str | None = None,
-) -> CompletionResult:
+) -> FallbackCompletionResult:
     """Build completion result payload."""
-    return CompletionResult(
+    return FallbackCompletionResult(
         result=result,
         model_used=model_used,
         used_fallback=used_fallback,
@@ -315,7 +290,7 @@ async def complete_with_fallback(
     thinking_level: str | None = None,
     primary_model_override: str | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult:
+) -> FallbackCompletionResult:
     """Attempt completion using primary → fallbacks → escalation model chain.
 
     Args:
