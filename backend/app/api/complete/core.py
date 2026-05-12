@@ -12,6 +12,7 @@ loop runs server-side via ``app.llm.tool_loop`` with
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -46,20 +47,67 @@ from .types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
 
+_THINK_OPEN_RE = re.compile(r"<think>", re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
 
-def _assistant_text(message: AssistantMessage) -> str:
+
+def _split_tagged_thinking(text: str) -> tuple[str, list[str]]:
+    """Split provider-emitted ``<think>`` text away from assistant-visible text."""
+    output: list[str] = []
+    thinking: list[str] = []
+    pos = 0
+    while pos < len(text):
+        open_match = _THINK_OPEN_RE.search(text, pos)
+        close_match = _THINK_CLOSE_RE.search(text, pos)
+        if close_match is None:
+            output.append(text[pos:])
+            break
+        if open_match is not None and open_match.start() < close_match.start():
+            output.append(text[pos:open_match.start()])
+            tagged = text[open_match.end():close_match.start()].strip()
+        else:
+            tagged = text[pos:close_match.start()].strip()
+        if tagged:
+            thinking.append(tagged)
+        pos = close_match.end()
+    return "".join(output), thinking
+
+
+def _assistant_text_and_tagged_thinking(message: AssistantMessage) -> tuple[str, list[str]]:
     parts: list[str] = []
     for block in message.content:
         if isinstance(block, TextContent):
             parts.append(block.text)
-    return "".join(parts)
+    return _split_tagged_thinking("".join(parts))
 
 
-def _assistant_thinking(message: AssistantMessage) -> tuple[str | None, int | None]:
+def _normalize_tagged_thinking(message: AssistantMessage) -> None:
+    """Move raw provider ``<think>`` text blocks into ThinkingContent blocks."""
+    normalized = []
+    changed = False
+    for block in message.content:
+        if not isinstance(block, TextContent):
+            normalized.append(block)
+            continue
+        text, thinking_chunks = _split_tagged_thinking(block.text)
+        if thinking_chunks:
+            changed = True
+            normalized.extend(ThinkingContent(thinking=chunk) for chunk in thinking_chunks)
+        if text:
+            normalized.append(TextContent(text=text, text_signature=block.text_signature))
+    if changed:
+        message.content = normalized
+
+
+def _assistant_thinking(
+    message: AssistantMessage,
+    tagged_thinking: list[str],
+) -> tuple[str | None, int | None]:
     chunks: list[str] = []
     for block in message.content:
         if isinstance(block, ThinkingContent) and block.thinking:
             chunks.append(block.thinking)
+    chunks.extend(tagged_thinking)
     if not chunks:
         return None, None
     thinking = "\n".join(chunks)
@@ -174,9 +222,10 @@ async def complete_internal(
         max_turns=max_turns,
     )
     message = result.message
+    _normalize_tagged_thinking(message)
 
-    content = _assistant_text(message)
-    thinking_content, thinking_tokens = _assistant_thinking(message)
+    content, tagged_thinking = _assistant_text_and_tagged_thinking(message)
+    thinking_content, thinking_tokens = _assistant_thinking(message, tagged_thinking)
     cited_uuids = await extract_cited_uuids(content, memory_group_id) if use_memory else []
 
     return CompletionInternalResult(
