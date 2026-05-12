@@ -1,4 +1,9 @@
-"""Agent and model resolution logic for completion API."""
+"""Agent and model resolution.
+
+Moved from ``app.api.complete.resolution`` per convergence-map.md C2.
+Routing is now a peer of ``app.llm`` and ``app.memory``, not a sub-concern
+of the HTTP completion package.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from app.adapters.base import Message
-from app.api.complete.helpers import parse_mention
 from app.services.adaptive_model_router import (
     RoutingContext,
     RoutingSelectionError,
@@ -229,16 +233,7 @@ async def resolve_agent_and_model(
 ) -> tuple[str, str, ResolvedAgent | None, AgentMandateInjection | None, str | None]:
     """Resolve agent and model from request.
 
-    Args:
-        request: Completion request
-        db: Database session
-        request_hash: Request hash for logging
-
-    Returns:
-        Tuple of (resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used)
-
-    Raises:
-        HTTPException: If agent resolution fails
+    Returns ``(resolved_model, provider, resolved_agent, mandate_injection, agent_used)``.
     """
     from fastapi import HTTPException
 
@@ -329,15 +324,13 @@ def apply_mention_override(
     """Apply @mention model override if present in messages.
 
     Strips the @mention from the message content so the LLM doesn't see
-    routing directives, and the cache key is based on clean content + resolved model.
-
-    Args:
-        request: Completion request
-        resolved_model: Currently resolved model
-
-    Returns:
-        Tuple of (resolved_model, provider)
+    routing directives, and the cache key is based on clean content +
+    resolved model.
     """
+    # Lazy import — parse_mention is a string utility currently colocated with
+    # the HTTP package; routing layer doesn't take a hard dep on api/complete.
+    from app.api.complete.helpers import parse_mention
+
     if request.messages:
         last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
@@ -345,12 +338,9 @@ def apply_mention_override(
             if mentioned_model:
                 resolved_model = mentioned_model
                 provider = get_provider(resolved_model)
-                # Strip the @mention from the message so the LLM doesn't see it
-                # and cache keys are based on clean content + resolved model.
                 last_user_msg.content = cleaned_content
                 return resolved_model, provider
 
-    # No override, return current values
     provider = get_provider(resolved_model)
     return resolved_model, provider
 
@@ -359,15 +349,7 @@ def inject_agent_system_prompt(
     messages_dict: list[dict[str, Any]],
     agent_mandate_injection: AgentMandateInjection | None,
 ) -> list[dict[str, Any]]:
-    """Inject agent system prompt into messages.
-
-    Args:
-        messages_dict: Messages as dicts
-        agent_mandate_injection: Agent mandate injection
-
-    Returns:
-        Messages with system prompt injected
-    """
+    """Inject agent system prompt into messages."""
     if not agent_mandate_injection:
         return messages_dict
 
@@ -381,3 +363,11 @@ def inject_agent_system_prompt(
         temp_messages, agent_mandate_injection.system_content
     )
     return [{"role": m.role, "content": m.content} for m in temp_messages]
+
+
+__all__ = [
+    "ADHOC_AGENT_SLUG",
+    "apply_mention_override",
+    "inject_agent_system_prompt",
+    "resolve_agent_and_model",
+]

@@ -24,8 +24,8 @@ from app.api.complete.request_setup import (
     inject_memory,
     setup_session,
 )
-from app.api.complete.resolution import inject_agent_system_prompt
 from app.api.complete.schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
+from app.routing.resolution import inject_agent_system_prompt
 from app.services.adaptive_model_router import mark_routing_decision_completed
 
 if TYPE_CHECKING:

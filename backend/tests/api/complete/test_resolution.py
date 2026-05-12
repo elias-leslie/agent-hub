@@ -14,7 +14,7 @@ from app.api.complete.request_schemas import (
     RoutingJudgment,
     RoutingPreferences,
 )
-from app.api.complete.resolution import resolve_agent_and_model
+from app.routing.resolution import resolve_agent_and_model
 from app.services.agent_dto import AgentDTO
 
 
@@ -80,12 +80,12 @@ async def test_resolve_agent_and_model_preserves_agent_prompt_when_injection_dis
 
     with (
         patch(
-            "app.api.complete.resolution.resolve_agent",
+            "app.routing.resolution.resolve_agent",
             new_callable=AsyncMock,
             return_value=_resolved_agent({"injection_enabled": False}),
         ),
         patch(
-            "app.api.complete.resolution.inject_agent_mandates",
+            "app.routing.resolution.inject_agent_mandates",
             new_callable=AsyncMock,
             return_value=SimpleNamespace(system_content="agent", injected_uuids=[]),
         ) as mock_inject,
@@ -110,12 +110,12 @@ async def test_resolve_agent_and_model_disables_optional_runtime_layers_when_ena
 
     with (
         patch(
-            "app.api.complete.resolution.resolve_agent",
+            "app.routing.resolution.resolve_agent",
             new_callable=AsyncMock,
             return_value=_resolved_agent({"enabled": False, "injection_enabled": True}),
         ),
         patch(
-            "app.api.complete.resolution.inject_agent_mandates",
+            "app.routing.resolution.inject_agent_mandates",
             new_callable=AsyncMock,
             return_value=SimpleNamespace(system_content="agent", injected_uuids=[]),
         ) as mock_inject,
@@ -139,12 +139,12 @@ async def test_resolve_agent_and_model_disables_mandate_runtime_prompts_when_inc
 
     with (
         patch(
-            "app.api.complete.resolution.resolve_agent",
+            "app.routing.resolution.resolve_agent",
             new_callable=AsyncMock,
             return_value=_resolved_agent({"include_mandates": False, "include_guardrails": True}),
         ),
         patch(
-            "app.api.complete.resolution.inject_agent_mandates",
+            "app.routing.resolution.inject_agent_mandates",
             new_callable=AsyncMock,
             return_value=SimpleNamespace(system_content="agent", injected_uuids=[]),
         ) as mock_inject,
@@ -168,12 +168,12 @@ async def test_resolve_agent_and_model_disables_guardrail_runtime_prompts_when_i
 
     with (
         patch(
-            "app.api.complete.resolution.resolve_agent",
+            "app.routing.resolution.resolve_agent",
             new_callable=AsyncMock,
             return_value=_resolved_agent({"include_mandates": True, "include_guardrails": False}),
         ),
         patch(
-            "app.api.complete.resolution.inject_agent_mandates",
+            "app.routing.resolution.inject_agent_mandates",
             new_callable=AsyncMock,
             return_value=SimpleNamespace(system_content="agent", injected_uuids=[]),
         ) as mock_inject,
@@ -221,7 +221,7 @@ async def test_resolve_agent_and_model_supports_structured_adhoc_routing() -> No
     )
 
     with patch(
-        "app.api.complete.resolution.resolve_model_route",
+        "app.routing.resolution.resolve_model_route",
         new_callable=AsyncMock,
         return_value=(_routed_agent(), route),
     ) as mock_route:

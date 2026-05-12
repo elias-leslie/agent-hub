@@ -11,10 +11,51 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BeforeValidator
+
+# Capability routing moved to app.routing.capabilities per convergence-map.md C2.
+# Re-exported with adapter-aware wrappers that trigger lazy factory registration.
+# Phase 4: callers import from app.routing.capabilities directly.
+from app.routing import capabilities as _caps
+from app.routing.capabilities import (
+    ProviderCapabilities,
+)
+from app.routing.capabilities import reset as _reset_capabilities
+from app.routing.capabilities import (
+    set_capabilities as _set_capabilities,
+)
+
+
+def get_capabilities(provider: str) -> ProviderCapabilities:
+    _ensure_registered()
+    return _caps.get_capabilities(provider)
+
+
+def supports_tools(provider: str, model: str | None = None) -> bool:
+    _ensure_registered()
+    return _caps.supports_tools(provider, model)
+
+
+def supports_thinking(provider: str, model: str | None = None) -> bool:
+    _ensure_registered()
+    return _caps.supports_thinking(provider, model)
+
+
+def list_providers_with(capability: str) -> list[str]:
+    _ensure_registered()
+    return _caps.list_providers_with(capability)
+
+
+def supports_cache_retention(provider: str) -> bool:
+    _ensure_registered()
+    return _caps.supports_cache_retention(provider)
+
+
+def supports_images(provider: str) -> bool:
+    _ensure_registered()
+    return _caps.supports_images(provider)
 
 if TYPE_CHECKING:
     from app.adapters.base import ProviderAdapter
@@ -43,27 +84,11 @@ logger = logging.getLogger(__name__)
 AdapterFactory = Callable[[], "ProviderAdapter"]
 
 
-@dataclass(frozen=True)
-class ProviderCapabilities:
-    """Declared capabilities for a provider adapter.
-
-    Used for capability-aware routing — no more hard-coded ``if provider == "claude"``
-    branching in the completion pipeline.
-    """
-
-    supports_streaming: bool = True
-    supports_tool_execution: bool = False
-    supports_thinking: bool = False
-    supports_images: bool = False
-    supports_cache_retention: bool = False
-
-
 # ---------------------------------------------------------------------------
 # Registry internals
 # ---------------------------------------------------------------------------
 
 _factories: dict[str, AdapterFactory] = {}
-_capabilities: dict[str, ProviderCapabilities] = {}
 _cache: dict[str, ProviderAdapter] = {}
 _initialized: bool = False
 
@@ -199,7 +224,7 @@ def register(
     """
     _factories[provider] = factory
     if capabilities is not None:
-        _capabilities[provider] = capabilities
+        _set_capabilities(provider, capabilities)
 
 
 def get_adapter(provider: str) -> ProviderAdapter:
@@ -314,88 +339,10 @@ def list_providers() -> list[str]:
     return list(_factories.keys())
 
 
-# ---------------------------------------------------------------------------
-# Capability queries
-# ---------------------------------------------------------------------------
-
-
-def get_capabilities(provider: str) -> ProviderCapabilities:
-    """Get declared capabilities for a provider.
-
-    Returns a default (all-False except streaming) ``ProviderCapabilities``
-    if the provider has no explicit capabilities registered.
-    """
-    _ensure_registered()
-    return _capabilities.get(provider, ProviderCapabilities())
-
-
-def _model_capability(model: str | None, attr: str) -> bool | None:
-    """Return a model-scoped capability from the catalog, if available."""
-    if not model:
-        return None
-    from app.constants.catalog import get_model_capabilities
-
-    capabilities = get_model_capabilities(model)
-    if capabilities is None:
-        return None
-    return bool(getattr(capabilities, attr, False))
-
-
-def supports_tools(provider: str, model: str | None = None) -> bool:
-    """Return True if the provider/model supports tool execution."""
-    model_value = _model_capability(model, "supports_tool_execution")
-    if model_value is not None:
-        return model_value
-    return get_capabilities(provider).supports_tool_execution
-
-
-def supports_thinking(provider: str, model: str | None = None) -> bool:
-    """Return True if the provider/model supports thinking/reasoning mode."""
-    model_value = _model_capability(model, "has_thinking")
-    if model_value is not None:
-        return model_value
-    return get_capabilities(provider).supports_thinking
-
-
-def supports_images(provider: str) -> bool:
-    """Return True if the provider supports image inputs."""
-    return get_capabilities(provider).supports_images
-
-
-def supports_cache_retention(provider: str) -> bool:
-    """Return True if the provider supports cache retention."""
-    return get_capabilities(provider).supports_cache_retention
-
-
-def list_providers_with(capability: str) -> list[str]:
-    """Return providers that have a specific capability enabled.
-
-    Args:
-        capability: One of 'streaming', 'tool_execution', 'thinking',
-                    'images', 'cache_retention'
-
-    Returns:
-        List of provider names with the capability enabled.
-
-    Raises:
-        ValueError: If the capability name is invalid.
-    """
-    _ensure_registered()
-    attr = f"supports_{capability}"
-    # Validate the capability name
-    if not hasattr(ProviderCapabilities, attr):
-        valid = [f.name.removeprefix("supports_") for f in ProviderCapabilities.__dataclass_fields__.values()]
-        raise ValueError(f"Unknown capability: {capability!r}. Valid: {valid}")
-    return [
-        name for name, caps in _capabilities.items()
-        if getattr(caps, attr, False)
-    ]
-
-
 def reset() -> None:
     """Reset registry state. For testing only."""
     global _initialized
     _factories.clear()
-    _capabilities.clear()
+    _reset_capabilities()
     _cache.clear()
     _initialized = False
