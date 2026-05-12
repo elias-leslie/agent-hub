@@ -12,6 +12,7 @@ from typing import Any, Literal
 from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.catalog import resolve_model
 from app.models import (
     Agent,
     AgentRoutingProfile,
@@ -75,25 +76,47 @@ PROVIDER_ROUTING_METADATA: dict[str, dict[str, Any]] = {
 }
 
 CRITICAL_AGENT_SLUGS = {
+    "bear-researcher-v1",
+    "bull-researcher-v1",
     "persona",
     "verifier",
     "equity-analyst",
     "financial-document-reviewer",
+    "fundamentals-v1",
     "governance-auditor",
     "investment-committee",
     "market-pulse-analyst",
     "market-pulse-scout",
+    "news-grounded-v1",
+    "portfolio-mgr-v1",
+    "risk-aggressive-v1",
+    "risk-conservative-v1",
     "risk-manager",
+    "risk-neutral-v1",
+    "sentiment-grounded-v1",
+    "technical-v1",
     "trade-manager",
+    "trader-v1",
 }
 FINANCE_AGENT_SLUGS = {
+    "bear-researcher-v1",
+    "bull-researcher-v1",
     "equity-analyst",
     "financial-document-reviewer",
+    "fundamentals-v1",
     "investment-committee",
     "market-pulse-analyst",
     "market-pulse-scout",
+    "news-grounded-v1",
+    "portfolio-mgr-v1",
+    "risk-aggressive-v1",
+    "risk-conservative-v1",
     "risk-manager",
+    "risk-neutral-v1",
+    "sentiment-grounded-v1",
+    "technical-v1",
     "trade-manager",
+    "trader-v1",
 }
 UTILITY_AGENT_SLUGS = {
     "context-compactor",
@@ -354,9 +377,9 @@ async def _ensure_agent_profiles_and_manual_routes(db: AsyncSession) -> int:
             db.add(
                 ManualModelRoute(
                     agent_slug=agent.slug,
-                    primary_model_id=agent.primary_model_id,
-                    fallback_models=list(agent.fallback_models or []),
-                    escalation_model_id=agent.escalation_model_id,
+                    primary_model_id=resolve_model(agent.primary_model_id),
+                    fallback_models=[resolve_model(model) for model in agent.fallback_models or []],
+                    escalation_model_id=resolve_model(agent.escalation_model_id) if agent.escalation_model_id else None,
                     reason="Seeded from legacy agent model chain",
                     owner="startup",
                     allow_health_fallback=False,
@@ -842,15 +865,15 @@ class _RouteCandidate:
 def _manual_chain(agent: AgentDTO, manual: ManualModelRoute | None) -> _RouteCandidate:
     if manual:
         return _RouteCandidate(
-            primary_model_id=manual.primary_model_id,
-            fallback_models=list(manual.fallback_models or []),
-            escalation_model_id=manual.escalation_model_id,
+            primary_model_id=resolve_model(manual.primary_model_id),
+            fallback_models=[resolve_model(model) for model in manual.fallback_models or []],
+            escalation_model_id=resolve_model(manual.escalation_model_id) if manual.escalation_model_id else None,
             score_breakdown={"manual_route_id": manual.id, "reason": manual.reason},
         )
     return _RouteCandidate(
-        primary_model_id=agent.primary_model_id,
-        fallback_models=list(agent.fallback_models or []),
-        escalation_model_id=agent.escalation_model_id,
+        primary_model_id=resolve_model(agent.primary_model_id),
+        fallback_models=[resolve_model(model) for model in agent.fallback_models or []],
+        escalation_model_id=resolve_model(agent.escalation_model_id) if agent.escalation_model_id else None,
         score_breakdown={"legacy_agent_chain": True},
     )
 

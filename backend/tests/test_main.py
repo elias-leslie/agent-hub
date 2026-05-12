@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.main import _startup
 from app.services.compactness_policy import DEFAULTS as COMPACTNESS_DEFAULTS
+
+
+def test_ensure_builtin_providers_registered_restores_cleared_registry() -> None:
+    from app.llm import ensure_builtin_providers_registered
+    from app.llm.api_registry import clear_api_providers, get_api_provider
+
+    clear_api_providers()
+    try:
+        ensure_builtin_providers_registered()
+        assert get_api_provider("openai-completions") is not None
+    finally:
+        ensure_builtin_providers_registered()
 
 
 def _mock_async_session(mock_db: AsyncMock):
@@ -26,6 +39,11 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     credential_manager.load_with_retry = AsyncMock(return_value=2)
 
     with caplog.at_level(logging.INFO, logger="app.main"), patch(
+        "app.main.ensure_builtin_providers_registered"
+    ) as mock_ensure_builtin_providers, patch(
+        "app.main.get_api_providers",
+        return_value=[SimpleNamespace(api="openai-completions")],
+    ), patch(
         "app.main.init_telemetry"
     ), patch(
         "app.main.get_credential_manager", return_value=credential_manager
@@ -65,6 +83,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     ):
         await _startup()
 
+    mock_ensure_builtin_providers.assert_called_once_with()
     credential_manager.load_with_retry.assert_awaited_once_with(session_factory)
     mock_start_usage_tracker.assert_awaited_once()
     mock_bootstrap_default_agents.assert_awaited_once_with(mock_db)
@@ -72,6 +91,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
     mock_reconcile.assert_awaited_once_with(mock_db)
     assert "Loaded 1 env-backed credential override(s): openai:api_key" in caplog.text
+    assert "LLM API providers registered: openai-completions" in caplog.text
     assert "Seeded 39 default agent(s) for a fresh database" in caplog.text
     assert "Seeded/refreshed adaptive routing metadata: adaptive-routing:42" in caplog.text
     assert "Reconciled 1 first-party client registration(s): portfolio-client" in caplog.text
@@ -91,6 +111,11 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     credential_manager.load_with_retry = AsyncMock(return_value=2)
 
     with caplog.at_level(logging.INFO, logger="app.main"), patch(
+        "app.main.ensure_builtin_providers_registered"
+    ) as mock_ensure_builtin_providers, patch(
+        "app.main.get_api_providers",
+        return_value=[SimpleNamespace(api="openai-completions")],
+    ), patch(
         "app.main.init_telemetry"
     ), patch(
         "app.main.get_credential_manager", return_value=credential_manager
@@ -130,12 +155,14 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     ):
         await _startup()
 
+    mock_ensure_builtin_providers.assert_called_once_with()
     credential_manager.load_with_retry.assert_awaited_once_with(session_factory)
     mock_bootstrap_default_agents.assert_awaited_once_with(mock_db)
     mock_reconcile_agent_models.assert_awaited_once_with(mock_db)
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
     mock_reconcile.assert_awaited_once_with(mock_db)
     assert "No env-backed credential overrides configured" in caplog.text
+    assert "LLM API providers registered: openai-completions" in caplog.text
     assert "Failed default agent bootstrap at startup: seed boom" in caplog.text
     assert "Failed adaptive routing reconciliation at startup: model boom" in caplog.text
     assert "Failed first-party client reconciliation at startup: first-party boom" in caplog.text
