@@ -39,7 +39,7 @@ from .schemas import (
     ToolDefinition,
     UsageInfo,
 )
-from .session_manager import get_or_create_session, update_provider_metadata
+from .session_repo import get_or_create_session, update_provider_metadata
 
 router.include_router(async_router)
 

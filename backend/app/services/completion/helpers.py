@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message
-from app.api.complete.session_manager import get_or_create_session
+from app.api.complete.session_repo import get_or_create_session
 from app.services.completion.auto_thinking import should_enable_thinking
 from app.services.completion.episode_storage import (
     store_episode,

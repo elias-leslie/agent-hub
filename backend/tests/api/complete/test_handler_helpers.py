@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.api.complete._session_helpers import update_session_metadata
 from app.api.complete.handler_helpers import save_and_track
 from app.api.complete.request_schemas import DEFAULT_AGENTIC_MAX_TURNS
 from app.api.complete.schemas import CompletionRequest, MessageInput, SourceMetadata
+from app.api.complete.session_repo import update_session_metadata
 
 
 def test_completion_request_accepts_high_turn_budgets() -> None:

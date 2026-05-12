@@ -15,7 +15,7 @@ from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import estimate_cost
 
 from .execution_observability import persist_execution_observability
-from .session_manager import apply_execution_metadata, update_provider_metadata
+from .session_repo import apply_execution_metadata, update_provider_metadata
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
