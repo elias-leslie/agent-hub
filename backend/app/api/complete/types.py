@@ -160,9 +160,12 @@ class CompletionInternalResult:
 
     @property
     def content(self) -> str:
-        return "".join(
+        text = "".join(
             block.text for block in self.message.content if isinstance(block, TextContent)
         )
+        if any(isinstance(block, ThinkingContent) for block in self.message.content):
+            return text.strip()
+        return text
 
     @property
     def model(self) -> str:
