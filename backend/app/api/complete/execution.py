@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.complete.helpers import should_enable_thinking
 from app.api.complete.schemas import (
     CompletionResponse,
@@ -103,6 +105,7 @@ async def execute_with_fallback(
     thinking_level: str | None = None,
     resolved_model: str | None = None,
     prompt_cache_key: str | None = None,
+    db: AsyncSession | None = None,
 ) -> tuple[CompletionInternalResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -130,6 +133,7 @@ async def execute_with_fallback(
         thinking_level=thinking_level,
         primary_model_override=primary_override,
         prompt_cache_key=prompt_cache_key,
+        db=db,
     )
     fallback_used = fallback_result.used_fallback and fallback_result.model_used != requested_model
     if fallback_used and fallback_result.fallback_reason:

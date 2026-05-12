@@ -6,6 +6,8 @@ import math
 import time
 from typing import Any, NoReturn
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.complete.types import CompletionInternalResult
 from app.routing.registry import list_providers
 from app.services.agent_dto import AgentDTO
@@ -16,6 +18,11 @@ from app.services.llm_errors import (
 )
 from app.services.llm_messages import (
     Message,
+)
+from app.services.model_runtime_health import (
+    classify_runtime_failure,
+    record_model_runtime_failure,
+    record_model_runtime_success,
 )
 
 from .agent_routing_models import FallbackCompletionResult
@@ -60,6 +67,12 @@ def _resolve_retry_after_seconds(error: RateLimitError) -> float:
     return float(retry_after)
 
 
+def _runtime_failure_cooldown(error: BaseException) -> float | None:
+    if isinstance(error, RateLimitError):
+        return _resolve_retry_after_seconds(error)
+    return classify_runtime_failure(error).cooldown_seconds
+
+
 async def get_provider_rate_limit_cooldown_remaining(provider: str) -> float | None:
     """Return remaining seconds for an active provider rate-limit cooldown."""
     return await _RATE_LIMIT_BREAKER.get_cooldown_remaining(provider)
@@ -87,14 +100,17 @@ async def _record_completion_error(
     model: str,
     error: BaseException,
     start: float,
+    db: AsyncSession | None = None,
 ) -> None:
     """Record provider failure and rate-limit state for a completion error."""
-    if isinstance(error, RateLimitError):
+    cooldown_seconds = _runtime_failure_cooldown(error)
+    if cooldown_seconds is not None:
         await _RATE_LIMIT_BREAKER.trip(
             provider,
-            cooldown_seconds=_resolve_retry_after_seconds(error),
-            error_signature=f"rate_limit:{provider}",
+            cooldown_seconds=cooldown_seconds,
+            error_signature=f"runtime_failure:{provider}:{type(error).__name__}",
         )
+    await record_model_runtime_failure(db, model_id=model, provider=provider, error=error)
     record_provider_failure(provider, str(error), (time.monotonic() - start) * 1000)
     logger.warning("Model %s failed: %s", model, error)
 
@@ -108,6 +124,7 @@ async def _try_model(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
+    db: AsyncSession | None = None,
 ) -> tuple[CompletionInternalResult | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error.
 
@@ -139,7 +156,7 @@ async def _try_model(
             db=None,
             session_id=prompt_cache_key,
             tools=tools,
-            thinking_level=thinking_level,
+            thinking_level=_thinking_level_for_provider(provider, thinking_level),
             max_turns=1,
             execute_tools=False,
         )
@@ -147,11 +164,18 @@ async def _try_model(
         if terminal_error is not None:
             raise terminal_error
         record_provider_success(provider, (time.monotonic() - start) * 1000)
+        await record_model_runtime_success(db, model_id=model, provider=provider)
         await _RATE_LIMIT_BREAKER.on_success(provider)
         return internal, None
     except _COMPLETION_ERRORS as error:
-        await _record_completion_error(provider, model, error, start)
+        await _record_completion_error(provider, model, error, start, db)
         return None, error
+
+
+def _thinking_level_for_provider(provider: str, thinking_level: str | None) -> str | None:
+    if provider in _UNSUPPORTED_NATIVE_THINKING_PROVIDERS:
+        return None
+    return thinking_level
 
 
 async def _try_primary(
@@ -189,6 +213,7 @@ async def _try_fallbacks(
     verbosity_level: str | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
+    db: AsyncSession | None = None,
 ) -> FallbackCompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
@@ -202,7 +227,15 @@ async def _try_fallbacks(
             )
             continue
         result, _error = await _try_model(
-            messages, fallback_model, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
+            messages,
+            fallback_model,
+            temperature,
+            max_tokens,
+            tools,
+            thinking_level,
+            verbosity_level,
+            prompt_cache_key,
+            db,
         )
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
@@ -223,6 +256,7 @@ async def _try_escalation(
     tried_models: set[str] | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
+    db: AsyncSession | None = None,
 ) -> FallbackCompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
@@ -239,7 +273,15 @@ async def _try_escalation(
         )
         return None
     result, _error = await _try_model(
-        messages, escalation, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
+        messages,
+        escalation,
+        temperature,
+        max_tokens,
+        tools,
+        thinking_level,
+        verbosity_level,
+        prompt_cache_key,
+        db,
     )
     if result is None:
         if isinstance(_error, RateLimitError):
@@ -301,6 +343,7 @@ async def complete_with_fallback(
     thinking_level: str | None = None,
     primary_model_override: str | None = None,
     prompt_cache_key: str | None = None,
+    db: AsyncSession | None = None,
 ) -> FallbackCompletionResult:
     """Attempt completion using primary → fallbacks → escalation model chain.
 
@@ -316,7 +359,15 @@ async def complete_with_fallback(
     blocked_providers: set[str] = set()
 
     result, primary_error = await _try_model(
-        messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
+        messages,
+        primary_model,
+        temperature,
+        max_tokens,
+        tools,
+        thinking_level,
+        verbosity_level,
+        prompt_cache_key,
+        db,
     )
     if result is not None:
         return _completion_result(
@@ -339,6 +390,7 @@ async def complete_with_fallback(
         verbosity_level,
         blocked_providers,
         prompt_cache_key,
+        db,
     )
     if fallback_result is not None:
         fallback_result.fallback_reason = primary_reason
@@ -356,6 +408,7 @@ async def complete_with_fallback(
         tried_models=tried_models,
         blocked_providers=blocked_providers,
         prompt_cache_key=prompt_cache_key,
+        db=db,
     )
     if escalation_result is not None:
         escalation_result.fallback_reason = primary_reason

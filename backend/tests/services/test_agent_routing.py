@@ -32,6 +32,18 @@ class _CapturedCall:
     kwargs: dict[str, object] | None = None
 
 
+@pytest.fixture(autouse=True)
+def _isolate_agent_routing_circuit_breaker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.circuit_breaker.get_redis_client",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
+        CircuitBreakerManager(["claude", "gemini", "codex", "xai", "test"]),
+    )
+
+
 @pytest.fixture
 def mock_agent() -> AgentDTO:
     from datetime import UTC, datetime
