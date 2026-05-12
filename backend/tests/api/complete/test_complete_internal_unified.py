@@ -290,6 +290,41 @@ async def test_new_pipeline_propagates_thinking_content() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_pipeline_strips_tagged_thinking_from_text_content() -> None:
+    """OpenAI-compatible providers may emit raw ``</think>`` text."""
+    reg = register_faux_provider()
+    try:
+        reg.set_responses(
+            [
+                faux_assistant_message(
+                    "plan: answer tersely</think>final answer",
+                )
+            ]
+        )
+        model = reg.get_model()
+        assert model is not None
+
+        with patch(
+            "app.api.complete.core.resolve_llm_model",
+            return_value=model,
+        ):
+            result = await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "hi"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                use_memory=False,
+            )
+
+        assert result.content == "final answer"
+        assert result.thinking_content == "plan: answer tersely"
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
 async def test_new_pipeline_execute_tools_drives_unified_tool_loop() -> None:
     """``execute_tools=True`` runs the unified tool loop via app.services.tools.
 
