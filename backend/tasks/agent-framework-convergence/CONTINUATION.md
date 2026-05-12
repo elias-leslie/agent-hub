@@ -8,7 +8,11 @@
 - Phase 1 (universal shape + anthropic reference port): **COMPLETE** — commits `2c8531e2`, `c884876b`, `fc04d20d`, `4ff62952`.
 - Phase 2 (provider ports): **COMPLETE** — commits `13fbe5f7` (openai_completions), `39067151` (google + google_shared), `33ad48e1` (cloudflare URL helpers; provider collapsed into openai_completions per D4), `d6c43730` (faux test double).
 - Phase 3.1 (orchestrator skeleton + `LLM_USE_NEW_PIPELINE` flag): **COMPLETE** — commit `5165e9d2`. Flag default OFF.
-- Phase 3.2–3.6: **NEXT — start here**. See "Phase 3 — REMAINING" below.
+- Phase 3.2 (session_repo collapse): **COMPLETE** — commit `530653f7`.
+- Phase 3.3 (routing/ package): **COMPLETE** — commit `b4991c4b`.
+- Phase 3.4 (memory move + citation_extractor): **COMPLETE** — commit `41a696aa`.
+- Phase 3.5 (wire complete_internal on flag): **COMPLETE** — commit `4f80dbd9`. Flag default still OFF; baseline path covers single-turn, no-tools only.
+- Phase 3.6: **NEXT — start here**. Flip flag default to True; run autocode E2E per consumer (agent-hub, summitflow, portfolio-ai); verify SSE event names + field shapes match downstream-consumers.md Section 6. Block on green. Tool-execution + multi-turn paths require additional glue in new_pipeline.py before flip (the flag branches in core.py guard execute_tools=True and max_turns>1 back to the legacy path).
 - Operator approved autonomous execution through completion. **DO NOT PAUSE** between phases.
 - Task description's "0.6 Pause and review" / "Operator review required" language is **superseded** by `convergence-map.md`.
 - All D1–D10 decisions are LOCKED in `convergence-map.md` Part D. Do not re-litigate.
