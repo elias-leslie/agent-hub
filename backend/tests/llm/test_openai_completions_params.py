@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from app.llm.providers.openai_completions import _prepare_sdk_body
+from app.llm.model_resolver import resolve_llm_model
+from app.llm.providers.openai_completions import _get_compat, _prepare_sdk_body, build_params
+from app.llm.types import Context, UserMessage
 
 
 def test_provider_specific_fields_move_to_extra_body() -> None:
@@ -20,3 +22,24 @@ def test_provider_specific_fields_move_to_extra_body() -> None:
         "thinking": {"type": "enabled"},
         "provider": {"only": ["moonshotai"]},
     }
+
+
+def test_minimax_uses_system_role_and_plain_max_tokens() -> None:
+    model = resolve_llm_model("minimax/MiniMax-M2.7", "minimax")
+    compat = _get_compat(model)
+
+    params = build_params(
+        model,
+        Context(
+            messages=[UserMessage(content="hi", timestamp=1)],
+            system_prompt="system prompt",
+        ),
+        None,
+        compat,
+        "none",
+    )
+
+    assert params["messages"][0] == {"role": "system", "content": "system prompt"}
+    assert "store" not in params
+    assert "stream_options" not in params
+    assert compat.max_tokens_field == "max_tokens"
