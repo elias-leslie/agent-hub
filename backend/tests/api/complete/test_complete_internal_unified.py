@@ -1,4 +1,4 @@
-"""Phase 3.6 E2E tests for ``complete_internal_new_pipeline``.
+"""Phase 3.6 E2E tests for ``complete_internal``.
 
 Drives the new ``app.llm`` stack end-to-end through the faux provider so
 the flag flip in Phase 3.6 has a green baseline that exercises:
@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.complete.new_pipeline import complete_internal_new_pipeline
+from app.api.complete.core import complete_internal
 from app.api.complete.types import CompletionInternalResult
 from app.llm.providers.faux import (
     faux_assistant_message,
@@ -45,7 +45,7 @@ async def test_new_pipeline_single_turn_text_response() -> None:
 
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         fake_session,
@@ -56,11 +56,12 @@ async def test_new_pipeline_single_turn_text_response() -> None:
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model=model.id,
                 provider=model.provider,
@@ -96,7 +97,7 @@ async def test_new_pipeline_skips_memory_injection_when_use_memory_false() -> No
         inject_mock = AsyncMock()
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-no-mem"),
@@ -107,15 +108,16 @@ async def test_new_pipeline_skips_memory_injection_when_use_memory_false() -> No
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
             patch(
-                "app.api.complete.new_pipeline.inject_memory_context",
+                "app.api.complete.core.inject_memory_context",
                 new=inject_mock,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model=model.id,
                 provider=model.provider,
@@ -143,7 +145,7 @@ async def test_new_pipeline_citation_extractor_returns_empty_without_memory() ->
         extract_mock = AsyncMock(return_value=["should-not-be-called"])
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-cite-off"),
@@ -154,15 +156,16 @@ async def test_new_pipeline_citation_extractor_returns_empty_without_memory() ->
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
             patch(
-                "app.api.complete.new_pipeline.extract_cited_uuids",
+                "app.api.complete.core.extract_cited_uuids",
                 new=extract_mock,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model=model.id,
                 provider=model.provider,
@@ -192,7 +195,7 @@ async def test_new_pipeline_invokes_memory_and_citation_when_use_memory_true() -
 
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-mem"),
@@ -203,19 +206,20 @@ async def test_new_pipeline_invokes_memory_and_citation_when_use_memory_true() -
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
             patch(
-                "app.api.complete.new_pipeline.inject_memory_context",
+                "app.api.complete.core.inject_memory_context",
                 new=inject_mock,
             ),
             patch(
-                "app.api.complete.new_pipeline.extract_cited_uuids",
+                "app.api.complete.core.extract_cited_uuids",
                 new=extract_mock,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model=model.id,
                 provider=model.provider,
@@ -253,7 +257,7 @@ async def test_new_pipeline_propagates_thinking_content() -> None:
 
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-think"),
@@ -264,11 +268,12 @@ async def test_new_pipeline_propagates_thinking_content() -> None:
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model=model.id,
                 provider=model.provider,
@@ -319,7 +324,7 @@ async def test_new_pipeline_execute_tools_drives_unified_tool_loop() -> None:
 
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-tools"),
@@ -330,15 +335,16 @@ async def test_new_pipeline_execute_tools_drives_unified_tool_loop() -> None:
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
             patch(
-                "app.api.complete.new_pipeline.create_direct_handler",
+                "app.api.complete.core.create_direct_handler",
                 return_value=_StubHandler(),
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "run echo"}],
                 model=model.id,
                 provider=model.provider,
@@ -374,7 +380,7 @@ async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
 
         with (
             patch(
-                "app.api.complete.new_pipeline.setup_completion_session",
+                "app.api.complete.core.setup_completion_session",
                 new=AsyncMock(
                     return_value=(
                         SimpleNamespace(id="sess-shape"),
@@ -385,11 +391,12 @@ async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
                 ),
             ),
             patch(
-                "app.api.complete.new_pipeline.resolve_llm_model",
+                "app.api.complete.core.resolve_llm_model",
                 return_value=model,
             ),
         ):
-            result = await complete_internal_new_pipeline(
+            result = await complete_internal(
+                temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
                 model="claude-sonnet-4-6",
                 provider="anthropic",

@@ -51,12 +51,6 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    # Pi-mono convergence — Phase 3.6 default-ON flag. POST /api/complete
-    # routes through the new ``backend/app/llm/`` provider stack via
-    # ``backend/app/api/complete/orchestrator.py``. Phase 4 deletes the
-    # legacy branch and removes this flag entirely.
-    llm_use_new_pipeline: bool = True
-
     # Database
     agent_hub_db_url: str = ""
     agent_hub_db_pool_size: int = Field(default=3, ge=1)

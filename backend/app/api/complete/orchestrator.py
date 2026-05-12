@@ -21,13 +21,7 @@ sessions, routing, memory injection, cost persistence, or async
 dispatch. Those concerns live in adjacent modules (``session_repo``,
 ``backend.app.routing``, ``backend.app.memory``, ``services/
 cost_tracking.py``, ``workflows/completion.py``) and are composed in
-the HTTP route handler.
-
-Activated by ``settings.llm_use_new_pipeline`` (default False — see
-``backend/app/config.py``). Until that flips, this module is a
-no-impact import that ``backend/tests/llm/`` exercises end-to-end via
-the faux provider. The legacy ``complete_orchestrator.py`` /
-``complete_execution.py`` remain the active source of truth.
+``core.complete_internal``.
 """
 
 from __future__ import annotations
@@ -37,7 +31,6 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
-from app.config import get_settings
 from app.llm.event_stream import AssistantMessageEventStream
 from app.llm.stream import stream as llm_stream
 from app.llm.tool_loop import ToolLoopEvent, ToolRunner
@@ -62,17 +55,6 @@ class OrchestratorResult:
     message: AssistantMessage
     turns: int = 1
     tool_calls_count: int = 0
-
-
-def is_new_pipeline_enabled() -> bool:
-    """Return whether the new ``backend/app/llm/`` pipeline should serve.
-
-    HTTP route handlers in ``endpoints.py`` / ``async_endpoints.py``
-    branch on this flag. Defaults to False until Phase 3 wiring is
-    complete on all three downstream consumers.
-    """
-
-    return get_settings().llm_use_new_pipeline
 
 
 def build_context_from_messages(
@@ -223,7 +205,6 @@ def stop_reason_to_finish_reason(stop_reason: StopReason) -> str:
 __all__ = [
     "OrchestratorResult",
     "build_context_from_messages",
-    "is_new_pipeline_enabled",
     "run_completion",
     "run_completion_stream",
     "stop_reason_to_finish_reason",
