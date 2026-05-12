@@ -15,6 +15,7 @@ import logging
 import time
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -104,7 +105,7 @@ def _make_tool_runner(
 
 async def complete_internal(
     messages: list[dict[str, Any]], model: str, provider: str,
-    temperature: float, project_id: str, db: AsyncSession,
+    temperature: float, project_id: str, db: AsyncSession | None,
     session_id: str | None = None, external_id: str | None = None,
     client_id: str | None = None, request_source: str | None = None,
     parent_session_id: str | None = None,
@@ -128,18 +129,28 @@ async def complete_internal(
     requested_model: str | None = None,
     requested_provider: str | None = None,
 ) -> CompletionInternalResult:
-    """Run a completion via the unified ``app.llm`` pipeline."""
+    """Run a completion via the unified ``app.llm`` pipeline.
 
-    _session, session_id, _is_new, messages_dict = await setup_completion_session(
-        db, session_id, project_id, provider, model,
-        external_id, client_id, request_source, agent_slug, current_branch, working_dir,
-        parent_session_id, messages, trace_id=trace_id,
-        requested_provider=requested_provider or provider,
-        requested_model=requested_model or model,
-    )
+    When ``db`` is ``None`` the call runs ephemerally: no session row is
+    created, no DB-backed memory injection is attempted, and the returned
+    ``session_id`` is a synthetic ``ephemeral:<uuid>``. The agentic path
+    always supplies a real ``AsyncSession``.
+    """
+
+    if db is not None:
+        _session, session_id, _is_new, messages_dict = await setup_completion_session(
+            db, session_id, project_id, provider, model,
+            external_id, client_id, request_source, agent_slug, current_branch, working_dir,
+            parent_session_id, messages, trace_id=trace_id,
+            requested_provider=requested_provider or provider,
+            requested_model=requested_model or model,
+        )
+    else:
+        session_id = session_id or f"ephemeral:{uuid4()}"
+        messages_dict = list(messages)
 
     loaded_memory_uuids: list[str] = []
-    if use_memory:
+    if use_memory and db is not None:
         messages_dict, loaded_memory_uuids, _ = await inject_memory_context(
             messages_dict, db, session_id, memory_group_id, task_type, phase,
             memory_config, current_branch=current_branch, agent_id=agent_slug,

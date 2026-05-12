@@ -471,31 +471,50 @@ async def test_run_internal_passes_parent_session_id_to_complete_internal() -> N
     assert complete_internal.await_args.kwargs["parent_session_id"] == "persona-root"
 
 
-@pytest.mark.asyncio
-async def test_execute_without_db_records_provider_success() -> None:
-    from app.api.complete.execution import execute_without_db
-
-    request = SimpleNamespace(
+def _execute_without_db_request() -> SimpleNamespace:
+    return SimpleNamespace(
         temperature=0.0,
+        project_id="proj-1",
+        external_id=None,
+        parent_session_id=None,
+        agent_slug=None,
         enable_caching=False,
-        cache_ttl=None,
+        cache_ttl="ephemeral",
         enable_programmatic_tools=False,
         container_id=None,
+        working_dir=None,
+        trace_id=None,
+        task_type=None,
+        phase=None,
+        current_branch=None,
     )
-    adapter_result = CompletionResult(
+
+
+def _internal_result(model: str, provider: str) -> CompletionInternalResult:
+    return CompletionInternalResult(
         content="ok",
-        model="claude-sonnet-4-6",
-        provider="claude",
+        model=model,
+        provider=provider,
         input_tokens=1,
         output_tokens=1,
+        finish_reason="stop",
+        session_id="ephemeral:sess-x",
+        memory_uuids=[],
+        cited_uuids=[],
     )
-    adapter = SimpleNamespace(complete=AsyncMock(return_value=adapter_result))
 
-    with (
-        patch("app.api.complete.execution.get_adapter", return_value=adapter),
-        patch("app.api.complete.execution.record_provider_success") as record_success,
-        patch("app.api.complete.execution.record_provider_failure") as record_failure,
-    ):
+
+@pytest.mark.asyncio
+async def test_execute_without_db_routes_through_complete_internal() -> None:
+    from app.api.complete.execution import execute_without_db
+
+    request = _execute_without_db_request()
+    internal = _internal_result("claude-sonnet-4-6", "claude")
+
+    with patch(
+        "app.api.complete.core.complete_internal",
+        new=AsyncMock(return_value=internal),
+    ) as ci:
         result, model_used = await execute_without_db(
             messages_for_adapter=[Message(role="user", content="hi")],
             resolved_model="claude-sonnet-4-6",
@@ -506,38 +525,29 @@ async def test_execute_without_db_records_provider_success() -> None:
             response_format_dict=None,
         )
 
-    assert result is adapter_result
     assert model_used == "claude-sonnet-4-6"
-    record_success.assert_called_once()
-    record_failure.assert_not_called()
+    assert result.content == "ok"
+    assert result.model == "claude-sonnet-4-6"
+    ci.assert_awaited_once()
+    assert ci.await_args is not None
+    kwargs = ci.await_args.kwargs
+    assert kwargs["db"] is None
+    assert kwargs["execute_tools"] is False
+    assert kwargs["max_turns"] == 1
 
 
 @pytest.mark.asyncio
-async def test_execute_without_db_passes_session_cache_key_for_xai_multi_agent() -> None:
+async def test_execute_without_db_forwards_session_id_and_thinking_level() -> None:
     from app.api.complete.execution import execute_without_db
 
-    request = SimpleNamespace(
-        temperature=0.0,
-        enable_caching=False,
-        cache_ttl=None,
-        enable_programmatic_tools=False,
-        container_id=None,
-    )
-    adapter_result = CompletionResult(
-        content="ok",
-        model="xai/grok-4.20-multi-agent",
-        provider="xai",
-        input_tokens=1,
-        output_tokens=1,
-    )
-    adapter = SimpleNamespace(complete=AsyncMock(return_value=adapter_result))
+    request = _execute_without_db_request()
+    internal = _internal_result("xai/grok-4.20-multi-agent", "xai")
 
-    with (
-        patch("app.api.complete.execution.get_adapter", return_value=adapter),
-        patch("app.api.complete.execution.record_provider_success"),
-        patch("app.api.complete.execution.record_provider_failure"),
-    ):
-        result, model_used = await execute_without_db(
+    with patch(
+        "app.api.complete.core.complete_internal",
+        new=AsyncMock(return_value=internal),
+    ) as ci:
+        await execute_without_db(
             messages_for_adapter=[Message(role="user", content="hi")],
             resolved_model="xai/grok-4.20-multi-agent",
             provider="xai",
@@ -548,30 +558,23 @@ async def test_execute_without_db_passes_session_cache_key_for_xai_multi_agent()
             session_id="sess-99",
         )
 
-    assert result is adapter_result
-    assert model_used == "xai/grok-4.20-multi-agent"
-    assert adapter.complete.await_args.kwargs["prompt_cache_key"] == "sess-99"
-    assert "thinking_level" not in adapter.complete.await_args.kwargs
-    assert "reasoning_effort" not in adapter.complete.await_args.kwargs
+    assert ci.await_args is not None
+    kwargs = ci.await_args.kwargs
+    assert kwargs["session_id"] == "sess-99"
+    assert kwargs["thinking_level"] == "high"
 
 
 @pytest.mark.asyncio
-async def test_execute_without_db_records_provider_failure() -> None:
+async def test_execute_without_db_propagates_provider_errors() -> None:
     from app.api.complete.execution import execute_without_db
 
-    request = SimpleNamespace(
-        temperature=0.0,
-        enable_caching=False,
-        cache_ttl=None,
-        enable_programmatic_tools=False,
-        container_id=None,
-    )
-    adapter = SimpleNamespace(complete=AsyncMock(side_effect=ProviderError(provider="claude", message="boom")))
+    request = _execute_without_db_request()
 
     with (
-        patch("app.api.complete.execution.get_adapter", return_value=adapter),
-        patch("app.api.complete.execution.record_provider_success") as record_success,
-        patch("app.api.complete.execution.record_provider_failure") as record_failure,
+        patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(side_effect=ProviderError(provider="claude", message="boom")),
+        ),
         pytest.raises(ProviderError),
     ):
         await execute_without_db(
@@ -583,9 +586,6 @@ async def test_execute_without_db_records_provider_failure() -> None:
             tools_api=None,
             response_format_dict=None,
         )
-
-    record_success.assert_not_called()
-    record_failure.assert_called_once()
 
 
 def test_build_agentic_response_preserves_internal_finish_reason_on_success() -> None:
