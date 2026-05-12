@@ -75,6 +75,12 @@ PROVIDER_ROUTING_METADATA: dict[str, dict[str, Any]] = {
     },
 }
 _RUNTIME_FAILURE_PROVIDER_STATUSES = {"invalid_credentials", "quota_exhausted"}
+_RUNTIME_FAILURE_MODEL_STATUSES = {
+    "auth_failed",
+    "quota_or_rate_limited",
+    "model_not_found",
+    "runtime_error",
+}
 
 CRITICAL_AGENT_SLUGS = {
     "bear-researcher-v1",
@@ -488,10 +494,13 @@ async def refresh_catalog_model_availability(db: AsyncSession) -> int:
             changed += 1
         else:
             before = (row.routable, row.entitlement_id, row.last_smoke_status, row.failure_reason, row.capabilities_snapshot)
-            row.routable = available and row.enabled
             row.entitlement_id = entitlement_by_provider.get(model.provider)
-            row.last_smoke_status = "seed_trusted" if available else "provider_unavailable"
-            row.failure_reason = None if available else "Provider entitlement not configured"
+            if available and _catalog_refresh_should_preserve_runtime_failure(row):
+                row.routable = False
+            else:
+                row.routable = available and row.enabled
+                row.last_smoke_status = "seed_trusted" if available else "provider_unavailable"
+                row.failure_reason = None if available else "Provider entitlement not configured"
             row.capabilities_snapshot = snapshot
             if before != (row.routable, row.entitlement_id, row.last_smoke_status, row.failure_reason, row.capabilities_snapshot):
                 changed += 1
@@ -1058,6 +1067,10 @@ def _model_satisfies_constraints(row: ModelCatalogEntry, constraints: dict[str, 
 
 def _availability_allows_routing(availability: ModelAvailability | None) -> bool:
     return bool(availability and availability.enabled and availability.routable)
+
+
+def _catalog_refresh_should_preserve_runtime_failure(row: ModelAvailability) -> bool:
+    return row.last_smoke_status in _RUNTIME_FAILURE_MODEL_STATUSES
 
 
 def _effective_cost_policy(requested: str | None, profile_policy: str | None) -> str:

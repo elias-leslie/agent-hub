@@ -11,6 +11,7 @@ from app.models import AgentRoutingProfile, ModelAvailability, ModelCatalogEntry
 from app.services.adaptive_model_router import (
     RoutingContext,
     _availability_allows_routing,
+    _catalog_refresh_should_preserve_runtime_failure,
     _effective_cost_policy,
     _infer_workload,
     _manual_chain,
@@ -227,6 +228,34 @@ def test_missing_or_disabled_availability_is_not_routable() -> None:
     assert (
         _availability_allows_routing(ModelAvailability(model_id="ok", provider="test", enabled=True, routable=True))
         is True
+    )
+
+
+def test_catalog_refresh_preserves_runtime_failed_model_blocks() -> None:
+    assert (
+        _catalog_refresh_should_preserve_runtime_failure(
+            ModelAvailability(
+                model_id="nvidia/kimi-k2.6",
+                provider="nvidia",
+                enabled=True,
+                routable=False,
+                last_smoke_status="runtime_error",
+                failure_reason="output contract failed",
+            )
+        )
+        is True
+    )
+    assert (
+        _catalog_refresh_should_preserve_runtime_failure(
+            ModelAvailability(
+                model_id="xai/grok-4.3",
+                provider="xai",
+                enabled=True,
+                routable=True,
+                last_smoke_status="runtime_ok",
+            )
+        )
+        is False
     )
 
 
