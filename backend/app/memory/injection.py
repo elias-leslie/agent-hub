@@ -1,4 +1,9 @@
-"""Memory context injection for completion API."""
+"""Memory context injection.
+
+Moved from ``app.api.complete.memory_handler`` per convergence-map.md C4.
+The new pipeline composes this with session_repo + routing in the HTTP
+route handler; the adapter remains memory-agnostic.
+"""
 
 from __future__ import annotations
 
@@ -38,18 +43,7 @@ async def inject_memory_context(
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     """Inject progressive memory context into messages.
 
-    Args:
-        messages: Conversation messages
-        db: Database session
-        session_id: Session ID
-        memory_group_id: Memory group for isolation
-        task_type: Optional task type for triggered reference injection
-        phase: Optional phase for phase-triggered reference injection
-        memory_config: Optional memory configuration
-        current_branch: Optional git branch for continuity scoping
-
-    Returns:
-        Tuple of (modified messages, loaded memory UUIDs, facts count)
+    Returns ``(modified messages, loaded memory UUIDs, facts count)``.
     """
     scope, scope_id = parse_memory_group_id(memory_group_id)
     logger.info(
@@ -100,3 +94,6 @@ async def inject_memory_context(
         logger.warning(f"Memory injection failed (continuing without): {e}")
 
     return messages, loaded_memory_uuids, memory_facts_injected
+
+
+__all__ = ["inject_memory_context"]
