@@ -163,7 +163,7 @@ async def complete_internal(
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
     from app.api.complete.orchestrator import is_new_pipeline_enabled
 
-    if is_new_pipeline_enabled() and not execute_tools and max_turns == 1:
+    if is_new_pipeline_enabled():
         from app.api.complete.new_pipeline import complete_internal_new_pipeline
 
         return await complete_internal_new_pipeline(
