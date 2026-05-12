@@ -21,7 +21,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import Message
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.tool_loop import (
     ToolLoopEvent,
@@ -41,6 +40,7 @@ from app.llm.types import (
     ToolCallEndEvent,
     ToolResultMessage,
 )
+from app.services.llm_messages import Message
 
 from .orchestrator import build_context_from_messages, run_completion_stream
 from .schemas import MessageInput

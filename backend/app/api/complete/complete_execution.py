@@ -8,7 +8,6 @@ from typing import Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult, Message, ProviderError
 from app.api.complete.core import complete_internal
 from app.api.complete.execution import (
     execute_with_fallback,
@@ -20,6 +19,8 @@ from app.api.complete.execution import (
 from app.api.complete.schemas import CompletionRequest
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing_models import ResolvedAgent
+from app.services.llm_errors import ProviderError
+from app.services.llm_messages import CompletionResult, Message
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ async def _run_with_agentic_fallback(
     skip_cache: bool,
 ) -> CompletionInternalResult:
     """Try primary model then fallback_models for agentic DB execution."""
-    from app.adapters.registry import get_provider_for_model
+    from app.routing.registry import get_provider_for_model
 
     primary_error: ProviderError | asyncio.TimeoutError | None = None
     for model_id in [primary_model, *agent.agent.fallback_models]:

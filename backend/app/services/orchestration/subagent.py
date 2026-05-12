@@ -10,7 +10,7 @@ import asyncio
 import logging
 import uuid
 
-from app.adapters.base import Message
+from app.services.llm_messages import Message
 
 from .subagent_executor import execute_subagent
 from .subagent_models import SubagentConfig, SubagentResult

@@ -1,9 +1,7 @@
 """Provider capability routing.
 
-Extracted from ``app.adapters.registry`` per convergence-map.md C2 — capability
-routing is a router concern, not an adapter concern. The adapter factory/cache
-stays in ``app.adapters.registry`` (it's slated for deletion in Phase 4 once
-the new ``app.llm`` pipeline is the sole code path).
+Extracted from ``app.routing.registry`` per convergence-map.md C2 — capability
+routing is a router concern, not an adapter concern.
 """
 
 from __future__ import annotations
@@ -26,7 +24,40 @@ class ProviderCapabilities:
     supports_cache_retention: bool = False
 
 
-_capabilities: dict[str, ProviderCapabilities] = {}
+_capabilities: dict[str, ProviderCapabilities] = {
+    "claude": ProviderCapabilities(
+        supports_tool_execution=True,
+        supports_thinking=True,
+        supports_images=True,
+        supports_cache_retention=True,
+    ),
+    "gemini": ProviderCapabilities(
+        supports_tool_execution=True,
+        supports_thinking=True,
+        supports_images=True,
+    ),
+    "codex": ProviderCapabilities(supports_tool_execution=True),
+    "openai": ProviderCapabilities(supports_tool_execution=True, supports_images=True),
+    "openrouter": ProviderCapabilities(supports_tool_execution=True, supports_images=True),
+    "xai": ProviderCapabilities(supports_tool_execution=True),
+    "zhipu": ProviderCapabilities(supports_tool_execution=True),
+    "minimax": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
+    "kimi-code": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
+    "moonshot": ProviderCapabilities(
+        supports_tool_execution=True,
+        supports_thinking=True,
+        supports_images=True,
+    ),
+    "deepseek": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
+    "local": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
+    "nvidia": ProviderCapabilities(
+        supports_tool_execution=True,
+        supports_thinking=True,
+        supports_images=True,
+    ),
+    "cloudflare": ProviderCapabilities(supports_tool_execution=True),
+}
+_DEFAULT_CAPABILITIES = dict(_capabilities)
 
 
 def set_capabilities(provider: str, capabilities: ProviderCapabilities) -> None:
@@ -96,6 +127,7 @@ def list_providers_with(capability: str) -> list[str]:
 def reset() -> None:
     """Reset capability registry. Testing only."""
     _capabilities.clear()
+    _capabilities.update(_DEFAULT_CAPABILITIES)
 
 
 __all__ = [

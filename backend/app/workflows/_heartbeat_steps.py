@@ -67,9 +67,9 @@ async def _resolve_persona(
 
 async def get_heartbeat_runtime_info() -> HeartbeatRuntimeInfo:
     """Return the resolved model/provider and whether heartbeat can run on it."""
-    from app.adapters.registry import supports_thinking, supports_tools
     from app.constants.catalog import get_model_capabilities, get_model_entry
     from app.db import async_session
+    from app.routing.capabilities import supports_thinking, supports_tools
 
     async with async_session() as db:
         model, provider, _, thinking_level, _, _ = await _resolve_persona(db)

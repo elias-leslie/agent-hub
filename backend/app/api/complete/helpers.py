@@ -8,9 +8,9 @@ from typing import Any
 
 import jsonschema
 
-from app.adapters.base import Message
 from app.constants import MODEL_ALIASES, MODEL_CATALOG
 from app.constants.models import PROVIDER_NAMES
+from app.services.llm_messages import Message
 
 logger = logging.getLogger(__name__)
 

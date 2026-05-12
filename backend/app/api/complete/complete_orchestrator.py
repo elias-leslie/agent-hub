@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.registry import get_provider_for_model
 from app.api.complete.async_dispatch import dispatch_async_completion
 from app.api.complete.handlers import build_cached_completion_response
 from app.api.complete.orchestration_helpers import (
@@ -22,6 +21,7 @@ from app.api.complete.orchestration_helpers import (
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
+from app.routing.registry import get_provider_for_model
 from app.routing.resolution import (
     apply_mention_override,
     resolve_agent_and_model,

@@ -75,7 +75,7 @@ class TestStreamEventTypes:
 
     def test_turn_lifecycle_events(self):
         """StreamEvent should accept turn_start/turn_end types."""
-        from app.adapters.types import StreamEvent
+        from app.services.llm_messages import StreamEvent
 
         start = StreamEvent(type="turn_start", turn=1)
         assert start.type == "turn_start"
@@ -87,7 +87,7 @@ class TestStreamEventTypes:
 
     def test_message_provenance(self):
         """Message should accept provider/model provenance fields."""
-        from app.adapters.types import Message
+        from app.services.llm_messages import Message
 
         msg = Message(
             role="assistant",
@@ -100,7 +100,7 @@ class TestStreamEventTypes:
 
     def test_message_provenance_defaults_to_none(self):
         """Message provenance should default to None."""
-        from app.adapters.types import Message
+        from app.services.llm_messages import Message
 
         msg = Message(role="user", content="Hi")
         assert msg.provider is None

@@ -1,7 +1,6 @@
 """Completion API package."""
 
-from app.adapters.registry import clear_cache as clear_adapter_cache
-from app.adapters.registry import get_adapter
+from app.routing.registry import clear_cache as clear_adapter_cache
 from app.services.agent_routing import get_provider_for_model as get_provider
 
 from .async_endpoints import router as async_router
@@ -66,7 +65,6 @@ __all__ = [
     "clear_adapter_cache",
     "complete_internal",
     "extract_text_content",
-    "get_adapter",
     "get_or_create_session",
     "get_provider",
     "is_error_response",

@@ -13,7 +13,7 @@ from functools import lru_cache
 
 from google import genai
 
-from app.adapters.base import AuthenticationError
+from app.services.llm_errors import AuthenticationError
 
 logger = logging.getLogger(__name__)
 

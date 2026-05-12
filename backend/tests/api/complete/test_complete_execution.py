@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import CompletionResult, ProviderError
-from app.adapters.types import Message
 from app.api.complete.execution import build_agentic_response, execute_with_fallback
 from app.api.complete.types import CompletionInternalResult
+from app.services.llm_errors import ProviderError
+from app.services.llm_messages import CompletionResult, Message
 
 
 @pytest.mark.asyncio

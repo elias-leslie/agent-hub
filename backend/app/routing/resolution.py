@@ -11,7 +11,6 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from app.adapters.base import Message
 from app.services.adaptive_model_router import (
     RoutingContext,
     RoutingSelectionError,
@@ -24,6 +23,7 @@ from app.services.agent_routing import (
     resolve_agent,
 )
 from app.services.agent_routing_models import MandateInjection, ResolvedAgent
+from app.services.llm_messages import Message
 from app.services.memory.context_builder_settings import (
     resolve_runtime_prompt_includes,
 )

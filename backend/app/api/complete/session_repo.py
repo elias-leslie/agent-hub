@@ -17,11 +17,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.adapters.base import Message
 from app.models import Session as DBSession
 from app.models import SessionEventType
 from app.services.event_storage import get_sequencer, store_child_session_lifecycle_event
 from app.services.events import publish_session_start
+from app.services.llm_messages import Message
 from app.services.session_ingestion import SessionUpsertRequest, upsert_session
 from app.services.session_live_activity import (
     mark_session_completed,

@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from app.adapters.registry import get_provider_for_model
+from app.routing.registry import get_provider_for_model
 from app.services.benchmark_failure_classification import classify_benchmark_failure_detail
 from scripts.persona_benchmark_cases import PersonaBenchmarkCase
 
