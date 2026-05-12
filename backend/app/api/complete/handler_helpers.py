@@ -32,7 +32,7 @@ from .schemas import (
     ToolCallInfo,
     UsageInfo,
 )
-from .session_manager import apply_execution_metadata, update_provider_metadata
+from .session_repo import apply_execution_metadata, update_provider_metadata
 
 logger = logging.getLogger(__name__)
 

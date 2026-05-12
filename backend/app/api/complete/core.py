@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ._core_helpers import check_memory_and_cache, execute_and_build_result
 from .schemas import MessageInput
-from .session_manager import get_or_create_session  # Re-export for backwards compat
-from .session_setup import setup_completion_session
+from .session_repo import (
+    get_or_create_session,  # Re-export for backwards compat
+    setup_completion_session,
+)
 from .streaming import stream_completion  # Re-export for backwards compat
 from .tool_handlers import AgentProgress
 from .types import CompletionInternalResult
