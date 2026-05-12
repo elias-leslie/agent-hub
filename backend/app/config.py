@@ -51,14 +51,11 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    # Pi-mono convergence — Phase 3 feature flag. When True, the
-    # POST /api/complete pipeline routes through the new
-    # ``backend/app/llm/`` provider stack via
-    # ``backend/app/api/complete/orchestrator.py``. Default OFF until
-    # the orchestrator is fully wired and an autocode E2E has run on
-    # all three downstream consumers (agent-hub, summitflow, portfolio
-    # -ai). Removed in Phase 5 once the old code path is deleted.
-    llm_use_new_pipeline: bool = False
+    # Pi-mono convergence — Phase 3.6 default-ON flag. POST /api/complete
+    # routes through the new ``backend/app/llm/`` provider stack via
+    # ``backend/app/api/complete/orchestrator.py``. Phase 4 deletes the
+    # legacy branch and removes this flag entirely.
+    llm_use_new_pipeline: bool = True
 
     # Database
     agent_hub_db_url: str = ""
