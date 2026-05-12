@@ -28,6 +28,7 @@ async def cleanup_stale_memories(
     Returns:
         Dict with cleanup results: retired count, skipped, and reason.
     """
+    del driver
     try:
         result = await retire_stale_archives()
         retired = result.get("retired", 0)

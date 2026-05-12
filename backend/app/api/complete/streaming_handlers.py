@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Literal, cast
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session, stream_completion
 from app.api.complete.execution import get_thinking_level
 from app.api.complete.request_setup import (
@@ -21,6 +20,7 @@ from app.api.complete.request_setup import (
 from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
+from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 from app.services.session_live_activity import mark_session_execution_start

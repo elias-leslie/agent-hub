@@ -6,8 +6,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import Message
-from app.api.complete.session_manager import get_or_create_session
+from app.api.complete.session_repo import get_or_create_session
 from app.services.completion.auto_thinking import should_enable_thinking
 from app.services.completion.episode_storage import (
     store_episode,
@@ -15,6 +14,7 @@ from app.services.completion.episode_storage import (
 )
 from app.services.completion.types import CompletionOptions, CompletionSource
 from app.services.events import publish_session_start
+from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 

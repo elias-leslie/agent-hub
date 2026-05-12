@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.cloudflare_image import CloudflareImageAdapter
 from app.adapters.gemini_image import GeminiImageAdapter
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
@@ -28,6 +27,7 @@ from app.models import Session as DBSession
 from app.services.adaptive_model_router import RoutingContext
 from app.services.agent_routing_utils import resolve_agent
 from app.services.events import publish_complete, publish_session_start
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.session_live_activity import mark_session_completed
 
 # Type alias for database dependency

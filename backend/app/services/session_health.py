@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import RateLimitError
 from app.models import Session
+from app.services.llm_errors import RateLimitError
 
 
 def executing_tool_health_detail(tool_name: str | None) -> str:

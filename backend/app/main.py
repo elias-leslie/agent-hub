@@ -146,19 +146,13 @@ async def _startup() -> None:
     except Exception as e:
         logger.warning("Failed to load compactness policy at startup: %s", e)
 
-    from app.services.health_prober import init_health_prober
-    prober = init_health_prober()
-    logger.info("Provider health tracker initialized for %d providers (passive mode)", len(prober._providers))
+    logger.info("Provider health tracker disabled; unified providers report passively")
 
 
 async def _shutdown() -> None:
     """Run all shutdown tasks."""
-    from app.services.health_prober import shutdown_health_prober
-
     await stop_all_stream_bridges()
     logger.info("Hatchet stream bridges stopped")
-    await shutdown_health_prober()
-    logger.info("Health prober stopped")
     await shutdown_usage_tracker()
     logger.info("Usage tracker stopped")
     logger.info("Shutting down agent-hub")

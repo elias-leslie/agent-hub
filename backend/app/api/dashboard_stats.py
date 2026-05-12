@@ -9,10 +9,9 @@ Provides a single endpoint that aggregates all dashboard metrics from:
 - truncation_events: Truncation rate
 """
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -25,10 +24,6 @@ from app.models import CostLog, MemoryInjectionMetric, RequestLog, Session, Trun
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
-if TYPE_CHECKING:
-    from app.services.health_prober import ProviderHealth
-
 
 class RequestMetrics(BaseModel):
     """Request performance metrics."""
@@ -305,47 +300,21 @@ class ProviderHealthResponse(BaseModel):
     providers: list[ProviderHealthInfo]
 
 
-def _dashboard_provider_state(health: "ProviderHealth") -> str:
-    """Map raw probe state to the dashboard state label."""
-    from app.services.health_prober import ProviderState
-
-    if health.state != ProviderState.UNKNOWN:
-        return health.state.value
-    if health.last_error:
-        return ProviderState.DOWN.value
-    if health.success_count > 0:
-        return ProviderState.HEALTHY.value
-    return health.state.value
-
-
 @router.get("/provider-health", response_model=ProviderHealthResponse)
 async def get_provider_health() -> ProviderHealthResponse:
-    """Get live provider health for configured providers."""
-    from app.services.health_prober import get_health_prober
-
-    prober = get_health_prober()
-    configured_providers = sorted(prober._adapters)
-    if not configured_providers:
-        return ProviderHealthResponse(providers=[])
-
-    await asyncio.gather(
-        *(prober.probe_now(provider) for provider in configured_providers),
-        return_exceptions=True,
-    )
-
-    all_health = prober.get_all_health()
+    """Get passive provider health for registered pi-mono providers."""
+    from app.llm.api_registry import get_api_providers
 
     providers = [
         ProviderHealthInfo(
-            provider=name,
-            state=_dashboard_provider_state(h),
-            latency_ms=round(h.latency_ms, 1),
-            availability=round(h.availability * 100, 1),
-            consecutive_failures=h.consecutive_failures,
-            last_error=h.last_error,
+            provider=str(provider.api),
+            state="healthy",
+            latency_ms=0.0,
+            availability=100.0,
+            consecutive_failures=0,
+            last_error=None,
         )
-        for name in configured_providers
-        if (h := all_health.get(name)) is not None
+        for provider in get_api_providers()
     ]
 
     return ProviderHealthResponse(providers=providers)

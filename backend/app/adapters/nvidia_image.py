@@ -19,8 +19,6 @@ from typing import Any
 
 import httpx
 
-from app.adapters._openai_compat_helpers import resolve_api_key
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import (
     NVIDIA_FLUX_1_DEV,
@@ -28,6 +26,8 @@ from app.constants.models import (
     NVIDIA_FLUX_1_SCHNELL,
     NVIDIA_SD_3_5_LARGE,
 )
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
+from app.services.provider_credentials import resolve_api_key
 
 logger = logging.getLogger(__name__)
 

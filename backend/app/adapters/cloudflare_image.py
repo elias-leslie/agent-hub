@@ -20,15 +20,14 @@ from typing import Any
 
 import httpx
 
-from app.adapters._openai_compat_helpers import resolve_api_key
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
-from app.adapters.cloudflare import _resolve_account_id
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import (
     CF_FLUX_1_SCHNELL,
     CF_FLUX_2_DEV,
     CF_SD_XL_LIGHTNING,
 )
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
+from app.services.provider_credentials import resolve_api_key, resolve_cloudflare_account_id
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +96,7 @@ class CloudflareImageAdapter(ImageAdapter):
         """Generate an image, falling back through models on rate-limit."""
         full_prompt = f"{style} style: {prompt}" if style else prompt
         api_key = self._api_key()
-        account_id = _resolve_account_id()
+        account_id = resolve_cloudflare_account_id()
 
         models = [model] + [m for m in _FALLBACK_CHAIN if m != model]
         last_exc: Exception | None = None

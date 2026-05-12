@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import ProviderAdapter
-from app.adapters.registry import get_adapter as registry_get_adapter
-from app.adapters.registry import get_provider_for_model
+from app.routing.registry import get_provider_for_model
 from app.services.adaptive_model_router import RoutingContext, resolve_model_route
 from app.services.agent_dto import AgentDTO
 from app.services.agent_service import get_agent_service
@@ -16,11 +14,6 @@ from app.services.agent_service import get_agent_service
 from .agent_routing_models import MandateInjection, ResolvedAgent
 
 logger = logging.getLogger(__name__)
-
-
-def get_adapter(provider: str) -> ProviderAdapter:
-    """Get adapter instance for provider (fresh/uncached each call)."""
-    return registry_get_adapter(provider)
 
 
 async def resolve_agent(

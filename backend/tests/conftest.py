@@ -248,9 +248,7 @@ def _raise_real_api_error(*args: Any, **kwargs: Any) -> None:
     """Raise error when real API is called without mocking."""
     raise RealAPICallError(
         "Test attempted to make a real LLM API call! "
-        "All tests must mock adapter.complete() or adapter.stream(). "
-        "Use the mock_claude_adapter or mock_gemini_adapter fixtures, "
-        "or patch the adapter in your test."
+        "Mock complete_internal() or the app.llm provider stream in your test."
     )
 
 
@@ -281,8 +279,6 @@ def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None]:
         mock_genai.return_value.aio.models.generate_content = AsyncMock(
             side_effect=_raise_real_api_error
         )
-        # Note: OpenAI SDK (used by openai, openrouter, xai, zhipu adapters) is mocked
-        # at the adapter level in individual test files via patch("app.adapters.openai_compat.AsyncOpenAI")
         yield
 
 
@@ -350,5 +346,3 @@ def mock_db_session() -> Generator[AsyncMock]:
     yield mock_session
     # Restore null db (will be cleaned up by setup_test_app_state anyway)
     app.dependency_overrides[get_db] = _null_db
-
-

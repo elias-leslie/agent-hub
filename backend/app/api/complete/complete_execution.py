@@ -8,7 +8,6 @@ from typing import Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult, Message, ProviderError
 from app.api.complete.core import complete_internal
 from app.api.complete.execution import (
     execute_with_fallback,
@@ -20,10 +19,12 @@ from app.api.complete.execution import (
 from app.api.complete.schemas import CompletionRequest
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing_models import ResolvedAgent
+from app.services.llm_errors import ProviderError
+from app.services.llm_messages import Message
 
 logger = logging.getLogger(__name__)
 
-_NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None, str | None]
+_NonAgenticResult = tuple[CompletionInternalResult, str, bool, list[str], str | None, str | None]
 _ToolsAPI = list[dict[str, object]] | None
 _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
@@ -41,14 +42,7 @@ def _to_messages(msgs: _MsgsDict) -> list[Message]:
 
 def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _NonAgenticResult:
     """Wrap CompletionInternalResult as a non-agentic result tuple."""
-    cr = CompletionResult(
-        content=r.content, model=r.model, provider=r.provider,
-        input_tokens=r.input_tokens, output_tokens=r.output_tokens,
-        finish_reason=r.finish_reason, cache_metrics=r.cache_metrics,
-        thinking_content=r.thinking_content, thinking_tokens=r.thinking_tokens,
-        tool_calls=r.tool_calls, container=r.container,
-    )
-    return (cr, model, False, r.memory_uuids, r.session_id, r.fallback_reason)
+    return (r, model, False, r.memory_uuids, r.session_id or sid, r.fallback_reason)
 
 
 def _agentic_timeout_seconds(agent: ResolvedAgent | None) -> float | None:
@@ -114,7 +108,7 @@ async def _run_with_agentic_fallback(
     skip_cache: bool,
 ) -> CompletionInternalResult:
     """Try primary model then fallback_models for agentic DB execution."""
-    from app.adapters.registry import get_provider_for_model
+    from app.routing.registry import get_provider_for_model
 
     primary_error: ProviderError | asyncio.TimeoutError | None = None
     for model_id in [primary_model, *agent.agent.fallback_models]:

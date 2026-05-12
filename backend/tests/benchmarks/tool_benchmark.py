@@ -8,7 +8,7 @@ Usage:
 Options:
     --runs N        Number of runs per approach (default 3)
     --model MODEL   Claude model to use (default haiku)
-    --approaches    Comma-separated list of approaches to run (default A,B,C,D)
+    --approaches    Comma-separated list of approaches to run (default A,B,D)
     --output PATH   Where to write results markdown (default stdout)
     --verbose       Print per-turn details
 """
@@ -41,12 +41,6 @@ async def run_single_approach(
     elif approach == "B":
         from tests.benchmarks.approach_b import run_approach_b
         return await run_approach_b(model, working_dir, project_id)
-    elif approach == "C":
-        from tests.benchmarks.approach_c import run_approach_c
-        return await run_approach_c(model, working_dir, project_id)
-    elif approach == "C+":
-        from tests.benchmarks.approach_c_enhanced import run_approach_c_enhanced
-        return await run_approach_c_enhanced(model, working_dir, project_id)
     elif approach == "D":
         from tests.benchmarks.approach_d import run_approach_d
         return await run_approach_d(model, working_dir, project_id)
@@ -59,8 +53,8 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark tool execution approaches")
     parser.add_argument("--runs", type=int, default=3, help="Runs per approach (default 3)")
     parser.add_argument("--model", default="haiku", help="Claude model (default haiku)")
-    parser.add_argument("--approaches", default="A,B,C,D",
-                        help="Comma-separated approaches (default A,B,C,D)")
+    parser.add_argument("--approaches", default="A,B,D",
+                        help="Comma-separated approaches (default A,B,D)")
     parser.add_argument("--output", help="Output file path (default stdout)")
     parser.add_argument("--verbose", action="store_true", help="Print per-turn details")
     parser.add_argument("--project-id", default="benchmark-test",

@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.api.orchestration_models import AgentProgressInfo
+from app.api.complete.progress import AgentProgress
 
 from .usage_schemas import (
     ContainerInfo,
@@ -73,7 +73,7 @@ class CompletionResponse(BaseModel):
         default=0,
         description="Total number of tool calls made during execution",
     )
-    progress_log: list[AgentProgressInfo] | None = Field(
+    progress_log: list[AgentProgress] | None = Field(
         default=None,
         description="Progress log from agentic execution (only when max_turns > 1 or execute_tools=True)",
     )

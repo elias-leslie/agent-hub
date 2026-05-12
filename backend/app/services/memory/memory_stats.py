@@ -38,6 +38,7 @@ async def get_scope_stats(driver: Any = None) -> list[MemoryScopeCount]:
     Args:
         driver: Unused (kept for backward compatibility). Pass None.
     """
+    del driver
     repo = get_memory_repository()
     try:
         stats = await repo.get_stats()
@@ -73,6 +74,7 @@ async def get_stats(
         scope_id: Scope identifier for the response
         driver: Unused (kept for backward compatibility). Pass None.
     """
+    del driver
     repo = get_memory_repository()
 
     try:

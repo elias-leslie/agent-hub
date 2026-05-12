@@ -10,9 +10,9 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 if TYPE_CHECKING:
-    from app.adapters.base import Message
     from app.api.complete.schemas import CompletionRequest
     from app.services.agent_routing import ResolvedAgent
+    from app.services.llm_messages import Message
 
 logger = logging.getLogger(__name__)
 

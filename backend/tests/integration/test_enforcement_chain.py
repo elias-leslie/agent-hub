@@ -84,7 +84,7 @@ def _make_completion_result(
     input_tokens: int = 50,
     output_tokens: int = 20,
 ) -> MagicMock:
-    """Create a mock CompletionResult."""
+    """Create a mock completion payload."""
     result = MagicMock()
     result.content = content
     result.model = model

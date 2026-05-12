@@ -98,14 +98,6 @@ async def metrics(db: DbDep) -> Response:
     thrashing_events = 0
     circuit_trips = 0
     circuit_status = {}
-    try:
-        from app.services.router import get_router, get_thrashing_metrics
-        m_data = get_thrashing_metrics()
-        thrashing_events = m_data["thrashing_events_total"]
-        circuit_trips = m_data["circuit_breaker_trips_total"]
-        circuit_status = get_router().get_circuit_status()
-    except Exception as e:
-        logger.warning(f"Failed to get thrashing metrics: {e}")
 
     from app.api.health_metrics import build_prometheus_metrics
     return build_prometheus_metrics(_metrics, _start_time, thrashing_events, circuit_trips, circuit_status)

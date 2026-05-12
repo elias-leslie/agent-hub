@@ -125,7 +125,7 @@ async def create_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CredentialResponse:
     """Store a new encrypted credential."""
-    from app.adapters.registry import list_providers
+    from app.routing.registry import list_providers
 
     if is_system_credential_provider(request.provider):
         raise HTTPException(status_code=400, detail="System-managed credential providers are not writable via this API")
