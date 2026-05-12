@@ -155,13 +155,21 @@ async def find_duplicate_candidates(
     """
     stmt = text("""
         SELECT fi.*,
-               ts_rank(fi.search_vector, plainto_tsquery('english', :title)) AS rank
+               CASE
+                   WHEN lower(fi.title) = lower(:title) THEN 1.0
+                   ELSE ts_rank(fi.search_vector, plainto_tsquery('english', :title))
+               END AS rank
         FROM feedback_items fi
         WHERE fi.component_id = :component_id
         AND fi.feedback_type = :feedback_type
         AND fi.status IN ('open', 'acknowledged')
-        AND fi.search_vector @@ plainto_tsquery('english', :title)
-        ORDER BY (fi.project_id = :project_id) DESC, rank DESC
+        AND (
+            lower(fi.title) = lower(:title)
+            OR fi.search_vector @@ plainto_tsquery('english', :title)
+        )
+        ORDER BY (fi.project_id = :project_id) DESC,
+                 (lower(fi.title) = lower(:title)) DESC,
+                 rank DESC
         LIMIT :limit
     """)
     result = await db.execute(

@@ -12,6 +12,7 @@ the transitional surface.
 from __future__ import annotations
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
+from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
 from app.llm.types import Api, Model, ModelCost
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
@@ -53,8 +54,32 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "deepseek": "https://api.deepseek.com/v1",
     "local": "http://localhost:8080/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
-    "cloudflare": "",  # filled per-account at runtime
+    "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
     "codex": "https://api.anthropic.com",
+}
+
+_PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
+    "cloudflare": {
+        "llama-4-scout-17b": "@cf/meta/llama-4-scout-17b-16e-instruct",
+        "qwen3-30b": "@cf/qwen/qwen3-30b-a3b-fp8",
+        "qwq-32b": "@cf/qwen/qwq-32b",
+        "mistral-small-3.1-24b": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+        "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
+        "glm-4.7-flash": "@cf/zai-org/glm-4.7-flash",
+        "kimi-k2.6": "@cf/moonshotai/kimi-k2.6",
+        "kimi-k2.5": "@cf/moonshotai/kimi-k2.5",
+        "gpt-oss-120b": "@cf/openai/gpt-oss-120b",
+        "gpt-oss-20b": "@cf/openai/gpt-oss-20b",
+        "gemma-4-26b": "@cf/google/gemma-4-26b-a4b-it",
+        "granite-4.0-h-micro": "@cf/ibm-granite/granite-4.0-h-micro",
+        "nemotron-3-120b": "@cf/nvidia/nemotron-3-120b-a12b",
+    },
+    "nvidia": {
+        "qwen3.5-397b-a17b": "qwen/qwen3.5-397b-a17b",
+        "deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
+        "minimax-m2.7": "minimaxai/minimax-m2.7",
+        "kimi-k2.6": "moonshotai/kimi-k2.6",
+    },
 }
 
 
@@ -68,7 +93,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
     upstream_id = _upstream_model_id(resolved_id, provider)
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
-    base_url = _PROVIDER_BASE_URL.get(provider, "")
+    base_url = _resolve_base_url(provider)
 
     if entry is None:
         # Catalog miss — return a minimal Model so the adapter can still try.
@@ -108,9 +133,31 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
 
 def _upstream_model_id(model_id: str, provider: str) -> str:
     prefix = f"{provider}/"
-    if model_id.startswith(prefix):
-        return model_id[len(prefix):]
-    return model_id
+    upstream_id = model_id[len(prefix):] if model_id.startswith(prefix) else model_id
+    return _PROVIDER_MODEL_IDS.get(provider, {}).get(upstream_id, upstream_id)
+
+
+def _resolve_base_url(provider: str) -> str:
+    base_url = _PROVIDER_BASE_URL.get(provider, "")
+    if provider != "cloudflare" or "{" not in base_url:
+        return base_url
+
+    from app.llm.provider_support.cloudflare import resolve_cloudflare_base_url
+
+    return resolve_cloudflare_base_url(
+        Model(
+            id="",
+            name="",
+            api="openai-completions",
+            provider=provider,
+            base_url=base_url,
+            reasoning=False,
+            input=["text"],
+            cost=ModelCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0),
+            context_window=0,
+            max_tokens=0,
+        )
+    )
 
 
 __all__ = ["resolve_llm_model"]

@@ -62,7 +62,7 @@ def resolve_cloudflare_base_url(model: Model[Any]) -> str:
 
     def _sub(match: re.Match[str]) -> str:
         name = match.group(1)
-        value = os.environ.get(name)
+        value = os.environ.get(name) or _get_cached_cloudflare_value(name)
         if not value:
             raise RuntimeError(
                 f"{name} is required for provider {model.provider} but is not set."
@@ -70,6 +70,18 @@ def resolve_cloudflare_base_url(model: Model[Any]) -> str:
         return value
 
     return _PLACEHOLDER_RE.sub(_sub, url)
+
+
+def _get_cached_cloudflare_value(env_name: str) -> str | None:
+    credential_type = {
+        "CLOUDFLARE_ACCOUNT_ID": "account_id",
+        "CLOUDFLARE_GATEWAY_ID": "gateway_id",
+    }.get(env_name)
+    if credential_type is None:
+        return None
+    from app.services.credential_manager import get_credential_manager
+
+    return get_credential_manager().get("cloudflare", credential_type)
 
 
 __all__ = [
