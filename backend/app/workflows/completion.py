@@ -53,28 +53,6 @@ class CompletionInput(BaseModel):
     user_messages_for_db: list[dict[str, Any]] | None = Field(default=None)
 
 
-class CompletionWorkflowResult(BaseModel):
-    task_id: str
-    content: str = ""
-    model: str = "unknown"
-    provider: str = "unknown"
-    input_tokens: int = 0
-    output_tokens: int = 0
-    finish_reason: str | None = None
-    session_id: str = ""
-    memory_uuids: list[str] = Field(default_factory=list)
-    cited_uuids: list[str] = Field(default_factory=list)
-    from_cache: bool = False
-    thinking_content: str | None = None
-    thinking_tokens: int | None = None
-    turns: int = 1
-    tool_calls_count: int = 0
-    status: str = "success"
-    error: str | None = None
-    container_id: str | None = None
-    progress_log: list[dict[str, Any]] = Field(default_factory=list)
-
-
 def _result_to_dict(result: Any, task_id: str) -> dict[str, Any]:
     """Convert CompletionInternalResult to JSON-serializable dict."""
     return {

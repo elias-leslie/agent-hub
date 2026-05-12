@@ -66,6 +66,7 @@ dev = [
     "pytest-randomly>=3.16.0",
     # Linting & Type Checking
     "ruff>=0.15.0",
+    "import-linter>=2.0.0",
     "ty>=0.0.17",
     "types-jsonschema>=4.26.0",
     "types-redis>=4.6.0",
@@ -103,6 +104,31 @@ unresolved-import = "ignore"      # self-imports from packages, lazy imports
 # Keep the type gate focused on runtime code while ty is still beta. Tests and
 # operational scripts are covered by pytest and dedicated script tests.
 exclude = ["tests/**", "scripts/**"]
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "LLM providers are private to the llm package"
+type = "forbidden"
+source_modules = [
+    "app.adapters",
+    "app.api",
+    "app.cli",
+    "app.constants",
+    "app.core",
+    "app.memory",
+    "app.middleware",
+    "app.models",
+    "app.routing",
+    "app.scripts",
+    "app.services",
+    "app.storage",
+    "app.tasks",
+    "app.utils",
+    "app.workflows",
+]
+forbidden_modules = ["app.llm.providers"]
 
 [tool.pytest.ini_options]
 markers = [
