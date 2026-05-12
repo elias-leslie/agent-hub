@@ -46,6 +46,7 @@ def test_format_tool_capability_context_invokes_manifest_with_filters() -> None:
     cmd = mocked.call_args.args[0]
     assert cmd[:4] == ["st", "tools", "manifest", "--format"]
     assert cmd[4] == "inject"
+    assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "task"
     assert "--task" in cmd and cmd[cmd.index("--task") + 1] == "devops"
     assert "--agent" in cmd and cmd[cmd.index("--agent") + 1] == "persona"
     assert "--profile" in cmd and cmd[cmd.index("--profile") + 1] == "agent_runtime"
@@ -61,6 +62,21 @@ def test_format_tool_capability_context_drops_filter_for_chat_runtime() -> None:
             bash_available=True,
         )
     cmd = mocked.call_args.args[0]
+    assert "--task" not in cmd
+    assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "core"
+
+
+def test_format_tool_capability_context_uses_full_density_for_startup() -> None:
+    _clear_cache()
+    with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")) as mocked:
+        tcc.format_tool_capability_context(
+            consumer_profile="agent_startup",
+            task_type="chat",
+            project_id="agent-hub",
+            bash_available=True,
+        )
+    cmd = mocked.call_args.args[0]
+    assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "full"
     assert "--task" not in cmd
 
 

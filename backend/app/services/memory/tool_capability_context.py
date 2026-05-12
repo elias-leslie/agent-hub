@@ -21,6 +21,7 @@ _RUNTIME_TASK_TYPES = {
     "performance", "config", "devops", "database", "exploration",
     "heartbeat", "wake", "review",
 }
+_GENERIC_TASK_TYPES = {None, "", "chat"}
 
 
 def _profile_filters(
@@ -34,20 +35,36 @@ def _profile_filters(
     """
     profile = resolve_consumer_profile(consumer_profile)
     if profile == MemoryConsumerProfile.AGENT_STARTUP:
-        return (task_type or None, None)
-    if task_type in {None, "", "chat"}:
+        return (None, None)
+    if task_type in _GENERIC_TASK_TYPES:
         return (None, None)
     if task_type not in _RUNTIME_TASK_TYPES and task_type not in _FRONTEND_TASK_TYPES:
         return (None, None)
     return (task_type, None)
 
 
+def _density_for_context(consumer_profile: str | None, task_type: str | None) -> str:
+    profile = resolve_consumer_profile(consumer_profile)
+    if profile == MemoryConsumerProfile.AGENT_STARTUP:
+        return "full"
+    if task_type in _GENERIC_TASK_TYPES:
+        return "core"
+    if task_type in _RUNTIME_TASK_TYPES or task_type in _FRONTEND_TASK_TYPES:
+        return "task"
+    return "core"
+
+
 @lru_cache(maxsize=64)
-def _manifest_inject(task_type: str | None, agent_slug: str | None, consumer_profile: str | None) -> str:
+def _manifest_inject(
+    task_type: str | None,
+    agent_slug: str | None,
+    consumer_profile: str | None,
+    density: str,
+) -> str:
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
     env.pop("PYTHONHOME", None)
-    cmd = ["st", "tools", "manifest", "--format", "inject"]
+    cmd = ["st", "tools", "manifest", "--format", "inject", "--density", density]
     if task_type:
         cmd += ["--task", task_type]
     if agent_slug:
@@ -75,7 +92,8 @@ def format_tool_capability_context(
     if bash_available is False:
         return ""
     effective_task, _ = _profile_filters(consumer_profile, task_type)
-    body = _manifest_inject(effective_task, agent_slug, consumer_profile)
+    density = _density_for_context(consumer_profile, task_type)
+    body = _manifest_inject(effective_task, agent_slug, consumer_profile, density)
     if not body:
         return ""
     return f"<tool-usage>\n{body}\n</tool-usage>"
