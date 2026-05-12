@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_routing import (
-    CompletionResult,
+    FallbackCompletionResult,
     MandateInjection,
     ResolvedAgent,
     complete_with_fallback,
@@ -538,7 +538,7 @@ class TestCompleteWithFallback:
                 temperature=0.7,
             )
 
-        assert isinstance(result, CompletionResult)
+        assert isinstance(result, FallbackCompletionResult)
         assert result.model_used == CLAUDE_SONNET
         assert result.used_fallback is False
         record_success.assert_called_once()
@@ -577,7 +577,7 @@ class TestCompleteWithFallback:
                 temperature=0.7,
             )
 
-        assert isinstance(result, CompletionResult)
+        assert isinstance(result, FallbackCompletionResult)
         assert result.model_used == GEMINI_FLASH
         assert result.used_fallback is True
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"

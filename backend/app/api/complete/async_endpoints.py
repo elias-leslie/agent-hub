@@ -8,12 +8,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from redis.asyncio import Redis as AsyncRedis
 
+from app.api.complete.progress import AgentProgress
 from app.api.complete.schemas import (
     AsyncTaskStatusResponse,
     CompletionResponse,
     UsageInfo,
 )
-from app.api.orchestration_models import AgentProgressInfo
 from app.config import settings
 from app.services.completion_events import get_task_result
 
@@ -42,7 +42,7 @@ def _build_completion_response(stored: dict[str, Any]) -> CompletionResponse:
         cited_uuids=stored.get("cited_uuids", []),
         trace_id=stored.get("trace_id"),
         progress_log=[
-            AgentProgressInfo(
+            AgentProgress(
                 turn=p.get("turn", 0),
                 status=p.get("status", ""),
                 message=p.get("message", ""),

@@ -13,8 +13,9 @@ from app.api.complete.schemas import (
     ThinkingInfo,
     UsageInfo,
 )
+from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing import complete_with_fallback
-from app.services.llm_messages import CompletionResult, Message
+from app.services.llm_messages import Message
 
 if TYPE_CHECKING:
 
@@ -102,7 +103,7 @@ async def execute_with_fallback(
     thinking_level: str | None = None,
     resolved_model: str | None = None,
     prompt_cache_key: str | None = None,
-) -> tuple[CompletionResult, str, bool]:
+) -> tuple[CompletionInternalResult, str, bool]:
     """Execute completion with fallback chain.
 
     Args:
@@ -145,28 +146,6 @@ def _messages_to_dicts(messages: list[Message]) -> list[dict[str, Any]]:
     return [{"role": m.role, "content": m.content} for m in messages]
 
 
-def _internal_to_completion_result(
-    result: Any,
-    model: str,
-    provider: str,
-) -> CompletionResult:
-    """Project ``CompletionInternalResult`` onto the legacy ``CompletionResult`` shape."""
-    return CompletionResult(
-        content=result.content,
-        model=model,
-        provider=provider,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        finish_reason=result.finish_reason,
-        cache_metrics=result.cache_metrics,
-        thinking_content=result.thinking_content,
-        thinking_tokens=result.thinking_tokens,
-        tool_calls=result.tool_calls,
-        container=result.container,
-        fallback_reason=result.fallback_reason,
-    )
-
-
 async def execute_without_db(
     messages_for_adapter: list[Message],
     resolved_model: str,
@@ -176,13 +155,11 @@ async def execute_without_db(
     tools_api: list[dict[str, Any]] | None,
     response_format_dict: dict[str, Any] | None,
     session_id: str | None = None,
-) -> tuple[CompletionResult, str]:
+) -> tuple[CompletionInternalResult, str]:
     """Execute completion without a database session.
 
-    Routes through :func:`complete_internal` with ``db=None`` so the new
-    pi-mono pipeline handles every text completion. The historical
-    ``CompletionResult`` shape is reconstructed at the boundary for callers
-    that have not yet adopted ``CompletionInternalResult``.
+    Routes through :func:`complete_internal` with ``db=None`` so the
+    pi-mono pipeline handles every text completion.
     """
     from app.api.complete.core import complete_internal
 
@@ -213,7 +190,7 @@ async def execute_without_db(
         current_branch=request.current_branch,
     )
 
-    return _internal_to_completion_result(internal, resolved_model, provider), resolved_model
+    return internal, resolved_model
 
 
 def build_agentic_response(
@@ -237,7 +214,7 @@ def build_agentic_response(
     Returns:
         CompletionResponse
     """
-    from app.api.orchestration_models import AgentProgressInfo
+    from app.api.complete.progress import AgentProgress
 
     return CompletionResponse(
         content=internal_result.content,
@@ -280,7 +257,7 @@ def build_agentic_response(
         turns=internal_result.turns,
         tool_calls_count=internal_result.tool_calls_count,
         progress_log=[
-            AgentProgressInfo(
+            AgentProgress(
                 turn=p.turn,
                 status=p.status,
                 message=p.message,

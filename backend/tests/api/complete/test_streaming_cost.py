@@ -70,20 +70,8 @@ class TestStreamingChunkCostFields:
         assert "cost_usd" in json_str
 
 
-class TestStreamEventTypes:
-    """Verify StreamEvent supports new types."""
-
-    def test_turn_lifecycle_events(self):
-        """StreamEvent should accept turn_start/turn_end types."""
-        from app.services.llm_messages import StreamEvent
-
-        start = StreamEvent(type="turn_start", turn=1)
-        assert start.type == "turn_start"
-        assert start.turn == 1
-
-        end = StreamEvent(type="turn_end", turn=1)
-        assert end.type == "turn_end"
-        assert end.turn == 1
+class TestMessageProvenance:
+    """Verify message provenance fields."""
 
     def test_message_provenance(self):
         """Message should accept provider/model provenance fields."""

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.constants.models import CLAUDE_SONNET
-from app.services.llm_messages import CompletionResult, Message
+from app.services.llm_messages import Message
 from app.services.orchestration.parallel import (
     ParallelExecutor,
     ParallelResult,
@@ -146,14 +146,6 @@ class TestParallelExecutor:
     async def test_execute_single_task(self):
         """Test executing single task."""
         executor = ParallelExecutor()
-
-        CompletionResult(
-            content="Single result",
-            provider="claude",
-            model=CLAUDE_SONNET,
-            input_tokens=100,
-            output_tokens=50,
-        )
 
         with patch(
             "app.services.orchestration.subagent.SubagentManager.spawn",

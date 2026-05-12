@@ -13,7 +13,6 @@ from app.models import SessionEventType, TruncationEvent
 from app.services.context_tracker import log_token_usage
 from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_complete, publish_message
-from app.services.llm_messages import CompletionResult
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import build_output_usage, estimate_cost
@@ -242,7 +241,7 @@ def build_container_info(result: Any) -> ContainerInfo | None:
 
 
 async def cache_result_if_needed(
-    result: CompletionResult,
+    result: Any,
     request: CompletionRequest,
     resolved_model: str,
     messages_dict: list[dict[str, Any]],
@@ -267,7 +266,7 @@ async def cache_result_if_needed(
 
 
 async def log_truncation_if_needed(
-    result: CompletionResult,
+    result: Any,
     output_usage: OutputUsageInfo,
     resolved_model: str,
     session_id: str,

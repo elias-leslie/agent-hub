@@ -25,6 +25,7 @@ class ObservationInput(BaseModel):
     content_hash: str = ""
 
     def model_post_init(self, __context: Any) -> None:
+        del __context
         if not self.content_hash:
             raw = (
                 self.request_dict.get("content", "")
