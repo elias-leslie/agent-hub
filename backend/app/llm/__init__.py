@@ -9,3 +9,6 @@ match it. Public surface is documented per pi-mono's ``index.ts``.
 """
 
 from __future__ import annotations
+
+# Load built-in provider registrations when the llm package is imported.
+from . import providers as providers

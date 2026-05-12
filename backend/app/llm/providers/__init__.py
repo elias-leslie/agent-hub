@@ -7,3 +7,8 @@ providers directly; all access goes through ``api_registry.get_api_provider``.
 """
 
 from __future__ import annotations
+
+# Import built-in providers for their register_api_provider side effects.
+from . import anthropic as anthropic
+from . import google as google
+from . import openai_completions as openai_completions
