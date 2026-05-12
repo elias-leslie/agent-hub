@@ -948,6 +948,8 @@ async def _auto_route(
         if not _model_satisfies_constraints(row, constraints, context):
             continue
         entitlement = entitlement_rows.get(row.provider)
+        if entitlement is not None and entitlement.status in _RUNTIME_FAILURE_PROVIDER_STATUSES:
+            continue
         subscription_backed = bool(
             entitlement
             and (
