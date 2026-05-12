@@ -19,13 +19,13 @@ from app.api.complete.orchestration_helpers import (
     build_session_and_messages,
     execute_and_respond,
 )
-from app.api.complete.resolution import (
-    apply_mention_override,
-    resolve_agent_and_model,
-)
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
+from app.routing.resolution import (
+    apply_mention_override,
+    resolve_agent_and_model,
+)
 from app.services.adaptive_model_router import mark_routing_decision_completed
 from app.services.agent_routing_completion import get_provider_rate_limit_cooldown_remaining
 
