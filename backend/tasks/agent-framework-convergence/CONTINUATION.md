@@ -1,13 +1,16 @@
 # CONTINUATION — task-e65e9ee0
 
-**Read this file first. Then `pi-mono-catalog.md` and `convergence-map.md`. Then begin Phase 1.**
+**Read this file first. Then `pi-mono-catalog.md` and `convergence-map.md`.**
 
-## Status
+## Status (updated 2026-05-12)
 
-- Phase 0 (audit): **COMPLETE** — committed in the same git commit that introduced this directory.
-- Phase 1 (build new shape, port anthropic as reference): **NEXT — start here**.
-- Operator has approved autonomous execution through completion. **DO NOT PAUSE** between phases or subtasks.
-- The task description's "0.6 Pause and review" / "Operator review required" language is **superseded** by `convergence-map.md` § "STATUS — OPERATOR-APPROVED, AUTONOMOUS EXECUTION" and § "Autonomous-execution directive".
+- Phase 0 (audit): **COMPLETE** — commit `1518690a`.
+- Phase 1 (universal shape + anthropic reference port): **COMPLETE** — commits `2c8531e2`, `c884876b`, `fc04d20d`, `4ff62952`.
+- Phase 2 (provider ports): **COMPLETE** — commits `13fbe5f7` (openai_completions), `39067151` (google + google_shared), `33ad48e1` (cloudflare URL helpers; provider collapsed into openai_completions per D4), `d6c43730` (faux test double).
+- Phase 3.1 (orchestrator skeleton + `LLM_USE_NEW_PIPELINE` flag): **COMPLETE** — commit `5165e9d2`. Flag default OFF.
+- Phase 3.2–3.6: **NEXT — start here**. See "Phase 3 — REMAINING" below.
+- Operator approved autonomous execution through completion. **DO NOT PAUSE** between phases.
+- Task description's "0.6 Pause and review" / "Operator review required" language is **superseded** by `convergence-map.md`.
 - All D1–D10 decisions are LOCKED in `convergence-map.md` Part D. Do not re-litigate.
 
 ## Single optimization criterion
@@ -22,9 +25,75 @@
 - `convergence-map.md` — synthesis. Part A pi-mono→agent-hub map, Part B agent-hub classification (KEEP/REMOVE/REPLACE/NEW), Part C NEW-REQUIREMENT justifications (C1–C10), Part D locked decisions (D1–D10), Part E phase-ordering refinements.
 - `CONTINUATION.md` — this file.
 
-## Phase 1 — START HERE
+## What's in `backend/app/llm/` today
 
-Build the new `backend/app/llm/` shape and port Anthropic as the reference. Files go in the order below; each is a single commit.
+After Phase 1+2:
+
+```
+backend/app/llm/
+├── __init__.py
+├── api_registry.py        # ApiProvider Protocol + registry (Phase 1.A)
+├── env_api_keys.py
+├── event_stream.py        # EventStream[T,R] + AssistantMessageEventStream
+├── simple_options.py
+├── stream.py              # stream/complete/stream_simple/complete_simple
+├── tool_loop.py           # unified tool loop (Phase 1.D)
+├── transform_messages.py
+├── types.py               # universal types + 12-variant AssistantMessageEvent
+├── providers/
+│   ├── __init__.py
+│   ├── anthropic.py       # Phase 1.C — reference port
+│   ├── openai_completions.py  # Phase 2.1 — collapses xAI/OpenRouter/Kimi/...
+│   ├── google.py          # Phase 2.2 — replaces 13 gemini_* files
+│   ├── google_shared.py
+│   ├── cloudflare.py      # Phase 2.3 — URL helpers only; provider via openai_completions
+│   └── faux.py            # Phase 2.4 — test double
+└── utils/
+    ├── __init__.py
+    ├── diagnostics.py
+    ├── json_parse.py
+    ├── overflow.py
+    ├── sanitize_unicode.py
+    ├── validation.py
+    └── oauth/
+        ├── __init__.py
+        ├── anthropic.py   # Phase 1.B
+        ├── pkce.py
+        └── types.py
+```
+
+Plus `backend/app/api/complete/`:
+- `orchestrator.py` (Phase 3.1) — `run_completion` / `run_completion_stream` / `build_context_from_messages` / `is_new_pipeline_enabled`
+- `sse_writer.py` (Phase 1.D) — translates `AssistantMessageEvent` + tool-loop events into the 9-event downstream SSE contract
+
+Tests at `backend/tests/llm/`: 11 passing across `test_pipeline_smoke.py`, `test_faux_provider.py`, `test_orchestrator.py`.
+
+Registry on import contains: `anthropic-messages`, `openai-completions`, `google-generative-ai`. Faux is registered per-test via `register_faux_provider()`.
+
+## Phase 3 — REMAINING (start here)
+
+The orchestrator skeleton + feature flag are in place but **the HTTP route still uses the legacy `complete_orchestrator.py` + `complete_execution.py`**. Phase 3 finishes the harness collapse and flips the route.
+
+1. **`backend/app/api/complete/session_repo.py`** — collapse `session_manager.py` (198L) + `_session_helpers.py` (162L) + `session_setup.py` (110L) into ONE module (~200L target per convergence-map.md C1). Load conversation history from DB → universal `list[Message]`; persist final `AssistantMessage` after a turn. **DB session loading/persistence stays where it is** (`backend/app/db/models/sessions.py`); only the helper layer collapses.
+
+2. **`backend/app/routing/`** — new package collapsing `resolution.py` (383L) + the capability-routing parts of `adapters/registry.py` (per convergence-map.md C2, B1). Inputs: `agent_slug`, `workload_profile`, `task_type`, `cost_preference`, `routing_exclude_providers`. Output: ordered list of `Model[Api]` to try. Routing decisions are produced OUTSIDE the adapter; failed adapters surface as `AssistantMessage{ stop_reason: "error" }` and the router catches and tries the next.
+
+3. **Memory move** — `memory_handler.py` → `backend/app/memory/` (per C4). Out-of-band citation extraction → `backend/app/memory/citation_extractor.py` (per D9). The adapter doesn't know about memory; the memory layer assembles the system prompt and post-processes the assistant message text for citations.
+
+4. **HTTP route wiring** — `endpoints.py` `complete()` handler branches on `settings.llm_use_new_pipeline`:
+   - True: call `orchestrator.run_completion(...)` or `orchestrator.run_completion_stream(...)` and translate to `CompletionResponse` / SSE.
+   - False: existing `complete_orchestrator.execute_completion(...)` path (legacy).
+   Also wire `async_endpoints.py` (the Hatchet workflow) and `cancel_stream()`.
+
+5. **Block on green:** `st check` + at least one autocode E2E per consumer (agent-hub, summitflow, portfolio-ai). Verify SSE event names match `downstream-consumers.md` Section 6.
+
+6. **Flip the flag** — set `llm_use_new_pipeline=True` in `config.py` default (or via env in production). Old code path remains accessible for one rollback cycle.
+
+**Phase 3 commit cadence:** one collapse per commit. Order: 3.2 session_repo → 3.3 routing/ → 3.4 memory → 3.5 HTTP wiring + flag flip → 3.6 autocode E2E verification.
+
+Below is the original Phase 1 plan, kept for reference:
+
+## Phase 1 — DONE
 
 Detailed pi-mono cross-references appear in `convergence-map.md` Part A. Detailed file layout is in `convergence-map.md` D1.
 
