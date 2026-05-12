@@ -23,6 +23,15 @@ from google import genai
 from ..api_registry import register_api_provider
 from ..env_api_keys import get_env_api_key
 from ..event_stream import AssistantMessageEventStream
+from ..provider_support.google_shared import (
+    GoogleThinkingLevel,
+    convert_messages,
+    convert_tools,
+    is_thinking_part,
+    map_stop_reason,
+    map_tool_choice,
+    retain_thought_signature,
+)
 from ..simple_options import build_base_options, clamp_reasoning
 from ..types import (
     AssistantMessage,
@@ -50,15 +59,6 @@ from ..types import (
     UsageCost,
 )
 from ..utils.sanitize_unicode import sanitize_surrogates
-from .google_shared import (
-    GoogleThinkingLevel,
-    convert_messages,
-    convert_tools,
-    is_thinking_part,
-    map_stop_reason,
-    map_tool_choice,
-    retain_thought_signature,
-)
 
 __all__ = [
     "GoogleOptions",

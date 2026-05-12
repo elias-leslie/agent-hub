@@ -26,7 +26,7 @@ class CompletionInternalResult:
     session_id: str
     memory_uuids: list[str]
     cited_uuids: list[str]
-    from_cache: bool = False
+    cache_hit: bool = False
     runtime_cache: Any | None = None
     reasoning_text: str | None = None
     reasoning_token_count: int | None = None
@@ -35,11 +35,11 @@ class CompletionInternalResult:
     # Multi-turn execution fields
     turn_count: int = 1
     executed_tool_call_count: int = 0
-    status: str = "success"
-    error: str | None = None
+    execution_status: str = "success"
+    execution_error: str | None = None
     container_ref: str | None = None
-    progress_log: list[AgentProgress] = field(default_factory=list)
-    error_summary: dict[str, Any] | None = None
+    progress_entries: list[AgentProgress] = field(default_factory=list)
+    failure_summary: dict[str, Any] | None = None
     # Fallback tracking
     model_used: str | None = None
     fallback_used: bool = False
@@ -94,7 +94,7 @@ class CompletionInternalResult:
         self.session_id = session_id
         self.memory_uuids = memory_uuids or []
         self.cited_uuids = cited_uuids or []
-        self.from_cache = from_cache
+        self.cache_hit = from_cache
         self.runtime_cache = cache_metrics
         self.reasoning_text = thinking_content
         self.reasoning_token_count = thinking_tokens
@@ -102,11 +102,11 @@ class CompletionInternalResult:
         self.container_state = container
         self.turn_count = turns
         self.executed_tool_call_count = tool_calls_count
-        self.status = status
-        self.error = error
+        self.execution_status = status
+        self.execution_error = error
         self.container_ref = container_id
-        self.progress_log = progress_log or []
-        self.error_summary = error_summary
+        self.progress_entries = progress_log or []
+        self.failure_summary = error_summary
         self.model_used = model_used
         self.fallback_used = fallback_used
         self.requested_model = requested_model
@@ -194,6 +194,46 @@ class CompletionInternalResult:
                 cache_read_input_tokens=self.message.usage.cache_read,
             )
         return None
+
+    @property
+    def from_cache(self) -> bool:
+        return self.cache_hit
+
+    @from_cache.setter
+    def from_cache(self, value: bool) -> None:
+        self.cache_hit = value
+
+    @property
+    def status(self) -> str:
+        return self.execution_status
+
+    @status.setter
+    def status(self, value: str) -> None:
+        self.execution_status = value
+
+    @property
+    def error(self) -> str | None:
+        return self.execution_error
+
+    @error.setter
+    def error(self, value: str | None) -> None:
+        self.execution_error = value
+
+    @property
+    def progress_log(self) -> list[AgentProgress]:
+        return self.progress_entries
+
+    @progress_log.setter
+    def progress_log(self, value: list[AgentProgress]) -> None:
+        self.progress_entries = value
+
+    @property
+    def error_summary(self) -> dict[str, Any] | None:
+        return self.failure_summary
+
+    @error_summary.setter
+    def error_summary(self, value: dict[str, Any] | None) -> None:
+        self.failure_summary = value
 
     @property
     def thinking_content(self) -> str | None:
