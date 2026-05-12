@@ -7,7 +7,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
 
 from .citation_tracker import track_citations_with_metrics
@@ -56,7 +55,7 @@ async def build_cached_completion_response(
 
 
 async def process_completion_result(
-    result: CompletionResult,
+    result: Any,
     request: CompletionRequest,
     resolved_model: str,
     session_id: str,

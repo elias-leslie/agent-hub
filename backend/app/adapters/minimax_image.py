@@ -23,10 +23,10 @@ from typing import Any
 
 import httpx
 
-from app.adapters._openai_compat_helpers import resolve_api_key
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import MINIMAX_IMAGE_01
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
+from app.services.provider_credentials import resolve_api_key
 
 logger = logging.getLogger(__name__)
 

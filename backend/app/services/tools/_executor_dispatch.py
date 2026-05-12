@@ -97,11 +97,11 @@ def _check_duplicate_campaign(
     )
     if duplicate is None:
         return None
-        return (
-            f"Dispatch blocked for {project_id}: {agent_slug} already has an active "
-            "campaign session in this project. Query or inspect the existing campaign "
-            "instead of creating a duplicate task session."
-        )
+    return (
+        f"Dispatch blocked for {project_id}: {agent_slug} already has an active "
+        "campaign session in this project. Query or inspect the existing campaign "
+        "instead of creating a duplicate task session."
+    )
 
 
 def _check_owner_overlap(

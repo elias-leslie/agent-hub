@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.base import CompletionResult, Message
-from app.adapters.registry import get_adapter
-from app.adapters.thinking import get_thinking_config
 from app.api.complete.helpers import should_enable_thinking
 from app.api.complete.schemas import (
     CompletionResponse,
@@ -17,8 +13,9 @@ from app.api.complete.schemas import (
     ThinkingInfo,
     UsageInfo,
 )
+from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing import complete_with_fallback
-from app.services.health_prober import record_provider_failure, record_provider_success
+from app.services.llm_messages import Message
 
 if TYPE_CHECKING:
 
@@ -106,7 +103,7 @@ async def execute_with_fallback(
     thinking_level: str | None = None,
     resolved_model: str | None = None,
     prompt_cache_key: str | None = None,
-) -> tuple[CompletionResult, str, bool]:
+) -> tuple[CompletionInternalResult, str, bool]:
     """Execute completion with fallback chain.
 
     Args:
@@ -144,6 +141,11 @@ async def execute_with_fallback(
     )
 
 
+def _messages_to_dicts(messages: list[Message]) -> list[dict[str, Any]]:
+    """Translate adapter ``Message`` rows to the wire ``{role, content}`` shape."""
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
 async def execute_without_db(
     messages_for_adapter: list[Message],
     resolved_model: str,
@@ -153,62 +155,42 @@ async def execute_without_db(
     tools_api: list[dict[str, Any]] | None,
     response_format_dict: dict[str, Any] | None,
     session_id: str | None = None,
-) -> tuple[CompletionResult, str]:
-    """Execute completion without database.
+) -> tuple[CompletionInternalResult, str]:
+    """Execute completion without a database session.
 
-    Args:
-        messages_for_adapter: Messages for adapter
-        resolved_model: Resolved model
-        provider: Provider name
-        request: Completion request
-        thinking_level: Thinking level
-        tools_api: Tools in API format
-        response_format_dict: Response format dict
-
-    Returns:
-        Tuple of (result, model_used)
+    Routes through :func:`complete_internal` with ``db=None`` so the
+    pi-mono pipeline handles every text completion.
     """
-    from app.core.debug import debug, debug_async_timer
+    from app.api.complete.core import complete_internal
 
-    adapter = get_adapter(provider)
-    extra_kwargs: dict[str, Any] = {
-        "enable_caching": request.enable_caching,
-        "cache_ttl": request.cache_ttl,
-        "tools": tools_api,
-        "enable_programmatic_tools": request.enable_programmatic_tools,
-        "container_id": request.container_id,
-        "response_format": response_format_dict,
-    }
-    if session_id:
-        extra_kwargs["prompt_cache_key"] = session_id
-    if thinking_level:
-        thinking_config = get_thinking_config(resolved_model, thinking_level, provider)
-        if thinking_config:
-            extra_kwargs.update(thinking_config)
-        elif provider not in {
-            "cloudflare", "codex", "deepseek", "local", "minimax",
-            "moonshot", "nvidia", "openai", "openrouter", "xai", "zhipu",
-        }:
-            extra_kwargs["thinking_level"] = thinking_level
+    internal = await complete_internal(
+        messages=_messages_to_dicts(messages_for_adapter),
+        model=resolved_model,
+        provider=provider,
+        temperature=request.temperature,
+        project_id=request.project_id,
+        db=None,
+        session_id=session_id,
+        external_id=request.external_id,
+        parent_session_id=request.parent_session_id,
+        agent_slug=request.agent_slug,
+        enable_caching=request.enable_caching,
+        cache_ttl=request.cache_ttl,
+        thinking_level=thinking_level,
+        tools=tools_api,
+        enable_programmatic_tools=request.enable_programmatic_tools,
+        container_id=request.container_id,
+        response_format=response_format_dict,
+        max_turns=1,
+        execute_tools=False,
+        working_dir=request.working_dir,
+        trace_id=request.trace_id,
+        task_type=request.task_type,
+        phase=request.phase,
+        current_branch=request.current_branch,
+    )
 
-    debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
-    async with debug_async_timer(f"adapter.complete ({resolved_model})"):
-        start = time.monotonic()
-        try:
-            result = await adapter.complete(
-                messages=messages_for_adapter,
-                model=resolved_model,
-                max_tokens=None,
-                temperature=request.temperature,
-                **extra_kwargs,
-            )
-        except Exception as exc:
-            record_provider_failure(provider, str(exc), (time.monotonic() - start) * 1000)
-            raise
-        record_provider_success(provider, (time.monotonic() - start) * 1000)
-    debug(f"LLM response: tokens={result.input_tokens}+{result.output_tokens}")
-
-    return result, resolved_model
+    return internal, resolved_model
 
 
 def build_agentic_response(
@@ -232,7 +214,7 @@ def build_agentic_response(
     Returns:
         CompletionResponse
     """
-    from app.api.orchestration_models import AgentProgressInfo
+    from app.api.complete.progress import AgentProgress
 
     return CompletionResponse(
         content=internal_result.content,
@@ -275,7 +257,7 @@ def build_agentic_response(
         turns=internal_result.turns,
         tool_calls_count=internal_result.tool_calls_count,
         progress_log=[
-            AgentProgressInfo(
+            AgentProgress(
                 turn=p.turn,
                 status=p.status,
                 message=p.message,

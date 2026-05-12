@@ -9,14 +9,13 @@ from typing import Any, ClassVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult, Message
+from app.api.complete.core import complete_internal
 from app.services.agent_routing import get_provider_for_model as get_provider
 from app.services.completion.helpers import (
     get_thinking_level,
     handle_episode_storage,
     inject_memory_context,
 )
-from app.services.completion.provider_utils import get_adapter
 from app.services.completion.types import (
     CompletionOptions,
     CompletionServiceResult,
@@ -94,12 +93,14 @@ class CompletionService:
         session_id = options.session_id or str(uuid.uuid4())
         messages, memory_facts = await inject_memory_context(options, list(options.messages))
 
-        adapter = get_adapter(provider)
-        result: CompletionResult = await adapter.complete(
-            messages=[Message(role=m["role"], content=m["content"]) for m in messages],
+        result = await complete_internal(
+            messages=messages,
             model=options.model,
-            max_tokens=options.max_tokens,
+            provider=provider,
             temperature=options.temperature,
+            project_id=options.project_id,
+            db=None,
+            session_id=session_id,
             enable_caching=options.enable_caching,
             cache_ttl=options.cache_ttl,
             thinking_level=get_thinking_level(options, messages),

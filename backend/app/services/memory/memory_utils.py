@@ -79,6 +79,7 @@ async def resolve_uuid_prefix_with_driver(
     Raises:
         ValueError: If prefix is ambiguous (multiple matches) or not found
     """
+    del driver
     from .repository import get_memory_repository
 
     repo = get_memory_repository()

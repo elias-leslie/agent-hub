@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import CacheMetrics
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
+from app.services.llm_messages import CacheMetrics
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.response_cache.cache_key import generate_cache_key
 from app.services.token_counter import (
@@ -526,10 +526,13 @@ class TestTokenEstimationAccuracy:
 
         # Check warning thresholds
         if estimate.context_usage_percent > 90:
+            assert estimate.context_warning is not None
             assert "CRITICAL" in estimate.context_warning
         elif estimate.context_usage_percent > 75:
+            assert estimate.context_warning is not None
             assert "WARNING" in estimate.context_warning
         elif estimate.context_usage_percent > 50:
+            assert estimate.context_warning is not None
             assert "Note" in estimate.context_warning
 
 

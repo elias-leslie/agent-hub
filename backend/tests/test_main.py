@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,7 +24,6 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     session_factory = _mock_async_session(mock_db)
     credential_manager = MagicMock()
     credential_manager.load_with_retry = AsyncMock(return_value=2)
-    prober = SimpleNamespace(_providers=["claude", "gemini"])
 
     with caplog.at_level(logging.INFO, logger="app.main"), patch(
         "app.main.init_telemetry"
@@ -64,9 +62,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
         "app.services.compactness_policy.load_policy_from_db",
         new_callable=AsyncMock,
         return_value=COMPACTNESS_DEFAULTS,
-    ), patch(
-        "app.services.health_prober.init_health_prober", return_value=prober
-    ) as mock_init_health_prober:
+    ):
         await _startup()
 
     credential_manager.load_with_retry.assert_awaited_once_with(session_factory)
@@ -75,7 +71,6 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     mock_reconcile_agent_models.assert_awaited_once_with(mock_db)
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
     mock_reconcile.assert_awaited_once_with(mock_db)
-    mock_init_health_prober.assert_called_once_with()
     assert "Loaded 1 env-backed credential override(s): openai:api_key" in caplog.text
     assert "Seeded 39 default agent(s) for a fresh database" in caplog.text
     assert "Seeded/refreshed adaptive routing metadata: adaptive-routing:42" in caplog.text
@@ -94,7 +89,6 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     session_factory = _mock_async_session(mock_db)
     credential_manager = MagicMock()
     credential_manager.load_with_retry = AsyncMock(return_value=2)
-    prober = SimpleNamespace(_providers=["claude"])
 
     with caplog.at_level(logging.INFO, logger="app.main"), patch(
         "app.main.init_telemetry"
@@ -133,9 +127,7 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
         "app.services.compactness_policy.load_policy_from_db",
         new_callable=AsyncMock,
         return_value=COMPACTNESS_DEFAULTS,
-    ), patch(
-        "app.services.health_prober.init_health_prober", return_value=prober
-    ) as mock_init_health_prober:
+    ):
         await _startup()
 
     credential_manager.load_with_retry.assert_awaited_once_with(session_factory)
@@ -143,10 +135,9 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     mock_reconcile_agent_models.assert_awaited_once_with(mock_db)
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
     mock_reconcile.assert_awaited_once_with(mock_db)
-    mock_init_health_prober.assert_called_once_with()
     assert "No env-backed credential overrides configured" in caplog.text
     assert "Failed default agent bootstrap at startup: seed boom" in caplog.text
     assert "Failed adaptive routing reconciliation at startup: model boom" in caplog.text
     assert "Failed first-party client reconciliation at startup: first-party boom" in caplog.text
     assert "Failed registered project access reconciliation at startup: boom" in caplog.text
-    assert "Provider health tracker initialized for 1 providers" in caplog.text
+    assert "Provider health tracker disabled" in caplog.text

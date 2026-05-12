@@ -9,15 +9,13 @@ On rate-limit, automatically falls back through the model chain:
 import logging
 from typing import Any
 
+from google import genai
 from google.genai import types
 
-from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
-from app.adapters.gemini_adapter_settings import (
-    make_sdk_client,
-)
-from app.adapters.gemini_utils import resolve_api_key
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
+from app.services.provider_credentials import resolve_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +69,7 @@ class GeminiImageAdapter(ImageAdapter):
     """Gemini image generation via API key + model fallback on rate-limit."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        resolved_key = resolve_api_key(api_key)
+        resolved_key = resolve_api_key("gemini", api_key)
         self._sdk_client = _make_image_client(resolved_key)
         self._last_api_key = resolved_key
         logger.info("Gemini image adapter initialized with api_key auth")
@@ -83,7 +81,7 @@ class GeminiImageAdapter(ImageAdapter):
     def _refresh_credentials(self) -> None:
         """Re-check CredentialManager for rotated API key."""
         try:
-            fresh = resolve_api_key(None)
+            fresh = resolve_api_key("gemini")
             if fresh != self._last_api_key:
                 self._sdk_client = _make_image_client(fresh)
                 self._last_api_key = fresh
@@ -171,5 +169,5 @@ class GeminiImageAdapter(ImageAdapter):
 def _make_image_client(resolved_key: str | None) -> Any | None:
     """Create the SDK client used for Gemini image generation."""
     if resolved_key:
-        return make_sdk_client(resolved_key)
+        return genai.Client(api_key=resolved_key)
     return None

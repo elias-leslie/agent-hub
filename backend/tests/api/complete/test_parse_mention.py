@@ -149,8 +149,8 @@ class TestApplyMentionOverrideStripping:
         """@mention should be removed from message content after override."""
         from unittest.mock import patch
 
-        from app.api.complete.resolution import apply_mention_override
         from app.api.complete.schemas import CompletionRequest, MessageInput
+        from app.routing.resolution import apply_mention_override
 
         request = CompletionRequest(
             messages=[MessageInput(role="user", content="@cloudflare/qwen2.5-coder-32b Hello")],
@@ -158,7 +158,7 @@ class TestApplyMentionOverrideStripping:
             project_id="test",
         )
         with patch(
-            "app.api.complete.resolution.get_provider",
+            "app.routing.resolution.get_provider",
             return_value="cloudflare",
         ):
             model, provider = apply_mention_override(request, "nvidia/some-default")
@@ -172,8 +172,8 @@ class TestApplyMentionOverrideStripping:
         """Messages without @mention should not be modified."""
         from unittest.mock import patch
 
-        from app.api.complete.resolution import apply_mention_override
         from app.api.complete.schemas import CompletionRequest, MessageInput
+        from app.routing.resolution import apply_mention_override
 
         request = CompletionRequest(
             messages=[MessageInput(role="user", content="Hello world")],
@@ -181,7 +181,7 @@ class TestApplyMentionOverrideStripping:
             project_id="test",
         )
         with patch(
-            "app.api.complete.resolution.get_provider",
+            "app.routing.resolution.get_provider",
             return_value="nvidia",
         ):
             model, _provider = apply_mention_override(request, "nvidia/some-model")

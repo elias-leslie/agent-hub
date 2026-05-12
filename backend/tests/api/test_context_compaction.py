@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.api.complete.context_compaction import maybe_compact_context
+from app.api.complete.types import CompletionInternalResult
 
 # Patch targets at the source modules (imports are inside the function body)
 _TOKEN_COUNTER = "app.services.token_counter"
-_ADAPTER_REGISTRY = "app.adapters.registry"
 _AGENT_ROUTING = "app.services.agent_routing_utils"
 
 
@@ -30,6 +30,20 @@ def _make_resolved_compactor_agent() -> SimpleNamespace:
         agent=_make_compactor_agent(),
         model="claude-haiku-4-5",
         provider="claude",
+    )
+
+
+def _make_compaction_result(content: str) -> CompletionInternalResult:
+    return CompletionInternalResult(
+        content=content,
+        model="claude-haiku-4-5",
+        provider="claude",
+        input_tokens=100,
+        output_tokens=25,
+        finish_reason="stop",
+        session_id="ephemeral:compaction",
+        memory_uuids=[],
+        cited_uuids=[],
     )
 
 
@@ -81,13 +95,6 @@ class TestMaybeCompactContext:
         messages = _make_messages(20)
         mock_db = AsyncMock()
 
-        mock_adapter_result = MagicMock()
-        mock_adapter_result.content = "Summary of earlier conversation."
-        mock_adapter_result.model = "claude-haiku-4-5"
-        mock_adapter_result.input_tokens = 100
-        mock_adapter_result.output_tokens = 25
-        mock_adapter = AsyncMock()
-        mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -98,8 +105,10 @@ class TestMaybeCompactContext:
                 return_value=100_000,
             ),
             patch(
-                f"{_ADAPTER_REGISTRY}.get_adapter",
-                return_value=mock_adapter,
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(
+                    return_value=_make_compaction_result("Summary of earlier conversation.")
+                ),
             ),
             patch(
                 f"{_AGENT_ROUTING}.resolve_agent",
@@ -138,13 +147,6 @@ class TestMaybeCompactContext:
         ]
         mock_db = AsyncMock()
 
-        mock_adapter_result = MagicMock()
-        mock_adapter_result.content = "Summarized conversation."
-        mock_adapter_result.model = "claude-haiku-4-5"
-        mock_adapter_result.input_tokens = 100
-        mock_adapter_result.output_tokens = 25
-        mock_adapter = AsyncMock()
-        mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -155,8 +157,8 @@ class TestMaybeCompactContext:
                 return_value=100_000,
             ),
             patch(
-                f"{_ADAPTER_REGISTRY}.get_adapter",
-                return_value=mock_adapter,
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_compaction_result("Summarized conversation.")),
             ),
             patch(
                 f"{_AGENT_ROUTING}.resolve_agent",
@@ -187,8 +189,6 @@ class TestMaybeCompactContext:
         messages = _make_messages(20)
         mock_db = AsyncMock()
 
-        mock_adapter = AsyncMock()
-        mock_adapter.complete = AsyncMock(side_effect=Exception("Adapter error"))
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -199,8 +199,8 @@ class TestMaybeCompactContext:
                 return_value=100_000,
             ),
             patch(
-                f"{_ADAPTER_REGISTRY}.get_adapter",
-                return_value=mock_adapter,
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=Exception("Adapter error")),
             ),
             patch(
                 f"{_AGENT_ROUTING}.resolve_agent",
@@ -221,13 +221,6 @@ class TestMaybeCompactContext:
         messages = _make_messages(30)
         mock_db = AsyncMock()
 
-        mock_adapter_result = MagicMock()
-        mock_adapter_result.content = "Short summary."
-        mock_adapter_result.model = "claude-haiku-4-5"
-        mock_adapter_result.input_tokens = 100
-        mock_adapter_result.output_tokens = 25
-        mock_adapter = AsyncMock()
-        mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
         with (
             patch(
                 f"{_TOKEN_COUNTER}.count_message_tokens",
@@ -238,8 +231,8 @@ class TestMaybeCompactContext:
                 return_value=100_000,
             ),
             patch(
-                f"{_ADAPTER_REGISTRY}.get_adapter",
-                return_value=mock_adapter,
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(return_value=_make_compaction_result("Short summary.")),
             ),
             patch(
                 f"{_AGENT_ROUTING}.resolve_agent",

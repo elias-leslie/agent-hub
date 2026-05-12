@@ -8,7 +8,6 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
 from app.models import SessionEventType, TruncationEvent
 from app.services.context_tracker import log_token_usage
@@ -32,7 +31,7 @@ from .schemas import (
     ToolCallInfo,
     UsageInfo,
 )
-from .session_manager import apply_execution_metadata, update_provider_metadata
+from .session_repo import apply_execution_metadata, update_provider_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +241,7 @@ def build_container_info(result: Any) -> ContainerInfo | None:
 
 
 async def cache_result_if_needed(
-    result: CompletionResult,
+    result: Any,
     request: CompletionRequest,
     resolved_model: str,
     messages_dict: list[dict[str, Any]],
@@ -267,7 +266,7 @@ async def cache_result_if_needed(
 
 
 async def log_truncation_if_needed(
-    result: CompletionResult,
+    result: Any,
     output_usage: OutputUsageInfo,
     resolved_model: str,
     session_id: str,

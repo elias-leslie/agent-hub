@@ -4,9 +4,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.adapters.registry import ValidProvider
 from app.api.complete.request_schemas import ResponseFormat
 from app.api.complete.usage_schemas import ContextUsageInfo, OutputUsageInfo, UsageInfo
+from app.routing.registry import ValidProvider
 
 # ========== Subagent Models ==========
 
@@ -414,20 +414,3 @@ class WorkflowResponse(BaseModel):
     total_input_tokens: int
     total_output_tokens: int
 
-
-# ========== Agent Progress Model ==========
-# Note: AgentRunRequest and AgentRunResponse were removed when /run-agent was
-# consolidated into /complete with agentic mode. AgentProgressInfo is still
-# used by CompletionResponse for agentic execution progress.
-
-
-class AgentProgressInfo(BaseModel):
-    """Progress update from agentic execution."""
-
-    turn: int
-    status: str
-    message: str
-    topic: str | None = None
-    tool_calls: list[dict[str, Any]] = []
-    tool_results: list[dict[str, Any]] = []
-    thinking: str | None = None

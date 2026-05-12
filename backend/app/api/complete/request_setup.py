@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import HTTPException
 
-from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session
 from app.api.complete.schemas import ContextUsageInfo
 from app.services.context_tracker import check_context_before_request
 from app.services.event_storage import store_memory_inject_event
 from app.services.events import publish_session_start
+from app.services.llm_messages import Message
 from app.services.memory import (
     inject_progressive_context,
     parse_memory_group_id,

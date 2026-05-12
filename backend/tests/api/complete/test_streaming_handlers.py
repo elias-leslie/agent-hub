@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.responses import StreamingResponse
 
-from app.adapters.base import Message
 from app.api.complete.request_schemas import (
     AdhocWorkSpec,
     CompletionRequest,
@@ -17,6 +16,7 @@ from app.api.complete.streaming_handlers import (
     _compact_streaming_context,
     _setup_streaming_session,
 )
+from app.services.llm_messages import Message
 
 
 def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> None:

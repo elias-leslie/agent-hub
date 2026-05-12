@@ -199,6 +199,7 @@ class _null_async_context:
         return self._db
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:
+        del exc_type, exc, tb
         return False
 
 

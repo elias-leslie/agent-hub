@@ -19,18 +19,28 @@ from app.models import AgentBenchmarkExperiment, AgentBenchmarkRun
 # Re-exports (preserve public API for all importers)
 # ---------------------------------------------------------------------------
 from ._benchmark_config import (
-    capture_benchmark_config_snapshot,  # noqa: F401
-    memory_state_descriptor,  # noqa: F401
+    capture_benchmark_config_snapshot,
+    memory_state_descriptor,
 )
 from ._benchmark_dashboard import (
     benchmark_signal_run_clause,
-    get_agent_benchmark_dashboard,  # noqa: F401
+    get_agent_benchmark_dashboard,
     summarize_benchmark_experiment,
 )
-from ._benchmark_persistence import persist_benchmark_payload  # noqa: F401
+from ._benchmark_persistence import persist_benchmark_payload
 from ._benchmark_persistence import (  # noqa: F401
     should_update_regression_clusters as _should_update_regression_clusters,
 )
+
+__all__ = [
+    "benchmark_signal_run_clause",
+    "capture_benchmark_config_snapshot",
+    "get_agent_benchmark_dashboard",
+    "get_benchmark_experiment_summary_by_key",
+    "memory_state_descriptor",
+    "persist_benchmark_payload",
+    "summarize_benchmark_experiment",
+]
 
 
 async def get_benchmark_experiment_summary_by_key(

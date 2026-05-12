@@ -340,8 +340,8 @@ async def _try_model_analysis(
     db: Any,
 ) -> tuple[str, bool] | tuple[None, str]:
     """Attempt analysis with a single model. Returns (content, has_issues) or (None, reason)."""
-    from app.adapters.registry import get_provider_for_model
     from app.api.complete.core import complete_internal
+    from app.routing.registry import get_provider_for_model
 
     try:
         provider = get_provider_for_model(model)

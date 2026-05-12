@@ -4,22 +4,22 @@ import asyncio
 import logging
 import math
 import time
-from typing import NoReturn
+from typing import Any, NoReturn
 
-from app.adapters.base import (
-    Message,
+from app.api.complete.types import CompletionInternalResult
+from app.routing.registry import list_providers
+from app.services.agent_dto import AgentDTO
+from app.services.circuit_breaker import CircuitBreakerManager
+from app.services.llm_errors import (
     ProviderError,
     RateLimitError,
 )
-from app.adapters.registry import list_providers
-from app.adapters.thinking import get_thinking_config
-from app.constants.catalog import get_model_capabilities
-from app.services.agent_dto import AgentDTO
-from app.services.circuit_breaker import CircuitBreakerManager
-from app.services.health_prober import record_provider_failure, record_provider_success
+from app.services.llm_messages import (
+    Message,
+)
 
-from .agent_routing_models import CompletionResult
-from .agent_routing_utils import get_adapter, get_provider_for_model
+from .agent_routing_models import FallbackCompletionResult
+from .agent_routing_utils import get_provider_for_model
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,14 @@ _COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.Timeo
 _DEFAULT_RATE_LIMIT_COOLDOWN = 60.0
 _UNSUPPORTED_NATIVE_THINKING_PROVIDERS = {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}
 _RATE_LIMIT_BREAKER = CircuitBreakerManager(list_providers())
+
+
+def record_provider_failure(_provider: str, _error: str, _latency_ms: float | None = None) -> None:
+    """Compatibility hook after deleting the legacy active health prober."""
+
+
+def record_provider_success(_provider: str, _latency_ms: float | None = None) -> None:
+    """Compatibility hook after deleting the legacy active health prober."""
 
 
 def _format_fallback_reason(error: BaseException | None) -> str | None:
@@ -61,27 +69,9 @@ async def _active_cooldown_error(provider: str) -> RateLimitError | None:
     )
 
 
-def _build_completion_kwargs(
-    model: str,
-    provider: str,
-    thinking_level: str | None,
-    verbosity_level: str | None,
-    prompt_cache_key: str | None,
-) -> dict[str, object]:
-    """Build provider-specific kwargs for adapter.complete."""
-    extra_kwargs: dict[str, object] = {}
-    if thinking_level:
-        thinking_config = get_thinking_config(model, thinking_level, provider)
-        if thinking_config:
-            extra_kwargs.update(thinking_config)
-        elif provider not in _UNSUPPORTED_NATIVE_THINKING_PROVIDERS:
-            extra_kwargs["thinking_level"] = thinking_level
-    capabilities = get_model_capabilities(model)
-    if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
-        extra_kwargs["verbosity_level"] = verbosity_level
-    if prompt_cache_key:
-        extra_kwargs["prompt_cache_key"] = prompt_cache_key
-    return extra_kwargs
+def _messages_as_dicts(messages: list[Message]) -> list[dict[str, Any]]:
+    """Translate adapter ``Message`` rows to ``{role, content}`` wire dicts."""
+    return [{"role": m.role, "content": m.content} for m in messages]
 
 
 async def _record_completion_error(
@@ -110,8 +100,16 @@ async def _try_model(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
-) -> tuple[object | None, BaseException | None]:
-    """Attempt completion with a single model; return result and captured error."""
+) -> tuple[CompletionInternalResult | None, BaseException | None]:
+    """Attempt completion with a single model; return result and captured error.
+
+    Routes each attempt through the new pipeline by calling
+    :func:`backend.app.api.complete.core.complete_internal` with ``db=None``.
+    The fallback iteration, cooldown logic, and circuit-breaker bookkeeping
+    are unchanged.
+    """
+    from app.api.complete.core import complete_internal
+
     provider = get_provider_for_model(model)
     cooldown_error = await _active_cooldown_error(provider)
     if cooldown_error is not None:
@@ -124,24 +122,22 @@ async def _try_model(
         return None, cooldown_error
     start = time.monotonic()
     try:
-        adapter = get_adapter(provider)
-        result = await adapter.complete(
-            messages=messages,
+        internal = await complete_internal(
+            messages=_messages_as_dicts(messages),
             model=model,
-            max_tokens=max_tokens,
+            provider=provider,
             temperature=temperature,
+            project_id="",
+            db=None,
+            session_id=prompt_cache_key,
             tools=tools,
-            **_build_completion_kwargs(
-                model,
-                provider,
-                thinking_level,
-                verbosity_level,
-                prompt_cache_key,
-            ),
+            thinking_level=thinking_level,
+            max_turns=1,
+            execute_tools=False,
         )
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await _RATE_LIMIT_BREAKER.on_success(provider)
-        return result, None
+        return internal, None
     except _COMPLETION_ERRORS as error:
         await _record_completion_error(provider, model, error, start)
         return None, error
@@ -156,8 +152,8 @@ async def _try_primary(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
-    """Try the primary model; return CompletionResult or None on failure."""
+) -> FallbackCompletionResult | None:
+    """Try the primary model; return fallback result or None on failure."""
     result, error = await _try_model(
         messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
@@ -182,7 +178,7 @@ async def _try_fallbacks(
     verbosity_level: str | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
+) -> FallbackCompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
     for fallback_model in agent.fallback_models or []:
@@ -216,7 +212,7 @@ async def _try_escalation(
     tried_models: set[str] | None = None,
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult | None:
+) -> FallbackCompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
     blocked_providers = blocked_providers or set()
@@ -248,9 +244,9 @@ def _completion_result(
     model_used: str,
     used_fallback: bool,
     fallback_reason: str | None = None,
-) -> CompletionResult:
+) -> FallbackCompletionResult:
     """Build completion result payload."""
-    return CompletionResult(
+    return FallbackCompletionResult(
         result=result,
         model_used=model_used,
         used_fallback=used_fallback,
@@ -294,7 +290,7 @@ async def complete_with_fallback(
     thinking_level: str | None = None,
     primary_model_override: str | None = None,
     prompt_cache_key: str | None = None,
-) -> CompletionResult:
+) -> FallbackCompletionResult:
     """Attempt completion using primary → fallbacks → escalation model chain.
 
     Args:

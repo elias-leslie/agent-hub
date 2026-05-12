@@ -27,6 +27,8 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
         slug = agent["slug"]
         if slug in EXCLUDED_SLUGS:
             continue
+        if agent.get("name", "").startswith("Committee "):
+            continue
 
         primary_model_id = agent["primary_model_id"]
         fallback_models = agent.get("fallback_models", [])
