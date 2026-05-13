@@ -15,6 +15,7 @@ from app.api.complete.schemas import (
     ThinkingInfo,
     UsageInfo,
 )
+from app.api.complete.tool_provisioner import provision_standard_tools
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing import complete_with_fallback
 from app.services.llm_messages import Message
@@ -36,10 +37,7 @@ def prepare_tools(request: CompletionRequest) -> list[dict[str, Any]] | None:
     Returns:
         List of tool dicts or None if no tools
     """
-    if not request.tools:
-        return None
-
-    return [
+    tools = [
         {
             "name": t.name,
             "description": t.description,
@@ -51,7 +49,17 @@ def prepare_tools(request: CompletionRequest) -> list[dict[str, Any]] | None:
             ),
         }
         for t in request.tools
-    ]
+    ] if request.tools else None
+    if not getattr(request, "execute_tools", False):
+        return tools
+
+    provisioned = provision_standard_tools(
+        True,
+        tools,
+        agent_slug=getattr(request, "agent_slug", None),
+        project_id=getattr(request, "project_id", None),
+    )
+    return provisioned.loaded_tools or None
 
 
 def prepare_response_format(request: CompletionRequest) -> dict[str, Any] | None:
