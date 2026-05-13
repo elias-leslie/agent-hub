@@ -31,11 +31,6 @@ export interface SessionData {
   id: string;
   project_id?: string;
   provider?: string;
-  routing_mode?: string | null;
-  workload_profile?: string | null;
-  routing_decision_id?: string | null;
-  auto_candidate_model_id?: string | null;
-  routing_canary_percent?: number | null;
   messages?: Array<{
     id: number;
     role: string;
@@ -59,47 +54,13 @@ export interface MessageHistoryEntry {
   content: string;
 }
 
-export interface RoutingPreferences {
-  exclude_providers?: string[];
-  cost_preference?: "quality" | "balanced" | "low_cost";
-}
-
-export interface RoutingJudgment {
-  workload_profile?: string;
-  risk_tier?: "low" | "normal" | "elevated" | "critical";
-  capabilities?: Record<string, number>;
-  constraints?: Record<string, unknown>;
-  confidence?: number;
-  rationale?: string;
-}
-
 export type PromptMode = "full" | "chat" | "none";
-
-export interface AdhocWorkSpec {
-  title?: string;
-  prompt?: string;
-  task_type?: string;
-  workload_profile?: string;
-  risk_tier?: "low" | "normal" | "elevated" | "critical";
-  tool_mode?: "read_only" | "write";
-  capabilities?: Record<string, number>;
-  constraints?: Record<string, unknown>;
-  context?: string | Record<string, unknown>;
-  memories?: string | string[];
-  expected_output?: string | string[];
-  routing_judgment?: RoutingJudgment;
-  routing?: RoutingPreferences;
-}
 
 /**
  * Completion request body for the API.
  */
 export interface CompletionRequest {
   agent_slug?: string | null;
-  adhoc?: boolean;
-  adhoc_spec?: AdhocWorkSpec;
-  routing_exclude_providers?: string[];
-  routing_cost_preference?: "quality" | "balanced" | "low_cost";
   include_roles?: string[];
   prompt_mode?: PromptMode;
   messages: MessageHistoryEntry[];
@@ -121,7 +82,6 @@ export interface CompletionRequest {
   };
   work_context?: {
     mode?: string;
-    routing_mode?: string;
     preferred_agent_slug?: string;
     explore_policy?: string;
     research_policy?: string;
@@ -136,7 +96,6 @@ export interface CompletionRequest {
     artifact_summary?: string;
     surface?: string;
     pane_id?: string;
-    adhoc_spec?: AdhocWorkSpec;
   };
   thinking_level?: string;
   current_branch?: string;

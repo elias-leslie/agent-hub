@@ -69,7 +69,7 @@ def test_build_lines_skips_missing_keys() -> None:
 
 
 def test_build_lines_includes_json_dict() -> None:
-    lines = _build_lines({"adhoc_spec": {"x": 1}})
+    lines = _build_lines({"artifact_summary": {"x": 1}})
     assert '{"x":1}' in "\n".join(lines)
 
 
@@ -102,9 +102,9 @@ def test_prompt_from_model() -> None:
 
 
 def test_prompt_from_plain_dict() -> None:
-    prompt = work_context_to_prompt({"mode": "adhoc", "task_id": "t1"})
+    prompt = work_context_to_prompt({"mode": "task", "task_id": "t1"})
     assert prompt is not None
-    assert "mode: adhoc" in prompt
+    assert "mode: task" in prompt
     assert "task: t1" in prompt
     assert "project:" not in prompt
 

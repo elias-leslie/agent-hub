@@ -37,8 +37,6 @@ from .models import (
     TranscriptIngestResult,
 )
 
-SYNTHETIC_AGENT_SLUGS = {"adhoc"}
-
 
 async def upsert_session(
     db: AsyncSession,
@@ -49,7 +47,7 @@ async def upsert_session(
     _validate_external_id(request.external_id)
     provider = request.provider
     model = request.model
-    if request.agent_slug and request.agent_slug not in SYNTHETIC_AGENT_SLUGS:
+    if request.agent_slug:
         resolved = await resolve_agent(request.agent_slug, db)
         provider = resolved.provider
         model = resolved.model

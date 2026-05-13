@@ -445,7 +445,7 @@ def _build_findings_prompt(
 async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
     """Wake persona agent with site health findings for triage."""
     from app.db import async_session
-    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_model_router import RoutingContext
     from app.services.agent_routing_utils import resolve_agent
     from app.workflows.persona_wake import WakeInput, agent_wake_task
 
@@ -454,7 +454,7 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
             resolved = await resolve_agent(
                 "persona",
                 db,
-                RoutingContext(workload_profile="jenny_planning"),
+                RoutingContext(),
             )
         except Exception:
             logger.warning("Persona agent not found, skipping wake for site health findings")

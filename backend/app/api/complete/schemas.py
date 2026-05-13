@@ -6,13 +6,10 @@ This module re-exports all schemas from focused submodules for backward compatib
 from __future__ import annotations
 
 from .request_schemas import (
-    AdhocWorkSpec,
     CompletionRequest,
     EstimateRequest,
     MessageInput,
     ResponseFormat,
-    RoutingJudgment,
-    RoutingPreferences,
     SourceMetadata,
     ToolDefinition,
     WorkContext,
@@ -35,7 +32,6 @@ from .usage_schemas import (
 )
 
 __all__ = [
-    "AdhocWorkSpec",
     "AsyncTaskResponse",
     "AsyncTaskStatusResponse",
     "CacheInfo",
@@ -48,8 +44,6 @@ __all__ = [
     "MessageInput",
     "OutputUsageInfo",
     "ResponseFormat",
-    "RoutingJudgment",
-    "RoutingPreferences",
     "SourceMetadata",
     "StreamingChunk",
     "ThinkingInfo",

@@ -162,7 +162,7 @@ def _build_changes_summary(
     changes = []
     if resolved_primary_model_id:
         changes.append(f"primary_model={resolved_primary_model_id}")
-    if resolved_fallback_models:
+    if resolved_fallback_models is not None:
         changes.append(f"fallback_models={resolved_fallback_models}")
     if resolved_escalation_model_id:
         changes.append(f"escalation_model={resolved_escalation_model_id}")

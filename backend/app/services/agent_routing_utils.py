@@ -7,8 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.routing.registry import get_provider_for_model
-from app.services.adaptive_model_router import RoutingContext, resolve_model_route
 from app.services.agent_dto import AgentDTO
+from app.services.agent_model_router import RoutingContext, resolve_model_route
 from app.services.agent_service import get_agent_service
 
 from .agent_routing_models import MandateInjection, ResolvedAgent
@@ -29,27 +29,19 @@ async def resolve_agent(
             status_code=404,
             detail={"error": {"message": f"Agent '{slug}' not found", "type": "invalid_request_error", "code": "agent_not_found"}},
         )
-    routed_agent, route = await resolve_model_route(db, agent, routing_context)
+    routed_agent, _route = await resolve_model_route(db, agent, routing_context)
     model = routed_agent.primary_model_id
     provider = get_provider_for_model(model)
     logger.info(
-        "Agent routing: %s -> %s (%s) mode=%s workload=%s decision=%s",
+        "Agent routing: %s -> %s (%s)",
         slug,
         model,
         provider,
-        route.mode,
-        route.workload_profile,
-        route.decision_id,
     )
     return ResolvedAgent(
         agent=routed_agent,
         model=model,
         provider=provider,
-        routing_mode=route.mode,
-        workload_profile=route.workload_profile,
-        routing_decision_id=route.decision_id,
-        auto_candidate_model_id=route.auto_candidate_model_id,
-        routing_canary_percent=route.canary_percent,
     )
 
 

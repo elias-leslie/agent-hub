@@ -44,6 +44,7 @@ from app.llm.types import (
     SimpleStreamOptions,
     StopReason,
     TextContent,
+    Tool,
     UserMessage,
 )
 
@@ -88,7 +89,43 @@ def build_context_from_messages(
         # session loader before this function is called. Skipping here
         # keeps the orchestrator focused on its single job.
 
-    return Context(messages=universal_messages, system_prompt=system_prompt, tools=tools)
+    return Context(
+        messages=universal_messages,
+        system_prompt=system_prompt,
+        tools=_decode_tools(tools),
+    )
+
+
+def _decode_tools(tools: list[Any] | None) -> list[Tool] | None:
+    if not tools:
+        return None
+
+    decoded: list[Tool] = []
+    for raw in tools:
+        if isinstance(raw, Tool):
+            decoded.append(raw)
+            continue
+
+        if isinstance(raw, dict):
+            name = str(raw.get("name", "")).strip()
+            description = str(raw.get("description", ""))
+            schema = raw.get("input_schema") or raw.get("parameters")
+        else:
+            name = str(getattr(raw, "name", "")).strip()
+            description = str(getattr(raw, "description", ""))
+            schema = getattr(raw, "input_schema", None) or getattr(raw, "parameters", None)
+
+        if not name:
+            continue
+        decoded.append(
+            Tool(
+                name=name,
+                description=description,
+                parameters=dict(schema) if isinstance(schema, dict) else {},
+            )
+        )
+
+    return decoded or None
 
 
 def _decode_user_content(content: Any) -> str | list[TextContent | ImageContent]:

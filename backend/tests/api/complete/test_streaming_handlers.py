@@ -6,7 +6,6 @@ import pytest
 from fastapi.responses import StreamingResponse
 
 from app.api.complete.request_schemas import (
-    AdhocWorkSpec,
     CompletionRequest,
     MessageInput,
     SourceMetadata,
@@ -53,11 +52,6 @@ def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> N
             agent_used="persona",
             model_used="codex/gpt-5.4",
             fallback_used=False,
-            routing_mode=None,
-            workload_profile=None,
-            routing_decision_id=None,
-            auto_candidate_model_id=None,
-            routing_canary_percent=None,
             db=None,
             is_new_session=True,
             tools=loaded_tools,
@@ -96,11 +90,6 @@ def test_build_sse_response_forwards_source_metadata() -> None:
             agent_used="persona",
             model_used="codex/gpt-5.4",
             fallback_used=False,
-            routing_mode=None,
-            workload_profile=None,
-            routing_decision_id=None,
-            auto_candidate_model_id=None,
-            routing_canary_percent=None,
             db=None,
             is_new_session=True,
             tools=None,
@@ -144,17 +133,14 @@ async def test_compact_streaming_context_replaces_messages_when_compacted() -> N
 
 
 @pytest.mark.asyncio
-async def test_setup_streaming_session_persists_adhoc_metadata() -> None:
+async def test_setup_streaming_session_does_not_persist_adaptive_metadata() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="do work")],
         project_id="agent-hub",
-        adhoc=True,
-        adhoc_spec=AdhocWorkSpec(
-            title="Adhoc smoke",
-            workload_profile="coding_impl",
-        ),
+        agent_slug="coder",
     )
     session = type("Session", (), {"id": "sess-1", "provider_metadata": None})()
+    resolved_agent = type("ResolvedAgent", (), {})()
     db = AsyncMock()
 
     with (
@@ -177,7 +163,7 @@ async def test_setup_streaming_session_persists_adhoc_metadata() -> None:
             request,
             provider="kimi-code",
             resolved_model="kimi-code/kimi-for-coding",
-            resolved_agent=None,
+            resolved_agent=resolved_agent,
             db=db,
             client_id="client-1",
             request_source="pytest",
@@ -185,12 +171,4 @@ async def test_setup_streaming_session_persists_adhoc_metadata() -> None:
 
     assert session_id == "sess-1"
     assert is_new is True
-    assert session.provider_metadata == {
-        "adhoc": True,
-        "adhoc_spec": {
-            "title": "Adhoc smoke",
-            "workload_profile": "coding_impl",
-            "capabilities": {},
-            "constraints": {},
-        },
-    }
+    assert session.provider_metadata is None

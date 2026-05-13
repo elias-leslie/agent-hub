@@ -20,10 +20,6 @@ export interface ChatStreamApiConfig {
   parentSessionId?: string;
   sourceMetadata?: CompletionRequest["source_metadata"];
   workContext?: CompletionRequest["work_context"];
-  adhoc?: boolean;
-  adhocSpec?: CompletionRequest["adhoc_spec"];
-  routingExcludeProviders?: string[];
-  routingCostPreference?: CompletionRequest["routing_cost_preference"];
   includeRoles?: string[];
   promptMode?: CompletionRequest["prompt_mode"];
   useMemory?: boolean;
@@ -86,10 +82,6 @@ export function useChatStream(
     parentSessionId,
     sourceMetadata,
     workContext,
-    adhoc,
-    adhocSpec,
-    routingExcludeProviders,
-    routingCostPreference,
     includeRoles,
     promptMode,
     useMemory,
@@ -231,10 +223,6 @@ export function useChatStream(
         content,
         targetAgents,
         agentSlug,
-        adhoc,
-        adhocSpec,
-        routingExcludeProviders,
-        routingCostPreference,
         includeRoles,
         promptMode,
         useMemory,
@@ -262,7 +250,7 @@ export function useChatStream(
         currentBranch,
       });
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, adhoc, adhocSpec, routingExcludeProviders, routingCostPreference, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
   );
 
   const cancelStream = useCallback(() => {

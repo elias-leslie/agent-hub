@@ -58,7 +58,6 @@ def _resolved_agent(memory_config: dict[str, object] | None) -> SimpleNamespace:
 def test_work_context_prompt_injects_project_task_context() -> None:
     context = WorkContext(
         mode="project_task",
-        routing_mode="auto",
         preferred_agent_slug="debugger",
         explore_policy="force",
         research_policy="avoid",
@@ -69,13 +68,6 @@ def test_work_context_prompt_injects_project_task_context() -> None:
         task_title="Build Work Chats",
         pane_id="pane-1",
         surface="work_chats",
-        adhoc_spec={
-            "task_type": "project_task",
-            "routing_judgment": {
-                "workload_profile": "coding_impl",
-                "capabilities": {"coding": 0.9},
-            },
-        },
     )
 
     prompt = work_context_to_prompt(context)
@@ -83,14 +75,12 @@ def test_work_context_prompt_injects_project_task_context() -> None:
 
     assert prompt is not None
     assert "project: summitflow" in prompt
-    assert "routing_mode: auto" in prompt
     assert "preferred_agent: debugger" in prompt
     assert "explore_policy: force" in prompt
     assert "research_policy: avoid" in prompt
     assert "verifier_enabled: True" in prompt
     assert "task: task-123" in prompt
     assert "pane: pane-1" in prompt
-    assert '"workload_profile":"coding_impl"' in prompt
     assert messages[0].role == "system"
     assert messages[0].content == prompt
 

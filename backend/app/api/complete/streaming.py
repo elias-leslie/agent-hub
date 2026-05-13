@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import AsyncIterator
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -179,20 +178,6 @@ async def _persist_and_build_done_sse(
 
         await record_project_cost(ctx.project_id, cost.total_cost_usd)
 
-    if ctx.routing_decision_id:
-        from app.db import async_session
-        from app.services.adaptive_model_router import mark_routing_decision_completed
-
-        async with async_session() as db:
-            await mark_routing_decision_completed(
-                db,
-                ctx.routing_decision_id,
-                status="completed",
-                latency_ms=int((time.monotonic() - ctx.stream_start) * 1000),
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-            )
-
     model_id = ctx.model_used or ctx.model
     catalog_entry = MODEL_CATALOG_BY_ID.get(model_id)
     display_name = catalog_entry.name if catalog_entry else None
@@ -225,11 +210,6 @@ def _attach_routing(writer: SseWriter, ctx: StreamContext) -> None:
         agent_used=ctx.agent_used,
         model_used=ctx.model_used,
         fallback_used=ctx.fallback_used if ctx.agent_used else None,
-        routing_mode=ctx.routing_mode,
-        workload_profile=ctx.workload_profile,
-        routing_decision_id=ctx.routing_decision_id,
-        auto_candidate_model_id=ctx.auto_candidate_model_id,
-        routing_canary_percent=ctx.routing_canary_percent,
     )
 
 
@@ -333,11 +313,6 @@ async def stream_completion(
     max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
     working_dir: str | None = None,
     source_metadata: dict[str, object] | None = None,
-    routing_mode: str | None = None,
-    workload_profile: str | None = None,
-    routing_decision_id: str | None = None,
-    auto_candidate_model_id: str | None = None,
-    routing_canary_percent: float | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format via the unified pi-mono pipeline.
 
@@ -362,11 +337,6 @@ async def stream_completion(
         is_one_shot=is_one_shot,
         project_id=project_id,
         source_metadata=source_metadata,
-        routing_mode=routing_mode,
-        workload_profile=workload_profile,
-        routing_decision_id=routing_decision_id,
-        auto_candidate_model_id=auto_candidate_model_id,
-        routing_canary_percent=routing_canary_percent,
     )
     writer = SseWriter(session_id=session_id)
     _attach_routing(writer, ctx)
@@ -375,7 +345,7 @@ async def stream_completion(
     yield writer.connected(model=model, provider=provider)
     try:
         llm_model = resolve_llm_model(model, provider)
-        context = build_context_from_messages(_messages_to_dicts(messages))
+        context = build_context_from_messages(_messages_to_dicts(messages), tools=tools)
         execute_tools = bool(tools)
         run_tool = (
             _build_run_tool(
@@ -387,25 +357,6 @@ async def stream_completion(
             if execute_tools
             else None
         )
-        # Threading the tool catalog through Context is the orchestrator's job.
-        if tools:
-            from app.llm.types import Tool as UniversalTool
-
-            universal_tools: list[UniversalTool] = []
-            for t in tools:
-                schema = t.get("input_schema")
-                parameters: dict[str, Any] = {}
-                if isinstance(schema, dict):
-                    for k, v in schema.items():
-                        parameters[str(k)] = v
-                universal_tools.append(
-                    UniversalTool(
-                        name=str(t.get("name", "")),
-                        description=str(t.get("description", "")),
-                        parameters=parameters,
-                    )
-                )
-            context.tools = universal_tools
 
         events = run_completion_stream(
             llm_model,

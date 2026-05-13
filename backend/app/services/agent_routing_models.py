@@ -13,11 +13,6 @@ class ResolvedAgent:
     agent: AgentDTO
     model: str  # Primary model ID
     provider: str  # Provider name ("claude", "gemini")
-    routing_mode: str = "legacy"
-    workload_profile: str = "general"
-    routing_decision_id: str | None = None
-    auto_candidate_model_id: str | None = None
-    routing_canary_percent: float = 0.0
 
 
 @dataclass

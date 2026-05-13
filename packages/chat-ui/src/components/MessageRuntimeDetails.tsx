@@ -3,7 +3,6 @@ import {
   DollarSign,
   FileText,
   Paperclip,
-  Route,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
@@ -49,21 +48,14 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
   const hasAttachments = Boolean(message.attachments?.length);
   const hasPermissions = Boolean(message.permissionRequests?.length);
   const hasContextHints = Boolean(message.contextHints?.length);
-  const hasRouting = Boolean(
-    message.routingMode ||
-    message.workloadProfile ||
-    message.autoCandidateModel ||
-    message.routingCanaryPercent ||
-    message.routingDecisionId,
-  );
 
-  if (!hasUsage && !hasArtifacts && !hasAttachments && !hasPermissions && !hasContextHints && !hasRouting && !message.statusLabel) {
+  if (!hasUsage && !hasArtifacts && !hasAttachments && !hasPermissions && !hasContextHints && !message.statusLabel) {
     return null;
   }
 
   return (
     <div className="mt-3 space-y-2 border-t border-current/10 pt-2 text-xs">
-      {(message.statusLabel || hasUsage || hasContextHints || hasRouting) && (
+      {(message.statusLabel || hasUsage || hasContextHints) && (
         <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
           {message.statusLabel ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5">
@@ -85,20 +77,6 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
               {hint.label} {hint.value}
             </span>
           ))}
-          {message.routingMode ? (
-            <span className="inline-flex items-center gap-1">
-              <Route className="h-3 w-3" />
-              {message.routingMode}
-            </span>
-          ) : null}
-          {message.workloadProfile ? <span>Workload: {message.workloadProfile}</span> : null}
-          {message.autoCandidateModel ? <span>Auto: {message.autoCandidateModel}</span> : null}
-          {message.routingCanaryPercent ? <span>Canary: {message.routingCanaryPercent}%</span> : null}
-          {message.routingDecisionId ? (
-            <span title={message.routingDecisionId}>
-              Decision: {message.routingDecisionId.slice(0, 8)}
-            </span>
-          ) : null}
         </div>
       )}
 

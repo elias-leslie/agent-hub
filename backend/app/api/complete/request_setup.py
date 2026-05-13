@@ -40,22 +40,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def apply_routing_metadata(session: DBSession | None, resolved_agent: ResolvedAgent | None) -> None:
-    """Store latest Agent Hub routing metadata on the session row."""
-    if session is None or resolved_agent is None:
-        return
-    raw_metadata = getattr(session, "provider_metadata", None)
-    metadata: dict[str, Any] = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
-    metadata["routing"] = {
-        "routing_mode": getattr(resolved_agent, "routing_mode", None),
-        "workload_profile": getattr(resolved_agent, "workload_profile", None),
-        "routing_decision_id": getattr(resolved_agent, "routing_decision_id", None),
-        "auto_candidate_model_id": getattr(resolved_agent, "auto_candidate_model_id", None),
-        "routing_canary_percent": getattr(resolved_agent, "routing_canary_percent", None),
-    }
-    session.provider_metadata = metadata
-
-
 def apply_read_only_metadata(session: DBSession | None, read_only: bool) -> None:
     """Mark a session as read-only until observed write evidence proves otherwise."""
     if session is None or not read_only:
@@ -67,18 +51,6 @@ def apply_read_only_metadata(session: DBSession | None, read_only: bool) -> None
     session.provider_metadata = metadata
     if not (getattr(session, "declared_scope_paths", None) or getattr(session, "observed_write_paths", None)):
         session.scope_confidence = "observed_read"
-
-
-def apply_adhoc_metadata(session: DBSession | None, request: CompletionRequest) -> None:
-    """Persist adhoc WorkSpec snapshot for replay/debug."""
-    if session is None or not getattr(request, "adhoc", False):
-        return
-    raw_metadata = getattr(session, "provider_metadata", None)
-    metadata: dict[str, Any] = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
-    metadata["adhoc"] = True
-    if request.adhoc_spec:
-        metadata["adhoc_spec"] = request.adhoc_spec.model_dump(exclude_none=True)
-    session.provider_metadata = metadata
 
 
 def _memory_block_len(progressive_context: Any, field_name: str) -> int:
@@ -133,7 +105,6 @@ async def setup_session(
         )
         session_id = session.id
         apply_read_only_metadata(session, bool(getattr(request, "read_only", False)))
-        apply_adhoc_metadata(session, request)
         await bind_request_context(
             db,
             session=session,

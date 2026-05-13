@@ -9,7 +9,6 @@ from app.services.llm_messages import Message
 
 _LABELS: dict[str, str] = {
     "mode": "mode",
-    "routing_mode": "routing_mode",
     "preferred_agent_slug": "preferred_agent",
     "explore_policy": "explore_policy",
     "research_policy": "research_policy",
@@ -24,7 +23,6 @@ _LABELS: dict[str, str] = {
     "artifact_summary": "artifact_summary",
     "surface": "surface",
     "pane_id": "pane",
-    "adhoc_spec": "adhoc_spec",
 }
 
 

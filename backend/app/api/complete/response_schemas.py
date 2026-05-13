@@ -89,11 +89,6 @@ class CompletionResponse(BaseModel):
         default_factory=list,
         description="UUIDs of memory items referenced/cited in response",
     )
-    routing_mode: str | None = Field(default=None, description="Agent Hub routing mode used")
-    workload_profile: str | None = Field(default=None, description="Resolved workload profile")
-    routing_decision_id: str | None = Field(default=None, description="Routing decision audit id")
-    auto_candidate_model_id: str | None = Field(default=None, description="Auto-route candidate model id")
-    routing_canary_percent: float | None = Field(default=None, description="Auto-canary percent applied")
 
 
 class AsyncTaskResponse(BaseModel):
@@ -134,11 +129,6 @@ class StreamingChunk(BaseModel):
     model_used: str | None = Field(default=None, description="Actual model used")
     model_display_name: str | None = Field(default=None, description="Human-readable model name from catalog")
     fallback_used: bool | None = Field(default=None, description="Whether fallback was used")
-    routing_mode: str | None = Field(default=None, description="Agent Hub routing mode used")
-    workload_profile: str | None = Field(default=None, description="Resolved workload profile")
-    routing_decision_id: str | None = Field(default=None, description="Routing decision audit id")
-    auto_candidate_model_id: str | None = Field(default=None, description="Auto-route candidate model id")
-    routing_canary_percent: float | None = Field(default=None, description="Auto-canary percent applied")
     error: str | None = Field(default=None, description="Error message for 'error' events")
     # Cost and cache fields (populated on 'done' events)
     cost_usd: float | None = Field(default=None, description="Estimated cost in USD")

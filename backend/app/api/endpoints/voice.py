@@ -251,7 +251,7 @@ async def _resolve_voice_agent() -> tuple[str, float]:
     """Resolve model and temperature from the voice-responder agent config."""
     try:
         from app.db import _get_session_factory
-        from app.services.adaptive_model_router import RoutingContext
+        from app.services.agent_model_router import RoutingContext
         from app.services.agent_routing_utils import resolve_agent
 
         session_factory = _get_session_factory()
@@ -259,7 +259,7 @@ async def _resolve_voice_agent() -> tuple[str, float]:
             resolved = await resolve_agent(
                 "voice-responder",
                 db,
-                RoutingContext(workload_profile="voice_response", requires_audio=True),
+                RoutingContext(requires_audio=True),
             )
             return resolved.model, resolved.agent.temperature
     except Exception as exc:
