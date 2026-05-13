@@ -109,5 +109,10 @@ async def process_completion_result(
         model_used=model_used,
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
+        turns=getattr(result, "turns", 1),
+        tool_calls_count=getattr(result, "tool_calls_count", None),
+        progress_log=getattr(result, "progress_log", None),
+        error_summary=getattr(result, "error_summary", None),
+        trace_id=request.trace_id,
         cited_uuids=cited_uuids,
     )

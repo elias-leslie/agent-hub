@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.complete.complete_execution import execute_completion
 from app.api.complete.error_handlers import handle_completion_error
-from app.api.complete.execution import build_agentic_response, get_thinking_level
+from app.api.complete.execution import get_thinking_level
 from app.api.complete.handlers import process_completion_result
 from app.api.complete.helpers import validate_json_response
 from app.api.complete.request_setup import (
@@ -85,8 +85,12 @@ async def process_result(
         if not loaded_uuids:
             loaded_uuids = loaded_uuids_in
     else:
-        cr, model_used, fallback_used = result, resolved_model, False
-        loaded_uuids, sid, fallback_reason = loaded_uuids_in, session_id, None
+        cr = result
+        model_used = getattr(result, "model_used", None) or resolved_model
+        fallback_used = bool(getattr(result, "fallback_used", False))
+        loaded_uuids = loaded_uuids_in
+        sid = session_id
+        fallback_reason = getattr(result, "fallback_reason", None)
     rf = request.response_format
     if rf and rf.type == "json_object" and rf.schema_:
         is_valid, err = validate_json_response(cr.content, rf.schema_)
@@ -165,9 +169,6 @@ async def execute_and_respond(
             ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, session,
             http_request,
         )
-        if is_agentic and hasattr(result, "turns"):
-            response = build_agentic_response(result, ctx_info, effective_thinking_level, agent_used, False, request.trace_id)
-            return response
         return await process_result(
             request, result, resolved_model, session_id, db, session, skip_cache,
             messages_dict, ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, duration_ms,

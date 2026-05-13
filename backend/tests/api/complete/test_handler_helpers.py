@@ -8,9 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.api.complete.handler_helpers import save_and_track
+from app.api.complete.handler_helpers import make_completion_response, save_and_track
 from app.api.complete.request_schemas import DEFAULT_AGENTIC_MAX_TURNS
-from app.api.complete.schemas import CompletionRequest, MessageInput, SourceMetadata
+from app.api.complete.schemas import (
+    CompletionRequest,
+    MessageInput,
+    OutputUsageInfo,
+    SourceMetadata,
+)
 from app.api.complete.session_repo import update_session_metadata
 
 
@@ -137,6 +142,92 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert session.provider_metadata["effective_model"] == "claude-haiku-4-5"
     assert session.provider_metadata["fallback_used"] is True
     assert session.provider_metadata["fallback_reason"] == "TimeoutError: primary timed out"
+
+
+@pytest.mark.asyncio
+async def test_save_and_track_persists_agentic_observability_counts() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="run tool")],
+        project_id="test-project",
+        execute_tools=True,
+    )
+    result = SimpleNamespace(
+        content="done",
+        provider="kimi-code",
+        input_tokens=11,
+        output_tokens=13,
+        thinking_content=None,
+        thinking_tokens=None,
+        cache_metrics=None,
+        finish_reason="stop",
+        turns=2,
+        tool_calls_count=1,
+        tool_calls=None,
+    )
+    db = AsyncMock()
+    session = SimpleNamespace(
+        status="active",
+        provider="kimi-code",
+        model="kimi-code/kimi-for-coding",
+        models_used=[],
+        providers_used=[],
+        provider_metadata={},
+    )
+
+    with (
+        patch("app.api.complete.handler_helpers.save_events", new_callable=AsyncMock),
+        patch(
+            "app.api.complete.handler_helpers.persist_execution_observability",
+            new_callable=AsyncMock,
+        ) as mock_observability,
+        patch("app.api.complete.handler_helpers.estimate_cost", return_value=MagicMock(total_cost_usd=0.0)),
+        patch("app.api.complete.handler_helpers.log_token_usage", new_callable=AsyncMock),
+        patch("app.api.complete.handler_helpers.publish_complete", new_callable=AsyncMock),
+    ):
+        await save_and_track(
+            db=db,
+            session=session,
+            session_id="sess-1",
+            request=request,
+            result=result,
+            resolved_model="kimi-code/kimi-for-coding",
+            is_new_session=True,
+        )
+
+    observability_args = mock_observability.await_args
+    assert observability_args is not None
+    assert observability_args.kwargs["orchestration_path"] == "tool_loop"
+    assert observability_args.kwargs["turns_completed"] == 2
+    assert observability_args.kwargs["tool_calls_count"] == 1
+
+
+def test_make_completion_response_preserves_agentic_counts() -> None:
+    result = SimpleNamespace(
+        content="done",
+        model="kimi-code/kimi-for-coding",
+        provider="kimi-code",
+        input_tokens=11,
+        output_tokens=13,
+        finish_reason="stop",
+    )
+    response = make_completion_response(
+        result,
+        "sess-1",
+        None,
+        OutputUsageInfo(
+            output_tokens=13,
+            max_tokens_requested=0,
+            model_limit=0,
+            was_truncated=False,
+        ),
+        turns=2,
+        tool_calls_count=1,
+        trace_id="trace-1",
+    )
+
+    assert response.turns == 2
+    assert response.tool_calls_count == 1
+    assert response.trace_id == "trace-1"
 
 
 @pytest.mark.asyncio
