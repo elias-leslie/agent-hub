@@ -53,8 +53,8 @@ class Settings(BaseSettings):
 
     # Database
     agent_hub_db_url: str = ""
-    agent_hub_db_pool_size: int = Field(default=3, ge=1)
-    agent_hub_db_max_overflow: int = Field(default=3, ge=0)
+    agent_hub_db_pool_size: int = Field(default=8, ge=1)
+    agent_hub_db_max_overflow: int = Field(default=4, ge=0)
     agent_hub_db_pool_timeout: int = Field(default=30, ge=1)
     agent_hub_db_pool_recycle: int = Field(default=1800, ge=30)
 

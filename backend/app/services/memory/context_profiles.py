@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.db import async_session
 
 # Memory tag that signals a memory should render at full detail when delivered
 # to any startup consumer. Tag string kept as `codex_startup_full` to avoid
@@ -122,10 +122,9 @@ async def _ensure_policy_cache(db: AsyncSession | None) -> dict[str, tuple[int |
     if db is not None:
         _POLICY_CACHE = await _load_policy_cache(db)
         return _POLICY_CACHE
-    async for session in get_db():
+    async with async_session() as session:
         _POLICY_CACHE = await _load_policy_cache(session)
         return _POLICY_CACHE
-    return {}
 
 
 def _coerce_int_limit(value: Any, fallback: int) -> int:

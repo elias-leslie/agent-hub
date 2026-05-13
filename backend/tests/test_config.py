@@ -21,5 +21,5 @@ class TestSettings:
 
         settings = Settings(_env_file=None)
 
-        assert settings.agent_hub_db_pool_size == 3
-        assert settings.agent_hub_db_max_overflow == 3
+        assert settings.agent_hub_db_pool_size == 8
+        assert settings.agent_hub_db_max_overflow == 4
