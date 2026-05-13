@@ -55,6 +55,10 @@ async def save_and_track(
         else None
     )
     effective_model = model_used or resolved_model
+    tool_calls_count = getattr(result, "tool_calls_count", None)
+    if tool_calls_count is None:
+        tool_calls_count = len(getattr(result, "tool_calls", None) or [])
+    turns_completed = getattr(result, "turns", 1)
     apply_execution_metadata(
         session,
         requested_model=resolved_model,
@@ -69,12 +73,12 @@ async def save_and_track(
         provider=getattr(result, "provider", session.provider),
         model_used=effective_model,
         requested_max_turns=request.max_turns,
-        orchestration_path="single_turn",
+        orchestration_path="tool_loop" if request.execute_tools or request.max_turns > 1 else "single_turn",
         final_finish_reason=getattr(result, "finish_reason", None),
         execution_status="success",
         execution_error=None,
-        turns_completed=1,
-        tool_calls_count=len(getattr(result, "tool_calls", None) or []),
+        turns_completed=turns_completed,
+        tool_calls_count=tool_calls_count,
     )
     await save_events(
         db, session_id, request.messages, result.content,
@@ -154,6 +158,10 @@ def make_completion_response(
     **kwargs: Any,
 ) -> CompletionResponse:
     """Build a CompletionResponse with all standard fields."""
+    tool_calls_info = kwargs.get("tool_calls_info")
+    tool_calls_count = kwargs.get("tool_calls_count")
+    if tool_calls_count is None:
+        tool_calls_count = len(tool_calls_info) if tool_calls_info else 0
     return CompletionResponse(
         content=result.content,
         model=result.model,
@@ -177,10 +185,12 @@ def make_completion_response(
         agent_used=kwargs.get("agent_used"),
         model_used=kwargs.get("model_used"),
         fallback_used=kwargs.get("fallback_used", False),
-        turns=1,
-        tool_calls_count=len(kwargs["tool_calls_info"]) if kwargs.get("tool_calls_info") else 0,
-        progress_log=None,
-        trace_id=None,
+        fallback_reason=kwargs.get("fallback_reason"),
+        turns=kwargs.get("turns", 1),
+        tool_calls_count=tool_calls_count,
+        progress_log=kwargs.get("progress_log"),
+        error_summary=kwargs.get("error_summary"),
+        trace_id=kwargs.get("trace_id"),
         cited_uuids=kwargs.get("cited_uuids", []),
     )
 

@@ -8,6 +8,74 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.complete.orchestration_helpers import execute_and_respond
+from app.api.complete.types import CompletionInternalResult
+
+
+@pytest.mark.asyncio
+async def test_agentic_execute_and_respond_persists_result_before_response() -> None:
+    request = SimpleNamespace(
+        trace_id="trace-1",
+        agent_slug="coder",
+        response_format=None,
+        thinking_level=None,
+        auto_thinking=False,
+        memory_group_id=None,
+        external_id=None,
+    )
+    internal = CompletionInternalResult(
+        content="done",
+        model="kimi-code/kimi-for-coding",
+        provider="kimi-code",
+        input_tokens=1,
+        output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-123",
+        memory_uuids=[],
+        cited_uuids=[],
+        turns=2,
+        tool_calls_count=1,
+    )
+    response = SimpleNamespace(session_id="sess-123")
+
+    with (
+        patch(
+            "app.api.complete.orchestration_helpers.execute_completion",
+            new_callable=AsyncMock,
+            return_value=internal,
+        ),
+        patch(
+            "app.api.complete.orchestration_helpers.process_completion_result",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as process_result,
+    ):
+        result = await execute_and_respond(
+            request=request,
+            resolved_model="kimi-code/kimi-for-coding",
+            provider="kimi-code",
+            resolved_agent=None,
+            messages_dict=[{"role": "user", "content": "run tool"}],
+            all_messages=[],
+            is_agentic=True,
+            db=AsyncMock(),
+            session=SimpleNamespace(),
+            session_id="sess-123",
+            client_id=None,
+            source=None,
+            skip_cache=False,
+            ctx_info=None,
+            memory_facts=0,
+            loaded_uuids_in=[],
+            agent_used="coder",
+            is_new_session=True,
+            http_request=None,
+        )
+
+    assert result is response
+    process_result.assert_awaited_once()
+    await_args = process_result.await_args
+    assert await_args is not None
+    assert await_args.args[0] is internal
 
 
 @pytest.mark.asyncio
