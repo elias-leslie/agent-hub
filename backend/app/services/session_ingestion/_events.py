@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,14 @@ async def _load_existing_pairs(
         )
     )
     return {(turn, sequence) for turn, sequence in result.all()}
+
+
+async def _lock_session_event_ingestion(db: AsyncSession, session_id: str) -> None:
+    """Serialize explicit event batches per session before sequence inspection."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        {"lock_key": f"session-events:{session_id}"},
+    )
 
 
 def _adapter_for_provider(provider: str) -> ClaudeCodeTranscriptAdapter | CodexTranscriptAdapter:
@@ -171,6 +179,7 @@ async def _store_events_general(
     session: Session | None = None,
 ) -> AppendNormalizedEventsResult:
     """Store a batch of normalized events with idempotent dedup."""
+    await _lock_session_event_ingestion(db, session_id)
     current_turn = await get_max_turn(db, session_id) or 1
     sequence_cache: dict[int, int] = {}
     existing_pairs = await _load_existing_pairs(

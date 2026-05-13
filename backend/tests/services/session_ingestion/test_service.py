@@ -25,6 +25,58 @@ from app.services.session_ingestion.service import (
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_append_normalized_events_serializes_batches_by_session_id() -> None:
+    db = AsyncMock()
+
+    lock_result = MagicMock()
+    existing_pairs = MagicMock()
+    existing_pairs.all.return_value = []
+    db.execute = AsyncMock(side_effect=[lock_result, existing_pairs])
+
+    stored_event = MagicMock()
+    stored_event.id = "evt-locked"
+
+    with (
+        patch(
+            "app.services.session_ingestion._events.get_max_turn",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch(
+            "app.services.session_ingestion._events.get_max_sequence",
+            new_callable=AsyncMock,
+            return_value=0,
+        ),
+        patch(
+            "app.services.session_ingestion._events.store_event",
+            new_callable=AsyncMock,
+            return_value=stored_event,
+        ),
+    ):
+        result = await append_normalized_events(
+            db=db,
+            session_id="session-lock",
+            request=AppendNormalizedEventsRequest(
+                events=[
+                    NormalizedEvent(
+                        event_type="assistant_message",
+                        turn=1,
+                        sequence=1,
+                        role="assistant",
+                        content="locked",
+                    ),
+                ]
+            ),
+        )
+
+    first_execute = db.execute.await_args_list[0]
+    assert "pg_advisory_xact_lock" in str(first_execute.args[0])
+    assert first_execute.args[1] == {"lock_key": "session-events:session-lock"}
+    assert result.events_appended == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_append_normalized_events_skips_existing_turn_sequence_pair() -> None:
     db = AsyncMock()
 
