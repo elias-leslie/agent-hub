@@ -14,6 +14,22 @@ from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message
 
 
+def test_prepare_tools_auto_provisions_for_non_streaming_tool_loop() -> None:
+    from app.api.complete.execution import prepare_tools
+
+    request = SimpleNamespace(
+        tools=None,
+        execute_tools=True,
+        agent_slug="coder",
+        project_id="summitflow",
+    )
+
+    tools = prepare_tools(request)
+
+    assert tools is not None
+    assert [tool["name"] for tool in tools[:4]] == ["bash", "read_file", "edit_file", "write_file"]
+
+
 @pytest.mark.asyncio
 async def test_execute_with_fallback_attaches_primary_failure_reason_to_result() -> None:
     resolved_agent = SimpleNamespace(
