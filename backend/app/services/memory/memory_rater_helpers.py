@@ -44,7 +44,7 @@ async def call_llm_for_ratings(session_id: str, prompt: str) -> str:
     """
     from app.api.complete.core import complete_internal
     from app.db import _get_session_factory
-    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_model_router import RoutingContext
     from app.services.agent_routing_utils import resolve_agent
 
     session_factory = _get_session_factory()
@@ -53,7 +53,7 @@ async def call_llm_for_ratings(session_id: str, prompt: str) -> str:
             resolved = await resolve_agent(
                 "memory-rater",
                 db,
-                RoutingContext(workload_profile="memory_curation"),
+                RoutingContext(),
             )
         except Exception:
             logger.warning("memory-rater agent not found, skipping rating")

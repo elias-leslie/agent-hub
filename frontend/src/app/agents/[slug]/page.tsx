@@ -9,14 +9,7 @@ import {
   useSearchParams,
 } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  fetchAgent,
-  fetchAgentRouting,
-  fetchModels,
-  updateAgent,
-  updateAgentRouting,
-  updateAgentWorkloadRouting,
-} from '@/lib/api'
+import { fetchAgent, fetchModels, updateAgent } from '@/lib/api'
 import { DEFAULT_PREVIEW_SCENARIO } from '@/types/agent-preview'
 import { buildAgentUpdatePayload, createAgentFormData } from './agent-form'
 import { AgentEditorHeader } from './components/AgentEditorHeader'
@@ -28,14 +21,7 @@ import { ParametersTab } from './components/ParametersTab'
 import { PromptsTab } from './components/PromptsTab'
 import { getAgentEditorTabs, Sidebar } from './components/Sidebar'
 import { useAgentPreview } from './hooks/useAgentPreview'
-import type {
-  Agent,
-  AgentRoutingUpdate,
-  PreviewScenario,
-  PreviewTaskType,
-  TabId,
-  WorkloadRoutingUpdate,
-} from './types'
+import type { Agent, PreviewScenario, PreviewTaskType, TabId } from './types'
 
 function isAgentTab(value: string | null, slug: string): value is TabId {
   return getAgentEditorTabs(slug).some((tab) => tab.id === value)
@@ -82,12 +68,6 @@ export default function AgentEditorPage() {
     queryFn: fetchModels,
   })
 
-  const { data: routing } = useQuery({
-    queryKey: ['agent-routing', slug],
-    queryFn: () => fetchAgentRouting(slug),
-    enabled: !!slug && slug !== 'persona',
-  })
-
   const {
     data: preview,
     refetch: refetchPreview,
@@ -106,28 +86,6 @@ export default function AgentEditorPage() {
       queryClient.invalidateQueries({ queryKey: ['agent', slug] })
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       setHasChanges(false)
-    },
-  })
-
-  const routingMutation = useMutation({
-    mutationFn: (data: AgentRoutingUpdate) => updateAgentRouting(slug, data),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['agent-routing', slug], data)
-      queryClient.invalidateQueries({ queryKey: ['agent-routing', slug] })
-    },
-  })
-
-  const workloadRoutingMutation = useMutation({
-    mutationFn: ({
-      workloadProfile,
-      data,
-    }: {
-      workloadProfile: string
-      data: WorkloadRoutingUpdate
-    }) => updateAgentWorkloadRouting(slug, workloadProfile, data),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['agent-routing', slug], data)
-      queryClient.invalidateQueries({ queryKey: ['agent-routing', slug] })
     },
   })
 
@@ -298,18 +256,6 @@ export default function AgentEditorPage() {
                         formData={formData}
                         availableModels={availableModels}
                         updateField={updateField}
-                        routing={routing}
-                        isRoutingSaving={
-                          routingMutation.isPending ||
-                          workloadRoutingMutation.isPending
-                        }
-                        onRoutingChange={(data) => routingMutation.mutate(data)}
-                        onWorkloadRoutingChange={(workloadProfile, data) =>
-                          workloadRoutingMutation.mutate({
-                            workloadProfile,
-                            data,
-                          })
-                        }
                       />
                     )}
                     {activeTab === 'parameters' && (

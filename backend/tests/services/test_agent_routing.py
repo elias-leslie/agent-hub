@@ -129,11 +129,7 @@ class TestResolveAgent:
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=mock_agent)
         route = SimpleNamespace(
-            mode="manual",
-            workload_profile=None,
-            decision_id=None,
-            auto_candidate_model_id=None,
-            canary_percent=0,
+            mode="agent_assignment",
         )
 
         with (

@@ -472,6 +472,59 @@ async def test_new_pipeline_execute_tools_drives_unified_tool_loop() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_pipeline_passes_tool_definitions_to_unified_context() -> None:
+    """Agentic completion must expose provisioned tools as native model tools."""
+    reg = register_faux_provider()
+    try:
+        def assert_tool_context(context: Any, *_args: Any) -> Any:
+            assert context.tools is not None
+            assert len(context.tools) == 1
+            tool = context.tools[0]
+            assert tool.name == "echo"
+            assert tool.description == "Echo text"
+            assert tool.parameters == {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+            }
+            return faux_assistant_message("tool schema visible")
+
+        reg.set_responses([assert_tool_context])
+        model = reg.get_model()
+        assert model is not None
+
+        with patch(
+            "app.api.complete.core.resolve_llm_model",
+            return_value=model,
+        ):
+            result = await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "run echo"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                use_memory=False,
+                execute_tools=True,
+                max_turns=1,
+                tools=[
+                    {
+                        "name": "echo",
+                        "description": "Echo text",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {"text": {"type": "string"}},
+                        },
+                    }
+                ],
+            )
+
+        assert result.finish_reason == "stop"
+        assert result.content == "tool schema visible"
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
 async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
     """All fields downstream consumers read on a successful turn must be set.
 

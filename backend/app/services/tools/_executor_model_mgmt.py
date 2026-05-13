@@ -105,17 +105,19 @@ async def update_agent_model(
     thinking_level: str | None,
     change_reason: str | None,
 ) -> str:
-    """Update an agent's manual routing model chain and inference knobs."""
+    """Update an agent's model assignment chain and inference knobs."""
     if not agent_slug:
         return "Error: agent_slug required for update_agent_model"
-    if not any([primary_model_id, fallback_models, escalation_model_id,
-                temperature is not None, thinking_level]):
+    if not any([
+        primary_model_id,
+        fallback_models is not None,
+        escalation_model_id,
+        temperature is not None,
+        thinking_level,
+    ]):
         return "Error: at least one setting to update required"
     try:
-        from sqlalchemy import select
-
         from app.db import async_session
-        from app.models import AgentRoutingProfile, ManualModelRoute
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
@@ -131,59 +133,21 @@ async def update_agent_model(
             if not agent:
                 return f"Error: Agent '{agent_slug}' not found"
 
-            updated = agent
-            if temperature is not None or thinking_level:
-                updated = await agent_service.update(
-                    db,
-                    agent.id,
-                    temperature=temperature,
-                    thinking_level=thinking_level,
-                    changed_by="persona",
-                    change_reason=change_reason or "Routing/inference update by persona",
-                )
-                if not updated:
-                    return f"Error: Failed to update agent '{agent_slug}'"
-
-            if any([resolved_primary, resolved_fallbacks is not None, resolved_escalation]):
-                primary = resolved_primary or agent.primary_model_id
-                fallbacks = (
-                    resolved_fallbacks
-                    if resolved_fallbacks is not None
-                    else list(getattr(agent, "fallback_models", None) or [])
-                )
-                route = await db.scalar(
-                    select(ManualModelRoute).where(
-                        ManualModelRoute.agent_slug == agent_slug,
-                        ManualModelRoute.workload_profile.is_(None),
-                        ManualModelRoute.enabled == True,  # noqa: E712
-                    )
-                )
-                if not isinstance(route, ManualModelRoute):
-                    route = ManualModelRoute(agent_slug=agent_slug, workload_profile=None)
-                    db.add(route)
-                route.primary_model_id = primary
-                route.fallback_models = fallbacks
-                route.escalation_model_id = (
-                    resolved_escalation
-                    if escalation_model_id is not None
-                    else getattr(agent, "escalation_model_id", None)
-                )
-                route.reason = change_reason or "Manual route update by persona"
-                route.owner = "persona"
-                route.enabled = True
-                profile = await db.get(AgentRoutingProfile, agent_slug)
-                if not isinstance(profile, AgentRoutingProfile):
-                    profile = AgentRoutingProfile(agent_slug=agent_slug)
-                    db.add(profile)
-                profile.default_routing_mode = "manual_locked"
-                raw_metadata = profile.metadata_ if isinstance(profile.metadata_, dict) else {}
-                metadata = dict(raw_metadata)
-                metadata["source"] = "manual_override"
-                profile.metadata_ = metadata
+            updated = await agent_service.update(
+                db,
+                agent.id,
+                primary_model_id=resolved_primary,
+                fallback_models=resolved_fallbacks,
+                escalation_model_id=resolved_escalation
+                if escalation_model_id is not None
+                else None,
+                temperature=temperature,
+                thinking_level=thinking_level,
+                changed_by="persona",
+                change_reason=change_reason or "Agent model assignment update by persona",
+            )
             await db.commit()
 
-        if updated is None:
-            return f"Error: Agent '{agent_slug}' not found"
         if not updated:
             return f"Error: Failed to update agent '{agent_slug}'"
 

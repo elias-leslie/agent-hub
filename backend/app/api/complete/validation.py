@@ -24,16 +24,6 @@ async def validate_agent_slug(
     Raises:
         HTTPException: If agent_slug is missing or invalid
     """
-    if getattr(request, "adhoc", False) and request.agent_slug:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "adhoc_agent_conflict",
-                "message": "Use either 'adhoc=true' or 'agent_slug', not both.",
-            },
-        )
-    if getattr(request, "adhoc", False):
-        return
     if not request.agent_slug:
         available_agents: list[str] = []
         if db:

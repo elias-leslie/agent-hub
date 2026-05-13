@@ -24,7 +24,7 @@ from app.adapters.nvidia_image import NvidiaImageAdapter
 from app.constants import GEMINI_IMAGE, MODEL_CATALOG_BY_ID
 from app.db import get_db
 from app.models import Session as DBSession
-from app.services.adaptive_model_router import RoutingContext
+from app.services.agent_model_router import RoutingContext
 from app.services.agent_routing_utils import resolve_agent
 from app.services.events import publish_complete, publish_session_start
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
@@ -122,7 +122,7 @@ async def _resolve_model_chain(
             resolved = await resolve_agent(
                 agent_slug,
                 db,
-                RoutingContext(workload_profile="image_generation"),
+                RoutingContext(),
             )
         except HTTPException:
             resolved = None

@@ -120,7 +120,7 @@ async def _summarize_messages(
         return None
 
     from app.api.complete.core import complete_internal
-    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_model_router import RoutingContext
     from app.services.agent_routing_utils import resolve_agent
 
     conversation_text = "\n".join(
@@ -133,7 +133,7 @@ async def _summarize_messages(
             resolved = await resolve_agent(
                 _COMPACTOR_AGENT_SLUG,
                 db,
-                RoutingContext(workload_profile="summarization"),
+                RoutingContext(),
             )
         except Exception:
             logger.warning("Context compactor agent not found")

@@ -21,7 +21,6 @@ class ModelSyncResult(BaseModel):
     status: str
     enriched: int = 0
     total: int = 0
-    availability_changed: int = 0
     error: str | None = None
 
 
@@ -53,25 +52,19 @@ async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str
 
     try:
         from app.db import async_session
-        from app.services.adaptive_model_router import refresh_catalog_model_availability
         from app.services.model_enrichment_service import sync_all
 
         async with async_session() as db:
             result = await sync_all(db)
-            availability_changed = await refresh_catalog_model_availability(db)
-            if availability_changed:
-                await db.commit()
 
         out = ModelSyncResult(
             status=result.get("status", "success"),
             enriched=result.get("enriched", 0),
             total=result.get("total", 0),
-            availability_changed=availability_changed,
         )
         ctx.log(
             "Model sync complete: "
-            f"{out.enriched}/{out.total} enriched, "
-            f"{out.availability_changed} availability rows changed"
+            f"{out.enriched}/{out.total} enriched"
         )
         return out.model_dump()
 

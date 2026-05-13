@@ -47,7 +47,6 @@ RESULT_SHAPE_ALLOWLIST = {
     (APP / "api" / "orchestration_models.py", "SubagentResponse"),
     (APP / "api" / "orchestration_models.py", "WorkflowStageResponse"),
     (APP / "api" / "persona" / "schema_improvement.py", "PersonaHeartbeatFieldSession"),
-    (APP / "models" / "adaptive_routing.py", "RoutingDecision"),
     (APP / "models" / "agent_benchmark.py", "AgentBenchmarkAttempt"),
     (APP / "models" / "agent_performance_log.py", "AgentPerformanceLog"),
     (APP / "services" / "analytics" / "models.py", "CostLogExportRow"),

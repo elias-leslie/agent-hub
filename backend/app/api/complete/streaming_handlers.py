@@ -12,9 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.api.complete.core import get_or_create_session, stream_completion
 from app.api.complete.execution import get_thinking_level
 from app.api.complete.request_setup import (
-    apply_adhoc_metadata,
     apply_read_only_metadata,
-    apply_routing_metadata,
     compact_context_if_needed,
 )
 from app.api.complete.tool_provisioner import provision_standard_tools
@@ -79,7 +77,6 @@ async def _setup_streaming_session(
             trace_id=request.trace_id,
         )
         session_id = stream_session.id
-        apply_adhoc_metadata(stream_session, request)
         apply_read_only_metadata(stream_session, request.read_only)
         await bind_request_context(
             db,
@@ -87,7 +84,6 @@ async def _setup_streaming_session(
             work_context=request.work_context,
             source_metadata=request.source_metadata,
         )
-        apply_routing_metadata(stream_session, resolved_agent)
         mark_session_execution_start(stream_session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
@@ -210,11 +206,6 @@ def _build_sse_response(
     agent_used: str | None,
     model_used: str | None,
     fallback_used: bool,
-    routing_mode: str | None,
-    workload_profile: str | None,
-    routing_decision_id: str | None,
-    auto_candidate_model_id: str | None,
-    routing_canary_percent: float | None,
     db: AsyncSession | None,
     is_new_session: bool,
     tools: list[dict[str, object]] | None,
@@ -245,11 +236,6 @@ def _build_sse_response(
             max_tool_turns=request.max_turns,
             working_dir=request.working_dir,
             source_metadata=source_metadata,
-            routing_mode=routing_mode,
-            workload_profile=workload_profile,
-            routing_decision_id=routing_decision_id,
-            auto_candidate_model_id=auto_candidate_model_id,
-            routing_canary_percent=routing_canary_percent,
         ),
         media_type="text/event-stream",
         headers={
@@ -304,10 +290,5 @@ async def handle_streaming_request(
     return _build_sse_response(
         messages, resolved_model, provider, request, session_id, thinking_level,
         agent_used, model_used, fallback_used,
-        resolved_agent.routing_mode if resolved_agent else None,
-        resolved_agent.workload_profile if resolved_agent else None,
-        resolved_agent.routing_decision_id if resolved_agent else None,
-        resolved_agent.auto_candidate_model_id if resolved_agent else None,
-        resolved_agent.routing_canary_percent if resolved_agent else None,
         db, is_new_session, tools,
     )

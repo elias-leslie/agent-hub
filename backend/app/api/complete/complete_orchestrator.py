@@ -13,11 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.complete.async_dispatch import dispatch_async_completion
 from app.api.complete.handlers import build_cached_completion_response
-from app.api.complete.orchestration_helpers import (
-    _routing_metadata,
-    build_session_and_messages,
-    execute_and_respond,
-)
+from app.api.complete.orchestration_helpers import build_session_and_messages, execute_and_respond
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
@@ -26,7 +22,6 @@ from app.routing.resolution import (
     apply_mention_override,
     resolve_agent_and_model,
 )
-from app.services.adaptive_model_router import mark_routing_decision_completed
 from app.services.agent_routing_completion import get_provider_rate_limit_cooldown_remaining
 
 if TYPE_CHECKING:
@@ -158,14 +153,6 @@ async def orchestrate_completion(
         response = await build_cached_completion_response(
             cached, db, session, session_id, request, resolved_model,
             ctx_info, memory_facts, is_new_session=is_new_session,
-            routing_metadata=_routing_metadata(resolved_agent),
-        )
-        await mark_routing_decision_completed(
-            db,
-            getattr(resolved_agent, "routing_decision_id", None),
-            status="cached",
-            input_tokens=getattr(cached, "input_tokens", None),
-            output_tokens=getattr(cached, "output_tokens", None),
         )
         return response
     if is_agentic and request.async_execution:

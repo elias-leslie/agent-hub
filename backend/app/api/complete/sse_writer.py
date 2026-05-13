@@ -213,8 +213,7 @@ class SseWriter:
         """Attach routing/agent metadata to ``content`` + ``done`` events.
 
         Used by ``backend/app/routing/`` after the model is resolved
-        (agent_used, model_used, fallback_used, routing_mode,
-        workload_profile, routing_decision_id, ...).
+        (agent_used, model_used, fallback_used, ...).
         """
 
         for key, value in meta.items():

@@ -14,12 +14,10 @@ class StreamContext:
     _active_contexts: ClassVar[dict[str, StreamContext]] = {}
 
     __slots__ = (
-        "_seq", "agent_used", "auto_candidate_model_id", "cancel_event",
-        "fallback_used", "is_new_session", "is_one_shot", "last_progress_at",
+        "_seq", "agent_used", "cancel_event", "fallback_used",
+        "is_new_session", "is_one_shot", "last_progress_at",
         "last_progress_chars", "model", "model_used", "project_id", "provider",
-        "routing_canary_percent", "routing_decision_id", "routing_mode",
         "session_id", "source_metadata", "stream_start", "user_messages",
-        "workload_profile",
     )
 
     def __init__(
@@ -37,11 +35,6 @@ class StreamContext:
         cancel_event: asyncio.Event | None = None,
         project_id: str | None = None,
         source_metadata: dict[str, object] | None = None,
-        routing_mode: str | None = None,
-        workload_profile: str | None = None,
-        routing_decision_id: str | None = None,
-        auto_candidate_model_id: str | None = None,
-        routing_canary_percent: float | None = None,
     ) -> None:
         self._seq = 0
         self.session_id = session_id
@@ -57,11 +50,6 @@ class StreamContext:
         self.cancel_event = cancel_event
         self.project_id = project_id
         self.source_metadata = source_metadata
-        self.routing_mode = routing_mode
-        self.workload_profile = workload_profile
-        self.routing_decision_id = routing_decision_id
-        self.auto_candidate_model_id = auto_candidate_model_id
-        self.routing_canary_percent = routing_canary_percent
         self.last_progress_at = 0.0
         self.last_progress_chars = 0
 
@@ -81,11 +69,6 @@ class StreamContext:
         is_one_shot: bool,
         project_id: str | None = None,
         source_metadata: dict[str, object] | None = None,
-        routing_mode: str | None = None,
-        workload_profile: str | None = None,
-        routing_decision_id: str | None = None,
-        auto_candidate_model_id: str | None = None,
-        routing_canary_percent: float | None = None,
     ) -> StreamContext:
         """Create and register an active stream context for cooperative cancel."""
         ctx = cls(
@@ -102,11 +85,6 @@ class StreamContext:
             cancel_event=asyncio.Event(),
             project_id=project_id,
             source_metadata=source_metadata,
-            routing_mode=routing_mode,
-            workload_profile=workload_profile,
-            routing_decision_id=routing_decision_id,
-            auto_candidate_model_id=auto_candidate_model_id,
-            routing_canary_percent=routing_canary_percent,
         )
         cls._active_contexts[session_id] = ctx
         return ctx

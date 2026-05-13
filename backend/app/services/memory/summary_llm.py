@@ -33,7 +33,7 @@ async def _call_llm(prompt: str, project_id: str) -> str | None:
     """Run the LLM completion and return the stripped text, or None on failure."""
     from app.api.complete.core import complete_internal
     from app.db import _get_session_factory
-    from app.services.adaptive_model_router import RoutingContext
+    from app.services.agent_model_router import RoutingContext
     from app.services.agent_routing_utils import resolve_agent
 
     session_factory = _get_session_factory()
@@ -42,7 +42,7 @@ async def _call_llm(prompt: str, project_id: str) -> str | None:
             resolved = await resolve_agent(
                 "summarizer",
                 db,
-                RoutingContext(workload_profile="summarization"),
+                RoutingContext(),
             )
         except Exception:
             logger.warning("Summarizer agent not found, using fallback")

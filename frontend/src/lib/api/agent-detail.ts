@@ -1,11 +1,8 @@
 import type {
   Agent,
   AgentPreview,
-  AgentRouting,
-  AgentRoutingUpdate,
   ModelInfo,
   PreviewTaskType,
-  WorkloadRoutingUpdate,
 } from '@/app/agents/[slug]/types'
 import { fetchApi } from '@/lib/api-config'
 
@@ -25,42 +22,6 @@ export async function updateAgent(
     body: JSON.stringify(data),
   })
   if (!res.ok) throw new Error('Failed to update agent')
-  return res.json()
-}
-
-export async function fetchAgentRouting(slug: string): Promise<AgentRouting> {
-  const res = await fetchApi(`/api/agents/${slug}/routing`)
-  if (!res.ok) throw new Error('Failed to fetch agent routing')
-  return res.json()
-}
-
-export async function updateAgentRouting(
-  slug: string,
-  data: AgentRoutingUpdate,
-): Promise<AgentRouting> {
-  const res = await fetchApi(`/api/agents/${slug}/routing`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error('Failed to update agent routing')
-  return res.json()
-}
-
-export async function updateAgentWorkloadRouting(
-  slug: string,
-  workloadProfile: string,
-  data: WorkloadRoutingUpdate,
-): Promise<AgentRouting> {
-  const res = await fetchApi(
-    `/api/agents/${slug}/routing/workloads/${encodeURIComponent(workloadProfile)}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    },
-  )
-  if (!res.ok) throw new Error('Failed to update workload routing')
   return res.json()
 }
 

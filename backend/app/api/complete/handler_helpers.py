@@ -182,11 +182,6 @@ def make_completion_response(
         progress_log=None,
         trace_id=None,
         cited_uuids=kwargs.get("cited_uuids", []),
-        routing_mode=kwargs.get("routing_mode"),
-        workload_profile=kwargs.get("workload_profile"),
-        routing_decision_id=kwargs.get("routing_decision_id"),
-        auto_candidate_model_id=kwargs.get("auto_candidate_model_id"),
-        routing_canary_percent=kwargs.get("routing_canary_percent"),
     )
 
 

@@ -107,16 +107,16 @@ async def _startup() -> None:
 
     try:
         async with async_session() as db:
-            changed_routing_rows = await reconcile_agent_models_to_available_providers(db)
-        if changed_routing_rows:
+            changed_model_assignments = await reconcile_agent_models_to_available_providers(db)
+        if changed_model_assignments:
             logger.warning(
-                "Seeded/refreshed adaptive routing metadata: %s",
-                ", ".join(changed_routing_rows),
+                "Reconciled agent model assignment metadata: %s",
+                ", ".join(changed_model_assignments),
             )
         else:
-            logger.info("Adaptive routing metadata already aligned")
+            logger.info("Agent model assignments already aligned")
     except Exception as e:
-        logger.warning("Failed adaptive routing reconciliation at startup: %s", e)
+        logger.warning("Failed agent model assignment reconciliation at startup: %s", e)
 
     try:
         async with async_session() as db:

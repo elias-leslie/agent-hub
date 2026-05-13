@@ -204,7 +204,7 @@ async def complete_internal(
         )
 
     llm_model = resolve_llm_model(model, provider)
-    context = build_context_from_messages(messages_dict)
+    context = build_context_from_messages(messages_dict, tools=tools)
 
     run_tool = (
         _make_tool_runner(
