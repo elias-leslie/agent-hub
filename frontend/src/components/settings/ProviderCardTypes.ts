@@ -10,31 +10,13 @@ export interface OAuthProviderStatus {
   email?: string | null
 }
 
-/** Claude-specific OAuth status (different shape) */
-export interface ClaudeOAuthStatus {
-  status: 'valid' | 'expired' | 'missing'
-  token_prefix?: string | null
-  expires_in_seconds?: number | null
-  scopes?: string[]
-}
-
-/** Union type for all OAuth status shapes */
-export type OAuthStatus = OAuthProviderStatus | ClaudeOAuthStatus
-
-export function isClaudeStatus(s: OAuthStatus): s is ClaudeOAuthStatus {
-  return 'status' in s && !('oauth_status' in s)
-}
+export type OAuthStatus = OAuthProviderStatus
 
 /** Get normalized OAuth active state */
 export function getOAuthActive(
   status: OAuthStatus | undefined,
 ): 'active' | 'expired' | 'missing' {
   if (!status) return 'missing'
-  if (isClaudeStatus(status)) {
-    if (status.status === 'valid') return 'active'
-    if (status.status === 'expired') return 'expired'
-    return 'missing'
-  }
   if (status.oauth_status === 'authenticated') return 'active'
   if (status.oauth_status === 'expired') return 'expired'
   return 'missing'
@@ -47,7 +29,6 @@ export function hasAnyAuth(
 ): boolean {
   if (hasApiKey) return true
   if (!status) return false
-  if (isClaudeStatus(status)) return status.status === 'valid'
   return status.oauth_status === 'authenticated'
 }
 

@@ -11,7 +11,7 @@ from app.api.agents import _agent_create_kwargs, _agent_update_kwargs
 from app.api.endpoints import subagent as subagent_endpoint
 from app.api.orchestration_models import SubagentRequest
 from app.api.schemas.agent_schemas import AgentCreateRequest, AgentUpdateRequest
-from app.constants.models import CLAUDE_SONNET
+from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 from app.services.agent_crud import apply_agent_updates
 from app.services.orchestration.subagent_executor import _call_pipeline
 from app.services.orchestration.subagent_models import SubagentConfig
@@ -22,7 +22,7 @@ def _make_agent_create_request(**overrides) -> AgentCreateRequest:
         "slug": "timeout-agent",
         "name": "Timeout Agent",
         "system_prompt": "You handle long-running work.",
-        "primary_model_id": CLAUDE_SONNET,
+        "primary_model_id": KIMI_CODE_FOR_CODING,
     }
     payload.update(overrides)
     return AgentCreateRequest.model_validate(payload)
@@ -31,7 +31,7 @@ def _make_agent_create_request(**overrides) -> AgentCreateRequest:
 def _make_completion_result():
     return SimpleNamespace(
         content="ok",
-        provider="claude",
+        provider="gemini",
         model="model",
         input_tokens=1,
         output_tokens=1,
@@ -90,7 +90,7 @@ def test_apply_agent_updates_preserves_existing_timeout_for_none() -> None:
                 {
                     "task": "Audit files",
                     "name": "timeout-canary",
-                    "provider": "claude",
+                    "provider": "gemini",
                     "project_id": "summitflow",
                 }
             ),
@@ -101,7 +101,7 @@ def test_apply_agent_updates_preserves_existing_timeout_for_none() -> None:
                 {
                     "task": "Audit files",
                     "name": "timeout-canary",
-                    "provider": "claude",
+                    "provider": "gemini",
                     "project_id": "summitflow",
                     "timeout_seconds": None,
                 }
@@ -113,7 +113,7 @@ def test_apply_agent_updates_preserves_existing_timeout_for_none() -> None:
                 {
                     "task": "Audit files",
                     "name": "timeout-canary",
-                    "provider": "claude",
+                    "provider": "gemini",
                     "project_id": "summitflow",
                     "timeout_seconds": 7201,
                 }
@@ -130,7 +130,7 @@ async def test_subagent_endpoint_passes_timeout_seconds_through(subagent_request
         content="ok",
         status="completed",
         provider=subagent_request.provider,
-        model="claude-sonnet",
+        model=GEMINI_FLASH,
         input_tokens=1,
         output_tokens=1,
         thinking_content=None,
@@ -160,7 +160,7 @@ async def test_call_pipeline_skips_wait_for_when_timeout_is_none() -> None:
         mp.setattr(core_mod, "complete_internal", fake_complete)
         wait_for = AsyncMock(side_effect=AssertionError("wait_for should not be used"))
         mp.setattr(asyncio, "wait_for", wait_for)
-        result = await _call_pipeline([], "model", "claude", config)
+        result = await _call_pipeline([], GEMINI_FLASH, "gemini", config)
 
     assert result.content == "ok"
     wait_for.assert_not_awaited()
@@ -180,6 +180,6 @@ async def test_call_pipeline_uses_wait_for_for_positive_timeout() -> None:
 
         mp.setattr(core_mod, "complete_internal", fake_complete)
         mp.setattr(asyncio, "wait_for", fake_wait_for)
-        result = await _call_pipeline([], "model", "claude", config)
+        result = await _call_pipeline([], GEMINI_FLASH, "gemini", config)
 
     assert result.content == "ok"

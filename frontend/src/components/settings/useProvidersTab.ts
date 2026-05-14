@@ -13,7 +13,6 @@ import {
   createCredential,
   deleteCredential,
   exchangeOAuthCode,
-  fetchClaudeOAuthStatus,
   fetchCredentials,
   fetchOAuthStatus,
   fetchStatus,
@@ -43,10 +42,6 @@ export function useProvidersTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['credentials'],
     queryFn: () => fetchCredentials(),
-  })
-  const { data: claudeOAuthStatus } = useQuery({
-    queryKey: ['claude-oauth-status'],
-    queryFn: () => fetchClaudeOAuthStatus(),
   })
   const oauthStatusQueries = useQueries({
     queries: oauthProviderIds.map((providerId) => ({
@@ -103,7 +98,6 @@ export function useProvidersTab() {
         setManualPasteProvider(null)
         setManualPasteState(null)
         queryClient.invalidateQueries({ queryKey: ['credentials'] })
-        queryClient.invalidateQueries({ queryKey: ['claude-oauth-status'] })
         if (isOAuthProvider(provider)) {
           queryClient.invalidateQueries({
             queryKey: ['oauth-status', provider],
@@ -164,7 +158,6 @@ export function useProvidersTab() {
         setManualPasteState(null)
         setOauthLoading(null)
         queryClient.invalidateQueries({ queryKey: ['credentials'] })
-        queryClient.invalidateQueries({ queryKey: ['claude-oauth-status'] })
         queryClient.invalidateQueries({
           queryKey: ['oauth-status', providerId],
         })
@@ -297,10 +290,7 @@ export function useProvidersTab() {
 
   function getOAuthStatus(providerId: string) {
     const oauthIndex = oauthProviderIds.indexOf(providerId)
-    const genericStatus =
-      oauthIndex >= 0 ? oauthStatusQueries[oauthIndex]?.data : undefined
-    if (providerId === 'claude') return claudeOAuthStatus ?? genericStatus
-    return genericStatus
+    return oauthIndex >= 0 ? oauthStatusQueries[oauthIndex]?.data : undefined
   }
 
   function getHealthData(providerId: string): ProviderHealthData | undefined {
@@ -323,10 +313,6 @@ export function useProvidersTab() {
   ])
 
   function getPreferredAuth(providerId: string): 'oauth' | 'api_key' {
-    if (providerId === 'claude')
-      return (
-        (prefsData?.claude_auth_preference as 'oauth' | 'api_key') ?? 'oauth'
-      )
     if (providerId === 'codex')
       return (
         (prefsData?.codex_auth_preference as 'oauth' | 'api_key') ?? 'oauth'
@@ -338,9 +324,7 @@ export function useProvidersTab() {
     providerId: string,
     pref: 'oauth' | 'api_key',
   ) {
-    if (providerId === 'claude') {
-      prefsMut.mutate({ claude_auth_preference: pref })
-    } else if (providerId === 'codex') {
+    if (providerId === 'codex') {
       prefsMut.mutate({ codex_auth_preference: pref })
     }
   }

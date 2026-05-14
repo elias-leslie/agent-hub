@@ -146,13 +146,10 @@ PROVIDER_NAMES: dict[str, str] = {
 }
 
 # Default models for each use case
-DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
 DEFAULT_GEMINI_MODEL = GEMINI_FLASH
 
 # Model for complex reasoning (code review, architecture decisions)
-REASONING_CLAUDE_MODEL = CLAUDE_OPUS_4_7
 REASONING_GEMINI_MODEL = GEMINI_3_1_PRO
 
 # Model for fast/cheap operations (extraction, validation, summarization)
-FAST_CLAUDE_MODEL = CLAUDE_HAIKU
 FAST_GEMINI_MODEL = GEMINI_3_1_FLASH_LITE

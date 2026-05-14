@@ -12,7 +12,7 @@ from typing import Any
 import tiktoken
 
 from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry
-from app.constants.models import CLAUDE_SONNET
+from app.constants.models import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,11 @@ def _resolve_model(model: str) -> ModelEntry | None:
 
 
 def _get_model_entry(model: str) -> ModelEntry:
-    """Get catalog entry for a model, falling back to sonnet."""
+    """Get catalog entry for a model, falling back to a routable baseline."""
     entry = _resolve_model(model)
     if entry is not None:
         return entry
-    # Default to sonnet
-    return MODEL_CATALOG_BY_ID[CLAUDE_SONNET]
+    return MODEL_CATALOG_BY_ID[GEMINI_FLASH]
 
 
 @dataclass
@@ -70,8 +69,7 @@ class CostBreakdown:
 
 
 def _get_encoding() -> tiktoken.Encoding:
-    """Get tiktoken encoding for Claude-like models."""
-    # Claude uses a GPT-4-like tokenizer
+    """Get a broadly compatible tiktoken encoding."""
     try:
         return tiktoken.get_encoding("cl100k_base")
     except Exception:
@@ -152,7 +150,7 @@ def estimate_cost(
         input_tokens: Number of input tokens
         output_tokens: Number of output tokens
         model: Model identifier
-        cached_input_tokens: Number of cached input tokens (Claude only)
+        cached_input_tokens: Number of cached input tokens, when supported
 
     Returns:
         Cost breakdown in USD
@@ -269,8 +267,7 @@ def build_output_usage(
     Returns:
         OutputUsage with truncation detection
     """
-    # Check for truncation - handle different provider formats:
-    # Claude: "max_tokens", Gemini: "FinishReason.MAX_TOKENS" or "MAX_TOKENS"
+    # Check for truncation across provider-specific finish_reason formats.
     finish_lower = (finish_reason or "").lower()
     was_truncated = "max_tokens" in finish_lower
 

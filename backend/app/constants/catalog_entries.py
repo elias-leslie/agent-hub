@@ -100,6 +100,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         context_window=1_000_000, speed_tier="medium",
         capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=16_384),
         release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-sonnet",
+        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
     ),
     ModelEntry(
         id=CLAUDE_OPUS_4_7, alias="opus", name="Claude Opus 4.7",
@@ -109,6 +110,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         context_window=1_000_000, speed_tier="medium",
         capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=131_072),
         release_date="2026-04-01", knowledge_cutoff="2026-01-01", family="claude-opus",
+        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
     ),
     ModelEntry(
         id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 4.5",
@@ -118,6 +120,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         context_window=200_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=8_192),
         release_date="2025-10-01", knowledge_cutoff="2025-04-01", family="claude-haiku",
+        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
     ),
 
     # --- Gemini ---

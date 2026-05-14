@@ -123,7 +123,7 @@ class CompletionRequest(BaseModel):
         max_length=EXTERNAL_ID_MAX_LENGTH,
         description="External ID for cost aggregation (e.g., task-123, user-456)",
     )
-    enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
+    enable_caching: bool = Field(default=True, description="Enable provider prompt caching when supported")
     cache_ttl: str = Field(default="ephemeral", max_length=20, description="Cache TTL: ephemeral (5min) or 1h")
     response_format: ResponseFormat | None = Field(
         default=None,
@@ -147,11 +147,11 @@ class CompletionRequest(BaseModel):
     )
     enable_programmatic_tools: bool = Field(
         default=False,
-        description="Enable code execution to call tools programmatically (Claude only)",
+        description="Enable provider code execution to call tools programmatically when supported",
     )
     container_id: str | None = Field(
         default=None,
-        description="Container ID for code execution continuity (Claude only)",
+        description="Container ID for provider code execution continuity when supported",
     )
     use_memory: bool = Field(
         default=True,

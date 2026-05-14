@@ -13,7 +13,7 @@ class SessionCreate(BaseModel):
         description="Custom session ID (e.g. from Claude Code). Generated if not provided.",
     )
     project_id: str = Field(..., description="Project identifier")
-    provider: str = Field(..., description="Provider: claude or gemini")
+    provider: str = Field(..., description="Provider identifier")
     model: str = Field(..., description="Model identifier")
     session_type: str = Field(
         default="completion",

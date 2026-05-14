@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -24,8 +24,8 @@ class TestVerificationResult:
             name="maker",
             content="Generated code",
             status="completed",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="kimi-code",
+            model=KIMI_CODE_FOR_CODING,
             input_tokens=100,
             output_tokens=200,
         )
@@ -62,8 +62,8 @@ class TestVerificationResult:
             name="maker",
             content="Bad code",
             status="completed",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="kimi-code",
+            model=KIMI_CODE_FOR_CODING,
             input_tokens=100,
             output_tokens=200,
         )
@@ -179,8 +179,8 @@ SUGGESTIONS:
             name="maker",
             content="Perfect code",
             status="completed",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="kimi-code",
+            model=KIMI_CODE_FOR_CODING,
             input_tokens=100,
             output_tokens=200,
         )
@@ -229,8 +229,8 @@ SUGGESTIONS:
                     name="maker",
                     content=f"Code v{iteration}",
                     status="completed",
-                    provider="claude",
-                    model=CLAUDE_SONNET,
+                    provider="kimi-code",
+                    model=KIMI_CODE_FOR_CODING,
                     input_tokens=100,
                     output_tokens=200,
                 )
@@ -278,8 +278,8 @@ SUGGESTIONS:
                     name="maker",
                     content="Still bad code",
                     status="completed",
-                    provider="claude",
-                    model=CLAUDE_SONNET,
+                    provider="kimi-code",
+                    model=KIMI_CODE_FOR_CODING,
                     input_tokens=100,
                     output_tokens=200,
                 )
@@ -314,8 +314,8 @@ SUGGESTIONS:
                     name="maker",
                     content="",
                     status="error",
-                    provider="claude",
-                    model=CLAUDE_SONNET,
+                    provider="kimi-code",
+                    model=KIMI_CODE_FOR_CODING,
                     input_tokens=0,
                     output_tokens=0,
                     error="API error",
@@ -354,17 +354,19 @@ class TestCodeReviewPattern:
         """Test code review with custom providers."""
         reviewer = CodeReviewPattern(
             maker_provider="gemini",
-            checker_provider="claude",
+            checker_provider="kimi-code",
             max_iterations=2,
         )
 
         assert reviewer._maker_config.provider == "gemini"
-        assert reviewer._checker_config.provider == "claude"
+        assert reviewer._checker_config.provider == "kimi-code"
         assert reviewer._max_iterations == 2
 
     def test_system_prompts(self):
         """Test that system prompts are set correctly."""
         reviewer = CodeReviewPattern()
 
+        assert reviewer._maker_config.system_prompt is not None
+        assert reviewer._checker_config.system_prompt is not None
         assert "programmer" in reviewer._maker_config.system_prompt.lower()
         assert "reviewer" in reviewer._checker_config.system_prompt.lower()

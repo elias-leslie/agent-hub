@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.services.git_status_summary import RepoGitStatus
-from app.services.mcp_constants import MCP_TOOL_PREFIX
 from app.services.ownership_lanes import STALE_WORKSTREAM_IDLE_MINUTES
 
 if TYPE_CHECKING:
@@ -38,8 +37,6 @@ _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$"
 _COMPACT_STALE_LINE = re.compile(r"^- (?P<project>[a-z0-9-]+) \| (?P<task_id>task-[^\s|]+) \| ")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 
-# Infrastructure constants
-_CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
 _WORKSPACE_BASE = Path("/srv/workspaces/projects")
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 

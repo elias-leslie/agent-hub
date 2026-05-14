@@ -63,8 +63,8 @@ def _resolve_thought_signature(is_same_model: bool, signature: str | None) -> st
 
 
 def requires_tool_call_id(model_id: str) -> bool:
-    """Some Google-API-fronted models (Claude, gpt-oss) require explicit IDs."""
-    return model_id.startswith("claude-") or model_id.startswith("gpt-oss-")
+    """Some Google-API-fronted models require explicit tool-call IDs."""
+    return model_id.startswith("gpt-oss-")
 
 
 def _gemini_major_version(model_id: str) -> int | None:
@@ -233,9 +233,8 @@ def convert_tools(tools: list[Tool], use_parameters: bool = False) -> list[dict[
     """Convert tools to Gemini ``functionDeclarations`` format.
 
     Defaults to ``parametersJsonSchema`` (full JSON Schema). Set
-    ``use_parameters=True`` for Cloud Code Assist with Claude models,
-    which translates the legacy ``parameters`` field into Anthropic's
-    ``input_schema``.
+    ``use_parameters=True`` translates the legacy ``parameters`` field into
+    ``input_schema`` for APIs that require it.
     """
 
     if not tools:

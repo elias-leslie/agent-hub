@@ -14,7 +14,6 @@ export interface ProviderInfo {
 }
 
 const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, 'id'>> = {
-  claude: { name: 'Claude', hint: 'Anthropic — OAuth or API key', oauth: true },
   codex: { name: 'Codex', hint: 'ChatGPT subscription OAuth', oauth: true },
   deepseek: { name: 'DeepSeek', hint: 'DeepSeek API key' },
   gemini: { name: 'Gemini', hint: 'Google AI API key' },
@@ -75,6 +74,8 @@ export function isOAuthProvider(providerId: string): boolean {
 
 export function isVisibleSettingsProvider(providerId: string): boolean {
   return (
+    providerId !== 'anthropic' &&
+    providerId !== 'claude' &&
     providerId !== 'cloudcode' &&
     providerId !== 'antigravity' &&
     !providerId.startsWith('_')
@@ -90,7 +91,6 @@ export function filterVisibleSettingsProviders(
 }
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
-  claude: { dot: 'bg-amber-400', bg: 'border-amber-500/20' },
   codex: { dot: 'bg-emerald-400', bg: 'border-emerald-500/20' },
   deepseek: { dot: 'bg-cyan-400', bg: 'border-cyan-500/20' },
   gemini: { dot: 'bg-blue-400', bg: 'border-blue-500/20' },

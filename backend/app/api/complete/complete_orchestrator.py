@@ -17,7 +17,7 @@ from app.api.complete.orchestration_helpers import build_session_and_messages, e
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
-from app.routing.registry import get_provider_for_model
+from app.routing.registry import get_provider_for_model, is_workload_provider
 from app.routing.resolution import (
     apply_mention_override,
     resolve_agent_and_model,
@@ -31,6 +31,47 @@ if TYPE_CHECKING:
     from app.services.agent_routing import ResolvedAgent
 
 logger = logging.getLogger(__name__)
+
+
+def _reference_only_provider_error(model: str, provider: str) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={
+            "error": "provider_not_routable",
+            "provider": provider,
+            "model": model,
+            "message": (
+                "Claude/Anthropic models are catalog references and external "
+                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+            ),
+        },
+    )
+
+
+def _guard_workload_routing(
+    *,
+    request: CompletionRequest,
+    model: str,
+    provider: str,
+    resolved_agent: ResolvedAgent | None,
+) -> None:
+    """Reject reference-only providers before execution or fallback handling."""
+    if not is_workload_provider(provider):
+        raise _reference_only_provider_error(model, provider)
+
+    if not resolved_agent or request.disable_agent_fallbacks:
+        return
+
+    for fallback_model in resolved_agent.agent.fallback_models or []:
+        fallback_provider = get_provider_for_model(fallback_model)
+        if not is_workload_provider(fallback_provider):
+            raise _reference_only_provider_error(fallback_model, fallback_provider)
+
+    escalation_model = resolved_agent.agent.escalation_model_id
+    if escalation_model:
+        escalation_provider = get_provider_for_model(escalation_model)
+        if not is_workload_provider(escalation_provider):
+            raise _reference_only_provider_error(escalation_model, escalation_provider)
 
 
 async def _guard_provider_cooldowns(
@@ -97,6 +138,12 @@ async def _validate_and_resolve(
             request.agent_slug,
             resolved_model,
         )
+    _guard_workload_routing(
+        request=request,
+        model=resolved_model,
+        provider=provider,
+        resolved_agent=resolved_agent,
+    )
     http_request.state.resolved_model = resolved_model
     return rh, client_id, request_source, resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used
 

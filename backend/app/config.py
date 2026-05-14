@@ -150,7 +150,6 @@ class Settings(BaseSettings):
     # Optional provider credentials for standalone and Docker installs.
     # These are overlaid into the runtime credential cache at startup so
     # clean installs work without manual dashboard credential entry.
-    anthropic_api_key: str = ""
     gemini_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""

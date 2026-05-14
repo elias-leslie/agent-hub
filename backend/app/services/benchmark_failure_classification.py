@@ -27,7 +27,6 @@ _INFRA_FAILURE_MARKERS = (
     "503",
     "502",
     "rate limit",
-    "claude sdk stalled after tool_result",
     "empty_model_response",
 )
 

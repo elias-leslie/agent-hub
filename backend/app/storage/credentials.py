@@ -77,7 +77,7 @@ async def store_credential_async(
 
     Args:
         db: Async database session
-        provider: Provider name (claude, gemini)
+        provider: Provider identifier
         credential_type: Type of credential (api_key, oauth_token, etc.)
         value: Plaintext credential value
 

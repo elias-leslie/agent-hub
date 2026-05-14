@@ -1,9 +1,0 @@
-{
-  "opus-reasoner": {
-    "description": "Deep analysis worker",
-    "prompt": "Read the requested files and report back briefly.",
-    "tools": [
-      "Read"
-    ]
-  }
-}

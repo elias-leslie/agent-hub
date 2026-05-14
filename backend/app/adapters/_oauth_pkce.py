@@ -1,4 +1,4 @@
-"""Shared PKCE helpers for OAuth flows (Claude, Codex)."""
+"""Shared PKCE helpers for OAuth flows."""
 
 from __future__ import annotations
 

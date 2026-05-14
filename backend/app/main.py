@@ -177,7 +177,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="agent-hub",
-    description="Unified agentic AI service for Claude/Gemini workloads",
+    description="Unified agentic AI service for routed AI workloads",
     version="0.1.0",
     lifespan=lifespan,
 )

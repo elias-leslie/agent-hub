@@ -86,7 +86,7 @@ class TestToolRegistryAllowedCallers:
             ]
         )
 
-        result = registry.to_api_format("claude")
+        result = registry.to_api_format("kimi-code")
 
         assert len(result) == 1
         assert "allowed_callers" not in result[0]
@@ -104,13 +104,13 @@ class TestToolRegistryAllowedCallers:
             ]
         )
 
-        result = registry.to_api_format("claude")
+        result = registry.to_api_format("kimi-code")
 
         assert len(result) == 1
         assert result[0]["allowed_callers"] == ["code_execution_20250825"]
 
-    def test_api_format_with_code_execution(self):
-        """Test including code_execution tool in API format."""
+    def test_api_format_ignores_legacy_code_execution_flag(self):
+        """The legacy code_execution flag no longer injects provider tools."""
         registry = ToolRegistry(
             tools=[
                 Tool(
@@ -122,14 +122,10 @@ class TestToolRegistryAllowedCallers:
             ]
         )
 
-        result = registry.to_api_format("claude", include_code_execution=True)
+        result = registry.to_api_format("kimi-code", include_code_execution=True)
 
-        assert len(result) == 2
-        # First tool should be code_execution
-        assert result[0]["type"] == "code_execution_20250825"
-        assert result[0]["name"] == "code_execution"
-        # Second tool is our custom tool
-        assert result[1]["name"] == "query_db"
+        assert len(result) == 1
+        assert result[0]["name"] == "query_db"
 
     def test_is_caller_allowed_direct(self):
         """Test is_caller_allowed for direct caller."""

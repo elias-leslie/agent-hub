@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 # Valid agent types supported by the platform
 VALID_AGENT_TYPES = {
-    "claude",
     "cloudflare",
     "codex",
     "deepseek",

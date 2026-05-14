@@ -16,6 +16,7 @@ from pydantic import BeforeValidator
 logger = logging.getLogger(__name__)
 
 _INVALIDATED_PROVIDERS: set[str] = set()
+REFERENCE_ONLY_WORKLOAD_PROVIDERS = frozenset({"anthropic", "claude"})
 
 
 def get_provider_for_model(model: str) -> str:
@@ -48,7 +49,6 @@ def get_provider_for_model(model: str) -> str:
             return provider
 
     name_map = [
-        ("claude", "claude"),
         ("gemini", "gemini"),
         ("gpt", "openai"),
         ("grok", "xai"),
@@ -63,7 +63,7 @@ def get_provider_for_model(model: str) -> str:
         if name in model_lower:
             return provider
 
-    return "claude"
+    return "openai"
 
 
 def list_providers() -> list[str]:
@@ -71,6 +71,21 @@ def list_providers() -> list[str]:
     from app.constants.catalog import MODEL_CATALOG
 
     return sorted({entry.provider for entry in MODEL_CATALOG})
+
+
+def is_workload_provider(provider: str) -> bool:
+    """Return whether Agent Hub may execute workloads through ``provider``."""
+    return provider not in REFERENCE_ONLY_WORKLOAD_PROVIDERS
+
+
+def is_workload_model(model: str) -> bool:
+    """Return whether Agent Hub may execute workloads through ``model``."""
+    return is_workload_provider(get_provider_for_model(model))
+
+
+def list_workload_providers() -> list[str]:
+    """Return catalog providers that are routable for Agent Hub workloads."""
+    return [provider for provider in list_providers() if is_workload_provider(provider)]
 
 
 def invalidate(provider: str) -> None:
@@ -100,10 +115,26 @@ def _validate_provider(v: str) -> str:
 ValidProvider = Annotated[str, BeforeValidator(_validate_provider)]
 
 
+def _validate_workload_provider(v: str) -> str:
+    if not is_workload_provider(v):
+        raise ValueError(
+            f"Provider {v!r} is reference-only and cannot execute Agent Hub workloads"
+        )
+    return _validate_provider(v)
+
+
+ValidWorkloadProvider = Annotated[str, BeforeValidator(_validate_workload_provider)]
+
+
 __all__ = [
+    "REFERENCE_ONLY_WORKLOAD_PROVIDERS",
     "ValidProvider",
+    "ValidWorkloadProvider",
     "clear_cache",
     "get_provider_for_model",
     "invalidate",
+    "is_workload_model",
+    "is_workload_provider",
     "list_providers",
+    "list_workload_providers",
 ]

@@ -71,7 +71,7 @@ def test_parallel_request_lacks_stage_and_agent_routing_fields_needed_for_canoni
     task = ParallelTaskRequest(task="Review diff.", name="review")
     payload = task.model_dump(exclude_none=True)
 
-    assert payload == {"task": "Review diff.", "name": "review", "provider": "claude", "temperature": 1.0}
+    assert payload == {"task": "Review diff.", "name": "review", "provider": "gemini", "temperature": 1.0}
     assert "agent_slug" not in ParallelTaskRequest.model_fields
     assert "thinking_level" not in ParallelTaskRequest.model_fields
     assert "current_branch" not in ParallelTaskRequest.model_fields

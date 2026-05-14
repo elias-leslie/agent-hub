@@ -75,7 +75,7 @@ async def submit_and_review_onboarding(
 ) -> dict[str, str]:
     """Submit for dual-model review; returns dict with 'status' and 'feedback'."""
     from app.api.complete.core import complete_internal
-    from app.constants import REASONING_CLAUDE_MODEL, REASONING_GEMINI_MODEL
+    from app.constants import KIMI_CODE_FOR_CODING, REASONING_GEMINI_MODEL
     from app.db import async_session
 
     persona = await get_persona(db)
@@ -104,8 +104,8 @@ async def submit_and_review_onboarding(
                 run_single_review(
                     complete_internal,
                     async_session,
-                    REASONING_CLAUDE_MODEL,
-                    "claude",
+                    KIMI_CODE_FOR_CODING,
+                    "kimi-code",
                     review_prompt,
                     max_retries=2,
                 ),

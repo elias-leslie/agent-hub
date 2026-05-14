@@ -1,6 +1,6 @@
 """OAuth provider registry (port of pi-mono ``utils/oauth/index.ts``).
 
-Built-in providers are registered at import; callers use
+Providers may be registered at import; callers use
 :func:`get_oauth_provider` / :func:`refresh_oauth_token` /
 :func:`get_oauth_api_key` to authenticate.
 """
@@ -10,11 +10,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from .anthropic import (
-    anthropic_oauth_provider,
-    login_anthropic,
-    refresh_anthropic_token,
-)
 from .types import (
     OAuthAuthInfo,
     OAuthCredentials,
@@ -26,7 +21,7 @@ from .types import (
     OAuthSelectPrompt,
 )
 
-_BUILT_IN_OAUTH_PROVIDERS: list[OAuthProviderInterface] = [anthropic_oauth_provider]
+_BUILT_IN_OAUTH_PROVIDERS: list[OAuthProviderInterface] = []
 
 _oauth_provider_registry: dict[str, OAuthProviderInterface] = {
     p.id: p for p in _BUILT_IN_OAUTH_PROVIDERS
@@ -111,12 +106,9 @@ __all__ = [
     "OAuthProviderInterface",
     "OAuthSelectOption",
     "OAuthSelectPrompt",
-    "anthropic_oauth_provider",
     "get_oauth_api_key",
     "get_oauth_provider",
     "get_oauth_providers",
-    "login_anthropic",
-    "refresh_anthropic_token",
     "refresh_oauth_token",
     "register_oauth_provider",
     "reset_oauth_providers",

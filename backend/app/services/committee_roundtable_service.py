@@ -437,11 +437,9 @@ class CommitteeRoundtableService:
     def _provider_from_model(self, model_id: str | None) -> str | None:
         if not model_id:
             return None
-        if "/" in model_id:
-            return model_id.split("/", 1)[0]
-        if model_id.startswith("claude"):
-            return "claude"
-        return None
+        from app.routing.registry import get_provider_for_model
+
+        return get_provider_for_model(model_id)
 
     def _clamp(self, value: Any, fallback: float, *, low: float, high: float) -> float:
         try:

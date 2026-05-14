@@ -15,10 +15,6 @@ class TestLoadEnvCredentialsIntoCache:
     def test_loads_single_value_provider_keys_into_cache(self) -> None:
         with (
             patch(
-                "app.services.env_credential_service.settings.anthropic_api_key",
-                "anthropic-key",
-            ),
-            patch(
                 "app.services.env_credential_service.settings.openai_api_key",
                 "openai-key",
             ),
@@ -39,12 +35,10 @@ class TestLoadEnvCredentialsIntoCache:
 
         credential_manager = CredentialManager.get_instance()
         assert changed == [
-            "claude:api_key",
             "kimi-code:api_key",
             "openai:api_key",
             "openrouter:api_key",
         ]
-        assert credential_manager.get_api_key("claude") == "anthropic-key"
         assert credential_manager.get_api_key("kimi-code") == "kimi-code-key"
         assert credential_manager.get_api_key("openai") == "openai-key"
         assert credential_manager.get_api_key("openrouter") == "openrouter-key"
@@ -54,10 +48,6 @@ class TestLoadEnvCredentialsIntoCache:
         credential_manager.set_api_keys("gemini", ["cached-key"])
 
         with (
-            patch(
-                "app.services.env_credential_service.settings.anthropic_api_key",
-                "",
-            ),
             patch(
                 "app.services.env_credential_service.settings.openai_api_key",
                 "",
@@ -89,10 +79,6 @@ class TestLoadEnvCredentialsIntoCache:
         credential_manager.set("openai", "api_key", "openai-key")
 
         with (
-            patch(
-                "app.services.env_credential_service.settings.anthropic_api_key",
-                "",
-            ),
             patch(
                 "app.services.env_credential_service.settings.openai_api_key",
                 "openai-key",

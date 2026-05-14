@@ -56,6 +56,7 @@ export interface ModelOption {
   name: string;
   hint: string;
   provider: string;
+  routable: boolean;
   scores: ModelScores;
   cost: ModelCost;
   context_window: number;

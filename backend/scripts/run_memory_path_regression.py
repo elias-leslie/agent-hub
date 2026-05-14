@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Run real-path memory behavior checks across Codex, Claude, and Agent Hub agents."""
+"""Run real-path memory behavior checks across Codex and Agent Hub agents."""
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import re
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -140,40 +138,6 @@ def _run_codex_yolo(prompt: str) -> RunnerResult:
         raise RuntimeError(result.stderr or result.stdout)
     data, evidence = _parse_codex_jsonl(result.stdout)
     return RunnerResult(data=data, evidence=evidence)
-
-
-def _run_claude_bypass(prompt: str) -> RunnerResult:
-    with tempfile.NamedTemporaryFile(prefix="claude-memory-", suffix=".log", delete=False) as tmp:
-        debug_path = Path(tmp.name)
-    try:
-        result = _run_command(
-            [
-                "claude",
-                "-p",
-                "--dangerously-skip-permissions",
-                "--output-format",
-                "json",
-                "--debug-file",
-                str(debug_path),
-            ],
-            stdin_text=prompt,
-            timeout=240,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr or result.stdout)
-        payload = json.loads(result.stdout)
-        data = _extract_json_object(payload["result"])
-        debug_text = debug_path.read_text() if debug_path.exists() else ""
-        return RunnerResult(
-            data=data,
-            evidence={
-                "bash_tool_uses": debug_text.count("executePreToolHooks called for tool: Bash"),
-                "debug_path": str(debug_path),
-            },
-        )
-    finally:
-        with contextlib.suppress(OSError):
-            debug_path.unlink(missing_ok=True)
 
 
 def _run_agent_hub(agent_slug: str, prompt: str, *, execute_tools: bool) -> RunnerResult:
@@ -334,7 +298,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated Agent Hub agent slugs to probe",
     )
     parser.add_argument("--skip-codex", action="store_true", help="Skip Codex --yolo probes")
-    parser.add_argument("--skip-claude", action="store_true", help="Skip Claude bypass probes")
     parser.add_argument("--skip-agents", action="store_true", help="Skip Agent Hub agent probes")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON summary")
     return parser
@@ -379,32 +342,6 @@ def main() -> None:
                 target="codex_yolo",
                 prompt="prompt_source",
                 runner=lambda: _run_codex_yolo(PROMPT_SOURCE_PROMPT),
-                validator=_validate_prompt_source,
-            )
-        )
-
-    if not args.skip_claude:
-        results.append(
-            _run_probe(
-                target="claude_bypass",
-                prompt="startup_commands",
-                runner=lambda: _run_claude_bypass(STARTUP_COMMANDS_PROMPT),
-                validator=_validate_startup_commands,
-            )
-        )
-        results.append(
-            _run_probe(
-                target="claude_bypass",
-                prompt="commit_rule",
-                runner=lambda: _run_claude_bypass(COMMIT_RULE_PROMPT),
-                validator=_validate_commit_rule,
-            )
-        )
-        results.append(
-            _run_probe(
-                target="claude_bypass",
-                prompt="prompt_source",
-                runner=lambda: _run_claude_bypass(PROMPT_SOURCE_PROMPT),
                 validator=_validate_prompt_source,
             )
         )

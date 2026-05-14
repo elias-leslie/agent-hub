@@ -12,8 +12,10 @@ export function FallbackModelsList({
   availableModels,
   onChange,
 }: FallbackModelsListProps) {
+  const routableModels = availableModels.filter((model) => model.routable)
+
   const addModel = () => {
-    const available = availableModels.filter(
+    const available = routableModels.filter(
       (m) => !selectedModels.includes(m.id),
     )
     if (available.length > 0) {
@@ -53,7 +55,7 @@ export function FallbackModelsList({
                 onChange={(e) => updateModel(index, e.target.value)}
                 className="control-select flex-1"
               >
-                {availableModels.map((m) => (
+                {routableModels.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>
@@ -74,7 +76,7 @@ export function FallbackModelsList({
       <button
         type="button"
         onClick={addModel}
-        disabled={selectedModels.length >= availableModels.length - 1}
+        disabled={selectedModels.length >= routableModels.length - 1}
         className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Plus className="h-4 w-4" />

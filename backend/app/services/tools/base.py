@@ -30,7 +30,7 @@ class Tool:
     usage_examples: list[str] = field(default_factory=list)
     defer_loading: bool = False
     # Programmatic tool calling: who can call this tool
-    # ["direct"] = Claude calls directly (default)
+    # ["direct"] = the model calls directly (default)
     # ["code_execution_20250825"] = Only callable from code execution
     # ["direct", "code_execution_20250825"] = Both allowed
     allowed_callers: list[CallerType] = field(default_factory=lambda: ["direct"])
@@ -70,7 +70,7 @@ class CodeExecutionTool:
     """
     The code_execution tool for programmatic tool calling.
 
-    When included in tools, Claude can write code that calls other tools
+    When included in tools, a provider can write code that calls other tools
     programmatically within a sandboxed execution environment.
     """
 
@@ -78,7 +78,7 @@ class CodeExecutionTool:
     name: str = "code_execution"
 
     def to_api_format(self) -> dict[str, Any]:
-        """Convert to Claude API format."""
+        """Convert to provider API format."""
         return {
             "type": self.type,
             "name": self.name,
@@ -109,19 +109,15 @@ class ToolRegistry:
         Convert tools to provider-specific API format.
 
         Args:
-            provider: Target provider ("claude" or "gemini")
-            include_code_execution: If True, prepend code_execution tool (Claude only)
+            provider: Target provider.
+            include_code_execution: Deprecated compatibility flag.
 
         Returns:
             List of tool definitions in provider format
         """
         result: list[dict[str, Any]] = []
 
-        # Add code_execution tool first if requested (Claude only)
-        if include_code_execution and provider == "claude":
-            result.append(CodeExecutionTool().to_api_format())
-
-        if provider == "claude":
+        if provider in {"anthropic-messages", "kimi-code", "kimi-coding", "minimax", "minimax-cn"}:
             for t in self.tools:
                 tool_def: dict[str, Any] = {
                     "name": t.name,

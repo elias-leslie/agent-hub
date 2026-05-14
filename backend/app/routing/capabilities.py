@@ -13,8 +13,8 @@ from dataclasses import dataclass
 class ProviderCapabilities:
     """Declared capabilities for a provider.
 
-    Used for capability-aware routing — no hard-coded ``if provider == "claude"``
-    branching in the completion pipeline.
+    Used for capability-aware routing without provider-name branching in the
+    completion pipeline.
     """
 
     supports_streaming: bool = True
@@ -25,12 +25,6 @@ class ProviderCapabilities:
 
 
 _capabilities: dict[str, ProviderCapabilities] = {
-    "claude": ProviderCapabilities(
-        supports_tool_execution=True,
-        supports_thinking=True,
-        supports_images=True,
-        supports_cache_retention=True,
-    ),
     "gemini": ProviderCapabilities(
         supports_tool_execution=True,
         supports_thinking=True,

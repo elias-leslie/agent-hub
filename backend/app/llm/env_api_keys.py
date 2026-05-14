@@ -19,10 +19,6 @@ def _get_api_key_env_vars(provider: str) -> tuple[str, ...] | None:
     if provider == "github-copilot":
         return ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
 
-    # ANTHROPIC_OAUTH_TOKEN takes precedence over ANTHROPIC_API_KEY.
-    if provider == "anthropic":
-        return ("ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
-
     env_map = {
         "openai": "OPENAI_API_KEY",
         "azure-openai-responses": "AZURE_OPENAI_API_KEY",
@@ -92,8 +88,6 @@ def find_env_keys(provider: str) -> list[str] | None:
 
 def _credential_providers(provider: str) -> tuple[str, ...]:
     aliases = {
-        "anthropic": ("anthropic", "claude"),
-        "claude": ("claude", "anthropic"),
         "codex": ("codex",),
         "google": ("gemini", "google"),
         "gemini": ("gemini", "google"),
@@ -114,7 +108,7 @@ def _get_cached_api_key(provider: str) -> str | None:
 
     manager = get_credential_manager()
     for candidate in _credential_providers(provider):
-        if candidate in {"anthropic", "claude", "codex"}:
+        if candidate == "codex":
             oauth_token = manager.get(candidate, "oauth_token")
             if oauth_token:
                 return _extract_access_token(oauth_token)

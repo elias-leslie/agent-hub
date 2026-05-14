@@ -106,6 +106,7 @@ class ModelInfo(BaseModel):
     alias: str = Field(..., description="Short alias for @mention")
     hint: str = Field(..., description="Brief UI hint")
     provider: str = Field(..., description="Provider name")
+    routable: bool = Field(..., description="Whether Agent Hub may execute workloads through this model")
     scores: ModelScoresInfo
     cost: ModelCostInfo
     context_window: int

@@ -16,7 +16,7 @@ class SubagentConfig:
     name: str
     """Human-readable name for the subagent."""
 
-    provider: str = "claude"
+    provider: str = "gemini"
     """Which provider to use (validated by registry at adapter resolution)."""
 
     model: str | None = None

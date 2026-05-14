@@ -8,7 +8,7 @@ Self-hosted control plane for running, observing, and improving multi-provider A
 
 Most agent demos stop at chat. Agent Hub adds the operational layer that real deployments need:
 
-- Unified completions across Claude, Gemini, OpenAI, and OpenRouter
+- Unified completions across routed providers such as Gemini, OpenAI, OpenRouter, Kimi, and MiniMax
 - Persistent PostgreSQL-backed memory with progressive context injection
 - A named persona workspace with heartbeat automation and self-improvement loops
 - Operator dashboards for sessions, regressions, routing pressure, and cost
@@ -92,7 +92,6 @@ AGENT_HUB_SECRET_KEY=<random-urlsafe-token>
 HATCHET_CLIENT_TOKEN=<generated-by-scripts/generate-hatchet-dev-token.sh>
 HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070
 HATCHET_CLIENT_TLS_STRATEGY=none
-ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=

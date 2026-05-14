@@ -17,8 +17,6 @@ from app.llm.types import Api, Model, ModelCost
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
 _PROVIDER_API: dict[str, Api] = {
-    "anthropic": "anthropic-messages",
-    "claude": "anthropic-messages",
     "google": "google-generative-ai",
     "gemini": "google-generative-ai",
     # Everything OpenAI-compatible collapses here per D4.
@@ -41,8 +39,6 @@ _PROVIDER_API: dict[str, Api] = {
 
 # Provider → default base URL. Per-model overrides happen via Model.base_url.
 _PROVIDER_BASE_URL: dict[str, str] = {
-    "anthropic": "https://api.anthropic.com",
-    "claude": "https://api.anthropic.com",
     "google": "",
     "gemini": "",
     "openai": "https://api.openai.com/v1",

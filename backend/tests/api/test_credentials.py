@@ -64,19 +64,19 @@ class TestCreateCredential:
         response = client.post(
             "/api/credentials",
             json={
-                "provider": "claude",
+                "provider": "kimi-code",
                 "credential_type": "api_key",
-                "value": "sk-ant-test-12345678901234567890",
+                "value": "kimi-test-12345678901234567890",
             },
         )
 
         assert response.status_code == 201
         data = response.json()
         assert data["id"] == 1
-        assert data["provider"] == "claude"
+        assert data["provider"] == "kimi-code"
         assert data["credential_type"] == "api_key"
         # Value should be masked
-        assert "sk-a" in data["value_masked"]
+        assert "kimi" in data["value_masked"]
         assert "****" in data["value_masked"]
         assert "7890" in data["value_masked"]
         mock_db_session.add.assert_called_once()
@@ -114,7 +114,7 @@ class TestCreateCredential:
         response = client.post(
             "/api/credentials",
             json={
-                "provider": "claude",
+                "provider": "gemini",
                 "credential_type": "invalid_type",
                 "value": "test",
             },
@@ -127,7 +127,7 @@ class TestCreateCredential:
         response = client.post(
             "/api/credentials",
             json={
-                "provider": "claude",
+                "provider": "gemini",
                 "credential_type": "api_key",
             },
         )
@@ -154,11 +154,11 @@ class TestListCredentials:
         """Test listing credentials with results."""
         # Create mock credential
         fernet = Fernet(TEST_KEY.encode())
-        encrypted = fernet.encrypt(b"sk-ant-test123456789012")
+        encrypted = fernet.encrypt(b"gemini-test123456789012")
 
         mock_credential = MagicMock()
         mock_credential.id = 1
-        mock_credential.provider = "claude"
+        mock_credential.provider = "gemini"
         mock_credential.credential_type = "api_key"
         mock_credential.value_encrypted = encrypted
         mock_credential.created_at = datetime.now(UTC)
@@ -173,7 +173,7 @@ class TestListCredentials:
         assert response.status_code == 200
         data = response.json()
         assert len(data["credentials"]) == 1
-        assert data["credentials"][0]["provider"] == "claude"
+        assert data["credentials"][0]["provider"] == "gemini"
         # Value should be masked
         assert "****" in data["credentials"][0]["value_masked"]
         assert data["total"] == 1
@@ -215,7 +215,7 @@ class TestListCredentials:
         mock_result.scalars.return_value.all.return_value = []
         mock_db_session.execute.return_value = mock_result
 
-        response = client.get("/api/credentials?provider=claude")
+        response = client.get("/api/credentials?provider=gemini")
 
         assert response.status_code == 200
 
@@ -226,11 +226,11 @@ class TestGetCredential:
     def test_get_credential_success(self, client, mock_db_session):
         """Test getting a credential by ID."""
         fernet = Fernet(TEST_KEY.encode())
-        encrypted = fernet.encrypt(b"sk-ant-secretkey12345")
+        encrypted = fernet.encrypt(b"gemini-secretkey12345")
 
         mock_credential = MagicMock()
         mock_credential.id = 1
-        mock_credential.provider = "claude"
+        mock_credential.provider = "gemini"
         mock_credential.credential_type = "api_key"
         mock_credential.value_encrypted = encrypted
         mock_credential.created_at = datetime.now(UTC)
@@ -243,7 +243,7 @@ class TestGetCredential:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == 1
-        assert data["provider"] == "claude"
+        assert data["provider"] == "gemini"
         # Value should be masked
         assert "****" in data["value_masked"]
 
@@ -276,7 +276,7 @@ class TestUpdateCredential:
         """Test updating a credential."""
         mock_credential = MagicMock()
         mock_credential.id = 1
-        mock_credential.provider = "claude"
+        mock_credential.provider = "gemini"
         mock_credential.credential_type = "api_key"
         mock_credential.created_at = datetime.now(UTC)
         mock_credential.updated_at = datetime.now(UTC)
@@ -314,7 +314,7 @@ class TestDeleteCredential:
         """Test successfully deleting a credential."""
         mock_credential = MagicMock()
         mock_credential.id = 1
-        mock_credential.provider = "claude"
+        mock_credential.provider = "gemini"
         mock_db_session.get.return_value = mock_credential
 
         response = client.delete("/api/credentials/1")

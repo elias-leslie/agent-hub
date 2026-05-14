@@ -32,8 +32,6 @@ describe('ProviderStatusParts', () => {
       <TimestampRow
         authSince="2026-03-05T16:53:01.101456Z"
         healthData={undefined}
-        isClaude={false}
-        oauthStatus={undefined}
       />,
     )
 
