@@ -17,12 +17,12 @@ def test_nvidia_catalog_id_maps_to_upstream_model_id() -> None:
     assert model.base_url == "https://integrate.api.nvidia.com/v1"
 
 
-def test_minimax_uses_minimax_openai_compatible_endpoint() -> None:
+def test_minimax_uses_minimax_anthropic_compatible_endpoint() -> None:
     model = resolve_llm_model("minimax/MiniMax-M2.7", "minimax")
 
-    assert model.api == "openai-completions"
+    assert model.api == "anthropic-messages"
     assert model.id == "MiniMax-M2.7"
-    assert model.base_url == "https://api.minimax.io/v1"
+    assert model.base_url == "https://api.minimax.io/anthropic"
 
 
 def test_kimi_code_uses_anthropic_compatible_membership_endpoint() -> None:
@@ -30,8 +30,8 @@ def test_kimi_code_uses_anthropic_compatible_membership_endpoint() -> None:
 
     assert model.api == "anthropic-messages"
     assert model.id == "kimi-for-coding"
-    assert model.base_url == "https://api.kimi.com/coding/"
-    assert model.headers == {"User-Agent": "agent-hub/1.0"}
+    assert model.base_url == "https://api.kimi.com/coding"
+    assert model.headers == {"User-Agent": "KimiCLI/1.5"}
 
 
 def test_codex_uses_chatgpt_codex_responses_endpoint() -> None:
