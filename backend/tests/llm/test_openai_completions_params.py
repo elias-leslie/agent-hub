@@ -24,8 +24,8 @@ def test_provider_specific_fields_move_to_extra_body() -> None:
     }
 
 
-def test_minimax_uses_system_role_and_plain_max_tokens() -> None:
-    model = resolve_llm_model("minimax/MiniMax-M2.7", "minimax")
+def test_moonshot_uses_system_role_and_plain_max_tokens() -> None:
+    model = resolve_llm_model("moonshot/kimi-k2.6", "moonshot")
     compat = _get_compat(model)
 
     params = build_params(
@@ -41,5 +41,5 @@ def test_minimax_uses_system_role_and_plain_max_tokens() -> None:
 
     assert params["messages"][0] == {"role": "system", "content": "system prompt"}
     assert "store" not in params
-    assert "stream_options" not in params
+    assert "max_completion_tokens" not in params
     assert compat.max_tokens_field == "max_tokens"

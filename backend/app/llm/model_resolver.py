@@ -26,8 +26,10 @@ _PROVIDER_API: dict[str, Api] = {
     "openrouter": "openai-completions",
     "xai": "openai-completions",
     "zhipu": "openai-completions",
-    "minimax": "openai-completions",
+    "minimax": "anthropic-messages",
+    "minimax-cn": "anthropic-messages",
     "kimi-code": "anthropic-messages",
+    "kimi-coding": "anthropic-messages",
     "moonshot": "openai-completions",
     "moonshotai": "openai-completions",
     "deepseek": "openai-completions",
@@ -47,8 +49,10 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "openrouter": "https://openrouter.ai/api/v1",
     "xai": "https://api.x.ai/v1",
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-    "minimax": "https://api.minimax.io/v1",
-    "kimi-code": "https://api.kimi.com/coding/",
+    "minimax": "https://api.minimax.io/anthropic",
+    "minimax-cn": "https://api.minimaxi.com/anthropic",
+    "kimi-code": "https://api.kimi.com/coding",
+    "kimi-coding": "https://api.kimi.com/coding",
     "moonshot": "https://api.moonshot.ai/v1",
     "moonshotai": "https://api.moonshot.ai/v1",
     "deepseek": "https://api.deepseek.com/v1",
@@ -112,7 +116,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
 
     caps = entry.capabilities
     inputs: list = ["text"] + (["image"] if caps.has_vision else [])
-    headers = {"User-Agent": "agent-hub/1.0"} if provider == "kimi-code" else None
+    headers = {"User-Agent": "KimiCLI/1.5"} if provider in {"kimi-code", "kimi-coding"} else None
     return Model(
         id=upstream_id,
         name=entry.name,

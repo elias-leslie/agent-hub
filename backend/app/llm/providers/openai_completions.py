@@ -2,7 +2,7 @@
 
 Single-file provider serving every OpenAI-compatible API the catalog uses:
 OpenAI, xAI, OpenRouter, Kimi, Moonshot, DeepSeek, Zhipu, Cerebras,
-Together, Nvidia, Minimax, Vercel AI Gateway, GitHub Copilot, …
+Together, Nvidia, Vercel AI Gateway, GitHub Copilot, …
 They differ only by ``base_url`` + (optional) ``compat`` overrides.
 The 13+ legacy adapter files in ``backend/app/adapters/`` collapse into this
 one module.
