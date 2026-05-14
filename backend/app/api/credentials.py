@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -32,9 +30,6 @@ router = APIRouter()
 
 # Valid credential types
 VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token", "account_id"}
-
-CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
-
 
 def _is_visible_credential_provider(provider: str) -> bool:
     """Return whether a credential provider should be exposed via the public API."""
@@ -78,7 +73,7 @@ def _decrypt_masked(value_encrypted: str) -> str:
 class CredentialCreate(BaseModel):
     """Request body for creating a credential."""
 
-    provider: str = Field(..., max_length=100, description="Provider name (claude, cloudflare, codex, deepseek, gemini, local, minimax, moonshot, nvidia, openrouter, openai, xai, zhipu)")
+    provider: str = Field(..., max_length=100, description="Provider name (cloudflare, codex, deepseek, gemini, local, minimax, moonshot, nvidia, openrouter, openai, xai, zhipu)")
     credential_type: str = Field(..., max_length=50, description="Type: api_key, oauth_token, refresh_token")
     value: str = Field(..., min_length=1, max_length=10000, description="Credential value (will be encrypted)")
 
@@ -100,17 +95,6 @@ class CredentialResponse(BaseModel):
     updated_at: datetime
 
 
-class ClaudeOAuthStatus(BaseModel):
-    """Read-only status of Claude Code OAuth token."""
-
-    status: str = Field(..., description="valid, expired, or missing")
-    expires_at: datetime | None = Field(default=None, description="Token expiry time")
-    expires_in_seconds: int | None = Field(default=None, description="Seconds until expiry")
-    scopes: list[str] = Field(default_factory=list)
-    subscription_type: str | None = Field(default=None)
-    token_prefix: str | None = Field(default=None, description="First 12 chars of access token")
-
-
 class SetPrimaryCredentialResponse(BaseModel):
     """Response body for setting primary credential."""
 
@@ -125,12 +109,12 @@ async def create_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CredentialResponse:
     """Store a new encrypted credential."""
-    from app.routing.registry import list_providers
+    from app.routing.registry import list_workload_providers
 
     if is_system_credential_provider(request.provider):
         raise HTTPException(status_code=400, detail="System-managed credential providers are not writable via this API")
 
-    valid_providers = set(list_providers())
+    valid_providers = set(list_workload_providers())
     if request.provider not in valid_providers:
         raise HTTPException(
             status_code=400,
@@ -171,42 +155,6 @@ async def list_credentials(
     ]
 
     return {"credentials": [r.model_dump() for r in responses], "total": len(responses)}
-
-
-@router.get("/credentials/claude-oauth-status", response_model=ClaudeOAuthStatus)
-async def get_claude_oauth_status() -> ClaudeOAuthStatus:
-    """Check Claude Code OAuth token status (read-only).
-
-    Reads ~/.claude/.credentials.json without modifying it.
-    """
-    if not CLAUDE_CREDENTIALS_PATH.exists():
-        return ClaudeOAuthStatus(status="missing")
-
-    try:
-        data = json.loads(CLAUDE_CREDENTIALS_PATH.read_text())
-    except (json.JSONDecodeError, OSError) as e:
-        logger.warning(f"Failed to read Claude credentials: {e}")
-        return ClaudeOAuthStatus(status="missing")
-
-    oauth = data.get("claudeAiOauth")
-    if not oauth or not oauth.get("accessToken"):
-        return ClaudeOAuthStatus(status="missing")
-
-    expires_at_ms = oauth.get("expiresAt", 0)
-    now_ms = int(datetime.now().timestamp() * 1000)
-    expires_at = datetime.fromtimestamp(expires_at_ms / 1000) if expires_at_ms else None
-    expires_in = int((expires_at_ms - now_ms) / 1000) if expires_at_ms else None
-    access_token = oauth.get("accessToken", "")
-    token_prefix = access_token[:12] + "..." if len(access_token) > 12 else None
-
-    return ClaudeOAuthStatus(
-        status="valid" if expires_at_ms > now_ms else "expired",
-        expires_at=expires_at,
-        expires_in_seconds=expires_in,
-        scopes=oauth.get("scopes", []),
-        subscription_type=oauth.get("subscriptionType"),
-        token_prefix=token_prefix,
-    )
 
 
 @router.get("/credentials/{credential_id}", response_model=CredentialResponse)

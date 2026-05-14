@@ -2,7 +2,7 @@
 
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { MANUAL_PASTE, PROVIDER_ID_CLAUDE } from './ProviderCardUtils'
+import { MANUAL_PASTE } from './ProviderCardUtils'
 
 interface ManualPasteInputProps {
   providerId: string
@@ -12,7 +12,6 @@ interface ManualPasteInputProps {
 }
 
 export function ManualPasteInput({
-  providerId,
   onSubmit,
   onCancel,
   error,
@@ -25,11 +24,8 @@ export function ManualPasteInput({
     inputRef.current?.focus()
   }, [])
 
-  const isClaude = providerId === PROVIDER_ID_CLAUDE
-  const hint = isClaude ? MANUAL_PASTE.CLAUDE_HINT : MANUAL_PASTE.DEFAULT_HINT
-  const placeholder = isClaude
-    ? MANUAL_PASTE.CLAUDE_PLACEHOLDER
-    : MANUAL_PASTE.DEFAULT_PLACEHOLDER
+  const hint = MANUAL_PASTE.DEFAULT_HINT
+  const placeholder = MANUAL_PASTE.DEFAULT_PLACEHOLDER
 
   async function handleSubmit() {
     if (!value.trim() || submitting) return

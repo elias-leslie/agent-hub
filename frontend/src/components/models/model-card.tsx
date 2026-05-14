@@ -125,6 +125,11 @@ export function ModelCard({
                 {availability}
               </div>
             )}
+            {!model.routable && (
+              <div className="mt-2 inline-flex rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+                Reference only
+              </div>
+            )}
           </div>
 
           {/* Provider badge */}

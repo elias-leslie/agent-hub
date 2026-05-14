@@ -79,6 +79,7 @@ export interface CatalogModel {
   alias: string
   hint: string
   provider: string
+  routable: boolean
   cost: ModelCost
   context_window: number
   speed_tier: string

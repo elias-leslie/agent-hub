@@ -41,9 +41,8 @@ class ContainerManager:
     """
     Manages code execution containers for programmatic tool calling.
 
-    Containers are created by Claude's API and expire after ~4.5 minutes
-    of inactivity. This manager tracks container IDs for reuse within
-    sessions.
+    Provider-managed containers expire after a short idle window. This manager
+    tracks container IDs for reuse within sessions.
     """
 
     def __init__(self) -> None:

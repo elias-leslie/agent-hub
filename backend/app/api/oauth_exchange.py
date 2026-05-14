@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.claude_auth import exchange_claude_code, parse_claude_auth_input
 from app.adapters.codex_auth import exchange_code as exchange_codex_code
 from app.adapters.codex_auth import serialize_stored_oauth_token
 from app.api.oauth_schemas import OAuthExchangeRequest
@@ -44,17 +42,6 @@ def parse_codex_input(raw: str) -> tuple[str, str | None]:
             return code, params.get("state", [None])[0]
 
     return raw, None
-async def exchange_claude(
-    body: OAuthExchangeRequest, code_verifier: str, db: AsyncSession
-) -> str | None:
-    """Exchange Claude OAuth code and store credentials. Returns email or None."""
-    code, _state = parse_claude_auth_input(body.code_input)
-    creds = await exchange_claude_code(code, code_verifier, body.state)
-    token_data = json.dumps({"access_token": creds.access_token, "expires_at": creds.expires_at})
-    await upsert_credential(db, "claude", "oauth_token", token_data)
-    if creds.refresh_token:
-        await upsert_credential(db, "claude", "refresh_token", creds.refresh_token)
-    return None
 
 
 async def exchange_codex(

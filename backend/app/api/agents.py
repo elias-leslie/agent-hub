@@ -26,6 +26,7 @@ from app.api.schemas.agent_schemas import (
 )
 from app.db import get_db
 from app.models import RequestLog, Session
+from app.routing.registry import get_provider_for_model, is_workload_provider
 from app.services.agent_service import AgentDTO, get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.memory.context_builder_settings import resolve_effective_memory_config
@@ -92,13 +93,16 @@ def _agent_create_kwargs(request: AgentCreateRequest, auth: AuthenticatedKey | N
 
 def _agent_update_kwargs(request: AgentUpdateRequest, auth: AuthenticatedKey | None) -> dict[str, Any]:
     """Map an AgentUpdateRequest to keyword arguments for AgentService.update."""
+    escalation_model_id = request.escalation_model_id
+    if "escalation_model_id" in request.model_fields_set and escalation_model_id is None:
+        escalation_model_id = ""
     return dict(
         name=request.name,
         description=request.description,
         system_prompt=request.system_prompt,
         primary_model_id=request.primary_model_id,
         fallback_models=request.fallback_models,
-        escalation_model_id=request.escalation_model_id,
+        escalation_model_id=escalation_model_id,
         strategies=request.strategies,
         temperature=request.temperature,
         thinking_level=request.thinking_level,
@@ -142,6 +146,38 @@ def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPr
             "full_context_estimated_tokens",
         )},
     )
+
+
+def _reject_reference_only_models(
+    *,
+    primary_model_id: str | None = None,
+    fallback_models: list[str] | None = None,
+    escalation_model_id: str | None = None,
+) -> None:
+    """Reject model assignments that Agent Hub must not execute."""
+    candidates: list[tuple[str, str]] = []
+    if primary_model_id:
+        candidates.append(("primary_model_id", primary_model_id))
+    candidates.extend(("fallback_models", model_id) for model_id in fallback_models or [])
+    if escalation_model_id:
+        candidates.append(("escalation_model_id", escalation_model_id))
+
+    for field_name, model_id in candidates:
+        provider = get_provider_for_model(model_id)
+        if not is_workload_provider(provider):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "provider_not_routable",
+                    "field": field_name,
+                    "provider": provider,
+                    "model": model_id,
+                    "message": (
+                        "Claude/Anthropic models are catalog references and external "
+                        "Claude Code TUI only; Agent Hub agent assignments must use a routable provider."
+                    ),
+                },
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +247,11 @@ async def create_agent(
         raise HTTPException(status_code=409, detail=f"Agent '{request.slug}' already exists")
 
     try:
+        _reject_reference_only_models(
+            primary_model_id=request.primary_model_id,
+            fallback_models=request.fallback_models,
+            escalation_model_id=request.escalation_model_id,
+        )
         agent = await service.create(db, **_agent_create_kwargs(request, auth))
         logger.info(f"Created agent: {request.slug}")
         return await _build_agent_response(db, agent)
@@ -234,6 +275,11 @@ async def update_agent(
     agent = await _require_agent(db, slug, active_only=False)
 
     try:
+        _reject_reference_only_models(
+            primary_model_id=request.primary_model_id,
+            fallback_models=request.fallback_models,
+            escalation_model_id=request.escalation_model_id,
+        )
         updated = await service.update(db, agent.id, **_agent_update_kwargs(request, auth))
         if not updated:
             raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")

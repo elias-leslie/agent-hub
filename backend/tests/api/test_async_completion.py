@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.responses import JSONResponse
 
-from app.constants.models import CLAUDE_SONNET
+from app.constants.models import KIMI_CODE_FOR_CODING
 from tests.conftest import APITestClient
 
 # Patch target: orchestrator imports at top-level from sub-modules
@@ -18,8 +18,8 @@ _ORCH = "app.api.complete.complete_orchestrator"
 
 def _mock_agent() -> MagicMock:
     mock_agent = MagicMock()
-    mock_agent.model = CLAUDE_SONNET
-    mock_agent.provider = "claude"
+    mock_agent.model = KIMI_CODE_FOR_CODING
+    mock_agent.provider = "kimi-code"
     mock_agent.agent.slug = "coder"
     mock_agent.agent.fallback_models = []
     mock_agent.agent.memory_config = None
@@ -101,11 +101,11 @@ class TestAsyncDispatch:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(CLAUDE_SONNET, "claude"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -187,11 +187,11 @@ class TestAsyncDispatch:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(CLAUDE_SONNET, "claude"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -245,8 +245,8 @@ class TestAsyncTaskStatus:
         stored: dict[str, Any] = {
             "task_id": "task-123",
             "content": "Done",
-            "model": CLAUDE_SONNET,
-            "provider": "claude",
+            "model": KIMI_CODE_FOR_CODING,
+            "provider": "kimi-code",
             "input_tokens": 100,
             "output_tokens": 50,
             "finish_reason": "end_turn",
@@ -387,11 +387,11 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(CLAUDE_SONNET, "claude"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -417,7 +417,7 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.execute_and_respond",
                 new_callable=AsyncMock,
-                return_value=JSONResponse(content={"content": "sync response", "model": CLAUDE_SONNET}),
+                return_value=JSONResponse(content={"content": "sync response", "model": KIMI_CODE_FOR_CODING}),
             ),
         ):
             response = api_client.post(
@@ -454,11 +454,11 @@ class TestBackwardsCompat:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(CLAUDE_SONNET, "claude"),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -511,8 +511,8 @@ class TestGetTaskStatusViaAPI:
         stored: dict[str, Any] = {
             "task_id": "task-api-1",
             "content": "Result from worker",
-            "model": CLAUDE_SONNET,
-            "provider": "claude",
+            "model": KIMI_CODE_FOR_CODING,
+            "provider": "kimi-code",
             "input_tokens": 100,
             "output_tokens": 50,
             "finish_reason": "end_turn",

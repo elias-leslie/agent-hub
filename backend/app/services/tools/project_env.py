@@ -87,8 +87,7 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
 
     Unlike build_project_env() which returns a full os.environ copy,
     this returns ONLY the keys that need to change. This is designed
-    for callers that merge with os.environ themselves (e.g. Claude SDK
-    does ``{**os.environ, **options.env}``).
+    for callers that merge with os.environ themselves.
 
     Returns empty dict if no venv found.
     """

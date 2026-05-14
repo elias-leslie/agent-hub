@@ -12,7 +12,7 @@ class ResolvedAgent:
 
     agent: AgentDTO
     model: str  # Primary model ID
-    provider: str  # Provider name ("claude", "gemini")
+    provider: str  # Provider identifier
 
 
 @dataclass

@@ -6,6 +6,7 @@ export const codexModel: ModelInfo = {
   provider: 'codex',
   alias: 'codex',
   hint: 'Frontier',
+  routable: true,
   cost: {
     input_per_m: 2.5,
     output_per_m: 15,

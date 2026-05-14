@@ -9,7 +9,7 @@ class CodeReviewPattern(MakerChecker):
 
     def __init__(
         self,
-        maker_provider: str = "claude",
+        maker_provider: str = "kimi-code",
         checker_provider: str = "gemini",
         max_iterations: int = 2,
         project_id: str | None = None,

@@ -40,7 +40,6 @@ def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, 
 
 
 # Keywords that suggest complex reasoning where thinking helps
-# Inspired by Claude Code UX: Tab toggle, "ultrathink" trigger, sticky state
 _THINKING_TRIGGERS = [
     "ultrathink",
     "think hard",

@@ -7,15 +7,12 @@ import { ProviderActionButtons } from './ProviderActionButtons'
 import {
   getOAuthActive,
   hasAnyAuth,
-  isClaudeStatus,
   type ProviderCardProps,
 } from './ProviderCardTypes'
-import { PROVIDER_ID_CLAUDE } from './ProviderCardUtils'
 import { ProviderForm } from './ProviderForm'
 import { ProviderStatusDisplay } from './ProviderStatusDisplay'
 
 export type {
-  ClaudeOAuthStatus,
   OAuthProviderStatus,
   OAuthStatus,
 } from './ProviderCardTypes'
@@ -72,12 +69,10 @@ export function ProviderCard({
   const isConfigured = managedCredentials.length > 0
   const isOAuth = !!provider.oauth
   const isFormOpen = isEditing || isAdding
-  const isClaude = provider.id === PROVIDER_ID_CLAUDE
   const oauthActive = getOAuthActive(oauthStatus)
   const anyAuth = hasAnyAuth(oauthStatus, isConfigured)
 
-  const providerStatus =
-    oauthStatus && !isClaudeStatus(oauthStatus) ? oauthStatus : null
+  const providerStatus = oauthStatus ?? null
   const hasOAuthToken = oauthActive === 'active'
   const hasApiKey =
     providerStatus?.api_key_status === 'configured' || isConfigured
@@ -146,7 +141,6 @@ export function ProviderCard({
             healthData={healthData}
             isConfigured={isConfigured}
             isOAuth={isOAuth}
-            isClaude={isClaude}
             hasApiKey={hasApiKey}
             hasBothCredentials={hasBothCredentials}
             preferredAuth={preferredAuth}

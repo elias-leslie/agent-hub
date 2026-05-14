@@ -12,8 +12,7 @@ identifiers (``send_session_affinity_headers``,
 ``cf-aig-authorization`` bearer) in its compat layer.
 
 This module exposes only the URL templating helpers pi-mono ships in
-``cloudflare.ts``, so other providers (e.g. the Anthropic-via-AI-Gateway
-path) can resolve account-templated base URLs.
+``cloudflare.ts``.
 """
 
 from __future__ import annotations
@@ -36,12 +35,6 @@ CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL = (
 CLOUDFLARE_AI_GATEWAY_OPENAI_BASE_URL = (
     "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai"
 )
-# AI Gateway → Anthropic passthrough.
-CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL = (
-    "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"
-)
-
-
 def is_cloudflare_provider(provider: str) -> bool:
     return provider in ("cloudflare-workers-ai", "cloudflare-ai-gateway")
 
@@ -85,7 +78,6 @@ def _get_cached_cloudflare_value(env_name: str) -> str | None:
 
 
 __all__ = [
-    "CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL",
     "CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL",
     "CLOUDFLARE_AI_GATEWAY_OPENAI_BASE_URL",
     "CLOUDFLARE_WORKERS_AI_BASE_URL",

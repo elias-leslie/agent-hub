@@ -24,6 +24,7 @@ from app.api.models_latency_schemas import LatencyStatsResponse, ModelLatencySta
 from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
 from app.db import get_db
+from app.routing.registry import is_workload_provider
 
 if TYPE_CHECKING:
     from app.constants.catalog import ModelEntry
@@ -118,6 +119,7 @@ def _build_model_info(
         alias=e.alias,
         hint=e.hint,
         provider=e.provider,
+        routable=is_workload_provider(e.provider),
         scores=scores,
         cost=ModelCostInfo(
             input_per_m=input_per_m,

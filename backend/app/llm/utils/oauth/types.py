@@ -21,7 +21,7 @@ class OAuthCredentials:
 
 
 OAuthProviderId = str
-"""Per pi-mono, OAuth provider IDs are open strings (built-ins include ``"anthropic"``)."""
+"""Per pi-mono, OAuth provider IDs are open strings."""
 
 
 @dataclass(slots=True)

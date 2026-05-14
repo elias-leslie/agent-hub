@@ -63,7 +63,6 @@ export {
 } from './api/budgets'
 // Re-export all credentials-related exports
 export type {
-  ClaudeOAuthStatus,
   Credential,
   CredentialCreate,
   CredentialListResponse,
@@ -76,7 +75,6 @@ export {
   createCredential,
   deleteCredential,
   exchangeOAuthCode,
-  fetchClaudeOAuthStatus,
   fetchCredentials,
   fetchOAuthStatus,
   setPrimaryCredential,

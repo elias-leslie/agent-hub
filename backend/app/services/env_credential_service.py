@@ -23,7 +23,6 @@ def load_env_credentials_into_cache() -> list[str]:
     changed: list[str] = []
 
     single_value_credentials = [
-        ("claude", "api_key", settings.anthropic_api_key),
         ("cloudflare", "api_key", settings.cloudflare_api_key),
         ("cloudflare", "account_id", settings.cloudflare_account_id),
         ("deepseek", "api_key", settings.deepseek_api_key),

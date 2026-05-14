@@ -33,7 +33,6 @@ export function buildChatMessage(
     timestamp: new Date(entry.timestamp),
     agentName: personaDisplayName || entry.agent_slug || undefined,
     agentModel: entry.model || undefined,
-    agentProvider: 'claude',
   }
 }
 

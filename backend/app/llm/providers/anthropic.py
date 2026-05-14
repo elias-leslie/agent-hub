@@ -1,8 +1,9 @@
-"""Anthropic provider — reference port of pi-mono ``providers/anthropic.ts``.
+"""Anthropic Messages-compatible provider.
 
 Single-file provider. Native streaming only (no ``messages.create`` without
-``stream=True`` anywhere). Tool catalog, OAuth (Claude Pro/Max), API key,
-and GitHub Copilot bearer auth all funnel through this one file.
+``stream=True`` anywhere). This adapter keeps the Anthropic Messages protocol
+for compatible providers such as Kimi Code and MiniMax; Agent Hub does not use
+Claude/Anthropic as a workload provider.
 """
 
 from __future__ import annotations
@@ -93,48 +94,8 @@ class AnthropicOptions(StreamOptions):
     client: AsyncAnthropic | None = None
 
 
-# --- Claude Code identity (used when API key is an OAuth token) -----------
-
-_CLAUDE_CODE_VERSION = "2.1.75"
 _FINE_GRAINED_TOOL_STREAMING_BETA = "fine-grained-tool-streaming-2025-05-14"
 _INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
-
-# Pi-mono mimics Claude Code's tool naming for OAuth so the upstream
-# allowlist matches. Source: https://cchistory.mariozechner.at/data/prompts-2.1.11.md
-_CLAUDE_CODE_TOOLS = [
-    "Read",
-    "Write",
-    "Edit",
-    "Bash",
-    "Grep",
-    "Glob",
-    "AskUserQuestion",
-    "EnterPlanMode",
-    "ExitPlanMode",
-    "KillShell",
-    "NotebookEdit",
-    "Skill",
-    "Task",
-    "TaskOutput",
-    "TodoWrite",
-    "WebFetch",
-    "WebSearch",
-]
-
-_CC_TOOL_LOOKUP = {t.lower(): t for t in _CLAUDE_CODE_TOOLS}
-
-
-def _to_claude_code_name(name: str) -> str:
-    return _CC_TOOL_LOOKUP.get(name.lower(), name)
-
-
-def _from_claude_code_name(name: str, tools: list[Tool] | None) -> str:
-    if tools:
-        lower_name = name.lower()
-        for tool in tools:
-            if tool.name.lower() == lower_name:
-                return tool.name
-    return name
 
 
 # --- Cache-retention helpers ----------------------------------------------
@@ -179,9 +140,6 @@ def _get_anthropic_compat(model: Model[Any]) -> AnthropicMessagesCompat:
     """Resolve effective compat settings (defaults + auto-detected per provider)."""
 
     is_fireworks = model.provider == "fireworks"
-    is_cf_gw_anthropic = (
-        model.provider == "cloudflare-ai-gateway" and "anthropic" in model.base_url
-    )
 
     compat: AnthropicMessagesCompat | None = None
     if isinstance(model.compat, AnthropicMessagesCompat):
@@ -201,20 +159,13 @@ def _get_anthropic_compat(model: Model[Any]) -> AnthropicMessagesCompat:
         ),
         send_session_affinity_headers=_or(
             compat.send_session_affinity_headers if compat else None,
-            is_fireworks or is_cf_gw_anthropic,
+            is_fireworks,
         ),
         supports_cache_control_on_tools=_or(
             compat.supports_cache_control_on_tools if compat else None,
             not is_fireworks,
         ),
     )
-
-
-# --- OAuth detection ------------------------------------------------------
-
-
-def _is_oauth_token(api_key: str) -> bool:
-    return "sk-ant-oat" in (api_key or "")
 
 
 # --- Content-block conversion ---------------------------------------------
@@ -268,7 +219,6 @@ def _normalize_tool_call_id(id_: str, _model: Model[Any], _src: AssistantMessage
 def convert_messages(
     messages: list[Message],
     model: Model[Any],
-    is_oauth_token: bool,
     cache_control: _CacheControl | None,
 ) -> list[dict[str, Any]]:
     """Convert universal messages to Anthropic ``MessageParam`` list."""
@@ -339,7 +289,7 @@ def convert_messages(
                         {
                             "type": "tool_use",
                             "id": block.id,
-                            "name": _to_claude_code_name(block.name) if is_oauth_token else block.name,
+                            "name": block.name,
                             "input": block.arguments or {},
                         }
                     )
@@ -394,7 +344,6 @@ def convert_messages(
 
 def _convert_tools(
     tools: list[Tool],
-    is_oauth_token: bool,
     supports_eager_tool_input_streaming: bool,
     cache_control: _CacheControl | None,
 ) -> list[dict[str, Any]]:
@@ -402,7 +351,7 @@ def _convert_tools(
     for index, tool in enumerate(tools):
         schema = tool.parameters or {}
         params: dict[str, Any] = {
-            "name": _to_claude_code_name(tool.name) if is_oauth_token else tool.name,
+            "name": tool.name,
             "description": tool.description,
             "input_schema": {
                 "type": "object",
@@ -449,7 +398,6 @@ def _map_thinking_level_to_effort(
 def build_params(
     model: Model[Any],
     context: Context,
-    is_oauth_token: bool,
     options: AnthropicOptions | None,
 ) -> dict[str, Any]:
     """Build the Anthropic ``messages.create`` request body."""
@@ -460,30 +408,12 @@ def build_params(
 
     params: dict[str, Any] = {
         "model": model.id,
-        "messages": convert_messages(context.messages, model, is_oauth_token, cc),
+        "messages": convert_messages(context.messages, model, cc),
         "max_tokens": (options.max_tokens if options and options.max_tokens else (model.max_tokens // 3)),
         "stream": True,
     }
 
-    # System prompt (Claude Code identity on OAuth, plain otherwise).
-    if is_oauth_token:
-        system_blocks: list[dict[str, Any]] = [
-            {
-                "type": "text",
-                "text": "You are Claude Code, Anthropic's official CLI for Claude.",
-                **({"cache_control": cc_payload} if cc_payload else {}),
-            }
-        ]
-        if context.system_prompt:
-            system_blocks.append(
-                {
-                    "type": "text",
-                    "text": sanitize_surrogates(context.system_prompt),
-                    **({"cache_control": cc_payload} if cc_payload else {}),
-                }
-            )
-        params["system"] = system_blocks
-    elif context.system_prompt:
+    if context.system_prompt:
         params["system"] = [
             {
                 "type": "text",
@@ -499,7 +429,6 @@ def build_params(
         compat = _get_anthropic_compat(model)
         params["tools"] = _convert_tools(
             context.tools,
-            is_oauth_token,
             bool(compat.supports_eager_tool_input_streaming),
             cc if compat.supports_cache_control_on_tools else None,
         )
@@ -543,8 +472,8 @@ def create_client(
     use_fine_grained_tool_streaming_beta: bool,
     options_headers: dict[str, str] | None,
     session_id: str | None,
-) -> tuple[AsyncAnthropic, bool]:
-    """Return ``(client, is_oauth_token)`` for ``model`` + credentials."""
+) -> AsyncAnthropic:
+    """Return an Anthropic Messages-compatible client for ``model``."""
 
     needs_interleaved_beta = interleaved_thinking and not _supports_adaptive_thinking(model.id)
     beta_features: list[str] = []
@@ -552,23 +481,6 @@ def create_client(
         beta_features.append(_FINE_GRAINED_TOOL_STREAMING_BETA)
     if needs_interleaved_beta:
         beta_features.append(_INTERLEAVED_THINKING_BETA)
-
-    if model.provider == "cloudflare-ai-gateway":
-        headers = _merge_headers(
-            {
-                "accept": "application/json",
-                "cf-aig-authorization": f"Bearer {api_key}",
-                **({"anthropic-beta": ",".join(beta_features)} if beta_features else {}),
-            },
-            model.headers,
-            options_headers,
-        )
-        client = AsyncAnthropic(
-            api_key="placeholder",  # ignored — auth is via cf-aig-authorization
-            base_url=model.base_url,
-            default_headers=headers,
-        )
-        return client, False
 
     if model.provider == "github-copilot":
         headers = _merge_headers(
@@ -584,27 +496,7 @@ def create_client(
             base_url=model.base_url,
             default_headers=headers,
         )
-        return client, False
-
-    if _is_oauth_token(api_key):
-        headers = _merge_headers(
-            {
-                "accept": "application/json",
-                "anthropic-beta": ",".join(
-                    ["claude-code-20250219", "oauth-2025-04-20", *beta_features]
-                ),
-                "user-agent": f"claude-cli/{_CLAUDE_CODE_VERSION}",
-                "x-app": "cli",
-            },
-            model.headers,
-            options_headers,
-        )
-        client = AsyncAnthropic(
-            auth_token=api_key,
-            base_url=model.base_url,
-            default_headers=headers,
-        )
-        return client, True
+        return client
 
     affinity: dict[str, str] = {}
     compat = _get_anthropic_compat(model)
@@ -625,7 +517,7 @@ def create_client(
         base_url=model.base_url,
         default_headers=headers,
     )
-    return client, False
+    return client
 
 
 def _merge_headers(*sources: dict[str, str] | None) -> dict[str, str]:
@@ -731,14 +623,12 @@ def stream_anthropic(
 
         try:
             client: AsyncAnthropic
-            is_oauth: bool
 
             if options and options.client is not None:
                 client = options.client
-                is_oauth = False
             else:
                 api_key = (options.api_key if options else None) or get_env_api_key(model.provider) or ""
-                client, is_oauth = create_client(
+                client = create_client(
                     model,
                     api_key,
                     interleaved_thinking=(options.interleaved_thinking if options and options.interleaved_thinking is not None else True),
@@ -747,7 +637,7 @@ def stream_anthropic(
                     session_id=(options.session_id if options and options.cache_retention != "none" else None),
                 )
 
-            params = build_params(model, context, is_oauth, options)
+            params = build_params(model, context, options)
 
             if options and options.on_payload is not None:
                 maybe = options.on_payload(params, model)
@@ -781,7 +671,7 @@ def stream_anthropic(
                 async for event in message_stream:
                     if options and options.signal is not None and options.signal.is_set():
                         raise asyncio.CancelledError("Request was aborted")
-                    _handle_event(event, state, stream, model, context.tools, is_oauth)
+                    _handle_event(event, state, stream, model)
 
             if options and options.signal is not None and options.signal.is_set():
                 raise asyncio.CancelledError("Request was aborted")
@@ -916,8 +806,6 @@ def _handle_event(
     state: _StreamState,
     stream: AssistantMessageEventStream,
     model: Model[Any],
-    tools: list[Tool] | None,
-    is_oauth: bool,
 ) -> None:
     """Dispatch one SDK event into the AssistantMessageEvent stream."""
 
@@ -986,7 +874,7 @@ def _handle_event(
             output.content.append(
                 ToolCall(
                     id=tool_id,
-                    name=_from_claude_code_name(name, tools) if is_oauth else name,
+                    name=name,
                     arguments=initial_input if isinstance(initial_input, dict) else {},
                 )
             )

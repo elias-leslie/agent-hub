@@ -29,6 +29,24 @@ from app.llm.providers.faux import (
     register_faux_provider,
 )
 from app.llm.types import TextContent
+from app.services.llm_errors import ProviderError
+
+
+@pytest.mark.asyncio
+async def test_reference_only_provider_is_rejected_before_execution() -> None:
+    with pytest.raises(ProviderError) as exc_info:
+        await complete_internal(
+            temperature=0.0,
+            messages=[{"role": "user", "content": "hi"}],
+            model="claude-sonnet-4-6",
+            provider="claude",
+            project_id="agent-hub",
+            db=None,
+            use_memory=False,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "catalog references" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -559,19 +577,19 @@ async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
             result = await complete_internal(
                 temperature=0.0,
                 messages=[{"role": "user", "content": "hi"}],
-                model="claude-sonnet-4-6",
-                provider="anthropic",
+                model=model.id,
+                provider=model.provider,
                 project_id="agent-hub",
                 db=AsyncMock(),
                 use_memory=False,
-                requested_model="claude-sonnet-4-6",
-                requested_provider="anthropic",
+                requested_model="codex/gpt-5.4-mini",
+                requested_provider="codex",
             )
 
         # Required by downstream-consumers.md Section 6:
         assert result.content == "done"
-        assert result.model == "claude-sonnet-4-6"
-        assert result.provider == "anthropic"
+        assert result.model == "codex/gpt-5.4-mini"
+        assert result.provider == "codex"
         assert isinstance(result.input_tokens, int)
         assert isinstance(result.output_tokens, int)
         assert result.finish_reason == "stop"
@@ -580,8 +598,8 @@ async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
         assert result.cited_uuids == []
         assert result.turns == 1
         assert result.tool_calls_count == 0
-        assert result.model_used == "claude-sonnet-4-6"
-        assert result.requested_model == "claude-sonnet-4-6"
-        assert result.requested_provider == "anthropic"
+        assert result.model_used == model.id
+        assert result.requested_model == "codex/gpt-5.4-mini"
+        assert result.requested_provider == "codex"
     finally:
         reg.unregister()

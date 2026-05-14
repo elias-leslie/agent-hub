@@ -19,6 +19,7 @@ const models: ModelInfo[] = [
     provider: 'claude',
     alias: 'opus-4.7',
     hint: 'Frontier',
+    routable: false,
     cost: {
       input_per_m: 15,
       output_per_m: 75,

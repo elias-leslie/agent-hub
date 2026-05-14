@@ -34,9 +34,6 @@ export function formatDuration(totalSeconds: number): string {
 // Re-exported from canonical location
 export { formatLatency } from '@/lib/formatters'
 
-// Magic string constants
-export const PROVIDER_ID_CLAUDE = 'claude'
-
 export const OAUTH_STATUS = {
   AUTHENTICATED: 'authenticated',
   EXPIRED: 'expired',
@@ -49,9 +46,7 @@ export const AUTH_PREFERENCE = {
 } as const
 
 export const MANUAL_PASTE = {
-  CLAUDE_HINT: "Copy the code from Anthropic's page and paste it here",
   DEFAULT_HINT:
     "If the popup didn't redirect, copy the URL from the address bar",
-  CLAUDE_PLACEHOLDER: 'paste authorization code here',
   DEFAULT_PLACEHOLDER: 'https://localhost/...?code=...',
 } as const

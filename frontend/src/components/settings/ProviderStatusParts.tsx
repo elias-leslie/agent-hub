@@ -4,18 +4,11 @@ import { Activity, AlertTriangle, Clock, Key, Shield, Zap } from 'lucide-react'
 import type { Credential } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { ProviderInfo } from './constants'
-import {
-  isClaudeStatus,
-  type OAuthProviderStatus,
-  type OAuthStatus,
-  type ProviderHealthData,
+import type {
+  OAuthProviderStatus,
+  ProviderHealthData,
 } from './ProviderCardTypes'
-import {
-  formatDuration,
-  formatLatency,
-  timeAgo,
-  unixTimeAgo,
-} from './ProviderCardUtils'
+import { formatLatency, timeAgo, unixTimeAgo } from './ProviderCardUtils'
 
 // ---------------------------------------------------------------------------
 // Auth Badges
@@ -23,8 +16,6 @@ import {
 
 export function AuthBadges({
   isOAuth,
-  isClaude,
-  oauthStatus,
   hasApiKey,
   isConfigured,
   primaryCredential,
@@ -33,8 +24,6 @@ export function AuthBadges({
   credentials,
 }: {
   isOAuth: boolean
-  isClaude: boolean
-  oauthStatus?: OAuthStatus
   hasApiKey: boolean
   isConfigured: boolean
   primaryCredential?: Credential
@@ -45,67 +34,31 @@ export function AuthBadges({
   const badges: React.ReactNode[] = []
 
   if (isOAuth) {
-    if (isClaude && oauthStatus && isClaudeStatus(oauthStatus)) {
-      const isValid = oauthStatus.status === 'valid'
-      const isExpired = oauthStatus.status === 'expired'
+    const oauthState = providerStatus?.oauth_status
+    const isAuth = oauthState === 'authenticated'
+    const isExpired = oauthState === 'expired'
+    badges.push(
+      <span
+        key="oauth"
+        className={cn(
+          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+          isAuth
+            ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
+            : isExpired
+              ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
+              : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
+        )}
+      >
+        <Shield className="h-2.5 w-2.5" />
+        OAuth {isAuth ? 'Active' : isExpired ? 'Expired' : '—'}
+      </span>,
+    )
+    if (isAuth && providerStatus?.email) {
       badges.push(
-        <span
-          key="oauth"
-          className={cn(
-            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
-            isValid
-              ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
-              : isExpired
-                ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
-                : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
-          )}
-        >
-          <Shield className="h-2.5 w-2.5" />
-          OAuth {isValid ? 'Active' : isExpired ? 'Expired' : '—'}
+        <span key="email" className="text-[10px] text-slate-500">
+          {providerStatus.email}
         </span>,
       )
-      if (isValid && oauthStatus.expires_in_seconds != null) {
-        badges.push(
-          <span key="expires" className="text-[10px] text-slate-500">
-            expires in {formatDuration(oauthStatus.expires_in_seconds)}
-          </span>,
-        )
-      }
-      if (isExpired) {
-        badges.push(
-          <span key="reauth" className="text-[10px] text-red-400">
-            run `claude` to re-auth
-          </span>,
-        )
-      }
-    } else {
-      // Non-Claude OAuth providers
-      const oauthState = providerStatus?.oauth_status
-      const isAuth = oauthState === 'authenticated'
-      const isExpired = oauthState === 'expired'
-      badges.push(
-        <span
-          key="oauth"
-          className={cn(
-            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
-            isAuth
-              ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
-              : isExpired
-                ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
-                : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
-          )}
-        >
-          <Shield className="h-2.5 w-2.5" />
-          OAuth {isAuth ? 'Active' : isExpired ? 'Expired' : '—'}
-        </span>,
-      )
-      if (isAuth && providerStatus?.email) {
-        badges.push(
-          <span key="email" className="text-[10px] text-slate-500">
-            {providerStatus.email}
-          </span>,
-        )
-      }
     }
   }
 
@@ -237,13 +190,9 @@ export function HealthMetricsStrip({
 export function TimestampRow({
   authSince,
   healthData,
-  isClaude,
-  oauthStatus,
 }: {
   authSince: string | null
   healthData?: ProviderHealthData
-  isClaude: boolean
-  oauthStatus?: OAuthStatus
 }) {
   const lastCheck = healthData?.health?.last_check
   const lastSuccess = healthData?.health?.last_success
@@ -259,17 +208,6 @@ export function TimestampRow({
           Credentials updated {timeAgo(authSince)}
         </span>
       )}
-      {/* For Claude with valid OAuth but no DB credential, show token expiry instead */}
-      {!authSince &&
-        isClaude &&
-        oauthStatus &&
-        isClaudeStatus(oauthStatus) &&
-        oauthStatus.status === 'valid' && (
-          <span className="flex items-center gap-0.5">
-            <Shield className="h-2.5 w-2.5" />
-            OAuth active via CLI
-          </span>
-        )}
       {lastCheck && lastCheck > 0 && (
         <span>Checked {unixTimeAgo(lastCheck)}</span>
       )}

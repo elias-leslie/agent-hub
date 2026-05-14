@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from app.constants import (
-    CLAUDE_SONNET,
     GEMINI_FLASH,
     MODEL_CATALOG,
     MODEL_CATALOG_BY_ID,
 )
+from app.routing.registry import is_workload_provider
 
 
 def get_fallback_model(model_id: str, target_provider: str) -> str | None:
@@ -22,7 +22,7 @@ def get_fallback_model(model_id: str, target_provider: str) -> str | None:
     Returns:
         Mapped model identifier for target provider, or None if not found
     """
-    if model_id not in MODEL_CATALOG_BY_ID:
+    if not is_workload_provider(target_provider) or model_id not in MODEL_CATALOG_BY_ID:
         return None
     source_score = MODEL_CATALOG_BY_ID[model_id].scores.composite
     candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]
@@ -52,8 +52,6 @@ def map_model_to_provider(original_model: str, target_provider: str) -> str:
     # Fallback to provider defaults
     if target_provider == "gemini":
         return GEMINI_FLASH
-    elif target_provider == "claude":
-        return CLAUDE_SONNET
     else:
         # Try to find any model from target provider
         candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]

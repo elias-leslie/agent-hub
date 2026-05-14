@@ -1,4 +1,4 @@
-"""OAuth flow endpoints for Claude and Codex providers.
+"""OAuth flow endpoints for supported workload providers.
 
 Handles the browser-based OAuth PKCE flow:
 1. Frontend calls POST /api/oauth/{provider}/authorize
@@ -7,7 +7,7 @@ Handles the browser-based OAuth PKCE flow:
 3. Frontend opens auth URL in popup AND shows manual paste input
 4. **Local path**: callback server receives redirect -> tokens stored -> popup
    does postMessage("oauth-success") -> frontend clears paste UI
-5. **Remote path** (or Claude): user copies code/URL -> pastes into input ->
+5. **Remote path**: user copies code/URL -> pastes into input ->
    frontend calls POST /api/oauth/{provider}/exchange -> tokens stored
 6. Whichever path completes first wins; the other is cancelled/cleaned up.
 """
@@ -20,9 +20,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.claude_auth import create_claude_auth_flow
 from app.adapters.codex_auth import create_auth_flow as create_codex_auth_flow
-from app.api.oauth_exchange import exchange_claude, exchange_codex
+from app.api.oauth_exchange import exchange_codex
 from app.api.oauth_flows import complete_codex_flow
 from app.api.oauth_schemas import (
     OAuthAuthorizeResponse,
@@ -30,7 +29,7 @@ from app.api.oauth_schemas import (
     OAuthExchangeResponse,
     OAuthStatusResponse,
 )
-from app.api.oauth_status import check_claude_token_status, check_codex_token_status
+from app.api.oauth_status import check_codex_token_status
 from app.api.oauth_store import (
     cancel_active_server,
     cleanup_expired_flows,
@@ -46,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
-_SUPPORTED_PROVIDERS = frozenset({"claude", "codex"})
+_SUPPORTED_PROVIDERS = frozenset({"codex"})
 
 
 # ---------------------------------------------------------------------------
@@ -63,15 +62,6 @@ async def authorize_codex(db: Annotated[AsyncSession, Depends(get_db)]) -> OAuth
     set_pending_flow(flow["state"], "codex", flow["code_verifier"])
     spawn_background_task(complete_codex_flow(flow["state"], db))
     return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
-
-
-@router.post("/claude/authorize", response_model=OAuthAuthorizeResponse)
-async def authorize_claude() -> OAuthAuthorizeResponse:
-    """Start Claude OAuth PKCE flow (no local callback server needed)."""
-    cleanup_expired_flows()
-    flow = create_claude_auth_flow()
-    set_pending_flow(flow["state"], "claude", flow["code_verifier"])
-    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=False)
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +83,7 @@ async def get_oauth_status(
     cm = get_credential_manager()
     api_key_status = "configured" if cm.get_api_key(provider) else "not_configured"
 
-    if provider == "claude":
-        oauth_status, email = check_claude_token_status()
-    else:
-        oauth_status, email = check_codex_token_status()
+    oauth_status, email = check_codex_token_status()
 
     preferred_auth = await get_preference_value(db, f"{provider}_auth_preference", "api_key")
 
@@ -122,8 +109,7 @@ async def exchange_oauth_code(
 ) -> OAuthExchangeResponse:
     """Manually exchange an OAuth code/URL for tokens.
 
-    Used when the local callback server is unreachable (remote access)
-    or for Claude (which never has a callback server).
+    Used when the local callback server is unreachable (remote access).
     """
     if provider not in _SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Exchange not supported for provider: {provider}")
@@ -138,10 +124,7 @@ async def exchange_oauth_code(
     cancel_active_server(provider)
 
     try:
-        if provider == "claude":
-            email = await exchange_claude(body, code_verifier, db)
-        else:
-            email = await exchange_codex(body, code_verifier, db)
+        email = await exchange_codex(body, code_verifier, db)
 
         from app.routing.registry import invalidate as invalidate_adapter
 

@@ -17,6 +17,8 @@ export function ModelSelect({
   models,
   allowNull = false,
 }: ModelSelectProps) {
+  const routableModels = models.filter((model) => model.routable)
+
   return (
     <div className="section-card space-y-3">
       <div>
@@ -31,7 +33,7 @@ export function ModelSelect({
         className="control-select w-full"
       >
         {allowNull && <option value="">None</option>}
-        {models.map((model) => (
+        {routableModels.map((model) => (
           <option key={model.id} value={model.id}>
             {model.name}
           </option>

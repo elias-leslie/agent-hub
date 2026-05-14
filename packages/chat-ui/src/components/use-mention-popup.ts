@@ -8,7 +8,9 @@ export function useMentionPopup(input: string, selectedModels: ModelOption[], al
 
   const filteredModels = useMemo(() => {
     const selectedAliases = new Set(selectedModels.map((m) => m.alias));
-    const available = allModels.filter((m) => !selectedAliases.has(m.alias));
+    const available = allModels.filter(
+      (m) => m.routable && !selectedAliases.has(m.alias),
+    );
     if (!mentionFilter) return available;
     const lowerFilter = mentionFilter.toLowerCase();
     return available.filter(

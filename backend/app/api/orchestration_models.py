@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.api.complete.request_schemas import ResponseFormat
 from app.api.complete.usage_schemas import ContextUsageInfo, OutputUsageInfo, UsageInfo
-from app.routing.registry import ValidProvider
+from app.routing.registry import ValidWorkloadProvider
 
 # ========== Subagent Models ==========
 
@@ -16,7 +16,7 @@ class SubagentRequest(BaseModel):
 
     task: str = Field(..., description="Task description for the subagent")
     name: str = Field(default="subagent", description="Subagent name")
-    provider: ValidProvider = Field(default="claude", description="LLM provider")
+    provider: ValidWorkloadProvider = Field(default="gemini", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
     temperature: float = Field(default=1.0, ge=0, le=2)
@@ -80,7 +80,7 @@ class ParallelTaskRequest(BaseModel):
 
     task: str = Field(..., description="Task description")
     name: str = Field(default="task", description="Task name")
-    provider: ValidProvider = Field(default="claude")
+    provider: ValidWorkloadProvider = Field(default="gemini")
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0
@@ -128,10 +128,10 @@ class MakerCheckerRequest(BaseModel):
     """Request for maker-checker verification."""
 
     task: str = Field(..., description="Task for the maker agent")
-    maker_provider: ValidProvider = Field(
-        default="claude", description="Provider for maker"
+    maker_provider: ValidWorkloadProvider = Field(
+        default="gemini", description="Provider for maker"
     )
-    checker_provider: ValidProvider = Field(
+    checker_provider: ValidWorkloadProvider = Field(
         default="gemini", description="Provider for checker"
     )
     max_iterations: int = Field(default=3, ge=1, le=5)
@@ -157,10 +157,10 @@ class CodeReviewRequest(BaseModel):
     """Request for code review (specialized maker-checker)."""
 
     task: str = Field(..., description="Code generation task")
-    maker_provider: ValidProvider = Field(
-        default="claude", description="Provider for code generation"
+    maker_provider: ValidWorkloadProvider = Field(
+        default="kimi-code", description="Provider for code generation"
     )
-    checker_provider: ValidProvider = Field(
+    checker_provider: ValidWorkloadProvider = Field(
         default="gemini", description="Provider for code review"
     )
     project_id: str | None = Field(
@@ -180,7 +180,7 @@ class ChainStepRequest(BaseModel):
         description="Task description. Use {previous} to inject prior step output.",
     )
     name: str = Field(default="step", description="Step name")
-    provider: ValidProvider = Field(default="claude")
+    provider: ValidWorkloadProvider = Field(default="gemini")
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0
@@ -413,4 +413,3 @@ class WorkflowResponse(BaseModel):
     final_output: str
     total_input_tokens: int
     total_output_tokens: int
-

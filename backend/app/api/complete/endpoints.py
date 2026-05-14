@@ -37,7 +37,7 @@ async def complete(
 ) -> CompletionResponse | StreamingResponse | JSONResponse:
     """Generate a completion for the given messages.
 
-    Routes to appropriate provider (Claude or Gemini) based on model name.
+    Routes to the appropriate workload provider based on model name.
     Optionally persists messages to database for session continuity.
 
     Headers:

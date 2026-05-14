@@ -1,7 +1,7 @@
 [project]
 name = "agent-hub"
 version = "0.1.0"
-description = "Unified agentic AI service for Claude/Gemini workloads"
+description = "Unified agentic AI service for routed AI workloads"
 license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
@@ -23,7 +23,6 @@ dependencies = [
     # AI integrations
     "anthropic>=0.40.0",
     "openai>=1.0.0",
-    "claude-agent-sdk>=0.1.48", # OAuth via Claude CLI (zero API cost) — >=0.1.48 for stop_reason + recent SDK fixes
     "google-genai>=1.0.0", # Gemini API client
     "pgvector>=0.3.0", # PostgreSQL pgvector for memory embeddings
     "tiktoken>=0.7.0", # Token counting for context management

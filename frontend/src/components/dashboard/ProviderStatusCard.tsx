@@ -1,4 +1,4 @@
-import { Cpu, Server } from 'lucide-react'
+import { Server } from 'lucide-react'
 import type { ProviderStatus } from '@/lib/api'
 import { formatLatency } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
@@ -47,11 +47,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
         <div
           className={cn('rounded-xl border border-slate-800/70 p-2', config.bg)}
         >
-          {provider.name === 'claude' ? (
-            <Cpu className="h-4 w-4 text-orange-400" />
-          ) : (
-            <Server className="h-4 w-4 text-amber-400" />
-          )}
+          <Server className="h-4 w-4 text-amber-400" />
         </div>
         <div>
           <div className="flex items-center gap-2">

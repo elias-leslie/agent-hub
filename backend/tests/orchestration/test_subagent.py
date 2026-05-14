@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.api.complete.types import CompletionInternalResult
-from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 from app.services.llm_messages import Message
 from app.services.orchestration.subagent import (
     SubagentConfig,
@@ -17,8 +17,8 @@ from app.services.orchestration.subagent import (
 def _make_internal_result(
     *,
     content: str = "Test response",
-    provider: str = "claude",
-    model: str = CLAUDE_SONNET,
+    provider: str = "gemini",
+    model: str = GEMINI_FLASH,
     input_tokens: int = 100,
     output_tokens: int = 50,
     thinking_content: str | None = None,
@@ -44,7 +44,7 @@ class TestSubagentConfig:
         config = SubagentConfig(name="test")
 
         assert config.name == "test"
-        assert config.provider == "claude"
+        assert config.provider == "gemini"
         assert config.model is None
         assert config.system_prompt is None
         assert config.temperature == 1.0
@@ -74,8 +74,8 @@ class TestSubagentResult:
             name="test",
             content="Hello world",
             status="completed",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="gemini",
+            model=GEMINI_FLASH,
             input_tokens=100,
             output_tokens=50,
         )
@@ -90,8 +90,8 @@ class TestSubagentResult:
             name="test",
             content="",
             status="error",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="gemini",
+            model=GEMINI_FLASH,
             input_tokens=0,
             output_tokens=0,
             error="Connection failed",
@@ -106,8 +106,8 @@ class TestSubagentResult:
             name="test",
             content="Answer",
             status="completed",
-            provider="claude",
-            model=CLAUDE_SONNET,
+            provider="gemini",
+            model=GEMINI_FLASH,
             input_tokens=100,
             output_tokens=50,
             thinking_content="Let me think...",
@@ -120,19 +120,17 @@ class TestSubagentResult:
 
 class TestSubagentManager:
     def test_initialization(self):
-        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
-
         manager = SubagentManager()
-        assert manager._default_claude_model == CLAUDE_SONNET
         assert manager._default_gemini_model == GEMINI_FLASH
+        assert manager._default_kimi_code_model == KIMI_CODE_FOR_CODING
 
     def test_custom_default_models(self):
         manager = SubagentManager(
-            default_claude_model=CLAUDE_OPUS,
             default_gemini_model="gemini-3-pro",
+            default_kimi_code_model="kimi-code/custom",
         )
-        assert manager._default_claude_model == CLAUDE_OPUS
         assert manager._default_gemini_model == "gemini-3-pro"
+        assert manager._default_kimi_code_model == "kimi-code/custom"
 
     @pytest.mark.asyncio
     async def test_spawn_success(self):
@@ -349,8 +347,8 @@ class TestSubagentCostTracking:
             assert result.status == "completed"
             mock_log_cost.assert_called_once_with(
                 project_id="agent-hub",
-                provider="claude",
-                model=CLAUDE_SONNET,
+                provider="gemini",
+                model=GEMINI_FLASH,
                 input_tokens=100,
                 output_tokens=50,
             )

@@ -3,7 +3,7 @@
 Enables hierarchical agent patterns where a parent agent can spawn child agents
 with isolated context windows to handle subtasks.
 
-Inspired by Claude Code's Task tool which spawns specialized agents.
+Inspired by hierarchical task-agent patterns.
 """
 
 import asyncio
@@ -32,21 +32,21 @@ class SubagentManager:
 
     def __init__(
         self,
-        default_claude_model: str | None = None,
         default_gemini_model: str | None = None,
+        default_kimi_code_model: str | None = None,
     ):
-        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
+        from app.constants import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 
-        self._default_claude_model = default_claude_model or CLAUDE_SONNET
         self._default_gemini_model = default_gemini_model or GEMINI_FLASH
+        self._default_kimi_code_model = default_kimi_code_model or KIMI_CODE_FOR_CODING
         self._active_subagents: dict[str, asyncio.Task[SubagentResult]] = {}
 
     def _get_default_model(self, provider: str) -> str:
-        if provider == "claude":
-            return self._default_claude_model
+        if provider == "kimi-code":
+            return self._default_kimi_code_model
         if provider == "gemini":
             return self._default_gemini_model
-        return self._default_claude_model
+        return self._default_gemini_model
 
     async def spawn(
         self,

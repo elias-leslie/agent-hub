@@ -3,11 +3,10 @@
 import type { Credential } from '@/lib/api'
 import { CredentialList } from './CredentialList'
 import type { ProviderInfo } from './constants'
-import {
-  isClaudeStatus,
-  type OAuthProviderStatus,
-  type OAuthStatus,
-  type ProviderHealthData,
+import type {
+  OAuthProviderStatus,
+  OAuthStatus,
+  ProviderHealthData,
 } from './ProviderCardTypes'
 import {
   AuthBadges,
@@ -24,7 +23,6 @@ interface ProviderStatusDisplayProps {
   healthData?: ProviderHealthData
   isConfigured: boolean
   isOAuth: boolean
-  isClaude: boolean
   hasApiKey: boolean
   hasBothCredentials: boolean
   preferredAuth: 'oauth' | 'api_key'
@@ -47,7 +45,6 @@ export function ProviderStatusDisplay({
   healthData,
   isConfigured,
   isOAuth,
-  isClaude,
   hasApiKey,
   hasBothCredentials,
   preferredAuth,
@@ -77,11 +74,7 @@ export function ProviderStatusDisplay({
   // Not configured at all — show hint
   const noAuth =
     !isConfigured &&
-    (!isOAuth ||
-      !oauthStatus ||
-      (isClaudeStatus(oauthStatus)
-        ? oauthStatus.status === 'missing'
-        : oauthStatus.oauth_status === 'not_configured'))
+    (!isOAuth || !oauthStatus || oauthStatus.oauth_status === 'not_configured')
 
   if (noAuth && !healthData?.configured) {
     return (
@@ -96,8 +89,6 @@ export function ProviderStatusDisplay({
       {/* Row 1: Auth method badges */}
       <AuthBadges
         isOAuth={isOAuth}
-        isClaude={isClaude}
-        oauthStatus={oauthStatus}
         hasApiKey={hasApiKey}
         isConfigured={isConfigured}
         primaryCredential={primaryCredential}
@@ -112,12 +103,7 @@ export function ProviderStatusDisplay({
       )}
 
       {/* Row 3: Timestamps — authenticated since + last checked */}
-      <TimestampRow
-        authSince={authSince}
-        healthData={healthData}
-        isClaude={isClaude}
-        oauthStatus={oauthStatus}
-      />
+      <TimestampRow authSince={authSince} healthData={healthData} />
 
       {/* Credential display (multi-field and single-field) */}
       <CredentialList

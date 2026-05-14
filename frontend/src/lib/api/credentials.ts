@@ -104,23 +104,6 @@ export async function setPrimaryCredential(
   return response.json()
 }
 
-export interface ClaudeOAuthStatus {
-  status: 'valid' | 'expired' | 'missing'
-  expires_at: string | null
-  expires_in_seconds: number | null
-  scopes: string[]
-  subscription_type: string | null
-  token_prefix: string | null
-}
-
-export async function fetchClaudeOAuthStatus(): Promise<ClaudeOAuthStatus> {
-  const response = await fetchApi(`${API_BASE}/credentials/claude-oauth-status`)
-  if (!response.ok) {
-    throw new Error(`Claude OAuth status fetch failed: ${response.status}`)
-  }
-  return response.json()
-}
-
 // --- OAuth flow API ---
 
 export interface OAuthAuthorizeResponse {

@@ -31,6 +31,8 @@ from app.llm.types import (
 )
 from app.memory.citation_extractor import extract_cited_uuids
 from app.memory.injection import inject_memory_context
+from app.routing.registry import is_workload_provider
+from app.services.llm_errors import ProviderError
 from app.services.tools.base import ToolCall as ServiceToolCall
 from app.services.tools.base import ToolCaller
 from app.services.tools.tool_handler import create_direct_handler
@@ -183,6 +185,16 @@ async def complete_internal(
     ``session_id`` is a synthetic ``ephemeral:<uuid>``. The agentic path
     always supplies a real ``AsyncSession``.
     """
+
+    if not is_workload_provider(provider):
+        raise ProviderError(
+            provider=provider,
+            message=(
+                "Claude/Anthropic models are catalog references and external "
+                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+            ),
+            status_code=400,
+        )
 
     if db is not None:
         _session, session_id, _is_new, messages_dict = await setup_completion_session(

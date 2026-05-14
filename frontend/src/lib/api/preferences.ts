@@ -8,7 +8,6 @@ const API_BASE = `${getApiBaseUrl()}/api`
 
 export interface UserPreferences {
   codex_auth_preference?: 'oauth' | 'api_key'
-  claude_auth_preference?: 'oauth' | 'api_key'
 }
 
 export async function fetchUserPreferences(): Promise<UserPreferences> {
@@ -18,7 +17,6 @@ export async function fetchUserPreferences(): Promise<UserPreferences> {
     if (response.status === 404) {
       return {
         codex_auth_preference: 'oauth',
-        claude_auth_preference: 'oauth',
       }
     }
     throw new Error(`Preferences fetch failed: ${response.status}`)

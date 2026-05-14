@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_OPUS, CODEX_GPT_5_1_MINI, CODEX_GPT_5_4
+from app.constants.models import CODEX_GPT_5_1_MINI, CODEX_GPT_5_4, KIMI_CODE_FOR_CODING
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_MEMORY_GROUP,
     HEARTBEAT_PROJECT,
@@ -37,7 +37,7 @@ class TestHeartbeatRuntimeInfo:
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (CLAUDE_OPUS, "claude"),
+            (KIMI_CODE_FOR_CODING, "kimi-code"),
             (CODEX_GPT_5_4, "codex"),
         ],
     )
@@ -98,7 +98,7 @@ class TestHeartbeatRuntimeInfo:
     @pytest.mark.parametrize(
         ("model_id", "provider", "expected_supported"),
         [
-            (CLAUDE_OPUS, "claude", True),
+            (KIMI_CODE_FOR_CODING, "kimi-code", True),
             (CODEX_GPT_5_4, "codex", True),
             (CODEX_GPT_5_1_MINI, "codex", False),
         ],
@@ -493,7 +493,9 @@ class TestPersonaHeartbeatTask:
             only_if_missing=True,
         )
         mock_do_completion.assert_awaited_once()
-        assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-provided"
+        await_args = mock_do_completion.await_args
+        assert await_args is not None
+        assert await_args.kwargs["heartbeat_session_id"] == "hb-session-provided"
         mock_clear_running.assert_awaited_once_with(
             claim_token="claim-provided",
             session_id="hb-session-provided",
@@ -572,7 +574,9 @@ class TestPersonaHeartbeatTask:
         assert result["status"] == "success"
         mock_attempt.assert_not_awaited()
         mock_set_running.assert_not_awaited()
-        assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-reserved"
+        await_args = mock_do_completion.await_args
+        assert await_args is not None
+        assert await_args.kwargs["heartbeat_session_id"] == "hb-session-reserved"
         mock_clear_running.assert_awaited_once_with(
             claim_token="claim-preclaimed",
             session_id="hb-session-reserved",
@@ -648,13 +652,13 @@ class TestPersonaHeartbeatTask:
 
 
 class TestHeartbeatCompletionRouting:
-    """Tests that Claude and Codex use the same heartbeat execution contract."""
+    """Tests that routable providers use the same heartbeat execution contract."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (CLAUDE_OPUS, "claude"),
+            (KIMI_CODE_FOR_CODING, "kimi-code"),
             (CODEX_GPT_5_4, "codex"),
         ],
     )
@@ -703,7 +707,9 @@ class TestHeartbeatCompletionRouting:
         assert result is complete_result
         assert model_review_due is False
         mock_complete.assert_awaited_once()
-        kwargs = mock_complete.await_args.kwargs
+        await_args = mock_complete.await_args
+        assert await_args is not None
+        kwargs = await_args.kwargs
         assert kwargs["model"] == model_id
         assert kwargs["provider"] == provider
         assert kwargs["session_id"] == "hb-session-1"
@@ -716,11 +722,11 @@ class TestHeartbeatCompletionRouting:
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (CLAUDE_OPUS, "claude"),
+            (KIMI_CODE_FOR_CODING, "kimi-code"),
             (CODEX_GPT_5_4, "codex"),
         ],
     )
-    async def test_do_completion_preserves_shared_contract_for_claude_and_codex(
+    async def test_do_completion_preserves_shared_contract_for_routable_providers(
         self, model_id, provider
     ):
         mock_db = AsyncMock()
@@ -762,7 +768,9 @@ class TestHeartbeatCompletionRouting:
 
         assert result is complete_result
         assert model_review_due is True
-        kwargs = mock_complete.await_args.kwargs
+        await_args = mock_complete.await_args
+        assert await_args is not None
+        kwargs = await_args.kwargs
         assert kwargs["messages"] == [
             {"role": "system", "content": "You are Persona"},
             {"role": "user", "content": "Compare providers"},
@@ -805,7 +813,7 @@ class TestHeartbeatCompletionRouting:
             patch(
                 "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=("claude-sonnet-4-6", "claude", 0.2, "medium", "You are Persona", {"mode": "auto"}),
+                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", 0.2, "medium", "You are Persona", {"mode": "auto"}),
             ) as mock_resolve_persona,
             patch(
                 "app.services.persona_service.get_persona",
@@ -838,10 +846,12 @@ class TestHeartbeatCompletionRouting:
             False,
             "not due",
             target_project_id="agent-hub",
-            provider="claude",
+            provider="kimi-code",
         )
         mock_resolve_persona.assert_awaited_once_with(mock_db, project_id="agent-hub")
-        kwargs = mock_complete.await_args.kwargs
+        await_args = mock_complete.await_args
+        assert await_args is not None
+        kwargs = await_args.kwargs
         assert kwargs["project_id"] == "agent-hub"
         assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
         assert kwargs["working_dir"] == "/tmp/agent-hub"

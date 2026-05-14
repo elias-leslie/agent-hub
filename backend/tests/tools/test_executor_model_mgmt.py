@@ -69,23 +69,20 @@ async def test_update_agent_model_normalizes_explicit_alias_inputs() -> None:
             agent_slug="persona",
             primary_model_id="codex-5.2",
             fallback_models=["codex/gpt-5.4", "openai/gpt-5.2"],
-            escalation_model_id="claude-sonnet-4-6",
+            escalation_model_id="kimi-code/kimi-for-coding",
             temperature=None,
             thinking_level=None,
             change_reason="normalize aliases",
         )
 
     assert "codex/gpt-5.2-codex" in result
-    service.update.assert_not_awaited()
-    added_routes = [
-        call.args[0]
-        for call in mock_db.add.call_args_list
-        if getattr(call.args[0], "primary_model_id", None) == "codex/gpt-5.2-codex"
-    ]
-    assert added_routes
-    route = added_routes[0]
-    assert route.fallback_models == ["codex/gpt-5.4", "openai/gpt-5.2"]
-    assert route.escalation_model_id == "claude-sonnet-4-6"
+    service.update.assert_awaited_once()
+    await_args = service.update.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
+    assert kwargs["fallback_models"] == ["codex/gpt-5.4", "openai/gpt-5.2"]
+    assert kwargs["escalation_model_id"] == "kimi-code/kimi-for-coding"
 
 
 @pytest.mark.anyio
@@ -122,11 +119,10 @@ async def test_update_agent_model_normalizes_legacy_prefixed_codex_model_ids() -
         )
 
     assert "primary_model=codex/gpt-5.2-codex" in result
-    service.update.assert_not_awaited()
-    assert any(
-        getattr(call.args[0], "primary_model_id", None) == "codex/gpt-5.2-codex"
-        for call in mock_db.add.call_args_list
-    )
+    service.update.assert_awaited_once()
+    await_args = service.update.await_args
+    assert await_args is not None
+    assert await_args.kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
 
 
 @pytest.mark.anyio
@@ -137,7 +133,7 @@ async def test_get_agent_details_includes_memory_config() -> None:
         name="Debugger",
         description="Investigates tricky failures.",
         primary_model_id="codex/gpt-5.4",
-        fallback_models=["claude-sonnet-4-6"],
+        fallback_models=["kimi-code/kimi-for-coding"],
         escalation_model_id=None,
         temperature=0.2,
         thinking_level="high",

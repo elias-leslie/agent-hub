@@ -24,8 +24,8 @@ from app.services.tools.direct_executor_core import DirectToolExecutor
 
 logger = logging.getLogger(__name__)
 
-# Claude Agent SDK uses PascalCase tool names (Bash, Read, Write, Edit)
-# but our handler uses lowercase names. Normalize before routing.
+# Some agent clients use PascalCase tool names (Bash, Read, Write, Edit);
+# the direct handler uses lowercase names. Normalize before routing.
 _SDK_TOOL_NAME_MAP: dict[str, str] = {
     "Bash": "bash",
     "Read": "read_file",

@@ -240,6 +240,11 @@ class AgentService:
 
         memory_cfg = normalize_memory_config(memory_config) if memory_config is not None else None
         prev_slug = agent.slug
+        resolved_escalation = (
+            _canonicalize_model_id(escalation_model_id)
+            if escalation_model_id is not None
+            else None
+        )
         apply_agent_updates(
             agent,
             name=name,
@@ -247,7 +252,7 @@ class AgentService:
             system_prompt=system_prompt,
             primary_model_id=_canonicalize_model_id(primary_model_id),
             fallback_models=_canonicalize_model_chain(fallback_models) if fallback_models is not None else None,
-            escalation_model_id=_canonicalize_model_id(escalation_model_id),
+            escalation_model_id=resolved_escalation,
             strategies=strategies,
             temperature=temperature,
             thinking_level=thinking_level,
@@ -261,6 +266,8 @@ class AgentService:
             hourly_request_limit=hourly_request_limit,
             timeout_seconds=timeout_seconds,
         )
+        if escalation_model_id is not None:
+            agent.escalation_model_id = resolved_escalation
         agent.version += 1
         if system_prompt is not None:
             await sync_agent_system_prompt(

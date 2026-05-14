@@ -277,11 +277,9 @@ async def _with_heartbeat(
     """Wrap an SSE iterator with periodic heartbeat comments.
 
     Iterates the inner generator directly (same task) to avoid corrupting
-    anyio cancel scopes — the Claude SDK uses anyio task groups
-    internally, and wrapping ``__anext__`` in a separate task (via
-    ``asyncio.ensure_future`` or a drain task) breaks anyio's task-local
-    cancel scope tracking, leaving ``CancelScope._deliver_cancellation``
-    spinning at 100% CPU.
+    provider SDK task-local cancel scopes. Wrapping ``__anext__`` in a
+    separate task (via ``asyncio.ensure_future`` or a drain task) can leave
+    cancellation cleanup spinning at 100% CPU.
     """
     last_yield = time.monotonic()
     async for chunk in inner:

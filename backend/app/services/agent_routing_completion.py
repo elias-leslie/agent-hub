@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.routing.registry import list_providers
+from app.routing.registry import is_workload_provider, list_providers
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.llm_errors import (
@@ -140,6 +140,15 @@ async def _try_model(
     from app.api.complete.core import complete_internal
 
     provider = get_provider_for_model(model)
+    if not is_workload_provider(provider):
+        return None, ProviderError(
+            provider=provider,
+            message=(
+                "Claude/Anthropic models are catalog references and external "
+                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+            ),
+            status_code=400,
+        )
     cooldown_error = await _active_cooldown_error(provider)
     if cooldown_error is not None:
         logger.warning(

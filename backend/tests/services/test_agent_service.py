@@ -325,6 +325,33 @@ class TestAgentService:
         assert mock_agent.version == 2
 
     @pytest.mark.asyncio
+    async def test_update_can_clear_escalation_model(self, service, mock_db, mock_agent):
+        """Explicit empty escalation assignment clears the stored model."""
+        mock_agent.escalation_model_id = CLAUDE_OPUS
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_agent
+        mock_db.execute.return_value = mock_result
+
+        async def mock_refresh(agent):
+            pass
+
+        mock_db.refresh = mock_refresh
+
+        with (
+            patch.object(service._cache, "invalidate"),
+            patch.object(service._cache, "set"),
+        ):
+            result = await service.update(
+                mock_db,
+                1,
+                escalation_model_id="",
+                change_reason="Clear escalation",
+            )
+
+        assert result is not None
+        assert mock_agent.escalation_model_id is None
+
+    @pytest.mark.asyncio
     async def test_update_returns_none_for_missing(self, service, mock_db):
         """Test update returns None when agent not found."""
         mock_result = MagicMock()

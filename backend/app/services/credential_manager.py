@@ -158,7 +158,7 @@ class CredentialManager:
         Get a cached credential value.
 
         Args:
-            provider: Provider name (claude, gemini)
+            provider: Provider identifier
             credential_type: Type (api_key, oauth_token, etc.)
 
         Returns:

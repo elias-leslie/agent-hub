@@ -26,15 +26,8 @@ export const metadata: Metadata = {
     template: '%s | Agent Hub',
   },
   description:
-    'Unified command center for agentic AI workloads. Monitor, test, and manage Claude and Gemini agents from a single interface.',
-  keywords: [
-    'AI agents',
-    'Claude',
-    'Gemini',
-    'LLM',
-    'monitoring',
-    'orchestration',
-  ],
+    'Unified command center for agentic AI workloads. Monitor, test, and manage routed agents from a single interface.',
+  keywords: ['AI agents', 'Gemini', 'LLM', 'monitoring', 'orchestration'],
   authors: [{ name: 'Agent Hub' }],
   openGraph: {
     title: 'Agent Hub',

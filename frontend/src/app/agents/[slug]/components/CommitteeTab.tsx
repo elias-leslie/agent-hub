@@ -84,6 +84,10 @@ export function CommitteeTab({
     any
   > | null>(null)
   const committee = useMemo(() => resolveCommitteeConfig(formData), [formData])
+  const routableModels = useMemo(
+    () => availableModels.filter((model) => model.routable),
+    [availableModels],
+  )
 
   const persistCommittee = (nextCommittee: CommitteeConfig) => {
     updateField('strategies', {
@@ -251,7 +255,7 @@ export function CommitteeTab({
               className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100"
             >
               <option value="">Use agent default</option>
-              {availableModels.map((model) => (
+              {routableModels.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
                 </option>
@@ -321,7 +325,7 @@ export function CommitteeTab({
                   className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100"
                 >
                   <option value="">Use agent default</option>
-                  {availableModels.map((model) => (
+                  {routableModels.map((model) => (
                     <option key={model.id} value={model.id}>
                       {model.name}
                     </option>

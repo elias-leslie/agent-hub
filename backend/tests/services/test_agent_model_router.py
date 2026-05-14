@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 from app.services.agent_dto import AgentDTO
 from app.services.agent_model_router import (
     RoutingContext,
@@ -23,8 +24,8 @@ def _agent(**overrides: object) -> AgentDTO:
         "name": "Portfolio Manager",
         "description": None,
         "system_prompt": "test",
-        "primary_model_id": "claude-haiku-4-5-20251001",
-        "fallback_models": ["claude-sonnet-4-6"],
+        "primary_model_id": KIMI_CODE_FOR_CODING,
+        "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": None,
         "strategies": {},
         "temperature": 0.1,
@@ -54,12 +55,12 @@ async def test_resolve_model_route_uses_agent_assignment_chain() -> None:
         RoutingContext(),
     )
 
-    assert agent.primary_model_id == "claude-haiku-4-5"
-    assert agent.fallback_models == ["claude-sonnet-4-6"]
-    assert route.primary_model_id == "claude-haiku-4-5"
-    assert route.fallback_models == ["claude-sonnet-4-6"]
+    assert agent.primary_model_id == KIMI_CODE_FOR_CODING
+    assert agent.fallback_models == [GEMINI_FLASH]
+    assert route.primary_model_id == KIMI_CODE_FOR_CODING
+    assert route.fallback_models == [GEMINI_FLASH]
     assert route.mode == "agent_assignment"
-    assert route.provider == "claude"
+    assert route.provider == "kimi-code"
     assert route.score_breakdown == {"agent_assignment_chain": True}
 
 
