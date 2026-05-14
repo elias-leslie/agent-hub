@@ -48,6 +48,17 @@ function formatSyncMoment(value: string | null | undefined): string | null {
   })
 }
 
+function availabilityBadge(
+  availability: string | null | undefined,
+): string | null {
+  if (!availability) return null
+  if (availability.includes('free_tier_preview')) return 'Free tier preview'
+  if (availability.includes('free_tier')) return 'Free tier'
+  if (availability === 'codex_oauth_subscription') return 'Codex OAuth'
+  if (availability.includes('paid_only')) return 'Paid only'
+  return null
+}
+
 const DEFAULT_PROVIDER_COLOR = {
   dot: 'bg-slate-400',
   bg: 'border-slate-500/20',
@@ -64,7 +75,7 @@ export function ModelCard({
   const hasEnrichment = !!model.enrichment
   const pricing = formatCatalogModelPricing(model)
   const syncedAt = formatSyncMoment(model.enrichment?.synced_at)
-  const isCodexOnlyPreview = model.availability === 'codex_only'
+  const availability = availabilityBadge(model.availability)
 
   return (
     <div
@@ -109,9 +120,9 @@ export function ModelCard({
                 <span className="ml-1 text-slate-400">({model.family})</span>
               )}
             </p>
-            {isCodexOnlyPreview && (
+            {availability && (
               <div className="mt-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                ChatGPT/Codex now, API soon
+                {availability}
               </div>
             )}
           </div>

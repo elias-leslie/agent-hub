@@ -122,5 +122,12 @@ export function formatCatalogModelPricing(
       source: 'Codex-only',
     }
   }
+  if (model.availability?.includes('free_tier')) {
+    return {
+      primary: 'Free tier',
+      secondary: `Paid ${formatUsd(model.cost.input_per_m)} / ${formatUsd(model.cost.output_per_m)}`,
+      source: pricingSourceLabel(model.cost.source),
+    }
+  }
   return formatModelPricing(model.cost)
 }

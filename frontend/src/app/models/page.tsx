@@ -46,7 +46,12 @@ function compactNumber(value: number | null | undefined): string {
 }
 
 function pricingSortValue(model: ModelOption): number {
-  if (model.availability === 'codex_only') return Number.POSITIVE_INFINITY
+  if (
+    model.availability?.includes('free_tier') ||
+    model.availability === 'codex_oauth_subscription'
+  ) {
+    return 0
+  }
   return getPricingSortValue(model.cost)
 }
 

@@ -40,6 +40,7 @@ def test_get_model_entry_resolves_new_claude_opus_4_7_alias() -> None:
 def test_gemini_flash_lite_models_support_agentic_extraction() -> None:
     for model_id, expected_cost in [
         ("gemini-3.1-flash-lite", (0.25, 1.5)),
+        ("gemini-3.1-flash-lite-preview", (0.25, 1.5)),
         ("gemini-2.5-flash-lite", (0.1, 0.4)),
     ]:
         entry = get_model_entry(model_id)
@@ -55,6 +56,29 @@ def test_gemini_flash_lite_models_support_agentic_extraction() -> None:
         assert info.capabilities.max_output_tokens == 65536
         assert info.cost.input_per_m == expected_cost[0]
         assert info.cost.output_per_m == expected_cost[1]
+        assert info.availability is not None
+        assert "free_tier" in info.availability
+
+
+def test_gemini_free_tier_catalog_includes_current_generation_models() -> None:
+    for model_id in [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
+    ]:
+        entry = get_model_entry(model_id)
+        assert entry is not None
+
+        info = _build_model_info(entry)
+
+        assert info.provider == "gemini"
+        assert info.capabilities.supports_tool_execution is True
+        assert info.capabilities.has_thinking is True
+        assert info.availability is not None
+        assert "free_tier" in info.availability
 
 
 def test_get_model_entry_returns_none_for_unknown_model() -> None:

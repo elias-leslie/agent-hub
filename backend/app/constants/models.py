@@ -18,12 +18,15 @@ CLAUDE_HAIKU = "claude-haiku-4-5"
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
 GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
+GEMINI_3_1_FLASH_LITE_PREVIEW = "gemini-3.1-flash-lite-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 GEMINI_IMAGE_NANO = "gemini-2.5-flash-image"            # Nano Banana - stable, fast
 GEMINI_IMAGE_NANO2 = "gemini-3.1-flash-image-preview"   # Nano Banana 2 - preview, fastest
 
-# New experimental models
+# Gemini 2.5 models (Google)
+GEMINI_2_5_FLASH = "gemini-2.5-flash"
 GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
+GEMINI_2_5_PRO = "gemini-2.5-pro"
 
 # OpenRouter Models (Canonical IDs) — only models cheaper/exclusive on OR
 OR_KIMI_K2_6 = "openrouter/moonshotai/kimi-k2.6"
