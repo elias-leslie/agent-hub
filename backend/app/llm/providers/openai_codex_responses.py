@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import replace
 from typing import Any
@@ -52,6 +53,7 @@ from ..types import (
 _CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
 _DEFAULT_INSTRUCTIONS = "You are a concise assistant."
 _background_tasks: set[asyncio.Task[None]] = set()
+_ID_PART_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 class _CodexCredentialStore:
@@ -130,26 +132,85 @@ def _tool_result_text(message: ToolResultMessage) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _sanitize_id_part(value: str) -> str:
+    sanitized = _ID_PART_RE.sub("_", value).strip("_")
+    return sanitized[:64].rstrip("_")
+
+
+def _parse_text_signature(signature: str | None) -> tuple[str | None, str | None]:
+    if not signature:
+        return None, None
+    msg_id = signature
+    phase = None
+    if signature.startswith("{"):
+        try:
+            payload = json.loads(signature)
+        except json.JSONDecodeError:
+            return None, None
+        if not isinstance(payload, dict):
+            return None, None
+        msg_id = payload.get("id")
+        raw_phase = payload.get("phase")
+        phase = raw_phase if raw_phase in {"commentary", "final_answer"} else None
+    if not isinstance(msg_id, str) or not msg_id.startswith("msg_") or len(msg_id) > 64:
+        return None, phase
+    return msg_id, phase
+
+
+def _encode_text_signature(msg_id: str, phase: str | None = None) -> str:
+    payload: dict[str, Any] = {"v": 1, "id": msg_id}
+    if phase in {"commentary", "final_answer"}:
+        payload["phase"] = phase
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def _assistant_message_id(message: AssistantMessage) -> tuple[str, str | None]:
+    for block in message.content:
+        if isinstance(block, TextContent):
+            msg_id, phase = _parse_text_signature(block.text_signature)
+            if msg_id:
+                return msg_id, phase
+    return f"msg_{message.timestamp}", None
+
+
+def _split_responses_tool_call_id(tool_call_id: str) -> tuple[str, str | None]:
+    call_id, sep, item_id = tool_call_id.partition("|")
+    return call_id, item_id if sep else None
+
+
+def _responses_tool_item_id(tool_call_id: str) -> str:
+    call_id, item_id = _split_responses_tool_call_id(tool_call_id)
+    if item_id and item_id.startswith("fc_") and len(item_id) <= 64:
+        return item_id
+    normalized = _sanitize_id_part(call_id)
+    if not normalized.startswith("fc_"):
+        normalized = f"fc_{normalized}"
+    return normalized[:64].rstrip("_")
+
+
 def _assistant_message_items(message: AssistantMessage) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     text = "".join(block.text for block in message.content if isinstance(block, TextContent))
     if text:
-        items.append(
-            {
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "output_text", "text": text, "annotations": []}],
-                "status": "completed",
-                "id": message.response_id or f"msg_{message.timestamp}",
-            }
-        )
+        msg_id, phase = _assistant_message_id(message)
+        item: dict[str, Any] = {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": text, "annotations": []}],
+            "status": "completed",
+            "id": msg_id,
+        }
+        if phase:
+            item["phase"] = phase
+        items.append(item)
     for block in message.content:
         if isinstance(block, ToolCall):
+            call_id, _item_id = _split_responses_tool_call_id(block.id)
             items.append(
                 {
                     "type": "function_call",
-                    "id": f"fc_{block.id}".replace("-", "_"),
-                    "call_id": block.id,
+                    "id": _responses_tool_item_id(block.id),
+                    "call_id": call_id,
                     "name": block.name,
                     "arguments": json.dumps(block.arguments),
                 }
@@ -162,10 +223,11 @@ def _input_from_context(context: Context) -> tuple[list[dict[str, Any]], str]:
     instructions = context.system_prompt or _DEFAULT_INSTRUCTIONS
     for message in context.messages:
         if isinstance(message, ToolResultMessage):
+            call_id, _item_id = _split_responses_tool_call_id(message.tool_call_id)
             items.append(
                 {
                     "type": "function_call_output",
-                    "call_id": message.tool_call_id,
+                    "call_id": call_id,
                     "output": _tool_result_text(message),
                 }
             )
@@ -273,6 +335,9 @@ async def _run(
     options: SimpleStreamOptions | None,
 ) -> None:
     started_text = False
+    current_text_index: int | None = None
+    current_message_item_id: str | None = None
+    current_message_phase: str | None = None
     text_parts: list[str] = []
     thinking_by_id: dict[str, list[str]] = {}
     tool_args_by_call_id: dict[str, str] = {}
@@ -312,20 +377,26 @@ async def _run(
                     if event_type == "response.output_text.delta":
                         delta = str(event.get("delta") or "")
                         if delta and not started_text:
+                            current_text_index = len(output.content)
                             output.content.append(TextContent(text=""))
-                            stream.push(TextStartEvent(content_index=0, partial=output))
+                            stream.push(TextStartEvent(content_index=current_text_index, partial=output))
                             started_text = True
                         if delta:
                             text_parts.append(delta)
-                            text_block = output.content[0]
+                            text_block = output.content[current_text_index or 0]
                             if isinstance(text_block, TextContent):
                                 text_block.text += delta
-                            stream.push(TextDeltaEvent(content_index=0, delta=delta, partial=output))
+                            stream.push(TextDeltaEvent(content_index=current_text_index or 0, delta=delta, partial=output))
                     elif event_type == "response.output_item.added":
                         item = _as_dict(event.get("item"))
                         item_type = item.get("type")
                         if item_type == "reasoning":
                             thinking_by_id[str(item.get("id", ""))] = []
+                        elif item_type == "message":
+                            item_id = str(item.get("id") or "")
+                            current_message_item_id = item_id if item_id.startswith("msg_") else None
+                            raw_phase = item.get("phase")
+                            current_message_phase = raw_phase if raw_phase in {"commentary", "final_answer"} else None
                         elif item_type == "function_call":
                             call_id = str(item.get("call_id") or "")
                             if call_id:
@@ -349,8 +420,10 @@ async def _run(
                                 args = json.loads(raw_args) if raw_args else {}
                             except json.JSONDecodeError:
                                 args = {}
+                            item_id = str(item.get("id") or "")
+                            tool_call_id = f"{call_id}|{item_id}" if item_id else call_id
                             tool_call = ToolCall(
-                                id=call_id,
+                                id=tool_call_id,
                                 name=str(item.get("name") or ""),
                                 arguments=args if isinstance(args, dict) else {},
                             )
@@ -359,6 +432,11 @@ async def _run(
                             output.content.append(tool_call)
                             stream.push(ToolCallStartEvent(content_index=index, partial=output))
                             stream.push(ToolCallEndEvent(content_index=index, tool_call=tool_call, partial=output))
+                        elif item.get("type") == "message" and current_text_index is not None:
+                            item_id = str(item.get("id") or current_message_item_id or "")
+                            text_block = output.content[current_text_index]
+                            if item_id.startswith("msg_") and isinstance(text_block, TextContent):
+                                text_block.text_signature = _encode_text_signature(item_id, current_message_phase)
                     elif event_type in {"response.completed", "response.done"}:
                         output.usage = _usage(event, model)
                         response_payload = _as_dict(event.get("response"))
@@ -367,7 +445,7 @@ async def _run(
                         if started_text:
                             stream.push(
                                 TextEndEvent(
-                                    content_index=0,
+                                    content_index=current_text_index or 0,
                                     content="".join(text_parts),
                                     partial=output,
                                 )
