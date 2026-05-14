@@ -8,6 +8,7 @@ Tests cover:
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -477,6 +478,61 @@ class TestAgentMetricsEndpoint:
             response = api_client.get("/api/agents/nonexistent/metrics")
 
             assert response.status_code == 404
+
+
+class TestAgentActivityEndpoint:
+    """Tests for agent runtime activity endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_agent_activity_returns_compact_runtime_evidence(self, api_client, mock_db_session):
+        """Activity endpoint exposes sessions and request logs without raw DB reads."""
+        mock_dto = make_mock_dto()
+        session_row = SimpleNamespace(
+            id="session-1",
+            project_id="summitflow",
+            external_id="task-1",
+            model="kimi-code/kimi-for-coding",
+            status="completed",
+            created_at=datetime(2026, 5, 14, 12, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 5, 14, 12, 3, tzinfo=UTC),
+            models_used=["kimi-code/kimi-for-coding"],
+            providers_used=["kimi-code"],
+            health_detail=None,
+            summary_outcome="completed",
+            current_branch="main",
+        )
+        request_row = SimpleNamespace(
+            created_at=datetime(2026, 5, 14, 12, 1, tzinfo=UTC),
+            model="kimi-code/kimi-for-coding",
+            status_code=200,
+            latency_ms=1234,
+            tokens_in=100,
+            tokens_out=200,
+            timed_out=False,
+            used_fallback=False,
+            fallback_model=None,
+            session_id="session-1",
+        )
+        session_result = MagicMock()
+        session_result.scalars.return_value.all.return_value = [session_row]
+        request_result = MagicMock()
+        request_result.scalars.return_value.all.return_value = [request_row]
+        mock_db_session.execute = AsyncMock(side_effect=[session_result, request_result])
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.get("/api/agents/coder/activity?external_id=task-1&limit=5")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["agent_slug"] == "coder"
+        assert data["sessions"][0]["id"] == "session-1"
+        assert data["sessions"][0]["models_used"] == ["kimi-code/kimi-for-coding"]
+        assert data["requests"][0]["status_code"] == 200
+        assert data["requests"][0]["timed_out"] is False
 
 
 class TestAgentBenchmarkDashboardEndpoint:
