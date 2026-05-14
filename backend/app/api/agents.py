@@ -7,6 +7,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard, get_agent_benchmark_run
@@ -24,6 +25,7 @@ from app.api.schemas.agent_schemas import (
     AgentUpdateRequest,
 )
 from app.db import get_db
+from app.models import RequestLog, Session
 from app.services.agent_service import AgentDTO, get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.memory.context_builder_settings import resolve_effective_memory_config
@@ -367,3 +369,75 @@ async def get_agent_versions(
     service = get_agent_service()
     agent = await _require_agent(db, slug)
     return await service.get_version_history(db, agent.id, limit=limit)
+
+
+@router.get("/{slug}/activity")
+async def get_agent_activity(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    external_id: str | None = None,
+) -> dict[str, Any]:
+    """Return compact recent sessions and request logs for one agent."""
+    agent = await _require_agent(db, slug)
+    session_filters = [Session.agent_slug == agent.slug]
+    if external_id:
+        session_filters.append(Session.external_id == external_id)
+    session_rows = (
+        await db.execute(
+            select(Session)
+            .where(*session_filters)
+            .order_by(Session.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    session_ids = [row.id for row in session_rows]
+
+    request_filters = [RequestLog.agent_slug == agent.slug]
+    if external_id:
+        request_filters = [RequestLog.session_id.in_(session_ids)] if session_ids else [RequestLog.id == -1]
+    request_rows = (
+        await db.execute(
+            select(RequestLog)
+            .where(*request_filters)
+            .order_by(RequestLog.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    return {
+        "agent_slug": agent.slug,
+        "sessions": [
+            {
+                "id": row.id,
+                "project_id": row.project_id,
+                "external_id": row.external_id,
+                "model": row.model,
+                "status": row.status,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "models_used": row.models_used or [],
+                "providers_used": row.providers_used or [],
+                "health_detail": row.health_detail,
+                "summary_outcome": row.summary_outcome,
+                "current_branch": row.current_branch,
+            }
+            for row in session_rows
+        ],
+        "requests": [
+            {
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "model": row.model,
+                "status_code": row.status_code,
+                "latency_ms": row.latency_ms,
+                "tokens_in": row.tokens_in,
+                "tokens_out": row.tokens_out,
+                "timed_out": row.timed_out,
+                "used_fallback": row.used_fallback,
+                "fallback_model": row.fallback_model,
+                "session_id": row.session_id,
+            }
+            for row in request_rows
+        ],
+    }
