@@ -55,9 +55,17 @@ def _dispatch_sse_event(data: dict[str, Any]) -> tuple[StreamChunk | None, bool]
         ), False
 
     if event_type in ("done", "cancelled"):
+        finish_reason = data.get("finish_reason")
+        # Agent-hub emits one `done` per turn during execute_tools loops.
+        # Mid-loop turns carry finish_reason="toolUse"; only the final turn
+        # carries a true terminal reason (stop / endTurn / length / error).
+        # Mirror pi-mono: `agent_end` is the sole terminal event — drop
+        # mid-loop dones so the consumer keeps streaming until the loop ends.
+        if event_type == "done" and finish_reason == "toolUse":
+            return None, False
         return StreamChunk(
             type=event_type,
-            finish_reason=data.get("finish_reason"),
+            finish_reason=finish_reason,
             model=data.get("model"),
             provider=data.get("provider"),
             input_tokens=data.get("input_tokens"),
