@@ -45,6 +45,7 @@ from app.services.tools._standard_tools import (
     FETCH_WEB_PAGE_TOOL,
     PRECISION_CODE_SEARCH_TOOL,
     READ_FILE_TOOL,
+    RESEARCH_WEB_TOOL,
     SEARCH_SCRATCH_CONTEXT_TOOL,
     SEARCH_WEB_TOOL,
     STANDARD_TOOLS,
@@ -111,6 +112,13 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "memory-curator": [
         *STANDARD_TOOLS,
         REVIEW_MEMORY_SYSTEM_TOOL,
+    ],
+    # Vantage's research studio agent: read-only web research surface only.
+    # Excludes bash/edit/write — see vantage/backend/app/services/research_orchestrator.py.
+    "vantage-research": [
+        RESEARCH_WEB_TOOL,
+        SEARCH_WEB_TOOL,
+        FETCH_WEB_PAGE_TOOL,
     ],
 }
 
