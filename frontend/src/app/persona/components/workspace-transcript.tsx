@@ -75,20 +75,19 @@ export function entrySummary(
   return fallback
 }
 
-function normalizeSummaryComparison(text: string | null | undefined): string {
-  return cleanSummary(prettifyDisplayText(text || ''))
-    .toLowerCase()
-    .replace(/[`"'""']/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
 function isRedundantSummaryMessage(
   messageText: string | null | undefined,
   summaryText: string | null | undefined,
 ): boolean {
-  const message = normalizeSummaryComparison(messageText)
-  const summary = normalizeSummaryComparison(summaryText)
+  const normalize = (text: string | null | undefined) =>
+    cleanSummary(prettifyDisplayText(text || ''))
+      .toLowerCase()
+      .replace(/[`"""']/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+
+  const message = normalize(messageText)
+  const summary = normalize(summaryText)
   if (!message || !summary) return false
   if (message === summary) return true
   const shorter = message.length <= summary.length ? message : summary
@@ -323,6 +322,238 @@ const NARRATION_ICONS: Record<string, string> = {
   decision: '⚖️',
 }
 
+// ─── Sub-components ───
+
+function ExpandButton({
+  expanded,
+  onClick,
+}: {
+  expanded: boolean
+  onClick: (e: React.MouseEvent) => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+    >
+      {expanded ? 'less' : 'more'}
+    </button>
+  )
+}
+
+function MessageItem({ item, name }: { item: TranscriptItem; name: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = item.content && item.content.length > 200
+
+  return (
+    <div className="text-xs leading-relaxed py-0.5">
+      <span className="font-medium text-slate-300">{name}:</span>{' '}
+      <span className="text-slate-400/90">
+        {isLong ? (
+          expanded ? (
+            <>
+              <span className="whitespace-pre-wrap">{item.content}</span>
+              <ExpandButton
+                expanded
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpanded(false)
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {truncate(item.content!, 200)}
+              <ExpandButton
+                expanded={false}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpanded(true)
+                }}
+              />
+            </>
+          )
+        ) : (
+          item.content
+        )}
+      </span>
+    </div>
+  )
+}
+
+function ToolCallItem({ item }: { item: TranscriptItem }) {
+  const [expanded, setExpanded] = useState(false)
+  const paramStr = item.toolParam ? `(${item.toolParam})` : ''
+
+  return (
+    <div className="text-xs font-mono rounded-md bg-slate-800/20 px-2.5 py-1.5">
+      <div className="text-slate-400">
+        <span
+          className={cn(
+            'inline-block h-1.5 w-1.5 rounded-full mr-1.5',
+            item.isError ? 'bg-rose-400' : 'bg-slate-600',
+          )}
+        />
+        Ran <span className="text-slate-300 font-medium">{item.toolName}</span>
+        {paramStr && <span className="text-slate-500">{paramStr}</span>}
+      </div>
+      {item.toolResult && (
+        <div
+          className={cn(
+            'ml-4 mt-1 border-l border-slate-800/50 pl-2.5',
+            item.isError ? 'text-rose-400/80' : 'text-slate-500',
+          )}
+        >
+          {item.toolResultFull && !expanded ? (
+            <>
+              {item.toolResult}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpanded(true)
+                }}
+                className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
+              >
+                more
+              </button>
+            </>
+          ) : item.toolResultFull && expanded ? (
+            <>
+              <span className="whitespace-pre-wrap break-words font-sans">
+                {item.toolResultFull}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpanded(false)
+                }}
+                className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
+              >
+                less
+              </button>
+            </>
+          ) : (
+            item.toolResult
+          )}
+        </div>
+      )}
+      {item.toolFields && item.toolFields.length > 0 && (
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+          {item.toolFields.map((field) => (
+            <div
+              key={`${item.id}-${field.label}-${field.value}`}
+              className="rounded-md border border-slate-800/60 bg-slate-950/60 px-2 py-1.5 font-sans"
+            >
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                {field.label}
+              </div>
+              <div
+                className={cn(
+                  'mt-1 break-words text-[11px]',
+                  field.tone === 'danger'
+                    ? 'text-rose-300'
+                    : field.tone === 'warning'
+                      ? 'text-amber-300'
+                      : field.tone === 'success'
+                        ? 'text-emerald-300'
+                        : field.tone === 'info'
+                          ? 'text-sky-300'
+                          : 'text-slate-300',
+                )}
+              >
+                {field.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ErrorItem({ item }: { item: TranscriptItem }) {
+  return (
+    <div className="text-xs text-rose-400/80 rounded-md bg-rose-500/5 px-2.5 py-1.5 flex items-start gap-2">
+      <span className="text-rose-500/60 mt-0.5">⚠</span>
+      <span>{item.content}</span>
+    </div>
+  )
+}
+
+function NarrationItem({ item }: { item: TranscriptItem }) {
+  const icon = NARRATION_ICONS[item.tagType || ''] || '▸'
+
+  if (item.tagType === 'confidence') {
+    const match = (item.tagContent || '').match(/^(\d+)/)
+    const pct = match ? parseInt(match[1], 10) : null
+    const rest = (item.tagContent || '').replace(/^\d+\s*[-–—:]\s*/, '')
+    return (
+      <div className="text-xs text-violet-400/80 flex items-center gap-2 py-0.5">
+        <span className="text-violet-500/60">{icon}</span>
+        {pct !== null && (
+          <>
+            <div className="h-1.5 w-14 rounded-full bg-slate-800/60 overflow-hidden">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  pct >= 70
+                    ? 'bg-emerald-500/70'
+                    : pct >= 40
+                      ? 'bg-amber-500/70'
+                      : 'bg-rose-500/70',
+                )}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <span className="font-medium tabular-nums">{pct}%</span>
+          </>
+        )}
+        {rest && <span className="text-slate-500">{rest}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        'text-xs py-0.5',
+        item.tagType === 'blocked' ? 'text-rose-400/80' : 'text-slate-400/80',
+      )}
+    >
+      <span
+        className={
+          item.tagType === 'blocked' ? 'text-rose-500/60' : 'text-slate-500/60'
+        }
+      >
+        {icon}
+      </span>{' '}
+      <span className="font-medium capitalize">{item.tagType}:</span>{' '}
+      {item.tagContent}
+    </div>
+  )
+}
+
+function IssueMarkerList({ markers }: { markers: PersonaIssueMarker[] }) {
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-slate-800/30 pt-2.5">
+      {markers.map((marker) => (
+        <div
+          key={`issue-${marker.event_id}-${marker.primary_tag}`}
+          className="flex items-start gap-2 text-xs text-amber-400/80"
+        >
+          <span className="text-amber-500/60 mt-0.5">⚠</span>
+          <div>
+            <span className="font-medium">
+              {pulseTagLabel(marker.primary_tag)}:
+            </span>{' '}
+            {marker.title}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── SessionTranscript: chronological chat-like event stream ───
 
 export function SessionTranscript({
@@ -352,15 +583,6 @@ export function SessionTranscript({
     )
   }, [events, hideRedundantSummaryMessage, narrationTags, summaryText])
 
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const toggleExpand = (id: string) =>
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
   if (narrationLoading) {
     return (
       <div className="mt-3 flex items-center gap-2 border-t border-slate-800/40 pt-3 text-xs text-slate-600">
@@ -383,237 +605,22 @@ export function SessionTranscript({
   return (
     <div className="mt-3 border-t border-slate-800/40 pt-3 space-y-2">
       {items.map((item) => {
-        if (item.kind === 'message') {
-          const isLong = item.content && item.content.length > 200
-          const isExpanded = expandedIds.has(item.id)
-          return (
-            <div key={item.id} className="text-xs leading-relaxed py-0.5">
-              <span className="font-medium text-slate-300">{name}:</span>{' '}
-              <span className="text-slate-400/90">
-                {isLong ? (
-                  isExpanded ? (
-                    <>
-                      <span className="whitespace-pre-wrap">
-                        {item.content}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleExpand(item.id)
-                        }}
-                        className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        less
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {truncate(item.content!, 200)}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleExpand(item.id)
-                        }}
-                        className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        more
-                      </button>
-                    </>
-                  )
-                ) : (
-                  item.content
-                )}
-              </span>
-            </div>
-          )
+        switch (item.kind) {
+          case 'message':
+            return <MessageItem key={item.id} item={item} name={name} />
+          case 'tool_call':
+            return <ToolCallItem key={item.id} item={item} />
+          case 'error':
+            return <ErrorItem key={item.id} item={item} />
+          case 'narration':
+            return <NarrationItem key={item.id} item={item} />
+          default:
+            return null
         }
-
-        if (item.kind === 'tool_call') {
-          const paramStr = item.toolParam ? `(${item.toolParam})` : ''
-          const isExpanded = expandedIds.has(item.id)
-          return (
-            <div
-              key={item.id}
-              className="text-xs font-mono rounded-md bg-slate-800/20 px-2.5 py-1.5"
-            >
-              <div className="text-slate-400">
-                <span
-                  className={cn(
-                    'inline-block h-1.5 w-1.5 rounded-full mr-1.5',
-                    item.isError ? 'bg-rose-400' : 'bg-slate-600',
-                  )}
-                />
-                Ran{' '}
-                <span className="text-slate-300 font-medium">
-                  {item.toolName}
-                </span>
-                {paramStr && <span className="text-slate-500">{paramStr}</span>}
-              </div>
-              {item.toolResult && (
-                <div
-                  className={cn(
-                    'ml-4 mt-1 border-l border-slate-800/50 pl-2.5',
-                    item.isError ? 'text-rose-400/80' : 'text-slate-500',
-                  )}
-                >
-                  {item.toolResultFull && !isExpanded ? (
-                    <>
-                      {item.toolResult}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleExpand(item.id)
-                        }}
-                        className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
-                      >
-                        more
-                      </button>
-                    </>
-                  ) : item.toolResultFull && isExpanded ? (
-                    <>
-                      <span className="whitespace-pre-wrap break-words font-sans">
-                        {item.toolResultFull}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleExpand(item.id)
-                        }}
-                        className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
-                      >
-                        less
-                      </button>
-                    </>
-                  ) : (
-                    item.toolResult
-                  )}
-                </div>
-              )}
-              {item.toolFields && item.toolFields.length > 0 && (
-                <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                  {item.toolFields.map((field) => (
-                    <div
-                      key={`${item.id}-${field.label}-${field.value}`}
-                      className="rounded-md border border-slate-800/60 bg-slate-950/60 px-2 py-1.5 font-sans"
-                    >
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                        {field.label}
-                      </div>
-                      <div
-                        className={cn(
-                          'mt-1 break-words text-[11px]',
-                          field.tone === 'danger'
-                            ? 'text-rose-300'
-                            : field.tone === 'warning'
-                              ? 'text-amber-300'
-                              : field.tone === 'success'
-                                ? 'text-emerald-300'
-                                : field.tone === 'info'
-                                  ? 'text-sky-300'
-                                  : 'text-slate-300',
-                        )}
-                      >
-                        {field.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        }
-
-        if (item.kind === 'error') {
-          return (
-            <div
-              key={item.id}
-              className="text-xs text-rose-400/80 rounded-md bg-rose-500/5 px-2.5 py-1.5 flex items-start gap-2"
-            >
-              <span className="text-rose-500/60 mt-0.5">⚠</span>
-              <span>{item.content}</span>
-            </div>
-          )
-        }
-
-        if (item.kind === 'narration') {
-          const icon = NARRATION_ICONS[item.tagType || ''] || '▸'
-          if (item.tagType === 'confidence') {
-            const match = (item.tagContent || '').match(/^(\d+)/)
-            const pct = match ? parseInt(match[1], 10) : null
-            const rest = (item.tagContent || '').replace(/^\d+\s*[-–—:]\s*/, '')
-            return (
-              <div
-                key={item.id}
-                className="text-xs text-violet-400/80 flex items-center gap-2 py-0.5"
-              >
-                <span className="text-violet-500/60">{icon}</span>
-                {pct !== null && (
-                  <>
-                    <div className="h-1.5 w-14 rounded-full bg-slate-800/60 overflow-hidden">
-                      <div
-                        className={cn(
-                          'h-full rounded-full transition-all',
-                          pct >= 70
-                            ? 'bg-emerald-500/70'
-                            : pct >= 40
-                              ? 'bg-amber-500/70'
-                              : 'bg-rose-500/70',
-                        )}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                    <span className="font-medium tabular-nums">{pct}%</span>
-                  </>
-                )}
-                {rest && <span className="text-slate-500">{rest}</span>}
-              </div>
-            )
-          }
-          return (
-            <div
-              key={item.id}
-              className={cn(
-                'text-xs py-0.5',
-                item.tagType === 'blocked'
-                  ? 'text-rose-400/80'
-                  : 'text-slate-400/80',
-              )}
-            >
-              <span
-                className={
-                  item.tagType === 'blocked'
-                    ? 'text-rose-500/60'
-                    : 'text-slate-500/60'
-                }
-              >
-                {icon}
-              </span>{' '}
-              <span className="font-medium capitalize">{item.tagType}:</span>{' '}
-              {item.tagContent}
-            </div>
-          )
-        }
-
-        return null
       })}
 
       {issueMarkers && issueMarkers.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t border-slate-800/30 pt-2.5">
-          {issueMarkers.map((marker) => (
-            <div
-              key={`issue-${marker.event_id}-${marker.primary_tag}`}
-              className="flex items-start gap-2 text-xs text-amber-400/80"
-            >
-              <span className="text-amber-500/60 mt-0.5">⚠</span>
-              <div>
-                <span className="font-medium">
-                  {pulseTagLabel(marker.primary_tag)}:
-                </span>{' '}
-                {marker.title}
-              </div>
-            </div>
-          ))}
-        </div>
+        <IssueMarkerList markers={issueMarkers} />
       )}
     </div>
   )
