@@ -1,6 +1,7 @@
 'use client'
 
 import type { ChatMessage, StreamStatus } from '@agent-hub/chat-ui'
+import { Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { SessionListItem } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
