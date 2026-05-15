@@ -1,105 +1,19 @@
-language: "en-US"
-tone_instructions: "Be direct and technical. Skip pleasantries."
-
 reviews:
-  profile: "assertive"
-  request_changes_workflow: false
-  high_level_summary: true
-  sequence_diagrams: false
-  poem: false
-  collapse_walkthrough: true
-  changed_files_summary: true
   auto_review:
     enabled: true
-    auto_incremental_review: true
     drafts: false
-    ignore_title_keywords:
-      - "WIP"
-      - "DO NOT MERGE"
-    ignore_authors:
-      - "dependabot[bot]"
-      - "renovate[bot]"
+    base_branches:
+      - main
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
   path_filters:
-    - "!**/*.lock"
-    - "!**/package-lock.json"
-    - "!**/*.min.js"
-    - "!**/migrations-archive/**"
-    - "!data/**"
-    - "!backups/**"
-  path_instructions:
-    - path: "backend/**/*.py"
-      instructions: |
-        Python 3.13+, FastAPI backend with multi-AI SDK integrations (Anthropic, OpenAI, Google Genai).
-        - Max 3 levels of nesting, use early returns
-        - Functions under 50 lines, files under 500 lines
-        - AAA test pattern (Arrange/Act/Assert), test naming: test_<unit>_<scenario>_<expected>
-        - All DB schema changes via Alembic, never raw SQL files
-        - Check for proper error handling and type hints
-        - Verify FK constraints have ON DELETE/UPDATE and indexes
-        - Uses Hatchet SDK for background task orchestration
-        - SQLAlchemy 2.0+ async patterns, pgvector for embeddings
-    - path: "frontend/**/*.tsx"
-      instructions: |
-        Next.js 16+ with TypeScript and React 19. Check for:
-        - Proper TypeScript types (no 'any')
-        - Named exports only
-        - React hooks best practices
-        - No hardcoded URLs (use api-config.ts)
-        - TanStack React Query for data fetching
-    - path: "frontend/**/*.ts"
-      instructions: |
-        TypeScript utility/config files. Check for:
-        - Proper types, no 'any'
-        - Named exports only
-    - path: "packages/**/*.ts"
-      instructions: |
-        Shared monorepo packages (agent-hub-client, chat-ui, passport-client).
-        - Must maintain backward compatibility across consumers
-        - Proper TypeScript types, no 'any'
-        - Named exports only
-    - path: "scripts/**/*.sh"
-      instructions: |
-        Bash scripts, many symlinked from SummitFlow. Check for:
-        - Proper quoting of variables
-        - Error handling (set -e or explicit checks)
-        - No interactive prompts (these are agent-only tools)
-        - POSIX-ish compatibility (bash 5+)
-    - path: "backend/alembic/**"
-      instructions: |
-        Alembic migrations. Verify:
-        - Proper upgrade() and downgrade() functions
-        - FK constraints with ON DELETE/UPDATE
-        - Indexes on FK columns
-        - NOT NULL where appropriate
-  tools:
-    ruff:
-      enabled: true
-    biome:
-      enabled: true
-    shellcheck:
-      enabled: true
-    sqlfluff:
-      enabled: true
-    markdownlint:
-      enabled: false
-    languagetool:
-      enabled: false
-    ast-grep:
-      enabled: true
-      essential_rules: true
-    github-checks:
-      enabled: true
-      timeout_ms: 90000
-
+    - '!artifacts/**'
+    - '!.dev-tools/**'
+    - '!frontend/tests-results/**'
+    - '!frontend/playwright-report/**'
+    - '!**/*.snap'
+    - '!**/__snapshots__/**'
 chat:
-  auto_reply: true
-
-knowledge_base:
-  learnings:
-    scope: "local"
-  web_search:
-    enabled: false
-  code_guidelines:
-    enabled: true
-
-early_access: true
+  auto_reply: false
