@@ -925,7 +925,14 @@ class TestSteerConsultation:
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
         assert kwargs["parent_session_id"] == "parent-session-123"
-        assert tool_names == {"read_file"}
+        # Read tier = read_file + read-only web research ops. The consultant
+        # gets both file reads and web research as their minimal toolkit.
+        assert tool_names == {
+            "read_file",
+            "research_web",
+            "search_web",
+            "fetch_web_page",
+        }
 
     @pytest.mark.asyncio
     async def test_sends_followup(self):
@@ -988,7 +995,12 @@ class TestSteerConsultation:
         assert kwargs["thinking_level"] == "low"
         assert kwargs["use_memory"] is True
         assert kwargs["memory_group_id"] == "project-test-project"
-        assert tool_names == {"read_file"}
+        assert tool_names == {
+            "read_file",
+            "research_web",
+            "search_web",
+            "fetch_web_page",
+        }
 
     @pytest.mark.asyncio
     async def test_no_project_id_error(self):
