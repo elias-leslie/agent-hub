@@ -56,13 +56,6 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
         category="persona",
     ),
     WorkflowScheduleDefinition(
-        schedule_id="site_health_check",
-        label="Site health check",
-        description="Runs cross-project frontend checks and can wake persona on findings.",
-        cron="30 14 * * 1-5; 0 7 * * *",
-        category="observability",
-    ),
-    WorkflowScheduleDefinition(
         schedule_id="session_cleanup",
         label="Session cleanup",
         description="Marks dead candidate sessions completed when the cleanup heuristics say they are done.",
