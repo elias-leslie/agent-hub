@@ -35,6 +35,26 @@ def test_build_execution_observability_uses_tool_budget_and_max_turn_stop_reason
     assert execution["request_source"] == "cli"
 
 
+def test_build_execution_observability_preserves_uncapped_tool_loop() -> None:
+    session = SimpleNamespace(agent_slug="coder", client_id=None, request_source="summitflow")
+
+    execution = build_execution_observability(
+        session=session,
+        provider="codex",
+        requested_max_turns=None,
+        orchestration_path="tool_loop",
+        final_finish_reason="stop",
+        execution_status="success",
+        execution_error=None,
+        turns_completed=200,
+        tool_calls_count=40,
+    )
+
+    assert execution["requested_max_turns"] is None
+    assert execution["effective_turn_budget"] is None
+    assert execution["terminal_stop_reason"] == "stop"
+
+
 @pytest.mark.asyncio
 async def test_persist_execution_observability_updates_session_metadata_and_stores_tool_audit() -> None:
     db = AsyncMock()
@@ -67,6 +87,8 @@ async def test_persist_execution_observability_updates_session_metadata_and_stor
     assert session.provider_metadata["execution"] == execution
     assert execution["effective_turn_budget"] == 4
     assert execution["terminal_stop_reason"] == "end_turn"
-    assert mock_store.await_args.kwargs["event_type"] == "tool_audit"
-    assert mock_store.await_args.kwargs["tool_name"] == "execution_observability"
-    assert mock_store.await_args.kwargs["tool_output"] == execution
+    await_args = mock_store.await_args
+    assert await_args is not None
+    assert await_args.kwargs["event_type"] == "tool_audit"
+    assert await_args.kwargs["tool_name"] == "execution_observability"
+    assert await_args.kwargs["tool_output"] == execution

@@ -31,7 +31,7 @@ class ParallelResult:
     """Result from parallel execution."""
 
     results: list[SubagentResult]
-    status: Literal["all_completed", "partial", "all_failed", "timeout"]
+    status: Literal["all_completed", "partial", "all_failed"]
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -49,7 +49,7 @@ class ParallelResult:
 
 def determine_status(
     completed: int, total: int
-) -> Literal["all_completed", "partial", "all_failed", "timeout"]:
+) -> Literal["all_completed", "partial", "all_failed"]:
     """Determine overall status from completion counts."""
     if completed == total:
         return "all_completed"
@@ -83,25 +83,16 @@ def sum_tokens(results: list[SubagentResult]) -> tuple[int, int]:
     )
 
 
-def _cancel_pending(pending: set[asyncio.Task[SubagentResult]]) -> None:
-    """Cancel all pending tasks."""
-    for task in pending:
-        task.cancel()
-
-
 async def _process_completed_batch(
     done: set[asyncio.Task[SubagentResult]],
     pending: set[asyncio.Task[SubagentResult]],
     results: list[SubagentResult],
-) -> bool:
-    """Process a batch of completed tasks; returns True if fail-fast should trigger."""
+) -> None:
+    """Process a batch of completed tasks without cancelling in-flight work."""
+    del pending
     for task in done:
         result = task.result()
         results.append(result)
-        if result.status in ("error", "timeout"):
-            _cancel_pending(pending)
-            return True
-    return False
 
 
 async def execute_fail_fast(
@@ -110,22 +101,15 @@ async def execute_fail_fast(
     parent_id: str | None,
     trace_id: str | None,
 ) -> list[SubagentResult]:
-    """Execute with fail-fast mode: cancel remaining tasks on first error."""
+    """Execute all tasks; fail-fast no longer cancels already-started agents."""
     pending: set[asyncio.Task[SubagentResult]] = {
         asyncio.create_task(coro) for coro in coros
     }
     results: list[SubagentResult] = []
-    try:
-        async with asyncio.timeout(timeout):
-            while pending:
-                done, pending = await asyncio.wait(
-                    pending, return_when=asyncio.FIRST_COMPLETED
-                )
-                if await _process_completed_batch(done, pending, results):
-                    raise asyncio.CancelledError("Fail fast triggered")
-    except TimeoutError:
-        _cancel_pending(pending)
-        raise
+    del timeout
+    while pending:
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        await _process_completed_batch(done, pending, results)
     return results
 
 
@@ -136,23 +120,20 @@ async def execute_all(
     trace_id: str | None,
 ) -> list[SubagentResult]:
     """Execute all tasks, collecting results including errors."""
-    if timeout:
-        raw_results = await asyncio.wait_for(
-            asyncio.gather(*coros, return_exceptions=True), timeout=timeout
-        )
-        return [
-            r
-            if isinstance(r, SubagentResult)
-            else exception_to_result(Exception(str(r)), parent_id, trace_id)
-            for r in raw_results
-        ]
-    return await asyncio.gather(*coros)
+    del timeout
+    raw_results = await asyncio.gather(*coros, return_exceptions=True)
+    return [
+        r
+        if isinstance(r, SubagentResult)
+        else exception_to_result(Exception(str(r)), parent_id, trace_id)
+        for r in raw_results
+    ]
 
 
 def annotate_span(
     results: list[SubagentResult],
     total_tasks: int,
-    status: Literal["all_completed", "partial", "all_failed", "timeout"],
+    status: Literal["all_completed", "partial", "all_failed"],
     total_input: int,
     total_output: int,
     span: Any,
@@ -169,27 +150,6 @@ def annotate_span(
     else:
         desc = "Partial completion" if status == "partial" else "All tasks failed"
         span.set_status(Status(StatusCode.ERROR, desc))
-
-
-def build_timeout_result(
-    results: list[SubagentResult],
-    started_at: datetime,
-    trace_id: str | None,
-    span: Any,
-) -> ParallelResult:
-    """Create a timeout ParallelResult and annotate the span."""
-    span.set_attribute("parallel.status", "timeout")
-    span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
-    total_input, total_output = sum_tokens(results)
-    return ParallelResult(
-        results=results,
-        status="timeout",
-        total_input_tokens=total_input,
-        total_output_tokens=total_output,
-        started_at=started_at,
-        completed_at=datetime.now(UTC),
-        trace_id=trace_id,
-    )
 
 
 def build_final_result(

@@ -25,7 +25,6 @@ class SubagentManager:
 
     Key patterns:
     - Isolated context: Each subagent has its own message history
-    - Resource limits: Configurable token budgets and timeouts
     - Hierarchical: Subagents can spawn child subagents
     - Traceable: OpenTelemetry correlation across subagent tree
     """
@@ -101,7 +100,7 @@ class SubagentManager:
 
         try:
             if timeout is not None:
-                result = await asyncio.wait_for(task, timeout=timeout)
+                result = await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
             else:
                 result = await task
             del self._active_subagents[subagent_id]

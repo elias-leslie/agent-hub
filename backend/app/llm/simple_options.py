@@ -30,7 +30,7 @@ def build_base_options(
     if options.max_tokens is not None:
         max_tokens = options.max_tokens
     elif model.max_tokens > 0:
-        max_tokens = min(model.max_tokens, 32000)
+        max_tokens = model.max_tokens
     else:
         max_tokens = None
 

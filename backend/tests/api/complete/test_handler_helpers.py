@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.complete.handler_helpers import make_completion_response, save_and_track
-from app.api.complete.request_schemas import DEFAULT_AGENTIC_MAX_TURNS
 from app.api.complete.schemas import (
     CompletionRequest,
     MessageInput,
@@ -29,17 +28,17 @@ def test_completion_request_accepts_high_turn_budgets() -> None:
     assert request.max_turns == 5000
 
 
-def test_completion_request_execute_tools_uses_generous_default_turn_fuse() -> None:
+def test_completion_request_execute_tools_has_no_default_turn_cap() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="hello")],
         project_id="test-project",
         execute_tools=True,
     )
 
-    assert request.max_turns == DEFAULT_AGENTIC_MAX_TURNS
+    assert request.max_turns is None
 
 
-def test_completion_request_execute_tools_upgrades_legacy_single_turn_value() -> None:
+def test_completion_request_execute_tools_preserves_explicit_turn_cap() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="hello")],
         project_id="test-project",
@@ -47,7 +46,7 @@ def test_completion_request_execute_tools_upgrades_legacy_single_turn_value() ->
         max_turns=1,
     )
 
-    assert request.max_turns == DEFAULT_AGENTIC_MAX_TURNS
+    assert request.max_turns == 1
 
 
 def test_completion_request_rejects_non_positive_turn_budgets() -> None:
@@ -130,7 +129,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
         "source_client": "agent-hub/work-chats",
     }
     assert observability_args.kwargs["orchestration_path"] == "single_turn"
-    assert observability_args.kwargs["requested_max_turns"] == 1
+    assert observability_args.kwargs["requested_max_turns"] is None
     assert observability_args.kwargs["provider"] == "claude"
     assert cost_args.args[2] == "claude-haiku-4-5"
     assert log_tokens_args.args[2] == "claude-haiku-4-5"

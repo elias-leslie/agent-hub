@@ -382,8 +382,8 @@ class TestParallelExecutor:
             assert max_concurrent <= 2  # Should never exceed concurrency limit
 
     @pytest.mark.asyncio
-    async def test_execute_fail_fast(self):
-        """Test fail-fast mode cancels remaining tasks on first failure."""
+    async def test_execute_fail_fast_does_not_cancel_in_flight_tasks(self):
+        """Fail-fast is compatibility metadata; started agents are allowed to finish."""
         executor = ParallelExecutor()
 
         call_count = 0
@@ -428,18 +428,18 @@ class TestParallelExecutor:
 
             result = await executor.execute(tasks=tasks, fail_fast=True)
 
-            # Should have partial results
-            assert result.status in ("partial", "all_failed")
+            assert result.status == "partial"
+            assert len(result.results) == 5
 
     @pytest.mark.asyncio
-    async def test_execute_with_timeout(self):
-        """Test execution with overall timeout."""
+    async def test_execute_with_timeout_does_not_cancel_active_agents(self):
+        """overall_timeout is compatibility metadata; active agents still finish."""
         import asyncio
 
         executor = ParallelExecutor()
 
         async def slow_spawn(*args, **kwargs):
-            await asyncio.sleep(10)  # Very slow
+            await asyncio.sleep(0.02)
             return SubagentResult(
                 subagent_id="test",
                 name="test",
@@ -462,7 +462,7 @@ class TestParallelExecutor:
                 )
             ]
 
-            result = await executor.execute(tasks=tasks, overall_timeout=0.1)
+            result = await executor.execute(tasks=tasks, overall_timeout=0.001)
 
-            # Should timeout
-            assert result.status == "timeout"
+            assert result.status == "all_completed"
+            assert len(result.results) == 1

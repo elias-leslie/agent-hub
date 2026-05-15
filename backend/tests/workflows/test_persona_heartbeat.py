@@ -785,7 +785,7 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["memory_config"] == {"mode": "auto"}
         assert kwargs["enable_caching"] is False
         assert kwargs["skip_cache"] is True
-        assert kwargs["max_turns"] == 17
+        assert kwargs["max_turns"] is None
         assert kwargs["execute_tools"] is True
         assert kwargs["enable_programmatic_tools"] is True
         assert kwargs["task_type"] == "heartbeat"

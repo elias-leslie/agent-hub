@@ -90,7 +90,7 @@ class ChainExecutor:
         tracer = get_tracer("agent-hub.orchestration.chain")
         span_attrs: dict[str, Any] = {
             "chain.step_count": len(steps),
-            "chain.timeout": overall_timeout or 0,
+            "chain.timeout_requested": overall_timeout or 0,
             "chain.stop_on_error": stop_on_error,
         }
 

@@ -150,7 +150,7 @@ async def test_subagent_endpoint_passes_timeout_seconds_through(subagent_request
 
 
 @pytest.mark.asyncio
-async def test_call_pipeline_skips_wait_for_when_timeout_is_none() -> None:
+async def test_call_pipeline_does_not_wrap_uncapped_subagent_calls() -> None:
     config = SubagentConfig(name="test", timeout_seconds=None)
     fake_complete = AsyncMock(return_value=_make_completion_result())
 
@@ -167,19 +167,17 @@ async def test_call_pipeline_skips_wait_for_when_timeout_is_none() -> None:
 
 
 @pytest.mark.asyncio
-async def test_call_pipeline_uses_wait_for_for_positive_timeout() -> None:
+async def test_call_pipeline_treats_timeout_seconds_as_metadata_only() -> None:
     config = SubagentConfig(name="test", timeout_seconds=12)
     fake_complete = AsyncMock(return_value=_make_completion_result())
-
-    async def fake_wait_for(coro, timeout):
-        assert timeout == 12
-        return await coro
 
     with pytest.MonkeyPatch.context() as mp:
         import app.api.complete.core as core_mod
 
         mp.setattr(core_mod, "complete_internal", fake_complete)
-        mp.setattr(asyncio, "wait_for", fake_wait_for)
+        wait_for = AsyncMock(side_effect=AssertionError("wait_for should not be used"))
+        mp.setattr(asyncio, "wait_for", wait_for)
         result = await _call_pipeline([], GEMINI_FLASH, "gemini", config)
 
     assert result.content == "ok"
+    wait_for.assert_not_awaited()

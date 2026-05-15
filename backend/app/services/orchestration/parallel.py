@@ -14,7 +14,6 @@ from .parallel_helpers import (
     ParallelResult,
     ParallelTask,
     build_final_result,
-    build_timeout_result,
     execute_all,
     execute_fail_fast,
 )
@@ -98,20 +97,10 @@ class ParallelExecutor:
                 f"trace={effective_trace_id}"
             )
             results: list[SubagentResult] = []
-            try:
-                results = await self._run_tasks(
-                    tasks, overall_timeout, parent_id, effective_trace_id,
-                    fail_fast, semaphore=request_semaphore,
-                )
-            except TimeoutError:
-                logger.warning(
-                    f"Parallel execution timed out after {overall_timeout}s"
-                )
-                return build_timeout_result(
-                    results, started_at, effective_trace_id, span
-                )
-            except asyncio.CancelledError:
-                pass
+            results = await self._run_tasks(
+                tasks, overall_timeout, parent_id, effective_trace_id,
+                fail_fast, semaphore=request_semaphore,
+            )
             return build_final_result(
                 results, len(tasks), started_at, effective_trace_id, span
             )
@@ -148,7 +137,7 @@ class ParallelExecutor:
         span_attrs: dict[str, Any] = {
             "parallel.task_count": len(tasks),
             "parallel.max_concurrency": effective_concurrency,
-            "parallel.timeout": overall_timeout or 0,
+            "parallel.timeout_requested": overall_timeout or 0,
             "parallel.fail_fast": fail_fast,
         }
         return await self._execute_in_span(

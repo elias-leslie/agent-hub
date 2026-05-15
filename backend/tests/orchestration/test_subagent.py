@@ -226,25 +226,25 @@ class TestSubagentManager:
             assert "helpful assistant" in messages[0]["content"]
 
     @pytest.mark.asyncio
-    async def test_spawn_timeout(self):
+    async def test_spawn_timeout_seconds_does_not_cancel_agent(self):
         import asyncio
 
         manager = SubagentManager()
         config = SubagentConfig(name="test", timeout_seconds=0.1)
 
         async def slow_complete(*args, **kwargs):
-            await asyncio.sleep(1)
-            return _make_internal_result(content="Too late", input_tokens=0, output_tokens=0)
+            await asyncio.sleep(0.02)
+            return _make_internal_result(content="Finished", input_tokens=0, output_tokens=0)
 
         with patch(
             "app.api.complete.core.complete_internal",
             new=slow_complete,
         ):
-            result = await manager.spawn(task="This will timeout.", config=config)
+            result = await manager.spawn(task="This will finish.", config=config)
 
-            assert result.status == "timeout"
-            assert result.error is not None
-            assert "timed out" in result.error.lower()
+            assert result.status == "completed"
+            assert result.error is None
+            assert result.content == "Finished"
 
     @pytest.mark.asyncio
     async def test_spawn_error(self):
@@ -290,6 +290,28 @@ class TestSubagentManager:
             subagent_id = await manager.spawn_background(task="Background task.", config=config)
 
             assert subagent_id is not None
+            assert manager.active_count == 1
+
+            result = await manager.get_result(subagent_id)
+            assert result is not None
+            assert result.status == "completed"
+            assert manager.active_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_result_timeout_does_not_cancel_background_agent(self):
+        import asyncio
+
+        manager = SubagentManager()
+        config = SubagentConfig(name="background")
+
+        async def slow_complete(*args, **kwargs):
+            await asyncio.sleep(0.02)
+            return _make_internal_result(content="Background response", input_tokens=0, output_tokens=0)
+
+        with patch("app.api.complete.core.complete_internal", new=slow_complete):
+            subagent_id = await manager.spawn_background(task="Background task.", config=config)
+
+            assert await manager.get_result(subagent_id, timeout=0.001) is None
             assert manager.active_count == 1
 
             result = await manager.get_result(subagent_id)

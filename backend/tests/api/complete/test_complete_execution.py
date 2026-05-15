@@ -194,7 +194,7 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
 
 
 @pytest.mark.asyncio
-async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
+async def test_agentic_fallback_does_not_use_agent_timeout_seconds_as_kill_switch() -> None:
     req = SimpleNamespace(
         temperature=0.0,
         project_id="agent-hub",
@@ -221,8 +221,8 @@ async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
     )
     success = CompletionInternalResult(
         content="done",
-        model="codex/gpt-5.4",
-        provider="codex",
+        model="nvidia/kimi-k2.6",
+        provider="nvidia",
         input_tokens=1,
         output_tokens=1,
         finish_reason="stop",
@@ -236,7 +236,7 @@ async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
         model_id = args[1]
         calls.append(model_id)
         if model_id == "nvidia/kimi-k2.6":
-            await asyncio.sleep(10)
+            await asyncio.sleep(0.02)
         return success
 
     with patch(
@@ -261,10 +261,10 @@ async def test_agentic_fallback_times_out_quiet_primary_model_turn() -> None:
             skip_cache=False,
         )
 
-    assert calls == ["nvidia/kimi-k2.6", "codex/gpt-5.4"]
-    assert result.model_used == "codex/gpt-5.4"
-    assert result.fallback_used is True
-    assert result.fallback_reason == "TimeoutError: Agentic model turn timed out after 0.01s"
+    assert calls == ["nvidia/kimi-k2.6"]
+    assert result.message.model == "nvidia/kimi-k2.6"
+    assert result.fallback_used is False
+    assert result.fallback_reason is None
 
 
 @pytest.mark.asyncio

@@ -44,7 +44,8 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
     """
     Execute multiple subagents in parallel.
 
-    Supports configurable concurrency and timeout.
+    Supports configurable concurrency. Timeout/fail-fast fields are accepted for
+    compatibility but do not cancel active agents.
     """
     executor = get_parallel_executor()
     trace_id = get_current_trace_id()
