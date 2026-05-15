@@ -45,6 +45,265 @@ class ProjectOverview:
 
     project_id: str
     label: str
+    ready_count: int = 0
+    blocked_count: int = 0
+    active_count: int = 0
+    stale_count: int = 0
+    completion_ready_count: int = 0
+    blocked_completion_ready_count: int = 0
+    queued_completion_ready_count: int = 0
+    unknown_completion_ready_count: int = 0
+    blocked_reasons: tuple[str, ...] = ()
+
+
+def _task_completion_bucket(task: dict[str, object]) -> str | None:
+    """Classify task completion readiness into a small summary bucket."""
+    readiness = task.get("completion_readiness")
+    if not isinstance(readiness, dict):
+        return None
+    ready = readiness.get("ready")
+    reason = readiness.get("reason")
+    if ready is True:
+        return "ready"
+    if isinstance(reason, str) and reason.strip().lower() == "unknown":
+        return "unknown"
+    return "blocked"
+
+
+def _collect_completion_ready_stats(tasks: object) -> tuple[int, int, int, int]:
+    """Return ready/blocked/queued/unknown completion counts from project tasks."""
+    if not isinstance(tasks, list):
+        return (0, 0, 0, 0)
+    ready = blocked = queued = unknown = 0
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        bucket = _task_completion_bucket(task)
+        if bucket == "ready":
+            ready += 1
+        elif bucket == "blocked":
+            blocked += 1
+        elif bucket == "unknown":
+            unknown += 1
+        else:
+            queued += 1
+    return ready, blocked, queued, unknown
+
+
+def _collect_blocked_reasons(tasks: object) -> tuple[str, ...]:
+    """Return distinct blocked completion reasons present in project tasks."""
+    if not isinstance(tasks, list):
+        return ()
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        readiness = task.get("completion_readiness")
+        if not isinstance(readiness, dict) or readiness.get("ready") is True:
+            continue
+        reason = readiness.get("reason")
+        if not isinstance(reason, str):
+            continue
+        normalized = reason.strip().lower()
+        if not normalized or normalized == "unknown" or normalized in seen:
+            continue
+        seen.add(normalized)
+        reasons.append(normalized)
+    return tuple(reasons)
+
+
+def _format_project_label(
+    *,
+    ready: int,
+    blocked: int,
+    active: int,
+    stale: int,
+    completion_ready: int,
+    blocked_completion_ready: int,
+    queued_completion_ready: int,
+    unknown_completion_ready: int,
+    blocked_reasons: tuple[str, ...],
+) -> str:
+    """Build compact per-project label with closure-state hints when present."""
+    parts = [f"{ready} ready"]
+    if blocked:
+        parts.append(f"{blocked} blocked")
+    if active:
+        parts.append(f"{active} active")
+    if stale:
+        parts.append(f"{stale} stale")
+    closure_parts: list[str] = []
+    if completion_ready:
+        closure_parts.append(f"{completion_ready} closure-ready")
+    if blocked_completion_ready:
+        closure_parts.append(f"{blocked_completion_ready} closure-blocked")
+    if unknown_completion_ready:
+        closure_parts.append(f"{unknown_completion_ready} closure-unknown")
+    if queued_completion_ready:
+        closure_parts.append(f"{queued_completion_ready} closure-queued")
+    if closure_parts:
+        parts.append("completion=" + "/".join(closure_parts))
+    if blocked_reasons:
+        parts.append("blocked-by=" + ",".join(blocked_reasons))
+    return ", ".join(parts)
+
+
+def _project_overview_from_payload(project: dict[str, object]) -> ProjectOverview | None:
+    """Convert one project payload row into a compact overview with closure hints."""
+    pid = project.get("project_id")
+    if not isinstance(pid, str) or not pid:
+        return None
+    ready = _coerce_int(project.get("ready_count"))
+    blocked = _coerce_int(project.get("blocked_count"))
+    active = _coerce_int(project.get("active_count"))
+    stale = _coerce_int(project.get("stale_count"))
+    completion_ready, blocked_completion_ready, queued_completion_ready, unknown_completion_ready = (
+        _collect_completion_ready_stats(project.get("ready_tasks"))
+    )
+    blocked_reasons = _collect_blocked_reasons(project.get("ready_tasks"))
+    return ProjectOverview(
+        project_id=pid,
+        label=_format_project_label(
+            ready=ready,
+            blocked=blocked,
+            active=active,
+            stale=stale,
+            completion_ready=completion_ready,
+            blocked_completion_ready=blocked_completion_ready,
+            queued_completion_ready=queued_completion_ready,
+            unknown_completion_ready=unknown_completion_ready,
+            blocked_reasons=blocked_reasons,
+        ),
+        ready_count=ready,
+        blocked_count=blocked,
+        active_count=active,
+        stale_count=stale,
+        completion_ready_count=completion_ready,
+        blocked_completion_ready_count=blocked_completion_ready,
+        queued_completion_ready_count=queued_completion_ready,
+        unknown_completion_ready_count=unknown_completion_ready,
+        blocked_reasons=blocked_reasons,
+    )
+
+
+def _format_completion_summary(project_overviews: list[ProjectOverview]) -> str:
+    """Build cross-project closure summary for heartbeat/task consumers."""
+    completion_ready = sum(overview.completion_ready_count for overview in project_overviews)
+    blocked = sum(overview.blocked_completion_ready_count for overview in project_overviews)
+    queued = sum(overview.queued_completion_ready_count for overview in project_overviews)
+    unknown = sum(overview.unknown_completion_ready_count for overview in project_overviews)
+    total = completion_ready + blocked + queued + unknown
+    if total == 0:
+        return ""
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for overview in project_overviews:
+        for reason in overview.blocked_reasons:
+            if reason in seen:
+                continue
+            seen.add(reason)
+            reasons.append(reason)
+    parts = [f"COMPLETION-READY[{completion_ready} ready"]
+    if blocked:
+        parts.append(f"{blocked} blocked")
+    if unknown:
+        parts.append(f"{unknown} unknown")
+    if queued:
+        parts.append(f"{queued} queued")
+    summary = ", ".join(parts) + "]"
+    if reasons:
+        summary += f"\nCOMPLETION-BLOCKERS[{','.join(reasons)}]"
+    return summary
+
+
+def _parse_completion_summary(task_overview: str) -> str:
+    """Extract existing completion summary block from compact ready-all text."""
+    lines = [line.rstrip() for line in task_overview.splitlines()]
+    collected: list[str] = []
+    capture = False
+    for line in lines:
+        if line.startswith("COMPLETION-READY["):
+            collected = [line]
+            capture = True
+            continue
+        if capture and line.startswith("COMPLETION-BLOCKERS["):
+            collected.append(line)
+            continue
+        if capture:
+            break
+    return "\n".join(collected)
+
+
+def extract_completion_summary_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    project_id: str | None = None,
+) -> str:
+    """Build cross-project completion summary directly from ready-all payloads."""
+    return _format_completion_summary(
+        extract_project_overviews_from_payload(task_overview_payload, project_id=project_id)
+    )
+
+
+def extract_completion_summary(task_overview: str) -> str:
+    """Extract completion summary block from compact ready-all text when present."""
+    return _parse_completion_summary(task_overview)
+
+
+def completion_ready_visible(task_overview_payload: dict[str, object], *, project_id: str | None = None) -> bool:
+    """Return True when at least one visible task is completion-ready."""
+    for overview in extract_project_overviews_from_payload(task_overview_payload, project_id=project_id):
+        if overview.completion_ready_count > 0:
+            return True
+    return False
+
+
+def has_unknown_completion_blocker(task_overview_payload: dict[str, object], *, project_id: str | None = None) -> bool:
+    """Return True when visible tasks carry unknown completion-readiness state."""
+    for overview in extract_project_overviews_from_payload(task_overview_payload, project_id=project_id):
+        if overview.unknown_completion_ready_count > 0:
+            return True
+    return False
+
+
+def has_dirty_completion_blocker(task_overview_payload: dict[str, object], *, project_id: str | None = None) -> bool:
+    """Return True when visible tasks are blocked by dirty-worktree closure reasons."""
+    target = "uncommitted changes"
+    for overview in extract_project_overviews_from_payload(task_overview_payload, project_id=project_id):
+        if any(target in reason for reason in overview.blocked_reasons):
+            return True
+    return False
+
+
+def summarize_completion_blockers(task_overview_payload: dict[str, object], *, project_id: str | None = None) -> tuple[str, ...]:
+    """Return distinct completion blockers from visible ready tasks."""
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for overview in extract_project_overviews_from_payload(task_overview_payload, project_id=project_id):
+        for reason in overview.blocked_reasons:
+            if reason in seen:
+                continue
+            seen.add(reason)
+            reasons.append(reason)
+    return tuple(reasons)
+
+
+def should_suppress_step_999_auto_defect(task_overview_payload: dict[str, object], *, project_id: str | None = None) -> bool:
+    """Return True when closure plumbing already explains the failure better than step 999."""
+    return has_unknown_completion_blocker(task_overview_payload, project_id=project_id)
+
+
+def should_allow_completion_reconcile_despite_dirty_worktree(
+    task_overview_payload: dict[str, object],
+    *,
+    project_id: str | None = None,
+) -> bool:
+    """Return True when at least one visible task is completion-ready despite dirty-tree blockers elsewhere."""
+    for overview in extract_project_overviews_from_payload(task_overview_payload, project_id=project_id):
+        if overview.completion_ready_count > 0:
+            return True
+    return False
 
 
 def _coerce_int(value: object, default: int = 0) -> int:
@@ -199,21 +458,9 @@ def extract_project_overviews_from_payload(
             continue
         if project_id is not None and project.get("project_id") != project_id:
             continue
-        pid = project.get("project_id")
-        if not isinstance(pid, str) or not pid:
-            continue
-        ready = _coerce_int(project.get("ready_count"))
-        blocked = _coerce_int(project.get("blocked_count"))
-        active = _coerce_int(project.get("active_count"))
-        stale = _coerce_int(project.get("stale_count"))
-        parts = [f"{ready} ready"]
-        if blocked:
-            parts.append(f"{blocked} blocked")
-        if active:
-            parts.append(f"{active} active")
-        if stale:
-            parts.append(f"{stale} stale")
-        overviews.append(ProjectOverview(project_id=pid, label=", ".join(parts)))
+        overview = _project_overview_from_payload(project)
+        if overview is not None:
+            overviews.append(overview)
     return overviews
 
 
@@ -324,6 +571,10 @@ def build_compact_task_overview_from_payload(
         lines.append(f"PROJECTS[{len(project_overviews)}]")
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
+
+    completion_summary = _format_completion_summary(project_overviews)
+    if completion_summary:
+        lines.extend(["", completion_summary])
 
     for section in [
         build_actionable_ready_summary_from_payload(
@@ -453,6 +704,10 @@ def build_compact_task_overview(
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
 
+    completion_summary = _parse_completion_summary(task_overview)
+    if completion_summary:
+        lines.extend(["", completion_summary])
+
     for section in [
         build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit),
         build_actionable_blocked_summary(task_overview, per_project_limit=per_project_limit),
@@ -476,10 +731,17 @@ __all__ = [
     "build_compact_task_overview",
     "build_compact_task_overview_from_payload",
     "collect_visible_task_ids_from_payload",
+    "extract_completion_summary",
+    "extract_completion_summary_from_payload",
     "extract_project_overviews",
     "extract_project_overviews_from_payload",
     "extract_ready_task_candidates",
     "extract_stale_task_candidates_from_payload",
+    "has_dirty_completion_blocker",
+    "has_unknown_completion_blocker",
     "parse_task_overview_stats",
     "parse_task_overview_stats_from_payload",
+    "should_allow_completion_reconcile_despite_dirty_worktree",
+    "should_suppress_step_999_auto_defect",
+    "summarize_completion_blockers",
 ]
