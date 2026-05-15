@@ -125,7 +125,7 @@ DISPATCH_AGENT_TOOL = Tool(
         "properties": {
             "agent_slug": {
                 "type": "string",
-                "description": "The agent to dispatch (e.g., 'site-checker', 'coder', 'debugger')",
+                "description": "The agent to dispatch (e.g., 'coder', 'debugger', 'reviewer')",
             },
             "task": {
                 "type": "string",

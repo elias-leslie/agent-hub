@@ -66,11 +66,11 @@ class TestWorkflowSchedules:
     async def test_updates_workflow_schedule(self, client):
         ac, mock_db = client
         payload = {
-            "schedule_id": "site_health_check",
-            "label": "Site health check",
-            "description": "Checks sites.",
-            "cron": "0 7 * * *",
-            "category": "observability",
+            "schedule_id": "session_cleanup",
+            "label": "Session cleanup",
+            "description": "Marks dead sessions complete.",
+            "cron": "*/15 * * * *",
+            "category": "maintenance",
             "default_enabled": True,
             "enabled": False,
             "notes": None,
@@ -82,7 +82,7 @@ class TestWorkflowSchedules:
             return_value=payload,
         ):
             resp = await ac.patch(
-                "/api/admin/schedules/site_health_check",
+                "/api/admin/schedules/session_cleanup",
                 json={"enabled": False, "updated_by": "admin-ui"},
             )
         assert resp.status_code == 200
