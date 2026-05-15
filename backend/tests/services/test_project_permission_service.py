@@ -40,9 +40,13 @@ class TestTierTools:
     def test_read_tier_has_read_tools(self):
         tools = get_tools_for_tier("read")
         assert "read_file" in tools
+        # Read-only network ops are read-class — same shape as read_file but
+        # over the open web. Required by agents like vantage-research.
+        assert "research_web" in tools
+        assert "search_web" in tools
+        assert "fetch_web_page" in tools
         assert "search_scratch_context" not in tools
         assert "precision_code_search" not in tools
-        assert "search_web" not in tools
         assert "write_file" not in tools
         assert "bash" not in tools
 
@@ -597,37 +601,37 @@ class TestCheckToolAllowed:
             assert "not permitted" in reason
 
     @pytest.mark.asyncio
-    async def test_search_web_denied_at_read_tier(self):
+    async def test_search_web_allowed_at_read_tier(self):
+        # Read-only network ops are read-class (same shape as read_file but
+        # over the open web). Allowed at read+ tier so agents like
+        # vantage-research can call them without requiring full tier.
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "search_web")
-            assert allowed is False
-            assert "not permitted" in reason
+            allowed, _ = await check_tool_allowed("proj", "search_web")
+            assert allowed is True
 
     @pytest.mark.asyncio
-    async def test_research_web_denied_at_read_tier(self):
+    async def test_research_web_allowed_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "research_web")
-            assert allowed is False
-            assert "not permitted" in reason
+            allowed, _ = await check_tool_allowed("proj", "research_web")
+            assert allowed is True
 
     @pytest.mark.asyncio
-    async def test_fetch_web_page_denied_at_read_tier(self):
+    async def test_fetch_web_page_allowed_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "fetch_web_page")
-            assert allowed is False
-            assert "not permitted" in reason
+            allowed, _ = await check_tool_allowed("proj", "fetch_web_page")
+            assert allowed is True
 
     @pytest.mark.asyncio
     async def test_denied_tool_at_read_tier(self):
@@ -731,7 +735,12 @@ class TestPersonaToolSets:
     def test_visible_read_tier_stays_core_only(self):
         tools = get_visible_tools_for_tier("read")
 
-        assert tools == frozenset({"read_file"})
+        assert tools == frozenset({
+            "read_file",
+            "research_web",
+            "search_web",
+            "fetch_web_page",
+        })
 
     def test_operational_contains_agency_tools(self):
         for tool in (

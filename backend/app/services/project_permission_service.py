@@ -136,6 +136,9 @@ _SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
 
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
+    "research_web",
+    "search_web",
+    "fetch_web_page",
 })
 
 _FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
