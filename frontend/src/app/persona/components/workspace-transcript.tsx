@@ -26,19 +26,13 @@ import {
 
 // ─── Strip observability tags from display text ───
 
-const NARRATION_TAG_RE = /\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g
-const APPLIED_CITATION_RE =
-  /\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g
-const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g
-const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g
-
 function cleanSummary(text: string | null | undefined): string {
   if (!text) return ''
   let cleaned = text
-    .replace(NARRATION_TAG_RE, '')
-    .replace(APPLIED_CITATION_RE, '')
-    .replace(FEEDBACK_RE, '')
-    .replace(SUMMARY_RE, '')
+    .replace(/\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g, '')
+    .replace(/\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g, '')
+    .replace(/\[\[F:[^\]]*\]?\]?/g, '')
+    .replace(/\[\[S:[^\]]*\]?\]?/g, '')
     .replace(/^HEARTBEAT_(?:OK|ACTION)\s*[—–-]?\s*/i, '')
   cleaned = cleaned
     .replace(/\[…/g, '')
@@ -312,38 +306,22 @@ function buildTranscriptItems(
   return items
 }
 
-const NARRATION_ICONS: Record<string, string> = {
-  started: '▸',
-  found: '🔍',
-  modified: '✏️',
-  tested: '✓',
-  confidence: '📊',
-  blocked: '⚠',
-  decision: '⚖️',
-}
-
 // ─── Sub-components ───
-
-function ExpandButton({
-  expanded,
-  onClick,
-}: {
-  expanded: boolean
-  onClick: (e: React.MouseEvent) => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-    >
-      {expanded ? 'less' : 'more'}
-    </button>
-  )
-}
 
 function MessageItem({ item, name }: { item: TranscriptItem; name: string }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = item.content && item.content.length > 200
+  const toggle = (to: boolean) => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        setExpanded(to)
+      }}
+      className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+    >
+      {to ? 'more' : 'less'}
+    </button>
+  )
 
   return (
     <div className="text-xs leading-relaxed py-0.5">
@@ -353,24 +331,12 @@ function MessageItem({ item, name }: { item: TranscriptItem; name: string }) {
           expanded ? (
             <>
               <span className="whitespace-pre-wrap">{item.content}</span>
-              <ExpandButton
-                expanded
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setExpanded(false)
-                }}
-              />
+              {toggle(false)}
             </>
           ) : (
             <>
               {truncate(item.content!, 200)}
-              <ExpandButton
-                expanded={false}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setExpanded(true)
-                }}
-              />
+              {toggle(true)}
             </>
           )
         ) : (
@@ -471,17 +437,19 @@ function ToolCallItem({ item }: { item: TranscriptItem }) {
   )
 }
 
-function ErrorItem({ item }: { item: TranscriptItem }) {
-  return (
-    <div className="text-xs text-rose-400/80 rounded-md bg-rose-500/5 px-2.5 py-1.5 flex items-start gap-2">
-      <span className="text-rose-500/60 mt-0.5">⚠</span>
-      <span>{item.content}</span>
-    </div>
-  )
-}
-
 function NarrationItem({ item }: { item: TranscriptItem }) {
-  const icon = NARRATION_ICONS[item.tagType || ''] || '▸'
+  const icon =
+    (
+      {
+        started: '▸',
+        found: '🔍',
+        modified: '✏️',
+        tested: '✓',
+        confidence: '📊',
+        blocked: '⚠',
+        decision: '⚖️',
+      } as Record<string, string>
+    )[item.tagType || ''] || '▸'
 
   if (item.tagType === 'confidence') {
     const match = (item.tagContent || '').match(/^(\d+)/)
@@ -611,7 +579,15 @@ export function SessionTranscript({
           case 'tool_call':
             return <ToolCallItem key={item.id} item={item} />
           case 'error':
-            return <ErrorItem key={item.id} item={item} />
+            return (
+              <div
+                key={item.id}
+                className="text-xs text-rose-400/80 rounded-md bg-rose-500/5 px-2.5 py-1.5 flex items-start gap-2"
+              >
+                <span className="text-rose-500/60 mt-0.5">⚠</span>
+                <span>{item.content}</span>
+              </div>
+            )
           case 'narration':
             return <NarrationItem key={item.id} item={item} />
           default:
