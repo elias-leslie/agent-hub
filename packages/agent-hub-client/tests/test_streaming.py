@@ -157,6 +157,56 @@ class TestStreamSSE:
         assert chunks[2].tool_status == "complete"
 
 
+    @pytest.mark.asyncio
+    async def test_stream_sse_continues_past_mid_loop_done(
+        self,
+        httpx_mock: HTTPXMock,
+    ) -> None:
+        """Mid-loop `done` events (finish_reason=toolUse) must not terminate the stream.
+
+        Agent-hub emits one `done` SSE per turn during execute_tools loops:
+        mid-loop turns carry finish_reason="toolUse" and the final turn carries
+        a true terminal reason. Pi-mono's agent-loop only emits `agent_end`
+        once — the SDK matches that shape by dropping mid-loop dones.
+        """
+        sse_body = (
+            'data: {"type":"tool_use","tool_id":"t1","tool_name":"research_web","tool_input":{"query":"q1"}}\n\n'
+            'data: {"type":"done","finish_reason":"toolUse","input_tokens":100,"output_tokens":20}\n\n'
+            'data: {"type":"tool_start","tool_id":"t1","tool_name":"research_web"}\n\n'
+            'data: {"type":"tool_result","tool_id":"t1","tool_result":"finding-1","tool_status":"complete"}\n\n'
+            'data: {"type":"content","content":"Final answer"}\n\n'
+            'data: {"type":"done","finish_reason":"stop","input_tokens":500,"output_tokens":120}\n\n'
+        )
+
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            content=sse_body.encode(),
+            headers={"content-type": "text/event-stream"},
+        )
+
+        async with AsyncAgentHubClient() as client:
+            chunks = []
+            async for chunk in client.stream_sse(
+                agent_slug="vantage-research",
+                messages=[{"role": "user", "content": "go"}],
+                project_id="test-project",
+                execute_tools=True,
+                max_turns=4,
+            ):
+                chunks.append(chunk)
+
+        # The mid-loop done is dropped; the final done terminates.
+        assert [c.type for c in chunks] == [
+            "tool_use",
+            "tool_result",
+            "content",
+            "done",
+        ]
+        assert chunks[-1].finish_reason == "stop"
+        assert chunks[-1].output_tokens == 120
+
+
 class TestStreamChunkModel:
     """Tests for StreamChunk model."""
 
