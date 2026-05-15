@@ -129,12 +129,10 @@ def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
     return [_tool_spec_to_api_tool(tool) for tool in source_tools if tool.name in allowed_names]
 
 
-async def _consultation_max_turns(db: Any) -> int:
-    from app.services._persona_crud import get_persona_limit
-    from app.services.persona_service import get_persona
-
-    persona = await get_persona(db)
-    return get_persona_limit(persona, "max_turns")
+async def _consultation_max_turns(db: Any) -> int | None:
+    """Consultation tool loops are uncapped unless the caller supplies a cap."""
+    del db
+    return None
 
 
 async def _load_parent_session(db: Any, parent_session_id: str):

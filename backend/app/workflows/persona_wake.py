@@ -176,15 +176,10 @@ async def _find_existing_wake_session(
     return result.scalar_one_or_none()
 
 
-async def _resolve_max_turns(db: Any, input: WakeInput) -> int:
-    """Return explicit max_turns or fall back to the persona's configured limit."""
-    if input.max_turns:
-        return input.max_turns
-    from app.services._persona_crud import get_persona_limit
-    from app.services.persona_service import get_persona
-
-    persona = await get_persona(db)
-    return get_persona_limit(persona, "max_turns")
+async def _resolve_max_turns(db: Any, input: WakeInput) -> int | None:
+    """Return only an explicit caller-directed turn cap."""
+    del db
+    return input.max_turns
 
 
 async def _check_permission_tier(project_id: str) -> bool:
@@ -201,7 +196,7 @@ async def _run_complete_guarded(
     db: Any,
     input: WakeInput,
     external_id: str | None,
-    max_turns: int,
+    max_turns: int | None,
 ) -> Any:
     """Run complete_internal and handle CancelledError cleanup."""
     try:
@@ -214,7 +209,7 @@ async def _run_complete_guarded(
         raise
 
 
-async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | None, max_turns: int) -> Any:
+async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | None, max_turns: int | None) -> Any:
     """Invoke complete_internal with wake-specific parameters."""
     from app.api.complete.core import complete_internal
 

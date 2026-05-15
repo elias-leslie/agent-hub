@@ -158,7 +158,7 @@ async def run_completion(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int | None = None,
 ) -> OrchestratorResult:
     """Drive the new pipeline to completion (non-streaming).
 
@@ -208,7 +208,7 @@ async def run_completion_stream(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.
 

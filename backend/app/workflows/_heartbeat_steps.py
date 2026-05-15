@@ -169,19 +169,15 @@ def _build_messages(system_content: str, prompt: str) -> list[dict[str, Any]]:
 
 async def _resolve_completion_context(
     execution_project: str,
-) -> tuple[str, str, float, str | None, str, dict[str, Any] | None, int]:
-    """Resolve persona agent config and max_turns for a heartbeat completion."""
+) -> tuple[str, str, float, str | None, str, dict[str, Any] | None, int | None]:
+    """Resolve persona agent config for a heartbeat completion."""
     from app.db import async_session
-    from app.services._persona_crud import get_persona_limit
-    from app.services.persona_service import get_persona
 
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content, agent_memory_config = (
             await _resolve_persona(db, project_id=execution_project)
         )
-        persona = await get_persona(db)
-        max_turns = get_persona_limit(persona, "max_turns")
-    return model, provider, temperature, thinking_level, system_content, agent_memory_config, max_turns
+    return model, provider, temperature, thinking_level, system_content, agent_memory_config, None
 
 
 async def _invoke_complete_internal(
@@ -194,7 +190,7 @@ async def _invoke_complete_internal(
     execution_project: str,
     heartbeat_session_id: str,
     memory_config: dict[str, Any] | None,
-    max_turns: int,
+    max_turns: int | None,
     thinking_level: str | None,
     working_dir: str | None,
 ) -> Any:

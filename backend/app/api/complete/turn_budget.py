@@ -25,7 +25,7 @@ def uses_openai_compat_tool_loop(provider: str) -> bool:
     return provider in _OPENAI_COMPAT_TOOL_PROVIDERS
 
 
-def resolve_tool_max_turns(provider: str, requested_max_turns: int) -> int:
+def resolve_tool_max_turns(provider: str, requested_max_turns: int | None) -> int | None:
     """Return the effective tool-loop turn budget.
 
     Tool execution needs at least:
@@ -33,9 +33,11 @@ def resolve_tool_max_turns(provider: str, requested_max_turns: int) -> int:
     2. one model turn after tool results
     3. one closeout turn if the model ends without a user-facing answer
 
-    Keep the floor small and provider-agnostic so callers can set higher
-    budgets deliberately without OpenAI-compat providers being inflated by
-    arbitrary policy.
+    ``None`` means no local turn cap. Keep the floor small and provider-agnostic
+    only when a caller explicitly provides a budget, so legacy low values do not
+    break the tool-result closeout turn.
     """
     del provider  # Provider family no longer affects the minimum tool budget.
+    if requested_max_turns is None:
+        return None
     return max(requested_max_turns, _MIN_TOOL_COMPLETION_TURNS)

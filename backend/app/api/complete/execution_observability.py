@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from typing import Any, Literal
 
 from app.models.session import SessionEventType
@@ -18,7 +17,7 @@ def build_execution_observability(
     *,
     session: Any,
     provider: str,
-    requested_max_turns: int,
+    requested_max_turns: int | None,
     orchestration_path: ExecutionPath,
     final_finish_reason: str | None,
     execution_status: str | None,
@@ -65,7 +64,7 @@ async def persist_execution_observability(
     *,
     provider: str,
     model_used: str,
-    requested_max_turns: int,
+    requested_max_turns: int | None,
     orchestration_path: ExecutionPath,
     final_finish_reason: str | None,
     execution_status: str | None,
@@ -108,14 +107,12 @@ def _effective_turn_budget(
     *,
     orchestration_path: ExecutionPath,
     provider: str,
-    requested_max_turns: int,
-) -> int:
+    requested_max_turns: int | None,
+) -> int | None:
     if orchestration_path == "tool_loop":
         return resolve_tool_max_turns(provider, requested_max_turns)
     if orchestration_path == "multi_turn":
-        if requested_max_turns <= 4:
-            return requested_max_turns
-        return requested_max_turns + math.ceil(requested_max_turns * 0.1)
+        return requested_max_turns
     return requested_max_turns
 
 

@@ -50,7 +50,7 @@ async def build_session_and_messages(
     skip_cache: bool,
 ) -> _SessionResult:
     """Set up session, build messages, inject memory, check cache."""
-    is_agentic = request.max_turns > 1 or request.execute_tools
+    is_agentic = request.execute_tools or (request.max_turns is not None and request.max_turns > 1)
     session_id, session, ctx_msgs, is_new_session = await setup_session(
         request, provider, resolved_model, db, client_id, source
     )

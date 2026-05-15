@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -83,32 +82,7 @@ class ProgressiveContext:
         return [r.uuid for r in self.reference_index if r.uuid]
 
 
-def _get_context_blocks(context: ProgressiveContext) -> dict[str, list[MemorySearchResult]]:
-    """Return mutable access to each context block."""
-    return {
-        "mandates": context.mandates,
-        "guardrails": context.guardrails,
-        "reference": context.reference,
-        "reference_index": context.reference_index,
-    }
-
-
-def _set_context_block(
-    context: ProgressiveContext,
-    field_name: str,
-    items: list[MemorySearchResult],
-) -> None:
-    """Replace one context block in-place."""
-    setattr(context, field_name, items)
-
-
-def _map_context_blocks(
-    context: ProgressiveContext,
-    transform: Callable[[str, list[MemorySearchResult]], list[MemorySearchResult]],
-) -> None:
-    """Apply same transform to each context block."""
-    for field_name, items in _get_context_blocks(context).items():
-        _set_context_block(context, field_name, transform(field_name, items))
+_CONTEXT_FIELDS = ("mandates", "guardrails", "reference", "reference_index")
 
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
@@ -121,37 +95,27 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
     references that still rely on ordinary memory tags for routing.
     """
     audience_tags, exclude_tags = resolve_memory_tags(memory_config)
+
     if exclude_tags:
-        _map_context_blocks(
-            context,
-            lambda _field_name, items: filter_by_tags(items, [], exclude_tags),
-        )
-    if audience_tags:
-        for field_name in ("reference", "reference_index"):
-            _set_context_block(
+        for field_name in _CONTEXT_FIELDS:
+            setattr(
                 context,
                 field_name,
-                _filter_legacy_reference_audience_tags(
-                    _get_context_blocks(context)[field_name],
-                    audience_tags,
-                ),
+                filter_by_tags(getattr(context, field_name), [], exclude_tags),
             )
 
-
-def _filter_legacy_reference_audience_tags(
-    items: list[MemorySearchResult],
-    audience_tags: list[str],
-) -> list[MemorySearchResult]:
-    """Apply tag-based audience routing only to references without applicability."""
-    retained: list[MemorySearchResult] = []
-    for item in items:
-        applicability = item.applicability
-        if applicability_has_targets(applicability) or applicability_has_exclusions(applicability):
-            retained.append(item)
-            continue
-        if filter_by_tags([item], audience_tags, []):
-            retained.append(item)
-    return retained
+    if audience_tags:
+        for field_name in ("reference", "reference_index"):
+            items = getattr(context, field_name)
+            retained: list[MemorySearchResult] = []
+            for item in items:
+                applicability = item.applicability
+                if applicability_has_targets(applicability) or applicability_has_exclusions(applicability):
+                    retained.append(item)
+                    continue
+                if filter_by_tags([item], audience_tags, []):
+                    retained.append(item)
+            setattr(context, field_name, retained)
 
 
 def _apply_applicability_filters(
@@ -162,29 +126,42 @@ def _apply_applicability_filters(
     consumer_tags: list[str],
 ) -> None:
     """Filter all context blocks against explicit applicability targeting."""
-    _map_context_blocks(
-        context,
-        lambda _field_name, items: [
-            item
-            for item in items
-            if applicability_matches(
-                item.applicability,
-                consumer_profile=consumer_profile,
-                consumer_agent_slug=consumer_agent_slug,
-                consumer_tags=consumer_tags,
-            )
-        ],
-    )
+    for field_name in _CONTEXT_FIELDS:
+        setattr(
+            context,
+            field_name,
+            [
+                item
+                for item in getattr(context, field_name)
+                if applicability_matches(
+                    item.applicability,
+                    consumer_profile=consumer_profile,
+                    consumer_agent_slug=consumer_agent_slug,
+                    consumer_tags=consumer_tags,
+                )
+            ],
+        )
 
 
 def _apply_uuid_exclusions(context: ProgressiveContext, excluded_uuids: set[str]) -> None:
     """Remove explicitly excluded memory UUIDs from all context blocks."""
     if not excluded_uuids:
         return
-    _map_context_blocks(
-        context,
-        lambda _field_name, items: [item for item in items if item.uuid not in excluded_uuids],
-    )
+    for field_name in _CONTEXT_FIELDS:
+        setattr(
+            context,
+            field_name,
+            [item for item in getattr(context, field_name) if item.uuid not in excluded_uuids],
+        )
+
+
+def _review_status_rank(item: MemorySearchResult) -> int:
+    """Prefer clean reviewed memories, then unreviewed, then queued review debt."""
+    if item.review_status == "clean":
+        return 0
+    if item.review_status == "needs_action":
+        return 2
+    return 1
 
 
 def _prioritize_items_for_profile(
@@ -203,15 +180,6 @@ def _prioritize_items_for_profile(
             -item.relevance_score,
         ),
     )
-
-
-def _review_status_rank(item: MemorySearchResult) -> int:
-    """Prefer clean reviewed memories, then unreviewed, then queued review debt."""
-    if item.review_status == "clean":
-        return 0
-    if item.review_status == "needs_action":
-        return 2
-    return 1
 
 
 def _limit_references_for_variant(
@@ -373,31 +341,6 @@ def _partition_reference_index(
     return reference_index, reference
 
 
-def _split_reference_index(
-    context: ProgressiveContext,
-    settings: Any,
-    memory_config: dict[str, Any] | None,
-) -> None:
-    """Partition fetched references into capability (index) vs regular buckets."""
-    if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
-        context.reference_index, context.reference = _partition_reference_index(context.reference)
-
-
-def _deduplicate_query_selected(
-    payloads: list[Any],
-    existing_uuids: set[str],
-) -> list[MemorySearchResult]:
-    """Validate payloads and drop any UUIDs already present in context."""
-    results: list[MemorySearchResult] = []
-    for payload in payloads:
-        result = MemorySearchResult.model_validate(payload)
-        if result.uuid in existing_uuids:
-            continue
-        existing_uuids.add(result.uuid)
-        results.append(result)
-    return results
-
-
 async def _merge_query_selected_references(
     context: ProgressiveContext,
     query: str,
@@ -411,13 +354,33 @@ async def _merge_query_selected_references(
     payloads = await get_query_relevant_references_as_search_results(query, scopes_to_query)
     if not payloads:
         return
-    filtered_payloads = [
-        payload for payload in payloads if _query_selected_matches_triggers(payload, task_type, phase)
-    ]
+
+    filtered_payloads = []
+    for payload in payloads:
+        trigger_task_types = normalize_trigger_task_types(payload.get("trigger_task_types"))
+        if trigger_task_types:
+            resolved_task_type = (task_type or "").strip().lower()
+            if not resolved_task_type or resolved_task_type not in trigger_task_types:
+                continue
+        trigger_phases = normalize_trigger_phases(payload.get("trigger_phases"))
+        if trigger_phases:
+            resolved_phase = (phase or "").strip().lower()
+            if not resolved_phase or resolved_phase not in trigger_phases:
+                continue
+        filtered_payloads.append(payload)
+
     if not filtered_payloads:
         return
+
     existing = {item.uuid for item in [*context.reference_index, *context.reference]}
-    selected = _deduplicate_query_selected(filtered_payloads, existing)
+    selected: list[MemorySearchResult] = []
+    for payload in filtered_payloads:
+        result = MemorySearchResult.model_validate(payload)
+        if result.uuid in existing:
+            continue
+        existing.add(result.uuid)
+        selected.append(result)
+
     if selected:
         selected_uuids = {r.uuid for r in selected}
         context.reference_index = [
@@ -426,27 +389,6 @@ async def _merge_query_selected_references(
     context.reference.extend(
         _limit_references_for_variant(selected, variant_config.max_query_selected_references, consumer_profile)
     )
-
-
-def _query_selected_matches_triggers(
-    payload: dict[str, Any],
-    task_type: str | None,
-    phase: str | None,
-) -> bool:
-    """Respect explicit trigger hints when semantic/text query selection adds references."""
-    trigger_task_types = normalize_trigger_task_types(payload.get("trigger_task_types"))
-    if trigger_task_types:
-        resolved_task_type = (task_type or "").strip().lower()
-        if not resolved_task_type or resolved_task_type not in trigger_task_types:
-            return False
-
-    trigger_phases = normalize_trigger_phases(payload.get("trigger_phases"))
-    if trigger_phases:
-        resolved_phase = (phase or "").strip().lower()
-        if not resolved_phase or resolved_phase not in trigger_phases:
-            return False
-
-    return True
 
 
 def _apply_all_filters(
@@ -469,18 +411,6 @@ def _apply_all_filters(
     if memory_config:
         _apply_tag_filters(context, memory_config)
         _apply_uuid_exclusions(context, set(resolve_excluded_memory_uuids(memory_config)))
-
-
-def _build_scopes_to_query(
-    scope: MemoryScope,
-    scope_id: str | None,
-    include_global: bool,
-) -> list[tuple[MemoryScope, str | None]]:
-    """Return the ordered list of scopes to query, appending GLOBAL when appropriate."""
-    scopes: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
-    if include_global and scope == MemoryScope.PROJECT and scope_id:
-        scopes.append((MemoryScope.GLOBAL, None))
-    return scopes
 
 
 async def _apply_priority_and_limits(
@@ -546,11 +476,18 @@ async def build_progressive_context(
         logger.info("Memory injection disabled - returning empty context")
         context.budget_usage, context.total_tokens = BudgetUsage(), 0
         return context
-    scopes_to_query = _build_scopes_to_query(scope, scope_id, include_global)
+
+    scopes_to_query: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
+    if include_global and scope == MemoryScope.PROJECT and scope_id:
+        scopes_to_query.append((MemoryScope.GLOBAL, None))
+
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
         scopes_to_query, include_mandates, include_guardrails, include_references, task_type, phase
     )
-    _split_reference_index(context, settings, memory_config)
+
+    if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
+        context.reference_index, context.reference = _partition_reference_index(context.reference)
+
     if not include_references:
         context.reference = []
         context.reference_index = []
@@ -558,6 +495,7 @@ async def build_progressive_context(
         await _merge_query_selected_references(
             context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase
         )
+
     _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
     await _apply_priority_and_limits(
         context, query, variant, variant_config, consumer_profile, memory_config

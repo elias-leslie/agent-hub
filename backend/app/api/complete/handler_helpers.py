@@ -73,7 +73,11 @@ async def save_and_track(
         provider=getattr(result, "provider", session.provider),
         model_used=effective_model,
         requested_max_turns=request.max_turns,
-        orchestration_path="tool_loop" if request.execute_tools or request.max_turns > 1 else "single_turn",
+        orchestration_path=(
+            "tool_loop"
+            if request.execute_tools or (request.max_turns is not None and request.max_turns > 1)
+            else "single_turn"
+        ),
         final_finish_reason=getattr(result, "finish_reason", None),
         execution_status="success",
         execution_error=None,

@@ -168,7 +168,7 @@ async def complete_internal(
     response_format: dict[str, Any] | None = None,
     skip_cache: bool = False,
     user_messages_for_db: list[MessageInput] | None = None,
-    max_turns: int = 1, execute_tools: bool = False,
+    max_turns: int | None = None, execute_tools: bool = False,
     working_dir: str | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
     trace_id: str | None = None,

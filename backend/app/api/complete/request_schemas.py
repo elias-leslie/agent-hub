@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
-from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS as DEFAULT_AGENTIC_MAX_TURNS
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 
 
@@ -207,10 +206,13 @@ class CompletionRequest(BaseModel):
         default=False,
         description="Enable SSE streaming. Returns text/event-stream with data: {json} format.",
     )
-    max_turns: int = Field(
-        default=1,
+    max_turns: int | None = Field(
+        default=None,
         ge=1,
-        description="Maximum agentic turns. 1 = single completion, >1 = agentic loop with tool execution.",
+        description=(
+            "Optional maximum agentic turns. None leaves tool loops uncapped; "
+            "set a positive value only for a caller-directed stop condition."
+        ),
     )
     working_dir: str | None = Field(
         default=None,
@@ -241,18 +243,6 @@ class CompletionRequest(BaseModel):
         description="Run agentic completion asynchronously via background worker. "
         "Returns 202 with task_id for polling. Only applies to agentic requests.",
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _apply_agentic_turn_defaults(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if not data.get("execute_tools"):
-            return data
-        raw_turns = data.get("max_turns")
-        if raw_turns is None or raw_turns == 1:
-            return {**data, "max_turns": DEFAULT_AGENTIC_MAX_TURNS}
-        return data
 
 
 class EstimateRequest(BaseModel):

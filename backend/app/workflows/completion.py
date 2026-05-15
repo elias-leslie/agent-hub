@@ -44,7 +44,7 @@ class CompletionInput(BaseModel):
     container_id: str | None = None
     response_format: dict[str, Any] | None = None
     skip_cache: bool = False
-    max_turns: int = 1
+    max_turns: int | None = None
     execute_tools: bool = False
     working_dir: str | None = None
     trace_id: str | None = None

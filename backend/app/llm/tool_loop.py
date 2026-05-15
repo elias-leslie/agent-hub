@@ -88,7 +88,7 @@ async def run(
     context: Context,
     run_tool: ToolRunner,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Run the multi-turn tool loop.
 
@@ -96,8 +96,8 @@ async def run(
     :func:`backend.app.llm.stream.stream_simple` and, when a turn ends
     with ``stop_reason == "toolUse"``, drives ``run_tool`` per tool call,
     appends ``ToolResultMessage``s to ``context.messages``, and starts
-    the next turn. Stops on the first non-``toolUse`` terminal or when
-    ``max_turns`` is exhausted.
+    the next turn. Stops on the first non-``toolUse`` terminal or when an
+    explicit caller-provided ``max_turns`` is exhausted.
 
     Yields:
         Each :class:`AssistantMessageEvent` from the provider, plus
@@ -108,7 +108,7 @@ async def run(
     turns = 0
     tool_calls_count = 0
 
-    while turns < max_turns:
+    while max_turns is None or turns < max_turns:
         turns += 1
 
         stream_handle = stream_simple(model, context, options)

@@ -25,7 +25,11 @@ class SubagentRequest(BaseModel):
         pattern="^(minimal|low|medium|high|ultrathink)$",
         description="Thinking depth: minimal/low/medium/high/ultrathink",
     )
-    timeout_seconds: float | None = Field(default=None, ge=1)
+    timeout_seconds: float | None = Field(
+        default=None,
+        ge=1,
+        description="Deprecated metadata only; active subagent execution is not locally time-capped.",
+    )
     agent_slug: str | None = Field(
         default=None,
         description=(
@@ -92,8 +96,14 @@ class ParallelRequest(BaseModel):
     tasks: list[ParallelTaskRequest] = Field(
         ..., min_length=1, max_length=20, description="Tasks to execute in parallel"
     )
-    overall_timeout: float | None = Field(default=None, description="Overall timeout in seconds")
-    fail_fast: bool = Field(default=False, description="Cancel remaining tasks on first failure")
+    overall_timeout: float | None = Field(
+        default=None,
+        description="Deprecated metadata only; active parallel agents are not locally time-capped.",
+    )
+    fail_fast: bool = Field(
+        default=False,
+        description="Deprecated metadata only; in-flight agents are allowed to finish.",
+    )
     max_concurrency: int | None = Field(
         default=None,
         ge=1,
@@ -324,10 +334,10 @@ class WorkflowStageRequest(BaseModel):
         default=False,
         description="Enable direct tool execution for this stage",
     )
-    max_turns: int = Field(
-        default=1,
+    max_turns: int | None = Field(
+        default=None,
         ge=1,
-        description="Maximum turn budget for this stage",
+        description="Optional caller-directed turn cap for this stage; None leaves agentic loops uncapped",
     )
     working_dir: str | None = Field(
         default=None,

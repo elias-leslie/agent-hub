@@ -51,9 +51,9 @@ logger = logging.getLogger(__name__)
 # Heartbeat interval in seconds — keeps SSE connections alive through proxies
 _HEARTBEAT_INTERVAL_S = 15
 
-# Match CompletionRequest.max_turns default; the shared tool-budget resolver
-# lifts low values when tools are actually enabled.
-DEFAULT_MAX_TOOL_TURNS = 1
+# Match CompletionRequest.max_turns default: no local agentic turn cap unless
+# the caller explicitly supplies one.
+DEFAULT_MAX_TOOL_TURNS: int | None = None
 
 # Re-export private alias used historically as _StreamContext
 _StreamContext = StreamContext
@@ -308,7 +308,7 @@ async def stream_completion(
     is_one_shot: bool = False,
     tools: list[dict[str, object]] | None = None,
     project_id: str | None = None,
-    max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
+    max_tool_turns: int | None = DEFAULT_MAX_TOOL_TURNS,
     working_dir: str | None = None,
     source_metadata: dict[str, object] | None = None,
 ) -> AsyncIterator[str]:
@@ -361,7 +361,7 @@ async def stream_completion(
             context,
             execute_tools=execute_tools,
             run_tool=run_tool,
-            max_turns=max(max_tool_turns, 1) if execute_tools else 1,
+            max_turns=max_tool_turns if execute_tools else 1,
         )
         async for chunk in _with_heartbeat(_emit_events(events, writer, ctx, content_buf)):
             yield chunk
