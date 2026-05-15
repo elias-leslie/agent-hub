@@ -48,7 +48,7 @@ function cleanSummary(text: string | null | undefined): string {
     .replace(/\n{2,}/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
-  if (/^[\[\]{}()…\s.,;:]*$/.test(cleaned)) return ''
+  if (/^[[\]{}()…\s.,;:]*$/.test(cleaned)) return ''
   return cleaned
 }
 
@@ -341,13 +341,7 @@ function ExpandButton({
   )
 }
 
-function MessageItem({
-  item,
-  name,
-}: {
-  item: TranscriptItem
-  name: string
-}) {
+function MessageItem({ item, name }: { item: TranscriptItem; name: string }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = item.content && item.content.length > 200
 
@@ -400,8 +394,7 @@ function ToolCallItem({ item }: { item: TranscriptItem }) {
             item.isError ? 'bg-rose-400' : 'bg-slate-600',
           )}
         />
-        Ran{' '}
-        <span className="text-slate-300 font-medium">{item.toolName}</span>
+        Ran <span className="text-slate-300 font-medium">{item.toolName}</span>
         {paramStr && <span className="text-slate-500">{paramStr}</span>}
       </div>
       {item.toolResult && (
@@ -529,9 +522,7 @@ function NarrationItem({ item }: { item: TranscriptItem }) {
     >
       <span
         className={
-          item.tagType === 'blocked'
-            ? 'text-rose-500/60'
-            : 'text-slate-500/60'
+          item.tagType === 'blocked' ? 'text-rose-500/60' : 'text-slate-500/60'
         }
       >
         {icon}
@@ -542,11 +533,7 @@ function NarrationItem({ item }: { item: TranscriptItem }) {
   )
 }
 
-function IssueMarkerList({
-  markers,
-}: {
-  markers: PersonaIssueMarker[]
-}) {
+function IssueMarkerList({ markers }: { markers: PersonaIssueMarker[] }) {
   return (
     <div className="mt-3 space-y-1.5 border-t border-slate-800/30 pt-2.5">
       {markers.map((marker) => (
