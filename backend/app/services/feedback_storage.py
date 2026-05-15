@@ -137,6 +137,61 @@ async def count_feedback_items(
     return result.scalar_one()
 
 
+_DUPLICATE_CANDIDATES_SQL = text("""
+    SELECT fi.*,
+           CASE
+               WHEN lower(fi.title) = lower(:title) THEN 1.0
+               ELSE ts_rank(fi.search_vector, plainto_tsquery('english', :title))
+           END AS rank
+    FROM feedback_items fi
+    WHERE fi.component_id = :component_id
+      AND fi.feedback_type = :feedback_type
+      AND fi.status IN ('open', 'acknowledged')
+      AND (
+          lower(fi.title) = lower(:title)
+          OR fi.search_vector @@ plainto_tsquery('english', :title)
+      )
+    ORDER BY (fi.project_id = :project_id) DESC,
+             (lower(fi.title) = lower(:title)) DESC,
+             rank DESC
+    LIMIT :limit
+""")
+
+
+async def _fetch_duplicate_rows(
+    db: AsyncSession,
+    *,
+    component_id: str,
+    feedback_type: str,
+    project_id: str,
+    title: str,
+    limit: int,
+) -> list:
+    """Execute raw SQL and return mapping rows for duplicate candidates."""
+    result = await db.execute(
+        _DUPLICATE_CANDIDATES_SQL,
+        {
+            "component_id": component_id,
+            "feedback_type": feedback_type,
+            "project_id": project_id,
+            "title": title,
+            "limit": limit,
+        },
+    )
+    return list(result.mappings().all())
+
+
+async def _load_items_ordered(
+    db: AsyncSession, ids: list[str]
+) -> list[FeedbackItem]:
+    """Load FeedbackItem ORM objects and return them in the given ID order."""
+    if not ids:
+        return []
+    result = await db.execute(select(FeedbackItem).where(FeedbackItem.id.in_(ids)))
+    items = {item.id: item for item in result.scalars().all()}
+    return [items[id_] for id_ in ids if id_ in items]
+
+
 async def find_duplicate_candidates(
     db: AsyncSession,
     *,
@@ -153,47 +208,16 @@ async def find_duplicate_candidates(
     components are shared across projects, so duplicate matching is global for
     the same component/type while preferring same-project matches.
     """
-    stmt = text("""
-        SELECT fi.*,
-               CASE
-                   WHEN lower(fi.title) = lower(:title) THEN 1.0
-                   ELSE ts_rank(fi.search_vector, plainto_tsquery('english', :title))
-               END AS rank
-        FROM feedback_items fi
-        WHERE fi.component_id = :component_id
-        AND fi.feedback_type = :feedback_type
-        AND fi.status IN ('open', 'acknowledged')
-        AND (
-            lower(fi.title) = lower(:title)
-            OR fi.search_vector @@ plainto_tsquery('english', :title)
-        )
-        ORDER BY (fi.project_id = :project_id) DESC,
-                 (lower(fi.title) = lower(:title)) DESC,
-                 rank DESC
-        LIMIT :limit
-    """)
-    result = await db.execute(
-        stmt,
-        {
-            "component_id": component_id,
-            "feedback_type": feedback_type,
-            "project_id": project_id,
-            "title": title,
-            "limit": limit,
-        },
+    rows = await _fetch_duplicate_rows(
+        db,
+        component_id=component_id,
+        feedback_type=feedback_type,
+        project_id=project_id,
+        title=title,
+        limit=limit,
     )
-    rows = result.mappings().all()
-    if not rows:
-        return []
-
-    # Load as ORM objects
     ids = [row["id"] for row in rows]
-    orm_result = await db.execute(
-        select(FeedbackItem).where(FeedbackItem.id.in_(ids))
-    )
-    items = {item.id: item for item in orm_result.scalars().all()}
-    # Preserve rank ordering
-    return [items[id_] for id_ in ids if id_ in items]
+    return await _load_items_ordered(db, ids)
 
 
 async def resolve_feedback_id(
