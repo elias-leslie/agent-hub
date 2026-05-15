@@ -16,10 +16,6 @@ from app.workflows.scheduled import (
     tier_optimizer_task,
 )
 from app.workflows.session_reaper import session_reaper_task
-from app.workflows.site_health_check import (
-    single_project_health_check_task,
-    site_health_check_task,
-)
 from app.workflows.summary import session_summary_task
 from app.workflows.webhooks import webhook_delivery_task
 
@@ -45,8 +41,6 @@ def test_ops_workflows_match_maintenance_runtime() -> None:
         session_summary_task,
         observation_processing_task,
         model_enrichment_sync_task,
-        site_health_check_task,
-        single_project_health_check_task,
         session_reaper_task,
     ) == OPS_WORKFLOWS
 

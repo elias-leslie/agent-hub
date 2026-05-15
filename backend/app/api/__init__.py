@@ -37,7 +37,6 @@ from app.api.push import router as push_router
 from app.api.runtime_context import router as runtime_context_router
 from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
-from app.api.site_health_check import router as site_health_check_router
 from app.api.tasks import router as tasks_router
 from app.api.wake import router as wake_router
 from app.api.webhooks import router as webhooks_router
@@ -80,7 +79,6 @@ router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
 router.include_router(wake_router)  # Has its own prefix /wake and tags
 router.include_router(heartbeat_router)  # Has its own prefix /heartbeat and tags
-router.include_router(site_health_check_router)  # Has its own prefix /site-health-check and tags
 router.include_router(work_chats_router)
 
 __all__ = ["router"]
