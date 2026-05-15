@@ -1287,37 +1287,6 @@
       "is_coding_agent": false
     },
     {
-      "slug": "site-checker",
-      "name": "Site Health Checker",
-      "description": "Vision-based frontend health checker — analyzes screenshots and console output to identify issues. No browser tools needed; screenshots are collected via subprocess and sent as image content blocks.",
-      "system_prompt": "You are a site health checker with vision. Return only actionable issues visible in the screenshots or console output. Output at most 3 findings total, one line each, formatted as <severity>: <page> - <problem> - <why it matters>. Use only critical or warning severities. Omit info, PASS, healthy summaries, repetition, and recommendations. If there are no actionable issues, reply exactly 'No issues found.'\n",
-      "primary_model_id": "gemini-3-flash-preview",
-      "fallback_models": [
-        "codex/gpt-5.4-mini",
-        "codex/gpt-5.4"
-      ],
-      "strategies": {},
-      "temperature": 0.0,
-      "thinking_level": "none",
-      "is_coding_agent": false,
-      "memory_config": {
-        "runtime_consumer_profile": "agent_visual",
-        "preview_consumer_profile": "agent_visual",
-        "injection_enabled": true,
-        "project_index_enabled": true,
-        "tool_capabilities_enabled": true,
-        "include_mandates": false,
-        "include_guardrails": false,
-        "include_references": false,
-        "reference_index_enabled": false,
-        "continuity_enabled": false,
-        "continuity_max_sessions": 5,
-        "audience_tags": [],
-        "exclude_tags": [],
-        "exclude_memory_uuids": []
-      }
-    },
-    {
       "slug": "specifier",
       "name": "Task Spec Critic",
       "description": "Independent second-opinion reviewer for task definitions, plans, and execution contracts before implementation starts",
@@ -1933,7 +1902,7 @@
     {
       "slug": "persona-agent-routing-catalog",
       "name": "Persona Agent Routing Catalog",
-      "content": "# Persona Routing\n\nUse in Work Chats auto mode.\n\n- `persona` coordinates. Answer simple asks directly.\n- Delegate only when another lane improves quality, speed, or proof.\n- Use exact-fit registered agents only.\n- Common fits: explorer, researcher, analyst, coder, debugger, test-writer, reviewer/critic.\n- Design/finalize fits: designer/ux-polisher, site-checker, git-agent, verifier.\n- Meta fits: prompt-builder, memory-curator.\n- Do not use synthetic or unregistered agents.\n- Never choose provider/model. Agent Hub resolves each registered agent slug through its assigned primary and fallback models.\n- Prefer bash `st` for task/session dispatch.\n- Respect explore_policy, research_policy, verifier_enabled.\n- Read child results with `st sessions` / `st session-events` summaries first.\n",
+      "content": "# Persona Routing\n\nUse in Work Chats auto mode.\n\n- `persona` coordinates. Answer simple asks directly.\n- Delegate only when another lane improves quality, speed, or proof.\n- Use exact-fit registered agents only.\n- Common fits: explorer, researcher, analyst, coder, debugger, test-writer, reviewer/critic.\n- Design/finalize fits: designer/ux-polisher, git-agent, verifier.\n- Meta fits: prompt-builder, memory-curator.\n- Do not use synthetic or unregistered agents.\n- Never choose provider/model. Agent Hub resolves each registered agent slug through its assigned primary and fallback models.\n- Prefer bash `st` for task/session dispatch.\n- Respect explore_policy, research_policy, verifier_enabled.\n- Read child results with `st sessions` / `st session-events` summaries first.\n",
       "description": "Compact routing catalog for Jenny in Work Chats auto mode.",
       "is_global": false,
       "enabled": true,
