@@ -8,10 +8,16 @@ from app.services.task_overview_summary import (
     build_compact_task_overview,
     build_compact_task_overview_from_payload,
     collect_visible_task_ids_from_payload,
+    extract_completion_summary_from_payload,
     extract_ready_task_candidates,
     extract_stale_task_candidates_from_payload,
+    has_dirty_completion_blocker,
+    has_unknown_completion_blocker,
     parse_task_overview_stats,
     parse_task_overview_stats_from_payload,
+    should_allow_completion_reconcile_despite_dirty_worktree,
+    should_suppress_step_999_auto_defect,
+    summarize_completion_blockers,
 )
 
 
@@ -253,3 +259,93 @@ def test_payload_task_helpers_collect_visible_ids_and_stale_candidates() -> None
     assert "task-stale001" in stale_summary
     assert "task-stale002" not in stale_summary
     assert "ACTIONABLE-READY[1]" in ready_summary
+
+
+def test_payload_completion_summary_surfaces_dirty_and_unknown_blockers() -> None:
+    payload = {
+        "summary": {"ready": 3, "blocked": 0, "active": 0, "stale": 0, "projects": 1},
+        "projects": [
+            {
+                "project_id": "agent-hub",
+                "ready_count": 3,
+                "blocked_count": 0,
+                "active_count": 0,
+                "stale_count": 0,
+                "ready_tasks": [
+                    {
+                        "id": "task-a2178df4",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "autonomous",
+                        "title": "Completion-ready lane",
+                        "completion_readiness": {"ready": True, "reason": None},
+                    },
+                    {
+                        "id": "task-c4fbbd9d",
+                        "priority": 2,
+                        "task_type": "bug",
+                        "execution_mode": "autonomous",
+                        "title": "Unknown closure lane",
+                        "completion_readiness": {"ready": False, "reason": "unknown"},
+                    },
+                    {
+                        "id": "task-dirty001",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "autonomous",
+                        "title": "Dirty closure lane",
+                        "completion_readiness": {
+                            "ready": False,
+                            "reason": "claimed checkout has uncommitted changes",
+                        },
+                    },
+                ],
+                "blocked_tasks": [],
+                "active_tasks": [],
+                "stale_tasks": [],
+            }
+        ],
+    }
+
+    completion_summary = extract_completion_summary_from_payload(payload)
+
+    assert "COMPLETION-READY[1 ready, 1 blocked, 1 unknown]" in completion_summary
+    assert "COMPLETION-BLOCKERS[claimed checkout has uncommitted changes]" in completion_summary
+    assert has_dirty_completion_blocker(payload) is True
+    assert has_unknown_completion_blocker(payload) is True
+    assert should_allow_completion_reconcile_despite_dirty_worktree(payload) is True
+    assert should_suppress_step_999_auto_defect(payload) is True
+    assert summarize_completion_blockers(payload) == ("claimed checkout has uncommitted changes",)
+
+
+def test_compact_payload_overview_includes_completion_summary() -> None:
+    payload = {
+        "summary": {"ready": 1, "blocked": 0, "active": 0, "stale": 0, "projects": 1},
+        "projects": [
+            {
+                "project_id": "agent-hub",
+                "ready_count": 1,
+                "blocked_count": 0,
+                "active_count": 0,
+                "stale_count": 0,
+                "ready_tasks": [
+                    {
+                        "id": "task-ready001",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "autonomous",
+                        "title": "Closure ready",
+                        "completion_readiness": {"ready": True, "reason": None},
+                    }
+                ],
+                "blocked_tasks": [],
+                "active_tasks": [],
+                "stale_tasks": [],
+            }
+        ],
+    }
+
+    summary = build_compact_task_overview_from_payload(payload)
+
+    assert "completion=1 closure-ready" in summary
+    assert "COMPLETION-READY[1 ready]" in summary
