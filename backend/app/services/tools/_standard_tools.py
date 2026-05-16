@@ -409,6 +409,103 @@ FETCH_WEB_PAGE_TOOL = Tool(
     ],
 )
 
+PROPOSE_THOROUGH_TOOL = Tool(
+    name="propose_thorough",
+    description=(
+        "Recommend the Thorough research mode (wider read + forced critique pass + "
+        "revision). Call this when the question would benefit from a more exhaustive "
+        "search and a self-review pass — e.g. the user asks for 'comprehensive', "
+        "'deep dive', or 'every angle' coverage. Returns a structured JSON "
+        "recommendation that the consumer surfaces to the user as a mode prompt."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "One-sentence justification for upgrading to Thorough.",
+            },
+        },
+        "required": ["reason"],
+    },
+    category="research",
+    search_keywords=["mode recommendation", "thorough research", "deep dive"],
+    usage_examples=[
+        "Recommend Thorough mode for an exhaustive cross-source synthesis question.",
+    ],
+)
+
+PROPOSE_COMMITTEE_TOOL = Tool(
+    name="propose_committee",
+    description=(
+        "Recommend the Committee research mode (skeptic / optimist / methodologist / "
+        "domain-expert debate, with a judge consensus loop). Call this when the "
+        "question is genuinely contested or the user asks to 'debate', 'weigh pros "
+        "and cons', or seeks 'multiple perspectives'. Returns a structured JSON "
+        "recommendation that the consumer surfaces to the user as a mode prompt."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "One-sentence justification for engaging the Committee.",
+            },
+        },
+        "required": ["reason"],
+    },
+    category="research",
+    search_keywords=["mode recommendation", "committee debate", "multiple perspectives"],
+    usage_examples=[
+        "Recommend Committee mode when the user asks to debate a contested claim.",
+    ],
+)
+
+PROPOSE_HONING_TOOL = Tool(
+    name="propose_honing",
+    description=(
+        "Recommend the Honing (karpathy-loop) research mode for iteratively "
+        "optimizing an editable artifact (prompt, code, plan) against a measurable "
+        "metric (judge rubric or test harness). REFUSES unless BOTH `editable_asset` "
+        "(with path + kind) AND `metric` (with kind + spec) are fully specified; "
+        "when incomplete, returns a fallback recommendation to Thorough mode with "
+        "the missing slots listed."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "editable_asset": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "kind": {"type": "string"},
+                    "current_content": {"type": "string"},
+                },
+            },
+            "metric": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["judge", "harness"]},
+                    "spec": {"type": "object"},
+                },
+            },
+            "hypothesis": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+    },
+    category="research",
+    search_keywords=[
+        "mode recommendation",
+        "honing",
+        "karpathy loop",
+        "metric-driven optimization",
+    ],
+    usage_examples=[
+        "Recommend Honing only when the user has explicitly named both a metric and an asset to optimize.",
+    ],
+)
+
+
 STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,

@@ -740,6 +740,11 @@ class TestPersonaToolSets:
             "research_web",
             "search_web",
             "fetch_web_page",
+            # Vantage mode-recommendation tools: I/O-free, structured-JSON
+            # output for downstream UI; safe at read tier.
+            "propose_thorough",
+            "propose_committee",
+            "propose_honing",
         })
 
     def test_operational_contains_agency_tools(self):

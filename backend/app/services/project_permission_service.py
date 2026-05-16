@@ -139,6 +139,12 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "research_web",
     "search_web",
     "fetch_web_page",
+    # Mode-recommendation tools surfaced to Vantage's vantage-research agent.
+    # They don't perform I/O — they emit a structured recommendation that the
+    # consumer normalizes into a UI event. Read-tier so they aren't stripped.
+    "propose_thorough",
+    "propose_committee",
+    "propose_honing",
 })
 
 _FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({

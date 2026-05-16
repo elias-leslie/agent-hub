@@ -44,6 +44,9 @@ from app.services.tools._standard_tools import (
     EDIT_FILE_TOOL,
     FETCH_WEB_PAGE_TOOL,
     PRECISION_CODE_SEARCH_TOOL,
+    PROPOSE_COMMITTEE_TOOL,
+    PROPOSE_HONING_TOOL,
+    PROPOSE_THOROUGH_TOOL,
     READ_FILE_TOOL,
     RESEARCH_WEB_TOOL,
     SEARCH_SCRATCH_CONTEXT_TOOL,
@@ -75,6 +78,9 @@ __all__ = [
     "MARK_MEMORY_IRRELEVANT_TOOL",
     "MARK_MEMORY_RELEVANT_TOOL",
     "PRECISION_CODE_SEARCH_TOOL",
+    "PROPOSE_COMMITTEE_TOOL",
+    "PROPOSE_HONING_TOOL",
+    "PROPOSE_THOROUGH_TOOL",
     "READ_FILE_TOOL",
     "READ_PERSONALITY_TOOL",
     "READ_USER_CONTEXT_TOOL",
@@ -113,12 +119,16 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         *STANDARD_TOOLS,
         REVIEW_MEMORY_SYSTEM_TOOL,
     ],
-    # Vantage's research studio agent: read-only web research surface only.
-    # Excludes bash/edit/write — see vantage/backend/app/services/research_orchestrator.py.
+    # Vantage's research studio agent: read-only web research surface plus
+    # three mode-recommendation tools. Excludes bash/edit/write — see
+    # vantage/backend/app/services/research_orchestrator.py.
     "vantage-research": [
         RESEARCH_WEB_TOOL,
         SEARCH_WEB_TOOL,
         FETCH_WEB_PAGE_TOOL,
+        PROPOSE_THOROUGH_TOOL,
+        PROPOSE_COMMITTEE_TOOL,
+        PROPOSE_HONING_TOOL,
     ],
 }
 

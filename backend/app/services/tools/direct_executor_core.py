@@ -85,6 +85,7 @@ class DirectToolExecutor:
         "edit_file",
         "consult_agent", "dispatch_agent",
         "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
+        "propose_thorough", "propose_committee", "propose_honing",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
@@ -222,6 +223,18 @@ class DirectToolExecutor:
                 max_chars=args.get("max_chars", 12000),
                 focus_query=args.get("focus_query"),
             )
+        if name == "propose_thorough":
+            from app.services.tools._propose_tools import execute_propose_thorough
+
+            return execute_propose_thorough(args)
+        if name == "propose_committee":
+            from app.services.tools._propose_tools import execute_propose_committee
+
+            return execute_propose_committee(args)
+        if name == "propose_honing":
+            from app.services.tools._propose_tools import execute_propose_honing
+
+            return execute_propose_honing(args)
         if name == "tool_search":
             return await self.tool_search(**{k: v for k, v in args.items() if k in ("query", "limit")})
 
