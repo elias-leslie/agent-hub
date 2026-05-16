@@ -506,6 +506,38 @@ PROPOSE_HONING_TOOL = Tool(
 )
 
 
+START_RESEARCH_TOOL = Tool(
+    name="start_research",
+    description=(
+        "Hand off the conversation to the research loop. Call this when you have "
+        "enough context to write a useful research brief. The `brief` should be a "
+        "self-contained restatement of the user's goal in third person, including any "
+        "constraints, angles, or output preferences they named. Optionally hint a `mode` "
+        "if the brief clearly fits one — otherwise leave it out and the consumer will route."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "brief": {
+                "type": "string",
+                "description": "Refined, self-contained research prompt.",
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["standard", "thorough", "committee", "honing"],
+                "description": "Optional mode hint. Omit if unsure; the consumer will pick.",
+            },
+        },
+        "required": ["brief"],
+    },
+    category="research",
+    search_keywords=["start research", "intake handoff", "scoping complete"],
+    usage_examples=[
+        "Call when the user has answered enough to write a useful research brief.",
+    ],
+)
+
+
 STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,

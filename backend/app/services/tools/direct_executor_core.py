@@ -85,7 +85,7 @@ class DirectToolExecutor:
         "edit_file",
         "consult_agent", "dispatch_agent",
         "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
-        "propose_thorough", "propose_committee", "propose_honing",
+        "propose_thorough", "propose_committee", "propose_honing", "start_research",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
@@ -235,6 +235,17 @@ class DirectToolExecutor:
             from app.services.tools._propose_tools import execute_propose_honing
 
             return execute_propose_honing(args)
+        if name == "start_research":
+            # Pure pass-through. The consumer (Vantage) lifts the brief from
+            # the tool_result and pivots its session into the research phase.
+            import json as _json
+
+            brief = str(args.get("brief") or "").strip()
+            mode = args.get("mode")
+            payload: dict[str, Any] = {"ok": True, "brief": brief}
+            if isinstance(mode, str) and mode:
+                payload["mode"] = mode
+            return _json.dumps(payload, ensure_ascii=False)
         if name == "tool_search":
             return await self.tool_search(**{k: v for k, v in args.items() if k in ("query", "limit")})
 
