@@ -145,6 +145,8 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "propose_thorough",
     "propose_committee",
     "propose_honing",
+    # Signal tool for Vantage's intake/scoping agent — pure pass-through.
+    "start_research",
 })
 
 _FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({

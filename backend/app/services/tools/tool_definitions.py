@@ -52,6 +52,7 @@ from app.services.tools._standard_tools import (
     SEARCH_SCRATCH_CONTEXT_TOOL,
     SEARCH_WEB_TOOL,
     STANDARD_TOOLS,
+    START_RESEARCH_TOOL,
     WRITE_FILE_TOOL,
     get_standard_tools,
 )
@@ -92,6 +93,7 @@ __all__ = [
     "SEARCH_WEB_TOOL",
     "SEND_PUSH_TOOL",
     "STANDARD_TOOLS",
+    "START_RESEARCH_TOOL",
     "STEER_CONSULTATION_TOOL",
     "SUBMIT_IDEA_TOOL",
     "SUBMIT_ONBOARDING_TOOL",
@@ -129,6 +131,11 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         PROPOSE_THOROUGH_TOOL,
         PROPOSE_COMMITTEE_TOOL,
         PROPOSE_HONING_TOOL,
+    ],
+    # Vantage's scoping-interview agent: pure chat, one signal tool that hands
+    # the conversation off to the research loop with a refined brief.
+    "vantage-intake": [
+        START_RESEARCH_TOOL,
     ],
 }
 

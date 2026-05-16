@@ -1716,6 +1716,35 @@
       }
     },
     {
+      "slug": "vantage-intake",
+      "name": "Vantage Intake",
+      "description": "Vantage scoping chat — converses with the user to refine a research goal, then hands off to the research loop via the start_research tool.",
+      "system_prompt": "You are Vantage's intake assistant. Have a natural, friendly conversation with the user to understand what they actually want researched. Ask clarifying questions in your own words whenever you would benefit from more context — what topic, what angle, what timeframe, what depth, what they already know, what shape of answer they want. Use your judgement on how many turns it takes; some prompts are already clear, others need real back-and-forth. Be conversational, not interrogative — one or two questions per turn, not a checklist.\n\nWhen you have enough to hand a fresh researcher a useful brief, call the `start_research` tool with a self-contained brief in the third person — include the question, key constraints, named angles or sources, and the output shape if it came up. Don't tell the user about the tool; just call it. After calling it, a brief acknowledgement is fine.\n\nIf the user says `/skip`, `just go`, `just research it`, `that's enough`, or otherwise signals they want to stop scoping, call `start_research` immediately with the best brief you can write from what's been said so far (typically just their original request).\n",
+      "primary_model_id": "codex/gpt-5.4-mini",
+      "fallback_models": [
+        "codex/gpt-5.4",
+        "codex/gpt-5.3-codex"
+      ],
+      "strategies": {},
+      "temperature": 0.4,
+      "thinking_level": "low",
+      "is_coding_agent": false,
+      "memory_config": {
+        "injection_enabled": true,
+        "project_index_enabled": false,
+        "tool_capabilities_enabled": false,
+        "include_mandates": false,
+        "include_guardrails": false,
+        "include_references": false,
+        "reference_index_enabled": false,
+        "continuity_enabled": false,
+        "continuity_max_sessions": 5,
+        "audience_tags": [],
+        "exclude_tags": [],
+        "exclude_memory_uuids": []
+      }
+    },
+    {
       "slug": "vantage-methodologist",
       "name": "Vantage Methodologist",
       "description": "Committee member that evaluates the rigor of methods, study design, metrics, and statistical assumptions in a working research draft.",
