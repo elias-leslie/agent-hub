@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select
@@ -40,6 +40,14 @@ RuntimeSourceType = Literal["prompt", "memory"]
 RuntimeOverrideMode = Literal["include", "exclude", "order"]
 RuntimeBlockSource = Literal["auto", "pinned"]
 RuntimeTierOverride = Literal["L0", "L1", "L2"]
+
+
+class _OverrideLike(Protocol):
+    source_type: str
+    source_id: str
+
+
+TOverrideItem = TypeVar("TOverrideItem", bound=_OverrideLike)
 
 KNOWN_RUNTIME_PROFILES = ("agent_startup",)
 
@@ -98,6 +106,9 @@ class RuntimeContextPreviewResponse(BaseModel):
     total_tokens: int
     # New: configured budget ceiling for this profile (memory.total_budget).
     budget_tokens: int = 0
+    # Whether the configured budget ceiling is active. When false, callers
+    # should report the token count without treating budget_tokens as a limit.
+    budget_enabled: bool = True
     rendered: str
     blocks: list[RuntimeContextBlockResponse]
     # New: blocks the user has explicitly excluded — surfaced for UI restore.
@@ -151,6 +162,7 @@ async def list_runtime_context_overrides(
         project_id=project_id,
         include_inherited=False,
     )
+    rows = await _filter_live_override_rows(db, rows)
     return [_override_response(row) for row in rows]
 
 
@@ -161,6 +173,7 @@ async def replace_runtime_context_overrides(
     project_id: str | None,
     overrides: list[RuntimeContextOverridePayload],
 ) -> list[RuntimeContextOverrideResponse]:
+    overrides = await _filter_live_override_items(db, overrides)
     await db.execute(
         delete(RuntimeContextOverride).where(
             RuntimeContextOverride.consumer_profile == consumer_profile,
@@ -203,6 +216,7 @@ async def render_runtime_context(
     override_rows = await _load_override_rows(
         db, consumer_profile=consumer_profile, project_id=project_id
     )
+    override_rows = await _filter_live_override_rows(db, override_rows)
     overrides = _resolve_overrides(override_rows)
     override_by_key = {
         (item.source_type, item.source_id): item
@@ -251,6 +265,7 @@ async def render_runtime_context(
         query=query,
         total_tokens=count_tokens(full_rendered),
         budget_tokens=settings.total_budget,
+        budget_enabled=settings.budget_enabled,
         rendered=rendered,
         blocks=rendered_blocks,
         excluded=excluded_blocks,
@@ -286,6 +301,69 @@ async def _compute_auxiliary_blocks(
         bash_available=bash_available,
     )
     return project_index_block, tool_capability_block
+
+
+async def _filter_live_override_rows(
+    db: AsyncSession,
+    rows: list[RuntimeContextOverride],
+) -> list[RuntimeContextOverride]:
+    return await _filter_live_override_items(db, rows)
+
+
+async def _filter_live_override_items(
+    db: AsyncSession,
+    items: list[TOverrideItem],
+) -> list[TOverrideItem]:
+    """Drop overrides whose source no longer exists in the active catalog."""
+    if not items:
+        return items
+
+    prompt_ids = {
+        str(item.source_id)
+        for item in items
+        if item.source_type == "prompt" and item.source_id
+    }
+    memory_ids: dict[str, uuid.UUID] = {}
+    for item in items:
+        if item.source_type != "memory":
+            continue
+        if not item.source_id:
+            continue
+        try:
+            memory_ids[str(item.source_id)] = uuid.UUID(str(item.source_id))
+        except (TypeError, ValueError):
+            continue
+
+    live_keys: set[tuple[str, str]] = set()
+    if prompt_ids:
+        prompt_result = await db.execute(
+            select(Prompt.slug).where(
+                Prompt.enabled.is_(True), Prompt.slug.in_(list(prompt_ids))
+            )
+        )
+        live_keys.update(("prompt", slug) for slug in prompt_result.scalars().all())
+    if memory_ids:
+        memory_result = await db.execute(
+            select(Memory.id).where(
+                Memory.id.in_(list(memory_ids.values())), Memory.status == "active"
+            )
+        )
+        live_keys.update(
+            ("memory", str(memory_id)) for memory_id in memory_result.scalars().all()
+        )
+
+    filtered: list[TOverrideItem] = []
+    for item in items:
+        source_type = item.source_type
+        source_id = item.source_id
+        if source_type == "memory":
+            try:
+                source_id = str(uuid.UUID(str(source_id)))
+            except (TypeError, ValueError):
+                continue
+        if (source_type, source_id) in live_keys:
+            filtered.append(item)
+    return filtered
 
 
 async def _load_override_rows(

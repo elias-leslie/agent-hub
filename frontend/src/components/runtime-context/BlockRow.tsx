@@ -66,7 +66,7 @@ function chevronLabel(
 function shortHash(block: RuntimeContextBlock): string {
   if (block.source_type === 'prompt') return `prompt:${block.source_id}`
   const tag =
-    block.tier === 'mandate' ? 'M' : block.tier === 'guardrail' ? 'G' : 'M'
+    block.tier === 'mandate' ? 'M' : block.tier === 'guardrail' ? 'G' : 'R'
   return `${tag}:${block.source_id.slice(0, 8)}`
 }
 

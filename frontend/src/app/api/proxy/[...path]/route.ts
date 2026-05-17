@@ -16,6 +16,22 @@ const SSE_HEADERS: Record<string, string> = {
   'X-Accel-Buffering': 'no',
   Connection: 'keep-alive',
 }
+const DASHBOARD_ONLY_PREFIXES = new Set(['runtime-context'])
+const DASHBOARD_CLIENT_ID =
+  process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim() ||
+  process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID?.trim() ||
+  'agent-hub-dashboard'
+const DASHBOARD_CLIENT_IDS = new Set([
+  DASHBOARD_CLIENT_ID,
+  'agent-hub-dashboard',
+])
+const DASHBOARD_REQUEST_SOURCE =
+  process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE?.trim() ||
+  'agent-hub-dashboard'
+const DASHBOARD_REQUEST_SOURCES = new Set([
+  DASHBOARD_REQUEST_SOURCE,
+  'agent-hub-dashboard',
+])
 
 function buildUpstreamUrl(path: string[], searchParams?: string): string {
   const joined = path.join('/')
@@ -27,8 +43,36 @@ type RouteContext = { params: Promise<{ path: string[] }> }
 
 const auth = buildInternalHeaders()
 
+function dashboardProxyGuard(
+  request: Request,
+  path: string[],
+): Response | null {
+  if (!DASHBOARD_ONLY_PREFIXES.has(path[0] ?? '')) return null
+
+  const clientId = request.headers.get('X-Client-Id')?.trim()
+  const requestSource = request.headers.get('X-Request-Source')?.trim()
+  if (
+    clientId &&
+    DASHBOARD_CLIENT_IDS.has(clientId) &&
+    requestSource &&
+    DASHBOARD_REQUEST_SOURCES.has(requestSource)
+  ) {
+    return null
+  }
+
+  return Response.json(
+    {
+      error: 'dashboard_only',
+      message: 'This API route is only available to the Agent Hub dashboard.',
+    },
+    { status: 401 },
+  )
+}
+
 export async function GET(request: Request, { params }: RouteContext) {
   const { path } = await params
+  const guard = dashboardProxyGuard(request, path)
+  if (guard) return guard
   const url = buildUpstreamUrl(
     path,
     new URL(request.url).searchParams.toString(),
@@ -45,6 +89,8 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { path } = await params
+  const guard = dashboardProxyGuard(request, path)
+  if (guard) return guard
   const url = buildUpstreamUrl(path)
   const body = await request.text()
   const response = await fetch(url, {
@@ -65,6 +111,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
 export async function PUT(request: Request, { params }: RouteContext) {
   const { path } = await params
+  const guard = dashboardProxyGuard(request, path)
+  if (guard) return guard
   const url = buildUpstreamUrl(path)
   const body = await request.text()
   const response = await fetch(url, {
@@ -83,6 +131,8 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { path } = await params
+  const guard = dashboardProxyGuard(request, path)
+  if (guard) return guard
   const url = buildUpstreamUrl(path)
   const body = await request.text()
   const response = await fetch(url, {
@@ -101,6 +151,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { path } = await params
+  const guard = dashboardProxyGuard(request, path)
+  if (guard) return guard
   const url = buildUpstreamUrl(
     path,
     new URL(request.url).searchParams.toString(),

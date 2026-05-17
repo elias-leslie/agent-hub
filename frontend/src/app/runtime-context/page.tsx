@@ -71,6 +71,7 @@ export default function RuntimeContextPage() {
         <BootReactorTopbar
           used={ctx.preview?.total_tokens ?? 0}
           budget={ctx.preview?.budget_tokens ?? 0}
+          budgetEnabled={ctx.preview?.budget_enabled ?? false}
           onRefresh={ctx.onRefresh}
           onReset={ctx.onResetOverrides}
           refreshing={ctx.isLoading}
@@ -98,6 +99,7 @@ export default function RuntimeContextPage() {
               toolCapabilities={ctx.preview?.tool_capabilities ?? ''}
               totalTokens={ctx.preview?.total_tokens ?? 0}
               budgetTokens={ctx.preview?.budget_tokens ?? 0}
+              budgetEnabled={ctx.preview?.budget_enabled ?? false}
               onExclude={ctx.onExclude}
               onRestore={ctx.onRestore}
               onEdit={onEditBlock}

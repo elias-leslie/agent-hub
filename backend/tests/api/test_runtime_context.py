@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,6 +15,7 @@ from app.services.runtime_context import (
     RuntimeContextPreviewResponse,
     _build_prompt_blocks,
     _default_prompt_position,
+    _filter_live_override_items,
     _render_blocks,
     _resolve_overrides,
     _ResolvedOverride,
@@ -115,6 +117,32 @@ def test_render_blocks_skips_excluded() -> None:
 
     assert "kept content" in rendered
     assert "dropped content" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_filter_live_override_items_drops_missing_sources() -> None:
+    live_memory_id = uuid.uuid4()
+    missing_memory_id = uuid.uuid4()
+    rows = [
+        _override(id="live-memory", source_id=str(live_memory_id)),
+        _override(id="missing-memory", source_id=str(missing_memory_id)),
+        _override(id="live-prompt", source_type="prompt", source_id="live-prompt"),
+        _override(
+            id="missing-prompt",
+            source_type="prompt",
+            source_id="missing-prompt",
+        ),
+    ]
+    prompt_result = MagicMock()
+    prompt_result.scalars.return_value.all.return_value = ["live-prompt"]
+    memory_result = MagicMock()
+    memory_result.scalars.return_value.all.return_value = [live_memory_id]
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[prompt_result, memory_result])
+
+    filtered = await _filter_live_override_items(db, rows)
+
+    assert [item.id for item in filtered] == ["live-memory", "live-prompt"]
 
 
 def test_default_prompt_position_orders_by_id() -> None:
@@ -221,6 +249,13 @@ async def test_profiles_endpoint_lists_agentic_cli_profiles(api_client) -> None:
     assert "agent_startup" in profiles
 
 
+def test_runtime_context_requires_internal_dashboard(test_client) -> None:
+    response = test_client.get("/api/runtime-context/profiles")
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "internal_only"
+
+
 @pytest.mark.asyncio
 async def test_overrides_endpoint_returns_layer_specific_rows(api_client) -> None:
     override = RuntimeContextOverrideResponse(
@@ -257,6 +292,7 @@ async def test_preview_endpoint_returns_rendered_context(api_client) -> None:
         query="startup context",
         total_tokens=12,
         budget_tokens=3500,
+        budget_enabled=True,
         rendered="## Agentic CLI Startup Core\nDirect concise.",
         blocks=[
             RuntimeContextBlockResponse(
@@ -305,6 +341,7 @@ async def test_preview_endpoint_returns_rendered_context(api_client) -> None:
     body = response.json()
     assert body["total_tokens"] == 12
     assert body["budget_tokens"] == 3500
+    assert body["budget_enabled"] is True
     assert body["blocks"][0]["source_id"] == "agentic-cli-startup-core"
     assert body["blocks"][0]["source"] == "pinned"
     assert body["blocks"][0]["scope"] == "global"

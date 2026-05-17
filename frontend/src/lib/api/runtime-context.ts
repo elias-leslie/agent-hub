@@ -62,6 +62,7 @@ export interface RuntimeContextPreview {
   query: string
   total_tokens: number
   budget_tokens: number
+  budget_enabled: boolean
   rendered: string
   blocks: RuntimeContextBlock[]
   excluded: RuntimeContextBlock[]

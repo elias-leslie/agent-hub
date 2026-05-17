@@ -31,6 +31,7 @@ const preview = {
   query: 'startup context',
   total_tokens: 42,
   budget_tokens: 3500,
+  budget_enabled: true,
   rendered: '## Agentic CLI Startup Core\nDirect concise.',
   blocks: [
     {
