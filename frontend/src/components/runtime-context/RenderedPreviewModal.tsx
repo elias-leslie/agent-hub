@@ -13,6 +13,7 @@ interface Props {
   toolCapabilities: string
   totalTokens: number
   budgetTokens: number
+  budgetEnabled: boolean
   onClose: () => void
 }
 
@@ -28,6 +29,7 @@ export function RenderedPreviewModal({
   toolCapabilities,
   totalTokens,
   budgetTokens,
+  budgetEnabled,
   onClose,
 }: Props) {
   const [copied, setCopied] = useState(false)
@@ -78,8 +80,9 @@ export function RenderedPreviewModal({
             </h2>
             <p className="text-xs text-slate-400 font-mono">
               Verbatim text injected into the agent's session start —{' '}
-              {totalTokens.toLocaleString()} / {budgetTokens.toLocaleString()}{' '}
-              tok
+              {budgetEnabled
+                ? `${totalTokens.toLocaleString()} / ${budgetTokens.toLocaleString()} tok`
+                : `${totalTokens.toLocaleString()} tok · budget off`}
             </p>
           </div>
           <div className="flex items-center gap-2">

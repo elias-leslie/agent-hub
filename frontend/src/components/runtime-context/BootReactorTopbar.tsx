@@ -14,6 +14,7 @@ interface ProjectOption {
 interface Props {
   used: number
   budget: number
+  budgetEnabled: boolean
   onRefresh: () => void
   onReset: () => void
   refreshing?: boolean
@@ -34,6 +35,7 @@ interface Props {
 export function BootReactorTopbar({
   used,
   budget,
+  budgetEnabled,
   onRefresh,
   onReset,
   refreshing,
@@ -56,7 +58,7 @@ export function BootReactorTopbar({
         </span>
       </div>
       <div className={styles.sepV} />
-      <TokenGauge used={used} budget={budget} />
+      <TokenGauge used={used} budget={budget} enabled={budgetEnabled} />
       {projects.length > 0 && onProjectChange ? (
         <label className={styles.projectPicker} title="Preview as project">
           <span className={styles.projectPickerLabel}>Project</span>

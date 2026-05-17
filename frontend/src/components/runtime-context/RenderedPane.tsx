@@ -24,6 +24,7 @@ interface Props {
   toolCapabilities: string
   totalTokens: number
   budgetTokens: number
+  budgetEnabled: boolean
   onExclude: (block: RuntimeContextBlock) => void
   onRestore: (block: RuntimeContextBlock) => void
   onEdit?: (block: RuntimeContextBlock) => void
@@ -49,6 +50,7 @@ export function RenderedPane({
   toolCapabilities,
   totalTokens,
   budgetTokens,
+  budgetEnabled,
   onExclude,
   onRestore,
   onEdit,
@@ -218,6 +220,7 @@ export function RenderedPane({
           toolCapabilities={toolCapabilities}
           totalTokens={totalTokens}
           budgetTokens={budgetTokens}
+          budgetEnabled={budgetEnabled}
           onClose={() => setPreviewOpen(false)}
         />
       ) : null}

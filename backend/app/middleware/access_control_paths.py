@@ -49,6 +49,7 @@ AUTH_BYPASS_PREFIXES = (
 INTERNAL_ONLY_PREFIXES = (
     "/api/admin",  # Admin dashboard endpoints
     "/api/access-control",  # Access control management
+    "/api/runtime-context",  # Runtime prompt/memory injection controls
     "/api/settings",  # Settings management
 )
 
