@@ -3,6 +3,8 @@ import { useMemo } from 'react'
 import { fetchSessions } from '@/lib/api'
 import type { SortDirection, SortField } from '../types'
 
+const SESSIONS_REFRESH_INTERVAL_MS = 5_000
+
 interface UseSessionsDataProps {
   statusFilter: string
   projectFilter: string
@@ -50,6 +52,8 @@ export function useSessionsData({
       return lastPage.page < totalPages ? lastPage.page + 1 : undefined
     },
     initialPageParam: 1,
+    refetchInterval: SESSIONS_REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
   })
 
   const allSessions = useMemo(

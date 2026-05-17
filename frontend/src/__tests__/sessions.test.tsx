@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionExpansion } from '@/app/sessions/hooks/useSessionExpansion'
 import SessionsPage from '@/app/sessions/page'
 import { createQueryClientWrapper } from './test-utils'
@@ -148,6 +148,10 @@ describe('SessionsPage', () => {
     })
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('shows explicit visible, loaded, and total counts in the ledger header', async () => {
     renderPage()
 
@@ -195,6 +199,27 @@ describe('SessionsPage', () => {
       expect(screen.getByText(/5 msg/i)).toBeInTheDocument()
       expect(screen.getByText(/12 evt/i)).toBeInTheDocument()
     })
+  })
+
+  it('auto-refreshes session rows without a manual refresh click', async () => {
+    vi.useFakeTimers()
+    vi.mocked(fetchSessions).mockResolvedValue(mockSessions)
+
+    renderPage()
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(fetchSessions).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fetchSessions).toHaveBeenCalledTimes(2)
   })
 
   it('splits status, project, and description while defaulting active work above stalled and ended rows', async () => {
@@ -584,6 +609,10 @@ describe('useSessionExpansion', () => {
     vi.clearAllMocks()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('drops stale expansion responses and preserves the most recently requested session', async () => {
     const aSession = createDeferred<{ id: string }>()
     const aEvents = createDeferred<{
@@ -695,5 +724,48 @@ describe('useSessionExpansion', () => {
     expect(result.current.expandedSessionId).toBeNull()
     expect(result.current.expandedSessionData).toBeNull()
     expect(result.current.expandedEventsData).toBeNull()
+  })
+
+  it('refreshes active expanded session evidence without collapsing the row', async () => {
+    vi.useFakeTimers()
+    vi.mocked(fetchSession)
+      .mockResolvedValueOnce({ id: 'session-a', status: 'active' } as never)
+      .mockResolvedValueOnce({ id: 'session-a', status: 'completed' } as never)
+    vi.mocked(fetchAllSessionEvents)
+      .mockResolvedValueOnce({
+        session_id: 'session-a',
+        events: [],
+        total: 0,
+        max_turn: 0,
+      } as never)
+      .mockResolvedValueOnce({
+        session_id: 'session-a',
+        events: [{ id: 'event-1' }],
+        total: 1,
+        max_turn: 1,
+      } as never)
+
+    const { result } = renderHook(() => useSessionExpansion())
+
+    await act(async () => {
+      await result.current.handleToggleExpand('session-a')
+    })
+
+    expect(fetchSession).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fetchSession).toHaveBeenCalledTimes(2)
+    expect(result.current.expandedSessionId).toBe('session-a')
+    expect(result.current.expandedSessionData).toEqual({
+      id: 'session-a',
+      status: 'completed',
+    })
+    expect(result.current.expandedEventsData?.total).toBe(1)
+    expect(result.current.isLoadingDetails).toBe(false)
   })
 })
