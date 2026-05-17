@@ -9,12 +9,20 @@ import {
   type SortField,
 } from '../types'
 
+const SORT_FIELDS: ReadonlySet<SortField> = new Set([
+  'agent',
+  'project',
+  'status',
+  'time',
+])
+const SORT_DIRECTIONS: ReadonlySet<SortDirection> = new Set(['asc', 'desc'])
+
 export function useSessionPreferences() {
   const queryClient = useQueryClient()
   const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [sortField, setSortField] = useState<SortField>('time')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [sortField, setSortField] = useState<SortField>('status')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   // Load preferences from localStorage
   useEffect(() => {
@@ -30,8 +38,10 @@ export function useSessionPreferences() {
     if (storedSort) {
       try {
         const { field, direction } = JSON.parse(storedSort)
-        setSortField(field)
-        setSortDirection(direction)
+        if (SORT_FIELDS.has(field) && SORT_DIRECTIONS.has(direction)) {
+          setSortField(field)
+          setSortDirection(direction)
+        }
       } catch {
         // ignore
       }

@@ -182,6 +182,8 @@ export async function fetchSessions(params?: {
   session_type?: string
   parent_session_id?: string
   external_id?: string
+  sort_by?: 'agent' | 'project' | 'status' | 'time'
+  sort_direction?: 'asc' | 'desc'
   page?: number
   page_size?: number
 }): Promise<SessionListResponse> {
@@ -194,6 +196,9 @@ export async function fetchSessions(params?: {
   if (params?.parent_session_id)
     searchParams.set('parent_session_id', params.parent_session_id)
   if (params?.external_id) searchParams.set('external_id', params.external_id)
+  if (params?.sort_by) searchParams.set('sort_by', params.sort_by)
+  if (params?.sort_direction)
+    searchParams.set('sort_direction', params.sort_direction)
   if (params?.page) searchParams.set('page', params.page.toString())
   if (params?.page_size)
     searchParams.set('page_size', params.page_size.toString())

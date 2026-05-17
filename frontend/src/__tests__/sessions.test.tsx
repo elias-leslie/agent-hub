@@ -197,6 +197,114 @@ describe('SessionsPage', () => {
     })
   })
 
+  it('splits status, project, and description while defaulting active work above stalled and ended rows', async () => {
+    vi.mocked(fetchSessions).mockResolvedValue({
+      sessions: [
+        {
+          ...mockSessions.sessions[1],
+          id: 'ended-session',
+          project_id: 'ended-project',
+          summary_oneliner: 'finished cleanup',
+          live_activity: {
+            phase: 'waiting_for_model',
+            status: 'active',
+            health: 'active',
+            outstanding_tool_calls: 0,
+            tool_calls_count: 3,
+            files_touched: [],
+            stalled: false,
+            lifecycle_state: 'active',
+            lifecycle_reason_codes: [],
+            dead_signals: [],
+            anti_reap_signals: [],
+            has_owner_lane: false,
+            has_specialist_lane: false,
+            reapable: false,
+          },
+          updated_at: '2026-01-09T10:00:00Z',
+        },
+        {
+          ...mockSessions.sessions[0],
+          id: 'stalled-session',
+          project_id: 'stalled-project',
+          summary_oneliner: 'waiting for provider',
+          live_activity: {
+            phase: 'waiting_for_model',
+            status: 'active',
+            health: 'stalled',
+            outstanding_tool_calls: 0,
+            tool_calls_count: 3,
+            files_touched: [],
+            stalled: true,
+            lifecycle_state: 'stalled',
+            lifecycle_reason_codes: [],
+            dead_signals: [],
+            anti_reap_signals: [],
+            has_owner_lane: true,
+            has_specialist_lane: false,
+            reapable: false,
+          },
+          updated_at: '2026-01-08T10:00:00Z',
+        },
+        {
+          ...mockSessions.sessions[0],
+          id: 'working-session',
+          project_id: 'working-project',
+          summary_oneliner: 'claiming next task',
+          live_activity: {
+            phase: 'tool',
+            status: 'running',
+            health: 'healthy',
+            outstanding_tool_calls: 0,
+            tool_calls_count: 3,
+            files_touched: [],
+            stalled: false,
+            lifecycle_state: 'working',
+            lifecycle_reason_codes: [],
+            dead_signals: [],
+            anti_reap_signals: [],
+            has_owner_lane: true,
+            has_specialist_lane: false,
+            reapable: false,
+          },
+          updated_at: '2026-01-07T10:00:00Z',
+        },
+      ],
+      total: 3,
+      page: 1,
+      page_size: 20,
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Status')).toBeInTheDocument()
+      expect(screen.getByText('Project')).toBeInTheDocument()
+      expect(screen.getByText('Description')).toBeInTheDocument()
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+    })
+
+    const rows = screen.getAllByTestId('session-row')
+    expect(rows[0]).toHaveTextContent('working-project')
+    expect(rows[0]).toHaveTextContent('claiming next task')
+    expect(rows[1]).toHaveTextContent('stalled-project')
+    expect(rows[1]).toHaveTextContent('waiting for provider')
+    expect(rows[2]).toHaveTextContent('ended-project')
+    expect(rows[2]).toHaveTextContent('finished cleanup')
+
+    fireEvent.mouseEnter(screen.getByLabelText('Working'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Working')).toBeInTheDocument()
+    })
+
+    fireEvent.mouseEnter(screen.getByLabelText('Ended'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Ended')).toBeInTheDocument()
+    })
+  })
+
   it('shows a live usage placeholder instead of blank dashes for active zero-token rows', async () => {
     vi.mocked(fetchSessions).mockResolvedValue({
       ...mockSessions,

@@ -599,6 +599,31 @@ class TestListSessions:
 
     @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
     @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
+    def test_list_sessions_forwards_server_side_sorting(
+        self,
+        mock_list_sessions: AsyncMock,
+        mock_lane_session_ids: AsyncMock,
+        client: APITestClient,
+    ) -> None:
+        """Session ordering is an API contract so pagination cannot hide active work."""
+        mock_list_sessions.return_value = ([], 0, {}, {}, {})
+        mock_lane_session_ids.return_value = (set(), set())
+
+        response = client.get("/api/sessions?sort_by=agent&sort_direction=desc")
+
+        assert response.status_code == 200
+        await_args = mock_list_sessions.await_args
+        assert await_args is not None
+        assert await_args.kwargs["sort_by"] == "agent"
+        assert await_args.kwargs["sort_direction"] == "desc"
+
+    def test_list_sessions_rejects_unknown_sort(self, client: APITestClient) -> None:
+        response = client.get("/api/sessions?sort_by=model")
+
+        assert response.status_code == 422
+
+    @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
+    @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
     def test_list_sessions_filter_by_external_id(
         self,
         mock_list_sessions: AsyncMock,

@@ -7,13 +7,7 @@ export const REFRESH_OPTIONS = [
 ] as const
 
 export type RefreshInterval = (typeof REFRESH_OPTIONS)[number]['value']
-export type SortField =
-  | 'project'
-  | 'model'
-  | 'status'
-  | 'tokens'
-  | 'cost'
-  | 'time'
+export type SortField = 'agent' | 'project' | 'status' | 'time'
 export type SortDirection = 'asc' | 'desc'
 
 export interface SessionsCountTriplet {

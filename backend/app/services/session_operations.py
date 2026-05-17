@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
@@ -12,6 +12,79 @@ from app.services.events import publish_session_start
 from app.services.session_live_activity import mark_session_completed
 
 logger = logging.getLogger(__name__)
+
+_SESSION_SORT_FIELDS = frozenset({"status", "project", "agent", "time"})
+_SESSION_SORT_DIRECTIONS = frozenset({"asc", "desc"})
+
+
+def _session_activity_timestamp():
+    return func.coalesce(Session.last_activity_at, Session.updated_at, Session.created_at)
+
+
+def _session_live_text_field(field_name: str):
+    return Session.provider_metadata["live_activity"][field_name].as_string()
+
+
+def _session_live_bool_field(field_name: str):
+    return Session.provider_metadata["live_activity"][field_name].as_boolean()
+
+
+def _session_operational_rank():
+    live_state = func.lower(
+        func.coalesce(
+            _session_live_text_field("lifecycle_state"),
+            _session_live_text_field("status"),
+            _session_live_text_field("phase"),
+            "",
+        )
+    )
+    active_status = Session.status == "active"
+    stalled_or_reapable = or_(
+        _session_live_bool_field("reapable").is_(True),
+        _session_live_bool_field("stalled").is_(True),
+        live_state.in_(("reapable", "stale", "stalled")),
+    )
+    return case(
+        (active_status, case((stalled_or_reapable, 1), else_=0)),
+        (Session.status == "failed", 2),
+        else_=3,
+    )
+
+
+def _ordered_session_query(query, sort_by: str, sort_direction: str):
+    """Apply the canonical sessions table order before pagination."""
+    normalized_sort = sort_by.strip().lower()
+    normalized_direction = sort_direction.strip().lower()
+    if normalized_sort not in _SESSION_SORT_FIELDS:
+        raise ValueError(f"Unsupported session sort field: {sort_by}")
+    if normalized_direction not in _SESSION_SORT_DIRECTIONS:
+        raise ValueError(f"Unsupported session sort direction: {sort_direction}")
+
+    direction = asc if normalized_direction == "asc" else desc
+    activity = _session_activity_timestamp()
+
+    if normalized_sort == "status":
+        return query.order_by(
+            direction(_session_operational_rank()),
+            desc(activity),
+            desc(Session.created_at),
+        )
+    if normalized_sort == "project":
+        return query.order_by(
+            direction(func.lower(Session.project_id)),
+            asc(_session_operational_rank()),
+            desc(activity),
+            desc(Session.created_at),
+        )
+    if normalized_sort == "agent":
+        return query.order_by(
+            direction(func.lower(func.coalesce(Session.agent_slug, ""))),
+            direction(func.lower(Session.model)),
+            asc(_session_operational_rank()),
+            desc(activity),
+            desc(Session.created_at),
+        )
+    return query.order_by(direction(activity), desc(Session.created_at))
 
 
 async def _validate_project_id(project_id: str) -> None:
@@ -237,6 +310,8 @@ async def _fetch_filtered_sessions(
     page_size: int,
     parent_session_id: str | None,
     external_id: str | None,
+    sort_by: str,
+    sort_direction: str,
 ) -> tuple[list[Session], int]:
     """Apply filters, paginate, and return sessions with total count.
 
@@ -269,7 +344,7 @@ async def _fetch_filtered_sessions(
     total = total_result.scalar() or 0
 
     offset = (page - 1) * page_size
-    query = query.order_by(Session.created_at.desc()).offset(offset).limit(page_size)
+    query = _ordered_session_query(query, sort_by, sort_direction).offset(offset).limit(page_size)
 
     result = await db.execute(query)
     sessions = list(result.scalars().all())
@@ -287,6 +362,8 @@ async def list_sessions_with_stats(
     page_size: int = 20,
     parent_session_id: str | None = None,
     external_id: str | None = None,
+    sort_by: str = "status",
+    sort_direction: str = "asc",
 ) -> tuple[list[Session], int, dict[str, int], dict[str, int], dict[str, dict[str, int]], dict[str, int], dict[str, int]]:
     """List sessions with pagination, filtering, and statistics.
 
@@ -314,6 +391,8 @@ async def list_sessions_with_stats(
         page_size,
         parent_session_id,
         external_id,
+        sort_by,
+        sort_direction,
     )
 
     session_ids = [s.id for s in sessions]
