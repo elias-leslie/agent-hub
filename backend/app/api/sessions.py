@@ -60,6 +60,8 @@ __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest",
 _SESSION_STORED_STATUSES = {"active", "completed", "failed"}
 _SESSION_STATUS_ALIASES = {"running": "active", "stale": "active", "reapable": "active"}
 _SESSION_LIVE_STATUS_ALIASES = {"stale", "reapable"}
+_SESSION_SORT_FIELDS = {"status", "project", "agent", "time"}
+_SESSION_SORT_DIRECTIONS = {"asc", "desc"}
 
 
 def _normalize_session_status_filter(status: str | None) -> str | None:
@@ -71,6 +73,19 @@ def _normalize_session_status_filter(status: str | None) -> str | None:
     if normalized not in _SESSION_STORED_STATUSES:
         raise HTTPException(status_code=422, detail=f"Unsupported session status: {status}")
     return normalized
+
+
+def _normalize_session_sort(sort_by: str, sort_direction: str) -> tuple[str, str]:
+    normalized_sort = sort_by.strip().lower()
+    normalized_direction = sort_direction.strip().lower()
+    if normalized_sort not in _SESSION_SORT_FIELDS:
+        raise HTTPException(status_code=422, detail=f"Unsupported session sort field: {sort_by}")
+    if normalized_direction not in _SESSION_SORT_DIRECTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported session sort direction: {sort_direction}",
+        )
+    return normalized_sort, normalized_direction
 
 
 def _session_live_activity(session: Any) -> dict[str, Any]:
@@ -305,11 +320,14 @@ async def list_sessions(
     parent_session_id: Annotated[str | None, Query(description="Filter by parent session")] = None,
     session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
     external_id: Annotated[str | None, Query(description="Filter by linked external work item")] = None,
+    sort_by: Annotated[str, Query(description="Sort field: status, project, agent, or time")] = "status",
+    sort_direction: Annotated[str, Query(description="Sort direction: asc or desc")] = "asc",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
     stored_status = _normalize_session_status_filter(status)
+    normalized_sort, normalized_direction = _normalize_session_sort(sort_by, sort_direction)
     raw_stats = await list_sessions_with_stats(
         db,
         project_id=project_id,
@@ -320,6 +338,8 @@ async def list_sessions(
         page_size=page_size,
         parent_session_id=parent_session_id,
         external_id=external_id,
+        sort_by=normalized_sort,
+        sort_direction=normalized_direction,
     )
     sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
         _normalize_list_sessions_stats(raw_stats)

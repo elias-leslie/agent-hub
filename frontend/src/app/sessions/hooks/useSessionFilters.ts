@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import type { SessionListItem } from '@/lib/api'
 import type { ModelCost } from '@/lib/models'
 import type { SortDirection, SortField } from '../types'
-import { estimateCost } from '../utils'
+import {
+  estimateCost,
+  getSessionDescription,
+  getSessionDisplayStatus,
+} from '../utils'
 
 interface UseSessionFiltersProps {
   sessions: SessionListItem[]
@@ -50,6 +54,7 @@ export function useSessionFilters({
           s.id.toLowerCase().includes(query) ||
           s.project_id.toLowerCase().includes(query) ||
           s.model.toLowerCase().includes(query) ||
+          getSessionDescription(s).toLowerCase().includes(query) ||
           s.agent_slug?.toLowerCase().includes(query) ||
           s.request_source?.toLowerCase().includes(query) ||
           s.attribution_label?.toLowerCase().includes(query) ||
@@ -61,41 +66,26 @@ export function useSessionFilters({
     const sorted = [...filtered].sort((a, b) => {
       let cmp = 0
       switch (sortField) {
+        case 'agent':
+          cmp =
+            (a.agent_slug || '').localeCompare(b.agent_slug || '') ||
+            a.model.localeCompare(b.model)
+          break
         case 'project':
           cmp = a.project_id.localeCompare(b.project_id)
           break
-        case 'model':
-          cmp = a.model.localeCompare(b.model)
-          break
         case 'status':
-          cmp = a.status.localeCompare(b.status)
-          break
-        case 'tokens':
           cmp =
-            a.total_input_tokens +
-            a.total_output_tokens -
-            (b.total_input_tokens + b.total_output_tokens)
+            getSessionDisplayStatus(a).rank - getSessionDisplayStatus(b).rank
           break
-        case 'cost': {
-          const costA = estimateCost(
-            a.model,
-            a.total_input_tokens,
-            a.total_output_tokens,
-            modelCosts,
-          )
-          const costB = estimateCost(
-            b.model,
-            b.total_input_tokens,
-            b.total_output_tokens,
-            modelCosts,
-          )
-          cmp = costA - costB
-          break
-        }
         case 'time':
           cmp =
             new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
           break
+      }
+      if (cmp === 0) {
+        cmp =
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       }
       return sortDirection === 'asc' ? cmp : -cmp
     })

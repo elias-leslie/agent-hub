@@ -55,31 +55,30 @@ export function SessionTable({
       className="max-h-[calc(100vh-220px)] overflow-auto border border-slate-800/70 bg-slate-950/70 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
     >
       <div className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-sm">
-        <div className="grid grid-cols-[minmax(320px,1.8fr)_minmax(120px,0.65fr)_minmax(190px,0.9fr)_minmax(130px,0.7fr)_72px_64px] items-center gap-3 px-4 py-2.5">
+        <div className="grid grid-cols-[56px_minmax(120px,0.55fr)_minmax(280px,1.6fr)_minmax(360px,1.45fr)_72px_64px] items-center gap-3 px-4 py-2.5">
           <SortableHeader
-            label="Session"
+            label="Status"
+            field="status"
+            currentField={sortField}
+            direction={sortDirection}
+            onSort={onSort}
+          />
+          <SortableHeader
+            label="Project"
             field="project"
             currentField={sortField}
             direction={sortDirection}
             onSort={onSort}
           />
           <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-slate-500">
-            Agent
+            Description
           </span>
           <SortableHeader
-            label="Model"
-            field="model"
+            label="Agent"
+            field="agent"
             currentField={sortField}
             direction={sortDirection}
             onSort={onSort}
-          />
-          <SortableHeader
-            label="Usage"
-            field="tokens"
-            currentField={sortField}
-            direction={sortDirection}
-            onSort={onSort}
-            align="right"
           />
           <SortableHeader
             label="Time"

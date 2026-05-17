@@ -1,48 +1,7 @@
+import { Tooltip } from '@/components/memory/Tooltip'
 import type { LiveActivity } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
-
-function resolveStatusState(
-  status: string,
-  liveActivity?: LiveActivity | null,
-) {
-  if (liveActivity?.reapable) {
-    return {
-      label: 'Reapable',
-      dot: 'bg-amber-400',
-      tone: 'text-amber-200',
-    }
-  }
-
-  if (liveActivity?.stalled) {
-    return {
-      label: 'Stalled',
-      dot: 'bg-amber-400',
-      tone: 'text-amber-200',
-    }
-  }
-
-  if (status === 'active' || liveActivity?.lifecycle_state === 'working') {
-    return {
-      label: 'Working',
-      dot: 'bg-emerald-400',
-      tone: 'text-emerald-200',
-    }
-  }
-
-  if (status === 'failed' || status === 'error') {
-    return {
-      label: 'Failed',
-      dot: 'bg-rose-400',
-      tone: 'text-rose-200',
-    }
-  }
-
-  return {
-    label: 'Ended',
-    dot: 'bg-slate-500',
-    tone: 'text-slate-300',
-  }
-}
+import { getSessionDisplayStatus } from '../utils'
 
 export function StatusCell({
   status,
@@ -51,28 +10,35 @@ export function StatusCell({
   status: string
   liveActivity?: LiveActivity | null
 }) {
-  const state = resolveStatusState(status, liveActivity)
+  const state = getSessionDisplayStatus({
+    status,
+    live_activity: liveActivity,
+  })
   const mismatch =
     liveActivity &&
     (status === 'completed' || status === 'failed' || status === 'error') &&
     liveActivity.lifecycle_state === 'working'
+  const label = mismatch ? `${state.label}, runtime mismatch` : state.label
 
   return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-2 text-xs font-medium',
-        state.tone,
-        mismatch && 'text-amber-200',
-      )}
-      title={mismatch ? 'Session row and live runtime disagree' : undefined}
-    >
+    <Tooltip content={label} position="top">
       <span
+        aria-label={label}
+        title={label}
         className={cn(
-          'h-2 w-2 rounded-full',
-          mismatch ? 'bg-amber-400' : state.dot,
+          'inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full border',
+          mismatch
+            ? 'border-amber-300/60 bg-amber-400/10'
+            : state.badgeClassName,
         )}
-      />
-      <span>{mismatch ? `${state.label}*` : state.label}</span>
-    </div>
+      >
+        <span
+          className={cn(
+            'h-2.5 w-2.5 rounded-full',
+            mismatch ? 'bg-amber-300' : state.dotClassName,
+          )}
+        />
+      </span>
+    </Tooltip>
   )
 }

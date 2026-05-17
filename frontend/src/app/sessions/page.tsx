@@ -23,7 +23,7 @@ export default function SessionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const pageSize = 25
+  const pageSize = 100
   const models = useModels()
   const modelCosts = useMemo(() => buildModelCostMap(models), [models])
 
@@ -39,7 +39,13 @@ export default function SessionsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useSessionsData({ statusFilter, projectFilter: '', pageSize })
+  } = useSessionsData({
+    statusFilter,
+    projectFilter: '',
+    pageSize,
+    sortField,
+    sortDirection,
+  })
 
   const {
     modelFilter,
