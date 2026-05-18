@@ -340,10 +340,13 @@ async def _query_recent_workstream_sessions(
 
     collected_at = now or datetime.now(UTC)
     cutoff = collected_at - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+    # current_branch.like("task-%/%") was the third criterion before the lease
+    # migration eliminated per-task branches. Sessions are still matched via
+    # workstream_status (the lease-era marker) and external_id (the canonical
+    # task id when the session is task-scoped).
     lane_or_reconciled_scope = or_(
         Session.workstream_status.isnot(None),
         Session.external_id.like(_TASK_BRANCH_PATTERN),
-        Session.current_branch.like(_TASK_BRANCH_PATTERN + "/%"),
     )
     async with async_session() as db:
         raw_rows = (

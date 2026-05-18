@@ -268,15 +268,16 @@ def test_parse_specialist_dispatch_request_reads_mode_and_task_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ensure_task_lane_context_parses_current_checkpoint_details_format() -> None:
+async def test_ensure_task_lane_context_returns_project_root_post_lease_migration() -> None:
+    """Per-task branches were eliminated in the lease migration. The lane
+    context now returns (None, project_root, None) for any claimed task —
+    branch parsing is gone."""
     details = (
         "CHECKPOINT:task-42\n"
         "  Project: summitflow\n"
         "  Base branch: main\n"
         "  Created: 2026-04-20T22:01:00.948638+00:00 (3m ago)\n"
-        "  Claimed by: Elias Leslie\n\n"
-        "BRANCHES[1]\n"
-        "  task-42/main [task]\n"
+        "  Claimed by: Elias Leslie\n"
     )
 
     with (
@@ -292,10 +293,29 @@ async def test_ensure_task_lane_context_parses_current_checkpoint_details_format
     ):
         branch, working_dir, error = await _ensure_task_lane_context("summitflow", "task-42")
 
-    assert branch == "task-42/main"
+    assert branch is None
     assert working_dir == "/srv/workspaces/projects/summitflow"
     assert error is None
     mock_st.assert_awaited_once_with("summitflow", "checkpoints --details task-42")
+
+
+@pytest.mark.asyncio
+async def test_ensure_task_lane_context_blocks_when_project_root_unknown() -> None:
+    """Project must have a known root; missing project_id maps to a clear error."""
+    with (
+        patch(
+            "app.services.tools._executor_dispatch._run_project_st_command",
+            new_callable=AsyncMock,
+            return_value="CHECKPOINT:task-42\n",
+        ),
+        patch("app.constants.projects.get_known_roots", return_value={}),
+    ):
+        branch, working_dir, error = await _ensure_task_lane_context("missing", "task-42")
+
+    assert branch is None
+    assert working_dir is None
+    assert error is not None
+    assert "unable to resolve project root" in error
 
 
 @pytest.mark.asyncio
