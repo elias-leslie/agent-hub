@@ -16,10 +16,10 @@ class TestSettings:
         assert settings.agent_hub_dashboard_client_id == "agent-hub-dashboard"
         assert settings.agent_hub_dashboard_request_source == "agent-hub-dashboard"
 
-    def test_db_pool_defaults_are_conservative(self, monkeypatch) -> None:
+    def test_db_pool_defaults_match_fanout_concurrency(self, monkeypatch) -> None:
         monkeypatch.setenv("AGENT_HUB_DB_URL", "postgresql://agent_hub:password@localhost:5432/agent_hub")
 
         settings = Settings(_env_file=None)
 
-        assert settings.agent_hub_db_pool_size == 8
-        assert settings.agent_hub_db_max_overflow == 4
+        assert settings.agent_hub_db_pool_size == 20
+        assert settings.agent_hub_db_max_overflow == 10
