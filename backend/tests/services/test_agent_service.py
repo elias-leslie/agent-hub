@@ -56,7 +56,6 @@ class TestAgentService:
         agent.max_subagent_concurrency = None
         agent.daily_token_budget = None
         agent.hourly_request_limit = None
-        agent.timeout_seconds = None
         agent.version = 1
         agent.created_at = datetime.now(UTC)
         agent.updated_at = datetime.now(UTC)
@@ -119,7 +118,6 @@ class TestAgentService:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            timeout_seconds=None,
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -155,7 +153,6 @@ class TestAgentService:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            timeout_seconds=None,
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -261,7 +258,6 @@ class TestAgentService:
             agent.max_subagent_concurrency = 2
             agent.daily_token_budget = 1000
             agent.hourly_request_limit = 25
-            agent.timeout_seconds = 45.0
 
         mock_db.refresh = mock_refresh
 
@@ -281,14 +277,12 @@ class TestAgentService:
                 max_subagent_concurrency=2,
                 daily_token_budget=1000,
                 hourly_request_limit=25,
-                timeout_seconds=45.0,
             )
 
         assert agent.slug == "test-agent"
         assert agent.name == "Test Agent"
         assert agent.thinking_level == "high"
         assert agent.verbosity_level == "medium"
-        assert agent.timeout_seconds == 45.0
         assert mock_db.add.call_count == 2
 
     @pytest.mark.asyncio
@@ -313,7 +307,6 @@ class TestAgentService:
                 name="Updated Coder",
                 thinking_level="minimal",
                 verbosity_level="high",
-                timeout_seconds=90.0,
                 change_reason="Test update",
             )
 
@@ -321,7 +314,6 @@ class TestAgentService:
         assert mock_agent.name == "Updated Coder"
         assert mock_agent.thinking_level == "minimal"
         assert mock_agent.verbosity_level == "high"
-        assert mock_agent.timeout_seconds == 90.0
         assert mock_agent.version == 2
 
     @pytest.mark.asyncio
@@ -480,7 +472,6 @@ class TestAgentDTO:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            timeout_seconds=None,
             version=1,
             created_at=now,
             updated_at=now,

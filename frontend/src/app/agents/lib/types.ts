@@ -12,7 +12,6 @@ export interface Agent {
   temperature: number
   is_active: boolean
   is_coding_agent: boolean
-  timeout_seconds: number | null
   version: number
   created_at: string
   updated_at: string

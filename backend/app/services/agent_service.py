@@ -165,7 +165,6 @@ class AgentService:
         max_subagent_concurrency: int | None = None,
         daily_token_budget: int | None = None,
         hourly_request_limit: int | None = None,
-        timeout_seconds: float | None = None,
         changed_by: str | None = None,
     ) -> AgentDTO:
         """Create a new agent."""
@@ -188,7 +187,6 @@ class AgentService:
             max_subagent_concurrency=max_subagent_concurrency,
             daily_token_budget=daily_token_budget,
             hourly_request_limit=hourly_request_limit,
-            timeout_seconds=timeout_seconds,
         )
         db.add(agent)
         await db.flush()
@@ -229,7 +227,6 @@ class AgentService:
         max_subagent_concurrency: int | None = None,
         daily_token_budget: int | None = None,
         hourly_request_limit: int | None = None,
-        timeout_seconds: float | None = None,
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> AgentDTO | None:
@@ -264,7 +261,6 @@ class AgentService:
             max_subagent_concurrency=max_subagent_concurrency,
             daily_token_budget=daily_token_budget,
             hourly_request_limit=hourly_request_limit,
-            timeout_seconds=timeout_seconds,
         )
         if escalation_model_id is not None:
             agent.escalation_model_id = resolved_escalation

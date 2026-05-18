@@ -54,7 +54,6 @@ export interface Agent {
   max_subagent_concurrency: number | null
   daily_token_budget: number | null
   hourly_request_limit: number | null
-  timeout_seconds: number | null
   version: number
   created_at: string
   updated_at: string

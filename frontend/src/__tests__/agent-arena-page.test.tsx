@@ -110,7 +110,6 @@ const agent: Agent = {
   max_subagent_concurrency: null,
   daily_token_budget: null,
   hourly_request_limit: null,
-  timeout_seconds: 60,
   version: 1,
   created_at: '2026-03-06T13:00:00Z',
   updated_at: '2026-03-06T14:00:00Z',

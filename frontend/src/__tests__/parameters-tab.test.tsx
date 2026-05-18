@@ -14,7 +14,6 @@ const baseFormData: Partial<Agent> = {
   max_subagent_concurrency: 2,
   daily_token_budget: 100000,
   hourly_request_limit: 30,
-  timeout_seconds: 60,
 }
 
 const miniModel: ModelInfo = {
@@ -78,35 +77,11 @@ describe('parameters tab', () => {
     fireEvent.change(screen.getByLabelText('Max subagent concurrency'), {
       target: { value: '101' },
     })
-    fireEvent.change(screen.getByLabelText('Timeout (seconds)'), {
-      target: { value: '601' },
-    })
 
     expect(updateField).not.toHaveBeenCalled()
     expect(
       screen.getAllByText('Enter a whole number between 1 and 100.'),
     ).toHaveLength(2)
-    expect(
-      screen.getByText('Enter a value between 1 and 600 seconds.'),
-    ).toBeInTheDocument()
-  })
-
-  it('still allows clearing optional numeric overrides', () => {
-    const updateField = vi.fn()
-
-    render(
-      <ParametersTab
-        formData={baseFormData}
-        updateField={updateField}
-        availableModels={[codexModel]}
-      />,
-    )
-
-    fireEvent.change(screen.getByLabelText('Timeout (seconds)'), {
-      target: { value: '' },
-    })
-
-    expect(updateField).toHaveBeenCalledWith('timeout_seconds', null)
   })
 
   it('keeps invalid drafts visible until the user corrects them', () => {

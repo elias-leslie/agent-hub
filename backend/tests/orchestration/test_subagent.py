@@ -49,7 +49,6 @@ class TestSubagentConfig:
         assert config.system_prompt is None
         assert config.temperature == 1.0
         assert config.thinking_level is None
-        assert config.timeout_seconds is None
 
     def test_custom_values(self):
         config = SubagentConfig(
@@ -59,7 +58,6 @@ class TestSubagentConfig:
             system_prompt="You are an analyzer.",
             temperature=0.5,
             thinking_level="low",
-            timeout_seconds=60.0,
         )
 
         assert config.provider == "gemini"
@@ -226,27 +224,6 @@ class TestSubagentManager:
             assert "helpful assistant" in messages[0]["content"]
 
     @pytest.mark.asyncio
-    async def test_spawn_timeout(self):
-        import asyncio
-
-        manager = SubagentManager()
-        config = SubagentConfig(name="test", timeout_seconds=0.1)
-
-        async def slow_complete(*args, **kwargs):
-            await asyncio.sleep(1)
-            return _make_internal_result(content="Too late", input_tokens=0, output_tokens=0)
-
-        with patch(
-            "app.api.complete.core.complete_internal",
-            new=slow_complete,
-        ):
-            result = await manager.spawn(task="This will timeout.", config=config)
-
-            assert result.status == "timeout"
-            assert result.error is not None
-            assert "timed out" in result.error.lower()
-
-    @pytest.mark.asyncio
     async def test_spawn_error(self):
         manager = SubagentManager()
         config = SubagentConfig(name="test")
@@ -302,7 +279,7 @@ class TestSubagentManager:
         import asyncio
 
         manager = SubagentManager()
-        config = SubagentConfig(name="cancellable", timeout_seconds=10)
+        config = SubagentConfig(name="cancellable")
 
         async def slow_complete(*args, **kwargs):
             await asyncio.sleep(10)

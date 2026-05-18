@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -151,10 +150,10 @@ async def _call_pipeline(
     provider: str,
     config: SubagentConfig,
 ):
-    """Invoke complete_internal with optional timeout, in DB-less mode."""
+    """Invoke complete_internal in DB-less mode."""
     from app.api.complete.core import complete_internal
 
-    coro = complete_internal(
+    return await complete_internal(
         messages=_messages_to_dicts(messages),
         model=model,
         provider=provider,
@@ -164,9 +163,6 @@ async def _call_pipeline(
         thinking_level=config.thinking_level,
         tools=config.tools,
     )
-    if config.timeout_seconds is None:
-        return await coro
-    return await asyncio.wait_for(coro, timeout=config.timeout_seconds)
 
 
 def _record_success(span, result, config) -> str | None:
@@ -273,22 +269,6 @@ async def _execute_in_span(
             result, effective_trace_id, parent_id,
         )
 
-    except TimeoutError:
-        logger.warning(
-            f"Subagent {config.name} ({subagent_id}) timed out "
-            f"after {config.timeout_seconds}s"
-        )
-        span.set_attribute("subagent.status", "timeout")
-        span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
-        span.record_exception(TimeoutError(f"Timeout after {config.timeout_seconds}s"))
-        return _make_result(
-            subagent_id, config, model, started_at,
-            status="timeout",
-            error=f"Execution timed out after {config.timeout_seconds} seconds",
-            parent_id=parent_id,
-            trace_id=effective_trace_id,
-        )
-
     except Exception as e:
         logger.error(f"Subagent {config.name} ({subagent_id}) error: {e}")
         span.set_attribute("subagent.status", "error")
@@ -333,8 +313,6 @@ async def execute_subagent(
             "subagent.context_mode": config.context_mode,
         },
     ) as span:
-        if config.timeout_seconds is not None:
-            span.set_attribute("subagent.timeout_seconds", config.timeout_seconds)
         span.set_attribute("subagent.context_messages_supplied", len(context or []))
         logger.info(
             f"Spawning subagent {config.name} ({subagent_id}) "

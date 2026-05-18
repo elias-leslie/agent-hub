@@ -28,7 +28,6 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
     max_subagent_concurrency: agent.max_subagent_concurrency ?? null,
     daily_token_budget: agent.daily_token_budget ?? null,
     hourly_request_limit: agent.hourly_request_limit ?? null,
-    timeout_seconds: agent.timeout_seconds ?? null,
   }
 }
 

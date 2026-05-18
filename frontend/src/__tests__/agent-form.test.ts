@@ -40,7 +40,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     max_subagent_concurrency: 2,
     daily_token_budget: 200000,
     hourly_request_limit: 50,
-    timeout_seconds: 90,
     version: 1,
     created_at: '2026-03-06T14:00:00Z',
     updated_at: '2026-03-06T14:00:00Z',
@@ -59,7 +58,6 @@ describe('agent form helpers', () => {
     )
     expect(formData.max_concurrency).toBe(4)
     expect(formData.daily_token_budget).toBe(200000)
-    expect(formData.timeout_seconds).toBe(90)
   })
 
   it('preserves strategies in form state and update payloads', () => {
@@ -99,14 +97,12 @@ describe('agent form helpers', () => {
       description: '',
       max_concurrency: 6,
       hourly_request_limit: 30,
-      timeout_seconds: null,
     })
 
     expect(payload).toEqual({
       description: '',
       max_concurrency: 6,
       hourly_request_limit: 30,
-      timeout_seconds: null,
     })
   })
 

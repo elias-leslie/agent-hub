@@ -86,7 +86,6 @@ def _agent_create_kwargs(request: AgentCreateRequest, auth: AuthenticatedKey | N
         max_subagent_concurrency=request.max_subagent_concurrency,
         daily_token_budget=request.daily_token_budget,
         hourly_request_limit=request.hourly_request_limit,
-        timeout_seconds=request.timeout_seconds,
         changed_by=str(auth.key_id) if auth else None,
     )
 
@@ -114,7 +113,6 @@ def _agent_update_kwargs(request: AgentUpdateRequest, auth: AuthenticatedKey | N
         max_subagent_concurrency=request.max_subagent_concurrency,
         daily_token_budget=request.daily_token_budget,
         hourly_request_limit=request.hourly_request_limit,
-        timeout_seconds=request.timeout_seconds,
         changed_by=str(auth.key_id) if auth else None,
         change_reason=request.change_reason,
     )

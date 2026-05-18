@@ -43,7 +43,6 @@ def make_mock_dto(
         "max_subagent_concurrency": None,
         "daily_token_budget": None,
         "hourly_request_limit": None,
-        "timeout_seconds": None,
         "version": 1,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -220,7 +219,6 @@ class TestAgentCreateEndpoint:
             name="New Agent",
             thinking_level="xhigh",
             verbosity_level="high",
-            timeout_seconds=120.0,
         )
 
         with patch("app.api.agents.get_agent_service") as mock_get_service:
@@ -238,7 +236,6 @@ class TestAgentCreateEndpoint:
                     "primary_model_id": KIMI_CODE_FOR_CODING,
                     "thinking_level": "xhigh",
                     "verbosity_level": "high",
-                    "timeout_seconds": 120,
                 },
             )
 
@@ -248,7 +245,6 @@ class TestAgentCreateEndpoint:
             create_kwargs = create_args.kwargs
             assert create_kwargs["thinking_level"] == "xhigh"
             assert create_kwargs["verbosity_level"] == "high"
-            assert create_kwargs["timeout_seconds"] == 120
 
     @pytest.mark.asyncio
     async def test_create_agent_forwards_typed_memory_config(self, api_client):
@@ -343,7 +339,6 @@ class TestAgentUpdateEndpoint:
         updated_dto = make_mock_dto(
             thinking_level="high",
             verbosity_level="medium",
-            timeout_seconds=60.0,
             version=2,
         )
 
@@ -358,7 +353,6 @@ class TestAgentUpdateEndpoint:
                 json={
                     "thinking_level": "high",
                     "verbosity_level": "medium",
-                    "timeout_seconds": 60,
                 },
             )
 
@@ -368,7 +362,6 @@ class TestAgentUpdateEndpoint:
             update_kwargs = update_args.kwargs
             assert update_kwargs["thinking_level"] == "high"
             assert update_kwargs["verbosity_level"] == "medium"
-            assert update_kwargs["timeout_seconds"] == 60
 
     @pytest.mark.asyncio
     async def test_update_agent_returns_404_when_service_update_returns_none(self, api_client):

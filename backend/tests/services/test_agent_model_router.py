@@ -38,7 +38,6 @@ def _agent(**overrides: object) -> AgentDTO:
         "max_subagent_concurrency": None,
         "daily_token_budget": None,
         "hourly_request_limit": None,
-        "timeout_seconds": None,
         "version": 1,
         "created_at": now,
         "updated_at": now,

@@ -20,8 +20,7 @@ interface LimitFieldConfig {
   description: string
 }
 
-type LimitField = LimitFieldConfig['field']
-type NumericField = LimitField | 'timeout_seconds'
+type NumericField = LimitFieldConfig['field']
 type DraftState = Record<NumericField, string>
 type ErrorState = Partial<Record<NumericField, string>>
 
@@ -77,19 +76,6 @@ function parseOptionalInteger(
     value < min ||
     (max !== undefined && value > max)
   ) {
-    return undefined
-  }
-
-  return value
-}
-
-function parseOptionalTimeout(rawValue: string): number | null | undefined {
-  if (rawValue === '') {
-    return null
-  }
-
-  const value = Number.parseFloat(rawValue)
-  if (Number.isNaN(value) || value <= 0 || value > 600) {
     return undefined
   }
 
@@ -159,7 +145,6 @@ export function ParametersTab({
     ),
     daily_token_budget: formatDraftValue(formData.daily_token_budget),
     hourly_request_limit: formatDraftValue(formData.hourly_request_limit),
-    timeout_seconds: formatDraftValue(formData.timeout_seconds),
   })
   const [fieldErrors, setFieldErrors] = useState<ErrorState>({})
 
@@ -171,14 +156,12 @@ export function ParametersTab({
       ),
       daily_token_budget: formatDraftValue(formData.daily_token_budget),
       hourly_request_limit: formatDraftValue(formData.hourly_request_limit),
-      timeout_seconds: formatDraftValue(formData.timeout_seconds),
     })
   }, [
     formData.daily_token_budget,
     formData.hourly_request_limit,
     formData.max_concurrency,
     formData.max_subagent_concurrency,
-    formData.timeout_seconds,
   ])
 
   function updateDraft(field: NumericField, rawValue: string) {
@@ -313,49 +296,6 @@ export function ParametersTab({
             This model ignores verbosity overrides.
           </div>
         )}
-
-        <div className="section-card space-y-2">
-          <div className="flex items-center justify-between">
-            <label htmlFor="timeout_seconds" className="detail-label">
-              Timeout (seconds)
-            </label>
-            <span className="text-sm font-mono text-slate-300">
-              {formData.timeout_seconds ?? 'Model default'}
-            </span>
-          </div>
-          <input
-            id="timeout_seconds"
-            type="number"
-            min="1"
-            max="600"
-            placeholder="Use model default"
-            aria-invalid={fieldErrors.timeout_seconds ? 'true' : 'false'}
-            value={draftValues.timeout_seconds}
-            onChange={(e) => {
-              updateDraft('timeout_seconds', e.target.value)
-              const value = parseOptionalTimeout(e.target.value)
-              if (value !== undefined) {
-                clearFieldError('timeout_seconds')
-                updateField('timeout_seconds', value)
-              } else {
-                setFieldError(
-                  'timeout_seconds',
-                  'Enter a value between 1 and 600 seconds.',
-                )
-              }
-            }}
-            className="control-input"
-          />
-          <p className="text-[10px] text-slate-400">
-            Override the model&apos;s default timeout. Leave empty to use the
-            model&apos;s timeout hint (based on speed tier).
-          </p>
-          {fieldErrors.timeout_seconds && (
-            <p className="text-[10px] text-rose-500">
-              {fieldErrors.timeout_seconds}
-            </p>
-          )}
-        </div>
 
         <div className="section-card space-y-4">
           <div>
