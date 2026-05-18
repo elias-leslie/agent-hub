@@ -214,8 +214,8 @@ def _collect_hooks(
 ) -> list[PreToolUseHook]:
     """Build the ordered list of pre-hooks for a new DirectToolHandler.
 
-    Order: project permission → cross-project boundary → checkout boundary.
-    First DENY wins during execution.
+    Order: project permission → cross-project boundary → checkout boundary
+    → lease check. First DENY wins during execution.
     """
     hooks: list[PreToolUseHook] = []
 
@@ -227,6 +227,11 @@ def _collect_hooks(
         from app.services.tools._checkout_boundary_hook import create_checkout_boundary_hook
 
         hooks.append(create_checkout_boundary_hook(working_dir))
+
+    if project_id:
+        from app.services.tools._lease_check_hook import create_lease_check_hook
+
+        hooks.append(create_lease_check_hook(project_id))
 
     return hooks
 
