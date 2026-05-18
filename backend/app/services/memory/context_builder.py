@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,10 +16,7 @@ from .applicability import (
     normalize_trigger_phases,
     normalize_trigger_task_types,
 )
-from .budget import BudgetUsage
-from .context_builder_fetcher import fetch_all_episodes
-from .context_builder_filters import filter_by_tags
-from .context_builder_processors import compute_token_counts
+from .budget import BudgetUsage, count_tokens
 from .context_builder_settings import (
     apply_memory_config_overrides,
     normalize_memory_config,
@@ -28,7 +26,16 @@ from .context_builder_settings import (
 )
 from .context_builder_tiers import (
     build_memory_plan_debug,
+    get_rendered_content,
     plan_context_render_tiers,
+)
+from .context_injector_blocks import (
+    get_auto_inject_references_as_search_results,
+    get_guardrails,
+    get_mandates,
+    get_phase_triggered_references_as_search_results,
+    get_pinned_episodes_as_search_results,
+    get_triggered_references_as_search_results,
 )
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .context_profiles import (
@@ -37,12 +44,218 @@ from .context_profiles import (
     resolve_policy_limits,
 )
 from .memory_models import MemoryContextKind
+from .memory_utils import build_group_id
 from .scoring import MemoryScoreInput, score_memory
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
 from .variants import get_variant_config
 
 logger = logging.getLogger(__name__)
+
+
+def _has_excluded_tag(ep_tags: list[str], exclude_tags: list[str]) -> bool:
+    return any(tag in ep_tags for tag in exclude_tags)
+
+
+def _has_required_tag(ep_tags: list[str], include_tags: list[str]) -> bool:
+    return any(tag in ep_tags for tag in include_tags)
+
+
+def _episode_passes_filters(
+    ep_tags: list[str],
+    include_tags: list[str],
+    exclude_tags: list[str],
+) -> bool:
+    if exclude_tags and _has_excluded_tag(ep_tags, exclude_tags):
+        return False
+    return not (include_tags and not _has_required_tag(ep_tags, include_tags))
+
+
+def filter_by_tags(
+    episodes: list[MemorySearchResult],
+    include_tags: list[str],
+    exclude_tags: list[str],
+) -> list[MemorySearchResult]:
+    """Filter episodes by include/exclude tags using the episode's tags field."""
+    if not include_tags and not exclude_tags:
+        return episodes
+
+    filtered = [
+        ep
+        for ep in episodes
+        if _episode_passes_filters(ep.tags or [], include_tags, exclude_tags)
+    ]
+
+    if len(filtered) < len(episodes):
+        logger.info(
+            "Tag filter: %d -> %d episodes (include=%s, exclude=%s)",
+            len(episodes),
+            len(filtered),
+            include_tags,
+            exclude_tags,
+        )
+
+    return filtered
+
+
+def compute_token_counts(
+    mandates: list[MemorySearchResult],
+    guardrails: list[MemorySearchResult],
+    references: list[MemorySearchResult],
+) -> tuple[int, int, int]:
+    """Compute total tokens for mandates, guardrails, and references."""
+    mandates_tokens = sum(count_tokens(get_rendered_content(m)) for m in mandates)
+    guardrails_tokens = sum(count_tokens(get_rendered_content(g)) for g in guardrails)
+    reference_tokens = sum(count_tokens(get_rendered_content(r)) for r in references)
+    return mandates_tokens, guardrails_tokens, reference_tokens
+
+
+def _add_unique(
+    items: list[MemorySearchResult],
+    target: list[MemorySearchResult],
+    seen: set[str],
+) -> None:
+    for item in items:
+        if item.uuid not in seen:
+            target.append(item)
+            seen.add(item.uuid)
+
+
+def _build_scope_tasks(
+    scopes_to_query: list[tuple[MemoryScope, str | None]],
+    include_mandates: bool,
+    include_guardrails: bool,
+    include_references: bool,
+) -> tuple[list[asyncio.Task[list[MemorySearchResult]]], list[str]]:
+    tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
+    task_keys: list[str] = []
+
+    for query_scope, query_scope_id in scopes_to_query:
+        if include_mandates:
+            tasks.append(
+                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
+            )
+            task_keys.append(f"mandates_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "mandate",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"mandates_pinned_{query_scope.value}")
+        if include_guardrails:
+            tasks.append(
+                asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
+            )
+            task_keys.append(f"guardrails_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "guardrail",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"guardrails_pinned_{query_scope.value}")
+        if include_references:
+            tasks.append(
+                asyncio.create_task(
+                    get_auto_inject_references_as_search_results(
+                        scope=query_scope, scope_id=query_scope_id
+                    )
+                )
+            )
+            task_keys.append(f"reference_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "reference",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"reference_pinned_{query_scope.value}")
+
+    return tasks, task_keys
+
+
+def _process_gathered_results(
+    task_keys: list[str],
+    results: list[list[MemorySearchResult] | BaseException],
+) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
+    mandates: list[MemorySearchResult] = []
+    guardrails: list[MemorySearchResult] = []
+    reference: list[MemorySearchResult] = []
+
+    mandates_seen: set[str] = set()
+    guardrails_seen: set[str] = set()
+    reference_seen: set[str] = set()
+
+    buckets = {
+        "mandates": (mandates, mandates_seen),
+        "guardrails": (guardrails, guardrails_seen),
+    }
+
+    for key, result in zip(task_keys, results, strict=True):
+        if isinstance(result, BaseException):
+            logger.warning("Failed to get %s: %s", key, result)
+            continue
+
+        assert isinstance(result, list)
+        block_type = key.split("_")[0]
+        target, seen = buckets.get(block_type, (reference, reference_seen))
+        _add_unique(result, target, seen)
+
+    return mandates, guardrails, reference
+
+
+async def fetch_all_episodes(
+    scopes_to_query: list[tuple[MemoryScope, str | None]],
+    include_mandates: bool,
+    include_guardrails: bool,
+    include_references: bool,
+    task_type: str | None,
+    phase: str | None,
+) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
+    """Fetch all episodes in parallel and deduplicate by UUID."""
+    tasks, task_keys = _build_scope_tasks(
+        scopes_to_query, include_mandates, include_guardrails, include_references
+    )
+
+    if include_references and task_type:
+        for query_scope, query_scope_id in scopes_to_query:
+            tasks.append(
+                asyncio.create_task(
+                    get_triggered_references_as_search_results(
+                        task_type=task_type,
+                        group_id=build_group_id(query_scope, query_scope_id),
+                    )
+                )
+            )
+            task_keys.append(f"reference_triggered_{query_scope.value}")
+
+    if include_references and phase:
+        for query_scope, query_scope_id in scopes_to_query:
+            tasks.append(
+                asyncio.create_task(
+                    get_phase_triggered_references_as_search_results(
+                        phase=phase,
+                        group_id=build_group_id(query_scope, query_scope_id),
+                    )
+                )
+            )
+            task_keys.append(f"reference_phase_triggered_{query_scope.value}")
+
+    if not tasks:
+        return [], [], []
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return _process_gathered_results(task_keys, results)
 
 
 @dataclass
