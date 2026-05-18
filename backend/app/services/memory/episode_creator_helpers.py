@@ -1,6 +1,6 @@
-"""Private helper functions for episode_creator_core.
+"""Private helper functions for episode_creator.
 
-Extracted to keep episode_creator_core.py focused on orchestration.
+Extracted to keep episode_creator.py focused on orchestration.
 """
 
 from __future__ import annotations
