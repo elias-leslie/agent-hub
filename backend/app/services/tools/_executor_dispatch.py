@@ -21,7 +21,6 @@ _CODING_TASK_KEYWORDS = (
 )
 _TASK_ID_RE = re.compile(r"(?im)^\s*Task(?:[- ]ID)?:\s*(task-[a-z0-9]+)\s*$")
 _MODE_RE = re.compile(r"(?im)^\s*Mode:\s*(task|campaign)\s*$")
-_BRANCH_RE = re.compile(r"(?im)^\s*(?:\+\s+)?([^\s]+)\s+\[task\]\s*$")
 _SHARED_PLUMBING_MARKERS = (
     "/alembic/", "/migrations/", "/schema", "/schemas/", "/contract",
     "/contracts/", "/routing", "/routes/", "/config", "/build",
@@ -171,7 +170,11 @@ async def _run_project_command(project_id: str, command: str) -> str:
 async def _ensure_task_lane_context(
     project_id: str, task_id: str,
 ) -> tuple[str | None, str | None, str | None]:
-    """Return (branch, working_dir, error) for a claimed task checkpoint, claiming if needed."""
+    """Return (None, working_dir, error) for a claimed task. Auto-claims first
+    if no checkpoint exists. Per-task branches were eliminated in the lease
+    migration — working_dir is now the project root; current_branch stays None
+    for downstream display.
+    """
     from app.constants.projects import get_known_roots
 
     details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
@@ -179,17 +182,14 @@ async def _ensure_task_lane_context(
         claim = await _run_project_st_command(project_id, f"claim {shlex.quote(task_id)}")
         if "Error:" in claim or claim.startswith("ERROR"):
             return None, None, f"Dispatch blocked for {task_id}: {claim.strip()}"
-        details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
 
-    branch_match = _BRANCH_RE.search(details)
-    branch = branch_match.group(1).strip() if branch_match else None
     working_dir = get_known_roots().get(project_id)
-    if not branch or not working_dir:
+    if not working_dir:
         return (
             None, None,
-            f"Dispatch blocked for {task_id}: unable to resolve claimed branch/checkout from checkpoint details.",
+            f"Dispatch blocked for {task_id}: unable to resolve project root for {project_id}.",
         )
-    return branch, working_dir, None
+    return None, working_dir, None
 
 
 async def prepare_specialist_dispatch(

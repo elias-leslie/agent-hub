@@ -124,6 +124,8 @@ class DirectToolExecutor:
         self._scratch_context = ScratchContextStore()
         if session_id:
             self._env["AGENT_HUB_SESSION_ID"] = session_id
+        if agent_slug:
+            self._env["AGENT_HUB_AGENT_SLUG"] = agent_slug
         self._tool_catalog = {
             str(tool["name"]): dict(tool) for tool in (tool_catalog or [])
         }
