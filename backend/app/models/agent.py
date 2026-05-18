@@ -71,9 +71,6 @@ class Agent(Base):
     hourly_request_limit: Mapped[int | None] = mapped_column(
         Integer, nullable=True, default=None
     )  # Max requests per hour (None = unlimited)
-    timeout_seconds: Mapped[float | None] = mapped_column(
-        Float, nullable=True, default=None
-    )  # Per-agent timeout override (None = use model default)
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

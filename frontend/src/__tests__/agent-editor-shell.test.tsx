@@ -58,7 +58,6 @@ const agent: Agent = {
   max_subagent_concurrency: 2,
   daily_token_budget: 100000,
   hourly_request_limit: 30,
-  timeout_seconds: 60,
   version: 4,
   created_at: '2026-03-01T00:00:00Z',
   updated_at: '2026-03-02T00:00:00Z',

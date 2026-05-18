@@ -67,7 +67,6 @@ def create_agent_model(
     max_subagent_concurrency: int | None = None,
     daily_token_budget: int | None = None,
     hourly_request_limit: int | None = None,
-    timeout_seconds: float | None = None,
 ) -> Agent:
     """Create agent model instance."""
     return Agent(
@@ -89,7 +88,6 @@ def create_agent_model(
         max_subagent_concurrency=max_subagent_concurrency,
         daily_token_budget=daily_token_budget,
         hourly_request_limit=hourly_request_limit,
-        timeout_seconds=timeout_seconds,
         version=1,
     )
 

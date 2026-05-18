@@ -65,7 +65,6 @@ class AgentCreateRequest(BaseModel):
     )
     daily_token_budget: int | None = Field(default=None, ge=0, description="Max tokens per day (0=unlimited)")
     hourly_request_limit: int | None = Field(default=None, ge=0, description="Max requests per hour (0=unlimited)")
-    timeout_seconds: float | None = Field(default=None, gt=0)
 
 
 class AgentUpdateRequest(BaseModel):
@@ -91,7 +90,6 @@ class AgentUpdateRequest(BaseModel):
     max_subagent_concurrency: int | None = Field(default=None, ge=1, le=100)
     daily_token_budget: int | None = Field(default=None, ge=0)
     hourly_request_limit: int | None = Field(default=None, ge=0)
-    timeout_seconds: float | None = Field(default=None, gt=0)
     change_reason: str | None = None
 
 
@@ -118,7 +116,6 @@ class AgentResponse(BaseModel):
     max_subagent_concurrency: int | None
     daily_token_budget: int | None
     hourly_request_limit: int | None
-    timeout_seconds: float | None
     version: int
     created_at: str
     updated_at: str
@@ -152,7 +149,6 @@ class AgentResponse(BaseModel):
             max_subagent_concurrency=dto.max_subagent_concurrency,
             daily_token_budget=dto.daily_token_budget,
             hourly_request_limit=dto.hourly_request_limit,
-            timeout_seconds=dto.timeout_seconds,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),

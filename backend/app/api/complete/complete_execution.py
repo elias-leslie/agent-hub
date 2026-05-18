@@ -49,45 +49,11 @@ def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _Non
     return (r, model, False, r.memory_uuids, r.session_id or sid, r.fallback_reason)
 
 
-def _agentic_timeout_seconds(agent: ResolvedAgent | None) -> float | None:
-    """Return the per-turn timeout for agentic model calls.
-
-    Returns None unless the agent row explicitly sets timeout_seconds.
-    Open-ended agent turns are unbounded by default.
-    """
-    if agent is None:
-        return None
-    configured = getattr(agent.agent, "timeout_seconds", None)
-    return float(configured) if configured is not None else None
-
-
 def _terminal_error_from_result(result: CompletionInternalResult) -> RuntimeError | None:
     if result.finish_reason not in {"error", "aborted"}:
         return None
     message = result.message.error_message or f"Provider returned finish_reason={result.finish_reason}"
     return RuntimeError(message)
-
-
-async def _run_internal_with_timeout(
-    req: CompletionRequest, model: str, provider: str, agent: ResolvedAgent | None,
-    msgs: _MsgsDict, db: AsyncSession, sid: str | None, client_id: str | None,
-    source: str | None, thinking: str | None, tools: _ToolsAPI, fmt: _FmtDict,
-    skip_cache: bool, is_agentic: bool,
-) -> CompletionInternalResult | _NonAgenticResult:
-    """Run internal completion with the configured agentic model-turn timeout."""
-    coro = _run_internal(
-        req, model, provider, agent, msgs, db, sid, client_id, source,
-        thinking, tools, fmt, skip_cache, is_agentic,
-    )
-    if not is_agentic:
-        return await coro
-    timeout = _agentic_timeout_seconds(agent)
-    if timeout is None:
-        return await coro
-    try:
-        return await asyncio.wait_for(coro, timeout=timeout)
-    except TimeoutError as exc:
-        raise TimeoutError(f"Agentic model turn timed out after {timeout:g}s") from exc
 
 
 async def _run_internal(
@@ -125,7 +91,7 @@ async def _run_with_agentic_fallback(
     for model_id in [primary_model, *agent.agent.fallback_models]:
         try:
             fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
-            raw = await _run_internal_with_timeout(
+            raw = await _run_internal(
                 req, model_id, fb_provider, agent, msgs, db, sid, client_id, source,
                 thinking, tools, fmt, skip_cache, True,
             )
@@ -162,7 +128,7 @@ async def _dispatch_db(
     """Route DB execution to fallback-aware or standard handler."""
     if is_agentic and _fallbacks_enabled(req, agent):
         return await _run_with_agentic_fallback(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache)
-    return await _run_internal_with_timeout(
+    return await _run_internal(
         req, model, provider, agent, msgs, db, sid, client_id, source,
         thinking, tools, fmt, skip_cache, is_agentic,
     )

@@ -25,7 +25,6 @@ class SubagentRequest(BaseModel):
         pattern="^(minimal|low|medium|high|ultrathink)$",
         description="Thinking depth: minimal/low/medium/high/ultrathink",
     )
-    timeout_seconds: float | None = Field(default=None, ge=1)
     agent_slug: str | None = Field(
         default=None,
         description=(

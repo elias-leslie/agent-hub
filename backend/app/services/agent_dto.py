@@ -31,7 +31,6 @@ class AgentDTO:
     max_subagent_concurrency: int | None
     daily_token_budget: int | None
     hourly_request_limit: int | None
-    timeout_seconds: float | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -59,7 +58,6 @@ class AgentDTO:
             max_subagent_concurrency=agent.max_subagent_concurrency,
             daily_token_budget=agent.daily_token_budget,
             hourly_request_limit=agent.hourly_request_limit,
-            timeout_seconds=agent.timeout_seconds,
             version=agent.version,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
@@ -87,7 +85,6 @@ class AgentDTO:
             "max_subagent_concurrency": self.max_subagent_concurrency,
             "daily_token_budget": self.daily_token_budget,
             "hourly_request_limit": self.hourly_request_limit,
-            "timeout_seconds": self.timeout_seconds,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -116,7 +113,6 @@ class AgentDTO:
             max_subagent_concurrency=data.get("max_subagent_concurrency"),
             daily_token_budget=data.get("daily_token_budget"),
             hourly_request_limit=data.get("hourly_request_limit"),
-            timeout_seconds=data.get("timeout_seconds"),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),

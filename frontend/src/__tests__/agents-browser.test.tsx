@@ -28,7 +28,6 @@ const baseAgent: Agent = {
   temperature: 0.2,
   is_active: true,
   is_coding_agent: true,
-  timeout_seconds: 60,
   version: 3,
   created_at: '2026-03-01T00:00:00Z',
   updated_at: '2026-03-02T00:00:00Z',

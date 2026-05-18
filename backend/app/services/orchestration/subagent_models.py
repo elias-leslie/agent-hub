@@ -34,9 +34,6 @@ class SubagentConfig:
     tools: list[dict[str, Any]] | None = None
     """Tool definitions available to this subagent."""
 
-    timeout_seconds: float | None = None
-    """Optional execution timeout override. None waits for completion."""
-
     max_spawn_depth: int = DEFAULT_MAX_SPAWN_DEPTH
     """Maximum nesting depth for subagent spawning (0 = no children)."""
 
