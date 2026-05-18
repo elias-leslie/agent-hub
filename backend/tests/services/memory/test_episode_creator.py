@@ -189,7 +189,7 @@ class TestEpisodeCreatorCreate:
         self.mock_repo.create.return_value = mock_memory
 
         with patch(
-            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            "app.services.memory.episode_creator.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -216,7 +216,7 @@ class TestEpisodeCreatorCreate:
         )
 
         with patch(
-            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            "app.services.memory.episode_creator.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -270,7 +270,7 @@ class TestEpisodeCreatorCreate:
         self.mock_repo.create.return_value = mock_memory
 
         with patch(
-            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            "app.services.memory.episode_creator.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -287,7 +287,7 @@ class TestEpisodeCreatorCreate:
     async def test_create_deduplication(self):
         """Test that duplicates are detected and skipped."""
         with patch(
-            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            "app.services.memory.episode_creator.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value="existing-uuid-789",
         ):
@@ -309,7 +309,7 @@ class TestEpisodeCreatorCreate:
         self.mock_repo.create.side_effect = Exception("Connection failed")
 
         with patch(
-            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            "app.services.memory.episode_creator.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
