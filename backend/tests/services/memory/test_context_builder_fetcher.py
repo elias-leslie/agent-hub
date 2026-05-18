@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.memory.context_builder_fetcher import fetch_all_episodes
+from app.services.memory.context_builder import fetch_all_episodes
 from app.services.memory.context_injector_blocks_helpers import mandate_episode_to_result
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 
@@ -35,19 +35,19 @@ class TestContextBuilderFetcher:
 
         with (
             patch(
-                "app.services.memory.context_builder_fetcher.get_mandates",
+                "app.services.memory.context_builder.get_mandates",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_guardrails",
+                "app.services.memory.context_builder.get_guardrails",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_auto_inject_references_as_search_results",
+                "app.services.memory.context_builder.get_auto_inject_references_as_search_results",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_pinned_episodes_as_search_results",
+                "app.services.memory.context_builder.get_pinned_episodes_as_search_results",
                 new=AsyncMock(
                     side_effect=lambda tier, scope, scope_id: [pinned_reference]
                     if tier == "reference"
@@ -78,19 +78,19 @@ class TestContextBuilderFetcher:
 
         with (
             patch(
-                "app.services.memory.context_builder_fetcher.get_mandates",
+                "app.services.memory.context_builder.get_mandates",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_guardrails",
+                "app.services.memory.context_builder.get_guardrails",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_auto_inject_references_as_search_results",
+                "app.services.memory.context_builder.get_auto_inject_references_as_search_results",
                 new=AsyncMock(return_value=[duplicate_reference]),
             ),
             patch(
-                "app.services.memory.context_builder_fetcher.get_pinned_episodes_as_search_results",
+                "app.services.memory.context_builder.get_pinned_episodes_as_search_results",
                 new=AsyncMock(
                     side_effect=lambda tier, scope, scope_id: [duplicate_reference]
                     if tier == "reference"
