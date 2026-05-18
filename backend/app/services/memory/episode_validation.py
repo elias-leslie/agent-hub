@@ -157,7 +157,7 @@ class EpisodeValidator:
         Lightweight validation for generated learnings.
 
         Returns error message if invalid, None if valid.
-        Used by episode_creator_core for lightweight validation.
+        Used by episode_creator for lightweight validation.
 
         bypass_compactness: When true, skip the strict-Caveman gate. Used by
         the UI "Save anyway" override.
