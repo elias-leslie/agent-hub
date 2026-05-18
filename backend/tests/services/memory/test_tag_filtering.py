@@ -1,11 +1,10 @@
-"""Tests for tag-based memory filtering (context_builder_filters.py + context_builder.py)."""
+"""Tests for tag-based memory filtering in context_builder.py."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.services.memory.context_builder import _apply_tag_filters
-from app.services.memory.context_builder_filters import filter_by_tags
+from app.services.memory.context_builder import _apply_tag_filters, filter_by_tags
 from app.services.memory.memory_models import (
     MemoryApplicability,
     MemorySearchResult,
