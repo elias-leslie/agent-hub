@@ -25,6 +25,13 @@ from app.adapters.codex_auth import (
 from app.db import async_session
 from app.services.credential_manager import get_credential_manager
 from app.services.credential_upsert import upsert_credential
+from app.services.llm_errors import (
+    AuthenticationError,
+    ProviderError,
+    RateLimitError,
+    extract_openai_rate_limit_header,
+    extract_retry_after_header,
+)
 
 from ..api_registry import register_api_provider
 from ..event_stream import AssistantMessageEventStream
@@ -315,6 +322,41 @@ def _event_error_message(event: dict[str, Any]) -> str | None:
     return None
 
 
+def _raise_codex_http_error(status_code: int, body: str, headers: Any) -> None:
+    """Map a Codex HTTP error response onto the shared provider-error taxonomy.
+
+    Routing into ``RateLimitError`` / ``AuthenticationError`` / retriable
+    ``ProviderError`` is what lets the upstream fallback orchestrator
+    cool down and switch providers instead of burning the whole chain.
+    """
+    header_map: dict[str, str] = {}
+    try:
+        header_map = {str(k): str(v) for k, v in dict(headers).items()}
+    except Exception:
+        header_map = {}
+    snippet = body[:500]
+    if status_code == 429:
+        retry_after = extract_retry_after_header(header_map, max_delay=60.0)
+        if retry_after is None:
+            retry_after = extract_openai_rate_limit_header(header_map, max_delay=60.0)
+        raise RateLimitError("codex", retry_after=retry_after)
+    if status_code in (401, 403):
+        raise AuthenticationError("codex")
+    if status_code >= 500:
+        raise ProviderError(
+            f"Codex HTTP {status_code}: {snippet}",
+            provider="codex",
+            retriable=True,
+            status_code=status_code,
+        )
+    raise ProviderError(
+        f"Codex HTTP {status_code}: {snippet}",
+        provider="codex",
+        retriable=False,
+        status_code=status_code,
+    )
+
+
 async def _parse_sse_lines(response: httpx.Response):
     async for line in response.aiter_lines():
         if not line.startswith("data: "):
@@ -367,7 +409,7 @@ async def _run(
         ):
                 if response.status_code >= 400:
                     error_body = (await response.aread()).decode("utf-8", errors="replace")
-                    raise RuntimeError(f"Codex HTTP {response.status_code}: {error_body}")
+                    _raise_codex_http_error(response.status_code, error_body, response.headers)
                 async for event in _parse_sse_lines(response):
                     error_message = _event_error_message(event)
                     if error_message:

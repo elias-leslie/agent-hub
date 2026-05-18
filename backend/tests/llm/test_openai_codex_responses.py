@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
-from app.llm.providers.openai_codex_responses import _input_from_context
+import pytest
+
+from app.llm.providers.openai_codex_responses import _input_from_context, _raise_codex_http_error
 from app.llm.types import AssistantMessage, Context, TextContent, ToolCall, ToolResultMessage, Usage
+from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
 
 def _assistant(content, *, response_id: str | None = None) -> AssistantMessage:
@@ -67,3 +70,49 @@ def test_replayed_codex_tool_ids_use_call_id_and_item_id_parts() -> None:
     assert items[0]["id"] == "fc_456"
     assert items[1]["type"] == "function_call_output"
     assert items[1]["call_id"] == "call_123"
+
+
+def test_codex_http_429_maps_to_rate_limit_error() -> None:
+    with pytest.raises(RateLimitError) as exc_info:
+        _raise_codex_http_error(429, '{"error":"rate limit"}', {"Retry-After": "12"})
+    assert exc_info.value.provider == "codex"
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.retry_after == pytest.approx(12.0)
+
+
+def test_codex_http_429_without_retry_after_still_maps() -> None:
+    with pytest.raises(RateLimitError) as exc_info:
+        _raise_codex_http_error(429, "rate limit exceeded", {})
+    assert exc_info.value.provider == "codex"
+    assert exc_info.value.retry_after is None
+
+
+def test_codex_http_401_maps_to_authentication_error() -> None:
+    with pytest.raises(AuthenticationError) as exc_info:
+        _raise_codex_http_error(401, "unauthorized", {})
+    assert exc_info.value.provider == "codex"
+    assert exc_info.value.status_code == 401
+
+
+def test_codex_http_403_maps_to_authentication_error() -> None:
+    with pytest.raises(AuthenticationError):
+        _raise_codex_http_error(403, "forbidden", {})
+
+
+def test_codex_http_5xx_is_retriable_provider_error() -> None:
+    with pytest.raises(ProviderError) as exc_info:
+        _raise_codex_http_error(503, "service unavailable", {})
+    err = exc_info.value
+    assert not isinstance(err, (RateLimitError, AuthenticationError))
+    assert err.provider == "codex"
+    assert err.status_code == 503
+    assert err.retriable is True
+
+
+def test_codex_http_400_is_nonretriable_provider_error() -> None:
+    with pytest.raises(ProviderError) as exc_info:
+        _raise_codex_http_error(400, "bad request body", {})
+    err = exc_info.value
+    assert not isinstance(err, (RateLimitError, AuthenticationError))
+    assert err.status_code == 400
+    assert err.retriable is False
