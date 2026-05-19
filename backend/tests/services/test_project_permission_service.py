@@ -745,6 +745,8 @@ class TestPersonaToolSets:
             "propose_thorough",
             "propose_committee",
             "propose_honing",
+            # Vantage intake/scoping signal tool — pure pass-through, no I/O.
+            "start_research",
         })
 
     def test_operational_contains_agency_tools(self):
