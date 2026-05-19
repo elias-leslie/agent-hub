@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import types
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,6 +12,8 @@ import pytest
 from app.services.telegram_bot_service import (
     TELEGRAM_CHAT_MAX_TURNS,
     TELEGRAM_CONNECT_TIMEOUT_SECONDS,
+    TELEGRAM_CONNECTION_POOL_SIZE,
+    TELEGRAM_MAX_KEEPALIVE_CONNECTIONS,
     TELEGRAM_POOL_TIMEOUT_SECONDS,
     TELEGRAM_READ_TIMEOUT_SECONDS,
     TELEGRAM_WRITE_TIMEOUT_SECONDS,
@@ -206,72 +209,62 @@ async def test_heartbeat_loop_runs_until_cancelled(monkeypatch: pytest.MonkeyPat
 
 
 def test_build_application_configures_network_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     app_instance = object()
 
     class _FakeRedis:
         async def close(self) -> None:
             return None
 
+    class _FakeHTTPXRequest:
+        def __init__(self, **kwargs: object) -> None:
+            captured.setdefault("requests", [])
+            requests = captured["requests"]
+            assert isinstance(requests, list)
+            requests.append(kwargs)
+
     class _Builder:
         def token(self, token: str):
             captured["token"] = token
             return self
 
-        def connect_timeout(self, value: float):
-            captured["connect_timeout"] = value
+        def request(self, request: _FakeHTTPXRequest):
+            captured["request"] = request
             return self
 
-        def read_timeout(self, value: float):
-            captured["read_timeout"] = value
-            return self
-
-        def write_timeout(self, value: float):
-            captured["write_timeout"] = value
-            return self
-
-        def pool_timeout(self, value: float):
-            captured["pool_timeout"] = value
-            return self
-
-        def get_updates_connect_timeout(self, value: float):
-            captured["get_updates_connect_timeout"] = value
-            return self
-
-        def get_updates_read_timeout(self, value: float):
-            captured["get_updates_read_timeout"] = value
-            return self
-
-        def get_updates_write_timeout(self, value: float):
-            captured["get_updates_write_timeout"] = value
-            return self
-
-        def get_updates_pool_timeout(self, value: float):
-            captured["get_updates_pool_timeout"] = value
+        def get_updates_request(self, request: _FakeHTTPXRequest):
+            captured["get_updates_request"] = request
             return self
 
         def build(self):
             return app_instance
 
     telegram_ext = types.SimpleNamespace(Application=types.SimpleNamespace(builder=lambda: _Builder()))
+    telegram_request = types.SimpleNamespace(HTTPXRequest=_FakeHTTPXRequest)
 
     monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
     monkeypatch.setitem(sys.modules, "telegram.ext", telegram_ext)
+    monkeypatch.setitem(sys.modules, "telegram.request", telegram_request)
 
     bot = AgentHubTelegramBot()
 
     assert bot._build_application("token") is app_instance
-    assert captured == {
-        "token": "token",
-        "connect_timeout": TELEGRAM_CONNECT_TIMEOUT_SECONDS,
-        "read_timeout": TELEGRAM_READ_TIMEOUT_SECONDS,
-        "write_timeout": TELEGRAM_WRITE_TIMEOUT_SECONDS,
-        "pool_timeout": TELEGRAM_POOL_TIMEOUT_SECONDS,
-        "get_updates_connect_timeout": TELEGRAM_CONNECT_TIMEOUT_SECONDS,
-        "get_updates_read_timeout": TELEGRAM_READ_TIMEOUT_SECONDS,
-        "get_updates_write_timeout": TELEGRAM_WRITE_TIMEOUT_SECONDS,
-        "get_updates_pool_timeout": TELEGRAM_POOL_TIMEOUT_SECONDS,
-    }
+    requests = captured["requests"]
+    assert isinstance(requests, list)
+    assert len(requests) == 2
+    for request_kwargs in requests:
+        assert request_kwargs["connection_pool_size"] == TELEGRAM_CONNECTION_POOL_SIZE
+        assert request_kwargs["connect_timeout"] == TELEGRAM_CONNECT_TIMEOUT_SECONDS
+        assert request_kwargs["read_timeout"] == TELEGRAM_READ_TIMEOUT_SECONDS
+        assert request_kwargs["write_timeout"] == TELEGRAM_WRITE_TIMEOUT_SECONDS
+        assert request_kwargs["pool_timeout"] == TELEGRAM_POOL_TIMEOUT_SECONDS
+        httpx_kwargs = request_kwargs["httpx_kwargs"]
+        assert isinstance(httpx_kwargs, dict)
+        limits = httpx_kwargs["limits"]
+        assert limits.max_connections == TELEGRAM_CONNECTION_POOL_SIZE
+        assert limits.max_keepalive_connections == TELEGRAM_MAX_KEEPALIVE_CONNECTIONS
+    assert captured["token"] == "token"
+    assert captured["request"] is not captured["get_updates_request"]
 
 
 @pytest.mark.asyncio
@@ -314,28 +307,10 @@ async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytes
         def token(self, _token: str):
             return self
 
-        def connect_timeout(self, _value: float):
+        def request(self, _request):
             return self
 
-        def read_timeout(self, _value: float):
-            return self
-
-        def write_timeout(self, _value: float):
-            return self
-
-        def pool_timeout(self, _value: float):
-            return self
-
-        def get_updates_connect_timeout(self, _value: float):
-            return self
-
-        def get_updates_read_timeout(self, _value: float):
-            return self
-
-        def get_updates_write_timeout(self, _value: float):
-            return self
-
-        def get_updates_pool_timeout(self, _value: float):
+        def get_updates_request(self, _request):
             return self
 
         def build(self):
@@ -351,6 +326,7 @@ async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytes
             COMMAND=_Filter(),
         ),
     )
+    telegram_request = types.SimpleNamespace(HTTPXRequest=lambda **kwargs: object())
 
     monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
     monkeypatch.setattr("app.services.telegram_bot_service.async_session", lambda: _SessionCtx())
@@ -361,6 +337,7 @@ async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytes
     )
     monkeypatch.setitem(sys.modules, "telegram", types.SimpleNamespace())
     monkeypatch.setitem(sys.modules, "telegram.ext", telegram_ext)
+    monkeypatch.setitem(sys.modules, "telegram.request", telegram_request)
 
     bot = AgentHubTelegramBot()
     write_status = AsyncMock()
