@@ -32,6 +32,8 @@ TELEGRAM_CONNECT_TIMEOUT_SECONDS = 10.0
 TELEGRAM_READ_TIMEOUT_SECONDS = 30.0
 TELEGRAM_WRITE_TIMEOUT_SECONDS = 10.0
 TELEGRAM_POOL_TIMEOUT_SECONDS = 10.0
+TELEGRAM_CONNECTION_POOL_SIZE = 4
+TELEGRAM_MAX_KEEPALIVE_CONNECTIONS = 0
 
 
 def blocked_chat_text(chat_id: str) -> str:
@@ -94,18 +96,27 @@ class AgentHubTelegramBot:
 
     def _build_application(self, token: str) -> Any:
         from telegram.ext import Application
+        from telegram.request import HTTPXRequest
+
+        request_kwargs = {
+            "connection_pool_size": TELEGRAM_CONNECTION_POOL_SIZE,
+            "connect_timeout": TELEGRAM_CONNECT_TIMEOUT_SECONDS,
+            "read_timeout": TELEGRAM_READ_TIMEOUT_SECONDS,
+            "write_timeout": TELEGRAM_WRITE_TIMEOUT_SECONDS,
+            "pool_timeout": TELEGRAM_POOL_TIMEOUT_SECONDS,
+            "httpx_kwargs": {
+                "limits": httpx.Limits(
+                    max_connections=TELEGRAM_CONNECTION_POOL_SIZE,
+                    max_keepalive_connections=TELEGRAM_MAX_KEEPALIVE_CONNECTIONS,
+                )
+            },
+        }
 
         return (
             Application.builder()
             .token(token)
-            .connect_timeout(TELEGRAM_CONNECT_TIMEOUT_SECONDS)
-            .read_timeout(TELEGRAM_READ_TIMEOUT_SECONDS)
-            .write_timeout(TELEGRAM_WRITE_TIMEOUT_SECONDS)
-            .pool_timeout(TELEGRAM_POOL_TIMEOUT_SECONDS)
-            .get_updates_connect_timeout(TELEGRAM_CONNECT_TIMEOUT_SECONDS)
-            .get_updates_read_timeout(TELEGRAM_READ_TIMEOUT_SECONDS)
-            .get_updates_write_timeout(TELEGRAM_WRITE_TIMEOUT_SECONDS)
-            .get_updates_pool_timeout(TELEGRAM_POOL_TIMEOUT_SECONDS)
+            .request(HTTPXRequest(**request_kwargs))
+            .get_updates_request(HTTPXRequest(**request_kwargs))
             .build()
         )
 
