@@ -519,7 +519,11 @@ class TestQueryRecentWorkstreamSessions:
         assert rows[0]["external_id"] == "task-2c2abc80"
         assert "sessions.workstream_status IS NOT NULL" in executed_query
         assert "sessions.external_id LIKE :external_id_1" in executed_query
-        assert "sessions.current_branch LIKE :current_branch_1" in executed_query
+        # The `current_branch LIKE` filter was retired when the lease
+        # migration eliminated per-task branches (see _heartbeat_data.py
+        # comments). Sessions are now matched via workstream_status +
+        # external_id only.
+        assert "sessions.current_branch LIKE" not in executed_query
         assert (
             "coalesce(sessions.workstream_updated_at, sessions.updated_at, sessions.created_at) DESC"
             in executed_query
