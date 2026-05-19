@@ -10,6 +10,10 @@ import pytest
 
 from app.services.telegram_bot_service import (
     TELEGRAM_CHAT_MAX_TURNS,
+    TELEGRAM_CONNECT_TIMEOUT_SECONDS,
+    TELEGRAM_POOL_TIMEOUT_SECONDS,
+    TELEGRAM_READ_TIMEOUT_SECONDS,
+    TELEGRAM_WRITE_TIMEOUT_SECONDS,
     AgentHubTelegramBot,
     allowed_start_text,
     blocked_chat_text,
@@ -201,6 +205,75 @@ async def test_heartbeat_loop_runs_until_cancelled(monkeypatch: pytest.MonkeyPat
     assert calls == 2
 
 
+def test_build_application_configures_network_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    app_instance = object()
+
+    class _FakeRedis:
+        async def close(self) -> None:
+            return None
+
+    class _Builder:
+        def token(self, token: str):
+            captured["token"] = token
+            return self
+
+        def connect_timeout(self, value: float):
+            captured["connect_timeout"] = value
+            return self
+
+        def read_timeout(self, value: float):
+            captured["read_timeout"] = value
+            return self
+
+        def write_timeout(self, value: float):
+            captured["write_timeout"] = value
+            return self
+
+        def pool_timeout(self, value: float):
+            captured["pool_timeout"] = value
+            return self
+
+        def get_updates_connect_timeout(self, value: float):
+            captured["get_updates_connect_timeout"] = value
+            return self
+
+        def get_updates_read_timeout(self, value: float):
+            captured["get_updates_read_timeout"] = value
+            return self
+
+        def get_updates_write_timeout(self, value: float):
+            captured["get_updates_write_timeout"] = value
+            return self
+
+        def get_updates_pool_timeout(self, value: float):
+            captured["get_updates_pool_timeout"] = value
+            return self
+
+        def build(self):
+            return app_instance
+
+    telegram_ext = types.SimpleNamespace(Application=types.SimpleNamespace(builder=lambda: _Builder()))
+
+    monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
+    monkeypatch.setitem(sys.modules, "telegram.ext", telegram_ext)
+
+    bot = AgentHubTelegramBot()
+
+    assert bot._build_application("token") is app_instance
+    assert captured == {
+        "token": "token",
+        "connect_timeout": TELEGRAM_CONNECT_TIMEOUT_SECONDS,
+        "read_timeout": TELEGRAM_READ_TIMEOUT_SECONDS,
+        "write_timeout": TELEGRAM_WRITE_TIMEOUT_SECONDS,
+        "pool_timeout": TELEGRAM_POOL_TIMEOUT_SECONDS,
+        "get_updates_connect_timeout": TELEGRAM_CONNECT_TIMEOUT_SECONDS,
+        "get_updates_read_timeout": TELEGRAM_READ_TIMEOUT_SECONDS,
+        "get_updates_write_timeout": TELEGRAM_WRITE_TIMEOUT_SECONDS,
+        "get_updates_pool_timeout": TELEGRAM_POOL_TIMEOUT_SECONDS,
+    }
+
+
 @pytest.mark.asyncio
 async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeRedis:
@@ -239,6 +312,30 @@ async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytes
 
     class _Builder:
         def token(self, _token: str):
+            return self
+
+        def connect_timeout(self, _value: float):
+            return self
+
+        def read_timeout(self, _value: float):
+            return self
+
+        def write_timeout(self, _value: float):
+            return self
+
+        def pool_timeout(self, _value: float):
+            return self
+
+        def get_updates_connect_timeout(self, _value: float):
+            return self
+
+        def get_updates_read_timeout(self, _value: float):
+            return self
+
+        def get_updates_write_timeout(self, _value: float):
+            return self
+
+        def get_updates_pool_timeout(self, _value: float):
             return self
 
         def build(self):

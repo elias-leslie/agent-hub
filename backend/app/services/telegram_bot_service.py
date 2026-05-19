@@ -28,6 +28,10 @@ TEXT_ONLY_V1_REPLY = "This bot supports text messages only in v1."
 RESET_CONFIRMATION = "Conversation reset. Your next text message will start a fresh Jenny conversation."
 SESSION_KEY_PREFIX = "agent-hub:telegram:chat"
 TELEGRAM_CHAT_MAX_TURNS = 8
+TELEGRAM_CONNECT_TIMEOUT_SECONDS = 10.0
+TELEGRAM_READ_TIMEOUT_SECONDS = 30.0
+TELEGRAM_WRITE_TIMEOUT_SECONDS = 10.0
+TELEGRAM_POOL_TIMEOUT_SECONDS = 10.0
 
 
 def blocked_chat_text(chat_id: str) -> str:
@@ -87,6 +91,23 @@ class AgentHubTelegramBot:
             "X-Source-Client": "agent-hub-telegram-bot",
             "X-Source-Path": "backend/app/scripts/run_telegram_bot.py",
         }
+
+    def _build_application(self, token: str) -> Any:
+        from telegram.ext import Application
+
+        return (
+            Application.builder()
+            .token(token)
+            .connect_timeout(TELEGRAM_CONNECT_TIMEOUT_SECONDS)
+            .read_timeout(TELEGRAM_READ_TIMEOUT_SECONDS)
+            .write_timeout(TELEGRAM_WRITE_TIMEOUT_SECONDS)
+            .pool_timeout(TELEGRAM_POOL_TIMEOUT_SECONDS)
+            .get_updates_connect_timeout(TELEGRAM_CONNECT_TIMEOUT_SECONDS)
+            .get_updates_read_timeout(TELEGRAM_READ_TIMEOUT_SECONDS)
+            .get_updates_write_timeout(TELEGRAM_WRITE_TIMEOUT_SECONDS)
+            .get_updates_pool_timeout(TELEGRAM_POOL_TIMEOUT_SECONDS)
+            .build()
+        )
 
     def _session_key(self, chat_id: str) -> str:
         return f"{SESSION_KEY_PREFIX}:{chat_id}:session_id"
@@ -316,9 +337,9 @@ class AgentHubTelegramBot:
             )
             return 1
 
-        from telegram.ext import Application, CommandHandler, MessageHandler, filters
+        from telegram.ext import CommandHandler, MessageHandler, filters
 
-        application = Application.builder().token(str(token)).build()
+        application = self._build_application(str(token))
         application.add_handler(CommandHandler("start", self.handle_start))
         application.add_handler(CommandHandler("status", self.handle_status))
         application.add_handler(CommandHandler("reset", self.handle_reset))
