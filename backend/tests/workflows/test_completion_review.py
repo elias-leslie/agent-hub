@@ -43,7 +43,7 @@ async def test_build_review_prompt_includes_closeout_and_ambiguity_rules() -> No
     prompt = await _build_review_prompt(
         completion_content="HEARTBEAT_OK — All residue resolved.",
         cleanup_status="ACTIONABLE-CLEANUP[1]\n- agent-hub | salvage | task-999",
-        workstream_inventory='- task-999 | state=completed_ready_for_closure | next=bash: st context task-999 then st done task-999 --admin --message "Completed work verified; task closed."',
+        workstream_inventory='- task-999 | state=completed_ready_for_closure | next=bash: st context task-999 && st done task-999 -m "Verified closeout."',
     )
 
     assert "Any `completed_ready_for_closure` item" in prompt

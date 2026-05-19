@@ -2018,8 +2018,8 @@ class TestGetWorkstreamInventory:
         assert "task-123" in result
         assert "state=completed_ready_for_closure" in result
         assert (
-            'bash: st context task-123 then st done task-123 --admin --message '
-            '"Completed work verified; task closed."'
+            'bash: st context task-123 && st done task-123 -m '
+            '"Verified closeout."'
             in result
         )
 
@@ -2049,10 +2049,47 @@ class TestGetWorkstreamInventory:
             result = await _get_workstream_inventory(provider="claude")
 
         assert (
-            'bash: st context task-123 then st done task-123 --admin --message '
-            '"Completed work verified; task closed."'
+            'bash: st context task-123 && st done task-123 -m '
+            '"Verified closeout."'
             in result
         )
+
+    @pytest.mark.asyncio
+    async def test_summarizes_excess_completed_closeout_lanes(self) -> None:
+        fake_rows = [
+            {
+                "session_id": f"sess-{idx}",
+                "agent_slug": "coder",
+                "project_id": "summitflow",
+                "external_id": f"task-{idx:02d}",
+                "current_branch": "main",
+                "status": "completed",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            }
+            for idx in range(8)
+        ]
+        fake_overview = "\n".join(
+            ["summitflow (8)"]
+            + [f"  * task-{idx:02d} pending Refactor" for idx in range(8)]
+        )
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ), patch(
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
+            return_value=fake_overview,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert result.count("&& st done task-") == 3
+        assert "completed_ready_for_closure summary" in result
+        assert "omitted=5" in result
+        assert "projects=summitflow:5" in result
+        assert "task-03" not in result
+        assert "task-07" not in result
 
     @pytest.mark.asyncio
     async def test_branch_only_completed_lane_still_recovers_task_id(self) -> None:
@@ -2082,8 +2119,8 @@ class TestGetWorkstreamInventory:
         assert "task-a3903361" in result
         assert "state=completed_ready_for_closure" in result
         assert (
-            'bash: st context task-a3903361 then st done task-a3903361 --admin --message '
-            '"Completed work verified; task closed."'
+            'bash: st context task-a3903361 && st done task-a3903361 -m '
+            '"Verified closeout."'
             in result
         )
 
@@ -2243,7 +2280,7 @@ class TestGetWorkstreamInventory:
         assert "idle=12m" in result
 
     @pytest.mark.asyncio
-    async def test_reports_mixed_lane_when_multiple_branches_active(self) -> None:
+    async def test_reports_mixed_lane_when_multiple_sessions_active(self) -> None:
         fake_rows = [
             {
                 "session_id": "sess-3",
@@ -2280,7 +2317,9 @@ class TestGetWorkstreamInventory:
 
         assert "task-777" in result
         assert "state=mixed" in result
-        assert "branches=2" in result
+        assert "branches=" not in result
+        assert "sessions=2" in result
+        assert "multiple active lanes" in result
         assert "cwd=/tmp/lanes/task-777-follow-up" in result or "cwd=/tmp/lanes/task-777-main" in result
 
     @pytest.mark.asyncio
@@ -2525,7 +2564,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "split/promotion cleanup; do not dispatch more implementation onto this task checkpoint"
+            == "multiple active lanes; run st pulse --gate and check leases before dispatch"
         )
         assert (
             _build_workstream_next_action(
@@ -2533,7 +2572,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "authoritative checkpoint recorded; avoid redispatch unless new facts contradict it"
+            == "authoritative session recorded; avoid redispatch unless new facts contradict it"
         )
         assert (
             _build_workstream_next_action(
@@ -2560,5 +2599,5 @@ class TestWorkstreamLaneContract:
                 task_id="task-6",
                 provider="claude",
             )
-            == 'bash: st context task-6 then st done task-6 --admin --message "Completed work verified; task closed."'
+            == 'bash: st context task-6 && st done task-6 -m "Verified closeout."'
         )

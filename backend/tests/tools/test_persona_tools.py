@@ -1904,14 +1904,13 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_falls_back_to_admin_close_when_checkpoint_is_missing(self):
+    async def test_reconcile_stops_when_checkpoint_is_missing(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             side_effect=[
                 "",
                 "ERROR No checkpoint found for task-42. Was it claimed?\n",
-                "Completed task task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -1936,7 +1935,10 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Completed task task-42" in result
+        assert "Reconcile stopped for task-42" in result
+        assert "direct task context" in result
+        assert "Do not admin-close it from session evidence" in result
+        assert mock_bash.await_count == 2
         assert mock_bash.await_args_list[0].args[0] == (
             "st -P summitflow exec-log task-42 -n 40 --debug"
         )
@@ -1944,20 +1946,15 @@ class TestManageTasks:
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow done task-42 --admin --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
 
     @pytest.mark.asyncio
-    async def test_reconcile_falls_back_to_admin_close_when_checkout_is_dirty(self):
+    async def test_reconcile_stops_when_checkpoint_is_dirty(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             side_effect=[
                 "",
-                "Claimed checkout has uncommitted changes.\n  Path: /tmp/checkout/task-42\nCommit or stash there before running st done.",
-                "Completed task task-42",
+                "Claimed checkpoint has uncommitted changes.\n  Path: /tmp/repo\n  Smart mode could not create a clean checkpoint.",
             ]
         )
         mock_db = AsyncMock()
@@ -1982,16 +1979,15 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Completed task task-42" in result
+        assert "Reconcile stopped for task-42" in result
+        assert "direct task context" in result
+        assert "Do not admin-close it from session evidence" in result
+        assert mock_bash.await_count == 2
         assert mock_bash.await_args_list[0].args[0] == (
             "st -P summitflow exec-log task-42 -n 40 --debug"
         )
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow done task-42 --admin --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
 
@@ -2045,7 +2041,7 @@ class TestManageTasks:
             side_effect=[
                 "",
                 (
-                    "PASS Main branch dirty, stashing changes before merge...\n"
+                    "PASS Main checkout dirty, stashing changes before finalization...\n"
                     "ERROR Diff gate blocked completion: No files changed vs base branch — "
                     "task has no code changes\n"
                     "  Use --skip-diff-gate for non-code tasks (docs, config).\n"
@@ -2099,7 +2095,7 @@ class TestManageTasks:
             side_effect=[
                 "",
                 (
-                    "PASS Main branch dirty, stashing changes before merge...\n"
+                    "PASS Main checkout dirty, stashing changes before finalization...\n"
                     "ERROR Diff gate blocked completion: No files changed vs base branch — "
                     "task has no code changes\n"
                 ),
@@ -2174,16 +2170,13 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_finalizes_after_admin_done_without_checkpoint_merge(self):
+    async def test_reconcile_stops_missing_checkpoint_before_cleanup(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             side_effect=[
                 "",
                 "ERROR No checkpoint found for task-42. Was it claimed?\n",
-                "Task task-42 completed without checkpoint merge.",
-                "TASK:task-42|completed|P2|refactor|SIMPLE",
-                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2208,18 +2201,13 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Task task-42 completed without checkpoint merge." in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Reconcile stopped for task-42" in result
+        assert "direct task context" in result
+        assert mock_bash.await_count == 2
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow done task-42 --admin --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
-        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_admin_closes_after_status_update_failure_recovery_hint(self):
@@ -2230,7 +2218,7 @@ class TestManageTasks:
                 "",
                 (
                     "PASS Task task-42 completed. Checkpoint removed.\n"
-                    "WARN Code merged but status update failed: "
+                    "WARN Work published but status update failed: "
                     "{\"error\":\"http_error\",\"message\":\"Invalid transition from 'pending' to 'completed'.\"}\n"
                     "  Recovery: st done task-42 --admin\n"
                 ),
