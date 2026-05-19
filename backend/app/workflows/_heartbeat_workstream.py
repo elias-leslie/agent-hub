@@ -9,7 +9,7 @@ Highest precedence first:
 1. retired - all observed lifecycle markers are retired
 2. reconciled - authoritative + superseded evidence exists for the same task session
 3. superseded - all observed lifecycle markers are superseded
-4. mixed - multiple active branches for the same task session
+4. mixed - multiple active lanes/sessions for the same task
 5. stale_active - active session exists but exceeds the stale age threshold
 6. active - live non-stale session exists
 7. completed_ready_for_closure - no active session remains and completed evidence exists
@@ -24,17 +24,20 @@ Automation boundary:
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 
 from app.services.ownership_lanes import idle_minutes_from_timestamps, infer_task_id
 from app.workflows._heartbeat_state import _STALE_ACTIVE_MINUTES
 
+_MAX_COMPLETED_CLOSEOUT_LINES = 3
+
 
 def _build_verify_then_close_action(task_id: str) -> str:
-    """Return shell-first closeout guidance for a completed task checkpoint."""
+    """Return shell-first closeout guidance for completed direct-main task work."""
     return (
-        f'bash: st context {task_id} then st done {task_id} --admin --message '
-        '"Completed work verified; task closed."'
+        f'bash: st context {task_id} && st done {task_id} -m '
+        '"Verified closeout."'
     )
 
 
@@ -51,7 +54,7 @@ def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
     statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
     active_rows = [row for row in rows if row.get("status") == "active"]
     completed_rows = [row for row in rows if row.get("status") == "completed"]
-    branches = {str(row["current_branch"]) for row in rows if row.get("current_branch")}
+    session_ids = {str(row["session_id"]) for row in rows if row.get("session_id")}
 
     if statuses == {"retired"}:
         return "retired"
@@ -59,7 +62,7 @@ def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
         return "reconciled"
     if statuses == {"superseded"}:
         return "superseded"
-    if len(active_rows) > 1 and len(branches) > 1:
+    if len(active_rows) > 1 and len(session_ids) > 1:
         return "mixed"
     if active_rows:
         freshest_active_idle = min(
@@ -104,9 +107,9 @@ def _build_workstream_next_action(
     if state == "stale_active":
         return _build_stale_active_action(project_id=project_id, task_id=task_id, provider=provider)
     if state == "mixed":
-        return "split/promotion cleanup; do not dispatch more implementation onto this task checkpoint"
+        return "multiple active lanes; run st pulse --gate and check leases before dispatch"
     if state == "reconciled":
-        return "authoritative checkpoint recorded; avoid redispatch unless new facts contradict it"
+        return "authoritative session recorded; avoid redispatch unless new facts contradict it"
     if state == "retired":
         return "retired_session_no_action"
     if state == "superseded":
@@ -235,7 +238,7 @@ def _build_lane_line(
         min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
         if active_rows else None
     )
-    branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
+    sessions = {str(r["session_id"]) for r in lane_rows if r.get("session_id")}
     agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
     ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
     working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
@@ -250,14 +253,38 @@ def _build_lane_line(
         parts.append(f"completed={completed_count}")
     if ws_statuses:
         parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
-    if branches:
-        parts.append(f"branches={len(branches)}")
-    if working_dirs:
+    if len(sessions) > 1:
+        parts.append(f"sessions={len(sessions)}")
+    if working_dirs and lane_state != "completed_ready_for_closure":
         parts.append(f"cwd={next(iter(sorted(working_dirs)))}")
-    if agents:
+    if agents and lane_state != "completed_ready_for_closure":
         parts.append(f"agents={','.join(sorted(agents))}")
     parts.append(f"next={next_action}")
     return " | ".join(parts)
+
+
+def _summarize_workstream_entries(
+    entries: list[tuple[str, str, str]],
+) -> list[str]:
+    """Keep closeout residue actionable without flooding heartbeat prompts."""
+    lines = ["Recent workstreams:"]
+    completed = [
+        entry for entry in entries
+        if entry[0] == "completed_ready_for_closure"
+    ]
+    lines.extend(line for state, _project_id, line in entries if state != "completed_ready_for_closure")
+    lines.extend(line for _state, _project_id, line in completed[:_MAX_COMPLETED_CLOSEOUT_LINES])
+    omitted = completed[_MAX_COMPLETED_CLOSEOUT_LINES:]
+    if omitted:
+        project_counts = Counter(project_id for _state, project_id, _line in omitted)
+        projects = ",".join(f"{project}:{count}" for project, count in sorted(project_counts.items()))
+        lines.append(
+            "- completed_ready_for_closure summary"
+            f" | omitted={len(omitted)}"
+            f" | projects={projects}"
+            ' | next=repeat st context <task-id> && st done <task-id> -m "Verified closeout."'
+        )
+    return lines
 
 
 def _build_workstream_lines(
@@ -269,7 +296,7 @@ def _build_workstream_lines(
     provider: str | None,
 ) -> list[str]:
     """Build per-lane inventory lines for the workstream section."""
-    lines = ["Recent workstreams:"]
+    entries: list[tuple[str, str, str]] = []
     for (project_id, lane_key), lane_rows in sorted(grouped.items()):
         task_id = _infer_lane_task_id(lane_rows)
         lane_state = _classify_workstream_lane(lane_rows)
@@ -278,8 +305,12 @@ def _build_workstream_lines(
                 task_id,
                 reason="reconcile stale task state only after verification",
             )
-            lines.append(
-                f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+            entries.append(
+                (
+                    "stale_running_task",
+                    project_id,
+                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}",
+                )
             )
             stale_keys.discard((project_id, task_id))
             continue
@@ -291,14 +322,22 @@ def _build_workstream_lines(
             queue_truth_available=queue_truth_available,
         ):
             continue
-        lines.append(_build_lane_line(project_id, lane_key, task_id, lane_state, lane_rows, provider))
+        entries.append((
+            lane_state,
+            project_id,
+            _build_lane_line(project_id, lane_key, task_id, lane_state, lane_rows, provider),
+        ))
     for project_id, task_id in sorted(stale_keys):
         if (project_id, task_id) not in grouped:
             next_a = _build_verify_then_inspect_action(
                 task_id,
                 reason="reconcile stale task state only after verification",
             )
-            lines.append(
-                f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+            entries.append(
+                (
+                    "stale_running_task",
+                    project_id,
+                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}",
+                )
             )
-    return lines
+    return _summarize_workstream_entries(entries)

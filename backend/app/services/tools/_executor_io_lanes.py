@@ -30,7 +30,7 @@ _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
 _RETIRE_NOTE = "Retired via task lane retire action"
 _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
 _NO_CODE_CHANGES_PHRASE = "no files changed vs base branch"
-_STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
+_STATUS_UPDATE_FAILED_PHRASE = "work published but status update failed"
 _ADMIN_RECOVERY_PHRASE = "recovery: st done"
 _EXEC_LOG_RECENT_MINUTES = 5
 _TASK_SESSION_LOOKBACK_HOURS = 48
@@ -355,16 +355,22 @@ async def _retire_stale_active_sessions(
 
 
 def _needs_admin_close(result: str) -> bool:
-    """Return True when the done-command output requires an admin-close retry."""
+    """Return True when `st done` explicitly prints an admin recovery hint."""
+    lowered = result.lower()
+    return (
+        _STATUS_UPDATE_FAILED_PHRASE in lowered
+        and _ADMIN_RECOVERY_PHRASE in lowered
+        and "--admin" in lowered
+    )
+
+
+def _needs_manual_closeout(result: str) -> bool:
+    """Return True when session evidence is insufficient for autonomous closeout."""
     lowered = result.lower()
     return (
         (_MISSING_CHECKPOINT_PHRASE.lower() in lowered and "was it claimed?" in lowered)
         or "claimed checkout has uncommitted changes." in lowered
-        or (
-            _STATUS_UPDATE_FAILED_PHRASE in lowered
-            and _ADMIN_RECOVERY_PHRASE in lowered
-            and "--admin" in lowered
-        )
+        or "claimed checkpoint has uncommitted changes." in lowered
     )
 
 
@@ -374,7 +380,7 @@ async def _cleanup_terminal_residue(
     project_id: str | None,
     result: str,
 ) -> str:
-    """Run safe cleanup when result contains terminal merge-residue text."""
+    """Run safe cleanup when result contains terminal closeout-residue text."""
     lowered = result.lower()
     if (
         "cannot merge - task" not in lowered
@@ -439,7 +445,7 @@ async def _dispatch_done(
     message: str,
     sessions: list[Session],
 ) -> str:
-    """Run `st done` and handle result, including admin-close and no-op residue paths."""
+    """Run `st done` and handle explicit recovery and no-op residue paths."""
     cmd = _st_cmd(f"done {shlex.quote(task_id)} --message {shlex.quote(message)}", project_id)
     result = await bash_fn(cmd)
     if "Task not ready to complete:" in result:
@@ -451,6 +457,13 @@ async def _dispatch_done(
         )
     if _NO_CODE_CHANGES_PHRASE in result.lower():
         return await _retire_noop_lane(bash_fn, task_id, project_id, sessions, result)
+    if _needs_manual_closeout(result):
+        return (
+            f"Reconcile stopped for {task_id}: SummitFlow needs direct task context "
+            "before closeout can continue. Do not admin-close it from session evidence. "
+            "Inspect task context/verification and keep the task open.\n"
+            f"Original result: {result.strip()}"
+        )
     if _needs_admin_close(result):
         admin_cmd = _st_cmd(
             f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
