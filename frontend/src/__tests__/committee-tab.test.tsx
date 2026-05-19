@@ -80,8 +80,11 @@ describe('committee tab', () => {
     expect(screen.getByText('Market Prediction Committee')).toBeInTheDocument()
     expect(screen.getByLabelText('Macro seat model')).toHaveValue('')
 
+    // Only routable models surface in the seat dropdown — non-routable
+    // entries like Claude (which agent-hub intentionally does not route)
+    // are filtered out. codexModel is routable in the fixture.
     fireEvent.change(screen.getByLabelText('Macro seat model'), {
-      target: { value: 'claude-opus-4-7' },
+      target: { value: 'codex/gpt-5.5' },
     })
 
     expect(updateField).toHaveBeenCalledWith(
@@ -91,7 +94,7 @@ describe('committee tab', () => {
           seats: expect.arrayContaining([
             expect.objectContaining({
               key: 'macro',
-              model_id: 'claude-opus-4-7',
+              model_id: 'codex/gpt-5.5',
             }),
           ]),
         }),
