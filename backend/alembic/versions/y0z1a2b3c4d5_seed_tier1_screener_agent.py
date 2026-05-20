@@ -6,7 +6,7 @@ Create Date: 2026-05-18
 
 Portfolio-AI's L3 fan-out previously fired the full deep committee (~15 LLM
 calls/stock) on the scanner's full top-25. The new shape adds a Tier-1
-cheap pre-screen: ~1 LLM call per stock × 25, then the deep committee
+cheap pre-screen: ~1 LLM call per stock x 25, then the deep committee
 fires only on the top 5-8 by (conviction, score).
 
 This migration registers the ``tier1-screener-v1`` agent so the existing
