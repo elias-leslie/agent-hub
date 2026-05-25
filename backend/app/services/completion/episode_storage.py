@@ -5,19 +5,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.services.completion.auto_thinking import extract_text_content
+from app.services.completion.types import CompletionSource
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.ingestion_config import CHAT_STREAM
 from app.services.memory.service import MemorySource
 
 logger = logging.getLogger(__name__)
-
-
-class CompletionSource:
-    """Source type for completion requests."""
-
-    CHAT = "chat"
-    VOICE = "voice"
-    STREAM = "stream"
 
 
 async def store_episode(
