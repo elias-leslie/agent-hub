@@ -26,6 +26,7 @@ from app.services.memory.context_builder_tiers import (
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
 from app.services.memory.context_profiles import (
     _PROFILE_POLICY_LIMITS,
+    MemoryConsumerProfile,
     invalidate_policy_cache,
     resolve_consumer_profile,
 )
@@ -33,6 +34,7 @@ from app.services.memory.project_index_context import format_project_index_conte
 from app.services.memory.repository import MemoryRepository
 from app.services.memory.service import MemoryScope, MemorySearchResult
 from app.services.memory.settings import get_memory_settings
+from app.services.memory.st_usage_memory import decay_score_by_surface
 from app.services.memory.tool_capability_context import format_tool_capability_context
 from app.services.project_permission_service import get_visible_tools_for_project
 
@@ -120,6 +122,10 @@ class RuntimeContextPreviewResponse(BaseModel):
     # can label them; total_tokens already accounts for them.
     project_index: str = ""
     tool_capabilities: str = ""
+    # Terse U-shaped footer restating the top mandates. Rendered last so the
+    # highest-priority rules bookend the payload (start + end). total_tokens
+    # already accounts for it.
+    non_negotiables: str = ""
 
 
 @dataclass(frozen=True)
@@ -254,8 +260,15 @@ async def render_runtime_context(
         project_id=project_id,
         task_type=task_type,
     )
+    non_negotiables = _render_non_negotiables(rendered_blocks)
+    # Order: project index -> mandates/guardrails -> tool capabilities ->
+    # non-negotiables footer. Mandates render before the (larger) tool catalog
+    # so the rules the model must follow are never the first thing truncated,
+    # and the footer restates the top few (U-shaped attention).
     full_rendered = "\n".join(
-        chunk for chunk in (project_index_block, tool_capability_block, rendered) if chunk
+        chunk
+        for chunk in (project_index_block, rendered, tool_capability_block, non_negotiables)
+        if chunk
     )
 
     settings = await get_memory_settings(db)
@@ -272,6 +285,7 @@ async def render_runtime_context(
         overrides=[_override_response(row) for row in override_rows],
         project_index=project_index_block,
         tool_capabilities=tool_capability_block,
+        non_negotiables=non_negotiables,
     )
 
 
@@ -294,11 +308,21 @@ async def _compute_auxiliary_blocks(
         await get_visible_tools_for_project(project_id) if project_id else frozenset()
     )
     bash_available = ("bash" in visible_tool_names) if project_id else None
+    # Usage-weighted adaptive tool selection for startup: score the project's st
+    # telemetry and let the manifest curate floor + relevant surfaces. Any failure
+    # yields no scores, and format_tool_capability_context falls back to full.
+    tool_scores: dict[str, float] | None = None
+    if project_id and resolve_consumer_profile(consumer_profile) == MemoryConsumerProfile.AGENT_STARTUP:
+        try:
+            tool_scores = await decay_score_by_surface(project_id) or None
+        except Exception:
+            tool_scores = None
     tool_capability_block = format_tool_capability_context(
         consumer_profile=consumer_profile,
         task_type=task_type,
         project_id=project_id,
         bash_available=bash_available,
+        tool_scores=tool_scores,
     )
     return project_index_block, tool_capability_block
 
@@ -630,6 +654,35 @@ async def apply_tier_overrides_to_context(
         target = by_id.get(ovr.source_id)
         if target is not None:
             apply_render_tier(target, ovr.tier_override, "user_override")
+
+
+# How many top mandates the non-negotiables footer restates. Terse by design —
+# this is cheap reinforcement, not a second full copy of the mandate union.
+_NON_NEGOTIABLE_LIMIT = 10
+
+
+def _render_non_negotiables(
+    blocks: list[RuntimeContextBlockResponse],
+    limit: int = _NON_NEGOTIABLE_LIMIT,
+) -> str:
+    """Restate the top mandates as a terse footer (U-shaped attention).
+
+    `blocks` arrive pre-sorted by position, so the first mandates are the
+    highest-priority ones. Emits citation + one-line summary only.
+    """
+    lines: list[str] = []
+    for block in blocks:
+        if block.source_type != "memory" or block.tier != "mandate":
+            continue
+        summary = (block.title or "").strip()
+        if not summary:
+            continue
+        lines.append(f"- [M:{block.source_id[:8]}] {summary}")
+        if len(lines) >= limit:
+            break
+    if not lines:
+        return ""
+    return "## Non-negotiables (top mandates restated)\n" + "\n".join(lines)
 
 
 def _render_blocks(blocks: list[RuntimeContextBlockResponse]) -> str:

@@ -88,6 +88,7 @@ class TestDemotionCandidates:
         mock_mem.helpful_count = 0
         mock_mem.harmful_count = 0
         mock_mem.utility_score = 0.01
+        mock_mem.lifecycle_score = 0.05
         mock_mem.created_at = datetime.now(UTC) - timedelta(days=30)
 
         mock_db = AsyncMock()
@@ -107,3 +108,97 @@ class TestDemotionCandidates:
         # The statement should have been constructed with tier.in_([1, 2, 3])
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         assert "3" in compiled
+
+
+def _mock_memory(**overrides):
+    """Build a MagicMock memory with neutral defaults for tier-decision tests."""
+    mem = MagicMock()
+    mem.id = uuid4()
+    mem.name = "mem"
+    mem.injection_tier = "reference"
+    mem.tier = 3
+    mem.status = "active"
+    mem.pinned = False
+    mem.loaded_count = 250
+    mem.referenced_count = 400  # ghost ratio well below threshold
+    mem.helpful_count = 0
+    mem.harmful_count = 0
+    mem.utility_score = 0.5
+    mem.lifecycle_score = 0.5
+    mem.created_at = datetime.now(UTC) - timedelta(days=30)
+    for key, value in overrides.items():
+        setattr(mem, key, value)
+    return mem
+
+
+async def _run_demotion(mem):
+    from app.services.memory._repo_tier import TierRepository
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [mem]
+    mock_db.execute.return_value = mock_result
+    return await TierRepository().find_demotion_candidates(db=mock_db)
+
+
+async def _run_promotion(mem):
+    from app.services.memory._repo_tier import TierRepository
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [mem]
+    mock_db.execute.return_value = mock_result
+    return await TierRepository().find_promotion_candidates(db=mock_db)
+
+
+class TestLifecycleScoreDecision:
+    """The demote/promote decision keys on lifecycle_score + per-tier thresholds."""
+
+    @pytest.mark.asyncio
+    async def test_demotion_via_low_lifecycle_score(self):
+        # reference demotion_threshold is 0.35; 0.05 is below it.
+        mem = _mock_memory(lifecycle_score=0.05)
+        candidates = await _run_demotion(mem)
+        assert len(candidates) == 1
+        assert candidates[0]["reason"].startswith("lifecycle_score=")
+
+    @pytest.mark.asyncio
+    async def test_no_demotion_when_lifecycle_score_healthy(self):
+        mem = _mock_memory(lifecycle_score=0.9)
+        assert await _run_demotion(mem) == []
+
+    @pytest.mark.asyncio
+    async def test_healthy_lifecycle_blocks_ghost_demotion(self):
+        # Always-injected mandate: huge ghost ratio but a healthy lifecycle score
+        # must NOT be demoted (lifecycle is authoritative, ghost is structural).
+        mem = _mock_memory(
+            injection_tier="mandate", tier=1,
+            loaded_count=5000, referenced_count=0, lifecycle_score=0.85,
+        )
+        assert await _run_demotion(mem) == []
+
+    @pytest.mark.asyncio
+    async def test_harmful_demotes_even_when_lifecycle_healthy(self):
+        mem = _mock_memory(lifecycle_score=0.95, harmful_count=5)
+        candidates = await _run_demotion(mem)
+        assert len(candidates) == 1
+        assert candidates[0]["reason"].startswith("harmful_count=")
+
+    @pytest.mark.asyncio
+    async def test_demotion_skipped_when_lifecycle_score_none(self):
+        # None must never demote on score alone (guard against TypeError).
+        mem = _mock_memory(lifecycle_score=None)
+        assert await _run_demotion(mem) == []
+
+    @pytest.mark.asyncio
+    async def test_promotion_via_high_lifecycle_score(self):
+        # reference promotion_threshold is 0.65; 0.9 clears it; helpful_count below 5.
+        mem = _mock_memory(lifecycle_score=0.9)
+        candidates = await _run_promotion(mem)
+        assert len(candidates) == 1
+        assert candidates[0]["reason"].startswith("lifecycle_score=")
+
+    @pytest.mark.asyncio
+    async def test_no_promotion_when_lifecycle_score_none(self):
+        mem = _mock_memory(lifecycle_score=None, helpful_count=0)
+        assert await _run_promotion(mem) == []

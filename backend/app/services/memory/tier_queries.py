@@ -26,14 +26,13 @@ async def find_demotion_candidates(
     grace_period_hours: int,
     min_age_days: int,
     harmful_threshold: int,
-    demotion_threshold: float,
     ghost_ratio_threshold: float,
 ) -> list[dict[str, Any]]:
     """
-    Find episodes eligible for demotion based on low utility or zombie status.
+    Find episodes eligible for demotion based on low lifecycle score or zombie status.
 
     Criteria:
-    1. Low utility: utility_score < demotion_threshold, loaded >= min_loads, age >= min_age_days
+    1. Low score: lifecycle_score < per-tier demotion threshold, loaded >= min_loads, age >= min_age_days
     2. Zombie: ghost_ratio > ghost_ratio_threshold (high loads, no references), neutral rating
     3. Harmful: harmful_count >= harmful_threshold
 
@@ -52,7 +51,6 @@ async def find_demotion_candidates(
             grace_period_hours=grace_period_hours,
             min_age_days=min_age_days,
             harmful_threshold=harmful_threshold,
-            demotion_threshold=demotion_threshold,
             ghost_ratio_threshold=ghost_ratio_threshold,
         )
 
@@ -88,13 +86,12 @@ async def find_promotion_candidates(
     min_refs: int,
     min_age_days: int,
     helpful_threshold: int,
-    promotion_threshold: float,
 ) -> list[dict[str, Any]]:
     """
-    Find episodes eligible for promotion based on high utility.
+    Find episodes eligible for promotion based on high lifecycle score.
 
     Criteria:
-    - utility_score > promotion_threshold, referenced >= min_refs, age >= min_age_days
+    - lifecycle_score >= per-tier promotion threshold, referenced >= min_refs, age >= min_age_days
     - OR helpful_count >= helpful_threshold
 
     Returns:
@@ -107,7 +104,6 @@ async def find_promotion_candidates(
             min_refs=min_refs,
             min_age_days=min_age_days,
             helpful_threshold=helpful_threshold,
-            promotion_threshold=promotion_threshold,
         )
 
         # Normalize the candidate dicts to match the expected format
