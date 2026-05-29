@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
+from app.services.credential_upsert import reset_provider_cooldown_after_credential_change
 from app.services.system_credentials import is_system_credential_provider
 from app.storage.credentials import (
     EncryptionError,
@@ -134,6 +135,7 @@ async def create_credential(
             value=request.value,
         )
         get_credential_manager().set(request.provider, request.credential_type, request.value)
+        await reset_provider_cooldown_after_credential_change(request.provider, request.credential_type)
     except EncryptionError as e:
         raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
 
@@ -201,6 +203,7 @@ async def update_credential(
         cred_mgr.replace_value(credential.provider, credential.credential_type, old_value, request.value)
     else:
         cred_mgr.set(credential.provider, credential.credential_type, request.value)
+    await reset_provider_cooldown_after_credential_change(credential.provider, credential.credential_type)
 
     return _build_credential_response(credential, mask_value(request.value))
 
