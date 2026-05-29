@@ -82,6 +82,11 @@ async def get_provider_rate_limit_cooldown_remaining(provider: str) -> float | N
     return await _RATE_LIMIT_BREAKER.get_cooldown_remaining(provider)
 
 
+async def reset_provider_rate_limit_cooldown(provider: str) -> None:
+    """Clear provider cooldown after credentials or auth state are repaired."""
+    await _RATE_LIMIT_BREAKER.reset_circuit(provider)
+
+
 async def _active_cooldown_error(provider: str) -> RateLimitError | None:
     """Return a synthetic RateLimitError when a provider cooldown is still active."""
     remaining = await get_provider_rate_limit_cooldown_remaining(provider)
