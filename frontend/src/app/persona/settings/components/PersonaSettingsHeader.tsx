@@ -63,14 +63,6 @@ export function PersonaSettingsHeader({
           </div>
 
           <div className="page-toolbar">
-            <Link
-              href="/persona/arena"
-              className="button-secondary"
-              title={`Open ${displayName} Arena`}
-            >
-              <FlaskConical className="h-4 w-4" />
-              Arena
-            </Link>
             {saveSuccess && !hasChanges && (
               <span className="page-pill border-emerald-500/20 bg-emerald-500/10 text-emerald-200">
                 <CheckCircle2 className="h-3.5 w-3.5" />

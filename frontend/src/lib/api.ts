@@ -37,7 +37,6 @@ export {
 } from './api/agent-detail'
 // Re-export all agents-related exports (list & metrics)
 export {
-  fetchAgentBenchmarkDashboard,
   fetchAgentBenchmarkRunDetail,
   fetchAgentMetrics,
   fetchAgents,
@@ -50,7 +49,6 @@ export type {
   TruncationMetricsResponse,
 } from './api/analytics'
 export { fetchCosts, fetchTruncations } from './api/analytics'
-export { fetchArenaOverview } from './api/arena'
 // Re-export all budget-related exports
 export type {
   BudgetSettingsUpdate,

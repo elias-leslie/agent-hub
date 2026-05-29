@@ -53,3 +53,50 @@ export function formatRelativeTime(dateStr: string | Date | null): string {
   if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+
+// Relative time tuned for benchmark/run timestamps: coarser buckets and a
+// "no runs yet" fallback. Kept distinct from formatRelativeTime above, whose
+// finer-grained output is depended on by many other surfaces.
+export function formatRelativeAge(iso: string | null | undefined): string {
+  if (!iso) {
+    return 'No completed runs yet'
+  }
+  const value = new Date(iso).getTime()
+  if (Number.isNaN(value)) {
+    return 'Unknown'
+  }
+  const diffMs = Date.now() - value
+  const diffHours = Math.max(Math.round(diffMs / (1000 * 60 * 60)), 0)
+  if (diffHours < 1) {
+    return 'Less than an hour ago'
+  }
+  if (diffHours < 24) {
+    return `${diffHours}h ago`
+  }
+  const diffDays = Math.round(diffHours / 24)
+  if (diffDays < 30) {
+    return `${diffDays}d ago`
+  }
+  return new Date(iso).toLocaleDateString()
+}
+
+export function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return 'Pending'
+  }
+  return `${value.toFixed(1)}%`
+}
+
+export function summarizeIssue(
+  value: string | null | undefined,
+  maxLength: number = 140,
+): string {
+  if (!value) {
+    return 'No issue captured'
+  }
+  const compact = value.replace(/\s+/g, ' ').trim()
+  if (compact.length <= maxLength) {
+    return compact
+  }
+  return `${compact.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+}

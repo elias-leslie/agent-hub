@@ -261,8 +261,7 @@ export default function PromptEditPage() {
                 <h2 className="section-heading mt-2">Source Content</h2>
                 <p className="section-copy mt-2 max-w-3xl">
                   Edit the prompt body, operator-facing description, and change
-                  reason that downstream Arena and benchmark runs use for
-                  attribution.
+                  reason that downstream benchmark runs use for attribution.
                 </p>
               </div>
               <div className="space-y-5 px-5 py-5 lg:px-6 lg:py-6">

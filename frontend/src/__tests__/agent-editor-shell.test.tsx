@@ -64,7 +64,7 @@ const agent: Agent = {
 }
 
 describe('agent editor shell', () => {
-  it('links the header chat and Arena actions to dedicated agent routes', () => {
+  it('links the header chat action to the dedicated agent route', () => {
     render(
       <AgentEditorHeader
         agent={agent}
@@ -80,10 +80,6 @@ describe('agent editor shell', () => {
     expect(screen.getByRole('link', { name: 'Chat' })).toHaveAttribute(
       'href',
       '/agents/coder/chat',
-    )
-    expect(screen.getByRole('link', { name: 'Arena' })).toHaveAttribute(
-      'href',
-      '/arena/coder',
     )
     expect(
       screen.getByRole('button', { name: 'Back to agents' }),

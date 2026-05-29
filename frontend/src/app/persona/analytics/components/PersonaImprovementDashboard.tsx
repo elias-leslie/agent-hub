@@ -14,22 +14,22 @@ import {
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { ChartCard } from '@/app/agents/[slug]/analytics/components/ChartCard'
 import type {
   AgentBenchmarkAttemptDetail,
   AgentBenchmarkRunDetail,
-} from '@/app/agents/[slug]/analytics/types'
-import {
-  formatPercent,
-  formatRelativeTime,
-  summarizeArenaIssue,
-} from '@/app/arena/utils'
+} from '@/app/agents/lib/types'
+import { ChartCard } from '@/components/charts/ChartCard'
 import {
   fetchAgentBenchmarkRunDetail,
   fetchPersonaImprovementDashboard,
   updatePersonaImprovementSchedule,
 } from '@/lib/api'
-import { formatTokens } from '@/lib/formatters'
+import {
+  formatPercent,
+  formatRelativeAge,
+  formatTokens,
+  summarizeIssue,
+} from '@/lib/formatters'
 import { usePersonaDisplayName } from '../../hooks/usePersonaDisplayName'
 import type {
   PersonaImprovementDashboard as PersonaImprovementDashboardData,
@@ -295,7 +295,7 @@ function RecentRunsSection({
                       {run.run_kind.replaceAll('_', ' ')}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {formatRelativeTime(run.completed_at)}
+                      {formatRelativeAge(run.completed_at)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
@@ -363,9 +363,9 @@ function RecentRunsSection({
 
                 <p className="mt-4 text-xs text-slate-400">
                   {run.experiment_decision_reason
-                    ? summarizeArenaIssue(run.experiment_decision_reason, 120)
+                    ? summarizeIssue(run.experiment_decision_reason, 120)
                     : run.top_failure_detail
-                      ? summarizeArenaIssue(run.top_failure_detail, 120)
+                      ? summarizeIssue(run.top_failure_detail, 120)
                       : 'No active failure signature in this run.'}
                 </p>
 
@@ -452,9 +452,7 @@ function RiskSection({
               </div>
               <p className="mt-2 text-sm text-slate-300">{item.summary}</p>
               <p className="mt-2 text-xs text-slate-500">
-                {item.detail
-                  ? summarizeArenaIssue(item.detail, 140)
-                  : 'No detail'}
+                {item.detail ? summarizeIssue(item.detail, 140) : 'No detail'}
               </p>
             </div>
           ))}
@@ -484,11 +482,11 @@ function RiskSection({
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 {item.summary_oneliner
-                  ? summarizeArenaIssue(item.summary_oneliner, 120)
+                  ? summarizeIssue(item.summary_oneliner, 120)
                   : 'No summary'}
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                seen {formatRelativeTime(item.completed_at)}
+                seen {formatRelativeAge(item.completed_at)}
               </p>
             </div>
           ))}
@@ -506,10 +504,10 @@ function RiskSection({
                 </span>
               </div>
               <p className="mt-2 text-sm text-slate-300">
-                {summarizeArenaIssue(item.failure_detail, 160)}
+                {summarizeIssue(item.failure_detail, 160)}
               </p>
               <p className="mt-2 text-xs text-slate-500">
-                last seen {formatRelativeTime(item.last_seen_at)}
+                last seen {formatRelativeAge(item.last_seen_at)}
               </p>
             </div>
           ))}
@@ -835,7 +833,7 @@ export function PersonaImprovementDashboard() {
             <div className="mt-5 flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300 ring-1 ring-slate-700">
                 last run{' '}
-                {formatRelativeTime(dashboard.overview.latest_completed_at)}
+                {formatRelativeAge(dashboard.overview.latest_completed_at)}
               </span>
               {latestLabRun ? (
                 <span className="rounded-full bg-emerald-950/20 px-3 py-1 text-emerald-300 ring-1 ring-emerald-900/60">
@@ -912,7 +910,7 @@ export function PersonaImprovementDashboard() {
                   </dt>
                   <dd className="mt-1 font-medium text-slate-100">
                     {dashboard.schedule.enabled
-                      ? formatRelativeTime(dashboard.schedule.next_run_at)
+                      ? formatRelativeAge(dashboard.schedule.next_run_at)
                       : 'Paused'}
                   </dd>
                 </div>
@@ -927,7 +925,7 @@ export function PersonaImprovementDashboard() {
               </dl>
 
               <p className="text-xs text-slate-500">
-                Last run {formatRelativeTime(dashboard.schedule.last_run_at)} ·
+                Last run {formatRelativeAge(dashboard.schedule.last_run_at)} ·
                 total runs {dashboard.schedule.run_count} · overlap skips
                 instead of stacking
               </p>

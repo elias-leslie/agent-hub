@@ -10,12 +10,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-
-import { ChartCard } from '@/app/agents/[slug]/analytics/components/ChartCard'
 import type {
   PersonaHeartbeatFieldTrendPoint,
   PersonaImprovementTrendPoint,
 } from '@/app/persona/analytics/types'
+import { ChartCard } from '@/components/charts/ChartCard'
 import { getPersonaDisplayName } from '../../utils/displayName'
 
 interface PersonaImprovementTrendSectionProps {
