@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   Bot,
   Eye,
-  FlaskConical,
   Loader2,
   Menu,
   MessageSquare,
@@ -107,10 +106,6 @@ export function AgentEditorHeader({
             >
               <MessageSquare className="h-4 w-4" />
               Chat
-            </Link>
-            <Link href={`/arena/${agent.slug}`} className="button-secondary">
-              <FlaskConical className="h-4 w-4" />
-              Arena
             </Link>
             <button
               type="button"

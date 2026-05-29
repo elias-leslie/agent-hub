@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PersonaAutosaveState } from '@/app/persona/hooks/usePersona'
 import { IdentityTab } from '@/app/persona/settings/components/IdentityTab'
-import { PersonaSettingsHeader } from '@/app/persona/settings/components/PersonaSettingsHeader'
 import { SessionLimitsTab } from '@/app/persona/settings/components/SessionLimitsTab'
 import { VoiceHeartbeatTab } from '@/app/persona/settings/components/VoiceHeartbeatTab'
 import type { Persona } from '@/types/persona'
@@ -346,23 +345,5 @@ describe('persona settings tabs', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('Tools: not supported')).toBeInTheDocument()
-  })
-
-  it('links Persona settings back to Arena', () => {
-    render(
-      <PersonaSettingsHeader
-        personaName="Avery"
-        hasChanges={false}
-        isSaving={false}
-        saveSuccess={false}
-        saveError={false}
-        onSave={vi.fn()}
-      />,
-    )
-
-    expect(screen.getByTitle('Open Avery Arena')).toHaveAttribute(
-      'href',
-      '/persona/arena',
-    )
   })
 })

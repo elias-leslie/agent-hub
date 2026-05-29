@@ -4,7 +4,6 @@ import {
   Brain,
   BrainCircuit,
   Cpu,
-  FlaskConical,
   Gauge,
   History,
   LayoutDashboard,
@@ -47,12 +46,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Monitoring',
     icon: Activity,
     description: 'Requests & metrics',
-  },
-  {
-    href: '/arena',
-    label: 'Arena',
-    icon: FlaskConical,
-    description: 'Benchmark command center',
   },
   {
     href: '/sessions',

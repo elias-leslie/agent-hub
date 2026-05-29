@@ -299,7 +299,7 @@ class AgentBenchmarkModelSummary(BaseModel):
 
 
 class AgentBenchmarkSuiteSummary(BaseModel):
-    """One benchmark suite summarized for Arena views."""
+    """One benchmark suite summarized for the agent benchmark dashboard."""
 
     suite_id: str
     run_count: int = 0

@@ -8,7 +8,6 @@ from app.api.admin_telegram import router as admin_telegram_router
 from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
-from app.api.arena import router as arena_router
 from app.api.compactness import router as compactness_router
 from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
@@ -44,7 +43,6 @@ from app.api.work_chats import router as work_chats_router
 
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
-router.include_router(arena_router)  # Has its own prefix /arena and tags
 router.include_router(analytics_router)  # Has its own prefix /analytics
 router.include_router(dashboard_stats_router)  # Has its own prefix /dashboard
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
