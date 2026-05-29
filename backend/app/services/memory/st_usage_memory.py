@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import shlex
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,15 @@ logger = logging.getLogger(__name__)
 _LOOKBACK = timedelta(days=14)
 _QUERY_LIMIT = 250
 _CACHE_TTL_SECONDS = 60
+
+# Adaptive tool-density scoring (decay_score_by_surface): ~120d horizon with a
+# 21-day half-life; per-project, falling back to global telemetry when a project
+# has too few events to score on its own.
+_SCORE_LOOKBACK = timedelta(days=120)
+_SCORE_HALF_LIFE_DAYS = 21.0
+_SCORE_FETCH_LIMIT = 5000
+_SCORE_MIN_PROJECT_EVENTS = 200
+_SCORE_CACHE_TTL_SECONDS = 300
 _GLOBAL_OPTIONS_WITH_VALUE = {"-P", "--project"}
 _HELP_FLAGS = {"-h", "--help"}
 
@@ -243,6 +253,7 @@ async def _fetch_recent_st_command_rows(
     *,
     project_id: str | None,
     since: datetime,
+    limit: int = _QUERY_LIMIT,
 ) -> list[tuple[Any, str | None, datetime]]:
     tool_input_text = SessionEvent.tool_input.cast(Text)
     content_text = SessionEvent.content.cast(Text)
@@ -258,7 +269,7 @@ async def _fetch_recent_st_command_rows(
             ),
         )
         .order_by(SessionEvent.created_at.desc())
-        .limit(_QUERY_LIMIT)
+        .limit(limit)
     )
     if project_id:
         stmt = stmt.join(Session, Session.id == SessionEvent.session_id).where(
@@ -303,3 +314,76 @@ async def get_recent_st_usage_memory(
 
     _CACHE[key] = (now, memory)
     return memory
+
+
+_SCORE_CACHE: dict[str | None, tuple[datetime, dict[str, float]]] = {}
+
+
+def _decay_scores_from_rows(
+    rows: list[tuple[Any, str | None, datetime]],
+    *,
+    now: datetime,
+) -> tuple[dict[str, float], int]:
+    """Sum time-decayed weights per parsed st command key. Returns (weights, parsed_count)."""
+    weights: dict[str, float] = {}
+    parsed = 0
+    for command, created_at in _extract_commands_from_rows(rows):
+        spec = parse_st_command(command)
+        if spec is None or spec.is_help:
+            continue
+        parsed += 1
+        age_days = max((now - created_at).total_seconds() / 86400, 0.0)
+        weight = math.pow(0.5, age_days / _SCORE_HALF_LIFE_DAYS)
+        weights[spec.key] = weights.get(spec.key, 0.0) + weight
+    return weights, parsed
+
+
+async def decay_score_by_surface(
+    project_id: str | None,
+    *,
+    db: AsyncSession | None = None,
+    now: datetime | None = None,
+) -> dict[str, float]:
+    """Return 0-100 usage scores per st command key, time-decayed (21d half-life).
+
+    Per-project over a ~120d horizon, falling back to global telemetry when the
+    project has fewer than _SCORE_MIN_PROJECT_EVENTS parsed events. Keys match
+    `parse_st_command` output ("db query", "pulse"); the manifest maps these to
+    surfaces. Returns {} on any failure (caller falls back to full density).
+    """
+    now = now or datetime.now(UTC)
+    cached = _SCORE_CACHE.get(project_id)
+    if cached and (now - cached[0]).total_seconds() < _SCORE_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    since = now - _SCORE_LOOKBACK
+
+    async def _scores_with(session: AsyncSession) -> dict[str, float]:
+        rows = await _fetch_recent_st_command_rows(
+            session, project_id=project_id, since=since, limit=_SCORE_FETCH_LIMIT
+        )
+        weights, parsed = _decay_scores_from_rows(rows, now=now)
+        if project_id and parsed < _SCORE_MIN_PROJECT_EVENTS:
+            global_rows = await _fetch_recent_st_command_rows(
+                session, project_id=None, since=since, limit=_SCORE_FETCH_LIMIT
+            )
+            weights, _ = _decay_scores_from_rows(global_rows, now=now)
+        if not weights:
+            return {}
+        peak = max(weights.values())
+        if peak <= 0:
+            return {}
+        return {key: round(value / peak * 100.0, 2) for key, value in weights.items()}
+
+    try:
+        if db is not None:
+            scores = await _scores_with(db)
+        else:
+            async with async_session() as owned_db:
+                scores = await _scores_with(owned_db)
+    except Exception as exc:
+        logger.debug("Failed to compute decay scores by surface: %s", exc)
+        return {}
+
+    _SCORE_CACHE[project_id] = (now, scores)
+    return scores

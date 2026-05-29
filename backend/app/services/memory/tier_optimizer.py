@@ -34,8 +34,8 @@ GRACE_PERIOD_HOURS = 48
 GHOST_RATIO_THRESHOLD = 10
 HARMFUL_COUNT_THRESHOLD = 3
 HELPFUL_COUNT_THRESHOLD = 5
-DEMOTION_THRESHOLD = 0.15
-PROMOTION_THRESHOLD = 0.70
+# Score thresholds are now per-tier and sourced from
+# lifecycle_score.TIER_CONFIGS inside the candidate-selection logic.
 
 _TierFn = Callable[[str], str | None]
 _ApplyFn = Callable[[str, str, str], Coroutine[None, None, bool]]
@@ -114,7 +114,7 @@ async def optimize_tiers() -> _OptResult:
         await find_demotion_candidates(
             min_loads=MIN_LOADS_FOR_DEMOTION, grace_period_hours=GRACE_PERIOD_HOURS,
             min_age_days=MIN_AGE_DAYS, harmful_threshold=HARMFUL_COUNT_THRESHOLD,
-            demotion_threshold=DEMOTION_THRESHOLD, ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
+            ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
         ),
         get_next_tier_down, demote_episode, "demote", "demotion", "demotions", results,
     )
@@ -122,7 +122,7 @@ async def optimize_tiers() -> _OptResult:
     await _apply_tier_changes(
         await find_promotion_candidates(
             min_refs=MIN_REFS_FOR_PROMOTION, min_age_days=MIN_AGE_DAYS,
-            helpful_threshold=HELPFUL_COUNT_THRESHOLD, promotion_threshold=PROMOTION_THRESHOLD,
+            helpful_threshold=HELPFUL_COUNT_THRESHOLD,
         ),
         get_next_tier_up, promote_episode, "promote", "promotion", "promotions", results,
     )
@@ -144,9 +144,9 @@ async def optimize_tiers() -> _OptResult:
 
 
 __all__ = [
-    "DEMOTION_THRESHOLD", "GHOST_RATIO_THRESHOLD", "GRACE_PERIOD_HOURS", "HARMFUL_COUNT_THRESHOLD",
+    "GHOST_RATIO_THRESHOLD", "GRACE_PERIOD_HOURS", "HARMFUL_COUNT_THRESHOLD",
     "HELPFUL_COUNT_THRESHOLD", "MIN_AGE_DAYS", "MIN_LOADS_FOR_DEMOTION", "MIN_REFS_FOR_PROMOTION",
-    "PROMOTION_THRESHOLD", "TierCandidate", "calculate_ghost_ratio", "demote_episode",
+    "TierCandidate", "calculate_ghost_ratio", "demote_episode",
     "find_demotion_candidates", "find_promotion_candidates", "get_next_tier_down",
     "get_next_tier_up", "log_tier_change", "optimize_tiers", "promote_episode",
 ]

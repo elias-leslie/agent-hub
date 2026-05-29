@@ -23,11 +23,13 @@ from .context_injector_formatter import (
     CHARS_PER_TOKEN,
     format_progressive_context,
 )
+from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 from .failure_reporting import MemoryFailureReport, report_memory_failure
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .project_index_context import format_project_index_context
 from .service import MemoryScope
 from .settings import get_memory_settings
+from .st_usage_memory import decay_score_by_surface
 from .tool_capability_context import format_tool_capability_context
 from .variants import assign_variant
 
@@ -261,12 +263,22 @@ async def run_injection_operation(
             else frozenset()
         )
         bash_available = ("bash" in visible_tool_names) if effective_project_id else None
+        tool_scores: dict[str, float] | None = None
+        if (
+            effective_project_id
+            and resolve_consumer_profile(consumer_profile) == MemoryConsumerProfile.AGENT_STARTUP
+        ):
+            try:
+                tool_scores = await decay_score_by_surface(effective_project_id) or None
+            except Exception:
+                tool_scores = None
         tool_capability_block = format_tool_capability_context(
             consumer_profile=consumer_profile,
             task_type=task_type,
             project_id=effective_project_id,
             bash_available=bash_available,
             agent_slug=consumer_agent_slug,
+            tool_scores=tool_scores,
         )
         if tool_capability_block:
             context.debug_info.update({

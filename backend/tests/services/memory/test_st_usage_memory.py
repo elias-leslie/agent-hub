@@ -1,9 +1,29 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from app.services.memory.st_usage_memory import (
+    _SCORE_HALF_LIFE_DAYS,
+    _decay_scores_from_rows,
     build_st_usage_memory_from_commands,
     parse_st_command,
 )
+
+
+def test_decay_scores_recency_weighting_and_help_exclusion() -> None:
+    now = datetime(2026, 5, 29, tzinfo=UTC)
+    rows = [
+        ("st pulse --gate", None, now),  # age 0 -> weight 1.0
+        ("st db query -t x", None, now - timedelta(days=_SCORE_HALF_LIFE_DAYS)),  # 1 half-life -> 0.5
+        ("st memory search foo --help", None, now),  # help -> excluded from scoring
+    ]
+
+    weights, parsed = _decay_scores_from_rows(rows, now=now)
+
+    assert parsed == 2  # the --help row is excluded
+    assert abs(weights["pulse"] - 1.0) < 1e-6
+    assert abs(weights["db query"] - 0.5) < 1e-6
+    assert "memory search" not in weights
 
 
 def test_parse_st_command_handles_project_flag_and_subcommands() -> None:

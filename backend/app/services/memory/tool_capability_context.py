@@ -8,6 +8,7 @@ duplicate state to maintain.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from functools import lru_cache
 
@@ -54,6 +55,17 @@ def _density_for_context(consumer_profile: str | None, task_type: str | None) ->
     return "core"
 
 
+def _run_manifest(cmd: list[str]) -> str:
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.pop("PYTHONHOME", None)
+    try:
+        result = run_process(cmd, capture_output=True, text=True, timeout=5, check=False, env=env)
+    except Exception:
+        return ""
+    return (result.stdout or "").strip()
+
+
 @lru_cache(maxsize=64)
 def _manifest_inject(
     task_type: str | None,
@@ -61,9 +73,6 @@ def _manifest_inject(
     consumer_profile: str | None,
     density: str,
 ) -> str:
-    env = os.environ.copy()
-    env.pop("PYTHONPATH", None)
-    env.pop("PYTHONHOME", None)
     cmd = ["st", "tools", "manifest", "--format", "inject", "--density", density]
     if task_type:
         cmd += ["--task", task_type]
@@ -71,11 +80,47 @@ def _manifest_inject(
         cmd += ["--agent", agent_slug]
     if consumer_profile:
         cmd += ["--profile", consumer_profile]
+    return _run_manifest(cmd)
+
+
+def _manifest_inject_adaptive(
+    task_type: str | None,
+    agent_slug: str | None,
+    consumer_profile: str | None,
+    scores: dict[str, float],
+) -> str:
+    """Render the adaptive-density manifest, passing usage scores via a temp file.
+
+    Not lru_cached: scores are per-project and time-varying, so a cache keyed on
+    (task, agent, profile, density) would serve stale/cross-project output.
+    """
+    import json
+    import tempfile
+
+    tmp_path: str | None = None
     try:
-        result = run_process(cmd, capture_output=True, text=True, timeout=5, check=False, env=env)
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".json", prefix="st-scores-", delete=False
+        ) as handle:
+            json.dump(scores, handle)
+            tmp_path = handle.name
+        cmd = [
+            "st", "tools", "manifest", "--format", "inject",
+            "--density", "adaptive", "--scores-file", tmp_path,
+        ]
+        if task_type:
+            cmd += ["--task", task_type]
+        if agent_slug:
+            cmd += ["--agent", agent_slug]
+        if consumer_profile:
+            cmd += ["--profile", consumer_profile]
+        return _run_manifest(cmd)
     except Exception:
         return ""
-    return (result.stdout or "").strip()
+    finally:
+        if tmp_path:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
 
 
 def format_tool_capability_context(
@@ -85,13 +130,29 @@ def format_tool_capability_context(
     project_id: str | None = None,
     bash_available: bool | None = None,
     agent_slug: str | None = None,
+    tool_scores: dict[str, float] | None = None,
 ) -> str:
-    """Render the <tool-usage> block by calling `st tools manifest --format inject`."""
+    """Render the <tool-usage> block by calling `st tools manifest --format inject`.
+
+    When `tool_scores` (usage-keyed 0-100 decay scores) are supplied for the
+    startup profile, the block is curated via the `adaptive` density: an
+    always-on floor plus usage-relevant surfaces. Any failure or empty result
+    falls back to the static density (full for startup) so the block is never
+    lost — fail to full, never to empty.
+    """
     if agent_slug == "persona" and bash_available is not True:
         return ""
     if bash_available is False:
         return ""
     effective_task, _ = _profile_filters(consumer_profile, task_type)
+    profile = resolve_consumer_profile(consumer_profile)
+    if profile == MemoryConsumerProfile.AGENT_STARTUP and tool_scores:
+        adaptive_body = _manifest_inject_adaptive(
+            effective_task, agent_slug, consumer_profile, tool_scores
+        )
+        if adaptive_body:
+            return f"<tool-usage>\n{adaptive_body}\n</tool-usage>"
+        # else: fall through to the static density below (fail to full).
     density = _density_for_context(consumer_profile, task_type)
     body = _manifest_inject(effective_task, agent_slug, consumer_profile, density)
     if not body:

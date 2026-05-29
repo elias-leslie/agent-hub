@@ -65,7 +65,15 @@ def main(argv: list[str] | None = None) -> int:
             f"tokens={response.total_tokens}"
         )
     else:
-        chunks = [response.project_index, response.tool_capabilities, response.rendered]
+        # Mandates/guardrails (`rendered`) precede the larger tool catalog so the
+        # rules the model must follow are never the first thing a downstream cap
+        # truncates; the non-negotiables footer restates the top few last.
+        chunks = [
+            response.project_index,
+            response.rendered,
+            response.tool_capabilities,
+            response.non_negotiables,
+        ]
         print("\n".join(chunk for chunk in chunks if chunk))
     return 0
 
