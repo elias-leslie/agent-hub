@@ -1,82 +1,68 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 8 | Last run: 2026-05-04 | State: ISSUES_
+_Runs: 9 | Last: 2026-06-04 | State: AUDITED (11 tasks created, none claimed) | Resume: pick a board task-id and EXECUTE one (recommend #1 task-7e59be47); see handoff doc_
 
-## Architecture
-- FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
-- Next.js frontend in `frontend`; packages under `packages/` provide shared client/UI SDKs.
-- Bundled Docker stack exposes frontend on `3003` and backend on `8003`; native run uses backend worker plus frontend dev server.
-- Project targets Python 3.13+, Node 20+, pnpm 10.28.0.
-- Persona API schemas are split by domain under `backend/app/api/persona/schema_*.py`; `schemas.py` remains the stable re-export surface.
-- Persona operator runtime tool surface is owned by `backend/app/services/tools/persona_tool_surface.py`; shared broad tool registries are not persona hot-load authority.
+## Orientation
+- FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
+- Next.js frontend in `frontend/src` (~440 TS/TSX files); shared SDKs/UI under `packages/` (`@agent-hub/chat-ui`, `@agent-hub/passport-client`, `packages/agent-hub-client` Python SDK).
+- Bundled Docker stack exposes frontend `3003`, backend `8003`; native run = backend + worker + frontend dev. Prod hosts: `agent.summitflow.dev` / `agentapi.summitflow.dev`. Python 3.13+, Node 20+, pnpm 10.28.0.
+- Canonical surface is `st`: `st check` (lint/types/tests/biome/tsc), `st db` (schema/indexes/read-query), `st browser` (running-app checks), `st graph fallow` (dead-code/dupes), `st search`, task lifecycle `st create|claim|context|log|done`. Prefer `st` over raw tools.
+- Agent/model config is DB-sourced; `backend/scripts/seed_agents_data/seed_data.json` is regenerated via `export_seeds.py` — do not hand-edit. Model catalog: DB is runtime source; `constants/catalog_entries.py` is build-time UI catalog (header wrongly says "single source of truth").
+- 0 TODO/FIXME/HACK markers in app code (disciplined). Coordination clean at audit time (`st pulse`: 0 writers/readers/dirty). Ready queue holds ~30 tasks, many stale (see Board #3, #9).
 
-## Project Tooling Notes
-- Use `st` for dev workflow and repo gates. `st check` owns pytest, vitest, Biome, Ruff, TSC, and related checks.
-- Current CLI has `st check cleanroom -- <command>`; top-level `st cleanroom` is not present in this run.
-- `st pulse -P agent-hub --details`, `st sessions ownership -P agent-hub`, and `st sessions overlap -P agent-hub` are coordination preflight surfaces.
-- `st ready` is project-auto only in this run; it does not accept `-P`.
-- `st search` may return stale-index warnings; verify sensitive code facts with repo-local reads when it does.
-- Agent seed export is DB-sourced: update live agents with `st agents update`, then regenerate `backend/scripts/seed_agents_data/seed_data.json` via `backend/scripts/export_seeds.py`; do not hand-edit the generated JSON.
+## Board  (ranked by value, highest first)
+| # | CLASS | STATUS | Title | Evidence | Impact | Effort | Conf | Task |
+|---|-------|--------|-------|----------|--------|--------|------|------|
+| 1 | FIX | OPEN | Internal-auth fail-open: empty `INTERNAL_SERVICE_SECRET` grants unrestricted admin/access-control via empty header | `middleware/access_control_paths.py:80`, `config.py:85` | high | S | high | task-7e59be47 |
+| 2 | FIX | OPEN | Release pipeline broken & unguarded: Docker build fails on missing `@summitflow/notes-ui`; CI runs zero tests/lint/types | `frontend/package.json:23`, `.github/workflows/docker-build.yml` | high | M | high | task-6613ef27 |
+| 3 | PRUNE | OPEN | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
+| 4 | FIX | OPEN | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
+| 5 | FIX | OPEN | Unbounded pagination/time params → 500 (not 4xx) across persona+agents endpoints (+ /memory contract drift) | `api/agents.py:192`, `api/persona/__init__.py:135` | med | S | high | task-5d58d068 |
+| 6 | PRUNE | OPEN | ~1,383 LOC dead frontend code: 9 orphaned components + unreachable `monitoring/` island | `components/monitoring/*`, `NarrationTimeline.tsx`×2 | med | S | high | task-27c33158 |
+| 7 | PRUNE+FIX | OPEN | Index hygiene: drop 2 redundant indexes (incl. on 1.2GB `session_events`) + add 2 missing FK indexes | `models/session.py:256`, `models/memory.py:34` | med | S | high | task-dba3b898 |
+| 8 | FIX | OPEN | Memory context build opens 12–16 separate pooled DB connections per call on hot SessionStart path | `services/memory/context_builder.py:734` | med | M | high | task-83cecc98 |
+| 9 | PRUNE | OPEN | Close 8 stale ready-queue tasks (6 site-health for deleted subsystem + 2 Gemini cred-test for deleted dir) | migration `t5u6v7w8x9y0`, `curl 127.0.0.1:3003`=307 | med | S | high | task-dff28019 |
+| 10 | FIX+PRUNE | OPEN | Docs & config drift cleanup (env vars, Arena docs, ports.json, .index.yaml link, dup plans, residue) | `.env.example`, `README.md:22`, `ports.json` | med | S | high | task-82a49127 |
+| L | PRUNE+FIX | OPEN | (lower-value batch) Prune dead backend code & duplication: 7 dead fns + dup `run_tool` closure + 12 dead model-tier maps (~270 LOC) | `agent_preview.py:149`, `api/complete/core.py:136`, `constants/catalog.py:284` | low | S | high | task-ae68413a |
 
-## Active Work Context
-- 2026-05-04 recurring hygiene reviewed `st pulse -P agent-hub --details`, `st sessions ownership/overlap -P agent-hub`, `st ready --limit 50`, `st feedback list --limit 50`, `st feedback summary`, audit open/completed items, VCS doctor, TODO/FIXME search, and targeted code/config scans.
-- Parallelism used: two read-only explorer sidecars swept task/feedback queue and code/config/dependency debt. Findings integrated: stale test bugs, schema refactor, raw subprocess root resolver, tracked `backend/--output`, frontend lint suppressions, and remaining open clusters.
-- Completed stale task cleanup for `task-235285e8` and `task-53b8efe2` after focused `st check pytest -- backend/tests/scripts/test_seed_agent_model_policy.py backend/tests/services/memory/test_reference_injection.py` passed 25 tests.
-- Claimed and completed `task-3144db3f`; first `st done` push hit remote 500, retry succeeded, merged to `main`, deleted task branch, and removed checkpoint.
-- VCS doctor reports cross-repo blockers outside agent-hub (`portfolio-ai`, `.codex`) but agent-hub pulse is clean before current-session edits; use agent-hub-local pulse/status for this closeout.
-- `task-04380626` memory-yield audit found project reference memories `05cc0918` and `b23f83b0` had zero helpful/cited counts and duplicate coverage; deleted both. Narrowed `f0eb55a5` to Cloudflare/provider/model coding contexts. Verification: `st memory list -s project --scope-id agent-hub -t reference -l 100`, `st memory status`, and persona preview health signal improved `untargeted_refs` from 41 to 40.
-- Reported new control-plane feedback `c48903d1` after `st context task-04380626` hit an import error in `cli.commands.tasks_context`.
-- `task-354906ba` split `backend/app/services/tools/_executor_io_tasks.py` into a 40-line facade plus focused plan/cleanup/dispatch modules; all new modules are under 300 lines. Focused executor/persona tool tests passed 100 tests.
-- `task-7984080d` split `backend/app/services/memory/review_agent.py` into a 47-line facade plus focused selection, prompt, call, decision, apply, and runner modules; all helper modules are under 300 lines. Focused memory review/scheduler tests passed 28 tests.
-- `task-69c7fa38` split chat sidebar UI out of `frontend/src/app/chat/page.tsx`; page is now 262 lines and focused on state/data wiring. Verification: Biome, full frontend TSC, changed gate, and browser checks for `/chat` passed with zero console/network errors.
-- `task-d8b9a77f` moved runtime-session streaming tool handling into `streaming_runtime_session.py`; `streaming_tool_loop.py` is now 156 lines and focused on legacy-loop orchestration/public entry. Focused streaming tool-loop tests passed.
-- `task-d5e78dde` moved persona runtime hook implementation behind `usePersonaRuntimeCore.ts`; public `usePersonaRuntime.ts` is now a 7-line compatibility facade. Verification: Biome, full frontend TSC, focused persona Vitest, browser `/persona` checks passed, and post-commit changed gate exited 0 with no changed paths; `st done` merged it to `main`.
-- Final recheck: `st ready --limit 50` returned zero ready tasks, `st feedback summary` reported 198 total feedback items, `st feedback list --limit 50` returned 50 open items, `st cleanup status` reported agent-hub clean, and CodeRabbit/review-bot search found no live references outside audit history.
-- 2026-05-04 continuation: parallel read-only sidecars swept feedback duplicates and code/config drift while local work merged exact duplicate feedback clusters. Final feedback summary reported 174 total records with open clusters still led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`; `st ready --limit 50` returned `READY[0]`.
-- Updated live quality-gate guidance from legacy `dt` to `st check` in contributor docs, arena/persona docs, orchestrated worker prompt generation, memory path regression expectations, and benchmark dispatch readiness cases. Historical task exports, task plans, logs, and applied migrations with old `dt` text were left unchanged as history or generated artifacts.
-- Reported feedback `c86c6059` after `st check --changed-only` crashed with `IndexError`; live valid changed-file gate is `st check --quick --changed-only`.
-- 2026-05-04 continuation: preflight found no ready tasks and no owner overlap; only dirty residue was tracked generated `graphify-out/GRAPH_REPORT.md` from a graphify run. Kept and published the regenerated report rather than dropping valid generated output.
-- Replaced the remaining live UI/test stale `dt` examples in memory episode form placeholder and compactness fixture with `st check` wording. Historical docs, generated task exports, and tests intentionally modeling old tool-friction events remain unchanged.
-- Merged additional exact duplicate feedback clusters for focused changed gates, project-memory guardrails, search-first workflow, and duplicate feedback search. Final feedback summary still reports unresolved governance backlog led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`.
-- 2026-05-04 continuation: repo started clean with `READY[0]`; merged remaining exact duplicate open feedback titles surfaced by capped `st feedback list --status open --type ... --limit 200` scans. Final duplicate-title recheck found no repeated exact titles in the capped open lists.
+## Findings detail
+**#1 — Internal-auth fail-open (SECURITY).** `access_control_paths.py:80` gates the internal-only prefixes (`/api/admin`, `/api/access-control`, `/api/runtime-context`, `/api/settings`) solely with `internal_header == settings.internal_service_secret`. `config.py:85` defaults the secret to `""` and nothing requires it at startup. A request sending header `X-Agent-Hub-Internal:` with an *empty value* yields `"" == ""` → `is_internal_request()` True → `set_internal_state` with `allowed_projects=None` (cross-project unrestricted), bypassing client identification/rate-limiting for ALL `/api/*`. Admin endpoints (disable clients, read/delete request-audit log) and access-control client CRUD have no endpoint-level auth. Ships blank in `.env.example` + `docker-compose.yml` with default `AGENT_HUB_BIND_HOST=0.0.0.0`. Runtime-confirmed exploit. **FIX**: reject empty secret in the comparison (and/or fail-startup/disable-internal when unset). Note: the test that should cover this (`tests/api/test_access_control.py:204` `test_valid_auth_allows_request`) is an empty stub, asserts nothing, and is `@pytest.mark.skip` — the fix must add a real test. *Human:* fail-startup vs boot-with-internal-disabled.
 
-## Open Items
-- [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - exact duplicate title clusters in capped open lists were merged, but many open feedback items remain and near-duplicate or cross-component/type clusters need policy/product judgment before disposition - impact: visible feedback still accumulates without full disposition.
+**#2 — Release pipeline broken & unguarded.** (a) `frontend/package.json:23` declares `"@summitflow/notes-ui": "file:../../summitflow/packages/notes-ui"` — that sibling tree is **outside this repo and the Docker build context**; hard imports in `app/notes/page.tsx:3` and the global `layout/sidebar-footer.tsx:1` pull it on every page. `docker/frontend.Dockerfile` rewrites only chat-ui/passport-client, never notes-ui → `pnpm install --frozen-lockfile` fails in Docker/CI. Local dev works only via stale `node_modules/.pnpm` cache. (b) `.github/workflows/docker-build.yml` is the only workflow (tag/dispatch) and builds+pushes `ghcr.io` images with **no pytest/vitest/ruff/biome/tsc step**; the real CI gate was deliberately deleted in `4293c1da`. So nothing catches (a). **FIX**: vendor/publish notes-ui *(human: ownership/release strategy)* + add a test/lint/types gate before build-push.
+
+**#3 — Stale P1 heartbeat cluster.** `workflow_schedule_controls.persona_heartbeat enabled=f` since 2026-04-21 (43d); 0 `heartbeat`-source sessions in 30d. `persona_heartbeat.py:107` hard-stops the cron when disabled. P1 tasks `task-4425b6c8` (heartbeat churn), `task-1f1ca536`, `task-7619a335`, `task-613922f1` are premised on live heartbeats that don't exist; their target gate (`persona_improvement.py:846`) returns `no_recent_field_heartbeats`/needs_review=False when recent list is empty. **PRUNE/decision.** *Human:* is the 2026-04-21 disable permanent (→ close the P1s) or a temporary pause (→ re-enable + verify)? `task-1f1ca536` implies it's paused pending prompt-budget reduction.
+
+**#4 — Raw Markdown on /memory.** `MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61-63`, `TimelineItem.tsx:83` render `episode.content` as plain text. DB `memories`: 198/201 rows contain `**bold**`. Live `agent.summitflow.dev/memory` shows literal `**Title**:` in every preview + body. A renderer already exists and is a current dependency: `packages/chat-ui/src/components/MarkdownContent.tsx` (react-markdown + remark-gfm). **FIX** small. *Human:* render Markdown vs strip markers.
+
+**#5 — Unbounded query params → 500.** `api/agents.py:192-193` (`limit`/`offset` raw → negative reaches `.limit()/.offset()` → Postgres error → catch-all 500 at `exception_handlers.py:80`), `api/persona/__init__.py:135` and `api/agents.py:381` (`days` raw → `timedelta` OverflowError → 500), plus `prompts.py:208`, `memory_episodes_handlers.py:273`. Sibling `memory_dashboard.py:137`/`memory_metrics.py:20` already use `Query(ge=1, le=90)` / `Query(ge=1, le=50)` — the correct pattern to copy. Related lower-value: `/memory/analytics` `lookback` string overrides bounded `days` unbounded (#11); `/memory/episodes/bulk-tag` accepts empty/unbounded `uuids` (#12). **FIX.** *Human:* per-endpoint caps.
+
+**#6 — Dead frontend code (~1,383 LOC).** Zero importers, verified via grep + `fallow` unused_files: `components/monitoring/*` island reached only by the also-dead `LiveEventsPanel.tsx`; `NarrationTimeline.tsx` ×2 (divergent copies); `CompletionGateResult.tsx`; `chat/session-dropdown.tsx` (only a stale `vi.mock`); `memory/memory-card.tsx` + `memory-stats.tsx`; `persona/utils/text.ts`; `chat/hooks/useContextChips.ts`. **PRUNE.**
+
+**#7 — Index hygiene.** `models/session.py:256-257` defines `uq_session_turn_sequence` UNIQUE then a *plain* `ix_session_events_session_turn` over identical columns — redundant ~54MB + a write/insert on the 1.2GB/573k-row hot table (plain index 6.9M scans, unique 0 — unique is a superset). `session.py:62` `parent_session_id index=True` duplicates `ix_sessions_parent`. Missing: `memory_injection_metrics.session_id` and `truncation_events.session_id` FKs have no index → seq-scan on session delete. **PRUNE 2 + FIX 2** in one migration.
+
+**#8 — Memory context connection fan-out.** `context_builder.py:734` `build_progressive_context()` has no db/session param; `_build_scope_tasks` + triggered/phase tasks create 6–8 asyncio tasks per scope × 2 scopes (PROJECT appends GLOBAL) = 12–16 concurrent fetches, each opening its own pooled `async_session()` (`_repo_query.py:128`, `_repo_tier.py:209`) against a pool of 20+10. `runtime_context.py:239` also builds blocks serially and re-triggers the fan-out. **FIX**: thread one shared read session. *Human:* confirm SELECT-only safety on caller session.
+
+**#9 — Stale task cluster (8 tasks).** Site-health subsystem deleted (migration `t5u6v7w8x9y0`, commit `dde700a5`, ~1143 LOC); zero live refs (only stale `.pyc`). Frontend confirmed reachable (`curl 127.0.0.1:3003` & `localhost:3003` → 307→/dashboard; service active) — refutes ERR_CONNECTION_REFUSED tasks. Close: `task-107ac68a, task-fe618e58, task-abde7468, task-210cd2df, task-06205ddb, task-05b9f2c6` (site-health/reachability) + `task-815fb6c4, task-2c975047` (Gemini cred test for deleted `tests/adapters/`). **PRUNE.**
+
+**#10 — Docs & config drift.** `.env.example` (claims to be the "full variable reference") omits 15 consumed vars: `DEEPSEEK/KIMI_CODE/MOONSHOT/MINIMAX/XAI/ZHIPU/NVIDIA/CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `LOCAL_OPENAI_BASE_URL/API_KEY`, `WEB_SEARCH_SEARXNG_URL`, `WEB_FETCH_BROWSER_CDP_URL`, `ST_BROWSER_HOST`. Stale Arena: `README.md:22` lists `/arena` (deleted in `31876fae`), `docs/arena-honing-log.md` + `docs/arena-operator-prompt.md` describe the dead surface, `docs/persona-benchmark.md:91` dead URL. `ports.json` orphan with wrong ports (8109/3109 vs 8003/3003), zero consumers. Broken `README.md` `.index.yaml` link (file absent). Divergent `VOICE_ARCHITECTURE_PLAN.md` (root 558L) vs `docs/voice-architecture-plan.md` (391L); stale root `CODERABBIT_REVIEW_SCOPE_PLAN.md`. Tracked residue `.dev-tools-list.json` (158KB) + `.dev-tools-task45.txt` (`.dev-tools/` is gitignored). `catalog_entries.py:1` header wrongly claims "single source of truth". `ST_BROWSER_HOST` default mismatch `config.py`(.234) vs `docker-compose.yml`(.244). **FIX+PRUNE.**
+
+### Lower-value (noted, not ranked)
+- 7 dead private functions ~86 LOC (`agent_preview.py:149` etc.) — PRUNE/S.
+- Duplicated byte-identical `run_tool` closure in `api/complete/core.py:136` & `streaming.py:83` — FIX/S.
+- SDK under-reports per-turn token/cost on dropped mid-loop done events (`agent-hub-client/_streaming.py:64`) — FIX/S, conf med. (The original SSE "termination" feedback is already fixed in the SDK — verified, not actionable.)
+- 12 hardcoded model-tier fallback maps ~92 LOC dead, superseded by score-based routing (`constants/catalog.py:284`) — PRUNE/S.
+- Empty/skipped auth test asserting nothing (`tests/api/test_access_control.py:204`) — fold into #1.
+- Oversized mock-heavy frontend integration tests (`unified-persona-workspace.test.tsx` 1242L) — FIX/M.
+
+## Execution log
+<!-- date | item# | task-id | what changed | how verified | result -->
+- 2026-06-04 | AUDIT | - | Reconciled stale 2026-05-04 doc; ran 13-dimension parallel finder + adversarial verify workflow (46 agents). 31 findings confirmed, 2 refuted. New Board #1-10 written. | Workflow `wf_c92d4783-542`; each finding re-verified against code/db/runtime. | Done.
+- 2026-06-04 | BATCH | 11 tasks | Batched board into 11 cohesive, individually-verifiable tasks (shared files / one verification each; scope-bombs #2 & #8 and product-decisions #3 isolated). Created via `st create --from-file`: #1→7e59be47, #5→5d58d068, #7→dba3b898, #4→2146db24, #6→27c33158, L→ae68413a, #10→82a49127, #9→dff28019, #3→838a8172, #2→6613ef27, #8→83cecc98. None claimed. | `st create` returned 11/11 OK. | Ready for per-task EXECUTE after /clear (handoff doc generated).
+
 ## Completed
-- [AH-AUDIT-033] 2026-05-04 - Merged remaining exact duplicate open feedback titles from capped type scans; duplicate-title recheck returned no repeated exact titles.
-- [AH-AUDIT-032] 2026-05-04 - Removed remaining live UI/test stale `dt` wording from memory episode form and compactness fixture; Biome, focused Vitest, changed gate, and stale live-reference search passed.
-- [AH-AUDIT-031] 2026-05-04 - Published refreshed tracked graphify report residue and merged more exact duplicate feedback clusters; final ready queue remained empty.
-- [AH-AUDIT-030] 2026-05-04 - Merged exact duplicate feedback clusters across praise/friction/idea groups, including repeated `dt`, feedback-search, precision-search, timeout-summary, citation-tracking, auto-project-detection, and tool-registry items.
-- [AH-AUDIT-029] 2026-05-04 - Replaced live legacy `dt` quality-gate guidance with `st check` equivalents in scripts and docs; ruff, types, changed gate, and stale-reference search passed for touched files.
-- [AH-AUDIT-009] 2026-05-04 - Exhausted current ready maintainability queue after schema/CRUD/tool/memory-review/chat/streaming/persona slices; final `st ready --limit 50` returned `READY[0]`.
-- [AH-AUDIT-028] 2026-05-04 - Reduced persona runtime public hook file to a compatibility facade over `usePersonaRuntimeCore.ts`; Biome, TSC, focused persona Vitest, and production browser `/persona` check passed.
-- [AH-AUDIT-027] 2026-05-04 - Split runtime-session streaming tool loop out of `streaming_tool_loop.py`; focused streaming tests and changed gate passed.
-- [AH-AUDIT-026] 2026-05-04 - Split chat sidebar out of `frontend/src/app/chat/page.tsx`; page is 262 lines, frontend checks passed, and browser `/chat` checks had zero console/network errors.
-- [AH-AUDIT-025] 2026-05-04 - Split memory `review_agent.py` into focused selection, prompt, reviewer-call, decision parsing, application, and runner modules while preserving facade imports; focused tests and changed gate passed.
-- [AH-AUDIT-024] 2026-05-04 - Split `_executor_io_tasks.py` into focused plan, cleanup, and dispatch guard modules while preserving the import facade; focused tests and changed gate passed.
-- [AH-AUDIT-023] 2026-05-04 - Completed project memory-yield audit for `task-04380626`: removed duplicate zero-citation refs `05cc0918`/`b23f83b0`, narrowed `f0eb55a5`, and verified memory status plus persona preview signal.
-- [AH-AUDIT-011] 2026-05-04 - Removed unused push workspace package, stale Docker tarball, lock importer, workflow pack step, and stale design-doc package reference; changed gate passed.
-- [AH-AUDIT-018] 2026-05-04 - Closed stale readiness-sync task `task-9148c25d`; named repro task is completed/archived, plan creation already defaults missing subtask steps, and focused tool tests passed.
-- [AH-AUDIT-019] 2026-05-04 - Closed stale cleanup-truth task `task-1e259848` and feedback `fd368ff4`; current cleanup is clean and exact reconciled-residue regression tests pass.
-- [AH-AUDIT-020] 2026-05-04 - Closed stale shared-runtime shaping task `task-bdf784b7`; target runtime task was already ready with concrete subtasks.
-- [AH-AUDIT-021] 2026-05-04 - Closed stale site-health/runtime cluster (`task-3ef41aa0`, `task-b4f9cf9c`, `task-8f81e9b7`, `task-78791f3c`, `task-36ef48ed`, `task-3dea84a5`, `task-55fe0ce2`) after live service, browser, and port checks passed on current host.
-- [AH-AUDIT-022] 2026-05-04 - Split memory revision-history behavior into `_repo_revisions.py`; `_repo_crud.py` is 261 lines with 6 direct methods, and memory service tests passed.
-- [AH-AUDIT-012] 2026-05-04 - Verified stale test-failure tasks `task-235285e8` and `task-53b8efe2` are fixed in current tree and closed them.
-- [AH-AUDIT-013] 2026-05-04 - Split persona API schemas into focused domain modules while preserving `app.api.persona.schemas` imports; focused persona tests, ruff, types, frontend, and changed gates passed.
-- [AH-AUDIT-014] 2026-05-04 - Replaced request-reachable raw `subprocess.run` in project root resolution with shared `safe_subprocess.run_process`; core tests passed.
-- [AH-AUDIT-015] 2026-05-04 - Removed tracked accidental binary artifact `backend/--output`.
-- [AH-AUDIT-016] 2026-05-04 - Removed three frontend lint suppressions in toast, session dropdown, and analytics tooltip; frontend gate passed.
-- [AH-AUDIT-017] 2026-05-04 - Purged obsolete review-bot heartbeat prompt references from historical Alembic prompt migrations and closed related queue/feedback as stale.
-- [AH-AUDIT-001] 2026-05-04 - Created project-local audit file with architecture, tooling, coordination, task, feedback, and verification context.
-- [AH-AUDIT-002] 2026-05-04 - Consolidated runtime subprocess spawns behind `app.utils.safe_subprocess` to remove raw route/workflow/tool spawns from changed paths.
-- [AH-AUDIT-004] 2026-05-04 - Collapsed persona operator tool surface to tiered core tools with code/doc source of truth and regression tests.
-- [AH-AUDIT-003] 2026-05-04 - Cleared repo-wide full-gate debt: backend pytest regressions, generated seed model policy, and frontend Biome diagnostics now pass full `st check --check`.
-- [AH-AUDIT-005] 2026-05-04 - Completed `task-851af567` verification scope with focused backend pytest, changed-file gate, and full repo gate all green.
+- 2026-05-04 (Runs 1-8): cleared full-gate debt; split oversized modules behind facades (persona schemas, executor IO, memory review, chat sidebar, streaming loop, persona runtime hook, repo CRUD); centralized subprocess; removed tracked binary `backend/--output`, lint suppressions, review-bot prompt residue; project memory-yield prune; migrated docs `dt`→`st check`; merged duplicate feedback clusters; closed stale task clusters. (Detail compacted; prior board items AH-AUDIT-001..033 all DONE except feedback-governance backlog, which is cross-project `summitflow` CLI signal, not agent-hub app code.)
 
-## Decisions
-- Treat missing top-level `st cleanroom` as live CLI drift; use current `st check cleanroom -- ...` shape for cleanroom commands.
-- Keep raw subprocess implementation centralized in `backend/app/utils/safe_subprocess.py`; route/workflow/tool code should call that wrapper.
-- No persona direct-tool exceptions are kept in the operator surface. Shared backend/non-persona registries may stay broad, but persona provisioning filters before deferred catalog exposure.
-- Grok/xAI is not a default seed fallback for active text agents; keep mixed Codex plus non-Codex fallbacks with Claude/Haiku where needed.
-
-## Human Follow-up
-- None.
+## Human follow-up
+- #1: deployment policy on empty internal secret (fail-startup vs disable-internal).
+- #2: `@summitflow/notes-ui` ownership — vendor into repo vs consume as published package.
+- #3: is `persona_heartbeat` disable (2026-04-21) permanent (close P1s) or paused (re-enable + verify)?
+- #4: render Markdown vs strip markers on /memory.
