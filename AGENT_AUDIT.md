@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Runs: 17 | Last: 2026-06-05 | State: EXECUTING (8/11 audit tasks done) | Resume: next item is #3 task-838a8172 (persona_heartbeat product decision)_
+_Runs: 18 | Last: 2026-06-05 | State: EXECUTING (9/11 audit tasks done) | Resume: next item is #2 task-6613ef27 (release pipeline scope-bomb)_
 
 ## Orientation
 - FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -14,7 +14,7 @@ _Runs: 17 | Last: 2026-06-05 | State: EXECUTING (8/11 audit tasks done) | Resume
 |---|-------|--------|-------|----------|--------|--------|------|------|
 | 1 | FIX | DONE | Internal-auth fail-open: empty `INTERNAL_SERVICE_SECRET` grants unrestricted admin/access-control via empty header | `middleware/access_control_paths.py:80`, `config.py:85` | high | S | high | task-7e59be47 |
 | 2 | FIX | OPEN | Release pipeline broken & unguarded: Docker build fails on missing `@summitflow/notes-ui`; CI runs zero tests/lint/types | `frontend/package.json:23`, `.github/workflows/docker-build.yml` | high | M | high | task-6613ef27 |
-| 3 | PRUNE | OPEN | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
+| 3 | PRUNE | DONE | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
 | 4 | FIX | DONE | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
 | 5 | FIX | DONE | Unbounded pagination/time params → 500 (not 4xx) across persona+agents endpoints (+ /memory contract drift) | `api/agents.py:192`, `api/persona/__init__.py:135` | med | S | high | task-5d58d068 |
 | 6 | PRUNE | DONE | ~1,383 LOC dead frontend code: 9 orphaned components + unreachable `monitoring/` island | `components/monitoring/*`, `NarrationTimeline.tsx`×2 | med | S | high | task-27c33158 |
@@ -65,8 +65,10 @@ _Runs: 17 | Last: 2026-06-05 | State: EXECUTING (8/11 audit tasks done) | Resume
 - 2026-06-05 | L | task-ae68413a | Removed seven dead private backend helpers, deleted dead model fallback maps and re-exports, and deduplicated the completion/streaming direct tool runner into `api/complete/tool_provisioner.py`. | Exact symbol/map reference check = 0 remaining; `st check pytest` full backend suite; `st check --quick --changed-only`; `st service rebuild agent-hub`; live backend health 200. | Done.
 - 2026-06-05 | #10 | task-82a49127 | Documented consumed env vars, removed stale Arena docs/routes, deleted orphan `ports.json`, root voice/code-review plans, and tracked `.dev-tools` residue; fixed README broken `.index.yaml` link, persona benchmark URL, catalog seed header, and `ST_BROWSER_HOST` default. | Reference grep for arena/ports/residue/voice-plan drift; `.env.example` key presence check; `st check --quick --changed-only`; `st service rebuild agent-hub`; backend health 200; `/persona/analytics` 200. | Done.
 - 2026-06-05 | #9 | task-dff28019 | Cancelled eight stale tasks: six site-health/frontend reachability tasks for the removed site-health subsystem and two Gemini credential test tasks for the deleted `tests/adapters` path. Left excluded `task-4baf6872` untouched. | `st context` status checks; live frontend `127.0.0.1:3003` and `localhost:3003` return 307→`/dashboard`; repo grep shows no live site-health code or Gemini failure refs; `st ready` no longer lists the eight cancelled tasks. | Done.
+- 2026-06-05 | #3 | task-838a8172 | Chose the conservative non-reenable path for `persona_heartbeat`: cron remains disabled, and four P1 tasks premised on live heartbeats were cancelled as non-reproducible/currently invalid. | `st db`: `persona_heartbeat enabled=f` since 2026-04-21; 0 heartbeat-source sessions in last 30d; field gate returns `no_recent_field_heartbeats`; `st ready` no longer lists dependent P1s. | Done.
 
 ## Completed
+- 2026-06-05 #3: persona heartbeat decision resolved without re-enabling cron; four live-heartbeat-dependent P1 tasks cancelled with current DB evidence.
 - 2026-06-05 #9: stale backlog triage complete; eight non-actionable ready-queue tasks cancelled with evidence, excluded task still pending.
 - 2026-06-05 #10: docs/config drift cleanup complete; canonical voice plan kept under `docs/`, stale arena/ports/residue removed, and documented env/defaults align with consumed config.
 - 2026-06-05 L: backend prune complete; dead helpers/maps are gone and completion paths share one direct tool-runner helper.
@@ -80,4 +82,3 @@ _Runs: 17 | Last: 2026-06-05 | State: EXECUTING (8/11 audit tasks done) | Resume
 ## Human follow-up
 - #1: deployment policy on empty internal secret (fail-startup vs disable-internal).
 - #2: `@summitflow/notes-ui` ownership — vendor into repo vs consume as published package.
-- #3: is `persona_heartbeat` disable (2026-04-21) permanent (close P1s) or paused (re-enable + verify)?
