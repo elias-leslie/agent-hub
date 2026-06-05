@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import async_session
 
 from .applicability import (
     applicability_has_exclusions,
@@ -121,67 +124,103 @@ def _add_unique(
             seen.add(item.uuid)
 
 
-def _build_scope_tasks(
+FetchOperation = tuple[str, Callable[[], Awaitable[list[MemorySearchResult]]]]
+
+
+def _build_scope_operations(
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     include_mandates: bool,
     include_guardrails: bool,
     include_references: bool,
-) -> tuple[list[asyncio.Task[list[MemorySearchResult]]], list[str]]:
-    tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
-    task_keys: list[str] = []
+    db: AsyncSession | None,
+) -> list[FetchOperation]:
+    operations: list[FetchOperation] = []
 
     for query_scope, query_scope_id in scopes_to_query:
         if include_mandates:
-            tasks.append(
-                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
+            operations.append(
+                (
+                    f"mandates_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: get_mandates(
+                        scope=scope, scope_id=scope_id, db=db
+                    ),
+                )
             )
-            task_keys.append(f"mandates_{query_scope.value}")
-            tasks.append(
-                asyncio.create_task(
-                    get_pinned_episodes_as_search_results(
-                        "mandate",
-                        scope=query_scope,
-                        scope_id=query_scope_id,
+            operations.append(
+                (
+                    f"mandates_pinned_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_pinned_episodes_as_search_results(
+                            "mandate",
+                            scope=scope,
+                            scope_id=scope_id,
+                            db=db,
+                        )
                     )
                 )
             )
-            task_keys.append(f"mandates_pinned_{query_scope.value}")
         if include_guardrails:
-            tasks.append(
-                asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
+            operations.append(
+                (
+                    f"guardrails_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: get_guardrails(
+                        scope=scope, scope_id=scope_id, db=db
+                    ),
+                )
             )
-            task_keys.append(f"guardrails_{query_scope.value}")
-            tasks.append(
-                asyncio.create_task(
-                    get_pinned_episodes_as_search_results(
-                        "guardrail",
-                        scope=query_scope,
-                        scope_id=query_scope_id,
+            operations.append(
+                (
+                    f"guardrails_pinned_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_pinned_episodes_as_search_results(
+                            "guardrail",
+                            scope=scope,
+                            scope_id=scope_id,
+                            db=db,
+                        )
                     )
                 )
             )
-            task_keys.append(f"guardrails_pinned_{query_scope.value}")
         if include_references:
-            tasks.append(
-                asyncio.create_task(
-                    get_auto_inject_references_as_search_results(
-                        scope=query_scope, scope_id=query_scope_id
+            operations.append(
+                (
+                    f"reference_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_auto_inject_references_as_search_results(
+                            scope=scope, scope_id=scope_id, db=db
+                        )
+                    ),
+                )
+            )
+            operations.append(
+                (
+                    f"reference_pinned_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_pinned_episodes_as_search_results(
+                            "reference",
+                            scope=scope,
+                            scope_id=scope_id,
+                            db=db,
+                        )
                     )
                 )
             )
-            task_keys.append(f"reference_{query_scope.value}")
-            tasks.append(
-                asyncio.create_task(
-                    get_pinned_episodes_as_search_results(
-                        "reference",
-                        scope=query_scope,
-                        scope_id=query_scope_id,
-                    )
-                )
-            )
-            task_keys.append(f"reference_pinned_{query_scope.value}")
 
-    return tasks, task_keys
+    return operations
+
+
+async def _run_fetch_operations(
+    operations: list[FetchOperation],
+) -> tuple[list[str], list[list[MemorySearchResult] | BaseException]]:
+    task_keys: list[str] = []
+    results: list[list[MemorySearchResult] | BaseException] = []
+    for task_key, operation in operations:
+        task_keys.append(task_key)
+        try:
+            results.append(await operation())
+        except BaseException as exc:
+            results.append(exc)
+    return task_keys, results
 
 
 def _process_gathered_results(
@@ -221,40 +260,47 @@ async def fetch_all_episodes(
     include_references: bool,
     task_type: str | None,
     phase: str | None,
+    db: AsyncSession | None = None,
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
-    """Fetch all episodes in parallel and deduplicate by UUID."""
-    tasks, task_keys = _build_scope_tasks(
-        scopes_to_query, include_mandates, include_guardrails, include_references
+    """Fetch all episodes with one caller-owned session and deduplicate by UUID."""
+    operations = _build_scope_operations(
+        scopes_to_query, include_mandates, include_guardrails, include_references, db
     )
 
     if include_references and task_type:
         for query_scope, query_scope_id in scopes_to_query:
-            tasks.append(
-                asyncio.create_task(
-                    get_triggered_references_as_search_results(
-                        task_type=task_type,
-                        group_id=build_group_id(query_scope, query_scope_id),
-                    )
+            operations.append(
+                (
+                    f"reference_triggered_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_triggered_references_as_search_results(
+                            task_type=task_type,
+                            group_id=build_group_id(scope, scope_id),
+                            db=db,
+                        )
+                    ),
                 )
             )
-            task_keys.append(f"reference_triggered_{query_scope.value}")
 
     if include_references and phase:
         for query_scope, query_scope_id in scopes_to_query:
-            tasks.append(
-                asyncio.create_task(
-                    get_phase_triggered_references_as_search_results(
-                        phase=phase,
-                        group_id=build_group_id(query_scope, query_scope_id),
-                    )
+            operations.append(
+                (
+                    f"reference_phase_triggered_{query_scope.value}",
+                    lambda scope=query_scope, scope_id=query_scope_id: (
+                        get_phase_triggered_references_as_search_results(
+                            phase=phase,
+                            group_id=build_group_id(scope, scope_id),
+                            db=db,
+                        )
+                    ),
                 )
             )
-            task_keys.append(f"reference_phase_triggered_{query_scope.value}")
 
-    if not tasks:
+    if not operations:
         return [], [], []
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    task_keys, results = await _run_fetch_operations(operations)
     return _process_gathered_results(task_keys, results)
 
 
@@ -619,9 +665,12 @@ async def _merge_query_selected_references(
     consumer_profile: str | None,
     task_type: str | None,
     phase: str | None,
+    db: AsyncSession | None,
 ) -> None:
     """Fetch query-relevant references and merge them into the context."""
-    payloads = await get_query_relevant_references_as_search_results(query, scopes_to_query)
+    payloads = await get_query_relevant_references_as_search_results(
+        query, scopes_to_query, db=db
+    )
     if not payloads:
         return
     filtered_payloads = [
@@ -703,6 +752,7 @@ async def _apply_priority_and_limits(
     variant_config: Any,
     consumer_profile: str | None,
     memory_config: dict[str, Any] | None,
+    db: AsyncSession | None,
 ) -> None:
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
@@ -721,7 +771,7 @@ async def _apply_priority_and_limits(
         query, consumer_profile=consumer_profile,
     )
     policy_mandate_limit, policy_guardrail_limit, policy_reference_limit = (
-        await resolve_policy_limits(consumer_profile, memory_config)
+        await resolve_policy_limits(consumer_profile, memory_config, db)
     )
     context.mandates = _limit_by_rendered_token_budget(context.mandates, policy_mandate_limit)
     context.guardrails = _limit_by_rendered_token_budget(context.guardrails, policy_guardrail_limit)
@@ -746,14 +796,35 @@ async def build_progressive_context(
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
     variant: str | None = None,
+    db: AsyncSession | None = None,
 ) -> ProgressiveContext:
     """Build tier-aware context: all mandates/guardrails injected deterministically;
     references include auto-inject, task/phase triggers, and query-selected items
     (disabled only for heartbeat tasks).
     """
+    if db is None:
+        async with async_session() as session:
+            return await build_progressive_context(
+                query=query,
+                scope=scope,
+                scope_id=scope_id,
+                include_mandates=include_mandates,
+                include_guardrails=include_guardrails,
+                include_references=include_references,
+                include_global=include_global,
+                task_type=task_type,
+                phase=phase,
+                memory_config=memory_config,
+                consumer_profile=consumer_profile,
+                consumer_agent_slug=consumer_agent_slug,
+                consumer_tags=consumer_tags,
+                variant=variant,
+                db=session,
+            )
+
     context = ProgressiveContext()
     variant_config = get_variant_config(variant)
-    settings = await get_memory_settings()
+    settings = await get_memory_settings(db)
     apply_memory_config_overrides(settings, memory_config)
     if not settings.enabled:
         logger.info("Memory injection disabled - returning empty context")
@@ -761,7 +832,13 @@ async def build_progressive_context(
         return context
     scopes_to_query = _build_scopes_to_query(scope, scope_id, include_global)
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
-        scopes_to_query, include_mandates, include_guardrails, include_references, task_type, phase
+        scopes_to_query,
+        include_mandates,
+        include_guardrails,
+        include_references,
+        task_type,
+        phase,
+        db=db,
     )
     _split_reference_index(context, settings, memory_config)
     if not include_references:
@@ -769,11 +846,11 @@ async def build_progressive_context(
         context.reference_index = []
     elif _should_select_query_references(task_type, memory_config, consumer_profile):
         await _merge_query_selected_references(
-            context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase
+            context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase, db
         )
     _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
     await _apply_priority_and_limits(
-        context, query, variant, variant_config, consumer_profile, memory_config
+        context, query, variant, variant_config, consumer_profile, memory_config, db
     )
     budget = _build_usage_snapshot(context)
     _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)

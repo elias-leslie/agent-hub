@@ -512,6 +512,7 @@ async def _build_memory_blocks(
         task_type=task_type,
         phase=phase,
         consumer_profile=consumer_profile,
+        db=db,
     )
     auto_items = [
         *[(item, "mandate", index) for index, item in enumerate(context.mandates)],

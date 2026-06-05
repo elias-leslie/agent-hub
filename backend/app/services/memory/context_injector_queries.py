@@ -4,6 +4,8 @@ import logging
 import re
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .episode_validation import EpisodeValidator
 from .memory_utils import build_group_id
 from .repository import MemoryRepository, get_memory_repository
@@ -37,6 +39,7 @@ async def get_episodes_by_tier(
     tier: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """
     Get episodes by injection_tier field.
@@ -59,6 +62,7 @@ async def get_episodes_by_tier(
             tier=tier,
             group_id=group_id,
             status="active",
+            db=db,
         )
         return [_memory_to_dict(m) for m in memories]
     except Exception as e:
@@ -69,6 +73,7 @@ async def get_episodes_by_tier(
 async def get_auto_inject_references(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """
     Get reference-tier episodes with auto_inject=true.
@@ -92,6 +97,7 @@ async def get_auto_inject_references(
             auto_inject=True,
             group_id=group_id,
             status="active",
+            db=db,
         )
         return [_memory_to_dict(m) for m in memories]
     except Exception as e:
@@ -103,6 +109,7 @@ async def get_pinned_episodes_by_tier(
     tier: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """Get pinned episodes for a tier.
 
@@ -119,6 +126,7 @@ async def get_pinned_episodes_by_tier(
             pinned=True,
             group_id=group_id,
             status="active",
+            db=db,
         )
         return [_memory_to_dict(m) for m in memories]
     except Exception as e:
@@ -151,6 +159,7 @@ async def get_query_relevant_references(
     query: str,
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     limit: int = _REFERENCE_TOP_K,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """Select a small set of query-relevant references for direct injection."""
     if not query.strip():
@@ -190,6 +199,7 @@ async def get_query_relevant_references(
                 tier=TIER_MAP["reference"],
                 limit=_REFERENCE_SEARCH_LIMIT,
                 min_score=_REFERENCE_MIN_SCORE,
+                db=db,
             )
         text_rows = [
             MemoryRepository._to_dict(mem)
@@ -198,13 +208,20 @@ async def get_query_relevant_references(
                 group_id=gid,
                 category="reference",
                 limit=_REFERENCE_SEARCH_LIMIT,
+                db=db,
             )
         ]
         return [(scope, row) for row in [*semantic_rows, *text_rows]]
 
-    scope_results = await asyncio.gather(
-        *(_fetch_scope(scope, scope_id) for scope, scope_id in scopes_to_query)
-    )
+    if db is not None:
+        scope_results = [
+            await _fetch_scope(scope, scope_id)
+            for scope, scope_id in scopes_to_query
+        ]
+    else:
+        scope_results = await asyncio.gather(
+            *(_fetch_scope(scope, scope_id) for scope, scope_id in scopes_to_query)
+        )
 
     for scope_rows in scope_results:
         for scope, row in scope_rows:
@@ -231,11 +248,12 @@ async def get_query_relevant_references_as_search_results(
     query: str,
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     limit: int = _REFERENCE_TOP_K,
+    db: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
     """Return direct-injection reference candidates as MemorySearchResult payloads."""
     from .context_injector_blocks_helpers import episode_to_result
 
-    rows = await get_query_relevant_references(query, scopes_to_query, limit=limit)
+    rows = await get_query_relevant_references(query, scopes_to_query, limit=limit, db=db)
     results: list[dict[str, Any]] = []
     for row in rows:
         result = episode_to_result(row)

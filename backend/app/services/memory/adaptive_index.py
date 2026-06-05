@@ -15,6 +15,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .adaptive_index_models import AdaptiveIndex, IndexEntry, build_index_entry
 from .adaptive_index_queries import fetch_mandates_with_stats
 from .adaptive_index_scoring import apply_demotion, calculate_demotion_threshold
@@ -84,6 +86,7 @@ async def build_adaptive_index(
 
 async def get_adaptive_index(
     force_refresh: bool = False,
+    db: AsyncSession | None = None,
 ) -> AdaptiveIndex:
     """
     Get the adaptive index, building/refreshing as needed.
@@ -102,7 +105,7 @@ async def get_adaptive_index(
         if _index_cache is not None and not force_refresh and not _index_cache.is_stale():
             return _index_cache
 
-        golden, fetched_stats = await fetch_mandates_with_stats()
+        golden, fetched_stats = await fetch_mandates_with_stats(db=db)
 
         if not golden and _index_cache is not None:
             return _index_cache  # Return stale cache on error

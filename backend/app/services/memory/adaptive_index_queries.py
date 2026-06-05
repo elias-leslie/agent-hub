@@ -7,12 +7,16 @@ Handles fetching mandate data and usage statistics using MemoryRepository.
 import logging
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .repository import MemoryRepository, get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_mandates_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
+async def fetch_mandates_with_stats(
+    db: AsyncSession | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
     """
     Fetch mandates and their usage stats from PostgreSQL.
 
@@ -27,6 +31,7 @@ async def fetch_mandates_with_stats() -> tuple[list[dict[str, Any]], dict[str, d
             tier="mandate",
             group_id="global",
             status="active",
+            db=db,
         )
         golden = [MemoryRepository._to_dict(m) for m in memories]
 
