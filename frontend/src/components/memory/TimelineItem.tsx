@@ -1,5 +1,6 @@
 'use client'
 
+import { MarkdownContent } from '@agent-hub/chat-ui'
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { formatRelativeTime } from '@/lib/formatters'
@@ -34,10 +35,6 @@ interface TimelineItemProps {
 export function TimelineItem({ episode, isLast }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false)
   const config = CATEGORY_CONFIG[episode.category as MemoryCategory]
-  const contentPreview =
-    episode.content.length > 160
-      ? `${episode.content.slice(0, 160)}...`
-      : episode.content
 
   return (
     <div className="relative flex gap-4 pb-6 group">
@@ -79,9 +76,13 @@ export function TimelineItem({ episode, isLast }: TimelineItemProps) {
           </div>
         </div>
 
-        <p className="text-sm text-slate-300 leading-relaxed break-words">
-          {expanded ? episode.content : contentPreview}
-        </p>
+        <MarkdownContent
+          content={episode.content}
+          className={cn(
+            'text-sm leading-relaxed text-slate-300 [&_p]:my-0',
+            !expanded && 'line-clamp-3',
+          )}
+        />
 
         {expanded && (
           <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
