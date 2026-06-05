@@ -19,7 +19,6 @@ The target user is a developer or operator running agent infrastructure, not a g
 
 - `/dashboard`: system health, usage, and provider status
 - `/persona`: live persona workspace and heartbeat activity
-- `/arena`: benchmark and regression pressure across agents
 - `/sessions`: conversation history and drill-down inspection
 - `/memory`: searchable memory episodes and reference tuning
 - `/access-control`: client registration and execution permissions
@@ -151,8 +150,7 @@ pnpm screenshot:all
 Base URL resolution order:
 
 1. `AGENT_HUB_SCREENSHOT_BASE_URL`
-2. `network.host_ip` from [`.index.yaml`](.index.yaml)
-3. `http://localhost:3003`
+2. `http://localhost:3003`
 
 When `st browser` is attached to the shared browser VM, do not use `localhost`; the remote browser must reach the app over the host IP.
 

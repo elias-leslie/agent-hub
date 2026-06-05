@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Runs: 15 | Last: 2026-06-05 | State: EXECUTING (6/11 audit tasks done) | Resume: next recommended small/safe item is #10 task-82a49127_
+_Runs: 16 | Last: 2026-06-05 | State: EXECUTING (7/11 audit tasks done) | Resume: next recommended small/safe item is #9 task-dff28019_
 
 ## Orientation
 - FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -21,7 +21,7 @@ _Runs: 15 | Last: 2026-06-05 | State: EXECUTING (6/11 audit tasks done) | Resume
 | 7 | PRUNE+FIX | DONE | Index hygiene: drop 2 redundant indexes (incl. on 1.2GB `session_events`) + add 2 missing FK indexes | `models/session.py:256`, `models/memory.py:34` | med | S | high | task-dba3b898 |
 | 8 | FIX | OPEN | Memory context build opens 12–16 separate pooled DB connections per call on hot SessionStart path | `services/memory/context_builder.py:734` | med | M | high | task-83cecc98 |
 | 9 | PRUNE | OPEN | Close 8 stale ready-queue tasks (6 site-health for deleted subsystem + 2 Gemini cred-test for deleted dir) | migration `t5u6v7w8x9y0`, `curl 127.0.0.1:3003`=307 | med | S | high | task-dff28019 |
-| 10 | FIX+PRUNE | OPEN | Docs & config drift cleanup (env vars, Arena docs, ports.json, .index.yaml link, dup plans, residue) | `.env.example`, `README.md:22`, `ports.json` | med | S | high | task-82a49127 |
+| 10 | FIX+PRUNE | DONE | Docs & config drift cleanup (env vars, Arena docs, ports.json, .index.yaml link, dup plans, residue) | `.env.example`, `README.md:22`, `ports.json` | med | S | high | task-82a49127 |
 | L | PRUNE+FIX | DONE | (lower-value batch) Prune dead backend code & duplication: 7 dead fns + dup `run_tool` closure + 12 dead model-tier maps (~270 LOC) | `agent_preview.py:149`, `api/complete/core.py:136`, `constants/catalog.py:284` | low | S | high | task-ae68413a |
 
 ## Findings detail
@@ -63,8 +63,10 @@ _Runs: 15 | Last: 2026-06-05 | State: EXECUTING (6/11 audit tasks done) | Resume
 - 2026-06-05 | #4 | task-2146db24 | `/memory` table previews/tooltips, expanded row bodies, and timeline items now render episode content through existing `@agent-hub/chat-ui` `MarkdownContent`; collapsed previews use CSS line-clamp instead of cutting Markdown tokens. | Baseline + final `st check --frontend-only`/`st check --quick --changed-only`; `st service rebuild agent-hub`; `st browser` on `127.0.0.1:3003/memory` found no literal `**` in table, expanded row, or timeline and console errors = 0. | Done.
 - 2026-06-05 | #6 | task-27c33158 | Deleted confirmed-dead frontend files: monitoring island, dead live-events panel, duplicate narration timelines, completion gate result, session dropdown, old memory card/stats components, persona text util, and unused context-chip hook; removed the stale session-dropdown test mock. | `rg`/symbol checks found zero remaining references; `st check --frontend-only`; `st check --quick --changed-only`; `st service rebuild agent-hub`; `st browser` dashboard smoke console errors = 0. | Done.
 - 2026-06-05 | L | task-ae68413a | Removed seven dead private backend helpers, deleted dead model fallback maps and re-exports, and deduplicated the completion/streaming direct tool runner into `api/complete/tool_provisioner.py`. | Exact symbol/map reference check = 0 remaining; `st check pytest` full backend suite; `st check --quick --changed-only`; `st service rebuild agent-hub`; live backend health 200. | Done.
+- 2026-06-05 | #10 | task-82a49127 | Documented consumed env vars, removed stale Arena docs/routes, deleted orphan `ports.json`, root voice/code-review plans, and tracked `.dev-tools` residue; fixed README broken `.index.yaml` link, persona benchmark URL, catalog seed header, and `ST_BROWSER_HOST` default. | Reference grep for arena/ports/residue/voice-plan drift; `.env.example` key presence check; `st check --quick --changed-only`; `st service rebuild agent-hub`; backend health 200; `/persona/analytics` 200. | Done.
 
 ## Completed
+- 2026-06-05 #10: docs/config drift cleanup complete; canonical voice plan kept under `docs/`, stale arena/ports/residue removed, and documented env/defaults align with consumed config.
 - 2026-06-05 L: backend prune complete; dead helpers/maps are gone and completion paths share one direct tool-runner helper.
 - 2026-06-05 #6: dead frontend prune complete; 1,383 LOC of orphaned UI code plus one stale mock removed with zero remaining references.
 - 2026-06-05 #4: memory Markdown rendering complete; running `/memory` shows rendered strong/list markup and no literal `**` in table/expanded/timeline views.

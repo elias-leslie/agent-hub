@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     hatchet_client_tls_strategy: str = "none"
 
     # Shared browser / web research infrastructure
-    st_browser_host: str = "192.168.8.234"
+    st_browser_host: str = "192.168.8.244"
     web_search_searxng_url: str = ""
     web_fetch_browser_cdp_url: str = ""
 

@@ -88,11 +88,11 @@ Infra failures are tracked separately so transport problems do not get mistaken 
 
 Current home:
 
-- `http://localhost:3003/persona/arena`
+- `http://localhost:3003/persona/analytics`
 
 Placement rule:
 
-- Arena is the umbrella evaluation surface, and the persona gets the first rich view there.
+- Persona analytics is the live evaluation dashboard for self-improvement and benchmark trends.
 - The backend/storage model should stay agent/model agnostic even when the first rich UX is persona-first.
 
 Why:
