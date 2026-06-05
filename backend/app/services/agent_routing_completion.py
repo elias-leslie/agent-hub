@@ -196,31 +196,6 @@ def _thinking_level_for_provider(provider: str, thinking_level: str | None) -> s
     return thinking_level
 
 
-async def _try_primary(
-    messages: list[Message],
-    agent: AgentDTO,
-    temperature: float,
-    max_tokens: int | None,
-    tools: list[dict[str, object]] | None,
-    thinking_level: str | None,
-    verbosity_level: str | None = None,
-    prompt_cache_key: str | None = None,
-) -> FallbackCompletionResult | None:
-    """Try the primary model; return fallback result or None on failure."""
-    result, error = await _try_model(
-        messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
-    )
-    if result is None:
-        logger.warning("Primary model %s failed for agent %s", agent.primary_model_id, agent.slug)
-        return None
-    return _completion_result(
-        result=result,
-        model_used=agent.primary_model_id,
-        used_fallback=False,
-        fallback_reason=_format_fallback_reason(error),
-    )
-
-
 async def _try_fallbacks(
     messages: list[Message],
     agent: AgentDTO,

@@ -146,47 +146,6 @@ def _build_budget_telemetry(
     }
 
 
-def _render_budget_warning_section(telemetry: dict[str, Any]) -> str:
-    warnings = telemetry.get("warnings") or []
-    if not warnings:
-        return ""
-    top_sections = telemetry.get("top_sections") or []
-    lines = [
-        "<prompt_budget>",
-        f"Severity: {telemetry['severity']}",
-        f"Total estimated tokens: {telemetry['total_estimated_tokens']}",
-        (
-            "Thresholds: "
-            f"warn={telemetry['warn_threshold_tokens']}, "
-            f"danger={telemetry['danger_threshold_tokens']}"
-        ),
-        (
-            "Low-yield tokens: "
-            f"{telemetry['low_yield_estimated_tokens']} "
-            f"across {telemetry['low_yield_section_count']} sections "
-            f"({telemetry['low_yield_share_of_total']:.1%} of total)"
-        ),
-        "Warnings:",
-        *[f"- {warning}" for warning in warnings],
-    ]
-    if top_sections:
-        lines.append("Top sections:")
-        lines.extend(
-            f"- {section['label']} [{section['source_kind']}:{section['source_id']}] "
-            f"~{section['estimated_tokens']} tokens ({section.get('share_of_total', 0.0):.1%})"
-            for section in top_sections[:3]
-        )
-    hotspot_sections = telemetry.get("top_low_yield_sections") or []
-    if hotspot_sections:
-        lines.append("Low-yield hotspots:")
-        lines.extend(
-            f"- {section['label']} [{section['source_kind']}:{section['source_id']}] "
-            f"~{section['estimated_tokens']} tokens ({section.get('share_of_total', 0.0):.1%})"
-            for section in hotspot_sections
-        )
-    lines.append("</prompt_budget>")
-    return "\n".join(lines)
-
 
 async def _build_task_prompt_preview(
     agent: AgentDTO,

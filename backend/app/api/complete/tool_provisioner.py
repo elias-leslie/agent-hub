@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
+from app.llm.tool_loop import ToolRunner
+from app.llm.types import TextContent, ToolCall, ToolResultMessage
+from app.services.tools.base import ToolCall as ServiceToolCall
+from app.services.tools.base import ToolCaller
 from app.services.tools.catalog import build_deferred_toolset, build_tool_catalog
+from app.services.tools.tool_handler import create_direct_handler
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +23,40 @@ class ToolProvisioningResult:
 
     loaded_tools: list[dict[str, Any]]
     catalog_tools: list[dict[str, Any]]
+
+
+def build_direct_tool_runner(
+    *,
+    working_dir: str | None,
+    project_id: str | None,
+    session_id: str | None,
+    agent_slug: str | None,
+) -> ToolRunner:
+    """Build the direct tool runner used by completion and streaming paths."""
+    handler = create_direct_handler(
+        working_dir=working_dir,
+        project_id=project_id,
+        session_id=session_id,
+        agent_slug=agent_slug,
+    )
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        service_call = ServiceToolCall(
+            id=call.id,
+            name=call.name,
+            input=dict(call.arguments or {}),
+            caller=ToolCaller(type="direct"),
+        )
+        result = await handler.execute(service_call)
+        return ToolResultMessage(
+            tool_call_id=call.id,
+            tool_name=call.name,
+            content=[TextContent(text=result.content)],
+            is_error=bool(result.is_error),
+            timestamp=int(time.time() * 1000),
+        )
+
+    return run_tool
 
 
 def _resolve_tools(

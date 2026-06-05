@@ -465,7 +465,7 @@ async def test_new_pipeline_execute_tools_drives_unified_tool_loop() -> None:
                 return_value=model,
             ),
             patch(
-                "app.api.complete.core.create_direct_handler",
+                "app.api.complete.tool_provisioner.create_direct_handler",
                 return_value=_StubHandler(),
             ),
         ):

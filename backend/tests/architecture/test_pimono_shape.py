@@ -56,7 +56,7 @@ RESULT_SHAPE_ALLOWLIST = {
 }
 TOOL_FILE_ALLOWLIST = {
     APP / "llm" / "tool_loop.py",
-    # Live service-side tool runtime used by complete_internal._make_tool_runner.
+    # Live service-side tool runtime used by complete_internal/build_direct_tool_runner.
     APP / "services" / "tools" / "tool_handler.py",
 }
 
