@@ -13,17 +13,51 @@ permissions:
   packages: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Backend checks
+        working-directory: backend
+        run: |
+          uv sync --all-extras --dev
+          uv run ruff check .
+          uv run ty check app
+          uv run pytest
+      - name: Frontend checks
+        run: |
+          pnpm --filter frontend lint
+          pnpm --filter frontend exec tsc --noEmit
+          pnpm --filter frontend test
+
   pack-workspace:
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.28.0
       - name: Pack workspace packages
         run: |
           mkdir -p /tmp/workspace-packages
-          for pkg in chat-ui passport-client; do
+          for pkg in chat-ui passport-client notes-ui; do
             if [ -d "packages/$pkg" ]; then
               cd "packages/$pkg"
               pnpm pack --pack-destination /tmp/workspace-packages

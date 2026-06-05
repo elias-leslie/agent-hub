@@ -20,7 +20,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@summitflow/notes-ui": "file:../../summitflow/packages/notes-ui",
+    "@summitflow/notes-ui": "workspace:*",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-virtual": "^3.13.18",
     "clsx": "^2.1.1",
