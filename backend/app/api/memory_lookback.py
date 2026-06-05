@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+MAX_MEMORY_LOOKBACK_DAYS = 90
+
 
 def parse_memory_lookback(lookback: str | None, fallback_days: int) -> tuple[timedelta, str]:
     """Return a lookback delta and canonical label.
@@ -19,7 +21,7 @@ def parse_memory_lookback(lookback: str | None, fallback_days: int) -> tuple[tim
         return timedelta(hours=1), normalized
     if normalized.endswith("d") and normalized[:-1].isdigit():
         days = int(normalized[:-1])
-        if days < 1:
+        if days < 1 or days > MAX_MEMORY_LOOKBACK_DAYS:
             msg = f"Invalid lookback value: {lookback}"
             raise ValueError(msg)
         return timedelta(days=days), normalized

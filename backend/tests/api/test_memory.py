@@ -427,3 +427,23 @@ class TestMemoryRevisionEndpoints:
         data = response.json()
         assert data["success"] is True
         assert data["version"] == 5
+
+
+class TestMemoryTagEndpoints:
+    @pytest.mark.asyncio
+    async def test_bulk_tag_rejects_empty_uuid_list(self, client: AsyncClient):
+        response = await client.post(
+            "/api/memory/episodes/bulk-tag",
+            json={"uuids": [], "add_tags": ["important"]},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_bulk_tag_rejects_oversized_uuid_list(self, client: AsyncClient):
+        response = await client.post(
+            "/api/memory/episodes/bulk-tag",
+            json={"uuids": [f"episode-{i}" for i in range(101)], "add_tags": ["important"]},
+        )
+
+        assert response.status_code == 422

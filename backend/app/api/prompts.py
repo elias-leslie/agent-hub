@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.prompt_schemas import (
@@ -205,7 +205,7 @@ async def list_prompt_revisions_endpoint(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
-    limit: int = 20,
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum prompt revisions to return")] = 20,
 ) -> PromptRevisionListResponse:
     revisions = await list_prompt_revisions(db, slug, limit=limit)
     return PromptRevisionListResponse(
