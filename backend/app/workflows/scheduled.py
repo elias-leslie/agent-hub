@@ -59,6 +59,7 @@ class DataRetentionResult(BaseModel):
     request_logs_deleted: int = 0
     usage_stats_deleted: int = 0
     session_events_deleted: int = 0
+    memory_injection_metrics_deleted: int = 0
 
 
 class MemoryGovernanceResult(BaseModel):
@@ -246,7 +247,8 @@ async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     ctx.log(
         f"Data retention: request_logs={result.request_logs_deleted}, "
         f"usage_stats={result.usage_stats_deleted}, "
-        f"session_events={result.session_events_deleted}"
+        f"session_events={result.session_events_deleted}, "
+        f"memory_injection_metrics={result.memory_injection_metrics_deleted}"
     )
     return result.model_dump()
 
