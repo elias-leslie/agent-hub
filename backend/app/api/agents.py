@@ -189,8 +189,8 @@ async def list_agents(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
     active_only: bool = True,
     is_coding_agent: bool | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=500, description="Maximum agents to return")] = 100,
+    offset: Annotated[int, Query(ge=0, le=10000, description="Agents to skip")] = 0,
 ) -> AgentListResponse:
     """List all agents.
 
@@ -378,8 +378,8 @@ async def get_agent_benchmarks(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
-    days: int = 30,
-    limit: int = 20,
+    days: Annotated[int, Query(ge=1, le=365, description="Days to include in benchmark history")] = 30,
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum benchmark rows per section")] = 20,
     suite_id: str | None = None,
 ) -> AgentBenchmarkDashboard:
     """Get persisted benchmark history and regression dashboard for one agent."""

@@ -102,6 +102,13 @@ class TestAgentListEndpoint:
             assert response.status_code == 200
             mock_svc.list_agents.assert_called_once()
 
+    @pytest.mark.parametrize("query", ["limit=0", "limit=501", "offset=-1", "offset=10001"])
+    def test_list_agents_rejects_invalid_pagination(self, api_client, query):
+        """Invalid pagination is rejected before SQL LIMIT/OFFSET."""
+        response = api_client.get(f"/api/agents?{query}")
+
+        assert response.status_code == 422
+
 
 class TestAgentDetailEndpoint:
     """Tests for GET /api/agents/{slug} endpoint."""
@@ -530,6 +537,13 @@ class TestAgentActivityEndpoint:
 
 class TestAgentBenchmarkDashboardEndpoint:
     """Tests for agent benchmark dashboard endpoint."""
+
+    @pytest.mark.parametrize("query", ["days=0", "days=366", "limit=0", "limit=101"])
+    def test_get_agent_benchmarks_rejects_invalid_windows(self, api_client, query):
+        """Invalid benchmark windows are rejected before timedelta/service work."""
+        response = api_client.get(f"/api/agents/coder/benchmarks?{query}")
+
+        assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_get_agent_benchmarks_returns_dashboard(self, api_client):

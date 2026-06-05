@@ -95,6 +95,12 @@ class TestPromptRevisionEndpoints:
         assert data["revisions"][0]["id"] == "rev-1"
         assert data["revisions"][0]["action"] == "update"
 
+    @pytest.mark.parametrize("limit", [0, 101])
+    def test_list_prompt_revisions_rejects_invalid_limit(self, api_client, limit):
+        response = api_client.get(f"/api/prompts/persona-heartbeat-instructions/revisions?limit={limit}")
+
+        assert response.status_code == 422
+
     @pytest.mark.asyncio
     async def test_restore_prompt_revision_returns_restored_prompt(self, api_client):
         with (

@@ -37,3 +37,8 @@ def test_parse_memory_lookback_accepts_supported_ranges(
 def test_parse_memory_lookback_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="Invalid lookback value"):
         parse_memory_lookback("2h", fallback_days=30)
+
+
+def test_parse_memory_lookback_rejects_values_above_window_cap() -> None:
+    with pytest.raises(ValueError, match="Invalid lookback value"):
+        parse_memory_lookback("91d", fallback_days=30)

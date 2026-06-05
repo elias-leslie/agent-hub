@@ -25,7 +25,7 @@ class SetTagsRequest(BaseModel):
 
 
 class BulkTagRequest(BaseModel):
-    uuids: list[str]
+    uuids: list[str] = Field(min_length=1, max_length=100)
     add_tags: list[str] = Field(default_factory=list)
     remove_tags: list[str] = Field(default_factory=list)
 
@@ -97,7 +97,7 @@ async def get_distinct_tags_endpoint() -> DistinctTagsResponse:
 
 
 class BulkRenderModeRequest(BaseModel):
-    uuids: list[str]
+    uuids: list[str] = Field(min_length=1, max_length=100)
     render_mode: RenderMode | None = Field(
         None,
         description=(

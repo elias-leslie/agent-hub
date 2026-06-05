@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -132,8 +133,8 @@ async def update_persona(
 @router.get("/improvement", response_model=PersonaImprovementDashboardResponse)
 async def get_improvement_dashboard(
     db: AsyncSession = Depends(get_db),
-    days: int = 30,
-    limit: int = 8,
+    days: Annotated[int, Query(ge=1, le=365, description="Days to include in improvement history")] = 30,
+    limit: Annotated[int, Query(ge=1, le=50, description="Maximum recent rows per section")] = 8,
 ) -> PersonaImprovementDashboardResponse:
     """Return the focused persona improvement dashboard payload."""
     return PersonaImprovementDashboardResponse(

@@ -223,6 +223,13 @@ class TestUpdatePersonaEndpoint:
 class TestPersonaImprovementDashboardEndpoint:
     """Tests for GET /api/persona/improvement."""
 
+    @pytest.mark.parametrize("query", ["days=0", "days=366", "limit=0", "limit=51"])
+    def test_rejects_invalid_windows(self, api_client, query):
+        """Invalid improvement windows are rejected before dashboard work."""
+        response = api_client.get(f"/api/persona/improvement?{query}")
+
+        assert response.status_code == 422
+
     def test_returns_focused_improvement_dashboard(self, api_client, mock_db_session):
         payload = {
             "generated_at": "2026-03-31T18:00:00Z",
