@@ -45,6 +45,7 @@ from .orchestrator import build_context_from_messages, run_completion_stream
 from .schemas import MessageInput
 from .sse_writer import SseWriter
 from .streaming_context import StreamContext
+from .tool_provisioner import build_direct_tool_runner
 
 logger = logging.getLogger(__name__)
 
@@ -59,58 +60,9 @@ DEFAULT_MAX_TOOL_TURNS = 1
 _StreamContext = StreamContext
 
 
-def _build_run_tool(
-    *,
-    working_dir: str | None,
-    project_id: str | None,
-    session_id: str,
-    agent_slug: str | None,
-):
-    """Build the run_tool callback the universal tool loop drives."""
-    from app.llm.tool_loop import ToolRunner
-    from app.llm.types import ToolCall as UniversalToolCall
-    from app.services.tools.base import ToolCall as ServiceToolCall
-    from app.services.tools.base import ToolCaller
-    from app.services.tools.tool_handler import create_direct_handler
-
-    handler = create_direct_handler(
-        working_dir=working_dir,
-        project_id=project_id,
-        session_id=session_id,
-        agent_slug=agent_slug,
-    )
-
-    async def run_tool(call: UniversalToolCall) -> ToolResultMessage:
-        service_call = ServiceToolCall(
-            id=call.id,
-            name=call.name,
-            input=dict(call.arguments or {}),
-            caller=ToolCaller(type="direct"),
-        )
-        result = await handler.execute(service_call)
-        return ToolResultMessage(
-            tool_call_id=call.id,
-            tool_name=call.name,
-            content=[TextContent(text=result.content)],
-            is_error=bool(result.is_error),
-            timestamp=int(time.time() * 1000),
-        )
-
-    runner: ToolRunner = run_tool
-    return runner
-
-
 def _messages_to_dicts(messages: list[Message]) -> list[dict[str, object]]:
     """Translate adapter ``Message`` rows to ``{role, content}`` dicts."""
     return [{"role": m.role, "content": m.content} for m in messages]
-
-
-def _assistant_text(message: AssistantMessage) -> str:
-    parts: list[str] = []
-    for block in message.content:
-        if isinstance(block, TextContent):
-            parts.append(block.text)
-    return "".join(parts)
 
 
 def _tool_result_text(result: ToolResultMessage) -> str:
@@ -346,7 +298,7 @@ async def stream_completion(
         context = build_context_from_messages(_messages_to_dicts(messages), tools=tools)
         execute_tools = bool(tools)
         run_tool = (
-            _build_run_tool(
+            build_direct_tool_runner(
                 working_dir=working_dir,
                 project_id=project_id,
                 session_id=session_id,

@@ -22,10 +22,6 @@ Draft202012Validator: Any = _Draft202012Validator
 ValidationError: Any = _ValidationError
 
 
-def _is_record(value: Any) -> bool:
-    return isinstance(value, dict)
-
-
 def _get_schema_types(schema: dict[str, Any]) -> list[str]:
     t = schema.get("type")
     if isinstance(t, str):

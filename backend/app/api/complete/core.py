@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
@@ -21,21 +20,15 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.llm.model_resolver import resolve_llm_model
-from app.llm.tool_loop import ToolRunner
 from app.llm.types import (
     AssistantMessage,
     TextContent,
     ThinkingContent,
-    ToolCall,
-    ToolResultMessage,
 )
 from app.memory.citation_extractor import extract_cited_uuids
 from app.memory.injection import inject_memory_context
 from app.routing.registry import is_workload_provider
 from app.services.llm_errors import ProviderError
-from app.services.tools.base import ToolCall as ServiceToolCall
-from app.services.tools.base import ToolCaller
-from app.services.tools.tool_handler import create_direct_handler
 
 from .orchestrator import build_context_from_messages, run_completion
 from .progress import AgentProgress
@@ -45,6 +38,7 @@ from .session_repo import (
     setup_completion_session,
 )
 from .streaming import stream_completion  # re-export for back-compat callers
+from .tool_provisioner import build_direct_tool_runner
 from .types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
@@ -119,39 +113,6 @@ def _assistant_thinking(
     return thinking, len(thinking) // 4
 
 
-def _make_tool_runner(
-    *,
-    working_dir: str | None,
-    project_id: str | None,
-    session_id: str | None,
-    agent_slug: str | None,
-) -> ToolRunner:
-    handler = create_direct_handler(
-        working_dir=working_dir,
-        project_id=project_id,
-        session_id=session_id,
-        agent_slug=agent_slug,
-    )
-
-    async def run_tool(call: ToolCall) -> ToolResultMessage:
-        service_call = ServiceToolCall(
-            id=call.id,
-            name=call.name,
-            input=dict(call.arguments or {}),
-            caller=ToolCaller(type="direct"),
-        )
-        result = await handler.execute(service_call)
-        return ToolResultMessage(
-            tool_call_id=call.id,
-            tool_name=call.name,
-            content=[TextContent(text=result.content)],
-            is_error=bool(result.is_error),
-            timestamp=int(time.time() * 1000),
-        )
-
-    return run_tool
-
-
 async def complete_internal(
     messages: list[dict[str, Any]], model: str, provider: str,
     temperature: float, project_id: str, db: AsyncSession | None,
@@ -219,7 +180,7 @@ async def complete_internal(
     context = build_context_from_messages(messages_dict, tools=tools)
 
     run_tool = (
-        _make_tool_runner(
+        build_direct_tool_runner(
             working_dir=working_dir,
             project_id=project_id,
             session_id=session_id,

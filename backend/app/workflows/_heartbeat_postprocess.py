@@ -19,9 +19,6 @@ from app.workflows._session_postprocess import (
     extract_synthetic_summary as _shared_extract_synthetic_summary,
 )
 from app.workflows._session_postprocess import (
-    has_inline_summary_tag as _shared_has_inline_summary_tag,
-)
-from app.workflows._session_postprocess import (
     inline_summary_contract_issues as _shared_inline_summary_contract_issues,
 )
 from app.workflows._session_postprocess import (
@@ -282,11 +279,6 @@ async def _log_heartbeat_performance_observation(
     except Exception:
         logger.debug("Failed to log heartbeat performance observation", exc_info=True)
 
-
-
-def _has_inline_summary_tag(content: str | None) -> bool:
-    """Return True when heartbeat output contains an inline [[S:...]] tag."""
-    return _shared_has_inline_summary_tag(content)
 
 
 def _inline_summary_contract_issues(content: str | None) -> list[str]:

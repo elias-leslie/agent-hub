@@ -41,11 +41,6 @@ class SpecialistDispatchPlan:
     working_dir: str | None = None
 
 
-def _is_wake_dispatch_specialist_session(session: object) -> bool:
-    request_source = getattr(session, "request_source", None)
-    return isinstance(request_source, str) and request_source.startswith("persona_wake:dispatch")
-
-
 def _is_shared_plumbing_path(path: str) -> bool:
     lowered = path.lower()
     return any(marker in lowered for marker in _SHARED_PLUMBING_MARKERS)

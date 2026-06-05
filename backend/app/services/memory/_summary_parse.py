@@ -93,24 +93,6 @@ def create_fallback_summary(
     return LLMAnalysisResult(summary="", tools=[], git_digest="")
 
 
-def _extract_git_digest(
-    git_context: str | None,
-    parts: list[str],
-) -> str:
-    """Extract git digest string and append first commit to parts."""
-    if not git_context:
-        return ""
-    commit_lines = [ln.strip() for ln in git_context.strip().split("\n") if ln.strip()]
-    if not commit_lines:
-        return ""
-    subjects = [
-        cl.split(" ", 1)[1] if " " in cl else cl
-        for cl in commit_lines[:3]
-    ]
-    parts.append(f"Commits: {subjects[0]}")
-    return "; ".join(subjects)[:500]
-
-
 def _parse_csv(raw: str) -> list[str]:
     """Parse a comma-separated value string, returning empty list for NONE."""
     val = raw.strip()
