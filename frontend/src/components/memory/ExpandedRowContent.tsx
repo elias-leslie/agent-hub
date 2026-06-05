@@ -1,5 +1,6 @@
 'use client'
 
+import { MarkdownContent } from '@agent-hub/chat-ui'
 import { useState } from 'react'
 import type { MemoryCategory, MemoryEpisode } from '@/lib/memory-api'
 import { EditEpisodeModal } from './EditEpisodeModal'
@@ -58,9 +59,10 @@ export function ExpandedRowContent({
 
       {/* CONTENT */}
       <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-700/50">
-        <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
-          {episode.content}
-        </p>
+        <MarkdownContent
+          content={episode.content}
+          className="text-sm leading-relaxed text-slate-300 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+        />
       </div>
 
       {/* BOTTOM: triggers + stats + similar */}

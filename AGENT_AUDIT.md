@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Runs: 12 | Last: 2026-06-05 | State: EXECUTING (3/11 audit tasks done) | Resume: next recommended small/safe item is #4 task-2146db24_
+_Runs: 13 | Last: 2026-06-05 | State: EXECUTING (4/11 audit tasks done) | Resume: next recommended small/safe item is #6 task-27c33158_
 
 ## Orientation
 - FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -15,7 +15,7 @@ _Runs: 12 | Last: 2026-06-05 | State: EXECUTING (3/11 audit tasks done) | Resume
 | 1 | FIX | DONE | Internal-auth fail-open: empty `INTERNAL_SERVICE_SECRET` grants unrestricted admin/access-control via empty header | `middleware/access_control_paths.py:80`, `config.py:85` | high | S | high | task-7e59be47 |
 | 2 | FIX | OPEN | Release pipeline broken & unguarded: Docker build fails on missing `@summitflow/notes-ui`; CI runs zero tests/lint/types | `frontend/package.json:23`, `.github/workflows/docker-build.yml` | high | M | high | task-6613ef27 |
 | 3 | PRUNE | OPEN | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
-| 4 | FIX | OPEN | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
+| 4 | FIX | DONE | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
 | 5 | FIX | DONE | Unbounded pagination/time params → 500 (not 4xx) across persona+agents endpoints (+ /memory contract drift) | `api/agents.py:192`, `api/persona/__init__.py:135` | med | S | high | task-5d58d068 |
 | 6 | PRUNE | OPEN | ~1,383 LOC dead frontend code: 9 orphaned components + unreachable `monitoring/` island | `components/monitoring/*`, `NarrationTimeline.tsx`×2 | med | S | high | task-27c33158 |
 | 7 | PRUNE+FIX | DONE | Index hygiene: drop 2 redundant indexes (incl. on 1.2GB `session_events`) + add 2 missing FK indexes | `models/session.py:256`, `models/memory.py:34` | med | S | high | task-dba3b898 |
@@ -60,8 +60,10 @@ _Runs: 12 | Last: 2026-06-05 | State: EXECUTING (3/11 audit tasks done) | Resume
 - 2026-06-05 | #1 | task-7e59be47 | Internal auth now rejects requests whenever `INTERNAL_SERVICE_SECRET` is empty/unset; replaced skipped placeholder auth test with empty-secret rejection + valid-secret allow coverage. | `st check pytest -- backend/tests/api/test_access_control.py`; `st check --quick --changed-only`; `st service rebuild agent-hub`; live `127.0.0.1:8003` empty internal header → 403. | Done.
 - 2026-06-05 | #5 | task-5d58d068 | Added `Query` bounds for agent/persona/prompt pagination and time-window params; capped compact memory lookback at 90d; constrained memory bulk UUID lists to 1-100. Confirmed memory episode revisions route was already bounded. | `st check pytest -- backend/tests/api/test_agents_api.py backend/tests/api/test_persona.py backend/tests/api/test_prompts_api.py backend/tests/api/test_memory.py backend/tests/api/test_memory_lookback.py`; `st check --quick --changed-only`; `st service rebuild agent-hub`; live bad requests for each endpoint family returned 400/422, not 500. | Done.
 - 2026-06-05 | #7 | task-dba3b898 | Added one Alembic migration plus model metadata changes: dropped redundant `ix_session_events_session_turn` and `ix_sessions_parent_session_id`; added FK indexes on `memory_injection_metrics.session_id` and `truncation_events.session_id`. | `st db` pre/post index checks; `alembic upgrade head`, `downgrade 9cff0500948a`, `upgrade head`; `EXPLAIN` uses `uq_session_turn_sequence`; `st check --quick --changed-only`; `st service rebuild agent-hub`. | Done.
+- 2026-06-05 | #4 | task-2146db24 | `/memory` table previews/tooltips, expanded row bodies, and timeline items now render episode content through existing `@agent-hub/chat-ui` `MarkdownContent`; collapsed previews use CSS line-clamp instead of cutting Markdown tokens. | Baseline + final `st check --frontend-only`/`st check --quick --changed-only`; `st service rebuild agent-hub`; `st browser` on `127.0.0.1:3003/memory` found no literal `**` in table, expanded row, or timeline and console errors = 0. | Done.
 
 ## Completed
+- 2026-06-05 #4: memory Markdown rendering complete; running `/memory` shows rendered strong/list markup and no literal `**` in table/expanded/timeline views.
 - 2026-06-05 #7: DB index hygiene complete; final live index set keeps `uq_session_turn_sequence` + `ix_sessions_parent` and includes both new session FK indexes.
 - 2026-06-05 #5: input-validation hardening complete; negative/huge pagination/window/list inputs are rejected at validation or bounded parser layer and runtime bad requests return 4xx.
 - 2026-06-05 #1: internal-auth fail-open closed; empty configured secret can no longer match empty `X-Agent-Hub-Internal`, and live empty-header request returns 403 after rebuild.
@@ -71,4 +73,3 @@ _Runs: 12 | Last: 2026-06-05 | State: EXECUTING (3/11 audit tasks done) | Resume
 - #1: deployment policy on empty internal secret (fail-startup vs disable-internal).
 - #2: `@summitflow/notes-ui` ownership — vendor into repo vs consume as published package.
 - #3: is `persona_heartbeat` disable (2026-04-21) permanent (close P1s) or paused (re-enable + verify)?
-- #4: render Markdown vs strip markers on /memory.

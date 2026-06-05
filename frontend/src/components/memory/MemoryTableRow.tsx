@@ -1,7 +1,7 @@
 'use client'
 
+import { MarkdownContent } from '@agent-hub/chat-ui'
 import { Check, ChevronDown, Pin } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   MemoryCategory,
   MemoryEpisode,
@@ -55,29 +55,6 @@ export function MemoryTableRow({
 }: MemoryTableRowProps) {
   const hasRelevance =
     'relevance_score' in item && item.relevance_score !== undefined
-  const contentRef = useRef<HTMLDivElement>(null)
-  const [charBudget, setCharBudget] = useState(80)
-
-  const updateBudget = useCallback(() => {
-    if (!contentRef.current) return
-    const width = contentRef.current.offsetWidth
-    // text-xs ≈ 6px avg char width; reserve space for pin icon + padding
-    setCharBudget(Math.max(30, Math.floor(width / 6)))
-  }, [])
-
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    updateBudget()
-    const ro = new ResizeObserver(updateBudget)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [updateBudget])
-
-  const truncatedContent =
-    item.content.length <= charBudget
-      ? item.content
-      : `${item.content.slice(0, charBudget).replace(/\s+\S*$/, '')}...`
 
   const tierBorderColor =
     {
@@ -147,13 +124,24 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <div ref={contentRef} className="min-w-0 overflow-hidden">
-          <Tooltip content={item.content.slice(0, 500)} position="bottom">
+        <div className="min-w-0 overflow-hidden">
+          <Tooltip
+            content={
+              <MarkdownContent
+                content={item.content.slice(0, 500)}
+                className="max-w-sm whitespace-normal text-[10px] leading-snug text-slate-100 [&_p]:my-0 [&_p]:leading-snug"
+              />
+            }
+            position="bottom"
+          >
             <div className="flex items-center gap-2">
               {item.pinned && (
                 <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
               )}
-              <span className="text-xs text-slate-300">{truncatedContent}</span>
+              <MarkdownContent
+                content={item.content}
+                className="line-clamp-1 min-w-0 text-xs leading-snug text-slate-300 [&_p]:my-0 [&_p]:inline [&_p]:leading-snug"
+              />
               {hasRelevance && (
                 <RelevanceBadge
                   score={(item as { relevance_score: number }).relevance_score}
