@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Runs: 13 | Last: 2026-06-05 | State: EXECUTING (4/11 audit tasks done) | Resume: next recommended small/safe item is #6 task-27c33158_
+_Runs: 14 | Last: 2026-06-05 | State: EXECUTING (5/11 audit tasks done) | Resume: next recommended small/safe item is lower-value prune task-ae68413a_
 
 ## Orientation
 - FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -17,7 +17,7 @@ _Runs: 13 | Last: 2026-06-05 | State: EXECUTING (4/11 audit tasks done) | Resume
 | 3 | PRUNE | OPEN | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
 | 4 | FIX | DONE | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
 | 5 | FIX | DONE | Unbounded pagination/time params → 500 (not 4xx) across persona+agents endpoints (+ /memory contract drift) | `api/agents.py:192`, `api/persona/__init__.py:135` | med | S | high | task-5d58d068 |
-| 6 | PRUNE | OPEN | ~1,383 LOC dead frontend code: 9 orphaned components + unreachable `monitoring/` island | `components/monitoring/*`, `NarrationTimeline.tsx`×2 | med | S | high | task-27c33158 |
+| 6 | PRUNE | DONE | ~1,383 LOC dead frontend code: 9 orphaned components + unreachable `monitoring/` island | `components/monitoring/*`, `NarrationTimeline.tsx`×2 | med | S | high | task-27c33158 |
 | 7 | PRUNE+FIX | DONE | Index hygiene: drop 2 redundant indexes (incl. on 1.2GB `session_events`) + add 2 missing FK indexes | `models/session.py:256`, `models/memory.py:34` | med | S | high | task-dba3b898 |
 | 8 | FIX | OPEN | Memory context build opens 12–16 separate pooled DB connections per call on hot SessionStart path | `services/memory/context_builder.py:734` | med | M | high | task-83cecc98 |
 | 9 | PRUNE | OPEN | Close 8 stale ready-queue tasks (6 site-health for deleted subsystem + 2 Gemini cred-test for deleted dir) | migration `t5u6v7w8x9y0`, `curl 127.0.0.1:3003`=307 | med | S | high | task-dff28019 |
@@ -61,8 +61,10 @@ _Runs: 13 | Last: 2026-06-05 | State: EXECUTING (4/11 audit tasks done) | Resume
 - 2026-06-05 | #5 | task-5d58d068 | Added `Query` bounds for agent/persona/prompt pagination and time-window params; capped compact memory lookback at 90d; constrained memory bulk UUID lists to 1-100. Confirmed memory episode revisions route was already bounded. | `st check pytest -- backend/tests/api/test_agents_api.py backend/tests/api/test_persona.py backend/tests/api/test_prompts_api.py backend/tests/api/test_memory.py backend/tests/api/test_memory_lookback.py`; `st check --quick --changed-only`; `st service rebuild agent-hub`; live bad requests for each endpoint family returned 400/422, not 500. | Done.
 - 2026-06-05 | #7 | task-dba3b898 | Added one Alembic migration plus model metadata changes: dropped redundant `ix_session_events_session_turn` and `ix_sessions_parent_session_id`; added FK indexes on `memory_injection_metrics.session_id` and `truncation_events.session_id`. | `st db` pre/post index checks; `alembic upgrade head`, `downgrade 9cff0500948a`, `upgrade head`; `EXPLAIN` uses `uq_session_turn_sequence`; `st check --quick --changed-only`; `st service rebuild agent-hub`. | Done.
 - 2026-06-05 | #4 | task-2146db24 | `/memory` table previews/tooltips, expanded row bodies, and timeline items now render episode content through existing `@agent-hub/chat-ui` `MarkdownContent`; collapsed previews use CSS line-clamp instead of cutting Markdown tokens. | Baseline + final `st check --frontend-only`/`st check --quick --changed-only`; `st service rebuild agent-hub`; `st browser` on `127.0.0.1:3003/memory` found no literal `**` in table, expanded row, or timeline and console errors = 0. | Done.
+- 2026-06-05 | #6 | task-27c33158 | Deleted confirmed-dead frontend files: monitoring island, dead live-events panel, duplicate narration timelines, completion gate result, session dropdown, old memory card/stats components, persona text util, and unused context-chip hook; removed the stale session-dropdown test mock. | `rg`/symbol checks found zero remaining references; `st check --frontend-only`; `st check --quick --changed-only`; `st service rebuild agent-hub`; `st browser` dashboard smoke console errors = 0. | Done.
 
 ## Completed
+- 2026-06-05 #6: dead frontend prune complete; 1,383 LOC of orphaned UI code plus one stale mock removed with zero remaining references.
 - 2026-06-05 #4: memory Markdown rendering complete; running `/memory` shows rendered strong/list markup and no literal `**` in table/expanded/timeline views.
 - 2026-06-05 #7: DB index hygiene complete; final live index set keeps `uq_session_turn_sequence` + `ix_sessions_parent` and includes both new session FK indexes.
 - 2026-06-05 #5: input-validation hardening complete; negative/huge pagination/window/list inputs are rejected at validation or bounded parser layer and runtime bad requests return 4xx.
