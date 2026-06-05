@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const HISTORY_KEY = "agent_hub_prompt_history";
+const HISTORY_KEY_PREFIX = "agent_hub_prompt_history";
 const HISTORY_LIMIT = 50;
 
-function loadHistory(): string[] {
+function storageKeyFor(agentSlug?: string | null): string {
+  return `${HISTORY_KEY_PREFIX}:${agentSlug || "_default"}`;
+}
+
+function loadHistory(storageKey: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(HISTORY_KEY);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -20,13 +24,13 @@ function loadHistory(): string[] {
   }
 }
 
-function saveHistory(history: string[]): void {
+function saveHistory(storageKey: string, history: string[]): void {
   if (typeof window === "undefined") return;
   try {
     if (history.length > 0) {
-      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      window.localStorage.setItem(storageKey, JSON.stringify(history));
     } else {
-      window.localStorage.removeItem(HISTORY_KEY);
+      window.localStorage.removeItem(storageKey);
     }
   } catch {
     // ignore quota / serialization errors — history is best-effort
@@ -34,30 +38,43 @@ function saveHistory(history: string[]): void {
 }
 
 /**
- * Shell-style recall of recently sent prompts, persisted in localStorage.
- * `history[0]` is the most recent. The browsing cursor is -1 when the user is
- * editing a fresh draft (not browsing history). Stepping past the newest entry
- * restores the stashed draft, mirroring terminal up/down history behaviour.
+ * Shell-style recall of recently sent prompts, persisted in localStorage and
+ * scoped per agent (`agentSlug`). `history[0]` is the most recent. The browsing
+ * cursor is -1 when the user is editing a fresh draft (not browsing history).
+ * Stepping past the newest entry restores the stashed draft, mirroring terminal
+ * up/down history behaviour.
  */
-export function usePromptHistory() {
-  const [history, setHistory] = useState<string[]>(loadHistory);
+export function usePromptHistory(agentSlug?: string | null) {
+  const storageKey = storageKeyFor(agentSlug);
+  const [history, setHistory] = useState<string[]>(() => loadHistory(storageKey));
   const indexRef = useRef(-1);
   const draftRef = useRef("");
 
-  const record = useCallback((entry: string) => {
-    const trimmed = entry.trim();
-    if (!trimmed) return;
-    setHistory((prev) => {
-      const next = [trimmed, ...prev.filter((e) => e !== trimmed)].slice(
-        0,
-        HISTORY_LIMIT,
-      );
-      saveHistory(next);
-      return next;
-    });
+  // Reload (and stop browsing) when the agent — and thus the storage key —
+  // changes, so each agent recalls only its own prompts.
+  useEffect(() => {
+    setHistory(loadHistory(storageKey));
     indexRef.current = -1;
     draftRef.current = "";
-  }, []);
+  }, [storageKey]);
+
+  const record = useCallback(
+    (entry: string) => {
+      const trimmed = entry.trim();
+      if (!trimmed) return;
+      setHistory((prev) => {
+        const next = [trimmed, ...prev.filter((e) => e !== trimmed)].slice(
+          0,
+          HISTORY_LIMIT,
+        );
+        saveHistory(storageKey, next);
+        return next;
+      });
+      indexRef.current = -1;
+      draftRef.current = "";
+    },
+    [storageKey],
+  );
 
   /** Stop browsing — call when the user edits the input directly. */
   const resetCursor = useCallback(() => {

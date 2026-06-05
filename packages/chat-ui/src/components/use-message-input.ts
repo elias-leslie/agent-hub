@@ -10,6 +10,8 @@ import { usePromptHistory } from "./use-prompt-history";
 import { useVoiceInput } from "./use-voice-input";
 
 export interface MessageInputProps {
+  /** Agent slug — scopes the up/down prompt-history recall per agent. */
+  agentSlug?: string;
   onSend: (message: string, targetModels?: string[]) => void;
   onCancel: () => void;
   status: StreamStatus;
@@ -33,6 +35,7 @@ export interface MessageInputProps {
 
 export function useMessageInput(props: MessageInputProps) {
   const {
+    agentSlug,
     onSend,
     status,
     disabled = false,
@@ -71,7 +74,7 @@ export function useMessageInput(props: MessageInputProps) {
     resetCursor: resetHistoryCursor,
     recallPrevious,
     recallNext,
-  } = usePromptHistory();
+  } = usePromptHistory(agentSlug);
 
   // Apply a recalled history entry and drop the caret at the end of the input.
   const applyRecalled = useCallback((value: string) => {

@@ -299,6 +299,7 @@ export function ChatPanel({
 
         {/* Input */}
         <MessageInput
+          agentSlug={agentSlug}
           onSend={sendMessage}
           onCancel={cancelStream}
           status={status}
