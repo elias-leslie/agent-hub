@@ -137,6 +137,12 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "vantage-intake": [
         START_RESEARCH_TOOL,
     ],
+    # Local Gemma test agent: read-only web tools so tool-calling is testable
+    # in the UI chat without any filesystem/shell exposure.
+    "gemma-local-test": [
+        SEARCH_WEB_TOOL,
+        FETCH_WEB_PAGE_TOOL,
+    ],
 }
 
 
