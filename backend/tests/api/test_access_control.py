@@ -201,10 +201,21 @@ class TestAccessControlMiddleware:
         # Should not return 400 or 403 - may return 200 or other valid response
         assert response.status_code not in [400, 403]
 
-    @pytest.mark.integration
-    @pytest.mark.skip(reason="Requires real client in database; use test_internal_header_bypasses_auth for unit coverage")
     async def test_valid_auth_allows_request(self, async_client):
         """Test that valid authentication allows request through."""
+        with patch("app.middleware.access_control_paths.settings.internal_service_secret", ""):
+            response = await async_client.get(
+                "/api/access-control/stats",
+                headers={"X-Agent-Hub-Internal": ""},
+            )
+            assert response.status_code == 403
+            assert response.json()["error"] == "internal_only"
+
+        response = await async_client.get(
+            "/api/access-control/stats",
+            headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+        )
+        assert response.status_code == 200
 
 
 class TestIdentifyClientFlow:
@@ -1031,6 +1042,7 @@ class TestBudgetCheckInPipeline:
 
             budget_result = await check_project_budget("test-project", db=None)
             assert budget_result.allowed is False
+            assert budget_result.reason is not None
             assert "monthly" in budget_result.reason
 
             with pytest.raises(HTTPException) as exc_info:
