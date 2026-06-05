@@ -51,6 +51,7 @@ from app.constants.models import (
     GEMINI_IMAGE_NANO,
     GEMINI_IMAGE_NANO2,
     KIMI_CODE_FOR_CODING,
+    LOCAL_GEMMA_4_12B,
     LOCAL_QWEN2_5_CODER_14B,
     LOCAL_QWEN3_30B_A3B,
     LOCAL_QWEN3_CODER_30B_A3B,
@@ -570,6 +571,15 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
 
     # --- Local OpenAI-compatible ---
+    ModelEntry(
+        id=LOCAL_GEMMA_4_12B, alias="local/gemma", name="Gemma 4 12B QAT (Local)",
+        hint="Local multimodal", provider="local",
+        scores=ModelScores(coding=52, reasoning=64, planning=56, tool_use=60, instruction=74, design=55),
+        cost=ModelCost(0.00, 0.00), context_window=32_768, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, supports_tool_execution=True, max_output_tokens=8_192),
+        release_date="2026-06-03", family="gemma",
+        availability="requires_local_openai_endpoint; qat_q4_0_~8gb_vram_100pct_gpu",
+    ),
     ModelEntry(
         id=LOCAL_QWEN3_CODER_30B_A3B, alias="local/qwen-coder", name="Qwen3-Coder 30B-A3B (Local)",
         hint="Local code", provider="local",

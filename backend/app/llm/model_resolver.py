@@ -52,7 +52,7 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "moonshot": "https://api.moonshot.ai/v1",
     "moonshotai": "https://api.moonshot.ai/v1",
     "deepseek": "https://api.deepseek.com/v1",
-    "local": "http://localhost:8080/v1",
+    "local": "http://127.0.0.1:11434/v1",  # Ollama; effective value read from settings.local_openai_base_url
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
     "codex": "https://chatgpt.com/backend-api/codex/responses",
@@ -140,6 +140,11 @@ def _upstream_model_id(model_id: str, provider: str) -> str:
 
 
 def _resolve_base_url(provider: str) -> str:
+    if provider == "local":
+        # Single source of truth for the local OpenAI-compatible endpoint (Ollama).
+        from app.config import settings
+
+        return settings.local_openai_base_url
     base_url = _PROVIDER_BASE_URL.get(provider, "")
     if provider != "cloudflare" or "{" not in base_url:
         return base_url

@@ -118,6 +118,7 @@ CF_NEMOTRON_3_120B = "cloudflare/nemotron-3-120b"
 LOCAL_QWEN3_CODER_30B_A3B = "local/qwen3-coder:30b-a3b"
 LOCAL_QWEN3_30B_A3B = "local/qwen3:30b-a3b"
 LOCAL_QWEN2_5_CODER_14B = "local/qwen2.5-coder:14b"
+LOCAL_GEMMA_4_12B = "local/gemma4:12b-it-qat"
 
 # Cloudflare Workers AI image generation models
 CF_FLUX_2_DEV = "cloudflare/flux-2-dev"

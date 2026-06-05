@@ -173,6 +173,14 @@ def get_env_api_key(provider: str) -> str | None:
     ):
         return "<authenticated>"
 
+    if provider == "local":
+        # Local OpenAI-compatible servers (Ollama/llama.cpp) accept any token.
+        # Use the configured key if set, else a harmless placeholder so the
+        # adapter's "key required" guard passes.
+        from app.config import settings
+
+        return settings.local_openai_api_key or "ollama"
+
     return None
 
 
