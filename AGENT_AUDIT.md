@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Runs: 9 | Last: 2026-06-04 | State: AUDITED (11 tasks created, none claimed) | Resume: pick a board task-id and EXECUTE one (recommend #1 task-7e59be47); see handoff doc_
+_Runs: 10 | Last: 2026-06-05 | State: EXECUTING (1/11 audit tasks done) | Resume: next recommended small/safe item is #5 task-5d58d068_
 
 ## Orientation
 - FastAPI backend in `backend/app` (~111k LOC Python, 1165 files); SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -12,7 +12,7 @@ _Runs: 9 | Last: 2026-06-04 | State: AUDITED (11 tasks created, none claimed) | 
 ## Board  (ranked by value, highest first)
 | # | CLASS | STATUS | Title | Evidence | Impact | Effort | Conf | Task |
 |---|-------|--------|-------|----------|--------|--------|------|------|
-| 1 | FIX | OPEN | Internal-auth fail-open: empty `INTERNAL_SERVICE_SECRET` grants unrestricted admin/access-control via empty header | `middleware/access_control_paths.py:80`, `config.py:85` | high | S | high | task-7e59be47 |
+| 1 | FIX | DONE | Internal-auth fail-open: empty `INTERNAL_SERVICE_SECRET` grants unrestricted admin/access-control via empty header | `middleware/access_control_paths.py:80`, `config.py:85` | high | S | high | task-7e59be47 |
 | 2 | FIX | OPEN | Release pipeline broken & unguarded: Docker build fails on missing `@summitflow/notes-ui`; CI runs zero tests/lint/types | `frontend/package.json:23`, `.github/workflows/docker-build.yml` | high | M | high | task-6613ef27 |
 | 3 | PRUNE | OPEN | Stale P1 "Jenny heartbeat" task cluster — cron disabled 43d, 0 heartbeats in 30d, non-reproducible | `workflow_schedule_controls` DB, `workflows/persona_heartbeat.py:107` | high | S | high | task-838a8172 |
 | 4 | FIX | OPEN | Memory page renders raw Markdown (`**`) to every user in production (200/201 entries) | `components/memory/MemoryTableRow.tsx:156`, `ExpandedRowContent.tsx:61` | med | S | high | task-2146db24 |
@@ -57,8 +57,10 @@ _Runs: 9 | Last: 2026-06-04 | State: AUDITED (11 tasks created, none claimed) | 
 <!-- date | item# | task-id | what changed | how verified | result -->
 - 2026-06-04 | AUDIT | - | Reconciled stale 2026-05-04 doc; ran 13-dimension parallel finder + adversarial verify workflow (46 agents). 31 findings confirmed, 2 refuted. New Board #1-10 written. | Workflow `wf_c92d4783-542`; each finding re-verified against code/db/runtime. | Done.
 - 2026-06-04 | BATCH | 11 tasks | Batched board into 11 cohesive, individually-verifiable tasks (shared files / one verification each; scope-bombs #2 & #8 and product-decisions #3 isolated). Created via `st create --from-file`: #1→7e59be47, #5→5d58d068, #7→dba3b898, #4→2146db24, #6→27c33158, L→ae68413a, #10→82a49127, #9→dff28019, #3→838a8172, #2→6613ef27, #8→83cecc98. None claimed. | `st create` returned 11/11 OK. | Ready for per-task EXECUTE after /clear (handoff doc generated).
+- 2026-06-05 | #1 | task-7e59be47 | Internal auth now rejects requests whenever `INTERNAL_SERVICE_SECRET` is empty/unset; replaced skipped placeholder auth test with empty-secret rejection + valid-secret allow coverage. | `st check pytest -- backend/tests/api/test_access_control.py`; `st check --quick --changed-only`; `st service rebuild agent-hub`; live `127.0.0.1:8003` empty internal header → 403. | Done.
 
 ## Completed
+- 2026-06-05 #1: internal-auth fail-open closed; empty configured secret can no longer match empty `X-Agent-Hub-Internal`, and live empty-header request returns 403 after rebuild.
 - 2026-05-04 (Runs 1-8): cleared full-gate debt; split oversized modules behind facades (persona schemas, executor IO, memory review, chat sidebar, streaming loop, persona runtime hook, repo CRUD); centralized subprocess; removed tracked binary `backend/--output`, lint suppressions, review-bot prompt residue; project memory-yield prune; migrated docs `dt`→`st check`; merged duplicate feedback clusters; closed stale task clusters. (Detail compacted; prior board items AH-AUDIT-001..033 all DONE except feedback-governance backlog, which is cross-project `summitflow` CLI signal, not agent-hub app code.)
 
 ## Human follow-up

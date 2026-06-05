@@ -76,5 +76,7 @@ def is_internal_only_path(path: str) -> bool:
 
 def is_internal_request(request: Request) -> bool:
     """Check if request is from agent-hub internal dashboard."""
+    if not settings.internal_service_secret:
+        return False
     internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
     return internal_header == settings.internal_service_secret
