@@ -341,10 +341,6 @@ vi.mock('@/lib/api/sessions', async () => {
   }
 })
 
-vi.mock('@/components/chat/session-dropdown', () => ({
-  SessionDropdown: () => <div data-testid="session-dropdown">sessions</div>,
-}))
-
 vi.mock('@/app/persona/components/TimeRangeDropdown', () => ({
   TimeRangeDropdown: () => <div data-testid="time-range">24h</div>,
 }))
