@@ -73,6 +73,7 @@ class MemoryInjectionMetric(Base):
     __table_args__ = (
         Index("ix_memory_injection_metrics_created_at", "created_at"),
         Index("ix_memory_injection_metrics_external_id", "external_id"),
+        Index("ix_memory_injection_metrics_session_id", "session_id"),
         Index("ix_memory_injection_metrics_variant", "variant"),
         Index("ix_memory_injection_metrics_project_id", "project_id"),
     )
