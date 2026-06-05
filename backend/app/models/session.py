@@ -59,7 +59,7 @@ class Session(Base):
 
     # Session branching support
     parent_session_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
     )
     fork_point_turn: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pending_patches: Mapped[dict[str, Any] | None] = mapped_column(
@@ -254,7 +254,6 @@ class SessionEvent(Base):
 
     __table_args__ = (
         UniqueConstraint("session_id", "turn", "sequence", name="uq_session_turn_sequence"),
-        Index("ix_session_events_session_turn", "session_id", "turn", "sequence"),
         Index("ix_session_events_type", "event_type"),
         Index("ix_session_events_tool", "tool_name"),
     )

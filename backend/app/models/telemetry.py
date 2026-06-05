@@ -99,6 +99,7 @@ class TruncationEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
+        Index("ix_truncation_events_session_id", "session_id"),
         Index("ix_truncation_events_model_created", "model", "created_at"),
         Index("ix_truncation_events_created", "created_at"),
     )
