@@ -6,6 +6,7 @@ import type { StreamStatus } from "../types/chat";
 import type { ModelOption } from "./use-models";
 import { useModels } from "./use-models";
 import { useMentionPopup } from "./use-mention-popup";
+import { usePromptHistory } from "./use-prompt-history";
 import { useVoiceInput } from "./use-voice-input";
 
 export interface MessageInputProps {
@@ -64,6 +65,24 @@ export function useMessageInput(props: MessageInputProps) {
     updateMentionFilter,
     handleMentionNavigation,
   } = useMentionPopup(input, selectedModels, allModels);
+
+  const {
+    record: recordHistory,
+    resetCursor: resetHistoryCursor,
+    recallPrevious,
+    recallNext,
+  } = usePromptHistory();
+
+  // Apply a recalled history entry and drop the caret at the end of the input.
+  const applyRecalled = useCallback((value: string) => {
+    setInput(value);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.selectionStart = el.selectionEnd = el.value.length;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (editingMessage) {
@@ -136,10 +155,12 @@ export function useMessageInput(props: MessageInputProps) {
   const handleSend = useCallback(() => {
     if (!canSend) return;
     const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.id) : undefined;
-    onSend(input.trim(), targetModels);
+    const trimmed = input.trim();
+    recordHistory(trimmed);
+    onSend(trimmed, targetModels);
     setInput("");
     setSelectedModels([]);
-  }, [canSend, selectedModels, onSend, input]);
+  }, [canSend, selectedModels, onSend, input, recordHistory]);
 
   const selectModel = useCallback(
     (model: ModelOption) => {
@@ -161,8 +182,10 @@ export function useMessageInput(props: MessageInputProps) {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setInput(value);
+    // User edited the draft directly — stop browsing history.
+    resetHistoryCursor();
     updateMentionFilter(value);
-  }, [updateMentionFilter]);
+  }, [updateMentionFilter, resetHistoryCursor]);
 
   const cancelEditing = useCallback(() => {
     onEditCancel?.();
@@ -184,6 +207,36 @@ export function useMessageInput(props: MessageInputProps) {
       return;
     }
 
+    // Shell-style prompt history recall (only when the @mention popup is closed
+    // and the caret is collapsed — multi-line editing/selection is unaffected).
+    // ArrowUp recalls older entries when the caret is on the first line;
+    // ArrowDown recalls newer ones when it is on the last line.
+    if (!showMentionPopup && e.key === "ArrowUp") {
+      const el = e.currentTarget;
+      const caret = el.selectionStart ?? 0;
+      if (el.selectionStart === el.selectionEnd && !input.slice(0, caret).includes("\n")) {
+        const recalled = recallPrevious(input);
+        if (recalled !== null) {
+          e.preventDefault();
+          applyRecalled(recalled);
+          return;
+        }
+      }
+    }
+
+    if (!showMentionPopup && e.key === "ArrowDown") {
+      const el = e.currentTarget;
+      const caret = el.selectionStart ?? 0;
+      if (el.selectionStart === el.selectionEnd && !input.slice(caret).includes("\n")) {
+        const recalled = recallNext();
+        if (recalled !== null) {
+          e.preventDefault();
+          applyRecalled(recalled);
+          return;
+        }
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -193,7 +246,7 @@ export function useMessageInput(props: MessageInputProps) {
       e.preventDefault();
       cancelEditing();
     }
-  }, [allowModelMentions, handleMentionNavigation, showMentionPopup, filteredModels, mentionSelectedIndex, selectModel, handleSend, editingMessage, onEditCancel, cancelEditing]);
+  }, [allowModelMentions, handleMentionNavigation, showMentionPopup, filteredModels, mentionSelectedIndex, selectModel, handleSend, editingMessage, onEditCancel, cancelEditing, input, recallPrevious, recallNext, applyRecalled]);
 
   return {
     input,
