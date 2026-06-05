@@ -1,4 +1,4 @@
-"""Model catalog entries — single source of truth for all UI-selectable models."""
+"""Insert-only seed entries for UI-selectable models; DB is runtime source."""
 
 from __future__ import annotations
 
