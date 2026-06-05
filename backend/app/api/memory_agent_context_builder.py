@@ -3,6 +3,7 @@
 import logging
 import time
 
+from app.db import async_session
 from app.services.memory.context_injector import ProgressiveContext, build_progressive_context
 from app.services.memory.service import MemoryScope
 from app.services.memory.settings import get_memory_settings
@@ -24,54 +25,54 @@ async def build_progressive_context_with_variant(
     consumer_profile: str | None,
 ) -> tuple[ProgressiveContext, str]:
     """Build progressive context and assign variant."""
-    settings = await get_memory_settings()
-    assigned_variant = assign_variant(
-        external_id=external_id,
-        project_id=project_id or scope_id,
-        variant_override=variant_override,
-        active_variant=settings.active_variant,
-    )
-    variant_value = getattr(assigned_variant, "value", str(assigned_variant))
-
-    context = await build_progressive_context(
-        query=query,
-        scope=scope,
-        scope_id=scope_id,
-        include_global=include_global,
-        task_type=task_type,
-        phase=phase,
-        consumer_profile=consumer_profile,
-        variant=variant_value,
-    )
-
-    # Apply per-profile/per-project tier overrides so the in-process CLI/hook
-    # delivery path honors the same UI controls as the runtime-context preview.
-    if consumer_profile:
-        from app.db import async_session
-        from app.services.runtime_context import apply_tier_overrides_to_context
-
-        items = (
-            list(context.mandates)
-            + list(context.guardrails)
-            + list(context.reference_index)
-            + list(context.reference)
+    async with async_session() as db:
+        settings = await get_memory_settings(db)
+        assigned_variant = assign_variant(
+            external_id=external_id,
+            project_id=project_id or scope_id,
+            variant_override=variant_override,
+            active_variant=settings.active_variant,
         )
-        if items:
-            try:
-                async with async_session() as db:
+        variant_value = getattr(assigned_variant, "value", str(assigned_variant))
+
+        context = await build_progressive_context(
+            query=query,
+            scope=scope,
+            scope_id=scope_id,
+            include_global=include_global,
+            task_type=task_type,
+            phase=phase,
+            consumer_profile=consumer_profile,
+            variant=variant_value,
+            db=db,
+        )
+
+        # Apply per-profile/per-project tier overrides so the in-process CLI/hook
+        # delivery path honors the same UI controls as the runtime-context preview.
+        if consumer_profile:
+            from app.services.runtime_context import apply_tier_overrides_to_context
+
+            items = (
+                list(context.mandates)
+                + list(context.guardrails)
+                + list(context.reference_index)
+                + list(context.reference)
+            )
+            if items:
+                try:
                     await apply_tier_overrides_to_context(
                         db,
                         consumer_profile=consumer_profile,
                         project_id=project_id or scope_id,
                         items=items,
                     )
-            except Exception:
-                logger.warning(
-                    "Failed to apply runtime tier overrides for profile=%s project=%s",
-                    consumer_profile,
-                    project_id or scope_id,
-                    exc_info=True,
-                )
+                except Exception:
+                    logger.warning(
+                        "Failed to apply runtime tier overrides for profile=%s project=%s",
+                        consumer_profile,
+                        project_id or scope_id,
+                        exc_info=True,
+                    )
 
     context.debug_info["variant"] = variant_value
     return context, variant_value
