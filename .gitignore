@@ -11,6 +11,8 @@ backend/.venv/
 *.egg-info/
 .eggs/
 dist/
+!packages/notes-ui/dist/
+!packages/notes-ui/dist/**
 build/
 
 # Node
