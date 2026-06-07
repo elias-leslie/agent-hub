@@ -28,8 +28,8 @@
     ]
   },
   "hosts": {
-    "production_frontend": "agent.summitflow.dev",
-    "production_api": "agentapi.summitflow.dev"
+    "production_frontend": "localhost:3003",
+    "production_api": "localhost:8003"
   },
   "repository": {
     "owner": "elias-leslie",

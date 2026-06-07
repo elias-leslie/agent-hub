@@ -795,7 +795,7 @@ async def test_heartbeat_session_backfills_request_identity_and_source_metadata(
             request_source="codex-transcript-sync",
             provider_metadata={
                 "source_client": "summitflow/codex-session-sync",
-                "source_path": "/home/kasadis/bin/codex-session-sync.py",
+                "source_path": "/home/demo/bin/codex-session-sync.py",
             },
         ),
     )
@@ -805,7 +805,7 @@ async def test_heartbeat_session_backfills_request_identity_and_source_metadata(
     metadata = session.provider_metadata
     assert isinstance(metadata, dict)
     assert metadata["source_client"] == "summitflow/codex-session-sync"
-    assert metadata["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
+    assert metadata["source_path"] == "/home/demo/bin/codex-session-sync.py"
 
 
 @pytest.mark.unit

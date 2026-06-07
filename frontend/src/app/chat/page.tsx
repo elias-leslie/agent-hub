@@ -19,7 +19,7 @@ import {
 const FALLBACK_PROJECT: ProjectConfig = {
   id: 'agent-hub',
   name: 'Agent Hub',
-  rootPath: '/srv/workspaces/projects/agent-hub',
+  rootPath: '/path/to/agent-hub',
 }
 
 function ChatContent() {

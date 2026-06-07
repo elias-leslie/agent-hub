@@ -169,7 +169,7 @@ _NEW_SYSTEM_PROMPT = (
     "- `st feedback report <component> 'title' --type idea` — new capability needed\n"
     "- `st feedback report <component> 'title' --type improvement` — existing feature could be better\n"
     "- `st feedback report <component> 'title' --type praise` — something worked great\n"
-    "- Dashboard: https://dev.summitflow.dev/feedback\n"
+    "- Dashboard: http://localhost:3001/feedback\n"
     "- Components: sf.cli, sf.dt, sf.quality, sf.api, sf.storage, sf.workflows, "
     "sf.explorer, sf.frontend, sf.scripts, ah.memory, ah.completion, ah.sessions, ah.hooks\n\n"
     "## How You Communicate\n\n"

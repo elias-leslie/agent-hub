@@ -46,31 +46,8 @@ jobs:
           pnpm --filter frontend exec tsc --noEmit
           pnpm --filter frontend test
 
-  pack-workspace:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.0
-      - name: Pack workspace packages
-        run: |
-          mkdir -p /tmp/workspace-packages
-          for pkg in chat-ui passport-client notes-ui; do
-            if [ -d "packages/$pkg" ]; then
-              cd "packages/$pkg"
-              pnpm pack --pack-destination /tmp/workspace-packages
-              cd -
-            fi
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: workspace-packages
-          path: /tmp/workspace-packages/*.tgz
-
   build:
-    needs: pack-workspace
+    needs: check
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -78,11 +55,9 @@ jobs:
           - component: backend
             dockerfile: docker/backend.Dockerfile
             image-suffix: api
-            needs-packages: false
           - component: frontend
             dockerfile: docker/frontend.Dockerfile
             image-suffix: web
-            needs-packages: true
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -92,11 +67,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - if: matrix.needs-packages
-        uses: actions/download-artifact@v4
-        with:
-          name: workspace-packages
-          path: docker/workspace-packages
       - uses: docker/build-push-action@v6
         with:
           context: .

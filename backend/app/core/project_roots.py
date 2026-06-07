@@ -11,7 +11,7 @@ from subprocess import TimeoutExpired
 
 from app.utils.safe_subprocess import run_process
 
-_CANONICAL_WORKSPACE_ROOT = Path("/srv/workspaces/projects")
+_CANONICAL_WORKSPACE_ROOT = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _MANIFEST_NAME = "project.identity.json"
 
 

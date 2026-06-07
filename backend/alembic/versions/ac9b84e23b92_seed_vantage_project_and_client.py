@@ -22,7 +22,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 _VANTAGE_PROJECT_ID = "vantage"
-_VANTAGE_ROOT_PATH = "/srv/workspaces/projects/vantage"
+_VANTAGE_ROOT_PATH = "/home/demo/projects/vantage"
 _VANTAGE_CLIENT_ID = "876c5159-95c3-45fa-abbd-ac39d4d42bfc"
 _VANTAGE_ALLOWED_PROJECTS = json.dumps([_VANTAGE_PROJECT_ID])
 _DAILY_BUDGET_USD = 10.0

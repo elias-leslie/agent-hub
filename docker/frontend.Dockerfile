@@ -1,30 +1,21 @@
 # Agent Hub Web — multi-stage Docker build with standalone output
 # Image: ghcr.io/elias-leslie/agent-hub-web
 # Port: 3003
-# Requires: workspace packages (chat-ui, passport-client, notes-ui) pre-packed as tarballs
 
 # ── Stage 0: Dev Runtime ─────────────────────────────────────────
 FROM node:20-slim AS dev
 
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY frontend/ ./
-COPY docker/workspace-packages/*.tgz /tmp/workspace-packages/
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/ ./packages/
+COPY frontend/ ./frontend/
 
-RUN sed -i 's|"@agent-hub/chat-ui": "workspace:\*"|"@agent-hub/chat-ui": "file:/tmp/workspace-packages/agent-hub-chat-ui-0.1.0.tgz"|g' package.json \
-    && sed -i 's|"@agent-hub/passport-client": "workspace:\*"|"@agent-hub/passport-client": "file:/tmp/workspace-packages/agent-hub-passport-client-0.1.0.tgz"|g' package.json \
-    && sed -i 's|"@summitflow/notes-ui": "workspace:\*"|"@summitflow/notes-ui": "file:/tmp/workspace-packages/summitflow-notes-ui-0.1.0.tgz"|g' package.json
+RUN CI=true pnpm install --frozen-lockfile
 
-RUN node -e "\
-  const fs = require('fs');\
-  const pkg = JSON.parse(fs.readFileSync('package.json'));\
-  pkg.pnpm = pkg.pnpm || {};\
-  pkg.pnpm.overrides = { ...pkg.pnpm?.overrides, '@agent-hub/passport-client': 'file:/tmp/workspace-packages/agent-hub-passport-client-0.1.0.tgz' };\
-  fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
-
-RUN CI=true pnpm install --no-frozen-lockfile
+WORKDIR /workspace/frontend
 
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -38,30 +29,13 @@ FROM node:20-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy all frontend source
-COPY frontend/ ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/ ./packages/
+COPY frontend/ ./frontend/
 
-# Copy workspace package tarballs (built by pack-workspace-packages.sh)
-COPY docker/workspace-packages/*.tgz /tmp/workspace-packages/
-
-# Replace workspace:* references with file: paths to tarballs
-RUN sed -i 's|"@agent-hub/chat-ui": "workspace:\*"|"@agent-hub/chat-ui": "file:/tmp/workspace-packages/agent-hub-chat-ui-0.1.0.tgz"|g' package.json \
-    && sed -i 's|"@agent-hub/passport-client": "workspace:\*"|"@agent-hub/passport-client": "file:/tmp/workspace-packages/agent-hub-passport-client-0.1.0.tgz"|g' package.json \
-    && sed -i 's|"@summitflow/notes-ui": "workspace:\*"|"@summitflow/notes-ui": "file:/tmp/workspace-packages/summitflow-notes-ui-0.1.0.tgz"|g' package.json
-
-# Override transitive passport-client dep (chat-ui depends on it, not on npm)
-RUN node -e "\
-  const fs = require('fs');\
-  const pkg = JSON.parse(fs.readFileSync('package.json'));\
-  pkg.pnpm = pkg.pnpm || {};\
-  pkg.pnpm.overrides = { ...pkg.pnpm?.overrides, '@agent-hub/passport-client': 'file:/tmp/workspace-packages/agent-hub-passport-client-0.1.0.tgz' };\
-  fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
-
-# Install dependencies and clean temp files in same layer
-RUN CI=true pnpm install --no-frozen-lockfile && \
-    rm -rf /tmp/workspace-packages
+RUN CI=true pnpm install --frozen-lockfile
 
 # Build with standalone output, then prune pnpm store
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -72,7 +46,7 @@ ENV AGENT_HUB_API_URL=${AGENT_HUB_API_URL}
 ENV SUMMITFLOW_API_URL=${SUMMITFLOW_API_URL}
 ENV AGENT_HUB_DASHBOARD_CLIENT_ID=${AGENT_HUB_DASHBOARD_CLIENT_ID}
 ENV NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID=${AGENT_HUB_DASHBOARD_CLIENT_ID}
-RUN pnpm build && pnpm store prune
+RUN pnpm --filter frontend build && pnpm store prune
 
 # ── Stage 2: Runner ──────────────────────────────────────────────
 FROM node:20-slim
@@ -86,12 +60,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3003
 ENV HOSTNAME=0.0.0.0
 
-COPY --chown=appuser:appuser --from=builder /app/.next/standalone ./
-COPY --chown=appuser:appuser --from=builder /app/.next/static ./.next/static
-COPY --chown=appuser:appuser --from=builder /app/public ./public
+COPY --chown=appuser:appuser --from=builder /workspace/frontend/.next/standalone ./
+COPY --chown=appuser:appuser --from=builder /workspace/frontend/.next/static ./frontend/.next/static
+COPY --chown=appuser:appuser --from=builder /workspace/frontend/public ./frontend/public
 
 USER appuser
 
 EXPOSE 3003
 
-CMD ["node", "server.js"]
+CMD ["node", "frontend/server.js"]

@@ -79,8 +79,5 @@ ALLOWED_COMMAND_PREFIXES = (
     "bash ~/agent-hub/scripts/rebuild.sh",
     "bash ~/agent-hub/scripts/restart.sh",
     "commit.sh ",
-    "/home/kasadis/bin/commit.sh",
-    "bash /home/kasadis/bin/commit.sh",
-    "bash /srv/workspaces/projects/summitflow/scripts/commit.sh",
 )
 HUMAN_TEXT_KEYS = ("summary", "content", "message", "stderr", "stdout", "error", "detail", "result")

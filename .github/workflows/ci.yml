@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+      - name: Install backend dependencies
+        run: uv sync --all-extras --dev
+      - name: Lint backend
+        run: uv run ruff check .
+      - name: Typecheck backend
+        run: uv run ty check app
+      - name: Test backend
+        run: uv run pytest
+      - name: Build backend package
+        run: uv build
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint frontend
+        run: pnpm --filter frontend lint
+      - name: Typecheck frontend
+        run: pnpm --filter frontend exec tsc --noEmit
+      - name: Test frontend
+        run: pnpm --filter frontend exec vitest run
+      - name: Build frontend
+        run: pnpm --filter frontend build

@@ -121,7 +121,7 @@ class TestGetSession:
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
             "source_client": "summitflow/codex-session-sync",
-            "source_path": "/home/kasadis/bin/codex-session-sync.py",
+            "source_path": "/home/demo/bin/codex-session-sync.py",
             "live_activity": {
                 "phase": "reading_file",
                 "status": "active",
@@ -235,7 +235,7 @@ class TestGetSession:
         assert data["client_id"] == "client-123"
         assert data["request_source"] == "codex-transcript-sync"
         assert data["source_client"] == "summitflow/codex-session-sync"
-        assert data["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
+        assert data["source_path"] == "/home/demo/bin/codex-session-sync.py"
         assert data["live_activity"]["phase"] == "reading_file"
         assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
         assert data["workstream_status"] == "completed_ready_for_closure"
@@ -367,7 +367,7 @@ class TestListSessions:
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
             "source_client": "summitflow/codex-session-sync",
-            "source_path": "/home/kasadis/bin/codex-session-sync.py",
+            "source_path": "/home/demo/bin/codex-session-sync.py",
             "cwd": str(checkout),
             "live_activity": {
                 "phase": "waiting_for_model",
@@ -450,7 +450,7 @@ class TestListSessions:
         assert data["sessions"][0]["client_id"] == "client-123"
         assert data["sessions"][0]["request_source"] == "codex-transcript-sync"
         assert data["sessions"][0]["source_client"] == "summitflow/codex-session-sync"
-        assert data["sessions"][0]["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
+        assert data["sessions"][0]["source_path"] == "/home/demo/bin/codex-session-sync.py"
         assert data["sessions"][0]["current_branch"] == "task-123/main"
         assert data["sessions"][0]["working_dir"] == str(checkout)
         assert data["sessions"][0]["workstream_status"] == "authoritative"

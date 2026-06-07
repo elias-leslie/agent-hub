@@ -58,6 +58,7 @@ secrets.json
 
 # Legacy artifacts
 celerybeat-schedule*
+docker/workspace-packages/
 
 # Project data
 data/
@@ -100,3 +101,16 @@ backend/*_strategy.json
 # Benchmark/temp output
 backend/.tmp/
 .gitnexus
+
+# Local/internal agent state and release artifacts
+.claude/
+.fallow/
+artifacts/
+logs/
+docs/tasks/
+graphify-out/
+
+
+# Generated Docker runtime state
+docker/hatchet-config/*
+!docker/hatchet-config/.gitkeep

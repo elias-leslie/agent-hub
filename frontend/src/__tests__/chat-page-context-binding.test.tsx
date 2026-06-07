@@ -111,7 +111,7 @@ describe('ChatPage context binding', () => {
         auto_exec_enabled: true,
         execution_start_hour: 0,
         execution_end_hour: 24,
-        root_path: '/home/kasadis/summitflow',
+        root_path: '/home/demo/summitflow',
         created_at: '2026-04-29T00:00:00Z',
         updated_at: '2026-04-29T00:00:00Z',
       },

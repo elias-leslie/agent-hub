@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 _DEFAULT_HEARTBEAT_BACKUP_PROJECT_ID = "agent-hub"
 _DEFAULT_HEARTBEAT_BACKUP_SOURCE_ID = "persona-sandbox"
-_WORKSPACE_BASE = Path("/srv/workspaces/projects")
+_WORKSPACE_BASE = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 
 
 def format_backup_size(size_bytes: int | None) -> str:

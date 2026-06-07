@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     hatchet_client_tls_strategy: str = "none"
 
     # Shared browser / web research infrastructure
-    st_browser_host: str = "192.168.8.244"
+    st_browser_host: str = ""
     web_search_searxng_url: str = ""
     web_fetch_browser_cdp_url: str = ""
 
@@ -129,9 +129,6 @@ class Settings(BaseSettings):
         f"http://localhost:{PORTFOLIO_FRONTEND_PORT}",
         f"http://localhost:{SUMMITFLOW_FRONTEND_PORT}",
         f"http://localhost:{AGENT_HUB_FRONTEND_PORT}",
-        "https://agent.summitflow.dev",
-        "https://dev.summitflow.dev",
-        "https://port.summitflow.dev",
     ]
 
     @field_validator("cors_origins", mode="before")
@@ -145,7 +142,7 @@ class Settings(BaseSettings):
     # Web Push (VAPID)
     vapid_public_key: str = ""
     vapid_private_key: str = ""
-    vapid_subject: str = "mailto:admin@summitflow.dev"
+    vapid_subject: str = "mailto:admin@example.com"
 
     # Optional provider credentials for standalone and Docker installs.
     # These are overlaid into the runtime credential cache at startup so

@@ -1,159 +1,231 @@
 # Agent Hub
 
-Self-hosted control plane for running, observing, and improving multi-provider AI agents.
+Self-hosted control plane for running, observing, and improving multi-provider
+AI agents.
 
 ![Agent Hub dashboard](docs/screenshots/dashboard.png)
 
-## Why It Exists
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.13+-3776ab.svg)](https://python.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000.svg)](https://nextjs.org)
 
-Most agent demos stop at chat. Agent Hub adds the operational layer that real deployments need:
+## Why it exists
 
-- Unified completions across routed providers such as Gemini, OpenAI, OpenRouter, Kimi, and MiniMax
-- Persistent PostgreSQL-backed memory with progressive context injection
-- A named persona workspace with heartbeat automation and self-improvement loops
-- Operator dashboards for sessions, regressions, routing pressure, and cost
+Most agent demos stop at chat. Agent Hub adds the operational layer needed to
+run agents as infrastructure: provider routing, persistent memory, sessions,
+access control, cost/latency visibility, and operator dashboards.
 
-The target user is a developer or operator running agent infrastructure, not a general end user.
+## What you get
 
-## What You Get
+- Unified completions and streaming across configured providers such as Gemini,
+  OpenAI, OpenRouter, Kimi, MiniMax, DeepSeek, xAI, and local OpenAI-compatible
+  endpoints.
+- PostgreSQL-backed memory and context injection.
+- Named agents/personas, session history, request logs, and routing telemetry.
+- Client registration and access-control surfaces for companion apps.
+- Optional web research, browser, push, Telegram, and voice integrations.
 
-- `/dashboard`: system health, usage, and provider status
-- `/persona`: live persona workspace and heartbeat activity
-- `/sessions`: conversation history and drill-down inspection
-- `/memory`: searchable memory episodes and reference tuning
-- `/access-control`: client registration and execution permissions
+The target user is a developer or operator running their own agent
+infrastructure, not a hosted SaaS user.
 
-## Quickstart
+## Requirements
 
-### Prerequisites
+Native development:
 
 - Python 3.13+
 - Node.js 20+
-- PostgreSQL
+- pnpm 10+
+- PostgreSQL 15+ with pgvector support recommended
 - Redis
-- Docker, if you want the bundled compose stack
+- Hatchet, for workflow/worker execution
 
-### Option A: Bundled Docker Stack
+Container development:
+
+- Docker Engine with Docker Compose v2
+
+## Quickstart: bundled Docker stack
 
 ```bash
+git clone https://github.com/elias-leslie/agent-hub.git
+cd agent-hub
 cp .env.example .env
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Set the generated secrets in `.env`:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import base64
+import os
+import secrets
+path = Path('.env')
+values = {
+    'POSTGRES_PASSWORD': secrets.token_urlsafe(24),
+    'AGENT_HUB_ENCRYPTION_KEY': base64.urlsafe_b64encode(os.urandom(32)).decode(),
+    'AGENT_HUB_SECRET_KEY': secrets.token_urlsafe(32),
+    'INTERNAL_SERVICE_SECRET': secrets.token_urlsafe(32),
+}
+lines = path.read_text().splitlines()
+seen = set()
+next_lines = []
+for line in lines:
+    key = line.split('=', 1)[0] if '=' in line and not line.startswith('#') else None
+    if key in values:
+        next_lines.append(f'{key}={values[key]}')
+        seen.add(key)
+    else:
+        next_lines.append(line)
+for key, value in values.items():
+    if key not in seen:
+        next_lines.append(f'{key}={value}')
+path.write_text('\n'.join(next_lines) + '\n')
+PY
+```
+
+Generate the Hatchet client token and start the stack:
+
+```bash
 ./scripts/generate-hatchet-dev-token.sh .env
-docker compose up -d --build
+docker compose --env-file .env up -d --build
 ```
 
 Open:
 
-- Frontend: `http://localhost:3003`
-- Backend: `http://localhost:8003`
+- Frontend: <http://localhost:3003>
+- Backend health: <http://localhost:8003/health>
 
-For the bundled Docker stack, leave `AGENT_HUB_DB_URL`, `AGENT_HUB_REDIS_URL`, and `TEST_AGENT_HUB_DB_URL` blank in `.env`. Compose injects the internal service URLs.
+For Docker, leave `AGENT_HUB_DB_URL`, `AGENT_HUB_REDIS_URL`, and
+`TEST_AGENT_HUB_DB_URL` blank. Compose injects container-internal service URLs.
 
-### Option B: Native Local Run
+## Native development
 
 ```bash
 cp .env.example .env.local
 pnpm install
 
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+uv sync --all-extras --dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
 ```
 
-In a second shell:
+Worker, in another shell:
 
 ```bash
-cd /path/to/agent-hub/backend
-source .venv/bin/activate
-python -m app.worker
+cd backend
+uv run python -m app.worker
 ```
 
-In a third shell:
+Frontend, in another shell from the repo root:
 
 ```bash
-cd /path/to/agent-hub/frontend
-pnpm dev --hostname 0.0.0.0 --port 3003
+pnpm --filter frontend dev -- --hostname 0.0.0.0 --port 3003
 ```
 
-## Environment
+## Configuration
 
-Start from [`.env.example`](.env.example). The minimum required variables for native installs are:
+Start from [`.env.example`](.env.example). Minimum native values:
 
 ```bash
 AGENT_HUB_DB_URL=postgresql://agent_hub_app:PASSWORD@localhost:5432/agent_hub
 AGENT_HUB_REDIS_URL=redis://localhost:6379/2
-AGENT_HUB_ENCRYPTION_KEY=<44-char-fernet-key>
-AGENT_HUB_SECRET_KEY=<random-urlsafe-token>
-HATCHET_CLIENT_TOKEN=<generated-by-scripts/generate-hatchet-dev-token.sh>
+AGENT_HUB_ENCRYPTION_KEY=<44-character-fernet-key>
+AGENT_HUB_SECRET_KEY=<random-secret>
+HATCHET_CLIENT_TOKEN=<generated-token>
 HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070
 HATCHET_CLIENT_TLS_STRATEGY=none
-GEMINI_API_KEY=
-OPENAI_API_KEY=
-OPENROUTER_API_KEY=
 ```
 
-If you are exposing Agent Hub beyond the local machine, do not rely on permissive defaults alone. Put it behind a reverse proxy or equivalent network controls.
+Provider API keys are optional. Configure only the providers you intend to use:
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+`DEEPSEEK_API_KEY`, `KIMI_CODE_API_KEY`, `MOONSHOT_API_KEY`, `MINIMAX_API_KEY`,
+`XAI_API_KEY`, `ZHIPU_API_KEY`, `NVIDIA_API_KEY`, and Cloudflare image keys.
+
+If you expose Agent Hub beyond loopback, put it behind a reverse proxy or other
+network controls and set strong client/internal secrets. Empty provider keys are
+valid for local UI/API smoke tests, but provider-backed completions will be
+unavailable until configured.
 
 ## Architecture
 
 ```text
 agent-hub/
-├── backend/                 FastAPI app, workflows, models, tests
-├── frontend/                Next.js dashboard and operator UI
-├── packages/                Shared SDKs and frontend packages
-├── examples/                SDK usage examples
-├── docker-compose.yml       Standalone Docker stack
-└── scripts/                 Bootstrap helpers
+├── backend/            FastAPI app, provider adapters, memory, workflows, tests
+├── frontend/           Next.js dashboard and operator UI
+├── packages/           Shared SDKs and UI packages
+├── examples/           SDK usage examples
+├── docker-compose.yml  Standalone local Docker stack
+├── scripts/            Bootstrap and service helpers
+└── docs/screenshots/   Public-safe UI screenshots
 ```
 
 ## SDK
 
-The Python SDK lives in [packages/agent-hub-client](packages/agent-hub-client) and exposes the async client used for completions, SSE streaming, and stateful sessions.
+The Python SDK lives in `packages/agent-hub-client` and exposes the async client
+used for completions, SSE streaming, and stateful sessions.
 
 ```bash
 pip install -e packages/agent-hub-client
 ```
 
-## Testing
+## Testing, linting, type checks, and build
 
-Use the shared quality wrapper from the repo root:
+Install dependencies first:
 
 ```bash
-st check --check
+pnpm install --frozen-lockfile
+cd backend && uv sync --all-extras --dev
 ```
 
-Frontend-only checks:
+Backend checks:
 
 ```bash
-st check --frontend-only
+cd backend
+uv run ruff check .
+uv run ty check app
+uv run pytest
+uv build
 ```
 
-Targeted backend suites:
+Frontend checks:
 
 ```bash
-st check pytest -- backend/tests/path/to/test_file.py
+pnpm --filter frontend lint
+pnpm --filter frontend exec tsc --noEmit
+pnpm --filter frontend exec vitest run
+pnpm --filter frontend build
+```
+
+Smoke test a running app:
+
+```bash
+curl -fsS http://localhost:8003/health
+curl -fsS http://localhost:3003/ >/dev/null
 ```
 
 ## Screenshots
 
-The docs screenshot flow uses `st browser`, not local Playwright:
+The checked-in screenshots use safe demo/empty data and were inspected before
+public release. To refresh them, start the local frontend and run:
 
 ```bash
 cd frontend
-pnpm screenshot:all
+AGENT_HUB_SCREENSHOT_BASE_URL=http://localhost:3003 pnpm screenshot:all
 ```
 
-Base URL resolution order:
+Inspect screenshots before committing them. Do not include provider tokens,
+private sessions, private infrastructure details, personal data, or customer
+content.
 
-1. `AGENT_HUB_SCREENSHOT_BASE_URL`
-2. `http://localhost:3003`
+## Optional and degraded behavior
 
-When `st browser` is attached to the shared browser VM, do not use `localhost`; the remote browser must reach the app over the host IP.
+Agent Hub can boot without provider keys. Dashboards, health checks, sessions,
+and configuration pages remain available. Provider completions, web research,
+push, Telegram, browser, and voice integrations require their corresponding
+configuration and should fail clearly when absent.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE), and [SECURITY.md](SECURITY.md).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Security reporting is described in [SECURITY.md](SECURITY.md).

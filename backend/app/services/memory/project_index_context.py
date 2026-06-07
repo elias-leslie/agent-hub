@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import yaml
 
 from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
-_WORKSPACE_BASE = Path("/srv/workspaces/projects")
+_WORKSPACE_BASE = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _RUNTIME_BASE_KEYS: tuple[str, ...] = ("project", "environment", "services", "urls", "network")
 _STARTUP_EXTRA_KEYS: tuple[str, ...] = ("pages",)
 _PAGE_TASK_TYPES = {"frontend", "ui-design", "design-review", "test", "verification"}

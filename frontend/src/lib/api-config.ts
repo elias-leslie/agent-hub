@@ -1,16 +1,16 @@
 /**
  * API configuration for Agent Hub frontend.
  *
- * Uses same-origin routing via Next.js rewrites to avoid CORS issues with CF Access:
+ * Uses same-origin routing via Next.js rewrites to avoid CORS issues:
  * - Development: http://localhost:3003/api/* -> localhost:8003/api/* (rewrite)
- * - Production: https://agent.summitflow.dev/api/* -> localhost:8003/api/* (rewrite)
+ * - Production: https://your-agent-hub-host.example/api/* -> backend /api/* (rewrite)
  *
  * This pattern ensures all API requests go through the same origin as the frontend,
  * with Next.js server-side proxying to the backend. No cross-origin = no CORS.
  */
 
 export const PORTS = { frontend: 3003, backend: 8003 }
-const PROD_DOMAIN = 'agent.summitflow.dev'
+const PROD_DOMAIN = process.env.NEXT_PUBLIC_AGENT_HUB_PROD_DOMAIN || ''
 const DEFAULT_DASHBOARD_CLIENT_ID = 'agent-hub-dashboard'
 
 /**
@@ -58,8 +58,7 @@ export function getWsUrl(path: string): string {
     return `ws://localhost:${PORTS.backend}${path}`
   }
 
-  // Production: use same-origin WebSocket via Cloudflare Tunnel path routing
-  // Tunnel config routes /api/* and /ws/* paths directly to backend
+  // Production: use same-origin WebSocket when a canonical public host is set.
   if (host === PROD_DOMAIN) {
     return `${protocol}//${PROD_DOMAIN}${path}`
   }

@@ -40,7 +40,7 @@ reset_command_guard_shell_state
 # Project detection
 PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 PROJECT_NAME=$(basename "$PROJECT_DIR")
-WORKSPACES_ROOT="${ST_WORKSPACES_ROOT:-/srv/workspaces}"
+WORKSPACES_ROOT="${ST_WORKSPACES_ROOT:-$HOME/.local/share/agent-hub/workspaces}"
 CURRENT_CONTEXT_ROOT=""
 CURRENT_CONTEXT_PROJECT=""
 

@@ -18,15 +18,26 @@ decisions are handled on a best-effort basis.
 
 Project setup and service commands are documented in [README.md](README.md).
 
-Quality checks should use the project wrappers:
+Backend checks:
 
 ```bash
-st check --quick --changed-only
+cd backend
+uv sync --all-extras --dev
+uv run ruff check .
+uv run ty check app
+uv run pytest
+uv build
 ```
 
-When you need to verify runtime behavior, use the same backend, worker, and
-frontend startup commands documented in the README. Do not assume repo-local
-restart helpers exist unless they are checked into this repository.
+Frontend checks:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter frontend lint
+pnpm --filter frontend exec tsc --noEmit
+pnpm --filter frontend exec vitest run
+pnpm --filter frontend build
+```
 
 ## Licensing
 

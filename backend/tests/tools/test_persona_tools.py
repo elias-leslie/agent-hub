@@ -1163,7 +1163,7 @@ class TestManageTasks:
             context={
                 "files_to_modify": ["backend/app/services/tools/_executor_io_tasks.py"],
                 "risks": ["Schema drift"],
-                "references": [{"title": "Schema", "url": "https://summitflow.dev/schemas/plan.json"}],
+                "references": [{"title": "Schema", "url": "https://github.com/elias-leslie/summitflow/schemas/plan.json"}],
                 "second_opinion": {
                     "required": True,
                     "stage": "task_shape",

@@ -11,6 +11,14 @@ from app.services.tools.direct_executor import DirectToolExecutor
 from app.services.tools.scratch_context import ScratchContextStore
 
 
+@pytest.fixture(autouse=True)
+def allow_test_bash_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.tools._executor_bash.get_command_guard_block_reason",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 def _artifact_id(output: str) -> str:
     match = re.search(r"artifact_id: (scratch_[a-f0-9]+)", output)
     assert match is not None

@@ -9,6 +9,7 @@ EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
     "image-gen",
+    "gemma-local-test",
     "kimi-code-test",
     "market-pulse-scout",
     "minimax-plan-test",

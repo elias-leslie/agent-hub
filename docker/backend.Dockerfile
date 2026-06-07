@@ -17,16 +17,14 @@ WORKDIR /app
 
 # Copy dependency files first (cache-friendly layer)
 COPY backend/pyproject.toml backend/uv.lock ./
-COPY docker/workspace-packages/*.whl /tmp/wheels/
 
 # Install deps and clean caches in same layer
 RUN uv export --frozen --no-dev --no-editable --format requirements-txt \
-      --no-header > requirements.txt && \
-    sed -i '/^\.$/d; /agent-hub-client$/d; /^\.\.\//d' requirements.txt && \
+      --no-header --no-hashes > requirements.txt && \
+    sed -i '/^\.$/d' requirements.txt && \
     uv venv .venv && \
-    uv pip install --python .venv/bin/python \
-      -r requirements.txt /tmp/wheels/agent_hub_client-*.whl && \
-    rm -rf /tmp/wheels /root/.cache/uv /root/.cache/pip requirements.txt
+    uv pip install --python .venv/bin/python -r requirements.txt && \
+    rm -rf /root/.cache/uv /root/.cache/pip requirements.txt
 
 # Copy application source
 COPY backend/app ./app

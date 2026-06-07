@@ -105,7 +105,7 @@ def test_build_plan_json_preserves_structured_steps_and_rich_context() -> None:
                 "files_to_create": ["backend/tests/tools/test_executor_io_tasks.py"],
                 "risks": ["Schema drift between Agent Hub and SummitFlow."],
                 "references": [
-                    {"title": "Plan schema", "url": "https://summitflow.dev/schemas/plan.json"},
+                    {"title": "Plan schema", "url": "https://github.com/elias-leslie/summitflow/schemas/plan.json"},
                     {"title": "", "url": "https://invalid.example.com"}
                 ],
                 "second_opinion": {
@@ -150,7 +150,7 @@ def test_build_plan_json_preserves_structured_steps_and_rich_context() -> None:
         "files_to_modify": ["backend/app/services/tools/_executor_io_tasks.py"],
         "files_to_create": ["backend/tests/tools/test_executor_io_tasks.py"],
         "risks": ["Schema drift between Agent Hub and SummitFlow."],
-        "references": [{"title": "Plan schema", "url": "https://summitflow.dev/schemas/plan.json"}],
+        "references": [{"title": "Plan schema", "url": "https://github.com/elias-leslie/summitflow/schemas/plan.json"}],
         "second_opinion": {
             "required": True,
             "stage": "task_shape",

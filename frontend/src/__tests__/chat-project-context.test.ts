@@ -34,7 +34,7 @@ describe('fetchProjectConfigs', () => {
 
   it('prefers canonical project roots over permission root paths', async () => {
     mockFetchProjectPermissions.mockResolvedValue([
-      permission('agent-hub', '/home/kasadis/agent-hub'),
+      permission('agent-hub', '/home/demo/agent-hub'),
     ])
     mockFetchProjectRoots.mockResolvedValue({
       'agent-hub': '/srv/workspaces/projects/agent-hub',

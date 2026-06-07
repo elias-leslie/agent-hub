@@ -23,13 +23,12 @@ def test_resolve_shared_command_guard_falls_back_when_resolved_scripts_lacks_gua
     _resolve_shared_command_guard_cached.cache_clear()
     with (
         patch("app.services.tools.command_guard.resolve_summitflow_scripts_dir", return_value=partial_scripts_dir),
-        patch("app.services.tools.command_guard.Path") as mock_path,
+        patch.dict("app.services.tools.command_guard.os.environ", {"SUMMITFLOW_SCRIPTS_DIR": str(canonical_scripts_dir)}),
         patch(
             "app.services.tools.command_guard.run_process",
             return_value=SimpleNamespace(returncode=0, stdout="bash sh", stderr=""),
         ),
     ):
-        mock_path.side_effect = lambda value: canonical_scripts_dir if str(value).startswith("/srv/") else Path(value)
         resolved = _resolve_shared_command_guard_cached()
 
     _resolve_shared_command_guard_cached.cache_clear()

@@ -9,7 +9,7 @@ from typing import Any
 
 DEFAULT_PROJECT_ID = "agent-hub"
 DEFAULT_BASE_URL = "http://localhost:8003"
-DEFAULT_WORKING_DIR = "/srv/workspaces/projects/agent-hub"
+DEFAULT_WORKING_DIR = "/path/to/agent-hub"
 
 
 def build_workflow_request_payload(

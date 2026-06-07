@@ -25,6 +25,7 @@ dependencies = [
     "openai>=1.0.0",
     "google-genai>=1.0.0", # Gemini API client
     "pgvector>=0.3.0", # PostgreSQL pgvector for memory embeddings
+    "numpy<2.4", # Keep wheels compatible with older x86_64 hosts
     "tiktoken>=0.7.0", # Token counting for context management
     "croniter>=1.3.0", # Cron expression parsing for scheduled jobs
     # Retry logic

@@ -12,8 +12,8 @@ from app.services._persona_crud import get_persona
 from app.services.telegram_delivery import send_configured_report
 from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
-DEFAULT_ST_PATH = "/srv/workspaces/projects/summitflow/backend/.venv/bin/st"
-DEFAULT_WORKDIR = Path("/srv/workspaces/projects/agent-hub")
+DEFAULT_ST_PATH = "st"
+DEFAULT_WORKDIR = Path.cwd()
 DEFAULT_TITLE = "Jenny operator status report"
 DEFAULT_MAX_TURNS = 12
 

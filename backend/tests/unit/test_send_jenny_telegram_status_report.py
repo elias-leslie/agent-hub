@@ -26,7 +26,7 @@ def test_build_complete_command_targets_persona_and_executes_tools() -> None:
     command = build_complete_command("report prompt")
 
     assert command[:3] == [
-        "/srv/workspaces/projects/summitflow/backend/.venv/bin/st",
+        "st",
         "complete",
         "-a",
     ]
