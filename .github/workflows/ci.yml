@@ -50,6 +50,12 @@ jobs:
         run: uv run ruff check .
       - name: Typecheck backend
         run: uv run ty check app
+      - name: Migrate test database
+        # The postgres service starts empty. Tests that boot the app via the
+        # TestClient lifespan load credentials from the DB; against an unmigrated
+        # schema credential_manager retries 5x (~15s) then errors, so every such
+        # test ERRORs. Build the schema first.
+        run: uv run alembic upgrade head
       - name: Test backend
         run: uv run pytest
       - name: Build backend package
