@@ -107,10 +107,20 @@ def get_command_guard_block_reason(
     *,
     session_id: str | None = None,
 ) -> str | None:
-    """Return a shared-guard block reason for the command, or None if allowed."""
+    """Return a shared-guard block reason for the command, or None if allowed.
+
+    The shared guard is an optional SummitFlow integration. When it is not
+    installed -- the normal state for a standalone agent-hub deployment -- the
+    guard simply does not apply and the command is allowed. This mirrors
+    ``build_command_guard_env_overlay``, which already no-ops (returns ``{}``)
+    when the guard is absent; failing closed here instead would block *all* bash
+    at runtime wherever SummitFlow is not present. A guard that is present but
+    fails or flags the command still blocks (see below), so a misconfigured guard
+    in a SummitFlow environment is never silently bypassed.
+    """
     resolved = resolve_shared_command_guard()
     if resolved is None:
-        return "Shared command guard unavailable"
+        return None
 
     env = {**os.environ, "BASH_ENV": "", "SF_COMMAND_GUARD_DISABLE": "1"}
     if session_id:
