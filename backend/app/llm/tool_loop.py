@@ -22,10 +22,12 @@ loop with the SSE writer in ``backend/app/api/complete/sse_writer.py``.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .headroom_compress import compress_tool_results, headroom_enabled
 from .stream import stream_simple
 from .types import (
     AssistantMessage,
@@ -110,6 +112,16 @@ async def run(
 
     while turns < max_turns:
         turns += 1
+
+        # PROTOTYPE: compress accumulated tool-result text before the next
+        # model call (off by default; HEADROOM_COMPRESS_TOOL_RESULTS=1). CPU-
+        # bound, so run off the event loop. Already-compressed blocks are
+        # skipped, so per-turn cost is bounded by the newest tool outputs.
+        if headroom_enabled():
+            loop = asyncio.get_running_loop()
+            context.messages, _ = await loop.run_in_executor(
+                None, compress_tool_results, context.messages, model.id
+            )
 
         stream_handle = stream_simple(model, context, options)
 
