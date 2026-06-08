@@ -3,7 +3,9 @@
 Self-hosted control plane for running, observing, and improving multi-provider
 AI agents.
 
-![Agent Hub dashboard](docs/screenshots/dashboard.png)
+![Agent Hub — control plane for multi-provider AI agents](docs/images/agent-hub-demo.gif)
+
+*One gateway for every agent and model provider: the command-center dashboard, the agent catalog with model routing and fallbacks, live request/latency/cost monitoring, and a model catalog tracking readiness and price.*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.13+-3776ab.svg)](https://python.org)
