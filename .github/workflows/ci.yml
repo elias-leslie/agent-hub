@@ -29,7 +29,7 @@ jobs:
     env:
       AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
       TEST_AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
-      HATCHET_CLIENT_TOKEN: eyJhbG.eyJzdWIi.dGVzdA
+      HATCHET_CLIENT_TOKEN: eyJhbG...c2ln
       HATCHET_CLIENT_TLS_STRATEGY: none
       INTERNAL_SERVICE_SECRET: agent-hub-internal-v1
     defaults:
