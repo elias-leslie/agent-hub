@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock
 
 from app.services.session_live_activity import (
@@ -8,6 +10,18 @@ from app.services.session_live_activity import (
     build_live_activity_response,
     update_live_activity_for_event,
 )
+
+# Repo root of this checkout, so command-scope inference can verify referenced
+# source files exist regardless of where CI clones the repo.
+REPO_ROOT = str(Path(__file__).resolve().parents[3])
+
+
+def _signal_list(response: object, key: str) -> list[object]:
+    """Narrow a LiveActivity signal field (dict[str, object]) to a list for membership asserts."""
+    assert isinstance(response, dict)
+    value = response[key]
+    assert isinstance(value, list)
+    return cast("list[object]", value)
 
 
 def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None:
@@ -149,7 +163,7 @@ def test_update_live_activity_for_event_infers_exec_command_read_path() -> None:
         tool_name="exec_command",
         tool_input={
             "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
-            "workdir": "/srv/workspaces/projects/agent-hub",
+            "workdir": REPO_ROOT,
         },
     )
 
@@ -208,7 +222,7 @@ def test_build_live_activity_response_marks_heartbeat_only_session_dead_candidat
 
     assert response is not None
     assert response["lifecycle_state"] == "dead_candidate"
-    assert "heartbeat_only" in response["dead_signals"]
+    assert "heartbeat_only" in _signal_list(response, "dead_signals")
     assert response["reapable"] is False
 
 
@@ -250,7 +264,7 @@ def test_build_live_activity_response_marks_stale_untracked_session_reapable() -
     assert response is not None
     assert response["phase"] == "unknown"
     assert response["lifecycle_state"] == "reapable"
-    assert "no_structured_activity" in response["dead_signals"]
+    assert "no_structured_activity" in _signal_list(response, "dead_signals")
     assert response["reapable_reason"] == (
         "no_model_activity_30m+no_structured_activity+zero_event_session+heartbeat_missing+no_lane"
     )
@@ -277,7 +291,7 @@ def test_build_live_activity_response_reaps_lane_free_zero_event_session_after_o
     assert response is not None
     assert response["lifecycle_state"] == "reapable"
     assert response["reapable"] is True
-    assert "zero_event_session" in response["dead_signals"]
+    assert "zero_event_session" in _signal_list(response, "dead_signals")
     assert response["reapable_reason"] == "no_model_activity_30m+zero_event_session+no_lane"
 
 
@@ -303,7 +317,7 @@ def test_build_live_activity_response_blocks_reaping_when_lane_is_active() -> No
     assert response is not None
     assert response["lifecycle_state"] == "dead_candidate"
     assert response["reapable"] is False
-    assert "owner_lane" in response["anti_reap_signals"]
+    assert "owner_lane" in _signal_list(response, "anti_reap_signals")
 
 
 def test_build_live_activity_response_reaps_stale_detached_rebuild_specialist_session() -> None:
@@ -328,8 +342,8 @@ def test_build_live_activity_response_reaps_stale_detached_rebuild_specialist_se
     assert response is not None
     assert response["lifecycle_state"] == "reapable"
     assert response["reapable"] is True
-    assert "detached_control_plane_rebuild" in response["dead_signals"]
-    assert "specialist_lane" not in response["anti_reap_signals"]
+    assert "detached_control_plane_rebuild" in _signal_list(response, "dead_signals")
+    assert "specialist_lane" not in _signal_list(response, "anti_reap_signals")
 
 
 def test_build_live_activity_response_reaps_lane_free_stale_finalizing_session() -> None:
@@ -353,7 +367,7 @@ def test_build_live_activity_response_reaps_lane_free_stale_finalizing_session()
     assert response is not None
     assert response["lifecycle_state"] == "reapable"
     assert response["reapable"] is True
-    assert "phase_finalizing" not in response["anti_reap_signals"]
+    assert "phase_finalizing" not in _signal_list(response, "anti_reap_signals")
 
 
 def test_build_live_activity_response_reaps_lane_free_stale_planning_session() -> None:
@@ -377,4 +391,4 @@ def test_build_live_activity_response_reaps_lane_free_stale_planning_session() -
     assert response is not None
     assert response["lifecycle_state"] == "reapable"
     assert response["reapable"] is True
-    assert "phase_planning" not in response["anti_reap_signals"]
+    assert "phase_planning" not in _signal_list(response, "anti_reap_signals")

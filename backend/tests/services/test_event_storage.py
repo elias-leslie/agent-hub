@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,6 +16,10 @@ from app.services.event_storage import (
     store_event,
     store_memory_inject_event,
 )
+
+# Repo root of this checkout, so command-scope inference can verify referenced
+# source files exist regardless of where CI clones the repo.
+REPO_ROOT = str(Path(__file__).resolve().parents[3])
 
 
 def _mock_parent_session(provider_metadata: dict[str, object] | None = None) -> MagicMock:
@@ -316,7 +321,7 @@ class TestMemoryInjectEvent:
             model="codex/gpt-5.4",
             status="active",
             session_type="agent",
-            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub"},
+            provider_metadata={"repo_root": REPO_ROOT},
             models_used=["codex/gpt-5.4"],
             providers_used=["codex"],
         )
@@ -331,7 +336,7 @@ class TestMemoryInjectEvent:
             tool_name="exec_command",
             tool_input={
                 "cmd": "sed -n '1,40p' backend/app/services/session_scope.py",
-                "workdir": "/srv/workspaces/projects/agent-hub",
+                "workdir": REPO_ROOT,
             },
             session=session,
         )

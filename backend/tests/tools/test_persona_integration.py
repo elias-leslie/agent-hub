@@ -39,6 +39,15 @@ from app.services.tools.tool_handler import (
 SANDBOX_DIR = "/home/testuser/persona-sandbox"
 
 
+@pytest.fixture(autouse=True)
+def allow_test_bash_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow real bash execution where the SummitFlow shared guard is absent (CI)."""
+    monkeypatch.setattr(
+        "app.services.tools._executor_bash.get_command_guard_block_reason",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 def _make_persona(**overrides: Any) -> MagicMock:
     """Create a mock Persona with sensible defaults."""
     defaults = {

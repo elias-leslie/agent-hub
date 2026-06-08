@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-DB_SCRIPT = Path("/srv/workspaces/projects/agent-hub/scripts/db.sh")
+DB_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "db.sh"
 
 
 def _write_executable(path: Path, content: str) -> None:

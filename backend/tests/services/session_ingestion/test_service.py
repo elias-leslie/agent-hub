@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,6 +22,10 @@ from app.services.session_ingestion.service import (
     ingest_transcript_events,
     upsert_session,
 )
+
+# Repo root of this checkout, so command-scope inference can verify referenced
+# source files exist regardless of where CI clones the repo.
+REPO_ROOT = str(Path(__file__).resolve().parents[4])
 
 
 @pytest.mark.unit
@@ -609,7 +614,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
         status="active",
         session_type="agent",
         provider_metadata={
-            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "repo_root": REPO_ROOT,
             "transcript_path": "/tmp/session-scope.jsonl",
         },
         models_used=["codex/gpt-5.4"],
@@ -638,14 +643,14 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
                                 'looked hung until the transient unit disappeared, which made runtime '
                                 'verification noisier than it needed to be."'
                             ),
-                            "workdir": "/srv/workspaces/projects/agent-hub",
+                            "workdir": REPO_ROOT,
                         },
                     ),
                     (
                         "exec_command",
                         {
                             "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
-                            "workdir": "/srv/workspaces/projects/agent-hub",
+                            "workdir": REPO_ROOT,
                         },
                     ),
                     (

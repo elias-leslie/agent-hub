@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,10 @@ from app.services.ownership_inventory import (
     query_project_active_specialists,
     query_project_ownership,
 )
+
+# Repo root of this checkout, so command-scope inference can verify referenced
+# source files exist regardless of where CI clones the repo.
+REPO_ROOT = str(Path(__file__).resolve().parents[3])
 
 
 @pytest.mark.asyncio
@@ -263,7 +268,7 @@ async def test_query_project_ownership_derives_scope_from_exec_command_and_apply
         observed_write_paths=[],
         scope_confidence=None,
         provider_metadata={
-            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "repo_root": REPO_ROOT,
             "live_activity": {
                 "phase": "waiting_for_model",
                 "status": "active",
@@ -280,7 +285,7 @@ async def test_query_project_ownership_derives_scope_from_exec_command_and_apply
         tool_name="exec_command",
         tool_input={
             "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
-            "workdir": "/srv/workspaces/projects/agent-hub",
+            "workdir": REPO_ROOT,
         },
     )
     patch_event = SimpleNamespace(

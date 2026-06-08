@@ -18,6 +18,15 @@ from app.services.tools.direct_executor import (
 )
 
 
+@pytest.fixture(autouse=True)
+def allow_test_bash_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow real bash execution where the SummitFlow shared guard is absent (CI)."""
+    monkeypatch.setattr(
+        "app.services.tools._executor_bash.get_command_guard_block_reason",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 class TestDirectToolExecutor:
     """Tests for DirectToolExecutor."""
 

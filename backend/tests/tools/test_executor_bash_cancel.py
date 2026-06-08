@@ -11,6 +11,15 @@ import pytest
 from app.services.tools import _executor_bash
 
 
+@pytest.fixture(autouse=True)
+def allow_test_bash_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow real bash execution where the SummitFlow shared guard is absent (CI)."""
+    monkeypatch.setattr(
+        "app.services.tools._executor_bash.get_command_guard_block_reason",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 class CancelledProcess:
     pid = 12345
     returncode: int | None = None
