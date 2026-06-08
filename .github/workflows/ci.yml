@@ -29,7 +29,10 @@ jobs:
     env:
       AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
       TEST_AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
-      HATCHET_CLIENT_TOKEN: eyJhbG...c2ln
+      # HATCHET_CLIENT_TOKEN is intentionally unset: tests/conftest.py supplies a
+      # structurally-valid dummy JWT via setdefault(). Setting it here overrides that,
+      # and any non-decodable value makes the Hatchet SDK reject it at import time
+      # (pytest then exits 4 before collection).
       HATCHET_CLIENT_TLS_STRATEGY: none
       INTERNAL_SERVICE_SECRET: agent-hub-internal-v1
     defaults:
