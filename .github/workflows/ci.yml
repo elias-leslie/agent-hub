@@ -14,7 +14,9 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector image (postgres 16 + the `vector` extension) — migrations run
+        # `CREATE EXTENSION vector`, which the stock postgres:16-alpine lacks.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: agent_hub_app
           POSTGRES_PASSWORD: test
