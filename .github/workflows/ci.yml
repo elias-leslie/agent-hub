@@ -17,7 +17,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
       - name: Install backend dependencies
@@ -36,8 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v5
-        with:
-          version: 10.28.0
       - uses: actions/setup-node@v6
         with:
           node-version: 20
