@@ -19,13 +19,52 @@ access control, cost/latency visibility, and operator dashboards.
 
 ## What you get
 
-- Unified completions and streaming across configured providers such as Gemini,
-  OpenAI, OpenRouter, Kimi, MiniMax, DeepSeek, xAI, and local OpenAI-compatible
-  endpoints.
-- PostgreSQL-backed memory and context injection.
-- Named agents/personas, session history, request logs, and routing telemetry.
-- Client registration and access-control surfaces for companion apps.
-- Optional web research, browser, push, Telegram, and voice integrations.
+**Provider routing**
+
+- Unified completions and SSE streaming across many providers from one API:
+  Gemini, OpenAI, OpenRouter, DeepSeek, Kimi/Moonshot, MiniMax, xAI, Zhipu (GLM),
+  NVIDIA, Cloudflare Workers AI, OpenAI Codex, and any local OpenAI-compatible
+  endpoint. (Anthropic/Claude is catalogued for reference but excluded from
+  workload routing by design.)
+- Model-to-provider resolution from a catalog, per-agent routing with fallbacks,
+  a provider circuit breaker, and runtime provider-health probing.
+- Image generation across Gemini, NVIDIA, MiniMax, and Cloudflare image adapters.
+
+**Memory, sessions, and agents**
+
+- PostgreSQL + pgvector memory ("memory-first"): semantic search, episodes,
+  learning extraction, tiering/promotion/retirement, and tiered context injection
+  into completions, with citation tracking.
+- Stateful sessions with full history, branching, ingestion, LLM-generated
+  summaries, and token accounting.
+- Named agents/personas with version history, per-agent model routing, a
+  benchmark dashboard, and a self-improving persona ("Jenny") heartbeat.
+- A DB-backed prompts catalog with revisions/restore and per-agent assignments.
+
+**Orchestration and tools**
+
+- Multi-agent orchestration: staged workflow (clarify → plan → execute → review →
+  QA), maker-checker, chain, parallel fan-out, sub-agents, code-review, and a
+  committee/roundtable.
+- Server-side tool execution with an agentic tool loop: shell, file read/write/edit,
+  precision code search, and web search/research/fetch (backed by SearXNG and a
+  CDP browser).
+
+**Operability and access control**
+
+- Cost/latency telemetry, request logs, truncation events, analytics, and
+  operator dashboards over a 6-axis model catalog (coding/reasoning/planning/
+  tool-use/instruction/design scores, plus per-token/image/second pricing).
+- Client registration and access control, per-project permissions, budgets and
+  quotas, encrypted credential storage (Fernet at rest), and OAuth (Codex/PKCE).
+- Optional web research, browser, web push (VAPID), Telegram bot, and voice
+  (faster-whisper STT → completion → edge-tts) integrations.
+- A Python SDK (`agent-hub-client`) with sync + async clients for completions,
+  SSE streaming, stateful sessions, image generation, and memory operations.
+
+Under the hood: ~36 API routers, multi-provider image/completion adapters, and
+15 Hatchet background workflows (session summaries, memory governance, model
+catalog enrichment, persona heartbeat, retention, and more).
 
 The target user is a developer or operator running their own agent
 infrastructure, not a hosted SaaS user.
