@@ -54,6 +54,14 @@ dependencies = [
 web-research = "app.cli.web_research:main"
 
 [project.optional-dependencies]
+# Opt-in tool-result compression engine (Rust ext: headroom._core). We call the
+# SmartCrusher / LogCompressor transforms directly — never headroom.compress — so
+# the engine's heavy core deps (litellm, ast-grep-cli) are neutralized below via
+# [tool.uv] override-dependencies. Base install omits this group, so the import in
+# app/llm/headroom_compress.py fails safe and compression no-ops.
+compression = [
+    "headroom-ai==0.23.0",
+]
 dev = [
     # Testing - Core
     "pytest>=9.0.0",
@@ -70,6 +78,17 @@ dev = [
     "ty>=0.0.17",
     "types-jsonschema>=4.26.0",
     "types-redis>=4.6.0",
+]
+
+[tool.uv]
+# The `compression` extra pulls headroom-ai, whose core deps include litellm
+# (forbidden by the single-adapter mandate) and ast-grep-cli (a large binary we
+# never invoke). The transforms-only path imports neither, so drop both from
+# resolution with a never-satisfiable marker — the package edge stays, but nothing
+# installs them on any platform.
+override-dependencies = [
+    "litellm==1.82.3; sys_platform == 'no-such-platform'",
+    "ast-grep-cli==0.39.5; sys_platform == 'no-such-platform'",
 ]
 
 [build-system]

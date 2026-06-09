@@ -6,6 +6,12 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+overrides = [
+    { name = "ast-grep-cli", marker = "sys_platform == 'no-such-platform'", specifier = "==0.39.5" },
+    { name = "litellm", marker = "sys_platform == 'no-such-platform'", specifier = "==1.82.3" },
+]
+
 [[package]]
 name = "agent-hub"
 version = "0.1.0"
@@ -45,6 +51,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+compression = [
+    { name = "headroom-ai" },
+]
 dev = [
     { name = "import-linter" },
     { name = "pytest" },
@@ -73,6 +82,7 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "google-genai", specifier = ">=1.0.0" },
     { name = "hatchet-sdk", specifier = ">=1.22.0" },
+    { name = "headroom-ai", marker = "extra == 'compression'", specifier = "==0.23.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "jsonschema", specifier = ">=4.20.0" },
@@ -106,7 +116,7 @@ requires-dist = [
     { name = "types-redis", marker = "extra == 'dev'", specifier = ">=4.6.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["compression", "dev"]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -272,6 +282,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/96/f0/5eb65b2bb0d09ac67
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/0e/27be9fdef66e72d64c0cdc3cc2823101b80585f8119b5c112c2e8f5f7dab/anyio-4.12.1-py3-none-any.whl", hash = "sha256:d405828884fc140aa80a3c667b8beed277f1dfedec42ba031bd6ac3db606ab6c", size = 113592, upload-time = "2026-01-06T11:45:19.497Z" },
 ]
+
+[[package]]
+name = "ast-grep-cli"
+version = "0.39.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/d2/d432c6e3bc20a9e3e9559f824523554952f38fec0c52e80cd2a76fc4b8ec/ast_grep_cli-0.39.5.tar.gz", hash = "sha256:134596d2364626e5da1ba7146b37866b6a2db09b3519943c0e3ba1eec8c3c304", size = 211472, upload-time = "2025-09-08T18:00:06.494Z" }
 
 [[package]]
 name = "asyncpg"
@@ -759,6 +775,12 @@ wheels = [
 ]
 
 [[package]]
+name = "fastuuid"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/7d/d9daedf0f2ebcacd20d599928f8913e9d2aea1d56d2d355a93bfa2b611d7/fastuuid-0.14.0.tar.gz", hash = "sha256:178947fc2f995b38497a74172adee64fdeb8b7ec18f2a5934d037641ba265d26", size = 18232, upload-time = "2025-10-19T22:19:22.402Z" }
+
+[[package]]
 name = "filelock"
 version = "3.20.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1093,6 +1115,26 @@ wheels = [
 ]
 
 [[package]]
+name = "headroom-ai"
+version = "0.23.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ast-grep-cli", marker = "sys_platform == 'no-such-platform'" },
+    { name = "click" },
+    { name = "litellm", marker = "sys_platform == 'no-such-platform'" },
+    { name = "opentelemetry-api" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "tiktoken" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/8a/815d6a5244639e4f23481e575e51e41928319046c2483983c11f6c6afac2/headroom_ai-0.23.0.tar.gz", hash = "sha256:64e156c0957ba347ab6c0772a46d768246a965d5a6be8e1de40d9d16406d0009", size = 1647728, upload-time = "2026-06-04T14:30:01.981Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/4c/8e6f0e98082100dbed8b89cd6fc828cb29fe813021ff23c0465c0483a6b9/headroom_ai-0.23.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f33c5abdcebb8cdb6847b3d5207ff5c2669e1e938759d4eed9e62170895a3e3d", size = 16082548, upload-time = "2026-06-04T14:29:54.857Z" },
+    { url = "https://files.pythonhosted.org/packages/47/aa/7c3a787e0a8def318d92e5f2c595d1e4513e6ac34792dd98acfa0a14bb7d/headroom_ai-0.23.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:fad4ae5f0fbf1ef26c35b151e2a0499166c4a061033a88d969555de91501d21f", size = 18141021, upload-time = "2026-06-04T14:29:57.177Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/df/502abccb76b70acee2e1a70dd5c1ece7918aecc7f457a084b16a45b1a1e9/headroom_ai-0.23.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:d10c727cfbf8c8f3cb1e36fb5586a18c763e70ff14f45ba73d2c55d6ebccd3f0", size = 17265164, upload-time = "2026-06-04T14:29:59.529Z" },
+]
+
+[[package]]
 name = "hf-xet"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1275,6 +1317,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jinja2"
+version = "3.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
 name = "jiter"
 version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1362,6 +1416,29 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/49/f3/45890c1b314f0d04e19c1c83d534e611513150939a7cf039664d9ab1e649/justext-3.0.2.tar.gz", hash = "sha256:13496a450c44c4cd5b5a75a5efcd9996066d2a189794ea99a49949685a0beb05", size = 828521, upload-time = "2025-02-25T20:21:49.934Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/ac/52f4e86d1924a7fc05af3aeb34488570eccc39b4af90530dd6acecdf16b5/justext-3.0.2-py2.py3-none-any.whl", hash = "sha256:62b1c562b15c3c6265e121cc070874243a443bfd53060e869393f09d6b6cc9a7", size = 837940, upload-time = "2025-02-25T20:21:44.179Z" },
+]
+
+[[package]]
+name = "litellm"
+version = "1.82.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "click" },
+    { name = "fastuuid" },
+    { name = "httpx" },
+    { name = "importlib-metadata" },
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "tiktoken" },
+    { name = "tokenizers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/00/13993312e6d2fb29cd6d5ffceb293455ef747fe5675eaa9aa49b09184656/litellm-1.82.3.tar.gz", hash = "sha256:7215b95e7cc38a52b5ae778d67e8829dec86594c8b05d8431294e95c7d59937c", size = 17368754, upload-time = "2026-03-16T21:51:30.356Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/3a/590d58dee65a238f7f3d5c37f8f9f9021ecaf27fe379a393b4259324b56e/litellm-1.82.3-py3-none-any.whl", hash = "sha256:609901f6c5a5cf8c24386e4e3f50738bb8a9db719709fd76b208c8ee6d00f7a7", size = 15551034, upload-time = "2026-03-16T21:51:26.747Z" },
 ]
 
 [[package]]

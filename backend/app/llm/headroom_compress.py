@@ -1,36 +1,38 @@
-"""Flag-gated tool-result compression (Headroom) — PROTOTYPE.
+"""Flag-gated tool-result compression (Headroom transforms).
 
 Compresses large ``ToolResultMessage`` text blocks before they re-enter the
-model context, using the ``headroom-ai`` pipeline (SmartCrusher for JSON,
-LogCompressor for logs/search output).
+model context, calling the ``headroom-ai`` Rust transforms **directly**:
+:class:`SmartCrusher` for JSON arrays, :class:`LogCompressor` for logs / build
+output.
 
-SAFETY MODEL — the result must stay self-contained and readable
-================================================================
-Headroom has two outcomes:
+Why call the transforms directly (not ``headroom.compress``)
+============================================================
+``headroom.compress`` is the full orchestrator and pulls the ``litellm``
+provider router, which conflicts with this service's single-adapter mandate.
+The transform classes need only the Rust engine (``headroom._core``) plus
+``pydantic`` / ``tiktoken`` / ``opentelemetry-api`` — all of which are already
+base dependencies. The ``compression`` optional group installs the engine with
+``litellm`` (and ``ast-grep-cli``) excluded from resolution; see
+``pyproject.toml`` ``[tool.uv] override-dependencies``. An import-guard test
+asserts ``litellm`` never loads on this path.
 
-* **Inline-readable** — JSON is losslessly tabularised (repeated keys factored
-  into a schema header, every row kept) or logs are summarised with an inline
-  ``Retrieve more: hash=...`` hint. The model can still read everything it
-  needs directly. SAFE.
-* **Opaque CCR pointer** — large opaque blobs are replaced wholesale with a
-  ``<<ccr:HASH,kind,size>>`` marker; the bytes live in Headroom's CCR store
-  and come back only via a ``headroom_retrieve`` tool. We have NOT wired that
-  tool into the agent tool-set, so a bare pointer would blind the agent to its
-  own tool output. UNSAFE — rejected here (the original is kept).
-
-Real-data testing (a 262-tool-output Codex session) showed the naive path
-turned 237/262 outputs into bare pointers (95% "savings" that hide the data);
-rejecting pointers + unwrapping JSON envelopes yields ~29% fully-readable
-savings on that code-heavy session, and 67-95% on JSON/log-heavy outputs.
+Safety model — results stay self-contained and readable
+=======================================================
+* CCR (Compress-Cache-Retrieve) is **disabled** — ``CCRConfig(enabled=False)``
+  for JSON, ``enable_ccr=False`` for logs. Compression therefore stays
+  inline-readable: JSON arrays are losslessly tabularised (repeated keys
+  factored into a schema header, every row kept), logs are summarised with the
+  errors/traces preserved. No opaque ``<<ccr:HASH>>`` pointer is emitted — the
+  agent has no ``headroom_retrieve`` tool, so a bare pointer would blind it to
+  its own tool output. As belt-and-suspenders we still reject any output that
+  contains ``<<ccr:``.
+* Fail-safe — any import or compression error leaves the messages unchanged.
+* Surgical — only ``ToolResultMessage`` ``TextContent`` is rewritten; message
+  structure, tool-call ids, thinking blocks and signatures are untouched.
+* Idempotent — already-compressed blocks are skipped, so per-turn cost is
+  bounded by the newest, not-yet-compressed tool outputs.
 
 Off by default. Enable with ``HEADROOM_COMPRESS_TOOL_RESULTS=1``.
-
-Design constraints honoured:
-* Single surface — the one async tool loop (``tool_loop.run``) calls
-  :func:`compress_tool_results` in a thread executor; nothing else changes.
-* Fail-safe — any import/compression error keeps the messages unchanged.
-* Surgical — only ``ToolResultMessage`` ``TextContent`` is touched; message
-  structure, tool-call ids, thinking blocks and signatures are untouched.
 """
 
 from __future__ import annotations
@@ -38,18 +40,20 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable
 from typing import Any
+
+from app.services.token_counter import count_tokens
 
 from .types import Message, TextContent, ToolResultMessage
 
 # Don't recompress already-compressed text. Matches the SmartCrusher tabular
-# header (``[78]{schema}`` / ``"[78]{schema}``) and the CCR retrieval marker.
+# header (``[78]{schema}`` / ``"[78]{schema}``) and, defensively, the CCR
+# retrieval marker (which CCR-disabled compression should never emit).
 _COMPRESSED_RE = re.compile(r'^\s*"?\[\d+\]\{|Retrieve more: hash=')
 
 # Below this, compression overhead exceeds savings (mirrors Headroom's own gate).
 _MIN_CHARS = 2000
-# Only accept a compressed block if it saves at least this fraction.
+# Only accept a compressed block if it saves at least this fraction of tokens.
 _MIN_GAIN = 0.10
 
 _ENV_FLAG = "HEADROOM_COMPRESS_TOOL_RESULTS"
@@ -64,50 +68,85 @@ def _looks_compressed(text: str) -> bool:
     return bool(_COMPRESSED_RE.search(text[:64]) or "Retrieve more: hash=" in text)
 
 
-def _compress_once(
-    hr_compress: Callable[..., Any], text: str, model_id: str
-) -> tuple[str, int, int] | None:
-    """Compress one string. Return ``(out, tokens_before, tokens_after)`` only
-    when the result is SAFE — self-contained (no bare ``<<ccr:`` pointer) and a
-    real win. Otherwise ``None``."""
-    res = hr_compress([{"role": "tool", "content": text}], model=model_id, protect_recent=0)
-    out = res.messages[0].get("content")
-    if not isinstance(out, str) or not out:
-        return None
-    if "<<ccr:" in out:  # opaque pointer — retrieval not wired, would blind the agent
-        return None
-    if res.tokens_after >= res.tokens_before * (1 - _MIN_GAIN):
-        return None
-    return out, res.tokens_before, res.tokens_after
+def _build_engines() -> tuple[Any, Any] | None:
+    """Build (SmartCrusher, LogCompressor) with CCR disabled, or ``None`` when
+    the engine isn't installed. Imports are local so the base install (no
+    ``compression`` extra) fails safe instead of erroring at module import."""
+    from headroom.config import CCRConfig
+    from headroom.transforms.log_compressor import LogCompressor, LogCompressorConfig
+    from headroom.transforms.smart_crusher import SmartCrusher
+
+    crusher = SmartCrusher(ccr_config=CCRConfig(enabled=False))
+    log_compressor = LogCompressor(LogCompressorConfig(enable_ccr=False))
+    return crusher, log_compressor
 
 
-def _safe_compress(
-    hr_compress: Callable[..., Any], text: str, model_id: str
+def _accept(original: str, compressed: Any) -> tuple[str, int, int] | None:
+    """Accept ``compressed`` only when it is SAFE and a real win.
+
+    Returns ``(out, tokens_before, tokens_after)`` or ``None``. Safe means a
+    non-empty string with no bare ``<<ccr:`` pointer; a real win means it saves
+    at least :data:`_MIN_GAIN` of the original's tokens.
+    """
+    if not isinstance(compressed, str) or not compressed:
+        return None
+    if "<<ccr:" in compressed:  # opaque pointer — retrieval not wired, would blind the agent
+        return None
+    tokens_before = count_tokens(original)
+    tokens_after = count_tokens(compressed)
+    if tokens_after >= tokens_before * (1 - _MIN_GAIN):
+        return None
+    return compressed, tokens_before, tokens_after
+
+
+def _compress_value(crusher: Any, log_compressor: Any, text: str) -> tuple[str, int, int] | None:
+    """Route one string to the right inline compressor by content sniff.
+
+    JSON array → SmartCrusher (tabularises rows). JSON object → envelope unwrap
+    (compress its largest string value). Anything else → LogCompressor.
+    """
+    obj = _try_json(text)
+    if isinstance(obj, list):
+        return _accept(text, crusher.crush(text).compressed)
+    if isinstance(obj, dict):
+        return _unwrap_envelope(crusher, log_compressor, obj)
+    # Not JSON — treat as log / build / search output.
+    return _accept(text, log_compressor.compress(text).compressed)
+
+
+def _unwrap_envelope(
+    crusher: Any, log_compressor: Any, obj: dict[str, Any]
 ) -> tuple[str, int, int] | None:
-    """Best safe compression of ``text``. Tries the raw form, then — if the raw
-    form is an opaque JSON envelope (e.g. ``{"output": "<28KB of logs>"}``) —
-    compresses its largest string value inline so the right per-type compressor
-    fires instead of a wholesale pointer offload."""
-    direct = _compress_once(hr_compress, text, model_id)
-    if direct is not None:
-        return direct
-    # JSON-envelope unwrap: route the inner payload to the inline compressors.
-    try:
-        obj = json.loads(text)
-    except Exception:
-        return None
-    if not isinstance(obj, dict):
-        return None
+    """Compress the largest string value of a JSON envelope inline.
+
+    Many tools wrap their payload, e.g. ``{"output": "<28KB of logs>"}``. The
+    wrapper itself doesn't compress, but routing the inner payload to the right
+    per-type compressor does. Re-serialises the envelope with the inner value
+    replaced; the gain/token counts are measured on the inner payload.
+    """
     str_keys = [k for k, v in obj.items() if isinstance(v, str) and len(v) >= _MIN_CHARS]
     if not str_keys:
         return None
     key = max(str_keys, key=lambda k: len(obj[k]))
-    inner = _compress_once(hr_compress, obj[key], model_id)
-    if inner is None:
+    inner = obj[key]
+    inner_obj = _try_json(inner)
+    if isinstance(inner_obj, list):
+        compressed_inner = crusher.crush(inner).compressed
+    else:
+        compressed_inner = log_compressor.compress(inner).compressed
+    accepted = _accept(inner, compressed_inner)
+    if accepted is None:
         return None
-    new_inner, tb, ta = inner
+    new_inner, tokens_before, tokens_after = accepted
     obj[key] = new_inner
-    return json.dumps(obj), tb, ta
+    return json.dumps(obj), tokens_before, tokens_after
+
+
+def _try_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
 
 
 def compress_tool_results(
@@ -119,6 +158,9 @@ def compress_tool_results(
     Returns ``(messages, stats)``. ``messages`` is the same list (mutated in
     place); ``stats`` reports blocks touched and tokens saved for observability.
     Never raises — on any failure the originals pass through unchanged.
+
+    ``model_id`` is accepted for call-site symmetry with the loop; the inline
+    transforms are model-agnostic, so it is not currently consulted.
     """
     stats: dict[str, Any] = {
         "blocks_seen": 0,
@@ -128,10 +170,14 @@ def compress_tool_results(
     }
 
     try:
-        from headroom import compress as _hr_compress
+        engines = _build_engines()
     except Exception:
-        stats["error"] = "headroom-ai not installed"
+        stats["error"] = "headroom-ai engine not available"
         return messages, stats
+    if engines is None:
+        stats["error"] = "headroom-ai engine not available"
+        return messages, stats
+    crusher, log_compressor = engines
 
     for msg in messages:
         if not isinstance(msg, ToolResultMessage):
@@ -144,17 +190,17 @@ def compress_tool_results(
                 continue
             stats["blocks_seen"] += 1
             try:
-                safe = _safe_compress(_hr_compress, text, model_id)
+                result = _compress_value(crusher, log_compressor, text)
             except Exception:
                 # Fail-safe: leave this block untouched, keep going.
                 continue
-            if safe is None:
+            if result is None:
                 continue
-            out, tb, ta = safe
+            out, tokens_before, tokens_after = result
             block.text = out
             stats["blocks_compressed"] += 1
-            stats["tokens_before"] += tb
-            stats["tokens_after"] += ta
+            stats["tokens_before"] += tokens_before
+            stats["tokens_after"] += tokens_after
 
     return messages, stats
 

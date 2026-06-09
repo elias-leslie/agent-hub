@@ -30,6 +30,27 @@ access control, cost/latency visibility, and operator dashboards.
 The target user is a developer or operator running their own agent
 infrastructure, not a hosted SaaS user.
 
+## How it compares
+
+These capabilities aren't new on their own — observability platforms, gateways,
+and hosted routers each cover a slice. Agent Hub's bet is having them **integrated
+and memory-first in one self-hosted control plane**, rather than stitched together.
+
+| | Agent Hub | Langfuse | LiteLLM | OpenRouter |
+|---|:---:|:---:|:---:|:---:|
+| Primary role | integrated control plane | observability / tracing | API gateway / proxy | hosted routing API |
+| Multi-provider routing with fallbacks | ✅ | ❌ | ✅ | ✅ |
+| Persistent memory + context injection | ✅ | ❌ | ❌ | ❌ |
+| Named agents/personas + session history | ✅ | ❌ | ❌ | ❌ |
+| Cost / latency telemetry + operator dashboard | ✅ | ✅ | partial | ✅ |
+| Self-hosted, no SaaS required | ✅ | ✅ | ✅ | ❌ |
+
+If you only need tracing, use Langfuse; only a gateway, use LiteLLM. Agent Hub is
+for running agents as infrastructure — routing, memory, sessions, and dashboards
+behind one self-hosted API.
+
+> ⭐ If a self-hosted, memory-first agent control plane is useful to you, a star helps others find it.
+
 ## Requirements
 
 Native development:
