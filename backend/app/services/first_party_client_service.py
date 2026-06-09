@@ -116,6 +116,17 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
         "external",
         ("monkey-fight",),
     )
+    # Hermes: terminal/CLI agent companion. Empty allowed_projects (None)
+    # means it can read/write across all projects — Hermes is a generic
+    # tool, not a project-siloed service. scope_id at the call site
+    # (profile:<name>) keeps the data properly partitioned.
+    if settings.hermes_client_id:
+        add(
+            settings.hermes_client_id,
+            "hermes",
+            "external",
+            tuple(settings.hermes_allowed_projects) if settings.hermes_allowed_projects else None,
+        )
 
     return specs
 

@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     summitflow_client_id: str = ""
     portfolio_client_id: str = ""
     monkey_fight_client_id: str = ""
+    hermes_client_id: str = "hermes"
+    hermes_request_source: str = "hermes-cli"
+    hermes_allowed_projects: tuple[str, ...] = ()  # empty = unrestricted; set per-env via HERMES_ALLOWED_PROJECTS
 
     # Native Telegram config overrides
     agent_hub_telegram_bot_token: str = ""
