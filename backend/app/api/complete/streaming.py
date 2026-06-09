@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.llm.headroom_compress import compression_enabled_for
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.tool_loop import (
     ToolLoopEvent,
@@ -314,6 +315,7 @@ async def stream_completion(
             execute_tools=execute_tools,
             run_tool=run_tool,
             max_turns=max(max_tool_turns, 1) if execute_tools else 1,
+            compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_used),
         )
         async for chunk in _with_heartbeat(_emit_events(events, writer, ctx, content_buf)):
             yield chunk

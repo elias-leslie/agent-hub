@@ -196,6 +196,15 @@ class CostLog(Base):
     model: Mapped[str] = mapped_column(String(100))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # Provider prefix-cache accounting — the Phase 5 cache-safety signal for
+    # Headroom tool-result compression (a write spike that erases token savings
+    # is the documented hard fail).
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Tool-result compression attribution (blocks rewritten + tokens saved).
+    compression_blocks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    compression_tokens_before: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    compression_tokens_after: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

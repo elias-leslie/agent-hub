@@ -97,9 +97,16 @@ async def save_and_track(
                 )
         await publish_message(session_id, "assistant", result.content, result.output_tokens)
     cost = estimate_cost(result.input_tokens, result.output_tokens, effective_model)
+    # `result` is a CompletionInternalResult on the live path but a CachedResponse
+    # on a cache hit (no `.message`), so read usage defensively like the rest of
+    # this function. Cache tokens don't apply to our own response cache → 0.
+    usage = getattr(getattr(result, "message", None), "usage", None)
     await log_token_usage(
         db, session_id, effective_model,
         result.input_tokens, result.output_tokens, cost.total_cost_usd,
+        cache_read_tokens=int(getattr(usage, "cache_read", 0) or 0),
+        cache_write_tokens=int(getattr(usage, "cache_write", 0) or 0),
+        compression_stats=getattr(result, "compression_stats", None),
     )
     await publish_complete(session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)
     # Record token usage for quota tracking

@@ -27,7 +27,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from .headroom_compress import compress_tool_results, headroom_enabled
+from .headroom_compress import compress_tool_results
 from .stream import stream_simple
 from .types import (
     AssistantMessage,
@@ -91,6 +91,8 @@ async def run(
     run_tool: ToolRunner,
     options: SimpleStreamOptions | None = None,
     max_turns: int = 32,
+    compress_tool_results_enabled: bool = False,
+    compression_stats_sink: dict[str, int] | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Run the multi-turn tool loop.
 
@@ -113,15 +115,20 @@ async def run(
     while turns < max_turns:
         turns += 1
 
-        # PROTOTYPE: compress accumulated tool-result text before the next
-        # model call (off by default; HEADROOM_COMPRESS_TOOL_RESULTS=1). CPU-
+        # Compress accumulated tool-result text before the next model call when
+        # the caller resolved the per-agent gate to ON (off by default). CPU-
         # bound, so run off the event loop. Already-compressed blocks are
         # skipped, so per-turn cost is bounded by the newest tool outputs.
-        if headroom_enabled():
+        if compress_tool_results_enabled:
             loop = asyncio.get_running_loop()
-            context.messages, _ = await loop.run_in_executor(
+            context.messages, turn_stats = await loop.run_in_executor(
                 None, compress_tool_results, context.messages, model.id
             )
+            if compression_stats_sink is not None:
+                for key in ("blocks_compressed", "tokens_before", "tokens_after"):
+                    compression_stats_sink[key] = compression_stats_sink.get(key, 0) + int(
+                        turn_stats.get(key, 0)
+                    )
 
         stream_handle = stream_simple(model, context, options)
 

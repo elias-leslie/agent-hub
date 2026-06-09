@@ -40,6 +40,9 @@ async def log_token_usage(
     input_tokens: int,
     output_tokens: int,
     cost_usd: float = 0.0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+    compression_stats: dict[str, int] | None = None,
 ) -> None:
     """
     Log token usage for a request to the CostLog table.
@@ -51,13 +54,23 @@ async def log_token_usage(
         input_tokens: Input token count
         output_tokens: Output token count
         cost_usd: Estimated cost in USD
+        cache_read_tokens: Provider prefix-cache read tokens (discounted input)
+        cache_write_tokens: Provider prefix-cache creation/write tokens
+        compression_stats: Optional Headroom tool-result compression aggregate
+            (``blocks_compressed``/``tokens_before``/``tokens_after``)
     """
+    stats = compression_stats or {}
     cost_log = CostLog(
         session_id=session_id,
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost_usd,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+        compression_blocks=int(stats.get("blocks_compressed", 0)),
+        compression_tokens_before=int(stats.get("tokens_before", 0)),
+        compression_tokens_after=int(stats.get("tokens_after", 0)),
     )
     db.add(cost_log)
     # Don't commit here - let caller handle transaction

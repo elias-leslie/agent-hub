@@ -40,6 +40,8 @@ class CompletionInternalResult:
     container_ref: str | None = None
     progress_entries: list[AgentProgress] = field(default_factory=list)
     failure_summary: dict[str, Any] | None = None
+    # Headroom tool-result compression aggregate for this request (None when off).
+    compression_stats: dict[str, int] | None = None
     # Fallback tracking
     model_used: str | None = None
     fallback_used: bool = False
@@ -73,6 +75,7 @@ class CompletionInternalResult:
         container_id: str | None = None,
         progress_log: list[AgentProgress] | None = None,
         error_summary: dict[str, Any] | None = None,
+        compression_stats: dict[str, int] | None = None,
         model_used: str | None = None,
         fallback_used: bool = False,
         requested_model: str | None = None,
@@ -107,6 +110,7 @@ class CompletionInternalResult:
         self.container_ref = container_id
         self.progress_entries = progress_log or []
         self.failure_summary = error_summary
+        self.compression_stats = compression_stats
         self.model_used = model_used
         self.fallback_used = fallback_used
         self.requested_model = requested_model

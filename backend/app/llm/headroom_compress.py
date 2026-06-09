@@ -38,10 +38,10 @@ Off by default. Enable with ``HEADROOM_COMPRESS_TOOL_RESULTS=1``.
 from __future__ import annotations
 
 import json
-import os
 import re
 from typing import Any
 
+from app.config import settings
 from app.services.token_counter import count_tokens
 
 from .types import Message, TextContent, ToolResultMessage
@@ -56,12 +56,30 @@ _MIN_CHARS = 2000
 # Only accept a compressed block if it saves at least this fraction of tokens.
 _MIN_GAIN = 0.10
 
-_ENV_FLAG = "HEADROOM_COMPRESS_TOOL_RESULTS"
-
-
 def headroom_enabled() -> bool:
-    """True when the prototype flag is set (off by default)."""
-    return os.environ.get(_ENV_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}
+    """Master kill-switch — ``settings.headroom_compress_tool_results`` (off by default)."""
+    return settings.headroom_compress_tool_results
+
+
+def _allowlisted_slugs() -> frozenset[str]:
+    """Per-agent opt-in allowlist parsed from the comma-separated setting."""
+    return frozenset(
+        slug.strip()
+        for slug in settings.headroom_compress_agent_slugs.split(",")
+        if slug.strip()
+    )
+
+
+def compression_enabled_for(agent_slug: str | None) -> bool:
+    """Effective gate: master switch ON **and** ``agent_slug`` is allowlisted.
+
+    Per-agent_slug opt-in (plan Phase 6) — JSON/log-heavy slugs are enabled via
+    ``HEADROOM_COMPRESS_AGENT_SLUGS``; everything else stays off. The tool loop
+    receives the resolved boolean, so the ``llm`` layer never reads settings.
+    """
+    if not agent_slug or not headroom_enabled():
+        return False
+    return agent_slug in _allowlisted_slugs()
 
 
 def _looks_compressed(text: str) -> bool:
@@ -205,4 +223,4 @@ def compress_tool_results(
     return messages, stats
 
 
-__all__ = ["compress_tool_results", "headroom_enabled"]
+__all__ = ["compress_tool_results", "compression_enabled_for", "headroom_enabled"]

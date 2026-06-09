@@ -159,6 +159,8 @@ async def run_completion(
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
     max_turns: int = 32,
+    compress_tool_results_enabled: bool = False,
+    compression_stats_sink: dict[str, int] | None = None,
 ) -> OrchestratorResult:
     """Drive the new pipeline to completion (non-streaming).
 
@@ -173,7 +175,15 @@ async def run_completion(
             raise ValueError("run_tool callback is required when execute_tools=True")
         tool_calls_count = 0
         final: AssistantMessage | None = None
-        async for event in run_tool_loop(model, context, run_tool, options, max_turns=max_turns):
+        async for event in run_tool_loop(
+            model,
+            context,
+            run_tool,
+            options,
+            max_turns=max_turns,
+            compress_tool_results_enabled=compress_tool_results_enabled,
+            compression_stats_sink=compression_stats_sink,
+        ):
             event_type = getattr(event, "type", None)
             if event_type == "tool_run_start":
                 tool_calls_count += 1
@@ -209,6 +219,7 @@ async def run_completion_stream(
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
     max_turns: int = 32,
+    compress_tool_results_enabled: bool = False,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.
 
@@ -220,7 +231,14 @@ async def run_completion_stream(
     if execute_tools:
         if run_tool is None:
             raise ValueError("run_tool callback is required when execute_tools=True")
-        async for event in run_tool_loop(model, context, run_tool, options, max_turns=max_turns):
+        async for event in run_tool_loop(
+            model,
+            context,
+            run_tool,
+            options,
+            max_turns=max_turns,
+            compress_tool_results_enabled=compress_tool_results_enabled,
+        ):
             yield event
         return
 

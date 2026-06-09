@@ -203,6 +203,76 @@ async def test_tool_loop_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(context.messages) == 4  # user + assistant1 + tool_result + assistant2
 
 
+async def _big_json_tool_result(call: ToolCall) -> ToolResultMessage:
+    payload = json.dumps(
+        [{"id": i, "name": f"row_{i}", "email": f"row_{i}@ex.com", "role": "member"} for i in range(120)]
+    )
+    return ToolResultMessage(
+        tool_call_id=call.id,
+        tool_name=call.name,
+        content=[TextContent(text=payload)],
+        is_error=False,
+        timestamp=0,
+    )
+
+
+def _two_turn_tool_loop() -> tuple[Model[Any], AssistantMessage, AssistantMessage]:
+    model = _claude_model()
+    turn1 = AssistantMessage(
+        content=[ToolCall(id="toolu_1", name="list_rows", arguments={})],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=10, output=2, total_tokens=12), stop_reason="toolUse", timestamp=0,
+    )
+    turn2 = AssistantMessage(
+        content=[TextContent(text="done")],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=12, output=1, total_tokens=13), stop_reason="stop", timestamp=0,
+    )
+    return model, turn1, turn2
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_compresses_results_when_flag_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Flag ON: the accumulated tool result is compressed before the next turn and
+    stats land in the sink (proves the Phase 2/3 threading end-to-end)."""
+    model, turn1, turn2 = _two_turn_tool_loop()
+    monkeypatch.setattr(tool_loop, "stream_simple", _fake_provider_factory(turn1_message=turn1, turn2_message=turn2))
+
+    context = Context(messages=[UserMessage(content="list", timestamp=0)])
+    sink: dict[str, int] = {}
+    async for _ in tool_loop.run(
+        model, context, _big_json_tool_result, options=SimpleStreamOptions(), max_turns=8,
+        compress_tool_results_enabled=True, compression_stats_sink=sink,
+    ):
+        pass
+
+    block = next(m for m in context.messages if isinstance(m, ToolResultMessage)).content[0]
+    assert isinstance(block, TextContent)
+    assert block.text.lstrip().startswith('"[')  # SmartCrusher tabular header
+    assert sink["blocks_compressed"] == 1
+    assert sink["tokens_after"] < sink["tokens_before"]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_leaves_results_raw_when_flag_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Flag OFF (default): the tool result passes through untouched, sink stays empty."""
+    model, turn1, turn2 = _two_turn_tool_loop()
+    monkeypatch.setattr(tool_loop, "stream_simple", _fake_provider_factory(turn1_message=turn1, turn2_message=turn2))
+
+    context = Context(messages=[UserMessage(content="list", timestamp=0)])
+    sink: dict[str, int] = {}
+    async for _ in tool_loop.run(
+        model, context, _big_json_tool_result, options=SimpleStreamOptions(), max_turns=8,
+        compress_tool_results_enabled=False, compression_stats_sink=sink,
+    ):
+        pass
+
+    block = next(m for m in context.messages if isinstance(m, ToolResultMessage)).content[0]
+    assert isinstance(block, TextContent)
+    assert block.text.lstrip().startswith("[{")  # still raw JSON
+    assert sink == {}
+
+
 @pytest.mark.asyncio
 async def test_sse_writer_emits_contract_events() -> None:
     """SSE writer surfaces the 9-event downstream contract correctly."""

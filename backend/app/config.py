@@ -164,6 +164,13 @@ class Settings(BaseSettings):
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"
     local_openai_api_key: str = ""
 
+    # Tool-result compression (Headroom). Master kill-switch (off by default) plus
+    # a per-agent_slug opt-in allowlist. Compression only fires when the master is
+    # on AND the request's agent_slug is in the comma-separated allowlist — see
+    # app/llm/headroom_compress.py:compression_enabled_for.
+    headroom_compress_tool_results: bool = False
+    headroom_compress_agent_slugs: str = ""
+
 
 
 @lru_cache

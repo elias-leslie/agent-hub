@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.llm.headroom_compress import compression_enabled_for
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.types import (
     AssistantMessage,
@@ -190,12 +191,15 @@ async def complete_internal(
         else None
     )
 
+    compression_stats: dict[str, int] = {}
     result = await run_completion(
         llm_model,
         context,
         execute_tools=execute_tools,
         run_tool=run_tool,
         max_turns=max_turns,
+        compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_slug),
+        compression_stats_sink=compression_stats,
     )
     message = result.message
     _normalize_tagged_thinking(message)
@@ -214,6 +218,7 @@ async def complete_internal(
         thinking_tokens=thinking_tokens,
         turns=result.turns,
         tool_calls_count=result.tool_calls_count,
+        compression_stats=compression_stats or None,
         model_used=model,
         requested_model=requested_model or model,
         requested_provider=requested_provider or provider,
