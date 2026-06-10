@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+
+from app.core.project_roots import resolve_project_root
 
 logger = logging.getLogger(__name__)
 
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 _DEFAULT_HEARTBEAT_BACKUP_PROJECT_ID = "agent-hub"
 _DEFAULT_HEARTBEAT_BACKUP_SOURCE_ID = "persona-sandbox"
-_WORKSPACE_BASE = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 
 
 def format_backup_size(size_bytes: int | None) -> str:
@@ -43,7 +42,10 @@ def format_compact_backup_source(source: dict[str, Any]) -> str:
 
 def _read_summitflow_api_url() -> str:
     """Read SummitFlow's canonical local API URL from .index.yaml."""
-    index_path = _WORKSPACE_BASE / _SUMMITFLOW_PROJECT_ID / ".index.yaml"
+    root = resolve_project_root(_SUMMITFLOW_PROJECT_ID)
+    if root is None:
+        return ""
+    index_path = root / ".index.yaml"
     if not index_path.is_file():
         return ""
     try:

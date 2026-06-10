@@ -131,9 +131,16 @@ class TestHeartbeatCompactContext:
         ]
         session_factory, _mock_db = _mock_async_session_with_fetchall(rows)
 
+        def fake_resolve_root(project_id):
+            candidate = tmp_path / project_id
+            return candidate if candidate.is_dir() else None
+
         with (
             patch("app.db.async_session", session_factory),
-            patch("app.workflows._heartbeat_project._WORKSPACE_BASE", tmp_path),
+            patch(
+                "app.workflows._heartbeat_project.resolve_project_root",
+                side_effect=fake_resolve_root,
+            ),
             patch(
                 "app.workflows._heartbeat_project._read_project_ports",
                 side_effect=lambda project_id: "8003/3003" if project_id == "agent-hub" else "",
@@ -143,7 +150,7 @@ class TestHeartbeatCompactContext:
 
         assert "- full auto-exec: agent-hub(8003/3003), summitflow" in result
         assert "- read manual: a-term" in result
-        assert f"- local path: {tmp_path}/<project-id> when present" in result
+        assert "- local path: resolve with `st projects root <project-id>` when present" in result
         assert str(tmp_path / "agent-hub") not in result
 
     @pytest.mark.asyncio

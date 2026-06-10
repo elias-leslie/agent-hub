@@ -498,11 +498,11 @@ def _limit_references_for_variant(
     return [item for _, item in ranked[:limit]]
 
 
-def _limit_by_rendered_token_budget(
+def _limit_policy_item_count(
     items: list[MemorySearchResult],
     limit: int,
 ) -> list[MemorySearchResult]:
-    """Cap policy items after reviewed compaction/rendering has reduced each item."""
+    """Cap policy items by count (0 = uncapped); items arrive pre-ranked."""
     if limit <= 0 or len(items) <= limit:
         return items
     return items[:limit]
@@ -773,10 +773,10 @@ async def _apply_priority_and_limits(
     policy_mandate_limit, policy_guardrail_limit, policy_reference_limit = (
         await resolve_policy_limits(consumer_profile, memory_config, db)
     )
-    context.mandates = _limit_by_rendered_token_budget(context.mandates, policy_mandate_limit)
-    context.guardrails = _limit_by_rendered_token_budget(context.guardrails, policy_guardrail_limit)
+    context.mandates = _limit_policy_item_count(context.mandates, policy_mandate_limit)
+    context.guardrails = _limit_policy_item_count(context.guardrails, policy_guardrail_limit)
     if policy_reference_limit > 0:
-        context.reference = _limit_by_rendered_token_budget(
+        context.reference = _limit_policy_item_count(
             context.reference, policy_reference_limit
         )
 

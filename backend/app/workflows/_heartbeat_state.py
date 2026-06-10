@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.services.git_status_summary import RepoGitStatus
@@ -38,7 +36,6 @@ _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$"
 _COMPACT_STALE_LINE = re.compile(r"^- (?P<project>[a-z0-9-]+) \| (?P<task_id>task-[^\s|]+) \| ")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 
-_WORKSPACE_BASE = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 
 

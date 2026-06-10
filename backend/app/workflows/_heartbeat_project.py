@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import logging
 
-from app.workflows._heartbeat_state import _WORKSPACE_BASE
+from app.core.project_roots import resolve_project_root
 
 logger = logging.getLogger(__name__)
 
 
 def _read_project_index(project_id: str) -> dict[str, object] | None:
     """Read and parse a project's .index.yaml, returning None on failure."""
-    index_path = _WORKSPACE_BASE / project_id / ".index.yaml"
+    root = resolve_project_root(project_id)
+    if root is None:
+        return None
+    index_path = root / ".index.yaml"
     if not index_path.is_file():
         return None
     try:
@@ -77,8 +80,8 @@ async def get_project_access_summary() -> str:
     for row in rows:
         auto = "auto-exec" if row.auto_exec_enabled else "manual"
         label = str(row.project_id)
-        workspace_path = _WORKSPACE_BASE / row.project_id
-        if workspace_path.is_dir():
+        workspace_path = resolve_project_root(row.project_id)
+        if workspace_path is not None and workspace_path.is_dir():
             ports = _read_project_ports(row.project_id)
             if ports:
                 label = f"{label}({ports})"
@@ -87,7 +90,7 @@ async def get_project_access_summary() -> str:
     lines = ["Project access:"]
     for (tier, auto), project_ids in sorted(groups.items()):
         lines.append(f"- {tier} {auto}: {', '.join(project_ids)}")
-    lines.append(f"- local path: {_WORKSPACE_BASE}/<project-id> when present")
+    lines.append("- local path: resolve with `st projects root <project-id>` when present")
     lines.append(
         "Cross-project inspection: use `st` from any directory; no cd or "
         "persona-sandbox-relative paths."

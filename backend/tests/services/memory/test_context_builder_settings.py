@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from app.services.memory.context_builder import (
     ProgressiveContext,
-    _limit_by_rendered_token_budget,
+    _limit_policy_item_count,
 )
 from app.services.memory.context_builder_settings import (
     normalize_memory_config,
@@ -91,7 +91,7 @@ def test_policy_limiter_caps_short_rendered_items() -> None:
         for i in range(12)
     ]
 
-    assert [item.uuid for item in _limit_by_rendered_token_budget(items, 3)] == [
+    assert [item.uuid for item in _limit_policy_item_count(items, 3)] == [
         "m0",
         "m1",
         "m2",

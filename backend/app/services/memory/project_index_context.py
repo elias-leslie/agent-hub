@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Any
 
 import yaml
 
+from app.core.project_roots import resolve_project_root
+
 from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
-_WORKSPACE_BASE = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _RUNTIME_BASE_KEYS: tuple[str, ...] = ("project", "environment", "services", "urls", "network")
 _STARTUP_EXTRA_KEYS: tuple[str, ...] = ("pages",)
 _PAGE_TASK_TYPES = {"frontend", "ui-design", "design-review", "test", "verification"}
 
 
 def _read_project_index(project_id: str) -> dict[str, Any] | None:
-    index_path = _WORKSPACE_BASE / project_id / ".index.yaml"
+    root = resolve_project_root(project_id)
+    if root is None:
+        return None
+    index_path = root / ".index.yaml"
     if not index_path.is_file():
         return None
     try:

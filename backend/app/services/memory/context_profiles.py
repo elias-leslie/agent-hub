@@ -43,7 +43,9 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
     MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
-    MemoryConsumerProfile.AGENT_STARTUP: (28, 6),
+    # Keep in sync with the runtime_context_profile_policies DB row (40/10) so a
+    # missing row doesn't silently shrink startup context.
+    MemoryConsumerProfile.AGENT_STARTUP: (40, 10),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
     MemoryConsumerProfile.AGENT_PREVIEW: False,
@@ -152,7 +154,7 @@ async def resolve_policy_limits(
     Resolution chain: per-agent `memory_config` (mandate_limit, guardrail_limit,
     reference_limit) → DB profile policy row → Python fallback dict. Returned
     integers use 0 = uncapped semantics so callers can pass directly to
-    `_limit_by_rendered_token_budget`.
+    `_limit_policy_item_count`.
     """
     profile = resolve_consumer_profile(consumer_profile)
     py_mandate, py_guardrail = _PROFILE_POLICY_LIMITS.get(profile, (0, 0))
