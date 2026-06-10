@@ -143,6 +143,13 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         SEARCH_WEB_TOOL,
         FETCH_WEB_PAGE_TOOL,
     ],
+    # portfolio-ai's card-catalog research agent: read-only web research to
+    # verify card fees/bonuses/valuations and discover candidate cards.
+    "credit-card-researcher": [
+        RESEARCH_WEB_TOOL,
+        SEARCH_WEB_TOOL,
+        FETCH_WEB_PAGE_TOOL,
+    ],
 }
 
 

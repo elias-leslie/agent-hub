@@ -24,6 +24,7 @@ from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
 from app.api.narration import router as narration_router
+from app.api.notifications import router as notifications_router
 from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.ownership import router as ownership_router
@@ -71,6 +72,7 @@ router.include_router(ownership_router)
 router.include_router(providers_router)  # Has its own prefix /providers and tags
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
 router.include_router(push_router)  # Has its own prefix /push and tags
+router.include_router(notifications_router)  # Has its own prefix /notifications and tags
 router.include_router(runtime_context_router)
 router.include_router(compactness_router)
 router.include_router(session_ingestion_router)
