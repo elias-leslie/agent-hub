@@ -68,6 +68,7 @@ ZHIPU_GLM_4_7_FLASHX = "zhipu/glm-4.7-flashx"
 ZHIPU_GLM_4_7_FLASH = "zhipu/glm-4.7-flash"
 
 # MiniMax models (Direct)
+MINIMAX_M3 = "minimax/MiniMax-M3"
 MINIMAX_M2_7 = "minimax/MiniMax-M2.7"
 MINIMAX_M2_7_HIGHSPEED = "minimax/MiniMax-M2.7-highspeed"
 MINIMAX_M2_5 = "minimax/MiniMax-M2.5"

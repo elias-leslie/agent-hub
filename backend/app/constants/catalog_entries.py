@@ -60,6 +60,7 @@ from app.constants.models import (
     MINIMAX_M2_5_HIGHSPEED,
     MINIMAX_M2_7,
     MINIMAX_M2_7_HIGHSPEED,
+    MINIMAX_M3,
     MOONSHOT_KIMI_K2_5,
     MOONSHOT_KIMI_K2_6,
     NVIDIA_DEEPSEEK_V4_FLASH,
@@ -476,6 +477,15 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
 
     # --- MiniMax direct ---
+    ModelEntry(
+        id=MINIMAX_M3, alias="minimax-m3", name="MiniMax M3",
+        hint="Agentic reasoning + long context", provider="minimax",
+        scores=ModelScores(coding=86, reasoning=90, planning=84, tool_use=86, instruction=88, design=66),
+        cost=ModelCost(0.30, 1.20, cache_read_per_million=0.06, cache_write_per_million=0.375),
+        context_window=1_000_000, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_tool_execution=True, max_output_tokens=131_072),
+        release_date="2026-06-01", family="minimax",
+    ),
     ModelEntry(
         id=MINIMAX_M2_7, alias="minimax", name="MiniMax M2.7",
         hint="Agent coding", provider="minimax",

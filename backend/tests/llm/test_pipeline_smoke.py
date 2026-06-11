@@ -203,6 +203,108 @@ async def test_tool_loop_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(context.messages) == 4  # user + assistant1 + tool_result + assistant2
 
 
+@pytest.mark.asyncio
+async def test_tool_loop_nudges_on_tooluse_without_parseable_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``toolUse`` stop with zero ToolCall blocks must not end the loop empty.
+
+    Observed live (session 8a0fea6a): provider reported toolUse, content had
+    no parseable tool call, and the user saw an empty reply. The loop now
+    appends a nudge UserMessage and runs another turn.
+    """
+
+    model = _claude_model()
+
+    turn1 = AssistantMessage(
+        content=[],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=10, output=0, total_tokens=10), stop_reason="toolUse", timestamp=0,
+    )
+    turn2 = AssistantMessage(
+        content=[TextContent(text="direct answer")],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=12, output=2, total_tokens=14), stop_reason="stop", timestamp=0,
+    )
+
+    monkeypatch.setattr(
+        tool_loop, "stream_simple", _fake_provider_factory(turn1_message=turn1, turn2_message=turn2)
+    )
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:  # pragma: no cover - not reached
+        raise AssertionError("no tool should execute")
+
+    context = Context(messages=[UserMessage(content="hi", timestamp=0)])
+    [event async for event in tool_loop.run(model, context, run_tool, options=SimpleStreamOptions(), max_turns=8)]
+
+    # user + empty assistant1 + nudge UserMessage + assistant2
+    assert len(context.messages) == 4
+    nudge = context.messages[2]
+    assert isinstance(nudge, UserMessage)
+    assert "no parseable tool call" in str(nudge.content)
+    final = context.messages[3]
+    assert isinstance(final, AssistantMessage)
+    assert final.stop_reason == "stop"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_forces_final_answer_when_cap_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cap exhaustion mid-tool-use must end with an answer, not narration.
+
+    Observed live: the loop hit max_turns while the model still wanted
+    tools, so the caller's final message was tool-call narration (or empty)
+    and the user saw a blank reply. The loop now appends a budget-exhausted
+    UserMessage and runs one final answer turn.
+    """
+
+    model = _claude_model()
+
+    turn1 = AssistantMessage(
+        content=[ToolCall(id="toolu_cap", name="echo", arguments={"text": "hi"})],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=10, output=2, total_tokens=12), stop_reason="toolUse", timestamp=0,
+    )
+    turn2 = AssistantMessage(
+        content=[TextContent(text="answer from collected results")],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(input=14, output=3, total_tokens=17), stop_reason="stop", timestamp=0,
+    )
+
+    monkeypatch.setattr(
+        tool_loop, "stream_simple", _fake_provider_factory(turn1_message=turn1, turn2_message=turn2)
+    )
+
+    executed: list[str] = []
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        executed.append(call.name)
+        return ToolResultMessage(
+            tool_call_id=call.id,
+            tool_name=call.name,
+            content=[TextContent(text="result")],
+            is_error=False,
+            timestamp=0,
+        )
+
+    context = Context(messages=[UserMessage(content="net worth?", timestamp=0)])
+    [event async for event in tool_loop.run(model, context, run_tool, options=SimpleStreamOptions(), max_turns=1)]
+
+    assert executed == ["echo"]
+    # user + assistant1 + tool_result + budget UserMessage + final assistant
+    assert len(context.messages) == 5
+    nudge = context.messages[3]
+    assert isinstance(nudge, UserMessage)
+    assert "Tool budget exhausted" in str(nudge.content)
+    final = context.messages[4]
+    assert isinstance(final, AssistantMessage)
+    assert final.stop_reason == "stop"
+    final_text = final.content[0]
+    assert isinstance(final_text, TextContent)
+    assert "answer from collected results" in final_text.text
+
+
 async def _big_json_tool_result(call: ToolCall) -> ToolResultMessage:
     payload = json.dumps(
         [{"id": i, "name": f"row_{i}", "email": f"row_{i}@ex.com", "role": "member"} for i in range(120)]

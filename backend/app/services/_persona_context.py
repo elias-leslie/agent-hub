@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.persona import Persona
 from app.services._persona_crud import get_persona_for_agent
 from app.services.persona_document_prompt_service import (
+    get_persona_chat_usage_context,
     get_persona_personality_document,
     get_persona_user_context_document,
 )
@@ -101,8 +102,11 @@ async def get_persona_context_for_agent(
     Returns the formatted context string, or None if no persona exists.
 
     Args:
-        task_type: When "heartbeat", includes heartbeat_instructions section.
-            Other values (or None) omit it to save tokens in chat sessions.
+        task_type: Usage-scenario flag from the caller. "heartbeat" includes
+            heartbeat_instructions; "chat" assembles a user-facing live-chat
+            stack (no onboarding, no evolution guidelines, plus a usage
+            override that suspends autonomous-run protocol). Other values
+            (or None) get the default stack.
     """
     persona = await get_persona_for_agent(db, agent_id)
     if not persona:
@@ -113,9 +117,13 @@ async def get_persona_context_for_agent(
     personality_text = await get_persona_personality_document(db)
     user_context_text = await get_persona_user_context_document(db)
 
-    onboarding_section = await _build_onboarding_section(
-        persona,
-        user_context_text=user_context_text,
+    onboarding_section = (
+        None
+        if task_type == "chat"
+        else await _build_onboarding_section(
+            persona,
+            user_context_text=user_context_text,
+        )
     )
     if onboarding_section:
         sections.append(onboarding_section)
@@ -152,10 +160,17 @@ async def get_persona_context_for_agent(
             f"<heartbeat_instructions>\n{heartbeat_instructions}\n</heartbeat_instructions>"
         )
 
-    if phase == "complete" and task_type != "heartbeat":
+    if phase == "complete" and task_type not in {"heartbeat", "chat"}:
         evolution_guidelines = await get_persona_evolution_guidelines()
         sections.append(
             f"<evolution_guidelines>\n{evolution_guidelines}\n</evolution_guidelines>"
         )
+
+    if task_type == "chat":
+        chat_usage_context = await get_persona_chat_usage_context(db)
+        if chat_usage_context:
+            sections.append(
+                f"<usage_context>\n{chat_usage_context}\n</usage_context>"
+            )
 
     return "\n\n".join(sections)

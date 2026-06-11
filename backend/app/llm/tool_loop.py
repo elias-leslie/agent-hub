@@ -37,6 +37,7 @@ from .types import (
     SimpleStreamOptions,
     ToolCall,
     ToolResultMessage,
+    UserMessage,
 )
 
 
@@ -150,7 +151,24 @@ async def run(
 
         tool_calls = [b for b in final.content if isinstance(b, ToolCall)]
         if not tool_calls:
-            return
+            # Provider claimed toolUse but no tool call parsed (observed:
+            # kimi ending turn 1 with empty content — the user saw an empty
+            # reply). Nudge the model to retry or answer directly; max_turns
+            # still bounds the loop.
+            import time as _time
+
+            context.messages.append(
+                UserMessage(
+                    content=(
+                        "Your last response ended with a tool-use stop reason "
+                        "but contained no parseable tool call. Retry the tool "
+                        "call with valid arguments, or answer the user "
+                        "directly without tools."
+                    ),
+                    timestamp=int(_time.time() * 1000),
+                )
+            )
+            continue
 
         for tool_call in tool_calls:
             tool_calls_count += 1
@@ -175,6 +193,30 @@ async def run(
                 yield ToolRunComplete(tool_call=tool_call, result=result)
 
             context.messages.append(result)
+
+    # max_turns exhausted while the model still wanted tools (every other
+    # exit returns inside the loop). Without this, the caller's "final"
+    # message is tool-call narration or empty content. Run one last turn
+    # instructing the model to answer from the results it already has.
+    # Tools stay in the context — providers reject tool-bearing history
+    # without tool definitions — but nothing further is executed, so the
+    # loop stays bounded at max_turns + 1.
+    import time as _time
+
+    context.messages.append(
+        UserMessage(
+            content=(
+                "Tool budget exhausted. Answer the user's question now using "
+                "the tool results already collected. Do not request any more "
+                "tools."
+            ),
+            timestamp=int(_time.time() * 1000),
+        )
+    )
+    stream_handle = stream_simple(model, context, options)
+    async for event in stream_handle:
+        yield event
+    context.messages.append(await stream_handle.result())
 
 
 __all__ = [

@@ -14,6 +14,7 @@ from app.services.persona_documents import (
     validate_text_document_update,
 )
 from app.services.prompt_catalog import (
+    PERSONA_CHAT_USAGE_CONTEXT_PROMPT_SLUG,
     PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
     PERSONA_PERSONALITY_PROMPT_SLUG,
     PERSONA_USER_CONTEXT_PROMPT_SLUG,
@@ -43,6 +44,10 @@ async def get_persona_personality_document(db: AsyncSession) -> str | None:
 
 async def get_persona_user_context_document(db: AsyncSession) -> str | None:
     return await _get_prompt_text(db, PERSONA_USER_CONTEXT_PROMPT_SLUG)
+
+
+async def get_persona_chat_usage_context(db: AsyncSession) -> str | None:
+    return await _get_prompt_text(db, PERSONA_CHAT_USAGE_CONTEXT_PROMPT_SLUG)
 
 
 async def set_persona_personality_document(

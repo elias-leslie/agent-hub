@@ -28,11 +28,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def prepare_tools(request: CompletionRequest) -> list[dict[str, Any]] | None:
+def prepare_tools(
+    request: CompletionRequest,
+    visible_tool_names: frozenset[str] | None = None,
+) -> list[dict[str, Any]] | None:
     """Convert tools from request to API format.
 
     Args:
         request: Completion request
+        visible_tool_names: Project-visible tool set resolved from the
+            permission tier (cache → DB), as on the streaming path. Without it,
+            tier filtering only sees the Redis cache and fails closed on a miss.
 
     Returns:
         List of tool dicts or None if no tools
@@ -58,6 +64,7 @@ def prepare_tools(request: CompletionRequest) -> list[dict[str, Any]] | None:
         tools,
         agent_slug=getattr(request, "agent_slug", None),
         project_id=getattr(request, "project_id", None),
+        visible_tool_names=visible_tool_names,
     )
     return provisioned.loaded_tools or None
 

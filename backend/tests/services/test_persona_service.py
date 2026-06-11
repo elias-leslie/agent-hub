@@ -491,6 +491,50 @@ class TestGetPersonaContextForAgent:
         assert "<evolution_guidelines>" not in result
 
     @pytest.mark.asyncio
+    async def test_chat_context_includes_usage_context_and_omits_evolution(self):
+        persona = _make_persona()
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result_persona
+
+        with patch(
+            "app.services._persona_context.get_persona_chat_usage_context",
+            new_callable=AsyncMock,
+            return_value="You are in a live chat with the user.",
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10, task_type="chat")
+
+        assert result is not None
+        assert "<usage_context>" in result
+        assert "You are in a live chat with the user." in result
+        assert "<evolution_guidelines>" not in result
+        assert "<heartbeat_instructions>" not in result
+        assert "<user_context_notes>" in result
+
+    @pytest.mark.asyncio
+    async def test_chat_context_omits_onboarding_even_when_incomplete(self):
+        persona = _make_persona(
+            onboarding_complete=False,
+            onboarding_phase="in_progress",
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result_persona
+
+        with patch(
+            "app.services._persona_context.get_persona_chat_usage_context",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10, task_type="chat")
+
+        assert result is not None
+        assert "<onboarding>" not in result
+        assert "<usage_context>" not in result
+
+    @pytest.mark.asyncio
     async def test_phase_not_started_injects_bootstrap_and_advances(self):
         """Phase not_started → inject bootstrap, advance to in_progress."""
         persona = _make_persona(
