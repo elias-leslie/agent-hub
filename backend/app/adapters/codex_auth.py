@@ -34,6 +34,14 @@ CODEX_SCOPE = "openid profile email offline_access"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
 
 
+class CodexAuthError(RuntimeError):
+    """Codex OAuth token refresh failed — the stored refresh token is dead.
+
+    Distinguishes auth-chain death (operator must Re-auth in the dashboard)
+    from transient provider errors so callers can alert on it specifically.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Credentials dataclass
 # ---------------------------------------------------------------------------
@@ -267,8 +275,13 @@ async def refresh_access_token(refresh_token: str) -> CodexCredentials:
         )
 
     if resp.status_code != 200:
-        logger.error("Codex token refresh failed: %s %s", resp.status_code, resp.text)
-        raise RuntimeError(f"Codex token refresh failed (HTTP {resp.status_code})")
+        logger.error(
+            "Codex token refresh failed: %s %s — fix: Agent Hub Settings → LLM Providers"
+            " → Codex → Re-auth (wiki: codex-oauth-token-rotation)",
+            resp.status_code,
+            resp.text,
+        )
+        raise CodexAuthError(f"Codex token refresh failed (HTTP {resp.status_code})")
 
     data = resp.json()
     access_token = data.get("access_token")

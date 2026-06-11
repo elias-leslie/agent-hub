@@ -34,6 +34,48 @@ _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
 
 
+# Codex auth death fires on every call once the refresh token is burned, so
+# alert at most once per cooldown window instead of per request.
+_CODEX_ALERT_COOLDOWN_S = 6 * 3600
+_codex_alert_at = 0.0
+
+
+async def _alert_codex_auth_dead(db: AsyncSession, model_id: str, error: Exception) -> None:
+    """Send a one-per-cooldown Telegram alert when the Codex OAuth chain dies.
+
+    Without this, refresh-token death silently degrades every call to fallback
+    models (observed 2026-06: five days of MiniMax answering persona chat).
+    """
+    from app.adapters.codex_auth import CodexAuthError
+
+    if not isinstance(error, CodexAuthError):
+        return
+
+    global _codex_alert_at
+    import time
+
+    now = time.monotonic()
+    if _codex_alert_at and now - _codex_alert_at < _CODEX_ALERT_COOLDOWN_S:
+        return
+    _codex_alert_at = now
+
+    try:
+        from app.services.telegram_delivery import send_configured_report
+
+        await send_configured_report(
+            db=db,
+            title="Codex OAuth dead — action needed",
+            body=(
+                f"Codex token refresh is failing ({error}); all {model_id} traffic is "
+                "running on fallback models until re-authenticated.\n\n"
+                "Fix: Agent Hub → Settings → LLM Providers → Codex → Re-auth.\n"
+                "Details: wiki page codex-oauth-token-rotation."
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send Codex auth alert")
+
+
 def _fallbacks_enabled(req: CompletionRequest, agent: ResolvedAgent | None) -> bool:
     """Return whether agent fallback/escalation chain should be used for this request."""
     return bool(agent and agent.agent.fallback_models and not req.disable_agent_fallbacks)
@@ -113,6 +155,7 @@ async def _run_with_agentic_fallback(
             if model_id == primary_model:
                 primary_error = e
             logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
+            await _alert_codex_auth_dead(db, model_id, e)
 
     if primary_error is None:
         raise RuntimeError("No models attempted in fallback chain")

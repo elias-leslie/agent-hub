@@ -567,3 +567,76 @@ def test_build_agentic_response_preserves_internal_finish_reason_on_success() ->
     )
 
     assert response.finish_reason == "max_turns"
+
+
+class TestCodexAuthAlert:
+    """_alert_codex_auth_dead: Telegram alert on dead Codex OAuth chain."""
+
+    def _reset_cooldown(self) -> None:
+        import app.api.complete.complete_execution as ce
+
+        ce._codex_alert_at = 0.0
+
+    @pytest.mark.asyncio
+    async def test_sends_alert_on_codex_auth_error(self) -> None:
+        from app.adapters.codex_auth import CodexAuthError
+        from app.api.complete.complete_execution import _alert_codex_auth_dead
+
+        self._reset_cooldown()
+        with patch(
+            "app.services.telegram_delivery.send_configured_report",
+            new_callable=AsyncMock,
+        ) as send:
+            await _alert_codex_auth_dead(
+                AsyncMock(), "codex/gpt-5.5", CodexAuthError("Codex token refresh failed (HTTP 401)")
+            )
+
+        send.assert_awaited_once()
+        assert send.await_args is not None
+        body = send.await_args.kwargs["body"]
+        assert "Re-auth" in body
+        assert "codex/gpt-5.5" in body
+
+    @pytest.mark.asyncio
+    async def test_ignores_other_errors(self) -> None:
+        from app.api.complete.complete_execution import _alert_codex_auth_dead
+
+        self._reset_cooldown()
+        with patch(
+            "app.services.telegram_delivery.send_configured_report",
+            new_callable=AsyncMock,
+        ) as send:
+            await _alert_codex_auth_dead(AsyncMock(), "codex/gpt-5.5", RuntimeError("timeout"))
+
+        send.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cooldown_suppresses_repeat_alerts(self) -> None:
+        from app.adapters.codex_auth import CodexAuthError
+        from app.api.complete.complete_execution import _alert_codex_auth_dead
+
+        self._reset_cooldown()
+        with patch(
+            "app.services.telegram_delivery.send_configured_report",
+            new_callable=AsyncMock,
+        ) as send:
+            err = CodexAuthError("Codex token refresh failed (HTTP 401)")
+            await _alert_codex_auth_dead(AsyncMock(), "codex/gpt-5.5", err)
+            await _alert_codex_auth_dead(AsyncMock(), "codex/gpt-5.5", err)
+
+        assert send.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_alert_failure_never_raises(self) -> None:
+        from app.adapters.codex_auth import CodexAuthError
+        from app.api.complete.complete_execution import _alert_codex_auth_dead
+
+        self._reset_cooldown()
+        with patch(
+            "app.services.telegram_delivery.send_configured_report",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("bot_token missing"),
+        ):
+            await _alert_codex_auth_dead(
+                AsyncMock(), "codex/gpt-5.5", CodexAuthError("Codex token refresh failed (HTTP 401)")
+            )
