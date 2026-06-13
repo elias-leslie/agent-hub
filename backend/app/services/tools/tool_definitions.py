@@ -150,6 +150,12 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         SEARCH_WEB_TOOL,
         FETCH_WEB_PAGE_TOOL,
     ],
+    # portfolio-ai's cross-vendor price scout: read-only web lookups of
+    # current product prices (Amazon/Walmart/Publix), one vendor per call.
+    "household-price-scout": [
+        SEARCH_WEB_TOOL,
+        FETCH_WEB_PAGE_TOOL,
+    ],
 }
 
 
