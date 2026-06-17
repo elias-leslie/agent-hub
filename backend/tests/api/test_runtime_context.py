@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.prompt import Prompt
+from app.services.memory.budget import BudgetUsage
+from app.services.memory.context_builder import ProgressiveContext
+from app.services.memory.service import MemoryCategory, MemorySearchResult, MemorySource
 from app.services.runtime_context import (
     RuntimeContextBlockResponse,
     RuntimeContextOverrideResponse,
@@ -19,6 +23,7 @@ from app.services.runtime_context import (
     _render_blocks,
     _resolve_overrides,
     _ResolvedOverride,
+    apply_runtime_memory_overrides_to_context,
 )
 
 
@@ -51,6 +56,93 @@ def test_resolve_overrides_prefers_project_layer_over_global() -> None:
     assert len(resolved) == 1
     assert resolved[0].id == "project"
     assert resolved[0].position == 90
+
+
+def _memory_result(
+    source_id: str,
+    *,
+    content: str,
+    category: MemoryCategory,
+) -> MemorySearchResult:
+    return MemorySearchResult(
+        uuid=source_id,
+        content=content,
+        summary=content,
+        source=MemorySource.SYSTEM,
+        relevance_score=1.0,
+        created_at=datetime.now(UTC),
+        facts=[],
+        category=category,
+    )
+
+
+@pytest.mark.asyncio
+async def test_apply_runtime_memory_overrides_to_context_excludes_and_includes() -> None:
+    keep = _memory_result(
+        "memory-keep",
+        content="Keep this mandate.",
+        category=MemoryCategory.MANDATE,
+    )
+    drop = _memory_result(
+        "memory-drop",
+        content="Drop this mandate.",
+        category=MemoryCategory.MANDATE,
+    )
+    forced = _memory_result(
+        "memory-forced",
+        content="Forced guardrail.",
+        category=MemoryCategory.GUARDRAIL,
+    )
+    context = ProgressiveContext(
+        mandates=[keep, drop],
+        budget_usage=BudgetUsage(),
+        total_tokens=999,
+        debug_info={"total_tokens": 999},
+    )
+    rows = [
+        _override(source_id="memory-drop", mode="exclude", position=10),
+        _override(
+            source_id="memory-forced",
+            mode="include",
+            position=5,
+            tier_override="L0",
+        ),
+    ]
+
+    async def _same_rows(_db, loaded_rows):
+        return loaded_rows
+
+    with (
+        patch(
+            "app.services.runtime_context._load_override_rows",
+            new=AsyncMock(return_value=rows),
+        ) as load_rows,
+        patch(
+            "app.services.runtime_context._filter_live_override_rows",
+            new=AsyncMock(side_effect=_same_rows),
+        ),
+        patch(
+            "app.services.runtime_context._fetch_forced_memory_items",
+            new=AsyncMock(return_value=[forced]),
+        ) as fetch_forced,
+    ):
+        await apply_runtime_memory_overrides_to_context(
+            AsyncMock(),
+            consumer_profile="agent_startup",
+            project_id="afterlife",
+            query="startup context",
+            context=context,
+        )
+
+    assert [item.uuid for item in context.mandates] == ["memory-keep"]
+    assert [item.uuid for item in context.guardrails] == ["memory-forced"]
+    assert context.guardrails[0].render_reason == "user_override"
+    assert context.total_tokens != 999
+    assert context.debug_info["mandates_count"] == 1
+    assert context.debug_info["guardrails_count"] == 1
+    assert context.debug_info["runtime_context_overrides_applied"] is True
+    load_rows.assert_awaited_once()
+    fetch_forced.assert_awaited_once()
 
 
 def test_render_blocks_groups_memory_lines() -> None:

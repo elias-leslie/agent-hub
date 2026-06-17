@@ -88,6 +88,7 @@ async def build_context_and_format(
     consumer_agent_slug: str | None,
     consumer_tags: list[str] | None,
     variant: str | None,
+    project_id: str | None = None,
 ) -> tuple[ProgressiveContext, str | None]:
     """Build progressive context and format it."""
     mc_mandates, mc_guardrails, mc_references = resolve_memory_config_includes(memory_config)
@@ -97,6 +98,27 @@ async def build_context_and_format(
         memory_config=memory_config, consumer_profile=consumer_profile,
         consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags, variant=variant,
     )
+    if consumer_profile:
+        from app.services.runtime_context import apply_runtime_memory_overrides_to_context
+
+        effective_project_id = project_id or (
+            scope_id if scope == MemoryScope.PROJECT else None
+        )
+        try:
+            await apply_runtime_memory_overrides_to_context(
+                None,
+                consumer_profile=consumer_profile,
+                project_id=effective_project_id,
+                query=query,
+                context=context,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to apply runtime context overrides for profile=%s project=%s",
+                consumer_profile,
+                effective_project_id,
+                exc_info=True,
+            )
     formatted = format_progressive_context(context, include_citations=True, consumer_profile=consumer_profile)
     return context, formatted
 
@@ -245,7 +267,7 @@ async def run_injection_operation(
         query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
         memory_config=memory_config, consumer_profile=consumer_profile,
         consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
-        variant=resolved_variant.value,
+        variant=resolved_variant.value, project_id=project_id,
     )
     project_index_block = ""
     if resolve_project_index_enabled(memory_config):

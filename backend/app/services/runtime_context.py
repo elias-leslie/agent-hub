@@ -17,11 +17,12 @@ from app.models.runtime_context import (
     RuntimeContextOverride,
     RuntimeContextProfilePolicy,
 )
-from app.services.memory.budget import count_tokens
-from app.services.memory.context_builder import build_progressive_context
+from app.services.memory.budget import BudgetUsage, count_tokens
+from app.services.memory.context_builder import ProgressiveContext, build_progressive_context
 from app.services.memory.context_builder_tiers import (
     apply_render_tier,
     get_rendered_content,
+    plan_context_render_tiers,
 )
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
 from app.services.memory.context_profiles import (
@@ -32,7 +33,7 @@ from app.services.memory.context_profiles import (
 )
 from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.repository import MemoryRepository
-from app.services.memory.service import MemoryScope, MemorySearchResult
+from app.services.memory.service import MemoryCategory, MemoryScope, MemorySearchResult
 from app.services.memory.settings import get_memory_settings
 from app.services.memory.st_usage_memory import decay_score_by_surface
 from app.services.memory.tool_capability_context import format_tool_capability_context
@@ -596,6 +597,13 @@ async def _fetch_forced_memory_items(db: AsyncSession, source_ids: list[str]) ->
 
 
 def _tier_for_memory(item: MemorySearchResult) -> str:
+    if item.category in {
+        MemoryCategory.MANDATE,
+        MemoryCategory.GUARDRAIL,
+        MemoryCategory.REFERENCE,
+        MemoryCategory.ARCHIVE,
+    }:
+        return item.category.value
     if item.context_kind.value == "capability":
         return "capability"
     return "reference"
@@ -655,6 +663,187 @@ async def apply_tier_overrides_to_context(
         target = by_id.get(ovr.source_id)
         if target is not None:
             apply_render_tier(target, ovr.tier_override, "user_override")
+
+
+async def apply_runtime_memory_overrides_to_context(
+    db: AsyncSession | None,
+    *,
+    consumer_profile: str | None,
+    project_id: str | None,
+    query: str,
+    context: ProgressiveContext,
+) -> ProgressiveContext:
+    """Apply canonical runtime-context memory overrides to a ProgressiveContext.
+
+    This is the shared bridge between the Runtime Context UI and non-UI
+    progressive-context consumers (Agent Hub agents, MCP, and the progressive
+    context CLI). The UI persists rows in ``runtime_context_overrides``; this
+    function makes the same per-profile/per-project include/exclude/render
+    decisions affect the actual memory context delivered to agents.
+    """
+    if not consumer_profile:
+        return context
+    if db is None:
+        from app.db import async_session
+
+        async with async_session() as session:
+            return await apply_runtime_memory_overrides_to_context(
+                session,
+                consumer_profile=consumer_profile,
+                project_id=project_id,
+                query=query,
+                context=context,
+            )
+
+    rows = await _load_override_rows(
+        db, consumer_profile=consumer_profile, project_id=project_id
+    )
+    rows = await _filter_live_override_rows(db, rows)
+    overrides = [
+        item
+        for item in _resolve_overrides(rows)
+        if item.enabled and item.source_type == "memory"
+    ]
+    if not overrides:
+        return context
+
+    excluded_ids = {
+        item.source_id for item in overrides if item.mode == "exclude"
+    }
+    _drop_memory_ids(context, excluded_ids)
+
+    loaded_ids = set(context.get_loaded_uuids())
+    forced_ids = [
+        item.source_id
+        for item in overrides
+        if item.mode == "include"
+        and item.source_id not in loaded_ids
+        and item.source_id not in excluded_ids
+    ]
+    forced_items = await _fetch_forced_memory_items(db, forced_ids)
+    for item in forced_items:
+        if item.uuid in loaded_ids or item.uuid in excluded_ids:
+            continue
+        _append_forced_memory_item(context, item)
+        loaded_ids.add(item.uuid)
+
+    # Re-plan all render tiers now that forced includes/excludes have changed
+    # the selected set, then let explicit UI render overrides win last.
+    plan_context_render_tiers(
+        context.mandates,
+        context.guardrails,
+        context.reference_index,
+        context.reference,
+        query,
+        consumer_profile=consumer_profile,
+    )
+
+    items_by_id = {
+        item.uuid: item
+        for item in (
+            list(context.mandates)
+            + list(context.guardrails)
+            + list(context.reference_index)
+            + list(context.reference)
+        )
+        if item.uuid
+    }
+    position_by_id: dict[str, int] = {}
+    for override in overrides:
+        if override.source_id in excluded_ids:
+            continue
+        if override.mode in {"include", "order"}:
+            position_by_id[override.source_id] = override.position
+        if override.tier_override:
+            target = items_by_id.get(override.source_id)
+            if target is not None:
+                apply_render_tier(target, override.tier_override, "user_override")
+
+    _sort_context_by_override_position(context, position_by_id)
+    _refresh_runtime_context_totals(context)
+    context.debug_info["runtime_context_overrides_applied"] = True
+    context.debug_info["runtime_context_override_count"] = len(overrides)
+    return context
+
+
+def _drop_memory_ids(context: ProgressiveContext, memory_ids: set[str]) -> None:
+    if not memory_ids:
+        return
+    context.mandates = [item for item in context.mandates if item.uuid not in memory_ids]
+    context.guardrails = [item for item in context.guardrails if item.uuid not in memory_ids]
+    context.reference_index = [
+        item for item in context.reference_index if item.uuid not in memory_ids
+    ]
+    context.reference = [item for item in context.reference if item.uuid not in memory_ids]
+
+
+def _append_forced_memory_item(
+    context: ProgressiveContext,
+    item: MemorySearchResult,
+) -> None:
+    if item.category == MemoryCategory.MANDATE:
+        context.mandates.append(item)
+        return
+    if item.category == MemoryCategory.GUARDRAIL:
+        context.guardrails.append(item)
+        return
+    if getattr(item.context_kind, "value", item.context_kind) == "capability":
+        context.reference_index.append(item)
+        return
+    context.reference.append(item)
+
+
+def _sort_context_by_override_position(
+    context: ProgressiveContext,
+    position_by_id: dict[str, int],
+) -> None:
+    if not position_by_id:
+        return
+
+    def sort_items(items: list[MemorySearchResult]) -> list[MemorySearchResult]:
+        return [
+            item
+            for _index, item in sorted(
+                enumerate(items),
+                key=lambda pair: (
+                    position_by_id.get(pair[1].uuid, 10_000 + pair[0]),
+                    pair[0],
+                ),
+            )
+        ]
+
+    context.mandates = sort_items(context.mandates)
+    context.guardrails = sort_items(context.guardrails)
+    context.reference_index = sort_items(context.reference_index)
+    context.reference = sort_items(context.reference)
+
+
+def _refresh_runtime_context_totals(context: ProgressiveContext) -> None:
+    budget = context.budget_usage or BudgetUsage()
+    budget.mandates_total = len(context.mandates)
+    budget.guardrails_total = len(context.guardrails)
+    budget.reference_total = len(context.reference_index) + len(context.reference)
+    budget.mandates_tokens = sum(
+        count_tokens(get_rendered_content(item)) for item in context.mandates
+    )
+    budget.guardrails_tokens = sum(
+        count_tokens(get_rendered_content(item)) for item in context.guardrails
+    )
+    budget.reference_tokens = sum(
+        count_tokens(get_rendered_content(item))
+        for item in [*context.reference_index, *context.reference]
+    )
+    context.budget_usage = budget
+    context.total_tokens = budget.total_tokens
+    context.debug_info.update(
+        {
+            "mandates_count": len(context.mandates),
+            "guardrails_count": len(context.guardrails),
+            "reference_count": len(context.reference_index) + len(context.reference),
+            "reference_index_count": len(context.reference_index),
+            "total_tokens": context.total_tokens,
+        }
+    )
 
 
 # How many top mandates the non-negotiables footer restates. Terse by design —

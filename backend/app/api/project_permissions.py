@@ -6,10 +6,12 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.projects import get_known_roots
 from app.db import async_session, get_db
+from app.models.memory_unified import Memory
 from app.models.project_permission import VALID_PERMISSION_TIERS, normalize_permission_tier
 from app.services.project_permission_service import (
     ExecutionPermissionResult,
@@ -82,6 +84,18 @@ class ExecutionPermissionResponse(BaseModel):
     reason: str
 
 
+class ProjectCatalogItem(BaseModel):
+    """Selectable project identity for UI/context scoping."""
+
+    project_id: str
+    label: str
+    root_path: str | None = None
+    has_permission: bool
+    has_root: bool
+    has_memory: bool
+    sources: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -103,6 +117,41 @@ def _to_response(perm: Any) -> ProjectPermissionResponse:
     )
 
 
+def _project_label(project_id: str) -> str:
+    return project_id.replace("-", " ").replace("_", " ")
+
+
+def _memory_project_id(scope: str | None, scope_id: str | None, group_id: str | None) -> str | None:
+    if scope_id:
+        return scope_id
+    if group_id and group_id.startswith("project-"):
+        return group_id.removeprefix("project-")
+    if scope and scope.startswith("project:"):
+        return scope.split(":", 1)[1]
+    return None
+
+
+async def _list_memory_project_ids(db: AsyncSession) -> set[str]:
+    """Return project IDs that exist only as memory/context scopes."""
+    result = await db.execute(
+        select(Memory.scope, Memory.scope_id, Memory.group_id)
+        .where(
+            or_(
+                Memory.scope == "project",
+                Memory.scope.like("project:%"),
+                Memory.group_id.like("project-%"),
+            )
+        )
+        .distinct()
+    )
+    project_ids: set[str] = set()
+    for scope, scope_id, group_id in result.all():
+        project_id = _memory_project_id(scope, scope_id, group_id)
+        if project_id:
+            project_ids.add(project_id)
+    return project_ids
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -120,6 +169,47 @@ async def list_permissions() -> list[ProjectPermissionResponse]:
 async def list_project_roots() -> dict[str, str]:
     """List canonical project roots keyed by project ID."""
     return get_known_roots()
+
+
+@router.get("/catalog", response_model=list[ProjectCatalogItem])
+async def list_project_catalog(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ProjectCatalogItem]:
+    """List all project IDs selectable for context scoping.
+
+    This intentionally includes memory-only project scopes in addition to
+    permission/root-backed projects so Runtime Context can manage contexts for
+    projects that do not currently resolve to a local checkout.
+    """
+    permissions = await list_project_permissions(db)
+    permission_by_id = {perm.project_id: perm for perm in permissions}
+    roots = get_known_roots()
+    memory_ids = await _list_memory_project_ids(db)
+    project_ids = sorted(set(permission_by_id) | set(roots) | memory_ids)
+
+    items: list[ProjectCatalogItem] = []
+    for project_id in project_ids:
+        perm = permission_by_id.get(project_id)
+        root_path = getattr(perm, "root_path", None) or roots.get(project_id)
+        sources: list[str] = []
+        if perm is not None:
+            sources.append("permission")
+        if project_id in roots:
+            sources.append("root")
+        if project_id in memory_ids:
+            sources.append("memory")
+        items.append(
+            ProjectCatalogItem(
+                project_id=project_id,
+                label=_project_label(project_id),
+                root_path=root_path,
+                has_permission=perm is not None,
+                has_root=project_id in roots,
+                has_memory=project_id in memory_ids,
+                sources=sources,
+            )
+        )
+    return items
 
 
 @router.post("/permissions", response_model=ProjectPermissionResponse, status_code=201)

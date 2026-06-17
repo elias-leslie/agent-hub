@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .applicability import normalize_applicability, normalize_context_kind
-from .service import MemorySearchResult, MemorySource
+from .service import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,42 @@ def _safe_confidence(raw: Any) -> float | None:
     try:
         return float(raw) if raw is not None else None
     except (TypeError, ValueError):
+        return None
+
+
+def _safe_scope(raw: Any) -> MemoryScope | None:
+    if isinstance(raw, MemoryScope):
+        return raw
+    if not isinstance(raw, str):
+        return None
+    value = raw.strip().lower()
+    if value.startswith("project"):
+        return MemoryScope.PROJECT
+    if value == MemoryScope.GLOBAL.value:
+        return MemoryScope.GLOBAL
+    return None
+
+
+def _safe_category(ep: dict[str, Any]) -> MemoryCategory | None:
+    raw = (
+        ep.get("injection_tier")
+        or ep.get("category")
+        or ep.get("memory_type")
+        or ep.get("tier")
+    )
+    if isinstance(raw, int):
+        raw = {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(raw)
+    if not isinstance(raw, str):
+        return None
+    value = raw.strip().lower()
+    if value.isdigit():
+        value = {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(
+            int(value),
+            value,
+        )
+    try:
+        return MemoryCategory(value)
+    except ValueError:
         return None
 
 
@@ -81,6 +117,9 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         relevance_score=float(ep.get("relevance_score") or 1.0),
         created_at=created_at,
         facts=[content],
+        scope=_safe_scope(ep.get("scope")),
+        scope_id=ep.get("scope_id"),
+        category=_safe_category(ep),
         review_status=str(ep.get("review_status") or "pending"),
         sensitivity_tier=str(ep.get("sensitivity_tier") or "normal"),
         last_reviewed_at=_safe_optional_datetime(ep.get("last_reviewed_at")),
@@ -133,6 +172,9 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             relevance_score=1.0,
             created_at=created_at,
             facts=[content],
+            scope=_safe_scope(ep.get("scope")),
+            scope_id=ep.get("scope_id"),
+            category=_safe_category(ep),
             review_status=str(ep.get("review_status") or "pending"),
             sensitivity_tier=str(ep.get("sensitivity_tier") or "normal"),
             last_reviewed_at=_safe_optional_datetime(ep.get("last_reviewed_at")),
@@ -180,6 +222,9 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
+        scope=_safe_scope(ep.get("scope")),
+        scope_id=ep.get("scope_id"),
+        category=_safe_category(ep),
         review_status=str(ep.get("review_status") or "pending"),
         sensitivity_tier=str(ep.get("sensitivity_tier") or "normal"),
         last_reviewed_at=_safe_optional_datetime(ep.get("last_reviewed_at")),

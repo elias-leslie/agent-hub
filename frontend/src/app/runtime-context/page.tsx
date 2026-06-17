@@ -11,7 +11,7 @@ import { LibraryPane } from '@/components/runtime-context/LibraryPane'
 import { RenderedPane } from '@/components/runtime-context/RenderedPane'
 import styles from '@/components/runtime-context/runtime-context.module.css'
 import { useRuntimeContext } from '@/components/runtime-context/useRuntimeContext'
-import { fetchProjectRoots } from '@/lib/api/project-permissions'
+import { fetchProjectCatalog } from '@/lib/api/project-permissions'
 import type { RuntimeContextBlock } from '@/lib/api/runtime-context'
 
 type EditTarget =
@@ -26,14 +26,17 @@ export default function RuntimeContextPage() {
   const ctx = useRuntimeContext(undefined, selectedProjectId)
   const projectsQuery = useQuery({
     queryKey: ['runtime-context', 'projects'],
-    queryFn: fetchProjectRoots,
+    queryFn: fetchProjectCatalog,
     staleTime: 5 * 60 * 1000,
   })
   const projectOptions = useMemo(() => {
-    const data = projectsQuery.data ?? {}
-    return Object.keys(data)
-      .sort()
-      .map((id) => ({ id, label: id }))
+    return (projectsQuery.data ?? [])
+      .filter((project) => project.project_id !== 'default')
+      .sort((a, b) => a.project_id.localeCompare(b.project_id))
+      .map((project) => ({
+        id: project.project_id,
+        label: project.label || project.project_id,
+      }))
   }, [projectsQuery.data])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

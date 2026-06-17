@@ -125,6 +125,51 @@ class TestListProjectRoots:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/projects/catalog
+# ---------------------------------------------------------------------------
+
+
+class TestListProjectCatalog:
+    @pytest.mark.asyncio
+    async def test_catalog_includes_memory_only_project_scopes(self, client):
+        ac, _ = client
+        perms = [
+            _make_perm(
+                "agent-hub",
+                "full",
+                root_path="/srv/workspaces/projects/agent-hub",
+            )
+        ]
+        with (
+            patch(
+                "app.api.project_permissions.list_project_permissions",
+                new_callable=AsyncMock,
+                return_value=perms,
+            ),
+            patch(
+                "app.api.project_permissions.get_known_roots",
+                return_value={"agent-hub": "/srv/workspaces/projects/agent-hub"},
+            ),
+            patch(
+                "app.api.project_permissions._list_memory_project_ids",
+                new_callable=AsyncMock,
+                return_value={"agent-hub", "the-aftertimes"},
+            ),
+        ):
+            resp = await ac.get("/api/projects/catalog")
+
+        assert resp.status_code == 200
+        data = {item["project_id"]: item for item in resp.json()}
+        assert data["agent-hub"]["has_permission"] is True
+        assert data["agent-hub"]["has_root"] is True
+        assert data["agent-hub"]["has_memory"] is True
+        assert data["the-aftertimes"]["label"] == "the aftertimes"
+        assert data["the-aftertimes"]["has_permission"] is False
+        assert data["the-aftertimes"]["has_root"] is False
+        assert data["the-aftertimes"]["has_memory"] is True
+
+
+# ---------------------------------------------------------------------------
 # POST /api/projects/permissions
 # ---------------------------------------------------------------------------
 

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RuntimeContextPage from '@/app/runtime-context/page'
 import { ToastProvider } from '@/components/error/toast'
+import { fetchProjectCatalog } from '@/lib/api/project-permissions'
 import { fetchPrompts } from '@/lib/api/prompts'
 import {
   fetchRuntimeOverrides,
@@ -19,6 +20,10 @@ vi.mock('@/lib/api/runtime-context', () => ({
 
 vi.mock('@/lib/api/prompts', () => ({
   fetchPrompts: vi.fn(),
+}))
+
+vi.mock('@/lib/api/project-permissions', () => ({
+  fetchProjectCatalog: vi.fn(),
 }))
 
 vi.mock('@/lib/memory/episodes', () => ({
@@ -89,6 +94,35 @@ describe('RuntimeContextPage', () => {
     vi.mocked(fetchRuntimeOverrides).mockResolvedValue([])
     vi.mocked(fetchRuntimePreview).mockResolvedValue(preview)
     vi.mocked(replaceRuntimeOverrides).mockResolvedValue([])
+    vi.mocked(fetchProjectCatalog).mockResolvedValue([
+      {
+        project_id: 'afterlife-game',
+        label: 'afterlife game',
+        root_path: '/srv/workspaces/projects/afterlife-game',
+        has_permission: true,
+        has_root: true,
+        has_memory: false,
+        sources: ['permission', 'root'],
+      },
+      {
+        project_id: 'agent-hub',
+        label: 'agent hub',
+        root_path: '/srv/workspaces/projects/agent-hub',
+        has_permission: true,
+        has_root: true,
+        has_memory: true,
+        sources: ['permission', 'root', 'memory'],
+      },
+      {
+        project_id: 'the-aftertimes',
+        label: 'the aftertimes',
+        root_path: '/srv/workspaces/projects/the-aftertimes',
+        has_permission: true,
+        has_root: true,
+        has_memory: true,
+        sources: ['permission', 'root', 'memory'],
+      },
+    ])
     vi.mocked(fetchPrompts).mockResolvedValue([
       {
         id: 1,
@@ -154,15 +188,65 @@ describe('RuntimeContextPage', () => {
     expect(gauge).toHaveTextContent('3,500 tok')
   })
 
-  it('does not expose profile/project/query controls', async () => {
+  it('exposes project scoping without advanced profile/query controls', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
     expect(screen.queryByText(/^Profile$/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/^Project$/)).not.toBeInTheDocument()
+    expect(screen.getByText(/^Project$/)).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'the aftertimes' })).toHaveValue(
+      'the-aftertimes',
+    )
     expect(screen.queryByText(/^Query$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Task Type$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Phase$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Override Layer/)).not.toBeInTheDocument()
+  })
+
+  it('uses the selected project as the override profile layer', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Project context')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByLabelText('Project context'), {
+      target: { value: 'afterlife-game' },
+    })
+
+    await waitFor(() => {
+      expect(fetchRuntimePreview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          consumerProfile: 'agent_startup',
+          projectId: 'afterlife-game',
+        }),
+      )
+      expect(fetchRuntimeOverrides).toHaveBeenCalledWith(
+        expect.objectContaining({
+          consumerProfile: 'agent_startup',
+          projectId: 'afterlife-game',
+        }),
+      )
+    })
+    await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
+
+    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
+    fireEvent.click(excludeButtons[excludeButtons.length - 1])
+
+    await waitFor(() => {
+      expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
+        expect.objectContaining({
+          consumerProfile: 'agent_startup',
+          projectId: 'afterlife-game',
+          overrides: expect.arrayContaining([
+            expect.objectContaining({
+              source_type: 'memory',
+              source_id: 'mem-1',
+              mode: 'exclude',
+            }),
+          ]),
+        }),
+      )
+    })
   })
 
   it('renders memory body inline but collapses prompt body by default on rendered rows', async () => {

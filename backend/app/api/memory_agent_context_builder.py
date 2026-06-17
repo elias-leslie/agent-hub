@@ -47,32 +47,29 @@ async def build_progressive_context_with_variant(
             db=db,
         )
 
-        # Apply per-profile/per-project tier overrides so the in-process CLI/hook
-        # delivery path honors the same UI controls as the runtime-context preview.
+        # Apply the same per-profile/per-project memory controls used by the
+        # Runtime Context UI so progressive-context delivery honors disable,
+        # include, order, and render-mode edits.
         if consumer_profile:
-            from app.services.runtime_context import apply_tier_overrides_to_context
-
-            items = (
-                list(context.mandates)
-                + list(context.guardrails)
-                + list(context.reference_index)
-                + list(context.reference)
+            from app.services.runtime_context import (
+                apply_runtime_memory_overrides_to_context,
             )
-            if items:
-                try:
-                    await apply_tier_overrides_to_context(
-                        db,
-                        consumer_profile=consumer_profile,
-                        project_id=project_id or scope_id,
-                        items=items,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Failed to apply runtime tier overrides for profile=%s project=%s",
-                        consumer_profile,
-                        project_id or scope_id,
-                        exc_info=True,
-                    )
+
+            try:
+                await apply_runtime_memory_overrides_to_context(
+                    db,
+                    consumer_profile=consumer_profile,
+                    project_id=project_id or scope_id,
+                    query=query,
+                    context=context,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to apply runtime context overrides for profile=%s project=%s",
+                    consumer_profile,
+                    project_id or scope_id,
+                    exc_info=True,
+                )
 
     context.debug_info["variant"] = variant_value
     return context, variant_value

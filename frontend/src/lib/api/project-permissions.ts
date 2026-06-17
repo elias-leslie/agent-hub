@@ -42,6 +42,16 @@ export interface ExecutionPermission {
   reason: string
 }
 
+export interface ProjectCatalogItem {
+  project_id: string
+  label: string
+  root_path: string | null
+  has_permission: boolean
+  has_root: boolean
+  has_memory: boolean
+  sources: string[]
+}
+
 export type ProjectRoots = Record<string, string>
 
 export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
@@ -53,6 +63,12 @@ export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
 export async function fetchProjectRoots(): Promise<ProjectRoots> {
   const res = await fetchApi(buildApiUrl('/api/projects/roots'))
   if (!res.ok) throw new Error('Failed to fetch project roots')
+  return res.json()
+}
+
+export async function fetchProjectCatalog(): Promise<ProjectCatalogItem[]> {
+  const res = await fetchApi(buildApiUrl('/api/projects/catalog'))
+  if (!res.ok) throw new Error('Failed to fetch project catalog')
   return res.json()
 }
 
