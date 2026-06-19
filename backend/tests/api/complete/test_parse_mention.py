@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.api.complete.helpers import parse_mention
+from app.api.complete.helpers import parse_mention, strip_mention_preserving_content_blocks
 from app.constants.models import PROVIDER_NAMES
 
 
@@ -141,6 +141,19 @@ class TestParseMentionMultimodal:
         assert model == "cloudflare/qwen2.5-coder-32b"
         assert cleaned == "Hello"
 
+    def test_strip_mention_preserves_image_blocks(self) -> None:
+        content = [
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": "abc"},
+            },
+            {"type": "text", "text": "@xai/grok-4.20-0309-reasoning Critique this"},
+        ]
+        cleaned = strip_mention_preserving_content_blocks(content)
+        assert isinstance(cleaned, list)
+        assert cleaned[0] == content[0]
+        assert cleaned[1] == {"type": "text", "text": "Critique this"}
+
 
 class TestApplyMentionOverrideStripping:
     """Test that apply_mention_override strips @mention from request messages."""
@@ -188,3 +201,40 @@ class TestApplyMentionOverrideStripping:
 
         assert model == "nvidia/some-model"
         assert request.messages[0].content == "Hello world"
+
+    def test_mention_override_preserves_multimodal_images(self) -> None:
+        """Model override in a multimodal prompt must not drop image blocks."""
+        from unittest.mock import patch
+
+        from app.api.complete.schemas import CompletionRequest, MessageInput
+        from app.routing.resolution import apply_mention_override
+
+        image_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": "abc"},
+        }
+        request = CompletionRequest(
+            messages=[
+                MessageInput(
+                    role="user",
+                    content=[
+                        image_block,
+                        {"type": "text", "text": "@xai/grok-4.20-0309-reasoning Critique this"},
+                    ],
+                )
+            ],
+            agent_slug="pixel-art-critic",
+            project_id="test",
+        )
+        with patch(
+            "app.routing.resolution.get_provider",
+            return_value="xai",
+        ):
+            model, provider = apply_mention_override(request, "gemini-3.1-flash-lite")
+
+        assert model == "xai/grok-4.20-0309-reasoning"
+        assert provider == "xai"
+        assert request.messages[0].content == [
+            image_block,
+            {"type": "text", "text": "Critique this"},
+        ]

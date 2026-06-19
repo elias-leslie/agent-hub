@@ -129,16 +129,16 @@ def apply_mention_override(
     """
     # Lazy import — parse_mention is a string utility currently colocated with
     # the HTTP package; routing layer doesn't take a hard dep on api/complete.
-    from app.api.complete.helpers import parse_mention
+    from app.api.complete.helpers import parse_mention, strip_mention_preserving_content_blocks
 
     if request.messages:
         last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
-            mentioned_model, cleaned_content = parse_mention(last_user_msg.content)
+            mentioned_model, _cleaned_content = parse_mention(last_user_msg.content)
             if mentioned_model:
                 resolved_model = mentioned_model
                 provider = get_provider(resolved_model)
-                last_user_msg.content = cleaned_content
+                last_user_msg.content = strip_mention_preserving_content_blocks(last_user_msg.content)
                 return resolved_model, provider
 
     provider = get_provider(resolved_model)

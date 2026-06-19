@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import re
 from typing import Any
 
 import jsonschema
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 _MENTION_PREFIXES: tuple[str, ...] = tuple(
     prefix for p in PROVIDER_NAMES for prefix in (p, f"{p}/")
 )
+_MENTION_RE = re.compile(r"@([\w/][\w./:-]*)", re.IGNORECASE)
 def _exact_model_ids() -> dict[str, str]:
     return {entry.id.lower(): entry.id for entry in MODEL_CATALOG}
 
@@ -86,10 +89,8 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
 
     Returns (resolved_model, cleaned_content) where resolved_model is None if no mention.
     """
-    import re
-
     text = extract_text_content(content) if isinstance(content, list) else content
-    match = re.search(r"@([\w/][\w./:-]*)", text, re.IGNORECASE)
+    match = _MENTION_RE.search(text)
     if not match:
         return None, text
 
@@ -103,8 +104,38 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     if not resolved_model:
         return None, text
 
-    cleaned = re.sub(r"@[\w/][\w./:-]*\s*", "", text, count=1).strip()
+    cleaned = _MENTION_RE.sub("", text, count=1).strip()
     return resolved_model, cleaned
+
+
+def strip_mention_preserving_content_blocks(
+    content: str | list[dict[str, Any]],
+) -> str | list[dict[str, Any]]:
+    """Strip the first model @mention without dropping multimodal blocks.
+
+    `parse_mention()` returns a plain cleaned text string for legacy callers.
+    Completion routing must preserve image blocks when a user supplies
+    multimodal content plus a model override. This helper removes the first
+    recognized mention from the first text block that contains it and leaves all
+    image/source blocks intact.
+    """
+    if isinstance(content, str):
+        return _MENTION_RE.sub("", content, count=1).strip()
+
+    cleaned_blocks: list[dict[str, Any]] = []
+    stripped = False
+    for block in content:
+        if not isinstance(block, dict):
+            cleaned_blocks.append({"type": "text", "text": str(block)})
+            continue
+        next_block = copy.deepcopy(block)
+        if not stripped and next_block.get("type") == "text":
+            text = str(next_block.get("text", ""))
+            if _MENTION_RE.search(text):
+                next_block["text"] = _MENTION_RE.sub("", text, count=1).strip()
+                stripped = True
+        cleaned_blocks.append(next_block)
+    return cleaned_blocks
 
 
 def _has_thinking_trigger(text: str) -> bool:

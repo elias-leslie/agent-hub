@@ -13,7 +13,11 @@ EXCLUDED_SLUGS = {
     "kimi-code-test",
     "market-pulse-scout",
     "minimax-plan-test",
+    "pixel-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "ux-polisher",
+}
+GROK_ALLOWED_SLUGS = {
+    "pixel-art-critic",  # tested as best current image critique primary
 }
 SEED_FILE = Path(__file__).resolve().parents[2] / "scripts" / "seed_agents_data" / "seed_data.json"
 
@@ -52,6 +56,8 @@ def test_seed_agents_do_not_use_grok_by_default() -> None:
     data = json.loads(SEED_FILE.read_text())
 
     for agent in data["agents"]:
+        if agent["slug"] in GROK_ALLOWED_SLUGS:
+            continue
         models = [agent["primary_model_id"], *agent.get("fallback_models", [])]
         grok_models = [model for model in models if "xai/" in model or "grok" in model]
 
