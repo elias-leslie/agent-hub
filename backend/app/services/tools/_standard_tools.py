@@ -311,6 +311,16 @@ RESEARCH_WEB_TOOL = Tool(
                     "Defaults to the research query for concise retrieval."
                 ),
             },
+            "backend": {
+                "type": "string",
+                "enum": ["auto", "direct", "jina"],
+                "description": (
+                    "Fetch backend for the selected page. Use auto by default: direct "
+                    "HTTP/trafilatura/browser first, then Jina Reader as a no-key markdown "
+                    "fallback when direct fetch fails or looks like a sparse dynamic shell."
+                ),
+                "default": "auto",
+            },
         },
         "required": ["query"],
     },
@@ -397,6 +407,16 @@ FETCH_WEB_PAGE_TOOL = Tool(
                     "When provided, the tool focuses the response on the most relevant sections "
                     "before truncation."
                 ),
+            },
+            "backend": {
+                "type": "string",
+                "enum": ["auto", "direct", "jina"],
+                "description": (
+                    "Fetch backend. Use auto by default: direct HTTP/trafilatura/browser first, "
+                    "then Jina Reader as a no-key markdown fallback when direct fetch fails or is sparse. "
+                    "Use jina explicitly after Firecrawl/rate-limit failures or when URL-to-markdown is enough."
+                ),
+                "default": "auto",
             },
         },
         "required": ["url"],

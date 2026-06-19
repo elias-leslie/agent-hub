@@ -6,6 +6,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from app.services.tools import _executor_web
@@ -31,9 +32,17 @@ class _FakeResponse:
         return None
 
 
+class _FailingResponse(_FakeResponse):
+    def raise_for_status(self) -> None:
+        request = httpx.Request("GET", self.url)
+        response = httpx.Response(self.status_code, request=request)
+        raise httpx.HTTPStatusError("boom", request=request, response=response)
+
+
 class _FakeAsyncClient:
-    def __init__(self, response: _FakeResponse) -> None:
+    def __init__(self, response: _FakeResponse, *, expected_url: str = "https://example.com") -> None:
         self._response = response
+        self._expected_url = expected_url
 
     async def __aenter__(self) -> _FakeAsyncClient:
         return self
@@ -42,7 +51,7 @@ class _FakeAsyncClient:
         return None
 
     async def get(self, url: str) -> _FakeResponse:
-        assert url == "https://example.com"
+        assert url == self._expected_url
         return self._response
 
 
@@ -244,6 +253,140 @@ class TestFetchWebPage:
         assert "unrelated footer" not in payload["content"]
 
     @pytest.mark.asyncio
+    async def test_focus_query_can_window_into_long_unbroken_content(self) -> None:
+        markdown = (
+            " ".join(f"prefix{i}" for i in range(180))
+            + " Pompeian robust olive oil price $38.79 package 68 fl oz unit $0.57/fl oz. "
+            + " ".join(f"suffix{i}" for i in range(180))
+        )
+        response = _FakeResponse(
+            text=markdown,
+            content_type="text/markdown; charset=utf-8",
+        )
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(response),
+        ):
+            result = await fetch_web_page(
+                "https://example.com",
+                max_chars=180,
+                focus_query="olive oil price 68 fl oz unit",
+            )
+
+        payload = json.loads(result)
+        assert payload["focused"] is True
+        assert payload["focus_strategy"] == "bm25_term_window"
+        assert "$38.79" in payload["content"]
+        assert "$0.57/fl oz" in payload["content"]
+        assert "prefix0" not in payload["content"]
+        assert len(payload["content"]) <= 180
+
+    @pytest.mark.asyncio
+    async def test_can_use_jina_reader_backend_explicitly(self) -> None:
+        response = _FakeResponse(
+            text="# Example page\n\nOlive oil costs $38.79 for 68 fl oz.",
+            url="https://r.jina.ai/https://example.com",
+            content_type="text/plain; charset=utf-8",
+        )
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(
+                response,
+                expected_url="https://r.jina.ai/https://example.com",
+            ),
+        ):
+            result = await fetch_web_page(
+                "https://example.com",
+                max_chars=5000,
+                focus_query="olive oil price fl oz",
+                backend="jina",
+            )
+
+        payload = json.loads(result)
+        assert payload["fetch_backend"] == "jina"
+        assert payload["site_name"] == "Jina Reader"
+        assert payload["reader_url"] == "https://r.jina.ai/https://example.com"
+        assert "68 fl oz" in payload["content"]
+
+    @pytest.mark.asyncio
+    async def test_auto_backend_falls_back_to_jina_when_direct_request_fails(self) -> None:
+        direct_client = _FakeAsyncClient(
+            _FailingResponse(text="", status_code=503),
+        )
+        jina_client = _FakeAsyncClient(
+            _FakeResponse(
+                text="# Jina fallback\n\nRecovered markdown content.",
+                url="https://r.jina.ai/https://example.com",
+                content_type="text/plain; charset=utf-8",
+            ),
+            expected_url="https://r.jina.ai/https://example.com",
+        )
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            side_effect=[direct_client, jina_client],
+        ):
+            result = await fetch_web_page("https://example.com", max_chars=5000)
+
+        payload = json.loads(result)
+        assert payload["fetch_backend"] == "jina"
+        assert payload["fallback_reason"].startswith("direct request failed:")
+        assert "Recovered markdown content" in payload["content"]
+
+    @pytest.mark.asyncio
+    async def test_auto_backend_uses_jina_for_sparse_dynamic_shell_without_browser(self) -> None:
+        shell_html = (
+            "<!doctype html><html><head><title>Shell</title>"
+            "<script>window.__APP__ = true;</script></head>"
+            "<body><main id='app'></main></body></html>"
+            + (" " * 1000)
+        )
+        direct_page = SimpleNamespace(
+            content="Shell",
+            format="text",
+            title="Shell",
+            site_name=None,
+            author=None,
+            published=None,
+            markdown_tokens_estimate=None,
+        )
+        direct_client = _FakeAsyncClient(_FakeResponse(text=shell_html))
+        jina_client = _FakeAsyncClient(
+            _FakeResponse(
+                text="# Rendered page\n\nLoaded dynamic price data.",
+                url="https://r.jina.ai/https://example.com",
+                content_type="text/plain; charset=utf-8",
+            ),
+            expected_url="https://r.jina.ai/https://example.com",
+        )
+
+        with (
+            patch.object(_executor_web.settings, "web_fetch_browser_cdp_url", ""),
+            patch.object(_executor_web.settings, "st_browser_host", ""),
+            patch(
+                "app.services.tools._executor_web.httpx.AsyncClient",
+                side_effect=[direct_client, jina_client],
+            ),
+            patch(
+                "app.services.tools._executor_web._extract_page_content",
+                return_value=direct_page,
+            ),
+        ):
+            result = await fetch_web_page("https://example.com", max_chars=5000)
+
+        payload = json.loads(result)
+        assert payload["fetch_backend"] == "jina"
+        assert payload["fallback_reason"] == "direct extraction looked like a sparse dynamic shell"
+        assert "Loaded dynamic price data" in payload["content"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_unknown_fetch_backend(self) -> None:
+        result = await fetch_web_page("https://example.com", backend="unknown")
+
+        payload = json.loads(result)
+        assert "backend must be one of" in payload["error"]
+        assert payload["backend"] == "unknown"
+
+    @pytest.mark.asyncio
     async def test_uses_browser_fallback_for_sparse_html_pages(self) -> None:
         response = _FakeResponse(
             text=(
@@ -367,6 +510,7 @@ class TestResearchWeb:
             url="https://blog.cloudflare.com/markdown-for-agents/",
             max_chars=12000,
             focus_query="Cloudflare Markdown for Agents",
+            backend="auto",
         )
 
     @pytest.mark.asyncio

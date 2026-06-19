@@ -40,8 +40,10 @@ DEFAULT_FETCH_ACCEPT = (
 DEFAULT_USER_AGENT = (
     "agent-hub/1.0 (+http://localhost:3003; persona web research tool)"
 )
+JINA_READER_BASE_URL = "https://r.jina.ai"
 _SEARCH_TYPES = frozenset({"text", "news"})
 _TIMELIMITS = frozenset({"d", "w", "m", "y"})
+_FETCH_BACKENDS = frozenset({"auto", "direct", "jina"})
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +211,76 @@ async def _try_browser_fallback(
     return page, original_final_url, "direct"
 
 
+def _apply_focus_and_truncation(
+    page: _PageExtraction,
+    *,
+    max_chars: int,
+    focus_query: str | None,
+) -> tuple[str, bool, str, dict[str, object], str | None]:
+    nfocus = _normalize_whitespace(focus_query or "")
+    content_out, focus_meta = _select_focused_content(page.content, nfocus or None, max_chars)
+    content_out = content_out if focus_meta.get("focused") else page.content
+    trunc_content, truncated = _truncate_text(content_out, max_chars)
+    excerpt, _ = _truncate_text(_normalize_whitespace(trunc_content.replace("\n", " ")), min(500, max_chars))
+    return trunc_content, truncated, excerpt, focus_meta, nfocus or None
+
+
+async def _fetch_with_jina_reader(
+    normalized_url: str,
+    *,
+    max_chars: int,
+    focus_query: str | None,
+    fallback_reason: str | None = None,
+) -> str:
+    reader_url = f"{JINA_READER_BASE_URL}/{normalized_url}"
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=DEFAULT_FETCH_TIMEOUT,
+            headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": "text/plain, text/markdown;q=0.9"},
+        ) as client:
+            response = await client.get(reader_url)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("fetch_web_page Jina Reader failed for %r: %s", normalized_url, exc)
+        return _error_payload(
+            "fetch_web_page jina request failed",
+            detail=str(exc),
+            fallback_reason=fallback_reason,
+            reader_url=reader_url,
+            url=normalized_url,
+        )
+
+    page = _PageExtraction(
+        content=response.text.strip(),
+        format="markdown",
+        title=None,
+        site_name="Jina Reader",
+    )
+    trunc_content, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(
+        page,
+        max_chars=max_chars,
+        focus_query=focus_query,
+    )
+    payload = _build_fetch_payload(
+        page,
+        response.status_code,
+        "jina",
+        normalized_url,
+        str(response.url),
+        response.headers.get("content-type", "text/plain"),
+        nfocus,
+        focus_meta,
+        trunc_content,
+        truncated,
+        excerpt,
+    )
+    payload["reader_url"] = reader_url
+    if fallback_reason:
+        payload["fallback_reason"] = fallback_reason
+    return _json_payload(payload)
+
+
 async def search_web(
     query: str,
     max_results: int = DEFAULT_WEB_SEARCH_RESULTS,
@@ -263,6 +335,7 @@ async def fetch_web_page(
     url: str,
     max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS,
     focus_query: str | None = None,
+    backend: str = "auto",
 ) -> str:
     """Fetch a webpage and return extracted readable content."""
     normalized_url = url.strip()
@@ -270,8 +343,21 @@ async def fetch_web_page(
         return _error_payload("fetch_web_page requires a non-empty url")
     if not normalized_url.startswith(("http://", "https://")):
         return _error_payload("fetch_web_page only supports http:// and https:// URLs")
+    backend = (backend or "auto").strip().lower()
+    if backend not in _FETCH_BACKENDS:
+        return _error_payload(
+            "fetch_web_page backend must be one of: auto, direct, jina",
+            backend=backend,
+        )
 
     bounded_max_chars = max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS))
+    if backend == "jina":
+        return await _fetch_with_jina_reader(
+            normalized_url,
+            max_chars=bounded_max_chars,
+            focus_query=focus_query,
+        )
+
     try:
         async with httpx.AsyncClient(
             follow_redirects=True, timeout=DEFAULT_FETCH_TIMEOUT,
@@ -281,6 +367,13 @@ async def fetch_web_page(
             response.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning("fetch_web_page failed for %r: %s", normalized_url, exc)
+        if backend == "auto":
+            return await _fetch_with_jina_reader(
+                normalized_url,
+                max_chars=bounded_max_chars,
+                focus_query=focus_query,
+                fallback_reason=f"direct request failed: {exc}",
+            )
         return _error_payload("fetch_web_page request failed", detail=str(exc), url=normalized_url)
 
     content_type = response.headers.get("content-type", "").lower()
@@ -290,6 +383,13 @@ async def fetch_web_page(
             _extract_page_content, content_type, raw_text, final_url, response.headers.get("x-markdown-tokens"),
         )
     except ValueError:
+        if backend == "auto":
+            return await _fetch_with_jina_reader(
+                normalized_url,
+                max_chars=bounded_max_chars,
+                focus_query=focus_query,
+                fallback_reason=f"unsupported content type: {content_type}",
+            )
         return _error_payload("fetch_web_page only supports text-like responses", content_type=content_type, url=normalized_url)
 
     browser_cdp_url = _get_browser_cdp_url()
@@ -299,15 +399,29 @@ async def fetch_web_page(
         )
     else:
         fetch_backend = "direct"
-    nfocus = _normalize_whitespace(focus_query or "")
-    content_out, focus_meta = _select_focused_content(page.content, nfocus or None, bounded_max_chars)
-    content_out = content_out if focus_meta.get("focused") else page.content
-    trunc_content, truncated = _truncate_text(content_out, bounded_max_chars)
-    excerpt, _ = _truncate_text(_normalize_whitespace(trunc_content.replace("\n", " ")), min(500, bounded_max_chars))
+    if (
+        backend == "auto"
+        and fetch_backend == "direct"
+        and _should_try_browser_fallback(content_type, raw_text, page.content)
+    ):
+        jina_raw = await _fetch_with_jina_reader(
+            normalized_url,
+            max_chars=bounded_max_chars,
+            focus_query=focus_query,
+            fallback_reason="direct extraction looked like a sparse dynamic shell",
+        )
+        jina_payload = json.loads(jina_raw)
+        if "error" not in jina_payload:
+            return jina_raw
+    trunc_content, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(
+        page,
+        max_chars=bounded_max_chars,
+        focus_query=focus_query,
+    )
 
     return _json_payload(_build_fetch_payload(
         page, response.status_code, fetch_backend, normalized_url, final_url,
-        content_type, nfocus or None, focus_meta, trunc_content, truncated, excerpt,
+        content_type, nfocus, focus_meta, trunc_content, truncated, excerpt,
     ))
 
 
@@ -319,6 +433,7 @@ async def research_web(
     timelimit: str | None = None,
     max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS,
     focus_query: str | None = None,
+    backend: str = "auto",
 ) -> str:
     """Search the web, choose one result, and fetch readable content."""
     normalized_query = _normalize_whitespace(query)
@@ -343,6 +458,7 @@ async def research_web(
         url=selected_url,
         max_chars=max_chars,
         focus_query=effective_focus,
+        backend=backend,
     )
     page_payload, err = _decode_step(page_raw, "fetch_web_page", "fetch step")
     if err:

@@ -527,6 +527,7 @@ class TestDispatch:
             timelimit=None,
             max_chars=4000,
             focus_query="markdown clients",
+            backend="auto",
         )
 
     @pytest.mark.asyncio
@@ -551,6 +552,7 @@ class TestDispatch:
             url="https://example.com",
             max_chars=5000,
             focus_query="pricing api limits",
+            backend="auto",
         )
 
     @pytest.mark.asyncio

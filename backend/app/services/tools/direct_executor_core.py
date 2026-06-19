@@ -218,12 +218,14 @@ class DirectToolExecutor:
                 timelimit=args.get("timelimit"),
                 max_chars=args.get("max_chars", 12000),
                 focus_query=args.get("focus_query"),
+                backend=args.get("backend", "auto"),
             )
         if name == "fetch_web_page":
             return await _fetch_web_page(
                 url=args["url"],
                 max_chars=args.get("max_chars", 12000),
                 focus_query=args.get("focus_query"),
+                backend=args.get("backend", "auto"),
             )
         if name == "propose_thorough":
             from app.services.tools._propose_tools import execute_propose_thorough

@@ -90,6 +90,57 @@ def _select_chunk_indices(
     return selected
 
 
+def _term_window(text: str, query_terms: list[str], max_chars: int) -> str | None:
+    """Return the densest query-term window from a block too large to include whole."""
+    stripped = text.strip()
+    if len(stripped) <= max_chars:
+        return stripped
+    lowered = stripped.lower()
+    term_positions = [
+        (term, pos)
+        for term in set(query_terms)
+        if term
+        for pos in [lowered.find(term)]
+        if pos >= 0
+    ]
+    if not term_positions:
+        return None
+
+    best_start = 0
+    best_score = -1
+    for _, pos in term_positions:
+        start = max(0, pos - max_chars // 3)
+        start = min(start, max(0, len(stripped) - max_chars))
+        window = lowered[start : start + max_chars]
+        score = sum(1 for term in set(query_terms) if term in window)
+        if score > best_score:
+            best_start = start
+            best_score = score
+
+    if best_start > 0:
+        boundary = stripped.rfind(" ", 0, best_start)
+        if boundary >= max(0, best_start - 40):
+            best_start = boundary + 1
+    window = stripped[best_start : best_start + max_chars].strip()
+    return window or None
+
+
+def _select_best_term_window(
+    chunks: list[tuple[int, str]],
+    scores: list[float],
+    query_terms: list[str],
+    max_chars: int,
+) -> str | None:
+    ranked = sorted(range(len(chunks)), key=lambda i: scores[i], reverse=True)
+    for idx in ranked:
+        if float(scores[idx]) <= 0:
+            continue
+        window = _term_window(chunks[idx][1], query_terms, max_chars)
+        if window:
+            return window
+    return _term_window("\n\n".join(chunk for _, chunk in chunks), query_terms, max_chars)
+
+
 def _select_focused_content(
     content: str,
     focus_query: str | None,
@@ -111,7 +162,16 @@ def _select_focused_content(
 
     selected = _select_chunk_indices(chunks, scores, max_chars)
     if not selected:
-        return content, {"focused": False}
+        focused_window = _select_best_term_window(chunks, scores, query_terms, max_chars)
+        if not focused_window or focused_window == stripped_content:
+            return content, {"focused": False}
+        return focused_window, {
+            "focused": True,
+            "focus_query": normalized_query,
+            "focus_strategy": "bm25_term_window",
+            "selected_chunk_count": 1,
+            "candidate_chunk_count": len(chunks),
+        }
 
     focused = "\n\n".join(chunks[i][1] for i in selected).strip()
     if not focused:
