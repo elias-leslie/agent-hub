@@ -223,7 +223,7 @@ class TestApplyMentionOverrideStripping:
                     ],
                 )
             ],
-            agent_slug="pixel-art-critic",
+            agent_slug="game-art-critic",
             project_id="test",
         )
         with patch(

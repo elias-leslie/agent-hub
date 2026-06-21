@@ -13,11 +13,11 @@ EXCLUDED_SLUGS = {
     "kimi-code-test",
     "market-pulse-scout",
     "minimax-plan-test",
-    "pixel-art-critic",  # visual critique agent; model panel chosen by image-critique evals
+    "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "ux-polisher",
 }
 GROK_ALLOWED_SLUGS = {
-    "pixel-art-critic",  # tested as best current image critique primary
+    "game-art-critic",  # tested as best current image critique primary
 }
 SEED_FILE = Path(__file__).resolve().parents[2] / "scripts" / "seed_agents_data" / "seed_data.json"
 
