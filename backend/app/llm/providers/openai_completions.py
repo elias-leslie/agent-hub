@@ -656,6 +656,13 @@ def build_params(
         if gateway:
             params["providerOptions"] = {"gateway": gateway}
 
+    if model.provider == "local" and model.id.startswith("gemma4:"):
+        from app.config import settings
+
+        keep_alive = settings.local_gemma4_keep_alive.strip()
+        if keep_alive:
+            params["keep_alive"] = keep_alive
+
     return params
 
 

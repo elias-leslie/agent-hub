@@ -43,3 +43,20 @@ def test_moonshot_uses_system_role_and_plain_max_tokens() -> None:
     assert "store" not in params
     assert "max_completion_tokens" not in params
     assert compat.max_tokens_field == "max_tokens"
+
+
+def test_local_gemma_adds_ollama_keep_alive_to_extra_body() -> None:
+    model = resolve_llm_model("local/gemma4:12b-it-qat", "local")
+    compat = _get_compat(model)
+
+    params = build_params(
+        model,
+        Context(messages=[UserMessage(content="critique this", timestamp=1)]),
+        None,
+        compat,
+        "none",
+    )
+    body = _prepare_sdk_body(params)
+
+    assert params["keep_alive"] == "5m"
+    assert body["extra_body"]["keep_alive"] == "5m"

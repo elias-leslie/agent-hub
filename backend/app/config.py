@@ -166,6 +166,10 @@ class Settings(BaseSettings):
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"
     local_openai_api_key: str = ""
+    # Ollama-compatible keep_alive for local Gemma 4 calls. This keeps the
+    # model warm during a short critique burst, then unloads it from GPU after
+    # the idle window instead of wasting VRAM indefinitely.
+    local_gemma4_keep_alive: str = "5m"
 
     # Tool-result compression (Headroom). Master kill-switch (off by default) plus
     # a per-agent_slug opt-in allowlist. Compression only fires when the master is
