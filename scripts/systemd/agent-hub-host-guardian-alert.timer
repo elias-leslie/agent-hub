@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll durable host guardian transitions for Telegram delivery
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=agent-hub-host-guardian-alert.service
+
+[Install]
+WantedBy=timers.target
+

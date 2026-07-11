@@ -1,9 +1,9 @@
 [Unit]
-Description=Run Agent Hub Jenny Telegram status report on a recurring timer
+Description=Send one daily Jenny Telegram operator status report
 
 [Timer]
-OnBootSec=10m
-OnUnitActiveSec=1h
+OnCalendar=*-*-* 08:00:00
+RandomizedDelaySec=5min
 AccuracySec=1m
 Persistent=true
 Unit=agent-hub-telegram-status-report.service

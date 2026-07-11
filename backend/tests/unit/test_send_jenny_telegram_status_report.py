@@ -7,6 +7,7 @@ import pytest
 
 from app.scripts.send_jenny_telegram_status_report import (
     build_complete_command,
+    build_deterministic_report,
     build_prompt,
     deliver_report,
     extract_report_text,
@@ -19,23 +20,40 @@ def test_build_prompt_mentions_live_checks_and_sections() -> None:
 
     assert "st pulse" in prompt
     assert "st sessions ownership" in prompt
+    assert "/var/lib/summitflow-host-guardian/status.json" in prompt
+    assert "backup veeam status" in prompt
     assert "Sections required" in prompt
 
 
 def test_build_complete_command_targets_persona_and_executes_tools() -> None:
     command = build_complete_command("report prompt")
 
-    assert command[:3] == [
+    assert command[:4] == [
         "st",
-        "complete",
+        "agent",
+        "run",
         "-a",
     ]
     assert "persona" in command
     assert "agent-hub" in command
-    assert "-x" in command
+    assert "--read-only" in command
     assert "--skip-cache" in command
     assert "--raw" in command
     assert command[-2:] == ["--message", "report prompt"]
+
+
+def test_deterministic_report_has_operator_sections(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.scripts.send_jenny_telegram_status_report._run_text",
+        lambda *args, **kwargs: "healthy",
+    )
+
+    report = build_deterministic_report(workdir=tmp_path)
+
+    assert "Overall" in report
+    assert "Host and drives" in report
+    assert "Backups" in report
+    assert "Services" in report
 
 
 def test_extract_report_text_returns_trimmed_content() -> None:
@@ -49,22 +67,16 @@ def test_extract_report_text_rejects_empty_content() -> None:
         extract_report_text(json.dumps({"content": "   "}))
 
 
-def test_persona_status_report_skip_reason_respects_disabled_heartbeat() -> None:
+def test_persona_status_report_allows_disabled_heartbeat() -> None:
     persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=0)
 
-    assert (
-        persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True)
-        == "persona_heartbeat_disabled"
-    )
+    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True) is None
 
 
-def test_persona_status_report_skip_reason_respects_disabled_schedule() -> None:
+def test_persona_status_report_allows_disabled_heartbeat_schedule() -> None:
     persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=60)
 
-    assert (
-        persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=False)
-        == "persona_heartbeat_schedule_disabled"
-    )
+    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=False) is None
 
 
 def test_persona_status_report_skip_reason_allows_active_heartbeat() -> None:

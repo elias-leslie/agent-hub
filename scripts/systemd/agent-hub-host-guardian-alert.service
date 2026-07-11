@@ -1,5 +1,5 @@
 [Unit]
-Description=Agent Hub Jenny Telegram status report
+Description=Deliver host guardian state changes through configured Telegram
 After=network-online.target
 Wants=network-online.target
 
@@ -7,5 +7,6 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=__PROJECT_ROOT__/backend
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/bin/bash -lc '__PROJECT_ROOT__/backend/.venv/bin/python -m app.scripts.send_jenny_telegram_status_report --deterministic'
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.scripts.send_host_guardian_alerts
 KillMode=control-group
+
