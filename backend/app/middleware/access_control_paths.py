@@ -41,7 +41,9 @@ AUTH_BYPASS_PREFIXES = (
     "/api/memory/entities",  # Memory entity listing (read-only)
     "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
     "/api/models",  # Model catalog (read-only static data, no LLM costs)
-    "/api/voice",  # Voice STT/TTS (free edge-tts + local whisper, no LLM costs)
+    # Voice currently uses caller-supplied WebSocket identity. Assistant mode
+    # can invoke an LLM, so deployments must keep this on a trusted boundary.
+    "/api/voice",
 )
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)

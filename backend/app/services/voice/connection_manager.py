@@ -37,7 +37,7 @@ class ConnectionManager:
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
 
-        if session_id and session_id in self.session_connections:
+        if session_id and self.session_connections.get(session_id) is websocket:
             del self.session_connections[session_id]
 
         logger.info(

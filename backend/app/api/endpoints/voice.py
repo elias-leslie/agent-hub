@@ -1,10 +1,13 @@
 import asyncio
 import base64
+import binascii
 import json
 import logging
 import os
 import tempfile
+import time
 import wave
+from dataclasses import dataclass, field
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
@@ -23,6 +26,7 @@ MSG_TYPE_CONTROL = "control"
 MSG_TYPE_TEXT = "text"
 MSG_TYPE_TRANSCRIPT = "transcript"
 MSG_TYPE_RESPONSE = "response"
+MSG_TYPE_ERROR = "error"
 
 # Control action constants
 ACTION_START = "start"
@@ -35,6 +39,23 @@ MODE_TRANSCRIBE = "transcribe"
 WAV_CHANNELS = 1
 WAV_SAMPLE_WIDTH = 2  # 16-bit
 WAV_FRAME_RATE = 16000
+
+# A voice turn is one native Whisper context window. At the wire format above,
+# 30 seconds is exactly 960,000 raw PCM bytes:
+#   30s * 16,000 frames/s * 1 channel * 2 bytes/frame
+# Bounding both elapsed time and bytes is intentional: a slow sender cannot hold
+# a recording slot forever, and a fast sender cannot exhaust memory before the
+# elapsed-time limit is reached.
+MAX_RECORDING_SECONDS = 30.0
+PCM_BYTES_PER_SECOND = WAV_FRAME_RATE * WAV_CHANNELS * WAV_SAMPLE_WIDTH
+MAX_RECORDING_BYTES = int(MAX_RECORDING_SECONDS * PCM_BYTES_PER_SECOND)
+
+# One identified client represents one microphone/user and therefore owns at
+# most one active push-to-talk turn. The global ceiling follows Python's default
+# asyncio thread-pool capacity, which is also the executor used for STT below.
+# It bounds aggregate buffered PCM to <= ~30.7 MB even on the largest pool.
+MAX_CONCURRENT_RECORDINGS_PER_CLIENT = 1
+MAX_CONCURRENT_RECORDINGS = min(32, (os.process_cpu_count() or 1) + 4)
 
 # Fallback response when AI completion fails
 FALLBACK_RESPONSE = "I'm sorry, I had trouble processing that. Could you try again?"
@@ -100,9 +121,72 @@ async def text_to_speech(request: TTSRequest) -> Response:
     return Response(content=audio_bytes, media_type="audio/mpeg")
 
 
-# In-memory storage for audio buffers
-# { "websocket_id": bytearray() }
-audio_buffers = {}
+@dataclass
+class RecordingState:
+    """Bounded, explicitly owned recording state for one WebSocket."""
+
+    client_id: str
+    audio: bytearray = field(default_factory=bytearray)
+    started_at: float | None = None
+    owns_slot: bool = False
+
+    @property
+    def is_recording(self) -> bool:
+        return self.started_at is not None
+
+
+# WebSocket IDs own their state; the second index enforces per-client limits.
+# ``user_id`` is currently caller-supplied rather than authenticated, so the
+# global limit is required as a hard backstop until voice WebSocket auth exists.
+recording_states: dict[int, RecordingState] = {}
+active_recordings_by_client: dict[str, set[int]] = {}
+active_recording_ids: set[int] = set()
+
+
+def _release_recording(ws_id: int, state: RecordingState) -> None:
+    """Release a recording slot and drop the buffer allocation immediately."""
+    state.audio = bytearray()
+    state.started_at = None
+    state.owns_slot = False
+    active_recording_ids.discard(ws_id)
+
+    client_recordings = active_recordings_by_client.get(state.client_id)
+    if client_recordings is not None:
+        client_recordings.discard(ws_id)
+        if not client_recordings:
+            active_recordings_by_client.pop(state.client_id, None)
+
+
+def _claim_recording(ws_id: int, state: RecordingState) -> str | None:
+    """Claim a bounded recording slot, returning an error code on refusal."""
+    if state.owns_slot:
+        _release_recording(ws_id, state)
+
+    client_recordings = active_recordings_by_client.get(state.client_id, set())
+    if len(client_recordings) >= MAX_CONCURRENT_RECORDINGS_PER_CLIENT:
+        return "client_recording_limit"
+    if len(active_recording_ids) >= MAX_CONCURRENT_RECORDINGS:
+        return "server_recording_limit"
+
+    state.audio = bytearray()
+    state.started_at = time.monotonic()
+    state.owns_slot = True
+    active_recording_ids.add(ws_id)
+    active_recordings_by_client.setdefault(state.client_id, set()).add(ws_id)
+    return None
+
+
+def _recording_expired(state: RecordingState) -> bool:
+    return bool(
+        state.started_at is not None
+        and time.monotonic() - state.started_at >= MAX_RECORDING_SECONDS
+    )
+
+
+async def _send_voice_error(websocket: WebSocket, code: str, message: str) -> None:
+    await manager.send_personal_message(
+        {"type": MSG_TYPE_ERROR, "code": code, "message": message}, websocket
+    )
 
 
 def _write_wav(path: str, audio: bytearray) -> None:
@@ -120,7 +204,12 @@ async def _transcribe_audio(audio: bytearray) -> str | None:
         tmp_path = tmp.name
 
     try:
-        await asyncio.to_thread(_write_wav, tmp_path, audio)
+        try:
+            await asyncio.to_thread(_write_wav, tmp_path, audio)
+        finally:
+            # Once PCM is persisted to the bounded temporary WAV, the in-memory
+            # recording buffer is no longer needed while STT runs.
+            audio.clear()
         transcript = await asyncio.to_thread(stt_service.transcribe, tmp_path)
         return transcript
     finally:
@@ -152,78 +241,185 @@ async def _run_ai_completion(
             temperature=voice_temp,
         )
         logger.info(
-            f"Voice completion for {user_id}: "
-            f"memory_facts={result.memory_facts_injected}, "
-            f"episode={result.episode_uuid}"
+            "Voice completion for %s: memory_facts=%s, episode=%s",
+            user_id,
+            result.memory_facts_injected,
+            result.episode_uuid,
         )
         return result.content
-    except Exception as e:
-        logger.error(f"Completion error for {user_id}: {e}")
+    except Exception as exc:
+        logger.error("Completion error for %s: %s", user_id, type(exc).__name__)
         return FALLBACK_RESPONSE
 
 
 async def _handle_stop(
-    websocket: WebSocket, ws_id: int, user_id: str, app: str, mode: str
+    websocket: WebSocket,
+    ws_id: int,
+    state: RecordingState,
+    user_id: str,
+    app: str,
+    mode: str,
 ) -> None:
     """Process buffered audio on recording stop: transcribe then optionally run AI."""
-    full_audio = audio_buffers[ws_id]
+    # Transfer buffer ownership to this stack frame before any await. Keep the
+    # concurrency slot until STT/completion finishes so rapid stop/start cycles
+    # cannot create an unbounded queue of inference work.
+    full_audio = state.audio
+    state.audio = bytearray()
+    state.started_at = None
     if not full_audio:
+        _release_recording(ws_id, state)
         return
 
-    logger.info(f"Stopped recording for {user_id}, processing...")
+    logger.info("Stopped recording for %s; processing %d PCM bytes", user_id, len(full_audio))
 
     try:
-        transcript = await _transcribe_audio(full_audio)
-    except Exception as e:
-        logger.error(f"STT Error: {e}")
-        audio_buffers[ws_id] = bytearray()
-        return
+        try:
+            transcript = await _transcribe_audio(full_audio)
+        except Exception as exc:
+            logger.error("STT error for %s: %s", user_id, type(exc).__name__)
+            await _send_voice_error(websocket, "transcription_failed", "Audio transcription failed")
+            return
 
-    if not transcript:
-        logger.warning(f"No transcript generated for {user_id}")
-        audio_buffers[ws_id] = bytearray()
-        return
+        if not transcript:
+            logger.warning("No transcript generated for %s", user_id)
+            return
 
-    logger.info(f"Transcript for {user_id} ({app}): {transcript}")
-    await manager.send_personal_message(
-        {"type": MSG_TYPE_TRANSCRIPT, "data": transcript}, websocket
-    )
-
-    if mode != MODE_TRANSCRIBE:
-        response_text = await _run_ai_completion(transcript, app, user_id)
+        # Transcript content is intentionally never written to server logs.
+        logger.info("Transcript generated for %s (%s): %d chars", user_id, app, len(transcript))
         await manager.send_personal_message(
-            {"type": MSG_TYPE_RESPONSE, "data": response_text}, websocket
+            {"type": MSG_TYPE_TRANSCRIPT, "data": transcript}, websocket
         )
 
-    audio_buffers[ws_id] = bytearray()
+        if mode != MODE_TRANSCRIBE:
+            response_text = await _run_ai_completion(transcript, app, user_id)
+            await manager.send_personal_message(
+                {"type": MSG_TYPE_RESPONSE, "data": response_text}, websocket
+            )
+    finally:
+        # Drop the local allocation on success, failure, or cancelled sends.
+        full_audio.clear()
+        _release_recording(ws_id, state)
 
 
 async def _handle_message(
-    websocket: WebSocket, ws_id: int, user_id: str, app: str, mode: str, data: str
+    websocket: WebSocket,
+    ws_id: int,
+    state: RecordingState,
+    user_id: str,
+    app: str,
+    mode: str,
+    data: str,
 ) -> None:
     """Parse and dispatch a single WebSocket message."""
     try:
         message = json.loads(data)
     except json.JSONDecodeError:
-        logger.error("Invalid JSON received")
+        logger.warning("Invalid JSON received from voice client %s", user_id)
+        await _send_voice_error(websocket, "invalid_message", "Message must be valid JSON")
+        return
+
+    if not isinstance(message, dict):
+        await _send_voice_error(websocket, "invalid_message", "Message must be a JSON object")
         return
 
     msg_type = message.get("type")
 
     if msg_type == MSG_TYPE_AUDIO:
-        audio_data = base64.b64decode(message["data"])
-        audio_buffers[ws_id].extend(audio_data)
+        if not state.is_recording:
+            await _send_voice_error(websocket, "recording_not_started", "Start recording first")
+            return
+        if _recording_expired(state):
+            _release_recording(ws_id, state)
+            await _send_voice_error(
+                websocket,
+                "recording_too_long",
+                f"Recording exceeds the {MAX_RECORDING_SECONDS:g}-second limit",
+            )
+            return
+
+        encoded_audio = message.get("data")
+        if not isinstance(encoded_audio, str):
+            _release_recording(ws_id, state)
+            await _send_voice_error(websocket, "invalid_audio", "Audio data must be base64 text")
+            return
+
+        remaining_bytes = MAX_RECORDING_BYTES - len(state.audio)
+        max_encoded_length = 4 * ((remaining_bytes + 2) // 3)
+        if len(encoded_audio) > max_encoded_length:
+            _release_recording(ws_id, state)
+            await _send_voice_error(
+                websocket,
+                "recording_too_large",
+                f"Recording exceeds the {MAX_RECORDING_BYTES}-byte PCM limit",
+            )
+            return
+
+        try:
+            audio_data = base64.b64decode(encoded_audio, validate=True)
+        except (binascii.Error, ValueError):
+            _release_recording(ws_id, state)
+            await _send_voice_error(websocket, "invalid_audio", "Audio data is not valid base64")
+            return
+
+        if len(audio_data) > remaining_bytes:
+            _release_recording(ws_id, state)
+            await _send_voice_error(
+                websocket,
+                "recording_too_large",
+                f"Recording exceeds the {MAX_RECORDING_BYTES}-byte PCM limit",
+            )
+            return
+        state.audio.extend(audio_data)
 
     elif msg_type == MSG_TYPE_CONTROL:
         action = message.get("action")
         if action == ACTION_START:
-            audio_buffers[ws_id] = bytearray()
-            logger.info(f"Started recording for {user_id}")
+            error_code = _claim_recording(ws_id, state)
+            if error_code:
+                await _send_voice_error(
+                    websocket,
+                    error_code,
+                    "Another recording already owns the available recording slot",
+                )
+                return
+            logger.info("Started recording for %s", user_id)
         elif action == ACTION_STOP:
-            await _handle_stop(websocket, ws_id, user_id, app, mode)
+            await _handle_stop(websocket, ws_id, state, user_id, app, mode)
 
     elif msg_type == MSG_TYPE_TEXT:
-        logger.info(f"Received text from {user_id}: {message.get('data')}")
+        text_data = message.get("data")
+        text_length = len(text_data) if isinstance(text_data, str) else 0
+        logger.info("Received text metadata from %s: %d chars", user_id, text_length)
+
+
+async def _receive_voice_message(
+    websocket: WebSocket, ws_id: int, state: RecordingState
+) -> str | None:
+    """Receive one message while enforcing wall-clock recording duration."""
+    if state.started_at is None:
+        return await websocket.receive_text()
+
+    remaining = MAX_RECORDING_SECONDS - (time.monotonic() - state.started_at)
+    if remaining <= 0:
+        _release_recording(ws_id, state)
+        await _send_voice_error(
+            websocket,
+            "recording_too_long",
+            f"Recording exceeds the {MAX_RECORDING_SECONDS:g}-second limit",
+        )
+        return None
+
+    try:
+        return await asyncio.wait_for(websocket.receive_text(), timeout=remaining)
+    except TimeoutError:
+        _release_recording(ws_id, state)
+        await _send_voice_error(
+            websocket,
+            "recording_too_long",
+            f"Recording exceeds the {MAX_RECORDING_SECONDS:g}-second limit",
+        )
+        return None
 
 
 @router.websocket("/ws")
@@ -234,17 +430,29 @@ async def websocket_endpoint(
     session_id: str = Query(None, description="Optional Session ID"),
     mode: str = Query("assistant", description="Mode: 'assistant' (full) or 'transcribe' (transcript only)"),
 ) -> None:
-    await manager.connect(websocket, user_id, session_id)
     ws_id = id(websocket)
-    audio_buffers[ws_id] = bytearray()
+    state = RecordingState(client_id=user_id)
+    recording_states[ws_id] = state
+    connected = False
 
     try:
+        await manager.connect(websocket, user_id, session_id)
+        connected = True
         while True:
-            data = await websocket.receive_text()
-            await _handle_message(websocket, ws_id, user_id, app, mode, data)
+            data = await _receive_voice_message(websocket, ws_id, state)
+            if data is not None:
+                await _handle_message(websocket, ws_id, state, user_id, app, mode, data)
     except WebSocketDisconnect:
-        manager.disconnect(websocket, user_id, session_id)
-        audio_buffers.pop(ws_id, None)
+        pass
+    except Exception as exc:
+        # Do not log message bodies, transcripts, or exception text that could
+        # contain them. The exception class is sufficient for diagnostics.
+        logger.error("Voice WebSocket failed for %s: %s", user_id, type(exc).__name__)
+    finally:
+        _release_recording(ws_id, state)
+        recording_states.pop(ws_id, None)
+        if connected:
+            manager.disconnect(websocket, user_id, session_id)
 
 
 async def _resolve_voice_agent() -> tuple[str, float]:

@@ -69,8 +69,9 @@ class TestReconcileFirstPartyClients:
             "monkey-fight",
             "summit-custom",
             "portfolio-client",
+            "hermes",
         ]
-        assert mock_db.add.call_count == 7
+        assert mock_db.add.call_count == 8
         created_clients = [call.args[0] for call in mock_db.add.call_args_list]
         assert [client.id for client in created_clients] == changed
         assert [client.display_name for client in created_clients] == [
@@ -81,6 +82,7 @@ class TestReconcileFirstPartyClients:
             "monkey-fight",
             "summitflow",
             "portfolio-ai",
+            "hermes",
         ]
         assert [client.client_type for client in created_clients] == [
             "internal",
@@ -90,6 +92,7 @@ class TestReconcileFirstPartyClients:
             "external",
             "internal",
             "internal",
+            "external",
         ]
         assert [client.allowed_projects for client in created_clients] == [
             '["agent-hub"]',
@@ -99,6 +102,7 @@ class TestReconcileFirstPartyClients:
             '["monkey-fight"]',
             '["summitflow", "agent-hub"]',
             '["portfolio-ai"]',
+            None,
         ]
         mock_db.commit.assert_awaited_once()
         assert mock_invalidate_client_cache.call_count == len(changed)
@@ -137,15 +141,26 @@ class TestReconcileFirstPartyClients:
         ):
             changed = await reconcile_first_party_clients(mock_db)
 
-        assert changed == ["agent-hub-telegram-bot", "summitflow", "portfolio-ai", "monkey-fight"]
+        assert changed == [
+            "agent-hub-telegram-bot",
+            "summitflow",
+            "portfolio-ai",
+            "monkey-fight",
+            "hermes",
+        ]
         assert existing.display_name == "portfolio-ai"
         assert existing.client_type == "internal"
         assert existing.status == "blocked"
         assert existing.allowed_projects == '["portfolio-ai"]'
         created_clients = [call.args[0].id for call in mock_db.add.call_args_list]
-        assert created_clients == ["agent-hub-telegram-bot", "summitflow", "monkey-fight"]
+        assert created_clients == [
+            "agent-hub-telegram-bot",
+            "summitflow",
+            "monkey-fight",
+            "hermes",
+        ]
         mock_db.commit.assert_awaited_once()
-        assert mock_invalidate_client_cache.call_count == 4
+        assert mock_invalidate_client_cache.call_count == 5
         mock_invalidate_client_cache.assert_any_call("portfolio-ai")
 
     @pytest.mark.asyncio
@@ -175,7 +190,13 @@ class TestReconcileFirstPartyClients:
         ):
             changed = await reconcile_first_party_clients(mock_db)
 
-        assert changed == ["agent-hub-telegram-bot", "summitflow", "portfolio-ai", "monkey-fight"]
+        assert changed == [
+            "agent-hub-telegram-bot",
+            "summitflow",
+            "portfolio-ai",
+            "monkey-fight",
+            "hermes",
+        ]
         created_clients = [call.args[0].id for call in mock_db.add.call_args_list]
         assert created_clients == changed
         mock_db.commit.assert_awaited_once()
