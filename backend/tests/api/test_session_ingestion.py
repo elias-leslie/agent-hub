@@ -7,14 +7,28 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
+from starlette.requests import Request
 
+from app.api.session_ingestion import (
+    append_events_endpoint,
+    finalize_session_endpoint,
+    heartbeat_session_endpoint,
+    ingest_transcript_events_endpoint,
+    upsert_session_endpoint,
+)
 from app.main import app
 from app.services.session_ingestion import (
+    AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
+    FinalizeSessionRequest,
     FinalizeSessionResult,
+    SessionHeartbeatRequest,
     SessionHeartbeatResult,
+    SessionUpsertRequest,
     SessionUpsertResult,
+    TranscriptIngestRequest,
 )
 from tests.conftest import TEST_HEADERS
 
@@ -30,8 +44,193 @@ async def client() -> AsyncGenerator[AsyncClient]:
         yield ac
 
 
+def _identified_request(allowed_projects: str | None) -> Request:
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/session-ingestion/sessions/upsert",
+            "headers": [],
+        }
+    )
+    request.state.client_id = "client-identified"
+    request.state.allowed_projects = allowed_projects
+    request.state.request_source = "test"
+    request.state.is_internal = False
+    return request
+
+
 class TestSessionIngestionAPI:
     """Tests for `/api/session-ingestion/...` endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_upsert_requires_target_project_authorization(self) -> None:
+        db = AsyncMock()
+        with (
+            patch(
+                "app.api.session_ingestion.upsert_session",
+                new_callable=AsyncMock,
+            ) as mock_upsert,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await upsert_session_endpoint(
+                request=SessionUpsertRequest(
+                    project_id="aftertimes",
+                    provider="codex",
+                    model="codex/gpt-5.4",
+                ),
+                http_request=_identified_request('["rootfall"]'),
+                db=db,
+                include_session=False,
+            )
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["code"] == "project_access_denied"
+        mock_upsert.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_upsert_requires_existing_session_project_authorization(self) -> None:
+        db = AsyncMock()
+        existing = MagicMock(id="session-existing", project_id="aftertimes")
+        with (
+            patch(
+                "app.api.session_ingestion.get_or_create_session",
+                new_callable=AsyncMock,
+                return_value=(existing, True),
+            ),
+            patch(
+                "app.api.session_ingestion.upsert_session",
+                new_callable=AsyncMock,
+            ) as mock_upsert,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await upsert_session_endpoint(
+                request=SessionUpsertRequest(
+                    session_id="session-existing",
+                    project_id="rootfall",
+                    provider="codex",
+                    model="codex/gpt-5.4",
+                ),
+                http_request=_identified_request('["rootfall"]'),
+                db=db,
+                include_session=False,
+            )
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["code"] == "project_access_denied"
+        mock_upsert.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_existing_session_mutations_require_project_authorization(self) -> None:
+        db = AsyncMock()
+        existing = MagicMock(id="session-existing", project_id="aftertimes")
+        http_request = _identified_request('["rootfall"]')
+        with (
+            patch(
+                "app.api.session_ingestion.get_session_or_404",
+                new_callable=AsyncMock,
+                return_value=existing,
+            ),
+            patch(
+                "app.api.session_ingestion.heartbeat_session",
+                new_callable=AsyncMock,
+            ) as mock_heartbeat,
+            patch(
+                "app.api.session_ingestion.append_normalized_events",
+                new_callable=AsyncMock,
+            ) as mock_append,
+            patch(
+                "app.api.session_ingestion.finalize_session",
+                new_callable=AsyncMock,
+            ) as mock_finalize,
+            patch(
+                "app.api.session_ingestion.ingest_transcript_events",
+                new_callable=AsyncMock,
+            ) as mock_transcript,
+        ):
+            mutation_calls = [
+                (
+                    lambda: heartbeat_session_endpoint(
+                        session_id="session-existing",
+                        request=SessionHeartbeatRequest(),
+                        http_request=http_request,
+                        db=db,
+                        include_session=False,
+                    ),
+                    mock_heartbeat,
+                ),
+                (
+                    lambda: append_events_endpoint(
+                        session_id="session-existing",
+                        request=AppendNormalizedEventsRequest(),
+                        http_request=http_request,
+                        db=db,
+                    ),
+                    mock_append,
+                ),
+                (
+                    lambda: finalize_session_endpoint(
+                        session_id="session-existing",
+                        http_request=http_request,
+                        db=db,
+                        request=FinalizeSessionRequest(),
+                    ),
+                    mock_finalize,
+                ),
+                (
+                    lambda: ingest_transcript_events_endpoint(
+                        session_id="session-existing",
+                        request=TranscriptIngestRequest(
+                            provider="codex",
+                            transcript_path="/tmp/session.jsonl",
+                        ),
+                        http_request=http_request,
+                        db=db,
+                    ),
+                    mock_transcript,
+                ),
+            ]
+            for mutation_call, mutation_mock in mutation_calls:
+                with pytest.raises(HTTPException) as exc_info:
+                    await mutation_call()
+                assert exc_info.value.status_code == 403
+                assert exc_info.value.detail["code"] == "project_access_denied"
+                mutation_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_upsert_project_move_returns_structured_conflict(self) -> None:
+        db = AsyncMock()
+        existing = MagicMock(id="session-existing", project_id="aftertimes")
+        with (
+            patch(
+                "app.api.session_ingestion.get_or_create_session",
+                new_callable=AsyncMock,
+                return_value=(existing, True),
+            ),
+            patch(
+                "app.api.session_ingestion.upsert_session",
+                new_callable=AsyncMock,
+            ) as mock_upsert,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await upsert_session_endpoint(
+                request=SessionUpsertRequest(
+                    session_id="session-existing",
+                    project_id="rootfall",
+                    provider="codex",
+                    model="codex/gpt-5.4",
+                ),
+                http_request=_identified_request(None),
+                db=db,
+                include_session=False,
+            )
+
+        assert exc_info.value.status_code == 409
+        assert exc_info.value.detail == {
+            "code": "session_project_immutable",
+            "message": "An existing session cannot be moved to another project.",
+        }
+        mock_upsert.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_upsert_session_endpoint(self, client: AsyncClient) -> None:

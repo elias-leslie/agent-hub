@@ -127,7 +127,6 @@ def _update_existing_session(
     base_path: str | None,
 ) -> None:
     """Apply upsert-request fields to an existing session."""
-    session.project_id = request.project_id
     if provider is not None:
         session.provider = provider
     if model is not None:

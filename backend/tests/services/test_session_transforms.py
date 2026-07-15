@@ -55,6 +55,76 @@ def test_build_session_response_derives_scope_confidence_from_paths() -> None:
     assert response.scope_confidence == "observed_read"
 
 
+def test_session_responses_expose_only_allow_listed_external_identity() -> None:
+    session = _session(
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "external_identity": {
+                "harness": "codex",
+                "launcher": "aico",
+                "display_identity": "Codex · Rootfall",
+                "runtime_session_id": "runtime-123",
+                "agent_path": "/root/codex-1",
+                "aico_session_id": "aico-session-1",
+                "aico_widget_id": "widget-1",
+                "aico_project_id": "rootfall",
+                "project_mapping_state": "mapped",
+                "prompt": "do not expose",
+                "secret": "do not expose",
+                "model_content": "do not expose",
+            },
+            "credentials": "do not expose",
+            "provider_prompt": "do not expose",
+        }
+    )
+
+    response = build_session_response(session)
+    item = build_session_list_items([session], {}, {})[0]
+    expected = {
+        "harness": "codex",
+        "launcher": "aico",
+        "display_identity": "Codex · Rootfall",
+        "runtime_session_id": "runtime-123",
+        "agent_path": "/root/codex-1",
+        "aico_session_id": "aico-session-1",
+        "aico_widget_id": "widget-1",
+        "aico_project_id": "rootfall",
+        "project_mapping_state": "mapped",
+    }
+
+    assert response.external_identity is not None
+    assert response.external_identity.model_dump(exclude_none=True) == expected
+    assert item.external_identity is not None
+    assert item.external_identity.model_dump(exclude_none=True) == expected
+    response_payload = response.model_dump()
+    assert "provider_metadata" not in response_payload
+    assert set(response_payload["external_identity"]) == set(expected)
+
+
+def test_external_identity_prefers_nested_and_supports_bounded_legacy_keys() -> None:
+    session = _session(
+        provider_metadata={
+            "harness": "legacy-harness",
+            "launcher": "legacy-launcher",
+            "runtime_session_id": "legacy-runtime",
+            "agent_path": "x" * 513,
+            "external_identity": {
+                "harness": "nested-harness",
+                "launcher": "nested-launcher",
+            },
+        }
+    )
+
+    response = build_session_response(session)
+
+    assert response.external_identity is not None
+    assert response.external_identity.model_dump(exclude_none=True) == {
+        "harness": "nested-harness",
+        "launcher": "nested-launcher",
+        "runtime_session_id": "legacy-runtime",
+    }
+
+
 def test_build_session_list_items_exposes_batch_task_ids() -> None:
     session = _session(
         provider_metadata={

@@ -19,6 +19,7 @@ from app.services._session_message_helpers import (
 )
 from app.services._session_metadata_helpers import (
     effective_model,
+    external_session_identity,
     metadata_value,
     optional_str,
     repo_root,
@@ -137,6 +138,7 @@ def _session_list_item(
         agent_slug=optional_str(session.agent_slug),
         session_type=session.session_type or "completion",
         parent_session_id=optional_str(session.parent_session_id),
+        external_identity=external_session_identity(session),
         external_id=optional_str(session.external_id),
         client_id=optional_str(session.client_id),
         request_source=optional_str(session.request_source),
@@ -245,6 +247,7 @@ def build_session_response(
         agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",
         parent_session_id=optional_str(session.parent_session_id),
+        external_identity=external_session_identity(session),
         external_id=optional_str(session.external_id),
         client_id=optional_str(session.client_id),
         request_source=optional_str(session.request_source),

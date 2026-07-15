@@ -17,6 +17,7 @@ from app.services.session_ingestion.models import (
     TranscriptIngestRequest,
 )
 from app.services.session_ingestion.service import (
+    SessionIngestionConflict,
     append_normalized_events,
     heartbeat_session,
     ingest_transcript_events,
@@ -396,6 +397,191 @@ async def test_upsert_session_reactivates_existing_completed_session() -> None:
     assert session.updated_at is not None
     assert db.commit.await_count == 1
     db.refresh.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_session_rejects_existing_session_project_move() -> None:
+    db = AsyncMock()
+    existing = Session(
+        id="session-existing",
+        project_id="aftertimes",
+        provider="codex",
+        model="codex/gpt-5.4",
+        status="active",
+        session_type="agent",
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            return_value=(existing, True),
+        ),
+        pytest.raises(SessionIngestionConflict) as exc_info,
+    ):
+        await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-existing",
+                project_id="rootfall",
+                provider="codex",
+                model="codex/gpt-5.4",
+            ),
+        )
+
+    assert exc_info.value.code == "session_project_immutable"
+    assert existing.project_id == "aftertimes"
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_session_rejects_self_parent() -> None:
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            return_value=(None, False),
+        ),
+        pytest.raises(SessionIngestionConflict) as exc_info,
+    ):
+        await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-child",
+                parent_session_id="session-child",
+                project_id="aftertimes",
+                provider="codex",
+                model="codex/gpt-5.4",
+            ),
+        )
+
+    assert exc_info.value.code == "session_parent_self_reference"
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_session_rejects_missing_parent() -> None:
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            side_effect=[(None, False), (None, False)],
+        ),
+        pytest.raises(SessionIngestionConflict) as exc_info,
+    ):
+        await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-child",
+                parent_session_id="session-missing",
+                project_id="aftertimes",
+                provider="codex",
+                model="codex/gpt-5.4",
+            ),
+        )
+
+    assert exc_info.value.code == "session_parent_not_found"
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_session_rejects_parent_from_another_project() -> None:
+    db = AsyncMock()
+    parent = Session(
+        id="session-parent",
+        project_id="rootfall",
+        provider="claude",
+        model="claude-sonnet-4-6",
+        status="active",
+        session_type="claude_code",
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            side_effect=[(None, False), (parent, True)],
+        ),
+        pytest.raises(SessionIngestionConflict) as exc_info,
+    ):
+        await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-child",
+                parent_session_id="session-parent",
+                project_id="aftertimes",
+                provider="codex",
+                model="codex/gpt-5.4",
+            ),
+        )
+
+    assert exc_info.value.code == "session_parent_project_mismatch"
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upsert_session_links_existing_parent_in_same_project() -> None:
+    db = AsyncMock()
+    db.add = MagicMock()
+    parent = Session(
+        id="session-parent",
+        project_id="aftertimes",
+        provider="claude",
+        model="claude-sonnet-4-6",
+        status="active",
+        session_type="claude_code",
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            side_effect=[(None, False), (parent, True)],
+        ),
+    ):
+        session, result = await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-child",
+                parent_session_id="session-parent",
+                project_id="aftertimes",
+                provider="codex",
+                model="codex/gpt-5.4",
+            ),
+        )
+
+    assert result.created is True
+    assert session.parent_session_id == "session-parent"
+    db.commit.assert_awaited_once()
 
 
 @pytest.mark.unit

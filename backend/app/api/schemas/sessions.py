@@ -153,6 +153,41 @@ class LiveActivityResponse(BaseModel):
     )
 
 
+_EXTERNAL_IDENTITY_MAX_LENGTH = 512
+
+
+class ExternalSessionIdentity(BaseModel):
+    """Strictly allow-listed external runtime identity safe for API responses."""
+
+    harness: str | None = Field(default=None, max_length=_EXTERNAL_IDENTITY_MAX_LENGTH)
+    launcher: str | None = Field(default=None, max_length=_EXTERNAL_IDENTITY_MAX_LENGTH)
+    display_identity: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+    runtime_session_id: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+    agent_path: str | None = Field(default=None, max_length=_EXTERNAL_IDENTITY_MAX_LENGTH)
+    aico_session_id: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+    aico_widget_id: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+    aico_project_id: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+    project_mapping_state: str | None = Field(
+        default=None,
+        max_length=_EXTERNAL_IDENTITY_MAX_LENGTH,
+    )
+
+
 class SessionResponse(BaseModel):
     """Response body for session operations."""
 
@@ -172,6 +207,10 @@ class SessionResponse(BaseModel):
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
     parent_session_id: str | None = Field(default=None, description="Parent session ID")
+    external_identity: ExternalSessionIdentity | None = Field(
+        default=None,
+        description="Allow-listed external harness/runtime identity",
+    )
     external_id: str | None = Field(default=None, description="Linked external work item ID")
     client_id: str | None = Field(default=None, description="Authenticated caller client ID")
     request_source: str | None = Field(default=None, description="Request source header")
@@ -252,6 +291,10 @@ class SessionListItem(BaseModel):
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
     parent_session_id: str | None = Field(default=None, description="Parent session ID")
+    external_identity: ExternalSessionIdentity | None = Field(
+        default=None,
+        description="Allow-listed external harness/runtime identity",
+    )
     external_id: str | None = Field(default=None, description="Linked external work item ID")
     client_id: str | None = Field(default=None, description="Authenticated caller client ID")
     request_source: str | None = Field(default=None, description="Request source header")

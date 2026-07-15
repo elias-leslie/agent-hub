@@ -6,6 +6,19 @@ from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.services.agent_routing import get_provider_for_model
 
+_EXTERNAL_IDENTITY_KEYS = (
+    "harness",
+    "launcher",
+    "display_identity",
+    "runtime_session_id",
+    "agent_path",
+    "aico_session_id",
+    "aico_widget_id",
+    "aico_project_id",
+    "project_mapping_state",
+)
+_EXTERNAL_IDENTITY_MAX_LENGTH = 512
+
 
 def resolve_model_display_name(model_id: str | None) -> str | None:
     if not model_id:
@@ -36,6 +49,35 @@ def metadata_paths(metadata: dict[str, Any] | None) -> list[str]:
 def metadata_value(session: Session, key: str) -> str | None:
     value = session_metadata(session).get(key)
     return value if isinstance(value, str) and value else None
+
+
+def _bounded_external_identity_value(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or len(normalized) > _EXTERNAL_IDENTITY_MAX_LENGTH:
+        return None
+    return normalized
+
+
+def external_session_identity(session: Session) -> dict[str, str] | None:
+    """Return only safe, bounded external identity metadata.
+
+    The nested provider metadata object is canonical. Same-named top-level keys
+    remain readable for legacy session rows; arbitrary provider metadata never
+    crosses this response boundary.
+    """
+    metadata = session_metadata(session)
+    nested_value = metadata.get("external_identity")
+    nested = nested_value if isinstance(nested_value, dict) else {}
+    identity: dict[str, str] = {}
+    for key in _EXTERNAL_IDENTITY_KEYS:
+        value = _bounded_external_identity_value(nested.get(key))
+        if value is None:
+            value = _bounded_external_identity_value(metadata.get(key))
+        if value is not None:
+            identity[key] = value
+    return identity or None
 
 
 def list_first(values: object) -> str | None:

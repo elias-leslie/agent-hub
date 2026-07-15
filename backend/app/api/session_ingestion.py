@@ -11,6 +11,7 @@ from app.api._session_request_identity import (
     enrich_session_heartbeat_request,
     enrich_session_upsert_request,
 )
+from app.api.access_control_helpers import require_project_access
 from app.api.schemas.sessions import SessionResponse
 from app.db import get_db
 from app.services.session_ingestion import (
@@ -30,6 +31,8 @@ from app.services.session_ingestion import (
     ingest_transcript_events,
     upsert_session,
 )
+from app.services.session_ingestion.service import SessionIngestionConflict
+from app.services.session_operations import get_or_create_session
 from app.services.session_queries import get_session_or_404
 
 router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
@@ -58,8 +61,23 @@ async def upsert_session_endpoint(
     from app.services.session_helpers import build_session_response
 
     enriched_request = enrich_session_upsert_request(request, http_request)
+    require_project_access(http_request, enriched_request.project_id)
     try:
+        if not getattr(http_request.state, "is_internal", False):
+            existing, is_existing = await get_or_create_session(db, enriched_request.session_id)
+            if is_existing and existing is not None:
+                require_project_access(http_request, existing.project_id)
+                if existing.project_id != enriched_request.project_id:
+                    raise SessionIngestionConflict(
+                        "session_project_immutable",
+                        "An existing session cannot be moved to another project.",
+                    )
         session, result = await upsert_session(db, enriched_request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -86,7 +104,22 @@ async def heartbeat_session_endpoint(
 
     enriched_request = enrich_session_heartbeat_request(request, http_request)
     try:
-        session, result = await heartbeat_session(db, session_id, enriched_request)
+        if getattr(http_request.state, "is_internal", False):
+            session, result = await heartbeat_session(db, session_id, enriched_request)
+        else:
+            session = await get_session_or_404(db, session_id)
+            require_project_access(http_request, session.project_id)
+            session, result = await heartbeat_session(
+                db,
+                session_id,
+                enriched_request,
+                session=session,
+            )
+    except SessionIngestionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -104,11 +137,13 @@ async def heartbeat_session_endpoint(
 async def append_events_endpoint(
     session_id: str,
     request: AppendNormalizedEventsRequest,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AppendNormalizedEventsResult:
     """Append normalized events to an existing session."""
     try:
         session = await get_session_or_404(db, session_id)
+        require_project_access(http_request, session.project_id)
         return await append_normalized_events(db, session_id, request, session=session)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -120,9 +155,18 @@ async def append_events_endpoint(
 )
 async def finalize_session_endpoint(
     session_id: str,
+    http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
     request: FinalizeSessionRequest | None = None,
 ) -> FinalizeSessionResult:
     """Finalize a session by extracting citations, feedback, and summaries."""
+    if not getattr(http_request.state, "is_internal", False):
+        try:
+            session = await get_session_or_404(db, session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        require_project_access(http_request, session.project_id)
+
     try:
         return await finalize_session(session_id, request)
     except Exception as exc:
@@ -139,11 +183,13 @@ async def finalize_session_endpoint(
 async def ingest_transcript_events_endpoint(
     session_id: str,
     request: TranscriptIngestRequest,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TranscriptIngestResult:
     """Translate a provider transcript into normalized session events."""
     try:
-        await get_session_or_404(db, session_id)
+        session = await get_session_or_404(db, session_id)
+        require_project_access(http_request, session.project_id)
         return await ingest_transcript_events(db, session_id, request)
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400

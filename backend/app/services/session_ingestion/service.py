@@ -38,6 +38,41 @@ from .models import (
 )
 
 
+class SessionIngestionConflict(ValueError):
+    """A semantic session mutation conflict that must not be overwritten."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+async def _validate_parent_link(
+    db: AsyncSession,
+    request: SessionUpsertRequest,
+) -> None:
+    """Validate a requested parent before persisting the relationship."""
+    parent_session_id = request.parent_session_id
+    if parent_session_id is None:
+        return
+    if request.session_id is not None and parent_session_id == request.session_id:
+        raise SessionIngestionConflict(
+            "session_parent_self_reference",
+            "A session cannot be its own parent.",
+        )
+
+    parent, parent_exists = await get_or_create_session(db, parent_session_id)
+    if not parent_exists or parent is None:
+        raise SessionIngestionConflict(
+            "session_parent_not_found",
+            f"Parent session not found: {parent_session_id}",
+        )
+    if parent.project_id != request.project_id:
+        raise SessionIngestionConflict(
+            "session_parent_project_mismatch",
+            "Parent and child sessions must belong to the same project.",
+        )
+
+
 async def upsert_session(
     db: AsyncSession,
     request: SessionUpsertRequest,
@@ -45,6 +80,15 @@ async def upsert_session(
     """Create or update a session using the canonical ingestion contract."""
     await _validate_project_id(request.project_id)
     _validate_external_id(request.external_id)
+
+    existing, is_existing = await get_or_create_session(db, request.session_id)
+    if is_existing and existing is not None and existing.project_id != request.project_id:
+        raise SessionIngestionConflict(
+            "session_project_immutable",
+            "An existing session cannot be moved to another project.",
+        )
+    await _validate_parent_link(db, request)
+
     provider = request.provider
     model = request.model
     if request.agent_slug:
@@ -58,7 +102,6 @@ async def upsert_session(
     )
     base_path = resolve_scope_base_path(merged_metadata, request.cwd)
 
-    existing, is_existing = await get_or_create_session(db, request.session_id)
     if not is_existing or existing is None:
         session = _build_new_session(request, provider, model, merged_metadata, base_path)
         db.add(session)
@@ -74,11 +117,18 @@ async def heartbeat_session(
     db: AsyncSession,
     session_id: str,
     request: SessionHeartbeatRequest,
+    session: Session | None = None,
 ) -> tuple[Session, SessionHeartbeatResult]:
     """Apply a live heartbeat update to an existing session."""
-    session = (
-        await db.execute(select(Session).where(Session.id == session_id).limit(1))
-    ).scalar_one_or_none()
+    if session is not None and session.id != session_id:
+        raise SessionIngestionConflict(
+            "session_identity_mismatch",
+            "The supplied session does not match the heartbeat target.",
+        )
+    if session is None:
+        session = (
+            await db.execute(select(Session).where(Session.id == session_id).limit(1))
+        ).scalar_one_or_none()
     if session is None:
         raise ValueError(f"Session not found: {session_id}")
     _apply_heartbeat_update(session, request)
