@@ -14,6 +14,8 @@ from app.constants.models import (
     CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
     CODEX_GPT_5_4_MINI,
+    GEMINI_2_5_FLASH,
+    GEMINI_3_5_FLASH,
     GEMINI_FLASH,
     KIMI_CODE_FOR_CODING,
 )
@@ -606,6 +608,52 @@ class TestCompleteWithFallback:
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for kimi-code"
         assert mock_ci.await_count == 2
         assert record_failure.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_primary_model_rate_limit_probes_one_explicit_same_provider_fallback(
+        self,
+        mock_agent: AgentDTO,
+    ) -> None:
+        mock_agent.primary_model_id = GEMINI_3_5_FLASH
+        mock_agent.fallback_models = [GEMINI_2_5_FLASH]
+        fallback_internal = _internal_result_for(GEMINI_2_5_FLASH, "gemini")
+
+        async def mock_internal(**kwargs: object) -> object:
+            if kwargs.get("model") == GEMINI_3_5_FLASH:
+                raise RateLimitError(
+                    provider="gemini",
+                    retry_after=60,
+                    quota_details={"model": GEMINI_3_5_FLASH},
+                )
+            return fallback_internal
+
+        breaker = CircuitBreakerManager(["gemini"])
+        with (
+            patch(
+                "app.services.circuit_breaker.get_redis_client",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
+                new=breaker,
+            ),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new=AsyncMock(side_effect=mock_internal),
+            ) as mock_ci,
+        ):
+            result = await complete_with_fallback(
+                messages=[Message(role="user", content="Review attached audio")],
+                agent=mock_agent,
+                max_tokens=100,
+                temperature=0.7,
+            )
+
+        assert result.model_used == GEMINI_2_5_FLASH
+        assert result.used_fallback is True
+        assert result.fallback_reason == "RateLimitError: Rate limit exceeded for gemini"
+        assert mock_ci.await_count == 2
+        assert await breaker.get_cooldown_remaining("gemini") is None
 
     @pytest.mark.asyncio
     async def test_provider_error_finish_reason_triggers_fallback(

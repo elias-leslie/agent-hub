@@ -40,6 +40,7 @@ from app.llm.types import (
     ToolCallEndEvent,
     ToolResultMessage,
 )
+from app.routing.registry import get_provider_for_model
 from app.services.llm_messages import Message
 
 from .orchestrator import build_context_from_messages, run_completion_stream
@@ -56,6 +57,11 @@ _HEARTBEAT_INTERVAL_S = 15
 # Match CompletionRequest.max_turns default; the shared tool-budget resolver
 # lifts low values when tools are actually enabled.
 DEFAULT_MAX_TOOL_TURNS = 1
+
+
+class _EarlyStreamProviderError(RuntimeError):
+    """Provider failed before any model output reached the SSE client."""
+
 
 # Re-export private alias used historically as _StreamContext
 _StreamContext = StreamContext
@@ -110,13 +116,14 @@ async def _persist_and_build_done_sse(
         None,
     )
 
+    effective_model = ctx.model_used or ctx.model
     await save_messages_to_db(
         session_id=ctx.session_id,
         user_messages=ctx.user_messages or [],
         accumulated_content=accumulated_content,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        model=ctx.model,
+        model=effective_model,
         agent_used=ctx.agent_used,
         stream_start=ctx.stream_start,
         source_metadata=ctx.source_metadata,
@@ -125,14 +132,13 @@ async def _persist_and_build_done_sse(
     if ctx.is_new_session and ctx.is_one_shot:
         await close_one_shot_session(ctx.session_id)
 
-    cost = estimate_cost(input_tokens, output_tokens, ctx.model)
+    cost = estimate_cost(input_tokens, output_tokens, effective_model)
     if ctx.project_id and cost.total_cost_usd > 0:
         from app.services.project_budget import record_project_cost
 
         await record_project_cost(ctx.project_id, cost.total_cost_usd)
 
-    model_id = ctx.model_used or ctx.model
-    catalog_entry = MODEL_CATALOG_BY_ID.get(model_id)
+    catalog_entry = MODEL_CATALOG_BY_ID.get(effective_model)
     display_name = catalog_entry.name if catalog_entry else None
 
     extras: dict[str, object] = {
@@ -171,6 +177,8 @@ async def _emit_events(
     writer: SseWriter,
     ctx: StreamContext,
     content_buf: list[str],
+    attempt_output_started: list[bool] | None = None,
+    retry_error_before_output: bool = False,
 ) -> AsyncIterator[str]:
     """Translate the orchestrator event stream into SSE, accumulating final text."""
     cancel_event = ctx.cancel_event
@@ -180,14 +188,20 @@ async def _emit_events(
             return
         if isinstance(event, TextDeltaEvent):
             if event.delta:
+                if attempt_output_started is not None:
+                    attempt_output_started[0] = True
                 content_buf[0] += event.delta
                 yield writer.content(event.delta)
             continue
         if isinstance(event, ThinkingDeltaEvent):
             if event.delta:
+                if attempt_output_started is not None:
+                    attempt_output_started[0] = True
                 yield writer.thinking(event.delta)
             continue
         if isinstance(event, ToolCallEndEvent):
+            if attempt_output_started is not None:
+                attempt_output_started[0] = True
             yield writer.tool_use(
                 event.tool_call.id,
                 event.tool_call.name,
@@ -195,9 +209,13 @@ async def _emit_events(
             )
             continue
         if isinstance(event, ToolRunStart):
+            if attempt_output_started is not None:
+                attempt_output_started[0] = True
             yield writer.tool_start(event.tool_call.id, event.tool_call.name)
             continue
         if isinstance(event, ToolRunComplete):
+            if attempt_output_started is not None:
+                attempt_output_started[0] = True
             yield writer.tool_result(
                 event.tool_call.id,
                 _tool_result_text(event.result),
@@ -205,6 +223,8 @@ async def _emit_events(
             )
             continue
         if isinstance(event, ToolRunError):
+            if attempt_output_started is not None:
+                attempt_output_started[0] = True
             yield writer.tool_result(event.tool_call.id, event.error, "error")
             continue
         if isinstance(event, DoneEvent):
@@ -216,6 +236,12 @@ async def _emit_events(
             )
             continue
         if isinstance(event, ErrorEvent):
+            if retry_error_before_output and not bool(
+                attempt_output_started and attempt_output_started[0]
+            ):
+                raise _EarlyStreamProviderError(
+                    event.error.error_message or "Provider stream failed before output"
+                )
             yield writer.error(event.error)
             continue
         # All other events (start/text_start/text_end/thinking_start/_end/
@@ -264,6 +290,7 @@ async def stream_completion(
     max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
     working_dir: str | None = None,
     source_metadata: dict[str, object] | None = None,
+    fallback_models: list[str] | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format via the unified pi-mono pipeline.
 
@@ -295,7 +322,6 @@ async def stream_completion(
 
     yield writer.connected(model=model, provider=provider)
     try:
-        llm_model = resolve_llm_model(model, provider)
         context = build_context_from_messages(_messages_to_dicts(messages), tools=tools)
         execute_tools = bool(tools)
         run_tool = (
@@ -309,16 +335,69 @@ async def stream_completion(
             else None
         )
 
-        events = run_completion_stream(
-            llm_model,
-            context,
-            execute_tools=execute_tools,
-            run_tool=run_tool,
-            max_turns=max(max_tool_turns, 1) if execute_tools else 1,
-            compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_used),
+        candidate_models = [model]
+        candidate_models.extend(
+            candidate
+            for candidate in fallback_models or []
+            if candidate not in candidate_models
         )
-        async for chunk in _with_heartbeat(_emit_events(events, writer, ctx, content_buf)):
-            yield chunk
+        primary_failure: str | None = None
+        for attempt_index, candidate_model in enumerate(candidate_models):
+            candidate_provider = get_provider_for_model(candidate_model)
+            attempt_output_started = [False]
+            has_later_candidate = attempt_index + 1 < len(candidate_models)
+            if attempt_index > 0:
+                ctx.model_used = candidate_model
+                ctx.fallback_used = True
+                _attach_routing(writer, ctx)
+                writer.attach_routing(fallback_reason=primary_failure)
+                if db is not None:
+                    from .session_repo import get_or_create_session
+
+                    await get_or_create_session(
+                        db,
+                        session_id,
+                        project_id or "",
+                        candidate_provider,
+                        candidate_model,
+                        agent_slug=agent_used,
+                        requested_provider=provider,
+                        requested_model=model,
+                    )
+                    await db.commit()
+            try:
+                llm_model = resolve_llm_model(candidate_model, candidate_provider)
+                events = run_completion_stream(
+                    llm_model,
+                    context,
+                    execute_tools=execute_tools,
+                    run_tool=run_tool,
+                    max_turns=max(max_tool_turns, 1) if execute_tools else 1,
+                    compress_tool_results_enabled=(
+                        execute_tools and compression_enabled_for(agent_used)
+                    ),
+                )
+                async for chunk in _with_heartbeat(
+                    _emit_events(
+                        events,
+                        writer,
+                        ctx,
+                        content_buf,
+                        attempt_output_started,
+                        has_later_candidate,
+                    )
+                ):
+                    yield chunk
+                break
+            except _EarlyStreamProviderError as exc:
+                primary_failure = primary_failure or f"{type(exc).__name__}: {exc}"
+                logger.warning(
+                    "Streaming model %s failed before output; trying configured fallback",
+                    candidate_model,
+                )
+                if not has_later_candidate:
+                    raise
+                continue
     except Exception as exc:
         logger.error("Streaming error: %s", exc)
         yield writer.error(_synthetic_error_message(model, provider, str(exc)))

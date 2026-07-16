@@ -16,7 +16,12 @@ import pytest
 
 from app.api.complete import StreamingChunk, stream_completion
 from app.api.complete.streaming_context import StreamContext
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
+from app.constants.models import (
+    CLAUDE_HAIKU,
+    CLAUDE_SONNET,
+    GEMINI_2_5_FLASH,
+    GEMINI_3_5_FLASH,
+)
 from app.llm.types import (
     AssistantMessage,
     DoneEvent,
@@ -45,12 +50,14 @@ def _done_event(
     finish_reason: str = "stop",
     input_tokens: int = 5,
     output_tokens: int = 2,
+    model: str = CLAUDE_SONNET,
+    provider: str = "claude",
 ) -> DoneEvent:
     message = AssistantMessage(
         content=[],
         api="anthropic-messages",
-        provider="claude",
-        model=CLAUDE_SONNET,
+        provider=provider,
+        model=model,
         usage=Usage(input=input_tokens, output=output_tokens),
         stop_reason=cast(StopReason, finish_reason),
         timestamp=int(time.time() * 1000),
@@ -58,12 +65,17 @@ def _done_event(
     return DoneEvent(reason="stop", message=message)
 
 
-def _error_event(text: str) -> ErrorEvent:
+def _error_event(
+    text: str,
+    *,
+    model: str = CLAUDE_SONNET,
+    provider: str = "claude",
+) -> ErrorEvent:
     message = AssistantMessage(
         content=[],
         api="anthropic-messages",
-        provider="claude",
-        model=CLAUDE_SONNET,
+        provider=provider,
+        model=model,
         usage=Usage(),
         stop_reason="error",
         timestamp=int(time.time() * 1000),
@@ -267,6 +279,101 @@ class TestStreamCompletionGenerator:
         error_chunks = [c for c in chunks if '"type": "error"' in c]
         assert len(error_chunks) == 1
         assert "API error occurred" in error_chunks[0]
+
+    @pytest.mark.asyncio
+    async def test_early_provider_error_uses_configured_fallback(self) -> None:
+        import json
+
+        attempted_models: list[str] = []
+
+        async def mock_stream(model, *_args: object, **_kwargs: object):
+            attempted_models.append(model.id)
+            if model.id == GEMINI_3_5_FLASH:
+                yield _error_event(
+                    "quota exhausted",
+                    model=GEMINI_3_5_FLASH,
+                    provider="gemini",
+                )
+                return
+            yield TextDeltaEvent(content_index=0, delta="Reviewed", partial=_partial_message())
+            yield _done_event(
+                model=GEMINI_2_5_FLASH,
+                provider="gemini",
+                input_tokens=11,
+                output_tokens=4,
+            )
+
+        save, citations, close = _patch_persistence()
+        with (
+            save as mock_save,
+            citations,
+            close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
+            chunks = []
+            async for chunk in stream_completion(
+                messages=[Message(role="user", content="Review this audio")],
+                model=GEMINI_3_5_FLASH,
+                provider="gemini",
+                temperature=0.2,
+                session_id="fallback-session",
+                agent_used="game-audio-critic",
+                model_used=GEMINI_3_5_FLASH,
+                fallback_models=[GEMINI_2_5_FLASH],
+            ):
+                chunks.append(chunk)
+
+        assert attempted_models == [GEMINI_3_5_FLASH, GEMINI_2_5_FLASH]
+        assert not any('"type": "error"' in chunk for chunk in chunks)
+        assert sum('"type": "content"' in chunk for chunk in chunks) == 1
+        done = next(
+            json.loads(chunk.removeprefix("data: ").strip())
+            for chunk in chunks
+            if '"type": "done"' in chunk
+        )
+        assert done["model"] == GEMINI_3_5_FLASH
+        assert done["provider"] == "gemini"
+        assert done["model_used"] == GEMINI_2_5_FLASH
+        assert done["fallback_used"] is True
+        assert "quota exhausted" in done["fallback_reason"]
+        assert mock_save.await_args.kwargs["model"] == GEMINI_2_5_FLASH
+
+    @pytest.mark.asyncio
+    async def test_provider_error_after_visible_output_does_not_replay_on_fallback(self) -> None:
+        attempted_models: list[str] = []
+
+        async def mock_stream(model, *_args: object, **_kwargs: object):
+            attempted_models.append(model.id)
+            yield TextDeltaEvent(content_index=0, delta="Partial", partial=_partial_message())
+            yield _error_event(
+                "stream interrupted",
+                model=model.id,
+                provider="gemini",
+            )
+
+        save, citations, close = _patch_persistence()
+        with (
+            save,
+            citations,
+            close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
+            chunks = []
+            async for chunk in stream_completion(
+                messages=[Message(role="user", content="Review this audio")],
+                model=GEMINI_3_5_FLASH,
+                provider="gemini",
+                temperature=0.2,
+                session_id="partial-output-session",
+                agent_used="game-audio-critic",
+                model_used=GEMINI_3_5_FLASH,
+                fallback_models=[GEMINI_2_5_FLASH],
+            ):
+                chunks.append(chunk)
+
+        assert attempted_models == [GEMINI_3_5_FLASH]
+        assert sum('"type": "content"' in chunk for chunk in chunks) == 1
+        assert sum('"type": "error"' in chunk for chunk in chunks) == 1
 
     @pytest.mark.asyncio
     async def test_connected_event_includes_model_and_provider(self) -> None:

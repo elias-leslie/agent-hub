@@ -209,6 +209,7 @@ def _build_sse_response(
     db: AsyncSession | None,
     is_new_session: bool,
     tools: list[dict[str, object]] | None,
+    fallback_models: list[str] | None = None,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
     source_metadata = (
@@ -236,6 +237,7 @@ def _build_sse_response(
             max_tool_turns=request.max_turns,
             working_dir=request.working_dir,
             source_metadata=source_metadata,
+            fallback_models=fallback_models,
         ),
         media_type="text/event-stream",
         headers={
@@ -286,9 +288,15 @@ async def handle_streaming_request(
         visible_tool_names=visible_tool_names,
     )
     tools = provisioned_tools.loaded_tools or None
+    fallback_models: list[str] = []
+    if resolved_agent is not None and not request.disable_agent_fallbacks:
+        fallback_models.extend(resolved_agent.agent.fallback_models or [])
+        escalation_model = resolved_agent.agent.escalation_model_id
+        if escalation_model and escalation_model not in fallback_models:
+            fallback_models.append(escalation_model)
 
     return _build_sse_response(
         messages, resolved_model, provider, request, session_id, thinking_level,
         agent_used, model_used, fallback_used,
-        db, is_new_session, tools,
+        db, is_new_session, tools, fallback_models,
     )

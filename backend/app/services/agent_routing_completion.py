@@ -134,6 +134,7 @@ async def _try_model(
     verbosity_level: str | None = None,
     prompt_cache_key: str | None = None,
     db: AsyncSession | None = None,
+    allow_provider_cooldown_probe: bool = False,
 ) -> tuple[CompletionInternalResult | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error.
 
@@ -154,7 +155,7 @@ async def _try_model(
             ),
             status_code=400,
         )
-    cooldown_error = await _active_cooldown_error(provider)
+    cooldown_error = None if allow_provider_cooldown_probe else await _active_cooldown_error(provider)
     if cooldown_error is not None:
         logger.warning(
             "Skipping model %s because provider %s is cooling down for %.0fs",
@@ -207,12 +208,18 @@ async def _try_fallbacks(
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
     db: AsyncSession | None = None,
+    cooldown_probe_provider: str | None = None,
 ) -> FallbackCompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
+    cooldown_probe_consumed = False
     for fallback_model in agent.fallback_models or []:
         fallback_provider = get_provider_for_model(fallback_model)
-        if fallback_provider in blocked_providers:
+        allow_cooldown_probe = (
+            not cooldown_probe_consumed
+            and fallback_provider == cooldown_probe_provider
+        )
+        if fallback_provider in blocked_providers and not allow_cooldown_probe:
             logger.info(
                 "Skipping fallback model %s because provider %s is rate-limited",
                 fallback_model,
@@ -229,7 +236,14 @@ async def _try_fallbacks(
             verbosity_level,
             prompt_cache_key,
             db,
+            allow_cooldown_probe,
         )
+        if allow_cooldown_probe:
+            # An explicit different-model fallback gets one bounded attempt when
+            # the primary model exhausted a provider/model quota. This is not a
+            # retry of the failed model, and prevents a provider-wide cooldown
+            # from defeating intentional Gemini 3.5 -> 2.5 routing.
+            cooldown_probe_consumed = True
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
             return _completion_result(result=result, model_used=fallback_model, used_fallback=True)
@@ -350,6 +364,7 @@ async def complete_with_fallback(
     primary_model = primary_model_override or agent.primary_model_id
     verbosity_level = getattr(agent, "verbosity_level", None)
     blocked_providers: set[str] = set()
+    cooldown_probe_provider: str | None = None
 
     result, primary_error = await _try_model(
         messages,
@@ -371,6 +386,13 @@ async def complete_with_fallback(
     logger.warning("Primary model %s failed for agent %s", primary_model, agent.slug)
     if isinstance(primary_error, RateLimitError):
         blocked_providers.add(primary_error.provider)
+        primary_provider = get_provider_for_model(primary_model)
+        if any(
+            fallback_model != primary_model
+            and get_provider_for_model(fallback_model) == primary_provider
+            for fallback_model in agent.fallback_models or []
+        ):
+            cooldown_probe_provider = primary_provider
     primary_reason = _format_fallback_reason(primary_error)
 
     fallback_result = await _try_fallbacks(
@@ -384,6 +406,7 @@ async def complete_with_fallback(
         blocked_providers,
         prompt_cache_key,
         db,
+        cooldown_probe_provider,
     )
     if fallback_result is not None:
         fallback_result.fallback_reason = primary_reason
