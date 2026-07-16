@@ -150,18 +150,61 @@ async def _call_pipeline(
     provider: str,
     config: SubagentConfig,
 ):
-    """Invoke complete_internal in DB-less mode."""
+    """Invoke the pipeline only after canonical context is assembled."""
     from app.api.complete.core import complete_internal
+    from app.db import async_session
+
+    if config.project_id:
+        async with async_session() as db:
+            return await complete_internal(
+                messages=_messages_to_dicts(messages),
+                model=model,
+                provider=provider,
+                temperature=config.temperature,
+                project_id=config.project_id,
+                db=db,
+                request_source=config.consumer_surface,
+                agent_slug=config.agent_slug,
+                use_memory=True,
+                memory_group_id=f"project:{config.project_id}",
+                task_type="orchestration",
+                thinking_level=config.thinking_level,
+                tools=config.tools,
+            )
+
+    from app.services.memory import MemoryScope, inject_progressive_context
+    from app.services.memory.context_resilience import (
+        require_successful_context_injection,
+    )
+
+    async with async_session() as db:
+        injected_messages, context = await inject_progressive_context(
+            messages=_messages_to_dicts(messages),
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            task_type="orchestration",
+            consumer_profile="agent_runtime",
+            consumer_agent_slug=config.agent_slug,
+            consumer_surface=config.consumer_surface,
+            include_prompts=True,
+            include_memories=True,
+            db=db,
+        )
+        require_successful_context_injection(context)
 
     return await complete_internal(
-        messages=_messages_to_dicts(messages),
+        messages=injected_messages,
         model=model,
         provider=provider,
         temperature=config.temperature,
-        project_id=config.project_id or "",
+        project_id="",
         db=None,
+        request_source=config.consumer_surface,
+        agent_slug=config.agent_slug,
+        use_memory=False,
         thinking_level=config.thinking_level,
         tools=config.tools,
+        canonical_context_preinjected=True,
     )
 
 

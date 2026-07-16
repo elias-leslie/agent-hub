@@ -227,11 +227,11 @@ def resolve_continuity_settings(
     """Resolve continuity settings from custom config or global settings."""
     normalized = normalize_memory_config(memory_config)
     if normalized is None:
-        return settings.continuity_enabled, settings.continuity_max_sessions, True, False
+        return settings.continuity_enabled, settings.continuity_max_sessions, False, False
     return (
         normalized["continuity_enabled"],
         normalized["continuity_max_sessions"],
-        _coerce_bool(normalized.get("cross_project_enabled"), True),
+        _coerce_bool(normalized.get("cross_project_enabled"), False),
         _coerce_bool(normalized.get("live_sessions_enabled"), False),
     )
 

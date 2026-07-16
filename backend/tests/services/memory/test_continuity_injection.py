@@ -12,7 +12,10 @@ from app.services.memory.continuity_format import (
     format_recent_activity,
     format_unified_timeline,
 )
-from app.services.memory.continuity_injector import build_continuity_context
+from app.services.memory.continuity_injector import (
+    _is_diagnostic_probe_summary,
+    build_continuity_context,
+)
 from app.services.memory.continuity_query import query_recent_summaries
 
 
@@ -141,6 +144,64 @@ class TestBuildContinuityContext:
 
         assert ctx.markdown == ""
         assert ctx.session_count == 0
+
+    @pytest.mark.asyncio
+    async def test_defaults_never_query_cross_project_or_live_continuity(self) -> None:
+        with patch(
+            "app.services.memory.continuity_injector._query_continuity_data",
+            new=AsyncMock(return_value=([], [], [])),
+        ) as query:
+            await build_continuity_context(project_id="test-project")
+
+        query.assert_awaited_once()
+        assert query.await_args is not None
+        assert query.await_args.kwargs["include_cross_project"] is False
+        assert query.await_args.kwargs["include_live_sessions"] is False
+
+    @pytest.mark.asyncio
+    async def test_projectless_generic_call_returns_empty_without_query(self) -> None:
+        with patch(
+            "app.services.memory.continuity_injector._query_continuity_data",
+            new=AsyncMock(),
+        ) as query:
+            ctx = await build_continuity_context()
+
+        query.assert_not_awaited()
+        assert ctx.markdown == ""
+        assert ctx.session_count == 0
+
+    @pytest.mark.asyncio
+    async def test_probe_summaries_do_not_reenter_continuity(self) -> None:
+        probe = _make_summary(summary="TOOLROUNDTRIPOK:THOUGHTSIGNATUREGATE7F4A9C2D")
+        durable = _make_summary(session_id="durable", summary="Fixed context ordering")
+        with patch(
+            "app.services.memory.continuity_injector._query_continuity_data",
+            new=AsyncMock(return_value=([probe, durable], [], [])),
+        ):
+            ctx = await build_continuity_context(project_id="agent-hub")
+
+        assert ctx.session_count == 1
+        assert "TOOLROUNDTRIPOK" not in ctx.markdown
+        assert "Fixed context ordering" in ctx.markdown
+
+    @pytest.mark.parametrize(
+        "summary",
+        [
+            "TOOLROUNDTRIPOK: /srv/workspaces/projects/agent-hub",
+            "CODEXHTTPOK",
+            "PORTOK2",
+            "STREAM OK",
+            "DEFAULTCHATFINAL4",
+            "BASHUNAVAILABLE",
+        ],
+    )
+    def test_known_probe_marker_families_are_detected(self, summary: str) -> None:
+        assert _is_diagnostic_probe_summary(_make_summary(summary=summary)) is True
+
+    def test_normal_summary_is_not_treated_as_probe(self) -> None:
+        assert _is_diagnostic_probe_summary(
+            _make_summary(summary="Implemented provider fallback and verified runtime")
+        ) is False
 
     @pytest.mark.asyncio
     async def test_returns_summaries_from_segments(self) -> None:

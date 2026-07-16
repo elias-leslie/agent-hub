@@ -17,6 +17,14 @@ _T = TypeVar("_T")
 logger = logging.getLogger(__name__)
 
 
+class CanonicalContextInjectionFailed(RuntimeError):
+    """Raised before model execution when canonical context is unavailable."""
+
+    def __init__(self, notice: str) -> None:
+        self.notice = notice
+        super().__init__(notice)
+
+
 @dataclass(slots=True)
 class MemoryFailureDetails:
     """Normalized failure details for fail-closed memory delivery."""
@@ -59,6 +67,39 @@ def build_memory_failure_notice(
         lines.append(f"Project: {project_id}")
     lines.append("</memory-system-status>")
     return "\n".join(lines)
+
+
+def build_unexpected_context_failure_notice(
+    error: Exception,
+    *,
+    operation: str,
+    consumer_profile: str | None = None,
+    project_id: str | None = None,
+) -> str:
+    """Render an unexpected wrapper failure as model-visible stop context."""
+    return build_memory_failure_notice(
+        MemoryFailureDetails(
+            operation=operation,
+            attempts=1,
+            error_type=type(error).__name__,
+            error_message=_truncate_error_message(str(error) or "unknown error"),
+            latency_ms=0,
+        ),
+        consumer_profile=consumer_profile,
+        project_id=project_id,
+    )
+
+
+def require_successful_context_injection(context: object) -> None:
+    """Abort a workload before its model call when delivery failed closed."""
+    debug_info = getattr(context, "debug_info", {})
+    if not isinstance(debug_info, dict) or not debug_info.get("memory_system_failed"):
+        return
+    notice = str(
+        debug_info.get("failure_notice")
+        or "Agent Hub canonical context injection failed; stop before model execution."
+    )
+    raise CanonicalContextInjectionFailed(notice)
 
 
 async def run_with_memory_retries(

@@ -30,11 +30,13 @@ async def run_maker_checker(request: MakerCheckerRequest) -> MakerCheckerRespons
         name="maker",
         provider=request.maker_provider,
         project_id=request.project_id,
+        agent_slug="coder",
     )
     checker_config = SubagentConfig(
         name="checker",
         provider=request.checker_provider,
         project_id=request.project_id,
+        agent_slug="reviewer",
     )
 
     verifier = MakerChecker(

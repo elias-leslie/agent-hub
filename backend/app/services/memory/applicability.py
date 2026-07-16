@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .memory_models import MemoryApplicability, MemoryContextKind
 
 _APPLICABILITY_KEYS = (
+    "consumer_surfaces",
+    "exclude_consumer_surfaces",
     "consumer_profiles",
     "exclude_consumer_profiles",
     "agent_slugs",
@@ -21,6 +24,49 @@ _TRIGGER_TASK_TYPE_ALIASES = {
     "migrations": "database",
     "migration": "database",
 }
+_CONSUMER_SURFACE_ALIASES = {
+    "claude": "claude_code",
+    "claude_cli": "claude_code",
+    "claude_code_cli": "claude_code",
+    "claude_gpt": "claude_code",
+    "claude_tui": "claude_code",
+    "codex_cli": "codex",
+    "codex_tui": "codex",
+    "gemini_cli": "gemini",
+    "gemini_tui": "gemini",
+    "pi_cli": "pi",
+    "pi_mono": "pi",
+    "pi_tui": "pi",
+    "completion": "agent_runtime",
+    "internal": "agent_runtime",
+    "runtime": "agent_runtime",
+}
+
+
+def normalize_context_identifier(value: str | None) -> str | None:
+    """Normalize case, CamelCase, spaces, and hyphens to stable snake case."""
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", cleaned)
+    cleaned = re.sub(r"[^A-Za-z0-9]+", "_", cleaned)
+    return cleaned.strip("_").lower() or None
+
+
+def normalize_consumer_surface(value: str | None) -> str | None:
+    """Return the canonical surface name shared by all TUI adapters."""
+    normalized = normalize_context_identifier(value)
+    if normalized is None:
+        return None
+    return _CONSUMER_SURFACE_ALIASES.get(normalized, normalized)
+
+
+def normalize_agent_slug(value: str | None) -> str | None:
+    """Normalize agent slugs while preserving their canonical hyphen style."""
+    normalized = normalize_context_identifier(value)
+    return normalized.replace("_", "-") if normalized else None
 
 
 def _normalize_string_list(value: Any) -> list[str]:
@@ -75,12 +121,39 @@ def normalize_context_kind(
 def normalize_applicability(value: Any) -> MemoryApplicability:
     """Normalize arbitrary JSON-like applicability payloads."""
     if isinstance(value, MemoryApplicability):
-        return value
+        value = value.model_dump()
     if isinstance(value, dict):
-        normalized = {
-            key: _normalize_string_list(value.get(key))
-            for key in _APPLICABILITY_KEYS
-        }
+        normalized: dict[str, list[str]] = {}
+        for key in _APPLICABILITY_KEYS:
+            items = _normalize_string_list(value.get(key))
+            if key in {"consumer_surfaces", "exclude_consumer_surfaces"}:
+                normalized[key] = list(
+                    dict.fromkeys(
+                        surface
+                        for item in items
+                        if (surface := normalize_consumer_surface(item))
+                    )
+                )
+            elif key in {"consumer_profiles", "exclude_consumer_profiles"}:
+                normalized[key] = list(
+                    dict.fromkeys(
+                        profile
+                        for item in items
+                        if (profile := normalize_context_identifier(item))
+                    )
+                )
+            elif key in {"agent_slugs", "exclude_agent_slugs"}:
+                normalized[key] = list(
+                    dict.fromkeys(
+                        slug
+                        for item in items
+                        if (slug := normalize_agent_slug(item))
+                    )
+                )
+            else:
+                normalized[key] = list(
+                    dict.fromkeys(item.strip().lower() for item in items if item.strip())
+                )
         return MemoryApplicability(**normalized)
     return MemoryApplicability()
 
@@ -89,16 +162,24 @@ def normalize_trigger_task_types(value: Any) -> list[str]:
     """Normalize trigger_task_types while preserving unknown values for audit visibility."""
     normalized: list[str] = []
     for item in _normalize_string_list(value):
-        lowered = item.lower()
-        lowered = _TRIGGER_TASK_TYPE_ALIASES.get(lowered, lowered)
-        if lowered not in normalized:
-            normalized.append(lowered)
+        identifier = normalize_context_identifier(item)
+        if identifier is None:
+            continue
+        identifier = _TRIGGER_TASK_TYPE_ALIASES.get(identifier, identifier)
+        if identifier not in normalized:
+            normalized.append(identifier)
     return normalized
 
 
 def normalize_trigger_phases(value: Any) -> list[str]:
     """Normalize trigger_phases into a compact, deduplicated list."""
-    return [item.lower() for item in _normalize_string_list(value)]
+    return list(
+        dict.fromkeys(
+            identifier
+            for item in _normalize_string_list(value)
+            if (identifier := normalize_context_identifier(item))
+        )
+    )
 
 
 def applicability_has_targets(value: MemoryApplicability | dict[str, Any] | None) -> bool:
@@ -107,6 +188,7 @@ def applicability_has_targets(value: MemoryApplicability | dict[str, Any] | None
     return any(
         getattr(resolved, field_name)
         for field_name in (
+            "consumer_surfaces",
             "consumer_profiles",
             "agent_slugs",
             "audience_tags",
@@ -120,6 +202,7 @@ def applicability_has_exclusions(value: MemoryApplicability | dict[str, Any] | N
     return any(
         getattr(resolved, field_name)
         for field_name in (
+            "exclude_consumer_surfaces",
             "exclude_consumer_profiles",
             "exclude_agent_slugs",
             "exclude_audience_tags",
@@ -130,13 +213,24 @@ def applicability_has_exclusions(value: MemoryApplicability | dict[str, Any] | N
 def applicability_matches(
     applicability: MemoryApplicability | dict[str, Any] | None,
     *,
+    consumer_surface: str | None = None,
     consumer_profile: str | None = None,
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
 ) -> bool:
     """Return True when a memory applies to the current consumer."""
     resolved = normalize_applicability(applicability)
-    tag_set = set(consumer_tags or [])
+    consumer_surface = normalize_consumer_surface(consumer_surface)
+    consumer_profile = normalize_context_identifier(consumer_profile)
+    consumer_agent_slug = normalize_agent_slug(consumer_agent_slug)
+    tag_set = {tag.strip().lower() for tag in consumer_tags or [] if tag.strip()}
+
+    if resolved.consumer_surfaces and (
+        not consumer_surface or consumer_surface not in resolved.consumer_surfaces
+    ):
+        return False
+    if consumer_surface and consumer_surface in resolved.exclude_consumer_surfaces:
+        return False
 
     if resolved.consumer_profiles and (
         not consumer_profile or consumer_profile not in resolved.consumer_profiles

@@ -61,6 +61,10 @@ class ProgressiveContextResponse(BaseModel):
     )
     attempts: int = Field(1, description="Number of attempts used for this response")
     latency_ms: int = Field(0, description="End-to-end response latency in milliseconds")
+    canonical_context: dict[str, Any] | None = Field(
+        None,
+        description="Version/hash/block identity from the canonical delivery contract",
+    )
 
 
 class CanonicalContextRequest(BaseModel):

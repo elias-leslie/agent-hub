@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
+from app.services.memory.applicability import normalize_context_identifier
 
 # Memory tag that signals a memory should render at full detail when delivered
 # to any startup consumer. Tag string kept as `codex_startup_full` to avoid
@@ -60,12 +61,13 @@ _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
 
 def resolve_consumer_profile(consumer_profile: str | None) -> MemoryConsumerProfile:
     """Normalize caller-provided profile names to a known profile."""
-    if not consumer_profile:
+    normalized = normalize_context_identifier(consumer_profile)
+    if not normalized:
         return MemoryConsumerProfile.AGENT_RUNTIME
-    if consumer_profile in _LEGACY_STARTUP_ALIASES:
+    if normalized in _LEGACY_STARTUP_ALIASES:
         return MemoryConsumerProfile.AGENT_STARTUP
     try:
-        return MemoryConsumerProfile(consumer_profile)
+        return MemoryConsumerProfile(normalized)
     except ValueError:
         return MemoryConsumerProfile.AGENT_RUNTIME
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -69,19 +70,23 @@ async def _mark_failed_run(
     error: str,
     raw_content: str | None = None,
     reviewer_model_id: str | None = None,
+    session_id: str | None = None,
 ) -> None:
     run.status = "failed"
     run.failed_count = failed_count
     run.reviewer_model_id = reviewer_model_id
     run.completed_at = datetime.now(UTC)
     metadata: dict[str, str] = {"error": error}
+    if session_id is not None:
+        metadata["session_id"] = session_id
     if raw_content is not None:
         metadata["raw_content"] = raw_content[:2000]
     run.metadata_ = metadata
     await db.flush()
 
 
-def _apply_review_decisions(
+async def _apply_review_decisions(
+    db: AsyncSession,
     memories: list[Memory],
     decisions: list[Any],
     *,
@@ -89,9 +94,33 @@ def _apply_review_decisions(
 ) -> int:
     needs_action_count = sum(1 for decision in decisions if decision.review_status == "needs_action")
     if not dry_run:
+        from sqlalchemy import select
+
+        from .repository import get_memory_repository
+
+        active_memory_ids = {
+            str(memory_id)
+            for memory_id in (
+                await db.execute(select(Memory.id).where(Memory.status == "active"))
+            ).scalars()
+        }
         by_uuid = {decision.uuid: decision for decision in decisions}
         for memory in memories:
-            _apply_decision(memory, by_uuid[str(memory.id)], datetime.now(UTC))
+            decision = by_uuid[str(memory.id)]
+            _apply_decision(
+                memory,
+                decision,
+                datetime.now(UTC),
+                active_memory_ids=active_memory_ids,
+            )
+            if isinstance(memory, Memory):
+                await get_memory_repository().record_revision(
+                    db,
+                    memory,
+                    action=f"review_{decision.decision}",
+                    changed_by="agent:memory-curator",
+                    change_reason=decision.reason,
+                )
     return needs_action_count
 
 
@@ -107,6 +136,7 @@ async def _completed_result(
     dry_run: bool,
     force_all: bool,
     only_missing_compact: bool,
+    only_incomplete_audit: bool,
 ) -> MemoryReviewBatchResult:
     run.status = "completed"
     run.reviewed_count = len(decisions)
@@ -119,6 +149,7 @@ async def _completed_result(
         "dry_run": dry_run,
         "force_all": force_all,
         "only_missing_compact": only_missing_compact,
+        "only_incomplete_audit": only_incomplete_audit,
         "reviewed_uuids": [decision.uuid for decision in decisions],
     }
     await db.flush()
@@ -142,6 +173,7 @@ async def _load_batch_memories(
     force_all: bool,
     include_archived: bool,
     only_missing_compact: bool,
+    only_incomplete_audit: bool,
 ) -> list[Memory]:
     return await select_memories_due_for_review(
         db,
@@ -150,6 +182,7 @@ async def _load_batch_memories(
         force_all=force_all,
         include_archived=include_archived,
         only_missing_compact=only_missing_compact,
+        only_incomplete_audit=only_incomplete_audit,
     )
 
 
@@ -161,13 +194,73 @@ async def _call_review_for_memories(
     reviewer_agent_slug: str,
     reviewer_model_id: str | None,
 ) -> tuple[str, str | None, str | None]:
+    from sqlalchemy import select
+
+    from app.models.prompt import Prompt
+    from app.models.runtime_context import RuntimeContextOverride
+    from app.services.memory.tool_capability_context import (
+        format_tool_capability_context,
+    )
+
     governance_snapshot = await facade.collect_memory_governance_snapshot(db)
-    prompt = facade.build_memory_review_prompt(memories, governance_snapshot=governance_snapshot)
+    memory_index = list(
+        (
+            await db.execute(
+                select(Memory).where(Memory.status == "active").order_by(Memory.scope, Memory.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    authority_prompts = list(
+        (
+            await db.execute(
+                select(Prompt).where(Prompt.enabled.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    authority_prompt_assignments = [
+        {
+            "prompt_slug": row.source_id,
+            "consumer_profile": row.consumer_profile,
+            "project_id": row.project_id,
+            "mode": row.mode,
+            "enabled": row.enabled,
+        }
+        for row in (
+            (
+                await db.execute(
+                    select(RuntimeContextOverride).where(
+                        RuntimeContextOverride.source_type == "prompt"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if getattr(row, "source_id", None)
+    ]
+    computed_tool_capabilities = await asyncio.to_thread(
+        format_tool_capability_context,
+        consumer_profile="agent_startup",
+        bash_available=True,
+    )
+    prompt = facade.build_memory_review_prompt(
+        memories,
+        governance_snapshot=governance_snapshot,
+        memory_index=memory_index,
+        authority_prompts=authority_prompts,
+        authority_prompt_assignments=authority_prompt_assignments,
+        computed_tool_capabilities=computed_tool_capabilities,
+    )
     return await facade._call_reviewer_agent(
         db,
         reviewer_agent_slug=reviewer_agent_slug,
         prompt=prompt,
         reviewer_model_id=reviewer_model_id,
+        expected_uuids={str(memory.id) for memory in memories},
     )
 
 
@@ -182,6 +275,7 @@ async def run_memory_review_batch(
     force_all: bool = False,
     include_archived: bool = False,
     only_missing_compact: bool = False,
+    only_incomplete_audit: bool = False,
 ) -> MemoryReviewBatchResult:
     """Run one review-agent batch and persist review metadata."""
     from app.services.memory import review_agent as facade
@@ -202,6 +296,7 @@ async def run_memory_review_batch(
         force_all=force_all,
         include_archived=include_archived,
         only_missing_compact=only_missing_compact,
+        only_incomplete_audit=only_incomplete_audit,
     )
     if not memories:
         return await _idle_result(db, run, reviewer_agent_slug)
@@ -228,7 +323,11 @@ async def run_memory_review_batch(
         )
 
     decisions = facade.parse_memory_review_content(raw_content, expected_uuids)
-    if decisions is None or len(decisions) != len(memories):
+    if (
+        decisions is None
+        or len(decisions) != len(memories)
+        or not facade.review_decisions_have_complete_checks(decisions)
+    ):
         await _mark_failed_run(
             db,
             run,
@@ -236,6 +335,7 @@ async def run_memory_review_batch(
             error="unparseable_review_response",
             raw_content=raw_content,
             reviewer_model_id=reviewer_model_id,
+            session_id=session_id,
         )
         return _failed_result(
             run,
@@ -246,7 +346,12 @@ async def run_memory_review_batch(
             error="unparseable_review_response",
         )
 
-    needs_action_count = _apply_review_decisions(memories, decisions, dry_run=dry_run)
+    needs_action_count = await _apply_review_decisions(
+        db,
+        memories,
+        decisions,
+        dry_run=dry_run,
+    )
     return await _completed_result(
         db,
         run,
@@ -258,6 +363,7 @@ async def run_memory_review_batch(
         dry_run=dry_run,
         force_all=force_all,
         only_missing_compact=only_missing_compact,
+        only_incomplete_audit=only_incomplete_audit,
     )
 
 

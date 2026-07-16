@@ -53,20 +53,11 @@ def _make_persona(**overrides) -> MagicMock:
 
 
 @contextmanager
-def _patch_persona_prompt_documents(persona: MagicMock):
-    with (
-        patch(
-            "app.api.persona.helpers.get_persona_personality_document",
-            new=AsyncMock(return_value=persona.personality),
-        ),
-        patch(
-            "app.api.persona.helpers.get_persona_heartbeat_instructions",
-            new=AsyncMock(return_value=persona.heartbeat_instructions),
-        ),
-        patch(
-            "app.api.persona.helpers.get_persona_user_context_document",
-            new=AsyncMock(return_value=persona.user_context),
-        ),
+def _patch_persona_instruction_prompt(persona: MagicMock):
+    """Only heartbeat guidance remains prompt-backed; row fields need no mock."""
+    with patch(
+        "app.api.persona.helpers.get_persona_heartbeat_instructions",
+        new=AsyncMock(return_value=persona.heartbeat_instructions),
     ):
         yield
 
@@ -93,7 +84,7 @@ class TestGetPersonaEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_prompt_documents(persona),
+            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona")
@@ -136,16 +127,8 @@ class TestGetPersonaEndpoint:
                 new=AsyncMock(return_value=persona),
             ) as mock_commit,
             patch(
-                "app.api.persona.helpers.get_persona_personality_document",
-                new=AsyncMock(side_effect=lambda _db: persona.personality),
-            ),
-            patch(
                 "app.api.persona.helpers.get_persona_heartbeat_instructions",
                 new=AsyncMock(side_effect=lambda _db: persona.heartbeat_instructions),
-            ),
-            patch(
-                "app.api.persona.helpers.get_persona_user_context_document",
-                new=AsyncMock(side_effect=lambda _db: persona.user_context),
             ),
         ):
             mock_get_persona.return_value = persona
@@ -422,7 +405,7 @@ class TestPersonaImprovementScheduleEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_prompt_documents(persona),
+            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.put("/api/persona", json={})
@@ -439,7 +422,7 @@ class TestResetOnboardingEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_prompt_documents(persona),
+            _patch_persona_instruction_prompt(persona),
             patch(
                 "app.api.persona.clear_persona_user_context_document",
                 new=AsyncMock(),
@@ -464,7 +447,7 @@ class TestGetPersonalityEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_prompt_documents(persona),
+            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
@@ -479,7 +462,7 @@ class TestGetPersonalityEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_prompt_documents(persona),
+            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
@@ -494,23 +477,20 @@ class TestUpdatePersonalityEndpoint:
     def test_updates_personality(self, api_client, mock_db_session):
         persona = _make_persona(version=3)
 
+        async def _set_personality(_db, value, **_kwargs):
+            old_value = persona.personality or ""
+            persona.personality = value
+            return len(old_value), len(value)
+
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
             patch(
                 "app.api.persona.set_persona_personality_document",
-                new=AsyncMock(return_value=(len(persona.personality), len("New personality text."))),
+                new=AsyncMock(side_effect=_set_personality),
             ) as mock_set,
-            patch(
-                "app.api.persona.helpers.get_persona_personality_document",
-                new=AsyncMock(return_value="New personality text."),
-            ),
             patch(
                 "app.api.persona.helpers.get_persona_heartbeat_instructions",
                 new=AsyncMock(return_value=persona.heartbeat_instructions),
-            ),
-            patch(
-                "app.api.persona.helpers.get_persona_user_context_document",
-                new=AsyncMock(return_value=persona.user_context),
             ),
         ):
             mock.return_value = persona
@@ -528,23 +508,20 @@ class TestUpdatePersonalityEndpoint:
     def test_updates_personality_without_reason(self, api_client, mock_db_session):
         persona = _make_persona(version=1)
 
+        async def _set_personality(_db, value, **_kwargs):
+            old_value = persona.personality or ""
+            persona.personality = value
+            return len(old_value), len(value)
+
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
             patch(
                 "app.api.persona.set_persona_personality_document",
-                new=AsyncMock(return_value=(len(persona.personality), len("Updated."))),
+                new=AsyncMock(side_effect=_set_personality),
             ) as mock_set,
-            patch(
-                "app.api.persona.helpers.get_persona_personality_document",
-                new=AsyncMock(return_value="Updated."),
-            ),
             patch(
                 "app.api.persona.helpers.get_persona_heartbeat_instructions",
                 new=AsyncMock(return_value=persona.heartbeat_instructions),
-            ),
-            patch(
-                "app.api.persona.helpers.get_persona_user_context_document",
-                new=AsyncMock(return_value=persona.user_context),
             ),
         ):
             mock.return_value = persona

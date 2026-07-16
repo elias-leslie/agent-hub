@@ -38,11 +38,13 @@ export interface RuntimeContextBlock {
   origin: 'auto' | 'override'
   // Why this block is in (or excluded from) context.
   source: RuntimeBlockSource
-  // Short tag explaining auto-injection (e.g. "tier:mandate", "boot_eligible").
+  // Short tag explaining auto-injection (e.g. "tier:mandate", "global").
   auto_reason?: string | null
   mode: RuntimeOverrideMode
   position: number
   tier: string | null
+  // DB prompt authority type; null for memory blocks.
+  prompt_type?: string | null
   // Effective L0/L1/L2 render tier (null for prompt blocks).
   render_tier?: string | null
   // Per-memory render-mode preference (full | compact | summary | null).
@@ -67,10 +69,10 @@ export interface RuntimeContextPreview {
   blocks: RuntimeContextBlock[]
   excluded: RuntimeContextBlock[]
   overrides: RuntimeContextOverride[]
-  // Computed auxiliary blocks (project index + tool capabilities) injected
-  // ahead of prompts/memories at session start. Surfaced for the rendered
-  // pane preview and inline rows.
+  // Computed auxiliary blocks follow authority-ordered prompts/memory in the
+  // canonical delivery and are surfaced for preview and inline rows.
   project_index?: string | null
+  continuity?: string | null
   tool_capabilities?: string | null
 }
 

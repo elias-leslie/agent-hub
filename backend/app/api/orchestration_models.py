@@ -83,6 +83,7 @@ class ParallelTaskRequest(BaseModel):
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0
+    agent_slug: str = "chat"
 
 
 class ParallelRequest(BaseModel):
@@ -183,6 +184,7 @@ class ChainStepRequest(BaseModel):
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0
+    agent_slug: str = "chat"
 
 
 class ChainRequest(BaseModel):

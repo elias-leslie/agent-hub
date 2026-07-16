@@ -6,37 +6,62 @@ import asyncio
 import logging
 import re
 
+from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
+
 logger = logging.getLogger(__name__)
 
 
 async def run_single_review(
     complete_internal,
     async_session,
-    model_id: str,
-    provider: str,
+    agent_slug: str,
     review_prompt: str,
     max_retries: int,
 ) -> dict[str, str]:
-    """Run one reviewer model with retry logic. Returns a review result dict."""
+    """Run one catalog-owned reviewer agent. Returns a review result dict."""
     last_error: Exception | None = None
+    reviewer_label = agent_slug
     for attempt in range(max_retries + 1):
         try:
             async with async_session() as review_db:
+                resolved = await resolve_agent(agent_slug, review_db)
+                mandate = await inject_agent_mandates(
+                    resolved.agent,
+                    review_db,
+                    prompt_mode="minimal",
+                    project_id="agent-hub",
+                    task_type="review",
+                )
+                messages: list[dict[str, str]] = []
+                if mandate.system_content:
+                    messages.append(
+                        {"role": "system", "content": mandate.system_content}
+                    )
+                messages.append({"role": "user", "content": review_prompt})
+                reviewer_label = f"{agent_slug} ({resolved.model})"
                 result = await complete_internal(
-                    messages=[{"role": "user", "content": review_prompt}],
-                    model=model_id,
-                    provider=provider,
-                    temperature=0.3,
+                    messages=messages,
+                    model=resolved.model,
+                    provider=resolved.provider,
+                    temperature=resolved.agent.temperature,
                     project_id="agent-hub",
                     db=review_db,
-                    agent_slug=None,
+                    agent_slug=agent_slug,
+                    request_source="persona_onboarding_review",
                     use_memory=False,
                     max_turns=1,
                     skip_cache=True,
+                    task_type="review",
+                    requested_model=resolved.model,
+                    requested_provider=resolved.provider,
                 )
             content = result.content.strip()
             approved = bool(re.match(r"^\s*APPROVED\b", content, re.IGNORECASE))
-            return {"model": model_id, "approved": "yes" if approved else "no", "content": content}
+            return {
+                "model": reviewer_label,
+                "approved": "yes" if approved else "no",
+                "content": content,
+            }
         except Exception as exc:
             last_error = exc
             if attempt < max_retries:
@@ -44,19 +69,19 @@ async def run_single_review(
                     "Onboarding review attempt %d/%d failed for %s: %s; retrying",
                     attempt + 1,
                     max_retries + 1,
-                    model_id,
+                    agent_slug,
                     exc,
                 )
                 await asyncio.sleep(5 * (attempt + 1))
 
     logger.error(
         "Onboarding review failed for %s after %d attempts: %s",
-        model_id,
+        agent_slug,
         max_retries + 1,
         last_error,
     )
     return {
-        "model": model_id,
+        "model": reviewer_label,
         "approved": "no",
         "content": f"Review failed after {max_retries + 1} attempts: {last_error}",
     }

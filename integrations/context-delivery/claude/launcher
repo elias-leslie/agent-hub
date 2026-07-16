@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""Lossless additive Agent Hub context launcher for Claude Code.
+
+Claude persists larger hook context as a short preview plus file pointer, and
+``--append-system-prompt-file`` is not inherited by spawned agents. The launcher
+therefore exposes the immutable canonical artifact as a unique additional
+directory's ``CLAUDE.md``. Claude loads that file in full for both the parent and
+spawned agents while preserving its native system prompt. Lifecycle hooks only
+bind the artifact to Claude's real session/subagent identifiers; they do not
+inject a second copy.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import hashlib
+import json
+import os
+import signal
+import sys
+import uuid
+from pathlib import Path
+from typing import NoReturn
+
+PASSTHROUGH_FLAGS = {"-h", "--help", "-v", "--version"}
+ADMIN_COMMANDS = {
+    "agents",
+    "auth",
+    "auto-mode",
+    "doctor",
+    "gateway",
+    "install",
+    "mcp",
+    "plugin",
+    "plugins",
+    "project",
+    "setup-token",
+    "update",
+    "upgrade",
+}
+SYSTEM_PROMPT_OPTIONS = (
+    "--system-prompt",
+    "--system-prompt-file",
+    "--append-system-prompt",
+    "--append-system-prompt-file",
+)
+
+
+async def _real_claude() -> str:
+    candidates = (
+        os.getenv("CLAUDE_REAL"),
+        str(Path.home() / ".local/bin/claude-real"),
+        str(
+            Path.home()
+            / ".local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+        ),
+    )
+    for candidate in candidates:
+        if candidate and await asyncio.to_thread(os.access, candidate, os.X_OK):
+            return candidate
+    raise SystemExit("agent-hub-claude: real Claude Code binary not found (set CLAUDE_REAL)")
+
+
+def _option_value(argv: list[str], option: str) -> str | None:
+    prefix = f"{option}="
+    for index, value in enumerate(argv):
+        if value.startswith(prefix):
+            return value[len(prefix) :]
+        if value == option and index + 1 < len(argv) and not argv[index + 1].startswith("-"):
+            return argv[index + 1]
+    return None
+
+
+def _is_passthrough(argv: list[str]) -> bool:
+    option_prefix = argv[: argv.index("--")] if "--" in argv else argv
+    if any(value in PASSTHROUGH_FLAGS for value in option_prefix):
+        return True
+    return bool(argv and argv[0] in ADMIN_COMMANDS)
+
+
+def _session_metadata(argv: list[str]) -> tuple[str | None, bool, str]:
+    explicit = _option_value(argv, "--session-id")
+    if explicit:
+        return explicit, False, "startup"
+    resume = _option_value(argv, "--resume") or _option_value(argv, "-r")
+    if "--fork-session" in argv:
+        return resume, False, "fork"
+    if resume or "--resume" in argv or "-r" in argv or "--continue" in argv or "-c" in argv:
+        return resume, False, "resume"
+    if _option_value(argv, "--from-pr") or "--from-pr" in argv:
+        return None, False, "resume"
+    return str(uuid.uuid4()), True, "startup"
+
+
+async def _model_metadata(argv: list[str]) -> str | None:
+    explicit = _option_value(argv, "--model") or os.getenv("CLAUDE_MODEL")
+    if explicit:
+        return explicit
+    raw_settings = _option_value(argv, "--settings")
+    try:
+        if raw_settings and raw_settings.lstrip().startswith("{"):
+            settings = json.loads(raw_settings)
+        else:
+            settings_path = (
+                Path(raw_settings).expanduser()
+                if raw_settings
+                else Path.home() / ".claude/settings.json"
+            )
+            content = await asyncio.to_thread(settings_path.read_text, encoding="utf-8")
+            settings = json.loads(content)
+    except (OSError, json.JSONDecodeError):
+        return None
+    model = settings.get("model") if isinstance(settings, dict) else None
+    return model.strip() if isinstance(model, str) and model.strip() else None
+
+
+async def _context_descriptor(argv: list[str]) -> tuple[dict[str, str], str | None, bool]:
+    client = os.getenv(
+        "AGENT_HUB_CONTEXT_CLIENT",
+        str(Path.home() / ".local/bin/agent-hub-context-client"),
+    )
+    if not await asyncio.to_thread(os.access, client, os.X_OK):
+        raise RuntimeError(
+            "agent-hub-claude: canonical context client is missing; "
+            "run the Agent Hub context adapter installer"
+        )
+
+    session, add_session_flag, phase = _session_metadata(argv)
+    command = [
+        client,
+        "deliver",
+        "--surface",
+        "claude_code",
+        "--cwd",
+        os.getcwd(),
+        "--provider",
+        os.getenv("AGENT_HUB_CONTEXT_PROVIDER", "anthropic"),
+        "--phase",
+        phase,
+        "--emit",
+        "descriptor",
+    ]
+    model = await _model_metadata(argv)
+    task = os.getenv("SUMMITFLOW_TASK_ID")
+    delivery_session = os.getenv("AICO_SESSION_ID") or session
+    if delivery_session:
+        command.extend(("--session", delivery_session))
+    if model:
+        command.extend(("--model", model))
+    if task:
+        command.extend(("--task", task))
+    transport_variant = os.getenv("AGENT_HUB_CONTEXT_TRANSPORT_VARIANT")
+    if transport_variant:
+        command.extend(("--metadata", f"transport_variant={transport_variant}"))
+
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        async with asyncio.timeout(20):
+            stdout, stderr = await process.communicate()
+    except TimeoutError as exc:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        await process.wait()
+        raise RuntimeError("agent-hub-claude: context client exceeded 20 seconds") from exc
+    if stderr:
+        sys.stderr.write(stderr.decode("utf-8", errors="replace"))
+    try:
+        descriptor = json.loads(stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"agent-hub-claude: canonical client returned invalid descriptor: {exc}"
+        ) from exc
+    if not isinstance(descriptor, dict) or descriptor.get("status") not in {"ok", "failed"}:
+        raise RuntimeError("agent-hub-claude: canonical client returned an invalid descriptor")
+    expected_code = 0 if descriptor["status"] == "ok" else 2
+    if process.returncode != expected_code:
+        raise RuntimeError(
+            "agent-hub-claude: canonical client exit/status mismatch "
+            f"(exit={process.returncode}, status={descriptor['status']})"
+        )
+    for field in ("payload_hash", "contract_path", "text_path"):
+        if not isinstance(descriptor.get(field), str):
+            raise RuntimeError(f"agent-hub-claude: descriptor is missing {field}")
+    return descriptor, session, add_session_flag
+
+
+async def _extract_user_system_prompts(argv: list[str]) -> tuple[list[str], list[str]]:
+    clean: list[str] = []
+    appends: list[str] = []
+    index = 0
+    while index < len(argv):
+        value = argv[index]
+        if value in SYSTEM_PROMPT_OPTIONS:
+            if index + 1 >= len(argv):
+                raise SystemExit(f"agent-hub-claude: {value} requires a value")
+            supplied = argv[index + 1]
+            if value.endswith("-file"):
+                try:
+                    appends.append(
+                        await asyncio.to_thread(
+                            Path(supplied).expanduser().read_text, encoding="utf-8"
+                        )
+                    )
+                except OSError as exc:
+                    raise SystemExit(
+                        f"agent-hub-claude: cannot read user system prompt: {exc}"
+                    ) from exc
+            else:
+                appends.append(supplied)
+            index += 2
+            continue
+        matched = False
+        for option in SYSTEM_PROMPT_OPTIONS:
+            prefix = f"{option}="
+            if not value.startswith(prefix):
+                continue
+            supplied = value[len(prefix) :]
+            if option.endswith("-file"):
+                try:
+                    appends.append(
+                        await asyncio.to_thread(
+                            Path(supplied).expanduser().read_text, encoding="utf-8"
+                        )
+                    )
+                except OSError as exc:
+                    raise SystemExit(
+                        f"agent-hub-claude: cannot read user system prompt: {exc}"
+                    ) from exc
+            else:
+                appends.append(supplied)
+            matched = True
+            break
+        if not matched:
+            clean.append(value)
+        index += 1
+    return clean, appends
+
+
+def _write_canonical_directory_sync(parent: Path, payload: bytes) -> Path:
+    directory = parent / f"claude-context-{uuid.uuid4().hex}"
+    directory.mkdir(mode=0o700)
+    destination = directory / "CLAUDE.md"
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+    os.chmod(destination, 0o400)
+    os.chmod(directory, 0o500)
+    return directory
+
+
+def _write_user_appends_sync(parent: Path, appends: list[str]) -> Path:
+    destination = parent / f"claude-user-additive-{uuid.uuid4().hex}.md"
+    content = "\n\n".join(value for value in appends if value)
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+    return destination
+
+
+def _exec_native_degraded(real: str, argv: list[str], error: object) -> NoReturn:
+    native_label = (
+        "Claude GPT"
+        if os.getenv("AGENT_HUB_CONTEXT_TRANSPORT_VARIANT") == "claude-gpt"
+        else "Claude"
+    )
+    sys.stderr.write(
+        "agent-hub-claude: Agent Hub supplemental context is unavailable; "
+        f"continuing with native {native_label} context only ({error})\n"
+    )
+    environment = os.environ.copy()
+    for key in (
+        "AGENT_HUB_CONTEXT_PREINJECTED_HASH",
+        "AGENT_HUB_CONTEXT_PREINJECTED_CONTRACT",
+        "AGENT_HUB_CONTEXT_PREINJECTED_TEXT",
+    ):
+        environment.pop(key, None)
+    os.execve(real, [real, *argv], environment)
+
+
+async def _main(argv: list[str]) -> None:
+    real = await _real_claude()
+    if _is_passthrough(argv):
+        os.execve(real, [real, *argv], os.environ.copy())
+
+    try:
+        descriptor, session, add_session_flag = await _context_descriptor(argv)
+        context_path = Path(descriptor["text_path"])
+        contract_path = Path(descriptor["contract_path"])
+        context_exists, contract_exists = await asyncio.gather(
+            asyncio.to_thread(context_path.is_file),
+            asyncio.to_thread(contract_path.is_file),
+        )
+        if not context_exists or not contract_exists:
+            raise RuntimeError("canonical context artifacts are missing")
+        if descriptor["status"] != "ok":
+            raise RuntimeError(
+                f"canonical delivery reported failed status; contract={contract_path}"
+            )
+        canonical_payload = await asyncio.to_thread(context_path.read_bytes)
+        canonical_hash = hashlib.sha256(canonical_payload).hexdigest()
+        if canonical_hash != descriptor["payload_hash"]:
+            raise RuntimeError("canonical context artifact hash mismatch")
+        canonical_directory = await asyncio.to_thread(
+            _write_canonical_directory_sync,
+            context_path.parent,
+            canonical_payload,
+        )
+    except (OSError, RuntimeError) as exc:
+        _exec_native_degraded(real, argv, exc)
+
+    try:
+        clean_argv, user_appends = await _extract_user_system_prompts(argv)
+        launch_prefix = ["--add-dir", str(canonical_directory)]
+        if user_appends:
+            additive_path = await asyncio.to_thread(
+                _write_user_appends_sync, context_path.parent, user_appends
+            )
+            launch_prefix.extend(("--append-system-prompt-file", str(additive_path)))
+    except (OSError, SystemExit) as exc:
+        _exec_native_degraded(real, argv, exc)
+    if add_session_flag and session and "--no-session-persistence" not in clean_argv:
+        clean_argv = ["--session-id", session, *clean_argv]
+
+    environment = os.environ.copy()
+    environment["AGENT_HUB_CONTEXT_PREINJECTED_HASH"] = descriptor["payload_hash"]
+    environment["AGENT_HUB_CONTEXT_PREINJECTED_CONTRACT"] = str(contract_path)
+    environment["AGENT_HUB_CONTEXT_PREINJECTED_TEXT"] = str(context_path)
+    environment["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
+    os.execve(
+        real,
+        [real, *launch_prefix, *clean_argv],
+        environment,
+    )
+
+
+if __name__ == "__main__":
+    asyncio.run(_main(sys.argv[1:]))

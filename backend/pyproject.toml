@@ -48,9 +48,11 @@ dependencies = [
     "asyncpg>=0.31.0",
     "rank-bm25>=0.2.2",
     "playwright>=1.57.0",
+    "mcp>=1.20.0",
 ]
 
 [project.scripts]
+agent-hub-context = "app.cli.runtime_context:main"
 web-research = "app.cli.web_research:main"
 
 [project.optional-dependencies]

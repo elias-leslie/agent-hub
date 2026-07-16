@@ -27,6 +27,17 @@ class _FakeContext:
         return ["11111111-1111-1111-1111-111111111111"]
 
 
+class _EmptyContext:
+    def __init__(self) -> None:
+        self.mandates: list[str] = []
+        self.guardrails: list[str] = []
+        self.reference: list[str] = []
+        self.reference_index: list[str] = []
+
+    def get_loaded_uuids(self) -> list[str]:
+        return []
+
+
 def _request() -> SimpleNamespace:
     return SimpleNamespace(
         use_memory=True,
@@ -44,6 +55,7 @@ def _request() -> SimpleNamespace:
         work_context=None,
         session_id=None,
         agent_slug="coder",
+        prompt_mode="full",
         max_turns=1,
         execute_tools=False,
         temperature=1.0,
@@ -86,13 +98,14 @@ def test_work_context_prompt_injects_project_task_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_inject_memory_skips_when_injection_disabled_flag() -> None:
+async def test_agent_request_keeps_canonical_prompts_when_memory_injection_disabled() -> None:
     request = _request()
+    request.prompt_mode = "none"
     messages = [{"role": "user", "content": "hi"}]
 
     with patch(
         "app.api.complete.request_setup.inject_progressive_context",
-        new_callable=AsyncMock,
+        new=AsyncMock(return_value=(messages, _EmptyContext())),
     ) as mock_inject:
         result_messages, injected_count, loaded = await inject_memory(
             request=request,
@@ -105,16 +118,22 @@ async def test_inject_memory_skips_when_injection_disabled_flag() -> None:
     assert result_messages == messages
     assert injected_count == 0
     assert loaded == []
-    mock_inject.assert_not_awaited()
+    mock_inject.assert_awaited_once()
+    assert mock_inject.await_args is not None
+    assert mock_inject.await_args.kwargs["include_prompts"] is True
+    assert mock_inject.await_args.kwargs["include_memories"] is False
 
 
 @pytest.mark.asyncio
-async def test_inject_memory_skips_when_enabled_false() -> None:
+async def test_agent_request_keeps_canonical_prompts_when_memory_disabled() -> None:
     request = _request()
+    request.prompt_mode = "none"
 
     with patch(
         "app.api.complete.request_setup.inject_progressive_context",
-        new_callable=AsyncMock,
+        new=AsyncMock(
+            return_value=([{"role": "user", "content": "hi"}], _EmptyContext())
+        ),
     ) as mock_inject:
         _, injected_count, loaded = await inject_memory(
             request=request,
@@ -126,16 +145,22 @@ async def test_inject_memory_skips_when_enabled_false() -> None:
 
     assert injected_count == 0
     assert loaded == []
-    mock_inject.assert_not_awaited()
+    mock_inject.assert_awaited_once()
+    assert mock_inject.await_args is not None
+    assert mock_inject.await_args.kwargs["include_prompts"] is True
+    assert mock_inject.await_args.kwargs["include_memories"] is False
 
 
 @pytest.mark.asyncio
-async def test_inject_memory_requires_both_enabled_and_injection_enabled() -> None:
+async def test_agent_request_keeps_prompts_when_memory_flags_conflict() -> None:
     request = _request()
+    request.prompt_mode = "none"
 
     with patch(
         "app.api.complete.request_setup.inject_progressive_context",
-        new_callable=AsyncMock,
+        new=AsyncMock(
+            return_value=([{"role": "user", "content": "hi"}], _EmptyContext())
+        ),
     ) as mock_inject:
         _, injected_count, loaded = await inject_memory(
             request=request,
@@ -147,7 +172,10 @@ async def test_inject_memory_requires_both_enabled_and_injection_enabled() -> No
 
     assert injected_count == 0
     assert loaded == []
-    mock_inject.assert_not_awaited()
+    mock_inject.assert_awaited_once()
+    assert mock_inject.await_args is not None
+    assert mock_inject.await_args.kwargs["include_prompts"] is True
+    assert mock_inject.await_args.kwargs["include_memories"] is False
 
 
 @pytest.mark.asyncio
@@ -191,6 +219,10 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     assert inject_args is not None
     assert inject_args.kwargs["variant"] == "MINIMAL"
     assert inject_args.kwargs["consumer_profile"] is None
+    assert inject_args.kwargs["consumer_surface"] == "agent_runtime"
+    assert inject_args.kwargs["include_prompts"] is True
+    assert inject_args.kwargs["include_memories"] is True
+    assert inject_args.kwargs["db"] is db
     mock_track.assert_awaited_once_with(["11111111-1111-1111-1111-111111111111"])
     mock_store.assert_awaited_once()
     store_args = mock_store.await_args
@@ -311,6 +343,11 @@ async def test_build_session_and_messages_compacts_before_context_limit_check() 
         patch(
             "app.api.complete.orchestration_helpers.inject_agent_system_prompt",
             side_effect=lambda messages, _mandate: messages,
+        ),
+        patch(
+            "app.api.complete.orchestration_helpers.inject_memory",
+            new_callable=AsyncMock,
+            return_value=([], 0, []),
         ),
         patch(
             "app.api.complete.orchestration_helpers.compact_context_if_needed",

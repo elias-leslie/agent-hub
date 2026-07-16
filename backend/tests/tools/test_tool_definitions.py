@@ -37,6 +37,7 @@ def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools(
     review_tool = next(tool for tool in tools if tool.name == "review_memory_system")
     assert review_tool.input_schema["properties"]["force_all"]["type"] == "boolean"
     assert review_tool.input_schema["properties"]["only_missing_compact"]["type"] == "boolean"
+    assert review_tool.input_schema["properties"]["only_incomplete_audit"]["type"] == "boolean"
     assert review_tool.input_schema["properties"]["cadence_days"]["minimum"] == 0
     assert review_tool.input_schema["properties"]["batch_limit"]["maximum"] == 10
 

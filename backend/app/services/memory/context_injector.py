@@ -1,8 +1,4 @@
-"""Context injection service for memory-augmented completions.
-
-Public facade for query extraction, compatibility wrappers, and memory injection.
-Heavy lifting lives in context_builder.py and context_injector_ops.py.
-"""
+"""Public facade for canonical context injection into completion messages."""
 
 from __future__ import annotations
 
@@ -19,12 +15,6 @@ from .context_injector_formatter import (
     format_relevance_debug_block,
     get_context_token_stats,
     get_relevance_debug_info,
-)
-from .context_injector_ops import (
-    apply_continuity_to_context as _ops_apply_continuity_to_context,
-)
-from .context_injector_ops import (
-    build_context_and_format as _ops_build_context_and_format,
 )
 from .context_injector_ops import (
     handle_injection_failure as _ops_handle_injection_failure,
@@ -50,8 +40,6 @@ __all__ = [
     "MEMORY_CONTEXT_HEADER",
     "MEMORY_CONTEXT_START",
     "ProgressiveContext",
-    "_apply_continuity_to_context",
-    "_build_context_and_format",
     "_record_injection_metrics",
     "build_progressive_context",
     "extract_query_from_messages",
@@ -88,58 +76,8 @@ def extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
             text = text[idx + len(task_marker) :]
         elif text.startswith("Task:\n"):
             text = text[len("Task:\n") :]
-        return text.strip()[:500] or None
+        return text.strip() or None
     return None
-
-
-async def _build_context_and_format(
-    query: str,
-    scope: MemoryScope,
-    scope_id: str | None,
-    task_type: str | None,
-    phase: str | None,
-    memory_config: dict[str, Any] | None,
-    consumer_profile: str | None,
-    consumer_agent_slug: str | None,
-    consumer_tags: list[str] | None,
-    variant: str | None,
-) -> tuple[ProgressiveContext, str | None]:
-    """Compatibility wrapper for refactored context-builder path."""
-    return await _ops_build_context_and_format(
-        query,
-        scope,
-        scope_id,
-        task_type,
-        phase,
-        memory_config,
-        consumer_profile,
-        consumer_agent_slug,
-        consumer_tags,
-        variant,
-    )
-
-
-async def _apply_continuity_to_context(
-    context: ProgressiveContext,
-    formatted: str,
-    scope: MemoryScope,
-    scope_id: str | None,
-    session_id: str | None,
-    memory_config: dict[str, Any] | None,
-    current_branch: str | None,
-    include_continuity: bool,
-) -> str:
-    """Compatibility wrapper for refactored continuity path."""
-    return await _ops_apply_continuity_to_context(
-        context,
-        formatted,
-        scope,
-        scope_id,
-        session_id,
-        memory_config,
-        current_branch,
-        include_continuity,
-    )
 
 
 def _record_injection_metrics(
@@ -165,9 +103,7 @@ def _record_injection_metrics(
 
 def _resolve_query(messages: list[dict[str, Any]], query: str | None) -> str | None:
     """Resolve query from explicit arg or message history."""
-    if not messages:
-        return None
-    return query or extract_query_from_messages(messages)
+    return query or extract_query_from_messages(messages) or "canonical runtime context"
 
 
 def _build_injection_kwargs(
@@ -188,6 +124,10 @@ def _build_injection_kwargs(
     consumer_profile: str | None,
     consumer_agent_slug: str | None,
     consumer_tags: list[str] | None,
+    consumer_surface: str,
+    include_prompts: bool,
+    include_memories: bool,
+    db: Any,
 ) -> dict[str, Any]:
     """Build kwargs for ops injection helper."""
     return {
@@ -208,6 +148,10 @@ def _build_injection_kwargs(
         "consumer_profile": consumer_profile,
         "consumer_agent_slug": consumer_agent_slug,
         "consumer_tags": consumer_tags,
+        "consumer_surface": consumer_surface,
+        "include_prompts": include_prompts,
+        "include_memories": include_memories,
+        "db": db,
     }
 
 
@@ -271,8 +215,12 @@ async def inject_progressive_context(
     consumer_profile: str | None = None,
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
+    consumer_surface: str = "agent_runtime",
+    include_prompts: bool = True,
+    include_memories: bool = True,
+    db: Any = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
-    """Inject mandates and guardrails context into messages."""
+    """Inject one canonical Agent Hub context delivery into messages."""
     resolved_query = _resolve_query(messages, query)
     if not resolved_query:
         return messages, ProgressiveContext()
@@ -281,6 +229,7 @@ async def inject_progressive_context(
         external_id, project_id, collect_metrics, task_type, phase,
         include_continuity, memory_config, current_branch,
         consumer_profile, consumer_agent_slug, consumer_tags,
+        consumer_surface, include_prompts, include_memories, db,
     )
     injected, failure, attempts, latency_ms = await _run_injection_with_retries(kwargs)
     if failure:

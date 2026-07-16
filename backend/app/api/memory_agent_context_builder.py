@@ -3,76 +3,10 @@
 import logging
 import time
 
-from app.db import async_session
-from app.services.memory.context_injector import ProgressiveContext, build_progressive_context
+from app.services.memory.context_injector import ProgressiveContext
 from app.services.memory.service import MemoryScope
-from app.services.memory.settings import get_memory_settings
-from app.services.memory.variants import assign_variant
 
 logger = logging.getLogger(__name__)
-
-
-async def build_progressive_context_with_variant(
-    query: str,
-    scope: MemoryScope,
-    scope_id: str | None,
-    include_global: bool,
-    task_type: str | None,
-    phase: str | None,
-    variant_override: str | None,
-    external_id: str | None,
-    project_id: str | None,
-    consumer_profile: str | None,
-) -> tuple[ProgressiveContext, str]:
-    """Build progressive context and assign variant."""
-    async with async_session() as db:
-        settings = await get_memory_settings(db)
-        assigned_variant = assign_variant(
-            external_id=external_id,
-            project_id=project_id or scope_id,
-            variant_override=variant_override,
-            active_variant=settings.active_variant,
-        )
-        variant_value = getattr(assigned_variant, "value", str(assigned_variant))
-
-        context = await build_progressive_context(
-            query=query,
-            scope=scope,
-            scope_id=scope_id,
-            include_global=include_global,
-            task_type=task_type,
-            phase=phase,
-            consumer_profile=consumer_profile,
-            variant=variant_value,
-            db=db,
-        )
-
-        # Apply the same per-profile/per-project memory controls used by the
-        # Runtime Context UI so progressive-context delivery honors disable,
-        # include, order, and render-mode edits.
-        if consumer_profile:
-            from app.services.runtime_context import (
-                apply_runtime_memory_overrides_to_context,
-            )
-
-            try:
-                await apply_runtime_memory_overrides_to_context(
-                    db,
-                    consumer_profile=consumer_profile,
-                    project_id=project_id or scope_id,
-                    query=query,
-                    context=context,
-                )
-            except Exception:
-                logger.warning(
-                    "Failed to apply runtime context overrides for profile=%s project=%s",
-                    consumer_profile,
-                    project_id or scope_id,
-                    exc_info=True,
-                )
-
-    context.debug_info["variant"] = variant_value
-    return context, variant_value
 
 
 async def build_continuity_markdown(
@@ -98,6 +32,7 @@ async def build_continuity_markdown(
             current_branch=current_branch,
             max_sessions=settings.continuity_max_sessions,
             exclude_session_id=session_id,
+            include_cross_project=False,
             include_live_sessions=False,
         )
 
@@ -111,42 +46,6 @@ async def build_continuity_markdown(
         logger.warning("Failed to build continuity context: %s", e)
 
     return ""
-
-
-async def format_context_with_continuity(
-    context: ProgressiveContext,
-    scope: MemoryScope,
-    scope_id: str | None,
-    current_branch: str | None,
-    session_id: str | None = None,
-    consumer_profile: str | None = None,
-) -> str:
-    """Format context and prepend continuity."""
-    selected_reference_uuids = context.get_reference_uuids()
-    indexed_reference_uuids = context.get_reference_index_uuids()
-    context.debug_info.update(
-        {
-            "reference_selected_count": len(selected_reference_uuids),
-            "reference_selected_uuids": selected_reference_uuids,
-            "reference_index_count": len(indexed_reference_uuids),
-            "reference_index_uuids": indexed_reference_uuids,
-        }
-    )
-    from app.services.memory.context_injector import format_progressive_context
-
-    formatted = format_progressive_context(
-        context,
-        include_citations=True,
-        consumer_profile=consumer_profile,
-    )
-
-    continuity_md = await build_continuity_markdown(
-        scope, scope_id, current_branch, session_id=session_id,
-    )
-    if continuity_md:
-        formatted = continuity_md + formatted
-
-    return formatted
 
 
 async def track_and_record_metrics(

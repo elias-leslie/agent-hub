@@ -43,6 +43,12 @@ class SubagentConfig:
     project_id: str | None = None
     """Project ID for cost tracking. When set, token usage is logged to CostLog."""
 
+    agent_slug: str = "chat"
+    """Agent Hub slug used for canonical prompt/memory applicability."""
+
+    consumer_surface: str = "orchestration_subagent"
+    """Canonical consumer surface for this orchestration workload."""
+
     context_mode: Literal["focused", "full", "none"] = "focused"
     """How parent context is forwarded to the child."""
 

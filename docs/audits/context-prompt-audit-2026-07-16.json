@@ -1,0 +1,4169 @@
+{
+  "audit_date": "2026-07-16",
+  "deterministic_checks": {
+    "allowed_exact_duplicate_groups": [
+      [
+        "kimi-code-test-system-prompt",
+        "minimax-plan-test-system-prompt"
+      ]
+    ],
+    "exact_command_syntax_hits": [],
+    "exact_duplicate_groups": [
+      [
+        "kimi-code-test-system-prompt",
+        "minimax-plan-test-system-prompt"
+      ]
+    ],
+    "near_duplicate_pairs": [
+      {
+        "a": "kimi-code-test-system-prompt",
+        "b": "minimax-plan-test-system-prompt",
+        "jaccard": 1.0,
+        "ratio": 1.0
+      },
+      {
+        "a": "risk-aggressive-v1-system-prompt",
+        "b": "risk-conservative-v1-system-prompt",
+        "jaccard": 0.7399,
+        "ratio": 0.7413
+      },
+      {
+        "a": "bear-researcher-v1-system-prompt",
+        "b": "bull-researcher-v1-system-prompt",
+        "jaccard": 0.9239,
+        "ratio": 0.7374
+      },
+      {
+        "a": "portfolio-jenny-planning-extract-system",
+        "b": "portfolio-jenny-reconcile-system",
+        "jaccard": 0.4,
+        "ratio": 0.6711
+      },
+      {
+        "a": "portfolio-thesis-generation-system",
+        "b": "portfolio-thesis-validation-system",
+        "jaccard": 0.3333,
+        "ratio": 0.6255
+      }
+    ],
+    "repeated_lines_disposition": "Intentional role-opposed committees, shared output schemas, or different consumers; no same-agent same-role/priority overlap remains.",
+    "repeated_substantive_line_count": 32,
+    "same_agent_same_role_priority_groups": []
+  },
+  "final_enabled_index": [
+    {
+      "content_sha256": "db533cdc7789a097086fff332dee6820f165d2cc0630f9e476e9aacfd94cab3a",
+      "slug": "a-loom-development-policy"
+    },
+    {
+      "content_sha256": "e098ec0b7488bf87cbe87fadeace9593555cbc2de892a47704c4690f3aec3db7",
+      "slug": "agent-hub-development-policy"
+    },
+    {
+      "content_sha256": "2bd13f81e756e94d30f7d49bcbd77c68d8cb462969ac966f8d34379f3ac1ed50",
+      "slug": "analyst-system-prompt"
+    },
+    {
+      "content_sha256": "a55824eb044f2007c26a836210e8e32657b26ca1f555fd1f2d846555fe592cc0",
+      "slug": "auditor-system-prompt"
+    },
+    {
+      "content_sha256": "7b9359a1bbd42ca5b907d192aa6673e1da942f8031ba08f974ca2dcdab46d933",
+      "slug": "autocode-execution"
+    },
+    {
+      "content_sha256": "13fecf0535ec88e05d37dae2993f5de28b2c6a2af8a50f898a2d9bd5ee79f49e",
+      "slug": "autocode-pristine-fix"
+    },
+    {
+      "content_sha256": "5713983b79110a962a029a4ffae56907074ee779f4333d44e3272f01a18e5127",
+      "slug": "autocode-subtask"
+    },
+    {
+      "content_sha256": "312c329f101dbc23870e356b32a0cf3189551ca4e07124b96b7ab74358f67b40",
+      "slug": "bear-researcher-v1-system-prompt"
+    },
+    {
+      "content_sha256": "eb2ee9215f923f20abc68f5c19ce59f40c373b1dac65860d5653ba201758bce3",
+      "slug": "bull-researcher-v1-system-prompt"
+    },
+    {
+      "content_sha256": "f487cafb7a2678ff018ddc110f095ea43b1537f21a46c46cc3b72958817c71de",
+      "slug": "caveman-output-directive"
+    },
+    {
+      "content_sha256": "e4bea2b76e449c0b70ad2763ea00047a5fdd269a543a36341fd32a6f754ec0ff",
+      "slug": "chat-system-prompt"
+    },
+    {
+      "content_sha256": "9e9be887205ca998e03566ae1c7f7185223e209cd01ce2c12c648c561e65095f",
+      "slug": "coder-system-prompt"
+    },
+    {
+      "content_sha256": "42e07d1348899b8a62746c33d8b0d2761fadfa89478ca725969ba269788a4c19",
+      "slug": "coding-development-practice"
+    },
+    {
+      "content_sha256": "368365270c48bda0b73e4944431f22d6834bd5127a9cfd299b89e93b0df91b4f",
+      "slug": "coding-golden-rule"
+    },
+    {
+      "content_sha256": "579bf41520099e121e7b19339e20bb5bf8888f4371309bfee3b000bc68c812e3",
+      "slug": "committee-router-v1-system-prompt"
+    },
+    {
+      "content_sha256": "6b6d7468405f3c87da21ef9047fe22470dea7c8a44d2dbfe418b7be1d821bd7e",
+      "slug": "committee-synthesizer-v1-system-prompt"
+    },
+    {
+      "content_sha256": "25f0d4942296092710291deeda6525715da94301450f3c6b56d815c9b7ad20fe",
+      "slug": "completion-review-prompt"
+    },
+    {
+      "content_sha256": "a95bfacf9b94b13b55f342b1469e9917d3528aaa1d0c15c224cea3b465e0eaf8",
+      "slug": "completion-review-rules"
+    },
+    {
+      "content_sha256": "a24e6c056f9646cf7ec9a0b76843bd815aacb68695fbad1bcd7d069768d6d35f",
+      "slug": "complexity-assessor-system-prompt"
+    },
+    {
+      "content_sha256": "68e5c370a4b484527cb3dbde673725452616da390b11916234889722e44ae00e",
+      "slug": "credit-card-offer-reviewer-system-prompt"
+    },
+    {
+      "content_sha256": "f08716f5f27cd71c536c6fd50caa9450721c6f457988e1218fd0d9e7c6b685c0",
+      "slug": "credit-card-researcher-system-prompt"
+    },
+    {
+      "content_sha256": "683f1c8a08014b0978e8b4a033be6592d0ae19cf8021180a177965740d1a417b",
+      "slug": "critic-system-prompt"
+    },
+    {
+      "content_sha256": "95eb84e3892caac619cfeed37736355a5f45483b7f4246af78cd4da98cd373e6",
+      "slug": "debugger-system-prompt"
+    },
+    {
+      "content_sha256": "65704d42acfad9b221ce83fd19abe4b5847d9bae5371bdb04ab4e3d19c6f085f",
+      "slug": "dependency-manager-system-prompt"
+    },
+    {
+      "content_sha256": "e2533f8c143af0ce2ec6a122790e18f7f9a73ccf26456e6d15f100e4b8a4c969",
+      "slug": "designer-system-prompt"
+    },
+    {
+      "content_sha256": "63f7c59942eed8e678ca3699a659c55610412d9658a7913530dd43f72c4d22c6",
+      "slug": "equity-analyst-system-prompt"
+    },
+    {
+      "content_sha256": "a1e2f0c8eb155674aca5458851b24be63d65d159b6953f392750e7420b58564d",
+      "slug": "explorer-system-prompt"
+    },
+    {
+      "content_sha256": "0a0bdac853c6cfc06e9627db8a28df3114eee3e3f464dac7962a5bf01d2987f1",
+      "slug": "extractor-system-prompt"
+    },
+    {
+      "content_sha256": "663881441b14604956097d48607c11e4ce7d0b00d20e06ce955d097f7a6280ea",
+      "slug": "feedback-audit"
+    },
+    {
+      "content_sha256": "a16983757691114d62aad411158565e00d60067101c5b71b2d551e44bb598ae2",
+      "slug": "financial-document-reviewer-json-contract"
+    },
+    {
+      "content_sha256": "60cc726cf195bc888ceec4a47ccea3e8d6ba1d104821c2af622b78089a77b1b0",
+      "slug": "financial-document-reviewer-money-rules"
+    },
+    {
+      "content_sha256": "5b0d57218a77484fcabc7e87d74f1f92d03ff3eb7680602af7be9fec6a7e2f12",
+      "slug": "financial-document-reviewer-system-prompt"
+    },
+    {
+      "content_sha256": "964ecb1f802170065301a6b1bc1133d3bec852b694fd795ff6b49346eddfce2c",
+      "slug": "fitness-bear-v1-system-prompt"
+    },
+    {
+      "content_sha256": "516a7e8f1442533ade4fff170fa094b8a5e035b7069226e0e2e91c84938c2f3c",
+      "slug": "fitness-bull-v1-system-prompt"
+    },
+    {
+      "content_sha256": "d3505332c11584ea82d26f4535a913acdf0e6d29205a08cf9001c52daf0afa73",
+      "slug": "fitness-judge-v1-system-prompt"
+    },
+    {
+      "content_sha256": "da1ce9cbe62716f66aaf3e77758f189cbe68a3be2e808e073e6ecdaf34c90f24",
+      "slug": "fitness-skeptic-v1-system-prompt"
+    },
+    {
+      "content_sha256": "53e7956bac17b454ef29bb9ccc81ca30f9e67f2992c0e2fdec075b94bf1fe056",
+      "slug": "fixer-system-prompt"
+    },
+    {
+      "content_sha256": "2ac7697c4befdf6112fc7a8ea53e8cffffe147d056f8b87a49194e66798f54bf",
+      "slug": "frontend-design-critic"
+    },
+    {
+      "content_sha256": "e1e22e5dbda0f1febc8c03ed188729f42be4ea494281da659f841bf884d09e6f",
+      "slug": "fundamentals-v1-system-prompt"
+    },
+    {
+      "content_sha256": "f3a67b21d430207f270bd55ace9780b4294544dc49b0de090e323c9d901f52b4",
+      "slug": "game-art-critic-gemma-system-prompt"
+    },
+    {
+      "content_sha256": "77b728919dcfd453d7a956255d12b71ed113e91cc5ef5df5f62aeca7d7a39b7b",
+      "slug": "game-art-critic-system-prompt"
+    },
+    {
+      "content_sha256": "00dd170b7a911fba68355be1459a1c00cbd91f3426e2d7e3f6fe6d3ca9efd95d",
+      "slug": "game-audio-critic-system-prompt"
+    },
+    {
+      "content_sha256": "42de38d376bb65c3ef8b1603dd5bc42cdb6252dbf3ce28893ad7209ad6afce60",
+      "slug": "gemma-local-test-system-prompt"
+    },
+    {
+      "content_sha256": "dc0d5266c29195e86ca39fce0281e20f4163af9b2766922ba2151b08ef9f9add",
+      "slug": "git-agent-system-prompt"
+    },
+    {
+      "content_sha256": "de63f8dc58a1910cf8f2d939ac41d49f031e00a023dece98d5be0c2b998296e4",
+      "slug": "governance-auditor-system-prompt"
+    },
+    {
+      "content_sha256": "0a3adece874f58d29eaa9ee1c0c5e058f3453dcb7faaa5466a6f1110a1e987de",
+      "slug": "graphify-semantic-extractor-system-prompt"
+    },
+    {
+      "content_sha256": "d8714e375d50771086681096d5240841de892e0f29a8ed0f20f0de4f60271860",
+      "slug": "graphify-workspace-map"
+    },
+    {
+      "content_sha256": "6573c828ad5b289b75e3159cc3c96f641ad8035ce5405f5da8a358e1e207301e",
+      "slug": "household-list-parser-system-prompt"
+    },
+    {
+      "content_sha256": "4053d506fe57914bd0f6d94d4bf71ce16691dee53bd32316d83152358d575305",
+      "slug": "household-price-scout-system-prompt"
+    },
+    {
+      "content_sha256": "21e724c4ad91d47948e385bdf597861b68d1de9a8d2e05a1db3a9950581d8113",
+      "slug": "household-transaction-audit-json-contract"
+    },
+    {
+      "content_sha256": "2d36767166020672187edbc8e2e6e89d65a7dafe274df06c601335fd56bd2e60",
+      "slug": "household-transaction-audit-system-prompt"
+    },
+    {
+      "content_sha256": "9b5c075374594b0e4d865ed5d0402c34ab1dacd9d9b3fc932ab2106e6bf75512",
+      "slug": "ideator-public-system-prompt"
+    },
+    {
+      "content_sha256": "4d9c2953a61b2e9eb2cbfb75299de4498564e10acabeafc3fbd485e6ee688a0d",
+      "slug": "ideator-system-prompt"
+    },
+    {
+      "content_sha256": "06ef9d9d587d076c93d2888644aab67ad9b8de8bcad8a5b2d43cfad259cf4b50",
+      "slug": "image-gen-system-prompt"
+    },
+    {
+      "content_sha256": "5b6594efd7a52683adba9fe5177cf13382ba8256a22f73ef2701d654770ad74e",
+      "slug": "investment-committee-system-prompt"
+    },
+    {
+      "content_sha256": "1f0eb926f1e19a5f28d2e95a5fd02f6a57ba622af55f4d7ff8b03e3aef445a3e",
+      "slug": "jenny-autonomy-policy"
+    },
+    {
+      "content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "slug": "kimi-code-test-system-prompt"
+    },
+    {
+      "content_sha256": "7a3054e34eb87d7e23f4835748876e0caad356dba1694c820f61d5d2c0afeb07",
+      "slug": "learning-extractor-system-prompt"
+    },
+    {
+      "content_sha256": "ae1ce78f60254a72a08191cf8e040d5504474c30dbc4c6b6a5c27892b2e246e5",
+      "slug": "market-pulse-analyst-system-prompt"
+    },
+    {
+      "content_sha256": "f4292248cea44cd2a343ddc61dc17fc1204aac42bb02b613d389eb8c88aeeb86",
+      "slug": "market-pulse-scout-system-prompt"
+    },
+    {
+      "content_sha256": "7a86552593861cdfc972b6649f5a196c4c5b6452866b146ab2db85923a22ae61",
+      "slug": "memory-curator-system-prompt"
+    },
+    {
+      "content_sha256": "f6b4c14f5139e61ee7b27f839de699b579efa5f21a278849be491452823a64a2",
+      "slug": "memory-rater-system-prompt"
+    },
+    {
+      "content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "slug": "minimax-plan-test-system-prompt"
+    },
+    {
+      "content_sha256": "ea99fe1c4d7fca57fb623c4406fe8b0c50994c5da64e42012b22f4e57fb8a552",
+      "slug": "minimax-tester-system-prompt"
+    },
+    {
+      "content_sha256": "cde98de1f4a03ee55ba803f471379586a663155046fc29d431cda5ea7ade0d5a",
+      "slug": "narration-tags"
+    },
+    {
+      "content_sha256": "55391c30b17c44f2cce0be4b1b4020a911f49f4809a66a282e3165d94cb98093",
+      "slug": "news-grounded-v1-system-prompt"
+    },
+    {
+      "content_sha256": "007f6d9d389c1a189d1d19d1980f3016218fccfdf57c57e9d8faf00fa028917e",
+      "slug": "note-formatter-system-prompt"
+    },
+    {
+      "content_sha256": "954aced462d6e4cd478f1915a8855fd393d0dbbd1493061ba01e43a3817303fa",
+      "slug": "note-titler-system-prompt"
+    },
+    {
+      "content_sha256": "de59ed611e478a3798092226c77dc3f8393e176be08991b8c42750c04e3ebc5b",
+      "slug": "optimizer-system-prompt"
+    },
+    {
+      "content_sha256": "b3e76e8e477ff33c6b5001536a71b2605da3e521ed41401bdfd8e2668f0dc8d0",
+      "slug": "persona-agent-routing-catalog"
+    },
+    {
+      "content_sha256": "4fb4e8045fd8693c08ef4387bf4d6eb2d2ebdedb36bfd0b3a0ffda75121a357f",
+      "slug": "persona-chat-usage-context"
+    },
+    {
+      "content_sha256": "41cd9d6ceaf2b2a8a82dd011b4710e106aee9c033876ef548626030eb3e23845",
+      "slug": "persona-evolution-guidelines"
+    },
+    {
+      "content_sha256": "232d63223a23eab118e371c491e79565630b9062fff5cea6e1ac0cbef3be6618",
+      "slug": "persona-focus-harness"
+    },
+    {
+      "content_sha256": "4a944a514910defaf058e643742525436240f1302e8933ee2b50d63bd9229a2b",
+      "slug": "persona-heartbeat-instructions"
+    },
+    {
+      "content_sha256": "07167f0e0d2a41d9dd809d00272b304169ba524f490588b293c2169df5cdfce7",
+      "slug": "persona-heartbeat-orchestrator"
+    },
+    {
+      "content_sha256": "627278e277cd6f28ede87924098d95d1903eda66c1717dec9ee9198b19de927a",
+      "slug": "persona-improvement-review"
+    },
+    {
+      "content_sha256": "099cb7ac8bd215d2fda880523780c6dd2264728f102ef5d51588e8a38194f0e2",
+      "slug": "persona-onboarding-bootstrap"
+    },
+    {
+      "content_sha256": "b4a825a87e629ba05d4a7af6b2a28052e91d5d8d7e34abee1a646a17815dc861",
+      "slug": "persona-onboarding-continuation"
+    },
+    {
+      "content_sha256": "381ca4104d77dc71031fe056c73d6023dd347ff37777d24918bba6f639f78974",
+      "slug": "persona-onboarding-pending-approval"
+    },
+    {
+      "content_sha256": "914d1604f66029cdc88f24d3898d93400607db1011ce06b2a5571252d162f9d5",
+      "slug": "persona-onboarding-review"
+    },
+    {
+      "content_sha256": "9396a5bf7a156f310d81a31ecfef5c245a01c0bab3dc3ab246cd1bfa8a3663aa",
+      "slug": "persona-safety"
+    },
+    {
+      "content_sha256": "614482d619ce93c309440ae4526f6df5dbea7cc149ee6f2ac7286b5e27839795",
+      "slug": "persona-system-prompt"
+    },
+    {
+      "content_sha256": "5ebe3e3e8d791711e03e039345c53db30bf117645416752d920c84db10337d0f",
+      "slug": "persona-wake-guidance"
+    },
+    {
+      "content_sha256": "3dce439438f7af2cf8445cdb81db43cef9246bafe833cd4953a11b9bfc9e0a88",
+      "slug": "pixel-art-critic-system-prompt"
+    },
+    {
+      "content_sha256": "a7f6e281f088f91e9ff0bf556509531d188b28a3dfc83486170c66b36d54f6ee",
+      "slug": "planner-system-prompt"
+    },
+    {
+      "content_sha256": "f5be9baf2ede06cd4477ca03333190053bd7bcbc4be4dc36b758f5b1dfbdf92a",
+      "slug": "platform-context"
+    },
+    {
+      "content_sha256": "5e76e6d42d88c7c7cdd17e3f98974dc36bc86d56b637480cee5d1faf272ef54b",
+      "slug": "portfolio-article-quality-labeling-system"
+    },
+    {
+      "content_sha256": "f8f0705bdea077c3e272f2efbb3951ea4af2b1f6c4e8ba45ef7a9b566efc6891",
+      "slug": "portfolio-article-quality-labeling-template"
+    },
+    {
+      "content_sha256": "1bb7fbd7a74256621a0247b0ce0e062e7aca17324161ffad1b52c1d8aa99964d",
+      "slug": "portfolio-cross-validation-review-system"
+    },
+    {
+      "content_sha256": "9d70bfb8fb1e01b13b7baa2f76a3a8febba91cdce8dc603d05463d15d98ff7a4",
+      "slug": "portfolio-cross-validation-review-template"
+    },
+    {
+      "content_sha256": "388e792d5751f0c9f34ece0faacf10a5051444517a4f84e6da34e09955a1edd6",
+      "slug": "portfolio-jenny-chat-system"
+    },
+    {
+      "content_sha256": "790b17e9adac6f2fdc8063180bf241c7eb2d79941fbfdcf70e5c467568e5945c",
+      "slug": "portfolio-jenny-planning-extract-system"
+    },
+    {
+      "content_sha256": "cb9146544658dac0e495bf0c672d2be8297899b9c5cc4cdd83ff7fee005a4855",
+      "slug": "portfolio-jenny-reconcile-system"
+    },
+    {
+      "content_sha256": "6885107ded59dd1fbe8da3dfd2389e3c4acad25435efcbc5f380c0f96855eacb",
+      "slug": "portfolio-mgr-v1-system-prompt"
+    },
+    {
+      "content_sha256": "2a7d5b35c0aebbc9e383ec35ee414a4ac2f1cf4dc34b30096aca7f8663e3de1b",
+      "slug": "portfolio-thesis-generation-system"
+    },
+    {
+      "content_sha256": "aa1534e8f6d17eef9a5c4598c9d60c569686547cd571c10abc575de38caf2087",
+      "slug": "portfolio-thesis-generation-template"
+    },
+    {
+      "content_sha256": "7e96cff0de33971b6a7ff19b276941d43206398b5414558e191a38412bf27578",
+      "slug": "portfolio-thesis-validation-system"
+    },
+    {
+      "content_sha256": "a073c2eedef944a4616968f54c6a3a278849d07fac78cc993012641580e5ca98",
+      "slug": "portfolio-thesis-validation-template"
+    },
+    {
+      "content_sha256": "20adca6b77d6cd0dec838a762fb1825a602a3f739ae2e863716f6efe312f9440",
+      "slug": "project-rebuild-runner-system-prompt"
+    },
+    {
+      "content_sha256": "afcfaa8835a4b823d7ff5ca5fb621c0297f28974e0d396495e7fab63278725ef",
+      "slug": "prompt-builder-system-prompt"
+    },
+    {
+      "content_sha256": "ddfdd2b2703161ac385d2195ed7fd8bcc171bd2fa26113547e66a5047802e1a6",
+      "slug": "prompt-development-practice"
+    },
+    {
+      "content_sha256": "1964758d9e1629d75124845047b50e12f054ead857f8993feebb1444d52d59a3",
+      "slug": "qa-plan-defect"
+    },
+    {
+      "content_sha256": "5a77cbc0ea7e7a6530412c7ddd72d46f6bf0be842277b16b687040577b80ab56",
+      "slug": "qa-system-prompt"
+    },
+    {
+      "content_sha256": "7e5fd92180a3b675016c3376322913cf5a32249d53906e1b5475083bd89244c6",
+      "slug": "reasoner-system-prompt"
+    },
+    {
+      "content_sha256": "fed97cbcf9379cf08ff8ee43082e3fc1107c810d5e92122e7b384b0454b8a2b8",
+      "slug": "refactor-system-prompt"
+    },
+    {
+      "content_sha256": "fb9a58718c649a27d3c1a75f90dcc2094dca37a206f79aa6da40a9125dd21ef0",
+      "slug": "researcher-system-prompt"
+    },
+    {
+      "content_sha256": "8f69faec21301e0d94cd4cfe0650ea4b2bf58452c7b18eaf3c66e0c42e8c5233",
+      "slug": "reviewer-system-prompt"
+    },
+    {
+      "content_sha256": "5538a4aff486a61bb68a094fe96318b2860a9814e682c8f6ca73c72795b0d6e8",
+      "slug": "risk-aggressive-v1-system-prompt"
+    },
+    {
+      "content_sha256": "eda6386f2e3e1033ead5f762dcb78236d5da3691a9ca705cc82b5598a1a074e4",
+      "slug": "risk-conservative-v1-system-prompt"
+    },
+    {
+      "content_sha256": "8445bb9bd455975305c329ab7b45a3d291388ba8d849b1ea42217122578e1475",
+      "slug": "risk-manager-system-prompt"
+    },
+    {
+      "content_sha256": "05d461da425755793678b2a8471f1e8a181542eaaaf4dcd87a88a1919ae69f14",
+      "slug": "risk-neutral-v1-system-prompt"
+    },
+    {
+      "content_sha256": "ed9cf85b315c990415ed1b41a6abf0c2d490159858d81a7562d6cdcb4cd58091",
+      "slug": "runtime-execution-evaluator"
+    },
+    {
+      "content_sha256": "222aed41bf305b1f980d1b8e9ee48fa2a47988448f23b3922c815afe89231f1c",
+      "slug": "safety-directive"
+    },
+    {
+      "content_sha256": "85d3807434b4f695b1ce6d57b4ef902b6a7c6626d5efb7d320ffe516ed48e67a",
+      "slug": "sentiment-grounded-v1-system-prompt"
+    },
+    {
+      "content_sha256": "bb7c94351d37c529bc755cc16038a7b21b2fa34ff38098a8897f5aa4001d260e",
+      "slug": "session-analysis"
+    },
+    {
+      "content_sha256": "0348d7c44bf9ed35dcdd791b2c3c376264b88170023da467ba7828de88f2df27",
+      "slug": "specifier-system-prompt"
+    },
+    {
+      "content_sha256": "116baa09f488f83f7e690dfdebcc11995d818876d861daec05e06697ea200e5e",
+      "slug": "summarizer-system-prompt"
+    },
+    {
+      "content_sha256": "073f944cf4d0e0a6f65379920a71cec9f38fb74e1dc55928912bbca85a39baa2",
+      "slug": "supervisor-system-prompt"
+    },
+    {
+      "content_sha256": "7aa56778df4009f7813177c90bff92f1bd435abc22331433fd5426fec946856c",
+      "slug": "task-sweep-orchestrator-system-prompt"
+    },
+    {
+      "content_sha256": "e538f1d38dafeda73b43a5463242fbcdd142ca81282532fad93b328a8fc7dac5",
+      "slug": "technical-v1-system-prompt"
+    },
+    {
+      "content_sha256": "e29e73fe51756fee357029a0426455ed71dc97152ed8df1d20b7a0c8cf778dd6",
+      "slug": "test-writer-system-prompt"
+    },
+    {
+      "content_sha256": "62ad68fee387dfc87269847fa14d8f3587254863d5dd6fd86cfadb95a2b395dd",
+      "slug": "tester-system-prompt"
+    },
+    {
+      "content_sha256": "73031b8cb76bf10f052b4f53525450b7daf07f4cd82af904ee44b2a7b9a0ed7c",
+      "slug": "the-aftertimes-development-policy"
+    },
+    {
+      "content_sha256": "68983f000609a1c699003d67cbd119fc51e9fe9681f67d59258a2d03d3317544",
+      "slug": "tier1-screener-v1-system-prompt"
+    },
+    {
+      "content_sha256": "e39cc9e940ad24b7f27301c01bc0791cbd0dcf2d6e3532be380bb250059eaa4a",
+      "slug": "trade-manager-system-prompt"
+    },
+    {
+      "content_sha256": "557ed7ea83824fb3ba6446705e93d8a4a91629ba03295a4c6ef44c67e7f1eb2e",
+      "slug": "trader-v1-system-prompt"
+    },
+    {
+      "content_sha256": "c6a730da04748a15561fb3d7cbcdc42aba714c8a8682463a88eaab787da50b04",
+      "slug": "triager-system-prompt"
+    },
+    {
+      "content_sha256": "8cebc461bf641a96cf977135189b3e707055d1be992a2802e1c85f40384a5580",
+      "slug": "ui-mockup-designer-system-prompt"
+    },
+    {
+      "content_sha256": "94ff980c7c63aab96422265d8763a048c710c6c66d69d4aaea86a6d6dbb30a82",
+      "slug": "ux-polisher-system-prompt"
+    },
+    {
+      "content_sha256": "6c53f039adcf7ccebf89a26612ca0d793a0a3a4f4ac015264e74f66592f25d01",
+      "slug": "validator-system-prompt"
+    },
+    {
+      "content_sha256": "be62e2f86d2856fb47491ff513ff18e669c562f35905e9de3b96cf5d8d98b9c2",
+      "slug": "vantage-domain-expert-system-prompt"
+    },
+    {
+      "content_sha256": "9cc407a8230abd140980d25660068c13cf76a623d2e89472c372c1942dadeebe",
+      "slug": "vantage-intake-system-prompt"
+    },
+    {
+      "content_sha256": "5865943a0c12e1484943b1b7ade1a8739c5614b397155cba50b3135a2f7b0048",
+      "slug": "vantage-methodologist-system-prompt"
+    },
+    {
+      "content_sha256": "2239825e37705979f0e9c73055ee6bc0278b30a3633751342a41ebdc1a6927e8",
+      "slug": "vantage-optimist-system-prompt"
+    },
+    {
+      "content_sha256": "0c02f3cef16afdc56dc6773ea8835267a1dc419cfcd2cbebb8ab14a7219fcaca",
+      "slug": "vantage-research-judge-system-prompt"
+    },
+    {
+      "content_sha256": "796dc9c9fe63fc0db2c19dc6c63bda9696a93000e2e41a8b540e20bd0a1f99d9",
+      "slug": "vantage-research-system-prompt"
+    },
+    {
+      "content_sha256": "75345fd309530279fb749c6cefa17e63756dc2b420e3f8d7254021b948cf0740",
+      "slug": "vantage-skeptic-system-prompt"
+    },
+    {
+      "content_sha256": "bda19bd1db87e519c4afd96f7bebac7fa8d4cdb04f6152cb1fe1a5afadd20a2b",
+      "slug": "verifier-system-prompt"
+    },
+    {
+      "content_sha256": "6825668884ac9988f1a93f9d08324d7935607eca7d46d5b12ad0ec20ac8d01fb",
+      "slug": "voice-responder-system-prompt"
+    },
+    {
+      "content_sha256": "48d73178aeba364521dcbd6c7dc6dda3f96b50dbcfefbb1985b86d1e7b0bb3cd",
+      "slug": "web-research-routine"
+    },
+    {
+      "content_sha256": "4597d96c4c44f55768c929d2e64ef56cee5efe49d6293d38cb66c2fbf1fcd91c",
+      "slug": "worker-system-prompt"
+    },
+    {
+      "content_sha256": "7209d976c1f855230531f529ba5f1bc74cdd9a8f61715d9de9f7af7923b96bf7",
+      "slug": "workspace-search-discipline"
+    }
+  ],
+  "initial_review_inventory": [
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "db533cdc7789a097086fff332dee6820f165d2cc0630f9e476e9aacfd94cab3a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "45505346605f5cd6dd026b93f8285b81a169f23936708fe9e8861afb654d9e2a",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "A-Loom-scoped reusable workflow rules; no command syntax or cross-scope authority issue.",
+      "review_source": "post_change_semantic_review",
+      "slug": "a-loom-development-policy"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "e098ec0b7488bf87cbe87fadeace9593555cbc2de892a47704c4690f3aec3db7",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "c4513476e63321ce6c8d074f60628173dfb9774bb69ab22dad832513f887d18e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Live project overrides inject this policy into eight Agent Hub consumer profiles. Current code uses the canonical pi-mono Anthropic stream (backend/app/llm/providers/anthropic.py:657-671), model-derived output tokens (:412), and CANCEL_NEWEST heartbeat scheduling (backend/app/workflows/persona_heartbeat.py:178); the stale direct-SDK recipe was removed.",
+      "review_source": "code_usage_evidence_review",
+      "slug": "agent-hub-development-policy"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "2bd13f81e756e94d30f7d49bcbd77c68d8cb462969ac966f8d34379f3ac1ed50",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2bd13f81e756e94d30f7d49bcbd77c68d8cb462969ac966f8d34379f3ac1ed50",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role specialization for analyst only; no boundary or overlap issue found.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "analyst-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "a55824eb044f2007c26a836210e8e32657b26ca1f555fd1f2d846555fe592cc0",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a55824eb044f2007c26a836210e8e32657b26ca1f555fd1f2d846555fe592cc0",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned audit role prompt; scoped to auditor and concise.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "auditor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "7b9359a1bbd42ca5b907d192aa6673e1da942f8031ba08f974ca2dcdab46d933",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "08f5e7a1cc517f0d3a8ebe40acd4cbcb3d2e7c2cf6c3c28008333223544c7a74",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Autocode-lane lifecycle split is scoped to harness-owned lane and uses runtime capabilities without exact syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "autocode-execution"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "not_applicable",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5c95ab885c3cda522f4239d213be8f809fb0bcc321004ff0bea5f7c3dd62c802",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "5c95ab885c3cda522f4239d213be8f809fb0bcc321004ff0bea5f7c3dd62c802",
+      "initial_status": "clean",
+      "outcome": "resolved_disabled",
+      "reason": "Disabled: exact slug search found no Agent Hub or SummitFlow consumer; current SummitFlow QA repair constructs and sends its debugger fix prompt in backend/app/tasks/autonomous/review_modules/actions.py:132-168.",
+      "review_source": "code_usage_evidence_review",
+      "slug": "autocode-fix"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "13fecf0535ec88e05d37dae2993f5de28b2c6a2af8a50f898a2d9bd5ee79f49e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a8cc5c2840a0cce447ee7f4df2abfe562f8a13b31dce81f102fbd11b021a579e",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Minimal template for supplied quality-gate errors; no reusable command syntax or authority conflict.",
+      "review_source": "post_change_semantic_review",
+      "slug": "autocode-pristine-fix"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5713983b79110a962a029a4ffae56907074ee779f4333d44e3272f01a18e5127",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5713983b79110a962a029a4ffae56907074ee779f4333d44e3272f01a18e5127",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "SummitFlow defines this slug and loads the DB template through its transient-safe prompt fetcher (backend/app/tasks/autonomous/exec_modules/prompts.py:72,88-99,381), then formats it in the active subtask payload path (:359-416).",
+      "review_source": "code_usage_evidence_review",
+      "slug": "autocode-subtask"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "312c329f101dbc23870e356b32a0cf3189551ca4e07124b96b7ab74358f67b40",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "312c329f101dbc23870e356b32a0cf3189551ca4e07124b96b7ab74358f67b40",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role-opposed committee prompt; overlap with bull-researcher-v1-system-prompt is intentional and different consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "bear-researcher-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "eb2ee9215f923f20abc68f5c19ce59f40c373b1dac65860d5653ba201758bce3",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "eb2ee9215f923f20abc68f5c19ce59f40c373b1dac65860d5653ba201758bce3",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role-opposed committee prompt; overlap with bear-researcher-v1-system-prompt is intentional and different consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "bull-researcher-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "f487cafb7a2678ff018ddc110f095ea43b1537f21a46c46cc3b72958817c71de",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f487cafb7a2678ff018ddc110f095ea43b1537f21a46c46cc3b72958817c71de",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Global output style prompt; explicitly exempts code, JSON, commits, and contracts from caveman style.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "caveman-output-directive"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "e4bea2b76e449c0b70ad2763ea00047a5fdd269a543a36341fd32a6f754ec0ff",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "38952b9513d38d0a8cf26efcfa42c37f3510e1b946f2ff141c077d988ddd5329",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Chat-scoped behavior is brief, additive, and delegates brevity to global output directive.",
+      "review_source": "post_change_semantic_review",
+      "slug": "chat-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "3acc4467cafc0e742fd6d1f537a8950bc85a53e7cd22e2b51d78b639be161539",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "3acc4467cafc0e742fd6d1f537a8950bc85a53e7cd22e2b51d78b639be161539",
+      "initial_status": "clean",
+      "outcome": "resolved_disabled",
+      "reason": "Merged into coder-system-prompt to remove duplicate same-agent system authority.",
+      "review_source": "disabled_after_audit",
+      "slug": "coder"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "9e9be887205ca998e03566ae1c7f7185223e209cd01ce2c12c648c561e65095f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "658ab85018a307a720729257170e9f1db1b6af49b438790c51e000e13be88db8",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Coder-scoped implementation guidance aligns with safety and autocode harness split for SummitFlow autonomous execution.",
+      "review_source": "post_change_semantic_review",
+      "slug": "coder-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "42e07d1348899b8a62746c33d8b0d2761fadfa89478ca725969ba269788a4c19",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "fcc55845aeeecf7782e993cfde28c5ec1d2310cc78760282ad61720ba7b9aadc",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Cross-project coding-profile practices are reusable behavioral rules with no exact commands or arbitrary size limits.",
+      "review_source": "post_change_semantic_review",
+      "slug": "coding-development-practice"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "368365270c48bda0b73e4944431f22d6834bd5127a9cfd299b89e93b0df91b4f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "368365270c48bda0b73e4944431f22d6834bd5127a9cfd299b89e93b0df91b4f",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Coding-work-only constraints are scoped, non-conflicting, and not duplicated by canonical prompts beyond compatible reinforcement.",
+      "review_source": "post_change_semantic_review",
+      "slug": "coding-golden-rule"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "579bf41520099e121e7b19339e20bb5bf8888f4371309bfee3b000bc68c812e3",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "579bf41520099e121e7b19339e20bb5bf8888f4371309bfee3b000bc68c812e3",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned router prompt with strict JSON schema; no conflicting or redundant same-consumer prompt supplied.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "committee-router-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "6b6d7468405f3c87da21ef9047fe22470dea7c8a44d2dbfe418b7be1d821bd7e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6b6d7468405f3c87da21ef9047fe22470dea7c8a44d2dbfe418b7be1d821bd7e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned synthesizer prompt with bounded source-of-truth and JSON output rules; no conflict found.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "committee-synthesizer-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "not_applicable",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "1ddfd6d117460c3a42c5003755fbffec8af552ab9511cfbf71175bb2097e4c59",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "1ddfd6d117460c3a42c5003755fbffec8af552ab9511cfbf71175bb2097e4c59",
+      "initial_status": "clean",
+      "outcome": "resolved_disabled",
+      "reason": "Disabled: exact slug search found no prompt consumer; SummitFlow completion gates are deterministic code in backend/app/api/tasks/crud_handlers.py:152-164 and backend/app/api/tasks/get_endpoints.py:34-60.",
+      "review_source": "code_usage_evidence_review",
+      "slug": "completion-gate"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "25f0d4942296092710291deeda6525715da94301450f3c6b56d815c9b7ad20fe",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "25f0d4942296092710291deeda6525715da94301450f3c6b56d815c9b7ad20fe",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent Hub catalogs this slug (backend/app/services/prompt_catalog.py:22), requires and formats its DB content in render_completion_review_prompt (backend/app/services/persona_prompt_service.py:122-135), and invokes that renderer from the completion-review workflow (backend/app/workflows/_completion_review.py:48).",
+      "review_source": "code_usage_evidence_review",
+      "slug": "completion-review-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "a95bfacf9b94b13b55f342b1469e9917d3528aaa1d0c15c224cea3b465e0eaf8",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a95bfacf9b94b13b55f342b1469e9917d3528aaa1d0c15c224cea3b465e0eaf8",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Reusable completion-review decision rules; no tool workflow or conflicting authority claim.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "completion-review-rules"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "a24e6c056f9646cf7ec9a0b76843bd815aacb68695fbad1bcd7d069768d6d35f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a24e6c056f9646cf7ec9a0b76843bd815aacb68695fbad1bcd7d069768d6d35f",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role prompt scoped to complexity-assessor with compact machine-format instruction.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "complexity-assessor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "68e5c370a4b484527cb3dbde673725452616da390b11916234889722e44ae00e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "68e5c370a4b484527cb3dbde673725452616da390b11916234889722e44ae00e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-specific extraction contract; overlaps credit-card researcher domain but different consumer and task.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "credit-card-offer-reviewer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "f08716f5f27cd71c536c6fd50caa9450721c6f457988e1218fd0d9e7c6b685c0",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "7f405c29cd62b0eb387b7993f5f4d43b12918c73a863608ff91f8ddd9aecf1ba",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Agent-specific JSON contract and web-use rule fit runtime-provided capability boundary.",
+      "review_source": "post_change_semantic_review",
+      "slug": "credit-card-researcher-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "683f1c8a08014b0978e8b4a033be6592d0ae19cf8021180a177965740d1a417b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "683f1c8a08014b0978e8b4a033be6592d0ae19cf8021180a177965740d1a417b",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned code review role, output contract, and scoped quality rules.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "critic-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "95eb84e3892caac619cfeed37736355a5f45483b7f4246af78cd4da98cd373e6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "95eb84e3892caac619cfeed37736355a5f45483b7f4246af78cd4da98cd373e6",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned debugging rules align with safety and coding policy; no replacement claim.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "debugger-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "65704d42acfad9b221ce83fd19abe4b5847d9bae5371bdb04ab4e3d19c6f085f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f3cea5f64d81c215a6f0f13046caae5e9c6d819db95ca07ee78c252da1bbfc13",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Dependency-manager role guidance is scoped, safety-compatible, and avoids command syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "dependency-manager-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "e2533f8c143af0ce2ec6a122790e18f7f9a73ccf26456e6d15f100e4b8a4c969",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "e2533f8c143af0ce2ec6a122790e18f7f9a73ccf26456e6d15f100e4b8a4c969",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned UI/UX review prompt; scoped, concise, no tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "designer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "63f7c59942eed8e678ca3699a659c55610412d9658a7913530dd43f72c4d22c6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "63f7c59942eed8e678ca3699a659c55610412d9658a7913530dd43f72c4d22c6",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned analyst role; avoids overclaiming, requires provided evidence, no stale tool surface.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "equity-analyst-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "explorer-system-prompt"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "16c43bfadc1921f0c7aeafb8fb22d7ddc3779c9f6dea3b5261c1a0655bf33478",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "16c43bfadc1921f0c7aeafb8fb22d7ddc3779c9f6dea3b5261c1a0655bf33478",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Merged into explorer-system-prompt to remove duplicate same-agent system authority.",
+      "review_source": "disabled_after_audit",
+      "slug": "explorer"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "a1e2f0c8eb155674aca5458851b24be63d65d159b6953f392750e7420b58564d",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "8ac25beb4828bdddc7c22dbd5b25890e527aa7891ff4f7164e22639fc66bd389",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Read-only explorer behavior and output formats are role-scoped and concise.",
+      "review_source": "post_change_semantic_review",
+      "slug": "explorer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "0a0bdac853c6cfc06e9627db8a28df3114eee3e3f464dac7962a5bf01d2987f1",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "0a0bdac853c6cfc06e9627db8a28df3114eee3e3f464dac7962a5bf01d2987f1",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned data extraction role; compact and scoped.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "extractor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "663881441b14604956097d48607c11e4ce7d0b00d20e06ce955d097f7a6280ea",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "663881441b14604956097d48607c11e4ce7d0b00d20e06ce955d097f7a6280ea",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Reusable workflow guidance for feedback triage; no hard authority replacement or exact tool workflow.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "feedback-audit"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "a16983757691114d62aad411158565e00d60067101c5b71b2d551e44bb598ae2",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a16983757691114d62aad411158565e00d60067101c5b71b2d551e44bb598ae2",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Shared output schema assigned to financial-document-reviewer; overlap with system prompt is contract-specific and intentional.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "financial-document-reviewer-json-contract"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "60cc726cf195bc888ceec4a47ccea3e8d6ba1d104821c2af622b78089a77b1b0",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "60cc726cf195bc888ceec4a47ccea3e8d6ba1d104821c2af622b78089a77b1b0",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Guardrail rules specialize money evidence extraction; no conflicting authority or stale tool claim.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "financial-document-reviewer-money-rules"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5b0d57218a77484fcabc7e87d74f1f92d03ff3eb7680602af7be9fec6a7e2f12",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5b0d57218a77484fcabc7e87d74f1f92d03ff3eb7680602af7be9fec6a7e2f12",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role prompt; separate JSON and money guardrails provide compatible schema and extraction constraints.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "financial-document-reviewer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "964ecb1f802170065301a6b1bc1133d3bec852b694fd795ff6b49346eddfce2c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "964ecb1f802170065301a6b1bc1133d3bec852b694fd795ff6b49346eddfce2c",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Role-opposed committee prompt intentionally overlaps shared schema with bull seat; different consumer and perspective.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fitness-bear-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "516a7e8f1442533ade4fff170fa094b8a5e035b7069226e0e2e91c84938c2f3c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "516a7e8f1442533ade4fff170fa094b8a5e035b7069226e0e2e91c84938c2f3c",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Role-opposed committee prompt intentionally overlaps shared schema with bear seat; different consumer and perspective.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fitness-bull-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "d3505332c11584ea82d26f4535a913acdf0e6d29205a08cf9001c52daf0afa73",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "d3505332c11584ea82d26f4535a913acdf0e6d29205a08cf9001c52daf0afa73",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Committee judge role consumes other seats and has distinct synthesis contract; overlap is intentional schema coordination.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fitness-judge-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "da1ce9cbe62716f66aaf3e77758f189cbe68a3be2e808e073e6ecdaf34c90f24",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "da1ce9cbe62716f66aaf3e77758f189cbe68a3be2e808e073e6ecdaf34c90f24",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Committee skeptic role is a meta-critic with distinct consumer and output; overlap with judge is intentional workflow contract.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fitness-skeptic-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "53e7956bac17b454ef29bb9ccc81ca30f9e67f2992c0e2fdec075b94bf1fe056",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "53e7956bac17b454ef29bb9ccc81ca30f9e67f2992c0e2fdec075b94bf1fe056",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned fixer role prompt is scoped to targeted fixes and does not replace higher policy.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fixer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "2ac7697c4befdf6112fc7a8ea53e8cffffe147d056f8b87a49194e66798f54bf",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2ac7697c4befdf6112fc7a8ea53e8cffffe147d056f8b87a49194e66798f54bf",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Reusable screenshot critique contract with clear output schema; no tool or authority claim.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "frontend-design-critic"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "e1e22e5dbda0f1febc8c03ed188729f42be4ea494281da659f841bf884d09e6f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "e1e22e5dbda0f1febc8c03ed188729f42be4ea494281da659f841bf884d09e6f",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee analyst prompt is constrained to payload evidence; overlap candidates are separate specialist roles, not same consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "fundamentals-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "f3a67b21d430207f270bd55ace9780b4294544dc49b0de090e323c9d901f52b4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f3a67b21d430207f270bd55ace9780b4294544dc49b0de090e323c9d901f52b4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned local art critic prompt specializes its role and accepts caller JSON formats; no stale command workflow.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "game-art-critic-gemma-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "77b728919dcfd453d7a956255d12b71ed113e91cc5ef5df5f62aeca7d7a39b7b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "77b728919dcfd453d7a956255d12b71ed113e91cc5ef5df5f62aeca7d7a39b7b",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned visual critic prompt covers broad game-art critique; overlap with audio/pixel critics is role-specialized, not same consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "game-art-critic-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "00dd170b7a911fba68355be1459a1c00cbd91f3426e2d7e3f6fe6d3ca9efd95d",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "00dd170b7a911fba68355be1459a1c00cbd91f3426e2d7e3f6fe6d3ca9efd95d",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned audio critic prompt is scoped to audible evidence; no conflict with art critic roles.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "game-audio-critic-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "42de38d376bb65c3ef8b1603dd5bc42cdb6252dbf3ce28893ad7209ad6afce60",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "42de38d376bb65c3ef8b1603dd5bc42cdb6252dbf3ce28893ad7209ad6afce60",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Minimal agent-owned local assistant prompt; generic tool-use line does not name stale tools or override tool capability blocks.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "gemma-local-test-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "dc0d5266c29195e86ca39fce0281e20f4163af9b2766922ba2151b08ef9f9add",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "dc0d5266c29195e86ca39fce0281e20f4163af9b2766922ba2151b08ef9f9add",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned output-only commit-message generator; narrow scope and no governance boundary issue.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "git-agent-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "de63f8dc58a1910cf8f2d939ac41d49f031e00a023dece98d5be0c2b998296e4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "de63f8dc58a1910cf8f2d939ac41d49f031e00a023dece98d5be0c2b998296e4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned audit-only prompt respects no mutation unless asked and reports evidence gaps.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "governance-auditor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "0a3adece874f58d29eaa9ee1c0c5e058f3453dcb7faaa5466a6f1110a1e987de",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "0a3adece874f58d29eaa9ee1c0c5e058f3453dcb7faaa5466a6f1110a1e987de",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned extraction contract; schema and constraints are stable task instructions, not duplicated tool workflow.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "graphify-semantic-extractor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "d8714e375d50771086681096d5240841de892e0f29a8ed0f20f0de4f60271860",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2e21f4d606e6547a8b447f63586cf4ea9ea3c878931563a52e548d4734553e22",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Graph workflow rules explicitly leave exact commands to computed capability context and complement search.",
+      "review_source": "post_change_semantic_review",
+      "slug": "graphify-workspace-map"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "6573c828ad5b289b75e3159cc3c96f641ad8035ce5405f5da8a358e1e207301e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6573c828ad5b289b75e3159cc3c96f641ad8035ce5405f5da8a358e1e207301e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned parser prompt defines compact JSON behavior; no external tool or memory boundary issue.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "household-list-parser-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "4053d506fe57914bd0f6d94d4bf71ce16691dee53bd32316d83152358d575305",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "85bdd6fa2f0ebe65f144b30539db868f380e96a8d35465e66a1ce63c8394a95c",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Agent-specific price-scout JSON contract is scoped and uses runtime public-web capability without syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "household-price-scout-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "21e724c4ad91d47948e385bdf597861b68d1de9a8d2e05a1db3a9950581d8113",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "21e724c4ad91d47948e385bdf597861b68d1de9a8d2e05a1db3a9950581d8113",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Shared JSON output contract; overlap with household audit system prompt is complementary schema plus behavior, not needless duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "household-transaction-audit-json-contract"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "2d36767166020672187edbc8e2e6e89d65a7dafe274df06c601335fd56bd2e60",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2d36767166020672187edbc8e2e6e89d65a7dafe274df06c601335fd56bd2e60",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Household audit behavior prompt protects ledger correctness and pairs cleanly with JSON contract.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "household-transaction-audit-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "9b5c075374594b0e4d865ed5d0402c34ab1dacd9d9b3fc932ab2106e6bf75512",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "9b5c075374594b0e4d865ed5d0402c34ab1dacd9d9b3fc932ab2106e6bf75512",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned public game-idea helper prompt is scoped to conversation flow and tool submission behavior; no canonical boundary conflict.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "ideator-public-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "4d9c2953a61b2e9eb2cbfb75299de4498564e10acabeafc3fbd485e6ee688a0d",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4d9c2953a61b2e9eb2cbfb75299de4498564e10acabeafc3fbd485e6ee688a0d",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned ideation prompt defines task intake and pipeline JSON modes without replacing global authority.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "ideator-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "06ef9d9d587d076c93d2888644aab67ad9b8de8bcad8a5b2d43cfad259cf4b50",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "06ef9d9d587d076c93d2888644aab67ad9b8de8bcad8a5b2d43cfad259cf4b50",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned image generation quality prompt; no tool claims, memory policy, or persona state.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "image-gen-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5b6594efd7a52683adba9fe5177cf13382ba8256a22f73ef2701d654770ad74e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5b6594efd7a52683adba9fe5177cf13382ba8256a22f73ef2701d654770ad74e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned final synthesizer prompt; committee overlap is intentional role separation, not duplicate same-consumer instruction.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "investment-committee-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "1f0eb926f1e19a5f28d2e95a5fd02f6a57ba622af55f4d7ff8b03e3aef445a3e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "1f0eb926f1e19a5f28d2e95a5fd02f6a57ba622af55f4d7ff8b03e3aef445a3e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Persona-scoped guardrail explicitly stays within project permissions and global Safety Directive; no hard context limit or state storage issue.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "jenny-autonomy-policy"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned test system prompt is narrow and assigned only to kimi-code-test; overlap with minimax-plan-test-system-prompt reaches different test agent consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "kimi-code-test-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "7a3054e34eb87d7e23f4835748876e0caad356dba1694c820f61d5d2c0afeb07",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "7a3054e34eb87d7e23f4835748876e0caad356dba1694c820f61d5d2c0afeb07",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned extractor prompt describes reusable extraction criteria and does not claim memory storage authority beyond identifying durable learnings.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "learning-extractor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "ae1ce78f60254a72a08191cf8e040d5504474c30dbc4c6b6a5c27892b2e246e5",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "ae1ce78f60254a72a08191cf8e040d5504474c30dbc4c6b6a5c27892b2e246e5",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Analyst role uses scout evidence as input while preserving verification; overlap with market-pulse-scout-system-prompt is role-separated.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "market-pulse-analyst-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "f4292248cea44cd2a343ddc61dc17fc1204aac42bb02b613d389eb8c88aeeb86",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f4292248cea44cd2a343ddc61dc17fc1204aac42bb02b613d389eb8c88aeeb86",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Scout role focuses on external evidence collection; overlap with market-pulse-analyst-system-prompt is complementary, not same consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "market-pulse-scout-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "7a86552593861cdfc972b6649f5a196c4c5b6452866b146ab2db85923a22ae61",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "9498cd7c174606507f01d2170ebd68dab98227bbcb049bf32aa5e48a7dd41728",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Prompt stays in DB-owned reusable behavior. It enforces memory/persona/prompt/tool-capability boundaries, uses canonical consumer normalization, avoids exact command syntax, and keeps no hard size limit. Repeated canonical boundary text is task-needed for memory curation, not harmful redundancy.",
+      "review_source": "post_change_semantic_review",
+      "slug": "memory-curator-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "f6b4c14f5139e61ee7b27f839de699b579efa5f21a278849be491452823a64a2",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f6b4c14f5139e61ee7b27f839de699b579efa5f21a278849be491452823a64a2",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned evaluator prompt is concise and only rates supplied memories in completed session context.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "memory-rater-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4671694ece629ecbac281b71f0df01caa234821ccb9324453907c36a1ab9f6e4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned test system prompt is narrow and assigned only to minimax-plan-test; overlap with kimi-code-test-system-prompt reaches different test agent consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "minimax-plan-test-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "ea99fe1c4d7fca57fb623c4406fe8b0c50994c5da64e42012b22f4e57fb8a552",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "fa386448880a468b28957bb4112f1d75fbb6c7f419b68204dc592a45d7de57a2",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Provider-evaluation tester prompt is short, role-scoped, and references runtime file-writing capability without exact syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "minimax-tester-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "cde98de1f4a03ee55ba803f471379586a663155046fc29d431cda5ea7ade0d5a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "cde98de1f4a03ee55ba803f471379586a663155046fc29d431cda5ea7ade0d5a",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Global output mandate allows machine-parsed exceptions, so heartbeat protocol prompts remain compatible.",
+      "review_source": "post_change_semantic_review",
+      "slug": "narration-tags"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "55391c30b17c44f2cce0be4b1b4020a911f49f4809a66a282e3165d94cb98093",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "55391c30b17c44f2cce0be4b1b4020a911f49f4809a66a282e3165d94cb98093",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee prompt is payload-grounded, prohibits web and memory, and has distinct news-only consumer role.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "news-grounded-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "007f6d9d389c1a189d1d19d1980f3016218fccfdf57c57e9d8faf00fa028917e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "007f6d9d389c1a189d1d19d1980f3016218fccfdf57c57e9d8faf00fa028917e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned formatter prompt has clear output schema and distinct JSON formatting role.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "note-formatter-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "954aced462d6e4cd478f1915a8855fd393d0dbbd1493061ba01e43a3817303fa",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "954aced462d6e4cd478f1915a8855fd393d0dbbd1493061ba01e43a3817303fa",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned titler prompt has distinct single-line title role; not same consumer as note-formatter-system-prompt.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "note-titler-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "de59ed611e478a3798092226c77dc3f8393e176be08991b8c42750c04e3ebc5b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "de59ed611e478a3798092226c77dc3f8393e176be08991b8c42750c04e3ebc5b",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned optimization role aligns with safety and coding practice: measure first, minimal changes, verify correctness.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "optimizer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "b3e76e8e477ff33c6b5001536a71b2605da3e521ed41401bdfd8e2668f0dc8d0",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2ee42be3bd1f8faa38209eb64d5dac62d634b946d1f194414e33ea0bfe74af19",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Persona routing rules are scoped to Work Chats auto mode and leave model/provider choice to Agent Hub.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-agent-routing-catalog"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "4fb4e8045fd8693c08ef4387bf4d6eb2d2ebdedb36bfd0b3a0ffda75121a357f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "a856116f8f3efc0176e9adc26a83ea39aaee5077ee6a4d4fbfeb9f03f46c156c",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Conversation-mode rules correctly separate chat from autonomous protocols and respect supplied history only.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-chat-usage-context"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "41cd9d6ceaf2b2a8a82dd011b4710e106aee9c033876ef548626030eb3e23845",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "41cd9d6ceaf2b2a8a82dd011b4710e106aee9c033876ef548626030eb3e23845",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Workflow template keeps DB prompts canonical, avoids parallel stores, and saves durable memory only for reusable lessons.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-evolution-guidelines"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "232d63223a23eab118e371c491e79565630b9062fff5cea6e1ac0cbef3be6618",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6fd6a21a6274615d06e849b0f586cdafaa68f245153b0ca07df796890bffd505",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Focus heuristics are persona task-mode behavior and leave commands to computed capability context.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-focus-harness"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "4a944a514910defaf058e643742525436240f1302e8933ee2b50d63bd9229a2b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6bf72c89d8ed256c6bd3ea9051ca8a5a8c58f7d1ef0a0b1df9cac89ca6943fd1",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Heartbeat-specific machine tags are allowed by narration exception; command syntax remains runtime-owned.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-heartbeat-instructions"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "07167f0e0d2a41d9dd809d00272b304169ba524f490588b293c2169df5cdfce7",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "b8aa58a0c649aec42fef7ab0edb3d09fa3a334fb3666b4f4a6fe0a98418d6a92",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Workflow template drives heartbeat with injected dynamic truth and compatible protocol output.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-heartbeat-orchestrator"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "627278e277cd6f28ede87924098d95d1903eda66c1717dec9ee9198b19de927a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "627278e277cd6f28ede87924098d95d1903eda66c1717dec9ee9198b19de927a",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Decision-review template is scoped to protected lab promotion review and returns a minimal JSON schema.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-improvement-review"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "099cb7ac8bd215d2fda880523780c6dd2264728f102ef5d51588e8a38194f0e2",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "099cb7ac8bd215d2fda880523780c6dd2264728f102ef5d51588e8a38194f0e2",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Onboarding workflow prompt is scoped to persona setup and does not claim higher authority or duplicate canonical policy.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-onboarding-bootstrap"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "b4a825a87e629ba05d4a7af6b2a28052e91d5d8d7e34abee1a646a17815dc861",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "b4a825a87e629ba05d4a7af6b2a28052e91d5d8d7e34abee1a646a17815dc861",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Continuation prompt is task-scoped and avoids re-asking known answers; no canonical conflict found.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-onboarding-continuation"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "381ca4104d77dc71031fe056c73d6023dd347ff37777d24918bba6f639f78974",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "381ca4104d77dc71031fe056c73d6023dd347ff37777d24918bba6f639f78974",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Waiting-state prompt is narrow and does not assert tool, storage, or authority claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-onboarding-pending-approval"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "914d1604f66029cdc88f24d3898d93400607db1011ce06b2a5571252d162f9d5",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "914d1604f66029cdc88f24d3898d93400607db1011ce06b2a5571252d162f9d5",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Reviewer template is scoped to onboarding approval and uses a clear output contract.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "persona-onboarding-review"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "concern",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "persona-system-prompt",
+        "persona-safety"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "f33491e9b6d56fef99bc17d8f76dd81fc6dd8a36c1ae073178230a5fc6a1d5ab",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "f33491e9b6d56fef99bc17d8f76dd81fc6dd8a36c1ae073178230a5fc6a1d5ab",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Legacy prompt-backed persona identity store disabled; persona.personality is canonical.",
+      "review_source": "disabled_after_audit",
+      "slug": "persona-personality-document"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "9396a5bf7a156f310d81a31ecfef5c245a01c0bab3dc3ab246cd1bfa8a3663aa",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "43621b36ba7fdf53c91b4c0334a46611f8216914d0c17db73594398ce77ea369",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Persona safety supplement narrows global safety without weakening it and fits persona scope.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-safety"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "614482d619ce93c309440ae4526f6df5dbea7cc149ee6f2ac7286b5e27839795",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "cb17191dfca4e3605f195b8bb64e86aff423f369ca4a2f4aa5d6175afcf6e07d",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Persona identity stays in agent prompt; reusable safety/tool/workflow authority delegated to DB prompts and computed capabilities.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "concern",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [
+        "platform-context"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "22d7d70d5b5c2338eaf48b4505785d3a1867cff59f09b8699d4778be32b8bc7d",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "22d7d70d5b5c2338eaf48b4505785d3a1867cff59f09b8699d4778be32b8bc7d",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Legacy prompt-backed persona state store disabled; persona row fields are canonical.",
+      "review_source": "disabled_after_audit",
+      "slug": "persona-user-context"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "5ebe3e3e8d791711e03e039345c53db30bf117645416752d920c84db10337d0f",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "ce425f988b6bab238191cc6a2f08410676041f200c9e5f827032212fe315dc27",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Behavioral wake guidance avoids exact command syntax and defers capabilities to runtime context.",
+      "review_source": "post_change_semantic_review",
+      "slug": "persona-wake-guidance"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "3dce439438f7af2cf8445cdb81db43cef9246bafe833cd4953a11b9bfc9e0a88",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "3dce439438f7af2cf8445cdb81db43cef9246bafe833cd4953a11b9bfc9e0a88",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned system prompt specializes pixel-art critique role. Overlap candidate with game-art critics is role-adjacent, not same effective consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "pixel-art-critic-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "concern",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "planner-system-prompt"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "3eaa90864341fdb3d488b388fe33bce786c4e3d8f572ab65a42defbf6883f9ab",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "3eaa90864341fdb3d488b388fe33bce786c4e3d8f572ab65a42defbf6883f9ab",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Disabled as an unassigned stale duplicate of planner-system-prompt.",
+      "review_source": "disabled_after_audit",
+      "slug": "planner"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "a7f6e281f088f91e9ff0bf556509531d188b28a3dfc83486170c66b36d54f6ee",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "7a62b0918537c4c66e6abf960cf39d38e889a9caa68dc54b413e770466194edb",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Planner-specific behavior uses live schema and canonical validator without spelling command syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "planner-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "f5be9baf2ede06cd4477ca03333190053bd7bcbc4be4dc36b758f5b1dfbdf92a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "872dd0f61c1ff4c6580655db5129f69270bec48a86100c9a39fb798c4842b604",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Matches canonical ownership and surface boundaries, including Claude GPT normalization and fail-open context behavior.",
+      "review_source": "post_change_semantic_review",
+      "slug": "platform-context"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5e76e6d42d88c7c7cdd17e3f98974dc36bc86d56b637480cee5d1faf272ef54b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5e76e6d42d88c7c7cdd17e3f98974dc36bc86d56b637480cee5d1faf272ef54b",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Short system prompt defines a narrow article-labeling output contract without stale tool or authority claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-article-quality-labeling-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "f8f0705bdea077c3e272f2efbb3951ea4af2b1f6c4e8ba45ef7a9b566efc6891",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f8f0705bdea077c3e272f2efbb3951ea4af2b1f6c4e8ba45ef7a9b566efc6891",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Template supplies schema and task data. Minor JSON-only overlap with system prompt is useful same-consumer output reinforcement and low cost.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-article-quality-labeling-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "1bb7fbd7a74256621a0247b0ce0e062e7aca17324161ffad1b52c1d8aa99964d",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "1bb7fbd7a74256621a0247b0ce0e062e7aca17324161ffad1b52c1d8aa99964d",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Narrow reviewer system prompt with JSON-only contract and no storage or tool surface claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-cross-validation-review-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "9d70bfb8fb1e01b13b7baa2f76a3a8febba91cdce8dc603d05463d15d98ff7a4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "9d70bfb8fb1e01b13b7baa2f76a3a8febba91cdce8dc603d05463d15d98ff7a4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Template contains needed input fields and schema. Overlap with system prompt is minimal and supports structured output.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-cross-validation-review-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "388e792d5751f0c9f34ece0faacf10a5051444517a4f84e6da34e09955a1edd6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "df4b2547ad6397a29eeb4520855d0556f1657d547f58f93d4565d579a5609a6d",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Portfolio-scoped runtime chat prompt respects read-only data boundary and confirmation before writes.",
+      "review_source": "post_change_semantic_review",
+      "slug": "portfolio-jenny-chat-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "790b17e9adac6f2fdc8063180bf241c7eb2d79941fbfdcf70e5c467568e5945c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "790b17e9adac6f2fdc8063180bf241c7eb2d79941fbfdcf70e5c467568e5945c",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Terse extractor prompt defines a bounded JSON extraction role and avoids unsupported storage or tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-jenny-planning-extract-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "cb9146544658dac0e495bf0c672d2be8297899b9c5cc4cdd83ff7fee005a4855",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "cb9146544658dac0e495bf0c672d2be8297899b9c5cc4cdd83ff7fee005a4855",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Terse reconciliation extractor prompt is scoped and does not duplicate canonical policy or tool workflow.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-jenny-reconcile-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "6885107ded59dd1fbe8da3dfd2389e3c4acad25435efcbc5f380c0f96855eacb",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6885107ded59dd1fbe8da3dfd2389e3c4acad25435efcbc5f380c0f96855eacb",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned system prompt specializes portfolio-mgr-v1 role; committee overlap is role-specific and not same-consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "portfolio-mgr-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-evolution-diagnosis-template"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "ea67852be90990d8e5d9bc771a0401cf94e5c0699a008519b917660c52aa6890",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "ea67852be90990d8e5d9bc771a0401cf94e5c0699a008519b917660c52aa6890",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-evolution-diagnosis-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-evolution-diagnosis-system"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "30a5b53ff82628d49fc04d9a74bdbee341fa8a34022d235136e9b3387366727d",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "30a5b53ff82628d49fc04d9a74bdbee341fa8a34022d235136e9b3387366727d",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-evolution-diagnosis-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-evolution-mutation-template"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "a86d1c6310adecd1de7877c3b808784db3d2ae2ae0b581c268e4b649d6d56b19",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "a86d1c6310adecd1de7877c3b808784db3d2ae2ae0b581c268e4b649d6d56b19",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-evolution-mutation-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-evolution-mutation-system"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "0b7f8be38e63843c8bdbedca6273b74ed9c9f296624a092ea08186aa1242f4de",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "0b7f8be38e63843c8bdbedca6273b74ed9c9f296624a092ea08186aa1242f4de",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-evolution-mutation-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-generator-template"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "9abfe08f38c4cf08ef47cb8cb8c5e452764a7680e1890c19ff91ebc2399b3e75",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "9abfe08f38c4cf08ef47cb8cb8c5e452764a7680e1890c19ff91ebc2399b3e75",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-generator-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "unknown",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "portfolio-strategy-generator-system"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "ee4e8d923945569308137ad20e0d47080746996f0aeaf8a824f9627acad19279",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "ee4e8d923945569308137ad20e0d47080746996f0aeaf8a824f9627acad19279",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Archived by prompt corpus audit: unassigned and no current Portfolio AI callsite.",
+      "review_source": "disabled_after_audit",
+      "slug": "portfolio-strategy-generator-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "2a7d5b35c0aebbc9e383ec35ee414a4ac2f1cf4dc34b30096aca7f8663e3de1b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2a7d5b35c0aebbc9e383ec35ee414a4ac2f1cf4dc34b30096aca7f8663e3de1b",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "System prompt contains only task behavior and JSON constraint. No storage, tool, surface, or platform-authority claims. Paired template owns inputs and schema.",
+      "review_source": "post_change_semantic_review",
+      "slug": "portfolio-thesis-generation-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "aa1534e8f6d17eef9a5c4598c9d60c569686547cd571c10abc575de38caf2087",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "92d52533bc13951270a921975529b67465be082225e9d9a2da80d3b72371fc9b",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Template owns output-shape instructions and contains no tool syntax or cross-surface claims.",
+      "review_source": "post_change_semantic_review",
+      "slug": "portfolio-thesis-generation-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "7e96cff0de33971b6a7ff19b276941d43206398b5414558e191a38412bf27578",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "7e96cff0de33971b6a7ff19b276941d43206398b5414558e191a38412bf27578",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "System prompt contains only validation behavior and JSON constraint. No storage, tool, surface, or platform-authority claims. Paired template owns inputs and schema.",
+      "review_source": "post_change_semantic_review",
+      "slug": "portfolio-thesis-validation-system"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "a073c2eedef944a4616968f54c6a3a278849d07fac78cc993012641580e5ca98",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "b055de7be3ae6d986892693819580f791cef1ac7c61318d355f5b9cfb4c89788",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Validation template is concise output schema guidance with no stale tool or authority claims.",
+      "review_source": "post_change_semantic_review",
+      "slug": "portfolio-thesis-validation-template"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "20adca6b77d6cd0dec838a762fb1825a602a3f739ae2e863716f6efe312f9440",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "20adca6b77d6cd0dec838a762fb1825a602a3f739ae2e863716f6efe312f9440",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned system prompt gives role and non-exact workflow constraints; does not duplicate computed tool commands.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "project-rebuild-runner-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "afcfaa8835a4b823d7ff5ca5fb621c0297f28974e0d396495e7fab63278725ef",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "afcfaa8835a4b823d7ff5ca5fb621c0297f28974e0d396495e7fab63278725ef",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned system prompt is scoped to prompt-builder output behavior; no stale tool claim or boundary issue.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "prompt-builder-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "ddfdd2b2703161ac385d2195ed7fd8bcc171bd2fa26113547e66a5047802e1a6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "ddfdd2b2703161ac385d2195ed7fd8bcc171bd2fa26113547e66a5047802e1a6",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Canonical reusable prompt-ops practice, included by project overrides; concise and not duplicating exact tool workflow.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "prompt-development-practice"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "concern",
+        "redundancy": "concern",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "qa-system-prompt"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "acd0e8845a5d9076541001d207d7665d75621f9c87fc4f7f26e92f7e42555f2a",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "acd0e8845a5d9076541001d207d7665d75621f9c87fc4f7f26e92f7e42555f2a",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Merged into qa-system-prompt with one canonical JSON verdict contract.",
+      "review_source": "disabled_after_audit",
+      "slug": "qa"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "1964758d9e1629d75124845047b50e12f054ead857f8993feebb1444d52d59a3",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "1964758d9e1629d75124845047b50e12f054ead857f8993feebb1444d52d59a3",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Scoped qa role=plan-defect prompt specializes plan-defect adjudication; overlap with qa is role-specific, not same effective mode.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "qa-plan-defect"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "5a77cbc0ea7e7a6530412c7ddd72d46f6bf0be842277b16b687040577b80ab56",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "e8ff4110518d65140fad22d2483f4c772edbb165ca10e3ebbd00c2a51b28a728",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "QA role prompt defines review criteria and JSON shape without duplicating command syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "qa-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "7e5fd92180a3b675016c3376322913cf5a32249d53906e1b5475083bd89244c6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "7e5fd92180a3b675016c3376322913cf5a32249d53906e1b5475083bd89244c6",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role prompt for reasoning consultant; concise reusable instructions, no boundary or tool claim issue.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "reasoner-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "concern",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "refactor-system-prompt"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "d805d531a2fe0918320676b00f7db1170c077e12b29d5cb2e2cb9de660b2b331",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "d805d531a2fe0918320676b00f7db1170c077e12b29d5cb2e2cb9de660b2b331",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Merged into refactor-system-prompt to remove fallback/assignment split authority.",
+      "review_source": "disabled_after_audit",
+      "slug": "refactor"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "fed97cbcf9379cf08ff8ee43082e3fc1107c810d5e92122e7b384b0454b8a2b8",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "01138bc355feb3db2a33e29809e0e80cc8fdd34a55bbc9b507c8196f2dfc259d",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Role-specific refactor guidance narrows coding behavior and defers tooling to project wrapper/runtime context.",
+      "review_source": "post_change_semantic_review",
+      "slug": "refactor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "fb9a58718c649a27d3c1a75f90dcc2094dca37a206f79aa6da40a9125dd21ef0",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "fb9a58718c649a27d3c1a75f90dcc2094dca37a206f79aa6da40a9125dd21ef0",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role prompt; research rules are scoped, non-conflicting, and concise.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "researcher-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "concern",
+        "redundancy": "concern",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "concern"
+      },
+      "conflicts_with": [
+        "reviewer-system-prompt"
+      ],
+      "content_changed": false,
+      "final_content_sha256": "7e7f9ba61431299055dab9dfe10986312502a84cfd0b82be38ec14ec4c03871e",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "7e7f9ba61431299055dab9dfe10986312502a84cfd0b82be38ec14ec4c03871e",
+      "initial_status": "needs_change",
+      "outcome": "resolved_disabled",
+      "reason": "Merged into reviewer-system-prompt to remove duplicate same-agent system authority.",
+      "review_source": "disabled_after_audit",
+      "slug": "reviewer"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "8f69faec21301e0d94cd4cfe0650ea4b2bf58452c7b18eaf3c66e0c42e8c5233",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "42d94f4b18cd8249283d4aae61d2211ea8312eb2208efd4cfffcfd4f0b7d8560",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Reviewer prompt defines QA-loop review behavior and evidence rules; no stale surface/tool claim found.",
+      "review_source": "post_change_semantic_review",
+      "slug": "reviewer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5538a4aff486a61bb68a094fe96318b2860a9814e682c8f6ca73c72795b0d6e8",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5538a4aff486a61bb68a094fe96318b2860a9814e682c8f6ca73c72795b0d6e8",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee risk role; overlap with other risk voters is intentional role-opposed committee design, not same-consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "risk-aggressive-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "eda6386f2e3e1033ead5f762dcb78236d5da3691a9ca705cc82b5598a1a074e4",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "eda6386f2e3e1033ead5f762dcb78236d5da3691a9ca705cc82b5598a1a074e4",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned conservative risk voter; committee overlap is intentional and consumer-specific.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "risk-conservative-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "8445bb9bd455975305c329ab7b45a3d291388ba8d849b1ea42217122578e1475",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "8445bb9bd455975305c329ab7b45a3d291388ba8d849b1ea42217122578e1475",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned risk-management role; scoped portfolio critique guidance with no stale tool or storage claim.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "risk-manager-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "05d461da425755793678b2a8471f1e8a181542eaaaf4dcd87a88a1919ae69f14",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "05d461da425755793678b2a8471f1e8a181542eaaaf4dcd87a88a1919ae69f14",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned consolidated risk voter; repeats aggressive/conservative lenses for its own private consolidation role, not duplicate delivery to same consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "risk-neutral-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "ed9cf85b315c990415ed1b41a6abf0c2d490159858d81a7562d6cdcb4cd58091",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "ed9cf85b315c990415ed1b41a6abf0c2d490159858d81a7562d6cdcb4cd58091",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Template prompt for screenshot evaluation; narrow scope, explicit JSON contract, no tool workflow claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "runtime-execution-evaluator"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "222aed41bf305b1f980d1b8e9ee48fa2a47988448f23b3922c815afe89231f1c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "05596affbad48a1d4dae52670f088023fd1ac1973751f754c8ab35ff2a7a27e8",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Global guardrail fits DB prompt authority and matches supplied canonical safety directive.",
+      "review_source": "post_change_semantic_review",
+      "slug": "safety-directive"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "85d3807434b4f695b1ce6d57b4ef902b6a7c6626d5efb7d320ffe516ed48e67a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "85d3807434b4f695b1ce6d57b4ef902b6a7c6626d5efb7d320ffe516ed48e67a",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned analyst role; confines evidence to payload and avoids memory/web, fitting committee specialization.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "sentiment-grounded-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "bb7c94351d37c529bc755cc16038a7b21b2fa34ff38098a8897f5aa4001d260e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "bb7c94351d37c529bc755cc16038a7b21b2fa34ff38098a8897f5aa4001d260e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Session analysis template summarizes transcripts and rates memories; it does not store reusable policy or conflict with canonical boundaries.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "session-analysis"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "0348d7c44bf9ed35dcdd791b2c3c376264b88170023da467ba7828de88f2df27",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "0348d7c44bf9ed35dcdd791b2c3c376264b88170023da467ba7828de88f2df27",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned spec critic role; concise critique-only rules and scoped output contract.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "specifier-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "not_applicable",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "43f111331aa846ed54046168ee9ae2cb47f36910c011f42f35d84e3b8fe434bb",
+      "final_enabled": false,
+      "final_status": "resolved_disabled",
+      "initial_content_sha256": "43f111331aa846ed54046168ee9ae2cb47f36910c011f42f35d84e3b8fe434bb",
+      "initial_status": "clean",
+      "outcome": "resolved_disabled",
+      "reason": "Disabled: exact slug search across Agent Hub and SummitFlow found no consumer, and the live row had no assignment or runtime override. Its SummitFlow psycopg guidance was current but unused.",
+      "review_source": "code_usage_evidence_review",
+      "slug": "sql-injection-review"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "116baa09f488f83f7e690dfdebcc11995d818876d861daec05e06697ea200e5e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "116baa09f488f83f7e690dfdebcc11995d818876d861daec05e06697ea200e5e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned summarizer role; compatible with `session-analysis` template because it sets role behavior while template supplies exact call format.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "summarizer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "073f944cf4d0e0a6f65379920a71cec9f38fb74e1dc55928912bbca85a39baa2",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "338dc133c6e3831bf82c57e0db818290523dbd868fbf529324e4c0f0271f5c2a",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Supervisor prompt explicitly defers to global Safety Directive and scopes retry/circuit-breaker decisions.",
+      "review_source": "post_change_semantic_review",
+      "slug": "supervisor-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "7aa56778df4009f7813177c90bff92f1bd435abc22331433fd5426fec946856c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "f7cf3925158ba331d568556adde1c7e8daa7a4248cf036c9eae12b43c1eeee3b",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Orchestrator guidance is role-specific, runtime-capability-driven, and avoids exact command syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "task-sweep-orchestrator-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "e538f1d38dafeda73b43a5463242fbcdd142ca81282532fad93b328a8fc7dac5",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "e538f1d38dafeda73b43a5463242fbcdd142ca81282532fad93b328a8fc7dac5",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned technical analyst role; confines claims to payload paths and intentional committee overlap is role-specific.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "technical-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "e29e73fe51756fee357029a0426455ed71dc97152ed8df1d20b7a0c8cf778dd6",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "90935fcf6a713a2a5959957a1d00d5fb33c596267fdedd977b684658dbc8d654",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Prompt defines reusable test-writing behavior only. It defers to canonical managed project capabilities without embedding commands, avoids persona or memory content, and is concise. Quality-gate rule aligns with capability-block ownership because it names behavior, not syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "test-writer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "not_applicable",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "62ad68fee387dfc87269847fa14d8f3587254863d5dd6fd86cfadb95a2b395dd",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "62ad68fee387dfc87269847fa14d8f3587254863d5dd6fd86cfadb95a2b395dd",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned smoke tester prompt; short role scope and output contract, no conflict with broader verification rules.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "tester-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "73031b8cb76bf10f052b4f53525450b7daf07f4cd82af904ee44b2a7b9a0ed7c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "73031b8cb76bf10f052b4f53525450b7daf07f4cd82af904ee44b2a7b9a0ed7c",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Project-scoped reusable development policy delivered only through The AfterTimes overrides; context hygiene section respects DB/memory boundary.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "the-aftertimes-development-policy"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "68983f000609a1c699003d67cbd119fc51e9fe9681f67d59258a2d03d3317544",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "68983f000609a1c699003d67cbd119fc51e9fe9681f67d59258a2d03d3317544",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned role prompt with bounded investment screener scope, clear JSON contract, no stale tool or shared policy duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "tier1-screener-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "e39cc9e940ad24b7f27301c01bc0791cbd0dcf2d6e3532be380bb250059eaa4a",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "e39cc9e940ad24b7f27301c01bc0791cbd0dcf2d6e3532be380bb250059eaa4a",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned trade-management role prompt; overlap candidates are distinct investment roles, not same consumer duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "trade-manager-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "557ed7ea83824fb3ba6446705e93d8a4a91629ba03295a4c6ef44c67e7f1eb2e",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "557ed7ea83824fb3ba6446705e93d8a4a91629ba03295a4c6ef44c67e7f1eb2e",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee trader prompt with specific synthesis/output duties; role overlaps are committee-specialized, not redundant for same consumer.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "trader-v1-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "c6a730da04748a15561fb3d7cbcdc42aba714c8a8682463a88eaab787da50b04",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "c6a730da04748a15561fb3d7cbcdc42aba714c8a8682463a88eaab787da50b04",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned triage role prompt; concise, scoped to readiness assessment, no stale tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "triager-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "8cebc461bf641a96cf977135189b3e707055d1be992a2802e1c85f40384a5580",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "0bc75553edcbc17eb0da044f280e025ce3488551c5809cb336566e3b89d165e4",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "UI mockup prompt is project-agnostic, scoped to output contract, and contains no tool syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "ui-mockup-designer-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "94ff980c7c63aab96422265d8763a048c710c6c66d69d4aaea86a6d6dbb30a82",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "94ff980c7c63aab96422265d8763a048c710c6c66d69d4aaea86a6d6dbb30a82",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned frontend UX implementation role prompt; scoped guidance, no tool-surface claims or policy replacement.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "ux-polisher-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "6c53f039adcf7ccebf89a26612ca0d793a0a3a4f4ac015264e74f66592f25d01",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6c53f039adcf7ccebf89a26612ca0d793a0a3a4f4ac015264e74f66592f25d01",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned quick validator role; short output contract and escalation behavior fit scope.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "validator-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "be62e2f86d2856fb47491ff513ff18e669c562f35905e9de3b96cf5d8d98b9c2",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "be62e2f86d2856fb47491ff513ff18e669c562f35905e9de3b96cf5d8d98b9c2",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee role prompt; intentional specialization, concise, no stale tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "vantage-domain-expert-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "9cc407a8230abd140980d25660068c13cf76a623d2e89472c372c1942dadeebe",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "288efa4c8d9421fea35f06675b0cf55e80b591215eca0e4b609b04a3240466aa",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Vantage intake prompt owns role behavior and defers handoff to runtime-provided capability.",
+      "review_source": "post_change_semantic_review",
+      "slug": "vantage-intake-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "5865943a0c12e1484943b1b7ade1a8739c5614b397155cba50b3135a2f7b0048",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "5865943a0c12e1484943b1b7ade1a8739c5614b397155cba50b3135a2f7b0048",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned committee role prompt; concise method-rigor scope, no boundary or tool issues.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "vantage-methodologist-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "2239825e37705979f0e9c73055ee6bc0278b30a3633751342a41ebdc1a6927e8",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "2239825e37705979f0e9c73055ee6bc0278b30a3633751342a41ebdc1a6927e8",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Role-opposed committee prompt; overlap with skeptic is intentional and not same-instruction duplication.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "vantage-optimist-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "0c02f3cef16afdc56dc6773ea8835267a1dc419cfcd2cbebb8ab14a7219fcaca",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "0c02f3cef16afdc56dc6773ea8835267a1dc419cfcd2cbebb8ab14a7219fcaca",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned judge prompt with compact JSON schema; no stale surface or policy conflict.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "vantage-research-judge-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "796dc9c9fe63fc0db2c19dc6c63bda9696a93000e2e41a8b540e20bd0a1f99d9",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "39002caa6d9ad116ed5956f284ba65f9f60b9fa53b210c356767175f8fafc0e6",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Research prompt uses runtime-provided public-web capabilities and avoids arbitrary call caps or exact commands.",
+      "review_source": "post_change_semantic_review",
+      "slug": "vantage-research-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "75345fd309530279fb749c6cefa17e63756dc2b420e3f8d7254021b948cf0740",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "75345fd309530279fb749c6cefa17e63756dc2b420e3f8d7254021b948cf0740",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Role-opposed committee prompt; intentional skeptic specialization, concise, no stale tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "vantage-skeptic-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "bda19bd1db87e519c4afd96f7bebac7fa8d4cdb04f6152cb1fe1a5afadd20a2b",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "702f427a65922c74f7b8c228b7f3d9d2e0bf2b9abe2cb2de63ee86d4bbcf6d67",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Verifier prompt defines read-mostly evidence behavior and exact report contract without live command syntax.",
+      "review_source": "post_change_semantic_review",
+      "slug": "verifier-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "6825668884ac9988f1a93f9d08324d7935607eca7d46d5b12ad0ec20ac8d01fb",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "6825668884ac9988f1a93f9d08324d7935607eca7d46d5b12ad0ec20ac8d01fb",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned voice response style prompt; concise and scoped, no stale tool claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "voice-responder-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "48d73178aeba364521dcbd6c7dc6dda3f96b50dbcfefbb1985b86d1e7b0bb3cd",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4d18f1dff9fe20fa79ac7b62d747ba34481619c73f42a440b90fb2e24d8e1719",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Global web-research behavior correctly assigns exact commands to computed tool-capability block.",
+      "review_source": "post_change_semantic_review",
+      "slug": "web-research-routine"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": false,
+      "final_content_sha256": "4597d96c4c44f55768c929d2e64ef56cee5efe49d6293d38cb66c2fbf1fcd91c",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4597d96c4c44f55768c929d2e64ef56cee5efe49d6293d38cb66c2fbf1fcd91c",
+      "initial_status": "clean",
+      "outcome": "clean_enabled",
+      "reason": "Agent-owned quick-fix role prompt; bounded scope, concise, no stale surface claims.",
+      "review_source": "initial_full_corpus_review",
+      "slug": "worker-system-prompt"
+    },
+    {
+      "checks": {
+        "authority": "pass",
+        "conflict": "pass",
+        "redundancy": "pass",
+        "scope_applicability": "pass",
+        "stale_surface_or_tool_claim": "pass",
+        "storage_boundary": "pass",
+        "token_efficiency": "pass"
+      },
+      "conflicts_with": [],
+      "content_changed": true,
+      "final_content_sha256": "7209d976c1f855230531f529ba5f1bc74cdd9a8f61715d9de9f7af7923b96bf7",
+      "final_enabled": true,
+      "final_status": "clean",
+      "initial_content_sha256": "4a71c06999778a41fcde3c61174708735a691a72ab6ff238e3edc40aee2c13a2",
+      "initial_status": "needs_change",
+      "outcome": "clean_enabled",
+      "reason": "Search behavior prompt defers exact commands to computed capability context and keeps memory as prior-learning source only.",
+      "review_source": "post_change_semantic_review",
+      "slug": "workspace-search-discipline"
+    }
+  ],
+  "migration_snapshot": {
+    "path": "backend/alembic/data/7f4e2d1c9b8a_audited_context.json",
+    "payload_sha256": "57380326502f1da7c12052e9b51692d93da63895322f5877230965ca08b4773c",
+    "revision": "7f4e2d1c9b8a"
+  },
+  "schema_version": 1,
+  "scope": {
+    "final_enabled_clean": 142,
+    "final_enabled_needs_change": 0,
+    "final_enabled_prompts": 142,
+    "final_enabled_unknown_or_concern_checks": 0,
+    "initial_enabled_prompts_reviewed": 159,
+    "initial_prompts_resolved_by_disable": 17,
+    "initial_unique_prompts_reviewed": 159,
+    "new_disabled_prompts_outside_initial_cohort": [
+      "agentic-cli-startup-core"
+    ],
+    "size_limit_enforced": false
+  }
+}

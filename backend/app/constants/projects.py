@@ -1,16 +1,8 @@
-"""Project and agent type constants.
-
-VALID_PROJECT_IDS are derived dynamically from project_permissions.
-Project roots are always derived through the canonical resolver in
-app.core.project_roots so there is exactly one root-resolution path.
-"""
+"""Project and agent type constants backed by the canonical ``st`` registry."""
 
 from __future__ import annotations
 
-import logging
 import time
-
-logger = logging.getLogger(__name__)
 
 # Valid agent types supported by the platform
 VALID_AGENT_TYPES = {
@@ -30,23 +22,8 @@ VALID_AGENT_TYPES = {
 }
 
 # ---------------------------------------------------------------------------
-# Dynamic project data — derived from project_permissions table
+# Dynamic project identity — derived only from the SummitFlow project registry
 # ---------------------------------------------------------------------------
-
-# Fallback used when DB is unavailable (startup, tests, migrations)
-_FALLBACK_PROJECT_IDS: frozenset[str] = frozenset({
-    "summitflow",
-    "agent-hub",
-    "vantage",
-    "portfolio-ai",
-    "a-term",
-    "monkey-fight",
-    "persona-sandbox",
-    "st-cli",
-    "claude-consultation",
-    "consult",
-    "agent-playground",
-})
 
 _cached_project_ids: frozenset[str] | None = None
 _cached_roots: dict[str, str] | None = None
@@ -54,45 +31,16 @@ _cache_timestamp: float = 0.0
 _CACHE_TTL_SECONDS: float = 300.0  # 5 minutes
 
 
-def _resolve_known_roots(project_ids: frozenset[str]) -> dict[str, str]:
-    """Resolve project roots from the canonical single-project resolver."""
-    from app.core.project_roots import resolve_project_root
-
-    roots: dict[str, str] = {}
-    for project_id in project_ids:
-        resolved = resolve_project_root(project_id)
-        if resolved is not None:
-            roots[project_id] = str(resolved)
-    return roots
-
-
 async def refresh_project_cache() -> frozenset[str]:
-    """Refresh project IDs cache from project_permissions and derive roots canonically.
-
-    Called on app startup and periodically from async contexts.
-    """
+    """Refresh project identity from the canonical ``st projects`` registry."""
     global _cached_project_ids, _cached_roots, _cache_timestamp
-    try:
-        from sqlalchemy import text
+    from app.core.project_roots import get_registered_project_roots
 
-        from app.db import async_session
-
-        async with async_session() as db:
-            result = await db.execute(
-                text("SELECT project_id FROM project_permissions")
-            )
-            rows = list(result)
-            db_ids = frozenset(row[0] for row in rows)
-
-        if db_ids:
-            _cached_project_ids = db_ids
-            _cached_roots = _resolve_known_roots(db_ids)
-            _cache_timestamp = time.monotonic()
-            return db_ids
-    except Exception as e:
-        logger.debug("Could not refresh project cache from DB: %s", e)
-
-    return _cached_project_ids or _FALLBACK_PROJECT_IDS
+    roots = await get_registered_project_roots(refresh=True)
+    _cached_roots = dict(roots)
+    _cached_project_ids = frozenset(roots)
+    _cache_timestamp = time.monotonic()
+    return _cached_project_ids
 
 
 # Backward-compatible alias
@@ -100,17 +48,13 @@ refresh_project_ids_cache = refresh_project_cache
 
 
 def get_valid_project_ids() -> frozenset[str]:
-    """Get valid project IDs from cache. Falls back to hardcoded set."""
-    if _cached_project_ids is not None:
-        return _cached_project_ids
-    return _FALLBACK_PROJECT_IDS
+    """Return the most recently loaded canonical registry identities."""
+    return _cached_project_ids or frozenset()
 
 
 def get_known_roots() -> dict[str, str]:
-    """Get project_id → root_path mapping via the canonical root resolver."""
-    if _cached_roots is not None:
-        return _cached_roots
-    return _resolve_known_roots(_cached_project_ids or _FALLBACK_PROJECT_IDS)
+    """Return the most recently loaded canonical project-root mapping."""
+    return dict(_cached_roots or {})
 
 
 def is_cache_stale() -> bool:
@@ -120,14 +64,30 @@ def is_cache_stale() -> bool:
     return (time.monotonic() - _cache_timestamp) >= _CACHE_TTL_SECONDS
 
 
+async def validate_project_id(project_id: str) -> None:
+    """Validate an explicit project ID against the canonical registry cache."""
+    if is_cache_stale():
+        await refresh_project_cache()
+    valid_project_ids = get_valid_project_ids()
+    if project_id not in valid_project_ids:
+        raise ValueError(
+            f"Unknown project_id '{project_id}'. "
+            f"Valid projects: {sorted(valid_project_ids)}"
+        )
+
+
 def invalidate_project_cache() -> None:
-    """Force next call to refresh_project_cache() to reload from DB."""
+    """Force the next validation to reload the canonical project registry."""
     global _cached_project_ids, _cached_roots, _cache_timestamp
     _cached_project_ids = None
     _cached_roots = None
     _cache_timestamp = 0.0
-    from app.core.project_roots import resolve_project_root
+    from app.core.project_roots import (
+        invalidate_registered_project_roots,
+        resolve_project_root,
+    )
 
+    invalidate_registered_project_roots()
     resolve_project_root.cache_clear()
 
 
@@ -151,7 +111,7 @@ class _ProjectIDsProxy:
         return repr(get_valid_project_ids())
 
     def __bool__(self) -> bool:
-        return True
+        return bool(get_valid_project_ids())
 
 
 VALID_PROJECT_IDS: frozenset[str] = _ProjectIDsProxy()  # type: ignore[assignment]

@@ -56,7 +56,11 @@ async def inject_agent_mandates(
     project_id: str | None = None,
     task_type: str | None = None,
 ) -> MandateInjection:
-    """Build system content with DB-stored prompts + agent's system prompt."""
+    """Build only agent-specific prompt/persona/permission content.
+
+    Shared operator prompts and memory are injected once through the canonical
+    context delivery path later in request setup.
+    """
     if prompt_mode == "none":
         return MandateInjection(system_content="", injected_uuids=[])
 
@@ -74,7 +78,7 @@ async def inject_agent_mandates(
             task_type=task_type,
             project_id=project_id,
             prompt_mode=prompt_mode,
-            include_global_prompts=True,
+            include_global_prompts=False,
             include_mandates=include_mandates,
             include_guardrails=include_guardrails,
             include_persona_context=(prompt_mode == "full"),

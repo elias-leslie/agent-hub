@@ -143,21 +143,13 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
     )
 
 
-def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> MemorySearchResult | None:
-    """Convert a mandate episode dict to MemorySearchResult with demotion check.
-
-    Returns None if content is missing or the episode is demoted.
-    Also supports the 'pinned' field.
-    """
+def mandate_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None:
+    """Convert an active mandate episode to a MemorySearchResult."""
     content = ep.get("content") or ""
     uuid = ep.get("uuid", "")
 
     if not content:
         logger.debug("Skipping mandate without content: %s", uuid[:8] if uuid else "?")
-        return None
-
-    if uuid in demoted_uuids and not ep.get("pinned", False):
-        logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
         return None
 
     created_at = _safe_created_at(ep.get("created_at"))

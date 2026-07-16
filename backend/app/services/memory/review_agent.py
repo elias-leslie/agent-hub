@@ -14,6 +14,8 @@ from ._review_agent_decisions import (
     MemoryReviewDecision,
     _normalize_compact_content,
     parse_memory_review_content,
+    repair_memory_review_content,
+    review_decisions_have_complete_checks,
 )
 from ._review_agent_prompt import (
     REVIEW_SCHEMA,
@@ -42,6 +44,8 @@ __all__ = [
     "build_memory_review_prompt",
     "collect_memory_governance_snapshot",
     "parse_memory_review_content",
+    "repair_memory_review_content",
+    "review_decisions_have_complete_checks",
     "run_memory_review_batch",
     "select_memories_due_for_review",
 ]

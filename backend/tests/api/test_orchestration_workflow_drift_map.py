@@ -67,12 +67,18 @@ def test_subagent_request_exposes_agent_slug_but_generic_endpoint_contract_canno
     assert "use_memory" not in SubagentRequest.model_fields
 
 
-def test_parallel_request_lacks_stage_and_agent_routing_fields_needed_for_canonical_workflow() -> None:
+def test_parallel_request_routes_each_task_through_an_agent_slug() -> None:
     task = ParallelTaskRequest(task="Review diff.", name="review")
     payload = task.model_dump(exclude_none=True)
 
-    assert payload == {"task": "Review diff.", "name": "review", "provider": "gemini", "temperature": 1.0}
-    assert "agent_slug" not in ParallelTaskRequest.model_fields
+    assert payload == {
+        "task": "Review diff.",
+        "name": "review",
+        "provider": "gemini",
+        "temperature": 1.0,
+        "agent_slug": "chat",
+    }
+    assert "agent_slug" in ParallelTaskRequest.model_fields
     assert "thinking_level" not in ParallelTaskRequest.model_fields
     assert "current_branch" not in ParallelTaskRequest.model_fields
     assert "working_dir" not in ParallelTaskRequest.model_fields

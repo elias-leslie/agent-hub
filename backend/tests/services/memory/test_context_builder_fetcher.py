@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.memory.context_builder import build_progressive_context, fetch_all_episodes
+from app.services.memory.context_builder import (
+    RequiredPolicyRetrievalError,
+    build_progressive_context,
+    fetch_all_episodes,
+)
 from app.services.memory.context_injector_blocks_helpers import mandate_episode_to_result
+from app.services.memory.context_injector_queries import (
+    get_episodes_by_tier,
+    get_pinned_episodes_by_tier,
+)
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -39,6 +48,71 @@ def _settings() -> MemorySettingsDTO:
 
 
 class TestContextBuilderFetcher:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("fetcher", [get_episodes_by_tier, get_pinned_episodes_by_tier])
+    async def test_policy_query_failures_propagate_and_disable_generic_page_cap(
+        self, fetcher: Any
+    ) -> None:
+        repo = AsyncMock()
+        repo.list_by_scope_and_tier.side_effect = RuntimeError("database unavailable")
+        with (
+            patch(
+                "app.services.memory.context_injector_queries.get_memory_repository",
+                return_value=repo,
+            ),
+            pytest.raises(RuntimeError, match="database unavailable"),
+        ):
+            await fetcher("mandate", MemoryScope.GLOBAL, None)
+
+        assert repo.list_by_scope_and_tier.await_args.kwargs["limit"] is None
+
+    @pytest.mark.asyncio
+    async def test_required_policy_failure_is_not_silently_dropped(self) -> None:
+        with (
+            patch(
+                "app.services.memory.context_builder.get_mandates",
+                new=AsyncMock(side_effect=RuntimeError("mandate query failed")),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_pinned_episodes_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            pytest.raises(RequiredPolicyRetrievalError, match="mandates_global"),
+        ):
+            await fetch_all_episodes(
+                [(MemoryScope.GLOBAL, None)],
+                include_mandates=True,
+                include_guardrails=False,
+                include_references=False,
+                task_type=None,
+                phase=None,
+            )
+
+    @pytest.mark.asyncio
+    async def test_optional_reference_failure_remains_non_blocking(self) -> None:
+        with (
+            patch(
+                "app.services.memory.context_builder.get_auto_inject_references_as_search_results",
+                new=AsyncMock(side_effect=RuntimeError("reference query failed")),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_pinned_episodes_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
+            mandates, guardrails, references = await fetch_all_episodes(
+                [(MemoryScope.GLOBAL, None)],
+                include_mandates=False,
+                include_guardrails=False,
+                include_references=True,
+                task_type=None,
+                phase=None,
+            )
+
+        assert mandates == []
+        assert guardrails == []
+        assert references == []
+
     @pytest.mark.asyncio
     async def test_fetch_all_episodes_includes_pinned_references(self) -> None:
         pinned_reference = _result(
@@ -216,19 +290,16 @@ class TestContextBuilderFetcher:
         assert fetch_all.await_args.kwargs["db"] is contexts[0].session
         assert resolve_limits.await_args.args[-1] is contexts[0].session
 
-    def test_mandate_episode_to_result_keeps_pinned_items_even_if_demoted(self) -> None:
+    def test_mandate_episode_to_result_does_not_use_usage_demotion(self) -> None:
         result = mandate_episode_to_result(
             {
-                "uuid": "pinned-demoted",
-                "content": "Pinned mandates should still load even if legacy demotion state exists.",
-                "pinned": True,
+                "uuid": "low-usage-mandate",
+                "content": "Usage counters must not remove operator mandates.",
             },
-            {"pinned-demoted"},
         )
 
         assert result is not None
-        assert result.uuid == "pinned-demoted"
-        assert result.pinned is True
+        assert result.uuid == "low-usage-mandate"
 
     def test_mandate_episode_to_result_propagates_render_mode(self) -> None:
         result = mandate_episode_to_result(
@@ -238,7 +309,6 @@ class TestContextBuilderFetcher:
                 "summary": "be terse",
                 "render_mode": "summary",
             },
-            set(),
         )
 
         assert result is not None

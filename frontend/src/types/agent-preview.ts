@@ -40,6 +40,22 @@ export interface AgentPreviewMemoryDebug {
   [key: string]: unknown
 }
 
+export interface AgentPreviewCanonicalContext {
+  schema_version: string
+  context_version: string
+  delivery_id: string
+  artifact_id: string
+  status: 'ok' | 'failed'
+  payload_hash_algorithm: 'sha256'
+  payload_hash: string
+  delivery_mode: 'additive'
+  recommended_role: 'developer'
+  native_context_policy: 'preserve'
+  estimated_tokens: number
+  block_ids: string[]
+  source_ids: string[]
+}
+
 export interface AgentPreview {
   slug: string
   name: string
@@ -58,6 +74,7 @@ export interface AgentPreview {
   project_id?: string | null
   task_prompt?: string | null
   sections: AgentPreviewSection[]
+  canonical_context?: AgentPreviewCanonicalContext
 }
 
 export interface PreviewScenario {

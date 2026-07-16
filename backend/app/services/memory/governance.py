@@ -81,6 +81,7 @@ async def collect_memory_governance_snapshot(
             Memory.trigger_task_types,
             Memory.applicability,
             Memory.loaded_count,
+            Memory.review_status,
         ).where(Memory.status == "active")
     )
     rows = memory_result.all()
@@ -101,12 +102,25 @@ async def collect_memory_governance_snapshot(
     invalid_trigger_task_type_count = 0
     invalid_trigger_task_type_samples: list[dict[str, Any]] = []
     startup_profile_agent_target_count = 0
+    clean_review_count = 0
+    pending_review_count = 0
+    needs_action_review_count = 0
+    invalid_review_status_count = 0
     startup_profile_agent_target_samples: list[dict[str, Any]] = []
     untargeted_reference_candidates: list[dict[str, Any]] = []
     oversized_policy_candidates: list[dict[str, Any]] = []
     canonical_task_types = set(SUBTASK_TYPES)
 
     for row in rows:
+        review_status = str(getattr(row, "review_status", "pending") or "pending")
+        if review_status == "clean":
+            clean_review_count += 1
+        elif review_status == "pending":
+            pending_review_count += 1
+        elif review_status == "needs_action":
+            needs_action_review_count += 1
+        else:
+            invalid_review_status_count += 1
         tier_name = TIER_REVERSE.get(int(row.tier or 0), "reference")
         context_kind = normalize_context_kind(
             row.context_kind,
@@ -226,6 +240,9 @@ async def collect_memory_governance_snapshot(
             missing_reference_summary_count,
             invalid_trigger_task_type_count,
             startup_profile_agent_target_count,
+            pending_review_count,
+            needs_action_review_count,
+            invalid_review_status_count,
         ]
     )
     soft_issue_count = untargeted_reference_count + oversized_policy_count
@@ -245,6 +262,11 @@ async def collect_memory_governance_snapshot(
 
     return {
         "active_count": len(rows),
+        "clean_review_count": clean_review_count,
+        "pending_review_count": pending_review_count,
+        "needs_action_review_count": needs_action_review_count,
+        "invalid_review_status_count": invalid_review_status_count,
+        "review_coverage_count": clean_review_count + needs_action_review_count,
         "health_status": health_status,
         "by_context_kind": dict(sorted(by_context_kind.items())),
         "targeted_count": targeted_count,

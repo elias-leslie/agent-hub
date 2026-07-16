@@ -43,8 +43,11 @@ __all__ = ["AgentDTO", "AgentService", "get_agent_service"]
 
 async def _resolve_system_prompt(db: AsyncSession, agent: Any) -> str:
     prompt = await get_prompt_by_slug(db, build_agent_system_prompt_slug(agent.slug))
-    if prompt and prompt.enabled and prompt.content.strip():
-        return prompt.content.strip()
+    if prompt is not None:
+        # Presence makes the owned prompt row authoritative. Disabled (or
+        # deliberately empty) means "inject nothing"; only a truly absent,
+        # not-yet-migrated row may use the Agent compatibility mirror.
+        return prompt.content.strip() if prompt.enabled else ""
     return agent.system_prompt
 
 
@@ -95,6 +98,16 @@ class AgentService:
         if active_only:
             cached = await self._cache.get(slug)
             if cached:
+                # The owned prompt row is the live authority. AgentDTO caching
+                # must not turn its compatibility mirror into a second prompt
+                # source for up to CACHE_TTL seconds after a prompt edit.
+                resolved_system_prompt = await _resolve_system_prompt(db, cached)
+                if resolved_system_prompt != cached.system_prompt:
+                    cached = replace(
+                        cached,
+                        system_prompt=resolved_system_prompt,
+                    )
+                    await self._cache.set(cached)
                 return await _apply_display_name_overrides(db, cached)
 
         agent = await get_agent_by_slug(db, slug, active_only=active_only)

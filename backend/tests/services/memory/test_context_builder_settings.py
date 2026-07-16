@@ -149,6 +149,18 @@ def test_resolve_continuity_settings_prefers_custom_values_when_present() -> Non
     assert resolved == (False, 9, False, True)
 
 
+def test_resolve_continuity_settings_does_not_leak_other_projects_by_default() -> None:
+    settings = MemorySettingsDTO(
+        enabled=True,
+        budget_enabled=True,
+        total_budget=3500,
+        continuity_enabled=True,
+        continuity_max_sessions=5,
+    )
+
+    assert resolve_continuity_settings(settings, None) == (True, 5, False, False)
+
+
 def test_resolve_effective_memory_config_inherits_global_defaults_when_custom_disabled() -> None:
     settings = MemorySettingsDTO(
         enabled=False,

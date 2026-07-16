@@ -103,7 +103,7 @@ class QueryRepository:
         tags_include: list[str] | None = None,
         tags_exclude: list[str] | None = None,
         since: datetime | None = None,
-        limit: int = 100,
+        limit: int | None = 100,
         offset: int = 0,
         order_by: str = "display_order",
         sort_order: str = "desc",
@@ -125,7 +125,11 @@ class QueryRepository:
         stmt = select(Memory)
         if conditions:
             stmt = stmt.where(and_(*conditions))
-        stmt = _apply_list_order(stmt, order_by, sort_order).limit(limit).offset(offset)
+        stmt = _apply_list_order(stmt, order_by, sort_order)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        if offset:
+            stmt = stmt.offset(offset)
 
         if db:
             result = await db.execute(stmt)

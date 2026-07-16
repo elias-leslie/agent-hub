@@ -327,7 +327,7 @@ class TestInjectAgentMandates:
             task_type="heartbeat",
             project_id=None,
             prompt_mode="full",
-            include_global_prompts=True,
+            include_global_prompts=False,
             include_mandates=True,
             include_guardrails=True,
             include_persona_context=True,
@@ -393,7 +393,7 @@ class TestInjectAgentMandates:
             task_type="wake",
             project_id=None,
             prompt_mode="full",
-            include_global_prompts=True,
+            include_global_prompts=False,
             include_mandates=True,
             include_guardrails=True,
             include_persona_context=True,
@@ -454,7 +454,7 @@ class TestInjectAgentMandates:
             task_type=None,
             project_id=None,
             prompt_mode="chat",
-            include_global_prompts=True,
+            include_global_prompts=False,
             include_mandates=True,
             include_guardrails=True,
             include_persona_context=False,
@@ -553,7 +553,7 @@ class TestCompleteWithFallback:
             patch(
                 "app.api.complete.core.complete_internal",
                 new=AsyncMock(return_value=internal),
-            ),
+            ) as complete_mock,
             patch("app.services.agent_routing_completion.record_provider_success") as record_success,
         ):
             result = await complete_with_fallback(
@@ -566,6 +566,8 @@ class TestCompleteWithFallback:
         assert isinstance(result, FallbackCompletionResult)
         assert result.model_used == KIMI_CODE_FOR_CODING
         assert result.used_fallback is False
+        assert complete_mock.await_args is not None
+        assert complete_mock.await_args.kwargs["canonical_context_preinjected"] is False
         record_success.assert_called_once()
 
     @pytest.mark.asyncio
@@ -912,3 +914,27 @@ class TestInjectSystemPromptIntoMessages:
 
         assert len(messages) == original_len
         assert len(result) == original_len + 1
+
+    def test_coalesces_late_system_messages_without_dropping_agent_prompt(self) -> None:
+        messages = [
+            Message(role="user", content="Earlier user turn"),
+            Message(role="system", content="Native caller safety"),
+            Message(role="assistant", content="Earlier reply"),
+            Message(role="system", content="Resumed session context"),
+        ]
+
+        result = inject_system_prompt_into_messages(messages, "Agent-specific prompt")
+
+        assert [message.role for message in result].count("system") == 1
+        assert result[0].role == "system"
+        assert isinstance(result[0].content, str)
+        assert result[0].content.index("Native caller safety") < result[0].content.index(
+            "Resumed session context"
+        )
+        assert result[0].content.index("Resumed session context") < result[0].content.index(
+            "Agent-specific prompt"
+        )
+        assert [message.content for message in result[1:]] == [
+            "Earlier user turn",
+            "Earlier reply",
+        ]

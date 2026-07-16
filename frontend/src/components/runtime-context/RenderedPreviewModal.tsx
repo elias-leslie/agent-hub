@@ -7,9 +7,11 @@ import { cn } from '@/lib/utils'
 interface Props {
   // Prompts + memories block (formatted via _render_blocks).
   rendered: string
-  // project_index block (auxiliary, prepended at session start).
+  // project_index block, placed after authority-ordered operator context.
   projectIndex: string
-  // tool_capabilities block (auxiliary, prepended after project_index).
+  // Cross-session continuity, placed after the project index.
+  continuity: string
+  // tool_capabilities block, placed after continuity.
   toolCapabilities: string
   totalTokens: number
   budgetTokens: number
@@ -26,6 +28,7 @@ interface SectionDef {
 export function RenderedPreviewModal({
   rendered,
   projectIndex,
+  continuity,
   toolCapabilities,
   totalTokens,
   budgetTokens,
@@ -34,23 +37,28 @@ export function RenderedPreviewModal({
 }: Props) {
   const [copied, setCopied] = useState(false)
 
-  // Injection order matches context_injector_ops.finalize_injection: aux blocks
-  // are joined with "\n" then formatted prompts/memories are appended.
+  // Injection order matches the canonical delivery: authority-ordered operator
+  // context first, then computed project, continuity, and capability blocks.
   const sections: SectionDef[] = [
+    {
+      label: 'Prompts + Memory',
+      hint: 'Authority-ordered prompts and memory blocks',
+      body: rendered,
+    },
     {
       label: 'Project Index',
       hint: 'Computed at session start from .index.yaml',
       body: projectIndex,
     },
     {
+      label: 'Continuity',
+      hint: 'Recent activity scoped by project and branch',
+      body: continuity,
+    },
+    {
       label: 'Tool Capabilities',
       hint: 'Computed at session start from CLI --help output',
       body: toolCapabilities,
-    },
-    {
-      label: 'Prompts + Memory',
-      hint: 'Boot-eligible prompts and tier-rule / pinned memory blocks',
-      body: rendered,
     },
   ]
   const visible = sections.filter((s) => s.body && s.body.trim().length > 0)
@@ -81,8 +89,8 @@ export function RenderedPreviewModal({
             <p className="text-xs text-slate-400 font-mono">
               Verbatim text injected into the agent's session start —{' '}
               {budgetEnabled
-                ? `${totalTokens.toLocaleString()} / ${budgetTokens.toLocaleString()} tok`
-                : `${totalTokens.toLocaleString()} tok · budget off`}
+                ? `${totalTokens.toLocaleString()} tok · ${budgetTokens.toLocaleString()} tok telemetry target (not enforced)`
+                : `${totalTokens.toLocaleString()} tok · budget telemetry off`}
             </p>
           </div>
           <div className="flex items-center gap-2">

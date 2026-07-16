@@ -34,7 +34,6 @@ AGENT_EXPORT_FIELDS = [
     "is_coding_agent", "memory_config",
 ]
 
-# Agents to mark inactive on fresh install
 DEACTIVATE_SLUGS = ["auditor"]
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 

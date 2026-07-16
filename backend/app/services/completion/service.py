@@ -91,7 +91,11 @@ class CompletionService:
         """Execute a completion request."""
         provider = get_provider(options.model)
         session_id = options.session_id or str(uuid.uuid4())
-        messages, memory_facts = await inject_memory_context(options, list(options.messages))
+        messages, memory_facts = await inject_memory_context(
+            options,
+            list(options.messages),
+            db=self.db,
+        )
 
         result = await complete_internal(
             messages=messages,
@@ -108,6 +112,7 @@ class CompletionService:
             enable_programmatic_tools=options.enable_programmatic_tools,
             container_id=options.container_id,
             response_format=options.response_format,
+            canonical_context_preinjected=True,
         )
 
         episode_uuid = await handle_episode_storage(

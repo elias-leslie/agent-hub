@@ -23,6 +23,11 @@ from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
     resolve_memory_consumer_profile,
 )
+from app.services.memory.context_resilience import (
+    CanonicalContextInjectionFailed,
+    build_unexpected_context_failure_notice,
+    require_successful_context_injection,
+)
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
@@ -187,8 +192,10 @@ async def inject_memory(
         Tuple of (messages_dict, memory_facts_injected, loaded_memory_uuids)
     """
     agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
-
-    if not (request.use_memory and memory_injection_enabled(agent_memory_config)):
+    include_memories = request.use_memory and memory_injection_enabled(agent_memory_config)
+    agentic_request = bool(resolved_agent) or request.max_turns > 1 or request.execute_tools
+    include_prompts = agentic_request or (request.prompt_mode or "full") != "none"
+    if not include_memories and not include_prompts:
         return messages_dict, 0, []
 
     memory_facts_injected = 0
@@ -210,7 +217,12 @@ async def inject_memory(
             current_branch=request.current_branch,
             consumer_profile=consumer_profile,
             consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
+            consumer_surface="agent_runtime",
+            include_prompts=include_prompts,
+            include_memories=include_memories,
+            db=db,
         )
+        require_successful_context_injection(progressive_context)
         memory_facts_injected = _count_memory_facts(progressive_context)
         loaded_memory_uuids = progressive_context.get_loaded_uuids()
         if memory_facts_injected > 0:
@@ -219,8 +231,18 @@ async def inject_memory(
                 db, session_id, loaded_memory_uuids, memory_facts_injected,
                 progressive_context, agent_slug,
             )
+    except CanonicalContextInjectionFailed:
+        raise
     except Exception as e:
-        logger.warning(f"Memory injection failed: {e}")
+        logger.exception("Canonical context injection failed unexpectedly")
+        raise CanonicalContextInjectionFailed(
+            build_unexpected_context_failure_notice(
+                e,
+                operation="completion_request_context_injection",
+                consumer_profile=consumer_profile,
+                project_id=request.project_id or scope_id,
+            )
+        ) from e
 
     return messages_dict, memory_facts_injected, loaded_memory_uuids
 

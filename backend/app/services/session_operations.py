@@ -88,26 +88,10 @@ def _ordered_session_query(query, sort_by: str, sort_direction: str):
 
 
 async def _validate_project_id(project_id: str) -> None:
-    """Validate project_id against known projects, refreshing cache if stale.
+    """Backward-compatible delegate to the canonical project registry."""
+    from app.constants.projects import validate_project_id
 
-    Args:
-        project_id: Project identifier to validate
-
-    Raises:
-        ValueError: If project_id is not in VALID_PROJECT_IDS
-    """
-    from app.constants import VALID_PROJECT_IDS
-    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
-
-    # Refresh project cache if stale (5-min TTL)
-    if is_cache_stale():
-        await refresh_project_ids_cache()
-
-    if project_id not in VALID_PROJECT_IDS:
-        raise ValueError(
-            f"Unknown project_id '{project_id}'. "
-            f"Valid projects: {sorted(VALID_PROJECT_IDS)}"
-        )
+    await validate_project_id(project_id)
 
 
 async def _resolve_provider_and_model(

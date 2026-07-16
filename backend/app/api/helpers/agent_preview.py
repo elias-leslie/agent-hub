@@ -7,27 +7,31 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.agent_dto import AgentDTO
+from app.services.canonical_context_adapters import (
+    canonical_context_contract,
+    progressive_context_from_delivery,
+)
 from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
+    resolve_continuity_settings,
+    resolve_excluded_memory_uuids,
     resolve_memory_config_includes,
     resolve_memory_consumer_profile,
+    resolve_memory_tags,
     resolve_project_index_enabled,
+    resolve_reference_index_enabled,
     resolve_runtime_prompt_includes,
     resolve_tool_capabilities_enabled,
 )
-from app.services.memory.context_injector import (
-    build_progressive_context,
-    extract_query_from_messages,
-    format_progressive_context,
+from app.services.memory.context_injector import extract_query_from_messages
+from app.services.memory.settings import get_memory_settings
+from app.services.runtime_context import (
+    CanonicalContextDeliveryRequest,
+    build_canonical_context_delivery,
 )
-from app.services.memory.project_index_context import format_project_index_context
-from app.services.memory.service import MemoryScope
-from app.services.memory.tool_capability_context import format_tool_capability_context
-from app.services.project_permission_service import get_visible_tools_for_project
 from app.services.runtime_prompt_stack import (
     RuntimePromptSection,
     collect_runtime_prompt_sections,
-    dedupe_runtime_prompt_sections,
     join_runtime_prompt_sections,
 )
 from app.services.token_counter import count_tokens
@@ -37,24 +41,6 @@ _PREVIEW_PROMPT_DANGER_TOKENS = 4_500
 _PREVIEW_LOW_YIELD_SOURCE_KINDS = {"persona_context", "memory_context", "task_prompt"}
 _PREVIEW_LOW_YIELD_SHARE_WARN = 0.45
 _PREVIEW_SECTION_SHARE_WARN = 0.2
-
-
-class _EmptyPreviewContext:
-    def __init__(self) -> None:
-        self.mandates: list[Any] = []
-        self.guardrails: list[Any] = []
-        self.reference: list[Any] = []
-        self.reference_index: list[Any] = []
-        self.debug_info: dict[str, Any] = {}
-
-    def get_loaded_uuids(self) -> list[str]:
-        return []
-
-    def get_reference_uuids(self) -> list[str]:
-        return []
-
-    def get_reference_index_uuids(self) -> list[str]:
-        return []
 
 
 def _build_budget_telemetry(
@@ -189,12 +175,6 @@ async def _build_task_prompt_preview(
     return prompt_input
 
 
-def _memory_scope_for_project(project_id: str | None) -> tuple[MemoryScope, str | None]:
-    if project_id:
-        return MemoryScope.PROJECT, project_id
-    return MemoryScope.GLOBAL, None
-
-
 def _build_preview_memory_query(task_prompt: str | None, prompt_input: str | None) -> str:
     """Mirror runtime memory-query extraction from the latest user message."""
     return extract_query_from_messages(
@@ -211,7 +191,7 @@ async def build_agent_preview(
     phase: str | None = None,
     prompt_input: str | None = None,
 ) -> dict[str, Any]:
-    """Build agent preview with runtime system sections, task prompt, and memory injection."""
+    """Preview the exact canonical operator delivery plus agent-specific layers."""
     agent_memory_config = agent.memory_config
     include_mandates, include_guardrails, include_references = resolve_memory_config_includes(
         agent_memory_config
@@ -224,61 +204,6 @@ async def build_agent_preview(
         agent_memory_config,
         surface="preview",
     )
-    runtime_sections: list[RuntimePromptSection] = []
-    runtime_sections = await collect_runtime_prompt_sections(
-        db,
-        agent,
-        task_type=None if task_type == "chat" else task_type,
-        project_id=project_id,
-        include_global_prompts=True,
-        include_mandates=runtime_include_mandates,
-        include_guardrails=runtime_include_guardrails,
-    )
-    combined = join_runtime_prompt_sections(runtime_sections)
-    project_index_block = ""
-    if resolve_project_index_enabled(agent_memory_config):
-        project_index_block = format_project_index_context(
-            project_id,
-            consumer_profile=preview_consumer_profile,
-            task_type=task_type,
-        )
-        if project_index_block:
-            combined = f"{combined}\n\n{project_index_block}" if combined else project_index_block
-            runtime_sections.append(
-                RuntimePromptSection(
-                    label="Project Index",
-                    source_kind="project_index",
-                    source_id=project_id or "global",
-                    placement="system",
-                    content=project_index_block,
-                )
-            )
-    tool_capability_block = ""
-    if resolve_tool_capabilities_enabled(agent_memory_config):
-        visible_tool_names = (
-            await get_visible_tools_for_project(project_id, db)
-            if project_id
-            else frozenset()
-        )
-        bash_available = ("bash" in visible_tool_names) if project_id else None
-        tool_capability_block = format_tool_capability_context(
-            consumer_profile=preview_consumer_profile,
-            task_type=task_type,
-            project_id=project_id,
-            bash_available=bash_available,
-            agent_slug=agent.slug,
-        )
-        if tool_capability_block:
-            combined = f"{combined}\n\n{tool_capability_block}" if combined else tool_capability_block
-            runtime_sections.append(
-                RuntimePromptSection(
-                    label="Tool Capabilities",
-                    source_kind="tool_capabilities",
-                    source_id=agent.slug,
-                    placement="system",
-                    content=tool_capability_block,
-                )
-            )
 
     task_prompt = await _build_task_prompt_preview(
         agent,
@@ -299,69 +224,85 @@ async def build_agent_preview(
         else None
     )
 
-    scope, scope_id = _memory_scope_for_project(project_id)
     memory_query = _build_preview_memory_query(task_prompt, prompt_input)
-    if injection_enabled:
-        context = await build_progressive_context(
-            query=memory_query,
-            scope=scope,
-            scope_id=scope_id,
-            include_mandates=include_mandates,
-            include_guardrails=include_guardrails,
-            include_references=include_references,
+    audience_tags, exclude_tags = resolve_memory_tags(agent_memory_config)
+    settings = await get_memory_settings(db)
+    continuity_enabled, max_sessions, cross_project, live_sessions = (
+        resolve_continuity_settings(settings, agent_memory_config)
+    )
+    delivery = await build_canonical_context_delivery(
+        db,
+        CanonicalContextDeliveryRequest(
+            consumer_surface="agent_preview",
+            consumer_profile=preview_consumer_profile,
+            agent_slug=agent.slug,
+            consumer_tags=audience_tags,
+            project_id=project_id,
+            task=task_prompt,
+            query=memory_query or None,
             task_type=None if task_type == "chat" else task_type,
             phase=phase,
-            memory_config=agent_memory_config,
-            consumer_profile=preview_consumer_profile,
-            consumer_agent_slug=agent.slug,
-            consumer_tags=list(agent_memory_config.get("audience_tags", [])) if agent_memory_config else None,
+            include_prompts=True,
+            include_memories=injection_enabled,
+            include_mandates=include_mandates and runtime_include_mandates,
+            include_guardrails=include_guardrails and runtime_include_guardrails,
+            include_references=include_references,
+            include_reference_index=resolve_reference_index_enabled(agent_memory_config),
+            exclude_tags=exclude_tags,
+            exclude_memory_uuids=resolve_excluded_memory_uuids(agent_memory_config),
+            include_project_index=resolve_project_index_enabled(agent_memory_config),
+            include_tool_capabilities=resolve_tool_capabilities_enabled(agent_memory_config),
+            include_continuity=continuity_enabled,
+            continuity_max_sessions=max_sessions,
+            continuity_cross_project=cross_project,
+            continuity_live_sessions=live_sessions,
+        ),
+    )
+    context = progressive_context_from_delivery(delivery)
+
+    canonical_sections = [
+        RuntimePromptSection(
+            label=block.title,
+            source_kind=f"canonical_{block.kind}",
+            source_id=block.provenance.source_id,
+            placement="system",
+            content=block.content,
         )
-        formatted_memory = format_progressive_context(
-            context,
-            include_citations=True,
-            consumer_profile=preview_consumer_profile,
-        )
-    else:
-        context = _EmptyPreviewContext()
-        formatted_memory = ""
-    if formatted_memory:
-        combined = f"{combined}\n\n{formatted_memory}" if combined else formatted_memory
-        runtime_sections.append(
+        for block in delivery.blocks
+    ]
+    if delivery.status != "ok":
+        canonical_sections.append(
             RuntimePromptSection(
-                label="Memory Context",
-                source_kind="memory_context",
-                source_id=scope_id or "global",
+                label="Canonical Context Failure",
+                source_kind="canonical_context_failure",
+                source_id=delivery.delivery_id,
                 placement="system",
-                content=formatted_memory,
+                content=delivery.rendered,
             )
         )
 
-    runtime_sections, dropped_system_sections = dedupe_runtime_prompt_sections(runtime_sections)
-    preview_sections = list(runtime_sections)
+    agent_sections = await collect_runtime_prompt_sections(
+        db,
+        agent,
+        task_type=None if task_type == "chat" else task_type,
+        project_id=project_id,
+        include_global_prompts=False,
+        include_persona_context=True,
+    )
+    preview_sections = [*canonical_sections, *agent_sections]
     if task_prompt_section:
         preview_sections.append(task_prompt_section)
 
-    _, duplicate_sections = dedupe_runtime_prompt_sections(preview_sections)
-    telemetry = _build_budget_telemetry(
-        preview_sections,
-        [*dropped_system_sections, *duplicate_sections],
-    )
+    telemetry = _build_budget_telemetry(preview_sections, [])
 
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
-    combined = join_runtime_prompt_sections(
-        [section for section in preview_sections if section.placement != "user"]
+    agent_prompt = join_runtime_prompt_sections(agent_sections)
+    combined = "\n\n".join(
+        content for content in (delivery.rendered, agent_prompt) if content
     )
-    full_context = join_runtime_prompt_sections(preview_sections)
-    reference_index_uuids_getter = getattr(context, "get_reference_index_uuids", None)
-    reference_index_uuids = (
-        reference_index_uuids_getter()
-        if callable(reference_index_uuids_getter)
-        else [
-            r.uuid
-            for r in getattr(context, "reference_index", [])
-            if getattr(r, "uuid", None)
-        ]
+    full_context = "\n\n".join(
+        content for content in (combined, task_prompt or "") if content
     )
 
     return {
@@ -371,7 +312,7 @@ async def build_agent_preview(
         "memory_debug": dict(getattr(context, "debug_info", {})),
         "loaded_memory_uuids": context.get_loaded_uuids(),
         "reference_uuids": context.get_reference_uuids(),
-        "reference_index_uuids": reference_index_uuids,
+        "reference_index_uuids": context.get_reference_index_uuids(),
         "mandate_count": len(context.mandates),
         "guardrail_count": len(context.guardrails),
         "mandate_uuids": [u for u in mandate_uuids if u],
@@ -383,4 +324,5 @@ async def build_agent_preview(
         "sections": [section.to_preview_dict() for section in preview_sections],
         "prompt_budget": telemetry,
         "full_context_estimated_tokens": count_tokens(full_context) if full_context else 0,
+        "canonical_context": canonical_context_contract(delivery),
     }

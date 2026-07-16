@@ -25,32 +25,41 @@ from .service import MemoryScope, MemorySearchResult
 logger = logging.getLogger(__name__)
 
 
+class RequiredPolicyConversionError(RuntimeError):
+    """An active mandate/guardrail could not become a delivered policy block."""
+
+
+def _required_source_id(episode: dict) -> str:
+    return str(episode.get("uuid") or episode.get("id") or "unknown")
+
+
 async def get_mandates(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     db: AsyncSession | None = None,
 ) -> list[MemorySearchResult]:
-    """Get all mandates for a scope (deterministic injection).
+    """Get all active mandates for a scope without usage-based demotion.
 
-    Uses injection_tier='mandate' field for filtering.
-    Returns ALL non-demoted mandates — no scoring or thresholds.
+    Review/governance owns mandate authority. Citation or load counters are
+    observability signals and must never silently remove operator policy.
     """
-    from .adaptive_index import get_adaptive_index
-
-    adaptive_index = await get_adaptive_index(db=db)
-    demoted_uuids = {e.uuid for e in adaptive_index.entries if e.is_demoted}
-
     episodes = await get_episodes_by_tier("mandate", scope, scope_id, db=db)
     logger.debug("Retrieved %d mandate episodes", len(episodes))
 
-    results = [r for ep in episodes if (r := mandate_episode_to_result(ep, demoted_uuids))]
+    results: list[MemorySearchResult] = []
+    invalid_ids: list[str] = []
+    for episode in episodes:
+        result = mandate_episode_to_result(episode)
+        if result is None:
+            invalid_ids.append(_required_source_id(episode))
+        else:
+            results.append(result)
+    if invalid_ids:
+        raise RequiredPolicyConversionError(
+            "Active mandates failed validation/conversion: " + ", ".join(invalid_ids)
+        )
 
-    logger.info(
-        "Mandate injection: %d/%d included (demoted=%d)",
-        len(results),
-        len(episodes),
-        len(demoted_uuids),
-    )
+    logger.info("Mandate injection: %d/%d included", len(results), len(episodes))
     return results
 
 
@@ -67,7 +76,24 @@ async def get_guardrails(
     episodes = await get_episodes_by_tier("guardrail", scope, scope_id, db=db)
     logger.debug("Retrieved %d guardrail episodes", len(episodes))
 
-    results = [r for ep in episodes if (r := guardrail_episode_to_result(ep))]
+    results: list[MemorySearchResult] = []
+    invalid_ids: list[str] = []
+    for episode in episodes:
+        try:
+            result = guardrail_episode_to_result(episode)
+        except Exception as exc:
+            raise RequiredPolicyConversionError(
+                f"Active guardrail {_required_source_id(episode)} failed validation/conversion: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        if result is None:
+            invalid_ids.append(_required_source_id(episode))
+        else:
+            results.append(result)
+    if invalid_ids:
+        raise RequiredPolicyConversionError(
+            "Active guardrails failed validation/conversion: " + ", ".join(invalid_ids)
+        )
 
     logger.info("Guardrail injection: %d included", len(results))
     return results

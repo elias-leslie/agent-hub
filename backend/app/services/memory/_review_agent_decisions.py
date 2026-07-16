@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from collections import Counter
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
-MAX_COMPACT_CONTENT_CHARS = 420
+from ._review_agent_prompt import REVIEW_CHECK_KEYS
+
 MIN_COMPACT_REVIEW_CONTENT_CHARS = 240
 _NORMATIVE_PATTERN = re.compile(
     r"\b(must|never|always|required|require|use|only|do not|don't|cannot|avoid)\b",
@@ -38,6 +40,8 @@ class MemoryReviewDecision:
     review_status: str
     confidence: float
     reason: str
+    checks: dict[str, str] = field(default_factory=dict)
+    merge_target_uuid: str | None = None
     suggested_summary: str | None = None
     compact_content: str | None = None
     suggested_tags: list[str] = field(default_factory=list)
@@ -111,21 +115,29 @@ def _normalize_compact_content(
     original: str,
     candidate: Any,
 ) -> str | None:
-    """Validate compact prompt text before persisting it."""
+    """Accept semantic compaction or keep using the complete source text.
+
+    Compaction is reviewer-authored.  This validator never crops by character
+    count: an invalid candidate is rejected so callers keep the full source.
+    The conservative normative signature prevents a compact variant from
+    silently weakening repeated ``must``/``never``/``only``-style clauses.
+    """
     if not isinstance(candidate, str):
         return None
     compact = " ".join(candidate.split())
     if not compact:
         return None
-    if len(compact) > MAX_COMPACT_CONTENT_CHARS:
-        compact = compact[:MAX_COMPACT_CONTENT_CHARS].rsplit(" ", 1)[0].rstrip(".,;:") + "..."
     if original:
         full = " ".join(original.split())
         if len(compact) >= len(full):
             return None
-        original_markers = {marker.lower() for marker in _NORMATIVE_PATTERN.findall(full)}
-        compact_markers = {marker.lower() for marker in _NORMATIVE_PATTERN.findall(compact)}
-        if original_markers and not original_markers.intersection(compact_markers):
+        original_markers = Counter(
+            marker.lower() for marker in _NORMATIVE_PATTERN.findall(full)
+        )
+        compact_markers = Counter(
+            marker.lower() for marker in _NORMATIVE_PATTERN.findall(compact)
+        )
+        if any(compact_markers[marker] < count for marker, count in original_markers.items()):
             return None
     return compact
 
@@ -198,6 +210,15 @@ def _suggested_applicability(item: dict[str, Any]) -> dict[str, Any]:
     profiles = recommended_profiles if isinstance(recommended_profiles, list) else target_consumers
     if isinstance(profiles, list):
         suggested.setdefault("consumer_profiles", [value for value in profiles if isinstance(value, str)])
+
+    recommended_surfaces = item.get("recommended_consumer_surfaces")
+    target_surfaces = item.get("target_surfaces") or item.get("target_consumer_surfaces")
+    surfaces = recommended_surfaces if isinstance(recommended_surfaces, list) else target_surfaces
+    if isinstance(surfaces, list):
+        suggested.setdefault(
+            "consumer_surfaces",
+            [value for value in surfaces if isinstance(value, str)],
+        )
     return suggested
 
 
@@ -232,19 +253,45 @@ def _decision_from_item(
     if sensitivity_tier not in {"normal", "personal", "confidential"}:
         sensitivity_tier = "normal"
     suggested_summary = item.get("suggested_summary")
+    merge_target_uuid = item.get("merge_target_uuid") or item.get("superseded_by")
+    raw_checks = item.get("checks")
+    checks = {
+        key: str(raw_checks.get(key))
+        for key in REVIEW_CHECK_KEYS
+        if isinstance(raw_checks, dict)
+        and raw_checks.get(key) in {"pass", "concern", "unknown", "not_applicable"}
+    }
+    if (
+        checks
+        and any(value in {"concern", "unknown"} for value in checks.values())
+        and review_status != "needs_action"
+    ):
+        return None
+    if (
+        checks
+        and all(value in {"pass", "not_applicable"} for value in checks.values())
+        and review_status != "clean"
+    ):
+        return None
+    if normalized_decision == "merge" and not isinstance(merge_target_uuid, str):
+        return None
     return MemoryReviewDecision(
         uuid=uuid,
         decision=normalized_decision,
         review_status=review_status,
         confidence=float(item.get("confidence") or 0.75),
-        reason=reason[:500],
+        reason=reason,
+        checks=checks,
+        merge_target_uuid=(
+            str(merge_target_uuid) if isinstance(merge_target_uuid, str) else None
+        ),
         suggested_summary=suggested_summary if isinstance(suggested_summary, str) else None,
         compact_content=compact_content,
         suggested_tags=[
             tag.strip()
-            for tag in item.get("suggested_tags", [])
+            for tag in (item.get("suggested_tags") or [])
             if isinstance(tag, str) and tag.strip()
-        ][:12],
+        ],
         suggested_applicability=_suggested_applicability(item),
         sensitivity_tier=sensitivity_tier,
     )
@@ -257,6 +304,14 @@ def parse_memory_review_content(
     """Parse review-agent JSON into decisions."""
     if not content:
         return None
+    content = content.strip()
+    if content.startswith("```"):
+        lines = content.splitlines()
+        if lines and lines[0].strip().lower() in {"```", "```json"}:
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        content = "\n".join(lines).strip()
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
@@ -285,7 +340,90 @@ def parse_memory_review_content(
         if decision is None:
             return None
         decisions.append(decision)
+    decision_uuids = [decision.uuid for decision in decisions]
+    if len(decision_uuids) != len(set(decision_uuids)):
+        return None
+    if set(decision_uuids) != expected_uuids:
+        return None
     return decisions
+
+
+def repair_memory_review_content(
+    content: str | None,
+    expected_uuids: set[str],
+) -> str | None:
+    """Deterministically quarantine incomplete per-check reviewer output.
+
+    This is a last-resort repair after a reviewer and its correction/fallback
+    failed strict validation. Missing checks become ``unknown`` and any
+    concern/unknown forces ``needs_action``; the repair can therefore never
+    turn uncertain output into a clean review.
+    """
+    if not content:
+        return None
+    raw = content.strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if lines and lines[0].strip().lower() in {"```", "```json"}:
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        raw = "\n".join(lines).strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, list):
+        items = parsed
+    elif isinstance(parsed, dict):
+        items = parsed.get("reviews") or parsed.get("decisions")
+    else:
+        return None
+    if not isinstance(items, list):
+        return None
+
+    repaired_items: list[dict[str, Any]] = []
+    for original_item in items:
+        if not isinstance(original_item, dict):
+            return None
+        item = dict(original_item)
+        raw_checks = item.get("checks")
+        if not isinstance(raw_checks, dict):
+            raw_checks = {}
+        item["checks"] = {
+            key: (
+                raw_checks[key]
+                if raw_checks.get(key)
+                in {"pass", "concern", "unknown", "not_applicable"}
+                else "unknown"
+            )
+            for key in REVIEW_CHECK_KEYS
+        }
+        uncertain = any(
+            value in {"concern", "unknown"} for value in item["checks"].values()
+        )
+        item["review_status"] = "needs_action" if uncertain else "clean"
+        if not uncertain:
+            item["decision"] = "keep"
+        repaired_items.append(item)
+
+    repaired = json.dumps({"reviews": repaired_items}, separators=(",", ":"))
+    decisions = parse_memory_review_content(repaired, expected_uuids)
+    if decisions is None or not review_decisions_have_complete_checks(decisions):
+        return None
+    return json.dumps(
+        {"reviews": [asdict(decision) for decision in decisions]},
+        separators=(",", ":"),
+    )
+
+
+def review_decisions_have_complete_checks(
+    decisions: list[MemoryReviewDecision] | None,
+) -> bool:
+    """Return whether every decision contains the complete nine-check audit."""
+    return bool(decisions) and all(
+        set(decision.checks) == set(REVIEW_CHECK_KEYS) for decision in decisions
+    )
 
 
 __all__ = [
@@ -294,4 +432,6 @@ __all__ = [
     "MemoryReviewDecision",
     "_normalize_compact_content",
     "parse_memory_review_content",
+    "repair_memory_review_content",
+    "review_decisions_have_complete_checks",
 ]

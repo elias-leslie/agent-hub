@@ -1,11 +1,12 @@
 """Core completion logic for the completion API.
 
 Single composition point for the synchronous ``POST /api/complete`` path:
-``setup_completion_session`` → optional ``inject_memory_context`` →
+``setup_completion_session`` → verified canonical context →
 ``resolve_llm_model`` → ``orchestrator.run_completion`` → optional
-``extract_cited_uuids``. The new pipeline replaces the legacy
-``ProviderAdapter`` family + capability-aware routing; the unified tool
-loop runs server-side via ``app.llm.tool_loop`` with
+``extract_cited_uuids``. Callers may skip duplicate injection only when their
+messages carry the hash-verified canonical envelope. The new pipeline replaces
+the legacy ``ProviderAdapter`` family + capability-aware routing; the unified
+tool loop runs server-side via ``app.llm.tool_loop`` with
 ``app.services.tools.create_direct_handler`` as the runner.
 """
 
@@ -30,6 +31,8 @@ from app.memory.citation_extractor import extract_cited_uuids
 from app.memory.injection import inject_memory_context
 from app.routing.registry import is_workload_provider
 from app.services.llm_errors import ProviderError
+from app.services.memory.context_injector_ops import has_verified_canonical_context
+from app.services.memory.context_resilience import CanonicalContextInjectionFailed
 
 from .error_summary import build_error_summary
 from .orchestrator import build_context_from_messages, run_completion
@@ -140,13 +143,15 @@ async def complete_internal(
     current_branch: str | None = None,
     requested_model: str | None = None,
     requested_provider: str | None = None,
+    canonical_context_preinjected: bool = False,
 ) -> CompletionInternalResult:
     """Run a completion via the unified ``app.llm`` pipeline.
 
     When ``db`` is ``None`` the call runs ephemerally: no session row is
-    created, no DB-backed memory injection is attempted, and the returned
-    ``session_id`` is a synthetic ``ephemeral:<uuid>``. The agentic path
-    always supplies a real ``AsyncSession``.
+    created and the returned ``session_id`` is a synthetic
+    ``ephemeral:<uuid>``. Canonical context is still loaded through a managed
+    async session unless the caller explicitly declares that the messages
+    already contain a verified canonical delivery.
     """
 
     if not is_workload_provider(provider):
@@ -172,11 +177,28 @@ async def complete_internal(
         messages_dict = list(messages)
 
     loaded_memory_uuids: list[str] = []
-    if use_memory and db is not None:
+    if canonical_context_preinjected:
+        if not has_verified_canonical_context(messages_dict):
+            raise CanonicalContextInjectionFailed(
+                "canonical_context_preinjected requires a hash-verified "
+                "Agent Hub canonical context envelope"
+            )
+    else:
         messages_dict, loaded_memory_uuids, _ = await inject_memory_context(
             messages_dict, db, session_id, memory_group_id, task_type, phase,
-            memory_config, current_branch=current_branch, agent_id=agent_slug,
+            memory_config,
+            current_branch=current_branch,
+            agent_id=agent_slug,
+            agent_slug=agent_slug,
+            project_id=project_id,
+            include_memories=use_memory,
+            consumer_surface="agent_runtime",
         )
+        if not has_verified_canonical_context(messages_dict):
+            raise CanonicalContextInjectionFailed(
+                "canonical context injection did not return a hash-verified "
+                "Agent Hub canonical context envelope"
+            )
 
     llm_model = resolve_llm_model(model, provider)
     context = build_context_from_messages(messages_dict, tools=tools)

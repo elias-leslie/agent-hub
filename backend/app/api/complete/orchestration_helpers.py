@@ -55,10 +55,11 @@ async def build_session_and_messages(
         request, provider, resolved_model, db, client_id, source
     )
     all_messages, messages_dict = build_message_list(request, ctx_msgs)
-    messages_dict = inject_agent_system_prompt(messages_dict, mandate)
     messages_dict, memory_facts_injected, loaded_memory_uuids = await inject_memory(
         request, messages_dict, session_id, resolved_agent, db
     )
+    # Canonical operator context precedes agent-specific prompt/persona layers.
+    messages_dict = inject_agent_system_prompt(messages_dict, mandate)
     messages_dict, _was_compacted = await compact_context_if_needed(
         db, session_id, resolved_model, messages_dict
     )

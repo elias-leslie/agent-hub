@@ -20,6 +20,7 @@ from app.services.llm_errors import (
 from app.services.llm_messages import (
     Message,
 )
+from app.services.memory.context_injector_ops import has_verified_canonical_context
 from app.services.model_runtime_health import (
     classify_runtime_failure,
     record_model_runtime_failure,
@@ -138,10 +139,11 @@ async def _try_model(
 ) -> tuple[CompletionInternalResult | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error.
 
-    Routes each attempt through the new pipeline by calling
-    :func:`backend.app.api.complete.core.complete_internal` with ``db=None``.
-    The fallback iteration, cooldown logic, and circuit-breaker bookkeeping
-    are unchanged.
+    Routes each already-prepared canonical request through the new pipeline by
+    calling :func:`backend.app.api.complete.core.complete_internal` with
+    ``db=None``. Core verifies the canonical envelope before provider access.
+    The fallback iteration, cooldown logic, and circuit-breaker bookkeeping are
+    unchanged.
     """
     from app.api.complete.core import complete_internal
 
@@ -166,8 +168,9 @@ async def _try_model(
         return None, cooldown_error
     start = time.monotonic()
     try:
+        message_dicts = _messages_as_dicts(messages)
         internal = await complete_internal(
-            messages=_messages_as_dicts(messages),
+            messages=message_dicts,
             model=model,
             provider=provider,
             temperature=temperature,
@@ -178,6 +181,7 @@ async def _try_model(
             thinking_level=_thinking_level_for_provider(provider, thinking_level),
             max_turns=1,
             execute_tools=False,
+            canonical_context_preinjected=has_verified_canonical_context(message_dicts),
         )
         terminal_error = _error_from_terminal_result(internal)
         if terminal_error is not None:
@@ -440,10 +444,7 @@ def inject_system_prompt_into_messages(
     messages: list[Message],
     system_content: str,
 ) -> list[Message]:
-    """Inject system content into messages list.
-
-    If a system message already exists, prepends the new content.
-    Otherwise, inserts a new system message at the beginning.
+    """Append system content to one lossless leading system message.
 
     Args:
         messages: Original message list (will not be modified)
@@ -452,19 +453,6 @@ def inject_system_prompt_into_messages(
     Returns:
         New message list with injected system content
     """
-    messages = messages.copy()
+    from app.services.llm_messages import append_system_context
 
-    system_idx = next(
-        (i for i, m in enumerate(messages) if m.role == "system"),
-        None,
-    )
-
-    if system_idx is not None:
-        messages[system_idx] = Message(
-            role="system",
-            content=f"{system_content}\n\n---\n\n{messages[system_idx].content}",
-        )
-    else:
-        messages.insert(0, Message(role="system", content=system_content))
-
-    return messages
+    return append_system_context(messages, system_content)

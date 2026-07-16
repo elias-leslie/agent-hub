@@ -12,12 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.owned_prompt_service import (
     AGENT_SYSTEM_PROMPT_TYPE,
-    GLOBAL_GUARDRAIL_PROMPT_TYPE,
-    GLOBAL_MANDATE_PROMPT_TYPE,
+    get_owned_prompt,
 )
 from app.services.prompt_service import (
     get_agent_prompts,
-    get_all_prompts,
     get_runtime_excluded_prompt_roles,
 )
 from app.services.token_counter import count_tokens
@@ -141,28 +139,55 @@ async def collect_runtime_prompt_sections(
     include_mandates: bool = True,
     include_guardrails: bool = True,
     include_persona_context: bool = True,
+    query: str = "startup context",
+    consumer_profile: str = "agent_runtime",
+    consumer_tags: list[str] | None = None,
 ) -> list[RuntimePromptSection]:
     """Collect the runtime system-prompt sections in injection order."""
     sections: list[RuntimePromptSection] = []
 
     if include_global_prompts:
-        global_prompts = await get_all_prompts(db, is_global=True)
-        for prompt in global_prompts:
-            if not prompt.enabled:
-                continue
-            if agent.slug and prompt.exclude_agents and agent.slug in prompt.exclude_agents:
-                continue
-            if prompt.prompt_type == GLOBAL_MANDATE_PROMPT_TYPE and not include_mandates:
-                continue
-            if prompt.prompt_type == GLOBAL_GUARDRAIL_PROMPT_TYPE and not include_guardrails:
+        from app.services.runtime_context import (
+            CanonicalContextDeliveryRequest,
+            build_canonical_context_delivery,
+        )
+
+        delivery = await build_canonical_context_delivery(
+            db,
+            CanonicalContextDeliveryRequest(
+                consumer_surface="agent_prompt_stack",
+                consumer_profile=consumer_profile,
+                agent_slug=getattr(agent, "slug", None),
+                consumer_tags=consumer_tags or [],
+                project_id=project_id,
+                query=query,
+                task_type=task_type,
+                include_memories=False,
+                include_mandates=include_mandates,
+                include_guardrails=include_guardrails,
+                include_project_index=False,
+                include_tool_capabilities=False,
+                include_continuity=False,
+            ),
+        )
+        for block in delivery.blocks:
+            if block.provenance.source_type != "prompt":
                 continue
             sections.append(
                 RuntimePromptSection(
-                    label=prompt.name,
+                    label=block.title,
                     source_kind="global_prompt",
-                    source_id=prompt.slug,
-                    content=prompt.content,
-                    updated_at=prompt.updated_at,
+                    source_id=block.provenance.source_id,
+                    content=block.content,
+                )
+            )
+        if delivery.status != "ok":
+            sections.append(
+                RuntimePromptSection(
+                    label="Canonical Context Failure",
+                    source_kind="canonical_context_failure",
+                    source_id=delivery.delivery_id,
+                    content=delivery.rendered,
                 )
             )
 
@@ -176,12 +201,52 @@ async def collect_runtime_prompt_sections(
             task_type=task_type,
         ),
     )
-    enabled_assignments = [assignment for assignment in assignments if assignment.prompt.enabled]
+    # Global prompt ownership is assembled once by canonical context. An old or
+    # redundant AgentPrompt assignment must not duplicate that content in the
+    # agent-specific layer.
+    agent_specific_assignments = [
+        assignment
+        for assignment in assignments
+        if not assignment.prompt.is_global
+    ]
+    enabled_assignments = [
+        assignment
+        for assignment in agent_specific_assignments
+        if assignment.prompt.enabled
+    ]
     has_owned_system_prompt = any(
         assignment.prompt.prompt_type == AGENT_SYSTEM_PROMPT_TYPE
-        for assignment in enabled_assignments
+        for assignment in agent_specific_assignments
     )
-    if not has_owned_system_prompt:
+    system_role_in_scope = include_roles is None or "system" in include_roles
+    unassigned_owned_system_prompt = None
+    if not has_owned_system_prompt and system_role_in_scope:
+        # Assignment drift must not revive the Agent compatibility mirror.
+        # Read the canonical owned row directly when no assignment surfaced:
+        # enabled rows still render, while disabled rows explicitly render
+        # nothing. Only a truly absent/unmigrated row permits the mirror.
+        unassigned_owned_system_prompt = await get_owned_prompt(
+            db,
+            agent_id=agent.id,
+            prompt_type=AGENT_SYSTEM_PROMPT_TYPE,
+        )
+
+    if unassigned_owned_system_prompt is not None:
+        prompt = unassigned_owned_system_prompt
+        content = (prompt.content or "").strip()
+        if prompt.enabled and content:
+            sections.append(
+                RuntimePromptSection(
+                    label=prompt.name,
+                    source_kind="agent_system_prompt",
+                    source_id=prompt.slug,
+                    content=content,
+                    role="system",
+                    priority=0,
+                    updated_at=prompt.updated_at,
+                )
+            )
+    elif not has_owned_system_prompt and system_role_in_scope:
         system_prompt = (getattr(agent, "system_prompt", None) or "").strip()
         if system_prompt:
             sections.append(

@@ -14,7 +14,7 @@ from tests.conftest import create_mock_db_session
 
 class TestPersonaInstructionService:
     @pytest.mark.asyncio
-    async def test_set_persona_heartbeat_instructions_syncs_prompt_documents(self) -> None:
+    async def test_set_persona_heartbeat_instructions_syncs_instruction_prompt(self) -> None:
         db = create_mock_db_session()
         prompt = Prompt(
             slug="persona-heartbeat-instructions",
@@ -31,14 +31,14 @@ class TestPersonaInstructionService:
         with (
             patch(
                 "app.services.persona_instruction_service.get_prompt_by_slug",
-                new=AsyncMock(side_effect=[prompt, None, None]),
+                new=AsyncMock(return_value=prompt),
             ),
             patch(
                 "app.services.persona_instruction_service._get_persona_agent",
                 new=AsyncMock(return_value=agent),
             ),
             patch(
-                "app.services.persona_instruction_service.sync_persona_document_prompts",
+                "app.services.persona_instruction_service.sync_persona_instruction_prompts",
                 new=AsyncMock(),
             ) as mock_sync,
         ):
@@ -54,8 +54,6 @@ class TestPersonaInstructionService:
         mock_sync.assert_awaited_once_with(
             db,
             agent=agent,
-            personality="",
-            user_context="",
             heartbeat_instructions="New heartbeat text",
             changed_by="persona",
             change_reason="benchmark promote",

@@ -13,7 +13,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
-from app.services.agent_service import AgentDTO, AgentService, get_agent_service
+from app.services.agent_service import (
+    AgentDTO,
+    AgentService,
+    _resolve_system_prompt,
+    get_agent_service,
+)
 
 
 class TestAgentService:
@@ -66,6 +71,46 @@ class TestAgentService:
     # ─────────────────────────────────────────────────────────────────────────
 
     @pytest.mark.asyncio
+    async def test_disabled_owned_prompt_does_not_revive_agent_mirror(
+        self, mock_db,
+    ):
+        """Disabling the canonical prompt explicitly disables its legacy mirror."""
+        agent = MagicMock(
+            slug="coder",
+            system_prompt="legacy compatibility mirror",
+        )
+        owned_prompt = MagicMock(
+            enabled=False,
+            content="canonical prompt content",
+        )
+
+        with patch(
+            "app.services.agent_service.get_prompt_by_slug",
+            new=AsyncMock(return_value=owned_prompt),
+        ):
+            result = await _resolve_system_prompt(mock_db, agent)
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_absent_owned_prompt_allows_unmigrated_agent_fallback(
+        self, mock_db,
+    ):
+        """The compatibility mirror remains available only before prompt migration."""
+        agent = MagicMock(
+            slug="legacy-agent",
+            system_prompt="legacy compatibility mirror",
+        )
+
+        with patch(
+            "app.services.agent_service.get_prompt_by_slug",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await _resolve_system_prompt(mock_db, agent)
+
+        assert result == "legacy compatibility mirror"
+
+    @pytest.mark.asyncio
     async def test_get_by_slug_returns_agent(self, service, mock_db, mock_agent):
         """Test get_by_slug returns agent when found."""
         mock_result = MagicMock()
@@ -97,7 +142,7 @@ class TestAgentService:
 
     @pytest.mark.asyncio
     async def test_get_by_slug_uses_cache(self, service, mock_db):
-        """Test get_by_slug returns cached agent without DB query."""
+        """Cached agent config still revalidates the authoritative prompt row."""
         cached_dto = AgentDTO(
             id=1,
             slug="cached-agent",
@@ -123,12 +168,65 @@ class TestAgentService:
             updated_at=datetime.now(UTC),
         )
 
-        with patch.object(service._cache, "get", return_value=cached_dto):
+        with (
+            patch.object(service._cache, "get", return_value=cached_dto),
+            patch(
+                "app.services.agent_service._resolve_system_prompt",
+                new=AsyncMock(return_value="prompt"),
+            ) as resolve_system_prompt,
+        ):
             result = await service.get_by_slug(mock_db, "cached-agent")
 
         assert result is not None
         assert result.slug == "cached-agent"
-        mock_db.execute.assert_not_called()
+        resolve_system_prompt.assert_awaited_once_with(mock_db, cached_dto)
+
+    @pytest.mark.asyncio
+    async def test_get_by_slug_refreshes_stale_cached_system_prompt(
+        self, service, mock_db,
+    ):
+        """An owned prompt edit wins immediately over the cached Agent mirror."""
+        cached_dto = AgentDTO(
+            id=1,
+            slug="cached-agent",
+            name="Cached",
+            description=None,
+            system_prompt="stale compatibility mirror",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.7,
+            thinking_level=None,
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=False,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        with (
+            patch.object(service._cache, "get", return_value=cached_dto),
+            patch.object(service._cache, "set", new=AsyncMock()) as cache_set,
+            patch(
+                "app.services.agent_service._resolve_system_prompt",
+                new=AsyncMock(return_value="authoritative owned prompt"),
+            ),
+        ):
+            result = await service.get_by_slug(mock_db, "cached-agent")
+
+        assert result is not None
+        assert result.system_prompt == "authoritative owned prompt"
+        cache_set_call = cache_set.await_args
+        assert cache_set_call is not None
+        refreshed = cache_set_call.args[0]
+        assert refreshed.system_prompt == "authoritative owned prompt"
 
     @pytest.mark.asyncio
     async def test_get_by_slug_overrides_cached_persona_name(self, service, mock_db):
@@ -161,6 +259,10 @@ class TestAgentService:
         with (
             patch.object(service._cache, "get", return_value=cached_dto),
             patch(
+                "app.services.agent_service._resolve_system_prompt",
+                new=AsyncMock(return_value="prompt"),
+            ),
+            patch(
                 "app.services.agent_service.get_persona_display_name",
                 new=AsyncMock(return_value="Avery"),
             ),
@@ -170,7 +272,6 @@ class TestAgentService:
         assert result is not None
         assert result.slug == "persona"
         assert result.name == "Avery"
-        mock_db.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_agent(self, service, mock_db, mock_agent):

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Source-linked entry point for the canonical Agent Hub context CLI.
+set -euo pipefail
+
+SOURCE="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SOURCE")/../../.." && pwd)"
+PYTHON="$ROOT/backend/.venv/bin/python"
+if [[ ! -x "$PYTHON" ]]; then
+    echo "agent-hub-context: backend Python runtime missing at $PYTHON" >&2
+    exit 127
+fi
+export PYTHONPATH="$ROOT/backend${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PYTHON" -m app.cli.runtime_context "$@"

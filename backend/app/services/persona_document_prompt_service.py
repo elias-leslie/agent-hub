@@ -1,13 +1,16 @@
-"""Prompt-backed storage for the persona's editable document prompts."""
+"""Persona-row storage for editable identity and user-state documents.
+
+Reusable operational instructions remain DB prompts.  The ``persona`` row is
+the canonical source for persona identity/state so editable documents do not
+form a second prompt-owned authority path.
+"""
 
 from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.agent import Agent
 from app.models.persona import Persona
-from app.services.owned_prompt_service import sync_persona_document_prompts
 from app.services.persona_documents import (
     normalize_user_profile,
     split_legacy_user_context,
@@ -15,19 +18,16 @@ from app.services.persona_documents import (
 )
 from app.services.prompt_catalog import (
     PERSONA_CHAT_USAGE_CONTEXT_PROMPT_SLUG,
-    PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-    PERSONA_PERSONALITY_PROMPT_SLUG,
-    PERSONA_USER_CONTEXT_PROMPT_SLUG,
 )
 from app.services.prompt_service import get_prompt_by_slug
 
 
-async def _get_persona_agent(db: AsyncSession) -> Agent:
-    result = await db.execute(select(Agent).where(Agent.slug == "persona"))
-    agent = result.scalar_one_or_none()
-    if agent is None:
+async def _get_persona(db: AsyncSession) -> Persona:
+    result = await db.execute(select(Persona).limit(1))
+    persona = result.scalar_one_or_none()
+    if persona is None:
         raise RuntimeError("Persona agent not found")
-    return agent
+    return persona
 
 
 async def _get_prompt_text(db: AsyncSession, slug: str) -> str | None:
@@ -39,11 +39,15 @@ async def _get_prompt_text(db: AsyncSession, slug: str) -> str | None:
 
 
 async def get_persona_personality_document(db: AsyncSession) -> str | None:
-    return await _get_prompt_text(db, PERSONA_PERSONALITY_PROMPT_SLUG)
+    persona = await _get_persona(db)
+    content = (persona.personality or "").strip()
+    return content or None
 
 
 async def get_persona_user_context_document(db: AsyncSession) -> str | None:
-    return await _get_prompt_text(db, PERSONA_USER_CONTEXT_PROMPT_SLUG)
+    persona = await _get_persona(db)
+    content = (persona.user_context or "").strip()
+    return content or None
 
 
 async def get_persona_chat_usage_context(db: AsyncSession) -> str | None:
@@ -57,24 +61,17 @@ async def set_persona_personality_document(
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> tuple[int, int]:
-    old_text = await get_persona_personality_document(db) or ""
+    persona = await _get_persona(db)
+    old_text = persona.personality or ""
     _old_value, new_value = validate_text_document_update(
         old_text,
         personality,
         field_label="personality",
     )
-    agent = await _get_persona_agent(db)
-    user_context = await get_persona_user_context_document(db) or ""
-    heartbeat = await _get_prompt_text(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG) or ""
-    await sync_persona_document_prompts(
-        db,
-        agent=agent,
-        personality=new_value,
-        user_context=user_context,
-        heartbeat_instructions=heartbeat,
-        changed_by=changed_by,
-        change_reason=change_reason or "Persona personality document updated",
-    )
+    if new_value != old_text:
+        persona.personality_previous = old_text or None
+        persona.personality = new_value
+        await db.flush()
     return len(old_text), len(new_value)
 
 
@@ -85,24 +82,17 @@ async def set_persona_user_context_document(
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> tuple[int, int]:
-    old_text = await get_persona_user_context_document(db) or ""
+    persona = await _get_persona(db)
+    old_text = persona.user_context or ""
     _old_value, new_value = validate_text_document_update(
         old_text,
         user_context,
         field_label="user_context",
     )
-    agent = await _get_persona_agent(db)
-    personality = await get_persona_personality_document(db) or ""
-    heartbeat = await _get_prompt_text(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG) or ""
-    await sync_persona_document_prompts(
-        db,
-        agent=agent,
-        personality=personality,
-        user_context=new_value,
-        heartbeat_instructions=heartbeat,
-        changed_by=changed_by,
-        change_reason=change_reason or "Persona user context updated",
-    )
+    if new_value != old_text:
+        persona.user_context_previous = old_text or None
+        persona.user_context = new_value or None
+        await db.flush()
     return len(old_text), len(new_value)
 
 
@@ -112,18 +102,12 @@ async def clear_persona_user_context_document(
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> None:
-    agent = await _get_persona_agent(db)
-    personality = await get_persona_personality_document(db) or ""
-    heartbeat = await _get_prompt_text(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG) or ""
-    await sync_persona_document_prompts(
-        db,
-        agent=agent,
-        personality=personality,
-        user_context="",
-        heartbeat_instructions=heartbeat,
-        changed_by=changed_by,
-        change_reason=change_reason or "Persona user context cleared",
-    )
+    persona = await _get_persona(db)
+    old_text = persona.user_context or ""
+    if old_text:
+        persona.user_context_previous = old_text
+        persona.user_context = None
+        await db.flush()
 
 
 async def migrate_legacy_user_context_to_profile(
@@ -135,7 +119,7 @@ async def migrate_legacy_user_context_to_profile(
 ) -> bool:
     """Move legacy structured user-context content into persona.user_profile."""
     existing_profile = normalize_user_profile(persona.user_profile) or {}
-    user_context = await get_persona_user_context_document(db)
+    user_context = persona.user_context
     migrated_profile, remaining_notes = split_legacy_user_context(user_context)
     if not migrated_profile:
         return False
@@ -153,18 +137,10 @@ async def migrate_legacy_user_context_to_profile(
         persona.user_profile = merged_profile
 
     if context_changed:
-        agent = await _get_persona_agent(db)
-        personality = await get_persona_personality_document(db) or ""
-        heartbeat = await _get_prompt_text(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG) or ""
-        await sync_persona_document_prompts(
-            db,
-            agent=agent,
-            personality=personality,
-            user_context=normalized_remaining_notes,
-            heartbeat_instructions=heartbeat,
-            changed_by=changed_by,
-            change_reason=change_reason or "Persona user context normalized into structured profile",
-        )
+        persona.user_context_previous = normalized_context or None
+        persona.user_context = normalized_remaining_notes or None
+    if profile_changed or context_changed:
+        await db.flush()
     return True
 
 

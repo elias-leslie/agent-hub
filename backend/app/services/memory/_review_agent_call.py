@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
+from ._review_agent_decisions import (
+    parse_memory_review_content,
+    repair_memory_review_content,
+    review_decisions_have_complete_checks,
+)
 from ._review_agent_prompt import REVIEW_SCHEMA
 
 logger = logging.getLogger(__name__)
@@ -20,6 +25,7 @@ async def _call_reviewer_agent(
     reviewer_agent_slug: str,
     prompt: str,
     reviewer_model_id: str | None = None,
+    expected_uuids: set[str] | None = None,
 ) -> tuple[str, str | None, str | None]:
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
@@ -39,6 +45,7 @@ async def _call_reviewer_agent(
         *list(resolved.agent.fallback_models or []),
     ]
     last_error: Exception | None = None
+    repair_candidates: list[tuple[str, str, str | None]] = []
     for model in dict.fromkeys(candidate_models):
         provider = resolved.provider if model == resolved.model else get_provider_for_model(model)
         try:
@@ -50,7 +57,28 @@ async def _call_reviewer_agent(
                 resolved=resolved,
                 reviewer_agent_slug=reviewer_agent_slug,
             )
-            return result.content, model, result.session_id
+            if getattr(result, "error", None):
+                last_error = RuntimeError(f"Memory reviewer model {model} failed: {result.error}")
+                logger.warning("%s; trying fallback", last_error)
+                continue
+            content = result.content.strip()
+            parsed = (
+                parse_memory_review_content(content, expected_uuids)
+                if content and expected_uuids is not None
+                else None
+            )
+            valid = bool(content) and (
+                expected_uuids is None or review_decisions_have_complete_checks(parsed)
+            )
+            if valid:
+                return content, model, result.session_id
+            if content and expected_uuids is not None:
+                repair_candidates.append((content, model, result.session_id))
+            last_error = RuntimeError(
+                f"Memory reviewer model {model} returned empty or incomplete JSON"
+            )
+            logger.warning("%s; trying fallback", last_error)
+            continue
         except Exception as exc:
             last_error = exc
             if isinstance(exc, AuthenticationError):
@@ -60,6 +88,15 @@ async def _call_reviewer_agent(
             ):
                 raise
             logger.warning("Memory review model %s failed; trying fallback: %s", model, exc)
+    if expected_uuids is not None:
+        for content, model, session_id in repair_candidates:
+            repaired = repair_memory_review_content(content, expected_uuids)
+            if repaired is not None:
+                logger.warning(
+                    "Using quarantined deterministic repair for incomplete memory review from %s",
+                    model,
+                )
+                return repaired, model, session_id
     if last_error is not None:
         raise last_error
     raise RuntimeError(f"No reviewer models configured for {reviewer_agent_slug}")

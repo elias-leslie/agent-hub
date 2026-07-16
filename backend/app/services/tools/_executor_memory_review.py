@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, cast, func, or_, select, text
+from sqlalchemy import func, select, text
 
 from app.models.memory_unified import Memory, MemoryReviewRun
+from app.services.memory._review_agent_select import build_review_filters
 
 logger = logging.getLogger(__name__)
 
@@ -26,40 +26,8 @@ def _bounded_int(value: int | None, *, default: int, minimum: int, maximum: int)
     return max(minimum, min(maximum, parsed))
 
 
-def _effective_reviewed_at_expr() -> Any:
-    source_validated_at = cast(
-        func.nullif(Memory.metadata_["source_compact_validated_at"].astext, ""),
-        DateTime(timezone=True),
-    )
-    return func.coalesce(Memory.last_reviewed_at, source_validated_at)
-
-
 def _json(data: dict[str, Any]) -> str:
     return json.dumps(data, separators=(",", ":"), sort_keys=True, default=str)
-
-
-def _review_filters(
-    *,
-    cadence_days: int,
-    force_all: bool,
-    include_archived: bool,
-    only_missing_compact: bool,
-) -> list[Any]:
-    cutoff = datetime.now(UTC) - timedelta(days=cadence_days)
-    statuses = ["active", "archived"] if include_archived else ["active"]
-    filters: list[Any] = [Memory.status.in_(statuses)]
-    if only_missing_compact:
-        filters.extend(
-            [
-                text("coalesce(memories.metadata->>'compact_content', '') = ''"),
-                text("memories.metadata->>'compact_reviewed_at' is null"),
-                func.length(Memory.content) > _MIN_COMPACT_REVIEW_CONTENT_CHARS,
-            ]
-        )
-    if not force_all:
-        effective_reviewed_at = _effective_reviewed_at_expr()
-        filters.append(or_(effective_reviewed_at.is_(None), effective_reviewed_at < cutoff))
-    return filters
 
 
 async def _review_status(
@@ -68,6 +36,7 @@ async def _review_status(
     force_all: bool = False,
     include_archived: bool = False,
     only_missing_compact: bool = False,
+    only_incomplete_audit: bool = False,
     latest_runs: int = 3,
 ) -> str:
     from app.db import async_session
@@ -84,11 +53,12 @@ async def _review_status(
             select(func.count())
             .select_from(Memory)
             .where(
-                *_review_filters(
+                *build_review_filters(
                     cadence_days=cadence_days,
                     force_all=force_all,
                     include_archived=include_archived,
                     only_missing_compact=only_missing_compact,
+                    only_incomplete_audit=only_incomplete_audit,
                 )
             )
         )
@@ -130,6 +100,7 @@ async def _review_status(
             "force_all": force_all,
             "include_archived": include_archived,
             "only_missing_compact": only_missing_compact,
+            "only_incomplete_audit": only_incomplete_audit,
             "due": int(due_count or 0),
             "compact": {
                 "ready": int(compact_ready or 0),
@@ -169,6 +140,7 @@ async def _run_due_reviews(
     force_all: bool,
     include_archived: bool,
     only_missing_compact: bool,
+    only_incomplete_audit: bool,
 ) -> str:
     from app.db import async_session
     from app.services.memory.review_agent import run_memory_review_batch
@@ -190,6 +162,7 @@ async def _run_due_reviews(
                 force_all=force_all,
                 include_archived=include_archived,
                 only_missing_compact=only_missing_compact,
+                only_incomplete_audit=only_incomplete_audit,
             )
             await db.commit()
 
@@ -223,6 +196,7 @@ async def _run_due_reviews(
             "force_all": force_all,
             "include_archived": include_archived,
             "only_missing_compact": only_missing_compact,
+            "only_incomplete_audit": only_incomplete_audit,
             "totals": totals,
             "runs": runs,
             "session_ids": session_ids,
@@ -239,6 +213,7 @@ async def _schedule_reviews(
     include_archived: bool,
     force_all: bool,
     only_missing_compact: bool,
+    only_incomplete_audit: bool,
     schedule_type: str | None,
     schedule_value: str | None,
     timezone: str,
@@ -261,6 +236,7 @@ async def _schedule_reviews(
         "include_archived": include_archived,
         "force_all": force_all,
         "only_missing_compact": only_missing_compact,
+        "only_incomplete_audit": only_incomplete_audit,
     }
     result = await schedule_job(
         name="Memory quality review",
@@ -284,6 +260,7 @@ async def review_memory_system(
     force_all: bool = False,
     include_archived: bool = False,
     only_missing_compact: bool = False,
+    only_incomplete_audit: bool = False,
     schedule_type: str | None = None,
     schedule_value: str | None = None,
     timezone: str = "UTC",
@@ -293,6 +270,7 @@ async def review_memory_system(
     max_batches = _bounded_int(max_batches, default=1, minimum=1, maximum=20)
     force_all = bool(force_all)
     only_missing_compact = bool(only_missing_compact)
+    only_incomplete_audit = bool(only_incomplete_audit)
     cadence_days = _bounded_int(
         cadence_days,
         default=45,
@@ -317,6 +295,7 @@ async def review_memory_system(
                 force_all=force_all,
                 include_archived=include_archived,
                 only_missing_compact=only_missing_compact,
+                only_incomplete_audit=only_incomplete_audit,
             )
         if action == "run_due":
             return await _run_due_reviews(
@@ -328,6 +307,7 @@ async def review_memory_system(
                 force_all=force_all,
                 include_archived=include_archived,
                 only_missing_compact=only_missing_compact,
+                only_incomplete_audit=only_incomplete_audit,
             )
         if action == "schedule":
             return await _schedule_reviews(
@@ -338,6 +318,7 @@ async def review_memory_system(
                 include_archived=include_archived,
                 force_all=force_all,
                 only_missing_compact=only_missing_compact,
+                only_incomplete_audit=only_incomplete_audit,
                 schedule_type=schedule_type,
                 schedule_value=schedule_value,
                 timezone=timezone,

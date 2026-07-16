@@ -6,10 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
 from app.services._persona_crud import get_persona_limit
-from app.services.persona_document_prompt_service import (
-    get_persona_personality_document,
-    get_persona_user_context_document,
-)
 from app.services.persona_documents import (
     normalize_user_profile,
 )
@@ -23,10 +19,10 @@ async def persona_to_response(
     persona: Persona,
     agent_slug: str = "persona",
 ) -> PersonaResponse:
-    """Convert a Persona ORM object to response schema."""
-    personality = await get_persona_personality_document(db)
+    """Convert the already-loaded canonical Persona row to the response schema."""
+    personality = (persona.personality or "").strip() or None
     heartbeat_instructions = await get_persona_heartbeat_instructions(db)
-    user_context = await get_persona_user_context_document(db)
+    user_context = (persona.user_context or "").strip() or None
     limits = None
     if persona.limits is not None:
         limits = {"max_turns": get_persona_limit(persona, "max_turns")}

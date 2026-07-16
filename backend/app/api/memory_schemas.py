@@ -4,6 +4,7 @@ This module re-exports all schemas from focused submodules for backward compatib
 All imports remain available from app.api.memory_schemas.
 """
 
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -64,6 +65,8 @@ __all__ = [
     "EpisodeDetailResponse",
     "HealthResponse",
     "MemoryRestoreRequest",
+    "MemoryReviewInventoryItem",
+    "MemoryReviewInventoryResponse",
     "MemoryReviewRunRequest",
     "MemoryReviewRunResponse",
     "MemoryRevisionListResponse",
@@ -161,6 +164,7 @@ class MemoryReviewRunRequest(BaseModel):
     force_all: bool = False
     include_archived: bool = False
     only_missing_compact: bool = False
+    only_incomplete_audit: bool = False
 
 
 class MemoryReviewRunResponse(BaseModel):
@@ -175,6 +179,42 @@ class MemoryReviewRunResponse(BaseModel):
     reviewer_model_id: str | None = None
     session_id: str | None = None
     errors: list[str] = Field(default_factory=list)
+
+
+class MemoryReviewInventoryItem(BaseModel):
+    """One active memory's latest auditable review outcome."""
+
+    uuid: str
+    uuid8: str
+    name: str | None = None
+    scope: str
+    scope_id: str | None = None
+    context_kind: str
+    authority: str
+    review_status: str
+    reviewed_at: datetime | None = None
+    decision: str | None = None
+    reason: str | None = None
+    checks: dict[str, str] = Field(default_factory=dict)
+    applied_remediations: list[str] = Field(default_factory=list)
+    prompt_migration_required: bool = False
+    review_complete: bool
+    content_chars: int
+    compact_status: str | None = None
+    compact_chars: int
+
+
+class MemoryReviewInventoryResponse(BaseModel):
+    """Coverage summary plus one outcome for every active memory."""
+
+    active_count: int
+    review_complete_count: int
+    review_incomplete_count: int
+    clean_count: int
+    needs_action_count: int
+    pending_count: int
+    prompt_migration_required_count: int
+    items: list[MemoryReviewInventoryItem]
 
 
 # ============================================================================

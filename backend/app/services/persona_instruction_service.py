@@ -6,11 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import Agent
-from app.services.owned_prompt_service import sync_persona_document_prompts
+from app.services.owned_prompt_service import sync_persona_instruction_prompts
 from app.services.prompt_catalog import (
     PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-    PERSONA_PERSONALITY_PROMPT_SLUG,
-    PERSONA_USER_CONTEXT_PROMPT_SLUG,
 )
 from app.services.prompt_service import get_prompt_by_slug
 
@@ -46,13 +44,9 @@ async def set_persona_heartbeat_instructions(
     old_text = prompt.content.strip() if prompt else ""
     new_text = heartbeat_instructions.strip()
     agent = await _get_persona_agent(db)
-    personality_prompt = await get_prompt_by_slug(db, PERSONA_PERSONALITY_PROMPT_SLUG)
-    user_context_prompt = await get_prompt_by_slug(db, PERSONA_USER_CONTEXT_PROMPT_SLUG)
-    await sync_persona_document_prompts(
+    await sync_persona_instruction_prompts(
         db,
         agent=agent,
-        personality=personality_prompt.content if personality_prompt else "",
-        user_context=user_context_prompt.content if user_context_prompt else "",
         heartbeat_instructions=new_text,
         changed_by=changed_by,
         change_reason=change_reason or "Persona heartbeat instructions updated",

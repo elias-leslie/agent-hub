@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -41,6 +42,16 @@ logger = logging.getLogger(__name__)
 # Staleness window: summaries older than this are excluded (7 days)
 STALENESS_HOURS = 168
 
+# Synthetic model/runtime probes use terse uppercase success markers rather
+# than durable work summaries. They must never recursively become agent input.
+_DIAGNOSTIC_PROBE_SUMMARY_RE = re.compile(
+    r"^\s*(?:"
+    r"[A-Z][A-Z0-9_]*(?:\s+|_)?OK\d*"
+    r"|DEFAULTCHATFINAL\d+"
+    r"|[A-Z][A-Z0-9_]*UNAVAILABLE"
+    r")(?=$|[\s:])"
+)
+
 
 class ContinuityContext(BaseModel):
     """Result of continuity context generation."""
@@ -48,6 +59,21 @@ class ContinuityContext(BaseModel):
     markdown: str
     session_count: int
     days_covered: int
+
+
+def _is_diagnostic_probe_summary(item: dict[str, Any]) -> bool:
+    """Return whether a summary is an explicit synthetic probe marker."""
+    summary = item.get("summary")
+    return isinstance(summary, str) and bool(
+        _DIAGNOSTIC_PROBE_SUMMARY_RE.match(summary)
+    )
+
+
+def _without_diagnostic_probe_summaries(
+    summaries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Remove probe output so it cannot poison later continuity deliveries."""
+    return [item for item in summaries if not _is_diagnostic_probe_summary(item)]
 
 
 async def _query_continuity_data(
@@ -120,9 +146,10 @@ async def build_continuity_context(
     current_branch: str | None = None,
     max_sessions: int = 5,
     days: int = 7,
-    include_cross_project: bool = True,
-    include_live_sessions: bool = True,
+    include_cross_project: bool = False,
+    include_live_sessions: bool = False,
     exclude_session_id: str | None = None,
+    allow_unscoped: bool = False,
 ) -> ContinuityContext:
     """Build "Recent Activity" context from PostgreSQL session summaries.
 
@@ -135,13 +162,21 @@ async def build_continuity_context(
         current_branch: Current git branch for branch scoping.
         max_sessions: Maximum sessions to include.
         days: Maximum days to look back (default 7, matches STALENESS_HOURS).
-        include_cross_project: Show summaries from other projects (default True).
-        include_live_sessions: Show currently active sessions (default True).
+        include_cross_project: Show summaries from other projects. Disabled by
+            default and reserved for explicit dashboard/operator opt-in.
+        include_live_sessions: Show currently active sessions across projects.
+            Disabled by default and reserved for explicit operator/dashboard
+            opt-in.
         exclude_session_id: Exclude this session from live sessions list.
+        allow_unscoped: Permit a project-less all-projects query. Disabled by
+            default; only explicit operator/dashboard surfaces should enable it.
 
     Returns:
         ContinuityContext with markdown block.
     """
+    if project_id is None and not allow_unscoped:
+        return ContinuityContext(markdown="", session_count=0, days_covered=0)
+
     staleness_cutoff = datetime.now(UTC) - timedelta(hours=STALENESS_HOURS)
 
     summaries, cross_project_summaries, live_sessions = await _query_continuity_data(
@@ -152,6 +187,10 @@ async def build_continuity_context(
         include_cross_project=include_cross_project,
         include_live_sessions=include_live_sessions,
         exclude_session_id=exclude_session_id,
+    )
+    summaries = _without_diagnostic_probe_summaries(summaries)
+    cross_project_summaries = _without_diagnostic_probe_summaries(
+        cross_project_summaries
     )
 
     sections = _build_markdown_sections(summaries, cross_project_summaries, live_sessions)

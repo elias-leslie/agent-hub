@@ -5,7 +5,7 @@ the flag flip in Phase 3.6 has a green baseline that exercises:
 
 * the session_repo collapse (mocked DB; we verify the wiring, not the
   DB upserts which are covered separately in ``test_request_setup.py``);
-* the memory injection bypass when ``use_memory=False``;
+* canonical prompt injection with optional memories disabled;
 * the out-of-band citation extractor (D9 — returns [] when use_memory
   is False, never touches the assistant message content);
 * the ``CompletionInternalResult`` shape matched by the downstream
@@ -29,7 +29,29 @@ from app.llm.providers.faux import (
     register_faux_provider,
 )
 from app.llm.types import TextContent
+from app.services.agent_routing_utils import inject_agent_mandates
 from app.services.llm_errors import ProviderError
+from app.services.memory.context_injector_ops import inject_memory_block
+from app.services.memory.context_resilience import CanonicalContextInjectionFailed
+from app.services.owned_prompt_service import AGENT_SYSTEM_PROMPT_TYPE
+
+
+def _verified_context(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return inject_memory_block(messages, "## Safety Directive\nTest canonical context")
+
+
+@pytest.fixture(autouse=True)
+def _stub_canonical_context_injection():
+    """Keep pipeline unit tests focused on completion behavior, not DB context IO."""
+    inject_mock = AsyncMock(
+        side_effect=lambda messages, *_args, **_kwargs: (
+            _verified_context(messages),
+            [],
+            0,
+        )
+    )
+    with patch("app.api.complete.core.inject_memory_context", new=inject_mock):
+        yield
 
 
 @pytest.mark.asyncio
@@ -151,15 +173,21 @@ async def test_new_pipeline_surfaces_provider_error_details() -> None:
 
 
 @pytest.mark.asyncio
-async def test_new_pipeline_skips_memory_injection_when_use_memory_false() -> None:
-    """``use_memory=False`` must not call inject_memory_context at all."""
+async def test_new_pipeline_injects_prompts_without_optional_memories() -> None:
+    """``use_memory=False`` still delivers canonical operator prompts."""
     reg = register_faux_provider()
     try:
         reg.set_responses([faux_assistant_message("ack")])
         model = reg.get_model()
         assert model is not None
 
-        inject_mock = AsyncMock()
+        inject_mock = AsyncMock(
+            return_value=(
+                _verified_context([{"role": "user", "content": "hi"}]),
+                [],
+                0,
+            )
+        )
         with (
             patch(
                 "app.api.complete.core.setup_completion_session",
@@ -191,9 +219,292 @@ async def test_new_pipeline_skips_memory_injection_when_use_memory_false() -> No
                 use_memory=False,
             )
 
-        inject_mock.assert_not_awaited()
+        inject_mock.assert_awaited_once()
+        inject_args = inject_mock.await_args
+        assert inject_args is not None
+        assert inject_args.kwargs["project_id"] == "agent-hub"
+        assert inject_args.kwargs["include_memories"] is False
+        assert inject_args.kwargs["consumer_surface"] == "agent_runtime"
         assert result.memory_uuids == []
         assert result.cited_uuids == []
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_context_failure_aborts_before_model_call() -> None:
+    reg = register_faux_provider()
+    try:
+        model = reg.get_model()
+        assert model is not None
+        run_model = AsyncMock()
+        with (
+            patch(
+                "app.api.complete.core.setup_completion_session",
+                new=AsyncMock(
+                    return_value=(
+                        SimpleNamespace(id="sess-context-failed"),
+                        "sess-context-failed",
+                        True,
+                        [{"role": "user", "content": "hi"}],
+                    )
+                ),
+            ),
+            patch(
+                "app.api.complete.core.inject_memory_context",
+                new=AsyncMock(
+                    side_effect=CanonicalContextInjectionFailed(
+                        "required canonical context unavailable"
+                    )
+                ),
+            ),
+            patch("app.api.complete.core.run_completion", new=run_model),
+            pytest.raises(
+                CanonicalContextInjectionFailed,
+                match="required canonical context unavailable",
+            ),
+        ):
+            await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "hi"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=AsyncMock(),
+                use_memory=False,
+            )
+
+        run_model.assert_not_awaited()
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_ephemeral_completion_still_loads_canonical_context() -> None:
+    """db=None keeps ephemeral persistence, not a context-injection bypass."""
+    reg = register_faux_provider()
+    try:
+        reg.set_responses([faux_assistant_message("ack")])
+        model = reg.get_model()
+        assert model is not None
+        inject_mock = AsyncMock(
+            return_value=(
+                _verified_context([{"role": "user", "content": "hi"}]),
+                [],
+                0,
+            )
+        )
+        with (
+            patch("app.api.complete.core.resolve_llm_model", return_value=model),
+            patch("app.api.complete.core.inject_memory_context", new=inject_mock),
+        ):
+            result = await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "hi"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                use_memory=False,
+            )
+
+        inject_mock.assert_awaited_once()
+        assert inject_mock.await_args is not None
+        assert inject_mock.await_args.args[1] is None
+        assert result.session_id.startswith("ephemeral:")
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once() -> None:
+    """Canonical prepending must not duplicate the agent-specific prompt layer."""
+    from app.workflows._heartbeat_steps import _invoke_complete_internal
+
+    owned_prompt_marker = "DISTINCT_OWNED_PERSONA_SYSTEM_PROMPT"
+    persona_row_marker = "DISTINCT_NATIVE_PERSONA_ROW_CONTEXT"
+    canonical_marker = "DISTINCT_CANONICAL_OPERATOR_CONTEXT"
+    agent = SimpleNamespace(
+        id=9,
+        slug="persona",
+        name="Jenny",
+        system_prompt="STALE_AGENT_SYSTEM_PROMPT_MIRROR",
+    )
+    assignment = SimpleNamespace(
+        role="system",
+        priority=0,
+        prompt=SimpleNamespace(
+            enabled=True,
+            is_global=False,
+            prompt_type=AGENT_SYSTEM_PROMPT_TYPE,
+            name="Persona System Prompt",
+            slug="persona-system-prompt",
+            content=f"<agent_persona>{owned_prompt_marker}</agent_persona>",
+            updated_at=None,
+        ),
+    )
+    with (
+        patch(
+            "app.services.runtime_prompt_stack.get_agent_prompts",
+            new=AsyncMock(return_value=[assignment]),
+        ),
+        patch(
+            "app.services.persona_service.get_persona_context_for_agent",
+            new=AsyncMock(return_value=persona_row_marker),
+        ),
+    ):
+        mandate = await inject_agent_mandates(
+            agent,
+            AsyncMock(),
+            task_type="heartbeat",
+        )
+
+    assert mandate.system_content.count(owned_prompt_marker) == 1
+    assert mandate.system_content.count(persona_row_marker) == 1
+    assert "STALE_AGENT_SYSTEM_PROMPT_MIRROR" not in mandate.system_content
+
+    captured: dict[str, str] = {}
+
+    def capture_context(context, *_args):
+        captured["system_prompt"] = context.system_prompt or ""
+        return faux_assistant_message("ack")
+
+    reg = register_faux_provider()
+    try:
+        reg.set_responses([capture_context])
+        model = reg.get_model()
+        assert model is not None
+        inject_mock = AsyncMock(
+            side_effect=lambda messages, *_args, **_kwargs: (
+                inject_memory_block(messages, canonical_marker),
+                [],
+                0,
+            )
+        )
+        with (
+            patch("app.api.complete.core.resolve_llm_model", return_value=model),
+            patch("app.api.complete.core.inject_memory_context", new=inject_mock),
+        ):
+            result = await _invoke_complete_internal(
+                None,
+                messages=[
+                    {"role": "system", "content": mandate.system_content},
+                    {"role": "user", "content": "heartbeat"},
+                ],
+                model=model.id,
+                provider=model.provider,
+                temperature=0.0,
+                execution_project="agent-hub",
+                heartbeat_session_id="heartbeat:exact-once",
+                memory_config=None,
+                max_turns=1,
+                thinking_level=None,
+                working_dir=None,
+            )
+
+        assert result.content == "ack"
+        provider_system_prompt = captured["system_prompt"]
+        assert provider_system_prompt.count(canonical_marker) == 1
+        assert provider_system_prompt.count(owned_prompt_marker) == 1
+        assert provider_system_prompt.count(persona_row_marker) == 1
+        assert provider_system_prompt.count("<agent-hub-context ") == 1
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_preinjected_bypass_requires_verified_canonical_envelope() -> None:
+    """A marker cannot suppress injection unless its payload hash verifies."""
+    reg = register_faux_provider()
+    try:
+        model = reg.get_model()
+        assert model is not None
+        run_model = AsyncMock()
+        with (
+            patch("app.api.complete.core.run_completion", new=run_model),
+            pytest.raises(
+                CanonicalContextInjectionFailed,
+                match="hash-verified Agent Hub canonical context envelope",
+            ),
+        ):
+            await complete_internal(
+                temperature=0.0,
+                messages=[
+                    {"role": "system", "content": "unverified agent prompt"},
+                    {"role": "user", "content": "hi"},
+                ],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                canonical_context_preinjected=True,
+            )
+
+        run_model.assert_not_awaited()
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_unverified_injector_output_aborts_before_model_call() -> None:
+    """A nominally successful injector cannot pass raw, unproven messages."""
+    reg = register_faux_provider()
+    try:
+        model = reg.get_model()
+        assert model is not None
+        run_model = AsyncMock()
+        with (
+            patch(
+                "app.api.complete.core.inject_memory_context",
+                new=AsyncMock(
+                    return_value=([{"role": "user", "content": "hi"}], [], 0)
+                ),
+            ),
+            patch("app.api.complete.core.run_completion", new=run_model),
+            pytest.raises(
+                CanonicalContextInjectionFailed,
+                match="did not return a hash-verified Agent Hub canonical context envelope",
+            ),
+        ):
+            await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "hi"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+            )
+
+        run_model.assert_not_awaited()
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_verified_preinjected_context_skips_only_duplicate_injection() -> None:
+    reg = register_faux_provider()
+    try:
+        reg.set_responses([faux_assistant_message("ack")])
+        model = reg.get_model()
+        assert model is not None
+        inject_mock = AsyncMock()
+        messages = _verified_context([{"role": "user", "content": "hi"}])
+        with (
+            patch("app.api.complete.core.resolve_llm_model", return_value=model),
+            patch("app.api.complete.core.inject_memory_context", new=inject_mock),
+        ):
+            result = await complete_internal(
+                temperature=0.0,
+                messages=messages,
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                canonical_context_preinjected=True,
+            )
+
+        inject_mock.assert_not_awaited()
+        assert result.content == "ack"
     finally:
         reg.unregister()
 
@@ -254,7 +565,9 @@ async def test_new_pipeline_invokes_memory_and_citation_when_use_memory_true() -
         model = reg.get_model()
         assert model is not None
 
-        injected_msgs = [{"role": "user", "content": "hi with memory"}]
+        injected_msgs = _verified_context(
+            [{"role": "user", "content": "hi with memory"}]
+        )
         inject_mock = AsyncMock(return_value=(injected_msgs, ["uuid-a", "uuid-b"], 2))
         extract_mock = AsyncMock(return_value=["uuid-a"])
 

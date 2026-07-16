@@ -1,17 +1,44 @@
 """Tests for subagent spawning and management."""
 
-from unittest.mock import AsyncMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.api.complete.types import CompletionInternalResult
 from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
 from app.services.llm_messages import Message
+from app.services.memory.context_builder import ProgressiveContext
 from app.services.orchestration.subagent import (
     SubagentConfig,
     SubagentManager,
     SubagentResult,
 )
+
+
+class _AsyncSessionContext:
+    def __init__(self, db: MagicMock) -> None:
+        self.db = db
+
+    async def __aenter__(self) -> MagicMock:
+        return self.db
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _stub_canonical_subagent_context():
+    db = MagicMock()
+    db.commit = AsyncMock()
+    inject = AsyncMock(
+        side_effect=lambda **kwargs: (kwargs["messages"], ProgressiveContext())
+    )
+    with (
+        patch("app.db.async_session", return_value=_AsyncSessionContext(db)),
+        patch("app.services.memory.inject_progressive_context", new=inject),
+    ):
+        yield {"db": db, "inject": inject}
 
 
 def _make_internal_result(
@@ -49,6 +76,8 @@ class TestSubagentConfig:
         assert config.system_prompt is None
         assert config.temperature == 1.0
         assert config.thinking_level is None
+        assert config.agent_slug == "chat"
+        assert config.consumer_surface == "orchestration_subagent"
 
     def test_custom_values(self):
         config = SubagentConfig(
@@ -222,6 +251,33 @@ class TestSubagentManager:
             assert messages is not None
             assert messages[0]["role"] == "system"
             assert "helpful assistant" in messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_project_subagent_uses_managed_canonical_context_session(
+        self,
+        _stub_canonical_subagent_context: dict[str, Any],
+    ):
+        manager = SubagentManager()
+        config = SubagentConfig(
+            name="review",
+            project_id="agent-hub",
+            agent_slug="reviewer",
+        )
+
+        with patch(
+            "app.api.complete.core.complete_internal",
+            new=AsyncMock(return_value=_make_internal_result()),
+        ) as complete:
+            result = await manager.spawn(task="Review the change.", config=config)
+
+        assert result.status == "completed"
+        call = complete.await_args
+        assert call is not None
+        assert call.kwargs["db"] is _stub_canonical_subagent_context["db"]
+        assert call.kwargs["agent_slug"] == "reviewer"
+        assert call.kwargs["request_source"] == "orchestration_subagent"
+        assert call.kwargs["use_memory"] is True
+        assert call.kwargs["memory_group_id"] == "project:agent-hub"
 
     @pytest.mark.asyncio
     async def test_spawn_error(self):

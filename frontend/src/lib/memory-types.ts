@@ -18,6 +18,8 @@ export type MemoryContextKind =
 export type MemorySource = 'chat' | 'voice' | 'system'
 
 export interface MemoryApplicability {
+  consumer_surfaces: string[]
+  exclude_consumer_surfaces: string[]
   consumer_profiles: string[]
   exclude_consumer_profiles: string[]
   agent_slugs: string[]

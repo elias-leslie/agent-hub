@@ -92,10 +92,10 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
         <header className="flex items-center justify-between p-4 border-b border-slate-800">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">
-              Policy caps · {profile}
+              Context selection · {profile}
             </h2>
             <p className="text-xs text-slate-400 font-mono">
-              Per-profile defaults. Leave blank for uncapped.
+              Required mandates and guardrails are always delivered in full.
             </p>
           </div>
           <button
@@ -108,30 +108,32 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
           </button>
         </header>
         <div className="p-4 space-y-3">
-          {(['mandate', 'guardrail', 'reference'] as const).map((tier) => (
-            <label key={tier} className="block">
-              <span className="text-xs uppercase tracking-[0.18em] text-slate-400 font-mono">
-                {tier} limit
-              </span>
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={form[tier]}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    [tier]: event.target.value,
-                  }))
-                }
-                placeholder="(uncapped)"
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 placeholder:text-slate-500"
-              />
-            </label>
-          ))}
+          <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
+            Mandates: always delivered · Guardrails: always delivered
+          </div>
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.18em] text-slate-400 font-mono">
+              Optional reference item limit
+            </span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={form.reference}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  reference: event.target.value,
+                }))
+              }
+              placeholder="(uncapped)"
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 placeholder:text-slate-500"
+            />
+          </label>
           <p className="text-[11px] text-slate-500">
-            0 = uncapped. Per-agent overrides can still tighten or loosen these
-            defaults.
+            0 = uncapped. This affects semantic selection of optional references
+            only; it never truncates or rejects the finalized payload by token
+            size.
           </p>
         </div>
         <footer className="flex items-center justify-end gap-2 p-4 border-t border-slate-800">

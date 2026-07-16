@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -77,7 +78,6 @@ def _mock_persona_prompt_documents():
     with (
         patch("app.services._persona_context.get_persona_personality_document", new=_get_personality),
         patch("app.services._persona_context.get_persona_user_context_document", new=_get_user_context),
-        patch("app.services._persona_crud.get_persona_personality_document", new=_get_personality),
     ):
         yield
 
@@ -637,6 +637,40 @@ class TestSubmitAndReviewOnboarding:
     """Tests for submit_and_review_onboarding() — dual-model approval gate."""
 
     @pytest.fixture(autouse=True)
+    def _mock_onboarding_catalog_agents(self):
+        async def _resolve_agent(agent_slug, _db):
+            routes = {
+                "reviewer": ("catalog-kimi-reviewer", "catalog-kimi"),
+                "chat": ("catalog-gemini-chat", "catalog-gemini"),
+            }
+            model, provider = routes[agent_slug]
+            return SimpleNamespace(
+                model=model,
+                provider=provider,
+                agent=SimpleNamespace(temperature=0.3),
+            )
+
+        async def _inject_agent_mandates(agent, _db, **_kwargs):
+            return SimpleNamespace(
+                system_content=(
+                    "<agent_persona>catalog reviewer prompt "
+                    f"temperature={agent.temperature}</agent_persona>"
+                )
+            )
+
+        with (
+            patch(
+                "app.services._persona_templates.resolve_agent",
+                new=_resolve_agent,
+            ),
+            patch(
+                "app.services._persona_templates.inject_agent_mandates",
+                new=_inject_agent_mandates,
+            ),
+        ):
+            yield
+
+    @pytest.fixture(autouse=True)
     def _mock_onboarding_review_prompt(self):
         async def _require_prompt_content(slug: str) -> str:
             assert slug == "persona-onboarding-review"
@@ -681,6 +715,49 @@ class TestSubmitAndReviewOnboarding:
         assert result["status"] == "approved"
         assert persona.onboarding_phase == "complete"
         assert persona.onboarding_complete is True
+
+    @pytest.mark.asyncio
+    async def test_reviewers_route_through_explicit_catalog_agents(self):
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        approved = MagicMock()
+        approved.content = "APPROVED\n\nProfile is actionable."
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        complete = AsyncMock(return_value=approved)
+
+        with (
+            patch("app.db.async_session", return_value=mock_session),
+            patch("app.api.complete.core.complete_internal", new=complete),
+        ):
+            result = await submit_and_review_onboarding(db, "Full summary", None)
+
+        assert result["status"] == "approved"
+        calls = [call.kwargs for call in complete.await_args_list]
+        assert {call["agent_slug"] for call in calls} == {"reviewer", "chat"}
+        assert {call["model"] for call in calls} == {
+            "catalog-kimi-reviewer",
+            "catalog-gemini-chat",
+        }
+        assert {call["provider"] for call in calls} == {
+            "catalog-kimi",
+            "catalog-gemini",
+        }
+        assert all(call["request_source"] == "persona_onboarding_review" for call in calls)
+        assert all(call["task_type"] == "review" for call in calls)
+        assert all(call["messages"][0]["role"] == "system" for call in calls)
+        assert all(
+            "catalog reviewer prompt" in call["messages"][0]["content"]
+            for call in calls
+        )
 
     @pytest.mark.asyncio
     async def test_one_rejects_sends_back(self):

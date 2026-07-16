@@ -17,6 +17,11 @@ from app.services.events import publish_session_start
 from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
+from app.services.memory.context_resilience import (
+    CanonicalContextInjectionFailed,
+    build_unexpected_context_failure_notice,
+    require_successful_context_injection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +32,17 @@ def _memory_block_len(progressive_context: object, field_name: str) -> int:
 
 
 async def inject_memory_context(
-    options: CompletionOptions, messages: list[dict[str, Any]], is_stream: bool = False
+    options: CompletionOptions,
+    messages: list[dict[str, Any]],
+    is_stream: bool = False,
+    db: AsyncSession | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Inject memory context if enabled."""
-    if not options.use_memory:
-        return messages, 0
-
+    """Inject canonical prompts plus optional memories for CompletionService."""
     scope, scope_id = parse_memory_group_id(options.memory_group_id)
+    consumer_profile = resolve_memory_consumer_profile(
+        options.memory_config, surface="runtime"
+    )
     try:
-        consumer_profile = resolve_memory_consumer_profile(options.memory_config, surface="runtime")
         messages, context = await inject_progressive_context(
             messages=messages,
             scope=scope,
@@ -49,7 +56,15 @@ async def inject_memory_context(
             memory_config=options.memory_config,
             current_branch=options.current_branch,
             consumer_profile=consumer_profile,
+            consumer_agent_slug=options.agent_slug,
+            consumer_surface=(
+                options.consumer_surface or options.source.value or "agent_runtime"
+            ),
+            include_prompts=True,
+            include_memories=options.use_memory,
+            db=db,
         )
+        require_successful_context_injection(context)
         count = (
             _memory_block_len(context, "mandates")
             + _memory_block_len(context, "guardrails")
@@ -60,10 +75,19 @@ async def inject_memory_context(
             prefix = "Streaming: " if is_stream else ""
             logger.info(f"{prefix}Injected {count} memories (scope={scope.value})")
         return messages, count
+    except CanonicalContextInjectionFailed:
+        raise
     except Exception as e:
         prefix = "Streaming: " if is_stream else ""
-        logger.warning(f"{prefix}Memory injection failed (continuing without): {e}")
-        return messages, 0
+        logger.exception("%sCanonical context injection failed unexpectedly", prefix)
+        raise CanonicalContextInjectionFailed(
+            build_unexpected_context_failure_notice(
+                e,
+                operation="completion_service_context_injection",
+                consumer_profile=consumer_profile,
+                project_id=options.project_id or scope_id,
+            )
+        ) from e
 
 
 def get_thinking_level(options: CompletionOptions, messages: list[dict[str, Any]]) -> str | None:

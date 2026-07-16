@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from app.models.agent import Agent
 from app.models.prompt import Prompt, PromptRevision
 from app.services.compactness import CompactnessValidationError
 from app.services.prompt_service import (
@@ -98,6 +99,36 @@ class TestPromptServiceRevisions:
         assert revision.change_reason == "benchmark tuning"
 
     @pytest.mark.asyncio
+    async def test_update_owned_system_prompt_syncs_legacy_agent_mirror(self) -> None:
+        db = create_mock_db_session()
+        owner = Agent(
+            slug="reviewer",
+            name="Reviewer",
+            system_prompt="legacy content",
+            primary_model_id="codex/gpt-5.5",
+        )
+        owner.id = 7
+        prompt = _make_prompt(
+            slug="reviewer-system-prompt",
+            content="old canonical content",
+            owner_agent_id=owner.id,
+            prompt_type="agent_system",
+        )
+        prompt.owner_agent = owner
+
+        with patch(
+            "app.services.prompt_service.get_prompt_by_slug",
+            new=AsyncMock(return_value=prompt),
+        ):
+            await update_prompt(
+                db,
+                prompt.slug,
+                content="new canonical content",
+            )
+
+        assert owner.system_prompt == "new canonical content"
+
+    @pytest.mark.asyncio
     async def test_update_prompt_rejects_non_caveman_content(self) -> None:
         db = create_mock_db_session()
         prompt = _make_prompt(content="old content")
@@ -173,6 +204,50 @@ class TestPromptServiceRevisions:
         assert isinstance(recorded_revision, PromptRevision)
         assert recorded_revision.action == "restore"
         assert recorded_revision.change_reason == "rollback test"
+
+    @pytest.mark.asyncio
+    async def test_restore_owned_system_prompt_syncs_legacy_agent_mirror(self) -> None:
+        db = create_mock_db_session()
+        owner = Agent(
+            slug="reviewer",
+            name="Reviewer",
+            system_prompt="current mirror",
+            primary_model_id="codex/gpt-5.5",
+        )
+        owner.id = 7
+        prompt = _make_prompt(
+            slug="reviewer-system-prompt",
+            content="current canonical content",
+            owner_agent_id=owner.id,
+            prompt_type="agent_system",
+        )
+        prompt.owner_agent = owner
+        revision = PromptRevision(
+            prompt_slug=prompt.slug,
+            prompt_name=prompt.name,
+            action="update",
+            content="restored canonical content",
+            description=prompt.description,
+            is_global=False,
+            enabled=True,
+            exclude_agents=[],
+            content_hash="abc123",
+        )
+        revision.id = "rev-2"
+
+        with (
+            patch(
+                "app.services.prompt_service.get_prompt_by_slug",
+                new=AsyncMock(return_value=prompt),
+            ),
+            patch(
+                "app.services.prompt_service.get_prompt_revision",
+                new=AsyncMock(return_value=revision),
+            ),
+        ):
+            await restore_prompt_revision(db, prompt.slug, "rev-2")
+
+        assert owner.system_prompt == "restored canonical content"
 
     @pytest.mark.asyncio
     async def test_get_prompt_revision_resolves_short_prefix_before_lookup(self) -> None:

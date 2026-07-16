@@ -127,6 +127,10 @@ def _add_unique(
 FetchOperation = tuple[str, Callable[[], Awaitable[list[MemorySearchResult]]]]
 
 
+class RequiredPolicyRetrievalError(RuntimeError):
+    """A mandate or guardrail source failed, so policy is incomplete."""
+
+
 def _build_scope_operations(
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     include_mandates: bool,
@@ -211,21 +215,21 @@ def _build_scope_operations(
 
 async def _run_fetch_operations(
     operations: list[FetchOperation],
-) -> tuple[list[str], list[list[MemorySearchResult] | BaseException]]:
+) -> tuple[list[str], list[list[MemorySearchResult] | Exception]]:
     task_keys: list[str] = []
-    results: list[list[MemorySearchResult] | BaseException] = []
+    results: list[list[MemorySearchResult] | Exception] = []
     for task_key, operation in operations:
         task_keys.append(task_key)
         try:
             results.append(await operation())
-        except BaseException as exc:
+        except Exception as exc:
             results.append(exc)
     return task_keys, results
 
 
 def _process_gathered_results(
     task_keys: list[str],
-    results: list[list[MemorySearchResult] | BaseException],
+    results: list[list[MemorySearchResult] | Exception],
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
     mandates: list[MemorySearchResult] = []
     guardrails: list[MemorySearchResult] = []
@@ -240,15 +244,27 @@ def _process_gathered_results(
         "guardrails": (guardrails, guardrails_seen),
     }
 
+    required_failures: list[tuple[str, Exception]] = []
     for key, result in zip(task_keys, results, strict=True):
-        if isinstance(result, BaseException):
+        if isinstance(result, Exception):
             logger.warning("Failed to get %s: %s", key, result)
+            if key.startswith(("mandates_", "guardrails_")):
+                required_failures.append((key, result))
             continue
 
         assert isinstance(result, list)
         block_type = key.split("_")[0]
         target, seen = buckets.get(block_type, (reference, reference_seen))
         _add_unique(result, target, seen)
+
+    if required_failures:
+        details = "; ".join(
+            f"{key}={type(error).__name__}: {error}"
+            for key, error in required_failures
+        )
+        raise RequiredPolicyRetrievalError(
+            f"Required memory policy retrieval was incomplete: {details}"
+        )
 
     return mandates, guardrails, reference
 
@@ -416,6 +432,7 @@ def _filter_legacy_reference_audience_tags(
 def _apply_applicability_filters(
     context: ProgressiveContext,
     *,
+    consumer_surface: str | None,
     consumer_profile: str | None,
     consumer_agent_slug: str | None,
     consumer_tags: list[str],
@@ -428,6 +445,7 @@ def _apply_applicability_filters(
             for item in items
             if applicability_matches(
                 item.applicability,
+                consumer_surface=consumer_surface,
                 consumer_profile=consumer_profile,
                 consumer_agent_slug=consumer_agent_slug,
                 consumer_tags=consumer_tags,
@@ -714,6 +732,7 @@ def _query_selected_matches_triggers(
 def _apply_all_filters(
     context: ProgressiveContext,
     memory_config: dict[str, Any] | None,
+    consumer_surface: str | None,
     consumer_profile: str | None,
     consumer_agent_slug: str | None,
     consumer_tags: list[str] | None,
@@ -724,9 +743,20 @@ def _apply_all_filters(
         resolved_tags, _ = resolve_memory_tags(memory_config)
     _apply_applicability_filters(
         context,
+        consumer_surface=consumer_surface,
         consumer_profile=consumer_profile,
         consumer_agent_slug=consumer_agent_slug,
         consumer_tags=resolved_tags,
+    )
+    # Snapshot every applicable required source before caller exclusions or
+    # render planning. Canonical delivery compares this set with what actually
+    # arrived, so an exclusion/validation bug cannot report tautological success.
+    context.debug_info["expected_required_memory_ids"] = list(
+        dict.fromkeys(
+            item.uuid
+            for item in [*context.mandates, *context.guardrails]
+            if item.uuid
+        )
     )
     if memory_config:
         _apply_tag_filters(context, memory_config)
@@ -753,6 +783,7 @@ async def _apply_priority_and_limits(
     consumer_profile: str | None,
     memory_config: dict[str, Any] | None,
     db: AsyncSession | None,
+    preserve_required_policy: bool,
 ) -> None:
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
@@ -773,8 +804,9 @@ async def _apply_priority_and_limits(
     policy_mandate_limit, policy_guardrail_limit, policy_reference_limit = (
         await resolve_policy_limits(consumer_profile, memory_config, db)
     )
-    context.mandates = _limit_policy_item_count(context.mandates, policy_mandate_limit)
-    context.guardrails = _limit_policy_item_count(context.guardrails, policy_guardrail_limit)
+    if not preserve_required_policy:
+        context.mandates = _limit_policy_item_count(context.mandates, policy_mandate_limit)
+        context.guardrails = _limit_policy_item_count(context.guardrails, policy_guardrail_limit)
     if policy_reference_limit > 0:
         context.reference = _limit_policy_item_count(
             context.reference, policy_reference_limit
@@ -792,10 +824,12 @@ async def build_progressive_context(
     task_type: str | None = None,
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
+    consumer_surface: str | None = None,
     consumer_profile: str | None = None,
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
     variant: str | None = None,
+    preserve_required_policy: bool = False,
     db: AsyncSession | None = None,
 ) -> ProgressiveContext:
     """Build tier-aware context: all mandates/guardrails injected deterministically;
@@ -815,10 +849,12 @@ async def build_progressive_context(
                 task_type=task_type,
                 phase=phase,
                 memory_config=memory_config,
+                consumer_surface=consumer_surface,
                 consumer_profile=consumer_profile,
                 consumer_agent_slug=consumer_agent_slug,
                 consumer_tags=consumer_tags,
                 variant=variant,
+                preserve_required_policy=preserve_required_policy,
                 db=session,
             )
 
@@ -848,9 +884,23 @@ async def build_progressive_context(
         await _merge_query_selected_references(
             context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase, db
         )
-    _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
+    _apply_all_filters(
+        context,
+        memory_config,
+        consumer_surface,
+        consumer_profile,
+        consumer_agent_slug,
+        consumer_tags,
+    )
     await _apply_priority_and_limits(
-        context, query, variant, variant_config, consumer_profile, memory_config, db
+        context,
+        query,
+        variant,
+        variant_config,
+        consumer_profile,
+        memory_config,
+        db,
+        preserve_required_policy,
     )
     budget = _build_usage_snapshot(context)
     _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)

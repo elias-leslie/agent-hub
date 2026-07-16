@@ -42,10 +42,6 @@ def client(mock_session: AsyncMock) -> Generator[APITestClient]:
 class TestCreateSession:
     """Tests for POST /api/sessions."""
 
-    @patch(
-        "app.constants.VALID_PROJECT_IDS",
-        frozenset({"test-project"}),
-    )
     def test_create_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test creating a new session."""
 
@@ -56,14 +52,18 @@ class TestCreateSession:
 
         mock_session.refresh.side_effect = set_timestamps
 
-        response = client.post(
-            "/api/sessions",
-            json={
-                "project_id": "test-project",
-                "provider": "claude",
-                "model": CLAUDE_SONNET,
-            },
-        )
+        with patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new=AsyncMock(),
+        ):
+            response = client.post(
+                "/api/sessions",
+                json={
+                    "project_id": "test-project",
+                    "provider": "claude",
+                    "model": CLAUDE_SONNET,
+                },
+            )
 
         assert response.status_code == 201
         data = response.json()

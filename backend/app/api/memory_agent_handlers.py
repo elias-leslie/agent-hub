@@ -2,20 +2,27 @@
 
 import time
 
+from app.db import async_session
+from app.services.canonical_context_adapters import (
+    canonical_context_contract,
+    progressive_context_from_delivery,
+    require_canonical_context,
+)
 from app.services.memory.context_builder_tiers import get_rendered_content
 from app.services.memory.context_resilience import (
     MemoryFailureDetails,
     build_memory_failure_notice,
     run_with_memory_retries,
 )
-from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.service import MemoryScope
-from app.services.memory.tool_capability_context import format_tool_capability_context
-from app.services.project_permission_service import get_visible_tools_for_project
+from app.services.memory.settings import get_memory_settings
+from app.services.memory.variants import assign_variant
+from app.services.runtime_context import (
+    CanonicalContextDeliveryRequest,
+    build_canonical_context_delivery,
+)
 
 from .memory_agent_context_builder import (
-    build_progressive_context_with_variant,
-    format_context_with_continuity,
     track_and_record_metrics,
 )
 from .memory_agent_helpers import build_budget_usage, build_scoring_breakdown
@@ -34,6 +41,7 @@ def _assemble_context_response(
     formatted,
     variant,
     debug,
+    canonical_contract,
     *,
     attempts: int,
     latency_ms: int,
@@ -62,6 +70,7 @@ def _assemble_context_response(
         budget_usage=build_budget_usage(context),
         attempts=attempts,
         latency_ms=latency_ms,
+        canonical_context=canonical_contract,
     )
 
 
@@ -111,61 +120,47 @@ async def _build_progressive_context_response_once(
     session_id: str | None = None,
     current_branch: str | None = None,
     consumer_profile: str | None = None,
+    consumer_surface: str = "progressive_context",
+    consumer_agent_slug: str | None = None,
+    consumer_tags: list[str] | None = None,
 ) -> ProgressiveContextResponse:
-    """Build one progressive-context response attempt."""
+    """Adapt one canonical delivery to the legacy progressive response shape."""
     start_time = time.monotonic()
-
-    context, variant = await build_progressive_context_with_variant(
-        query=query,
-        scope=scope,
-        scope_id=scope_id,
-        include_global=include_global,
-        task_type=task_type,
-        phase=phase,
-        variant_override=variant_override,
-        external_id=external_id,
-        project_id=project_id,
-        consumer_profile=consumer_profile,
+    effective_project_id = project_id or (
+        scope_id if scope == MemoryScope.PROJECT else None
     )
-
-    memory_formatted = await format_context_with_continuity(
-        context=context,
-        scope=scope,
-        scope_id=scope_id,
-        current_branch=current_branch,
-        session_id=session_id,
-        consumer_profile=consumer_profile,
-    )
-
-    effective_project_id = project_id or scope_id
-    blocks: list[str] = []
-
-    project_index_block = format_project_index_context(
-        effective_project_id, consumer_profile=consumer_profile, task_type=task_type,
-    )
-    if project_index_block:
-        blocks.append(project_index_block)
-        context.debug_info["project_index_included"] = True
-
-    visible_tool_names = (
-        await get_visible_tools_for_project(effective_project_id)
-        if effective_project_id
-        else frozenset()
-    )
-    tool_capability_block = format_tool_capability_context(
-        consumer_profile=consumer_profile,
-        task_type=task_type,
-        project_id=effective_project_id,
-        bash_available=("bash" in visible_tool_names) if effective_project_id else None,
-    )
-    if tool_capability_block:
-        blocks.append(tool_capability_block)
-        context.debug_info["tool_capabilities_included"] = True
-
-    if memory_formatted:
-        blocks.append(memory_formatted)
-
-    formatted = "\n".join(blocks) if blocks else ""
+    async with async_session() as db:
+        settings = await get_memory_settings(db)
+        assigned_variant = assign_variant(
+            external_id=external_id,
+            project_id=effective_project_id,
+            variant_override=variant_override,
+            active_variant=settings.active_variant,
+        )
+        variant = getattr(assigned_variant, "value", str(assigned_variant))
+        delivery = require_canonical_context(
+            await build_canonical_context_delivery(
+                db,
+                CanonicalContextDeliveryRequest(
+                    consumer_surface=consumer_surface,
+                    consumer_profile=consumer_profile or "agent_runtime",
+                    agent_slug=consumer_agent_slug,
+                    consumer_tags=consumer_tags or [],
+                    project_id=effective_project_id,
+                    session_id=session_id,
+                    task=query,
+                    query=query,
+                    task_type=task_type,
+                    phase=phase,
+                    current_branch=current_branch,
+                    include_global=include_global,
+                    variant=variant,
+                    client_metadata={"external_id": external_id or ""},
+                ),
+            )
+        )
+    context = progressive_context_from_delivery(delivery)
+    formatted = delivery.rendered
     latency_ms = int((time.monotonic() - start_time) * 1000)
 
     await track_and_record_metrics(
@@ -184,6 +179,7 @@ async def _build_progressive_context_response_once(
         formatted,
         variant,
         debug,
+        canonical_context_contract(delivery),
         attempts=1,
         latency_ms=latency_ms,
     )
@@ -203,6 +199,9 @@ async def build_progressive_context_response(
     session_id: str | None = None,
     current_branch: str | None = None,
     consumer_profile: str | None = None,
+    consumer_surface: str = "progressive_context",
+    consumer_agent_slug: str | None = None,
+    consumer_tags: list[str] | None = None,
 ) -> ProgressiveContextResponse:
     """Build progressive context response with retries and fail-closed fallback."""
 
@@ -221,6 +220,9 @@ async def build_progressive_context_response(
             session_id=session_id,
             current_branch=current_branch,
             consumer_profile=consumer_profile,
+            consumer_surface=consumer_surface,
+            consumer_agent_slug=consumer_agent_slug,
+            consumer_tags=consumer_tags,
         )
 
     response, failure, attempts, latency_ms = await run_with_memory_retries(

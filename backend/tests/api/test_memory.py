@@ -275,6 +275,8 @@ class TestSaveLearningEndpoint:
                     "trigger_phases": ["implementation", "verification"],
                     "context_kind": "capability",
                     "applicability": {
+                        "consumer_surfaces": ["codex_cli"],
+                        "exclude_consumer_surfaces": ["mcp"],
                         "consumer_profiles": ["codex_startup"],
                         "exclude_consumer_profiles": ["agent_runtime"],
                         "agent_slugs": ["persona"],
@@ -295,6 +297,8 @@ class TestSaveLearningEndpoint:
             ["implementation", "verification"],
             "capability",
             {
+                "consumer_surfaces": ["codex_cli"],
+                "exclude_consumer_surfaces": ["mcp"],
                 "consumer_profiles": ["codex_startup"],
                 "exclude_consumer_profiles": ["agent_runtime"],
                 "agent_slugs": ["persona"],

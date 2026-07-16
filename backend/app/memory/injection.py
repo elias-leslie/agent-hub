@@ -17,6 +17,11 @@ from app.services.memory import (
     track_loaded_batch,
 )
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
+from app.services.memory.context_resilience import (
+    CanonicalContextInjectionFailed,
+    build_unexpected_context_failure_notice,
+    require_successful_context_injection,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +36,7 @@ def _memory_block_len(progressive_context: Any, field_name: str) -> int:
 
 async def inject_memory_context(
     messages: list[dict[str, Any]],
-    db: AsyncSession,
+    db: AsyncSession | None,
     session_id: str,
     memory_group_id: str | None,
     task_type: str | None = None,
@@ -40,6 +45,9 @@ async def inject_memory_context(
     current_branch: str | None = None,
     agent_id: str | None = None,
     agent_slug: str | None = None,
+    project_id: str | None = None,
+    include_memories: bool = True,
+    consumer_surface: str = "agent_runtime",
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     """Inject progressive memory context into messages.
 
@@ -64,9 +72,15 @@ async def inject_memory_context(
             memory_config=memory_config,
             current_branch=current_branch,
             session_id=session_id,
+            project_id=project_id,
             consumer_profile=consumer_profile,
             consumer_agent_slug=agent_slug,
+            consumer_surface=consumer_surface,
+            include_prompts=True,
+            include_memories=include_memories,
+            db=db,
         )
+        require_successful_context_injection(progressive_context)
         memory_facts_injected = (
             _memory_block_len(progressive_context, "mandates")
             + _memory_block_len(progressive_context, "guardrails")
@@ -78,20 +92,33 @@ async def inject_memory_context(
         if memory_facts_injected > 0:
             logger.info(f"inject_memory_context: injected {memory_facts_injected} memory facts")
             await track_loaded_batch(loaded_memory_uuids)
-            memory_debug = dict(getattr(progressive_context, "debug_info", {}))
-            await store_memory_inject_event(
-                db, session_id, loaded_memory_uuids, memory_facts_injected,
-                reference_selected_uuids=list(
-                    memory_debug.get("reference_selected_uuids", [])
+            if db is not None:
+                memory_debug = dict(getattr(progressive_context, "debug_info", {}))
+                await store_memory_inject_event(
+                    db, session_id, loaded_memory_uuids, memory_facts_injected,
+                    reference_selected_uuids=list(
+                        memory_debug.get("reference_selected_uuids", [])
+                    ),
+                    reference_index_uuids=list(
+                        memory_debug.get("reference_index_uuids", [])
+                    ),
+                    memory_debug=memory_debug,
+                    agent_id=agent_id,
+                )
+    except CanonicalContextInjectionFailed:
+        raise
+    except Exception as exc:
+        logger.exception("Canonical context injection failed unexpectedly")
+        raise CanonicalContextInjectionFailed(
+            build_unexpected_context_failure_notice(
+                exc,
+                operation="complete_internal_context_injection",
+                consumer_profile=resolve_memory_consumer_profile(
+                    memory_config, surface="runtime"
                 ),
-                reference_index_uuids=list(
-                    memory_debug.get("reference_index_uuids", [])
-                ),
-                memory_debug=memory_debug,
-                agent_id=agent_id,
+                project_id=project_id or scope_id,
             )
-    except Exception as e:
-        logger.warning(f"Memory injection failed (continuing without): {e}")
+        ) from exc
 
     return messages, loaded_memory_uuids, memory_facts_injected
 

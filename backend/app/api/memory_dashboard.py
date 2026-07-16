@@ -231,6 +231,10 @@ async def get_continuity_context(
     project_id: Annotated[str | None, Query(description="Filter to a specific project")] = None,
     days: Annotated[int, Query(ge=1, le=30, description="Days to look back")] = 7,
     max_sessions: Annotated[int, Query(ge=1, le=50, description="Max sessions to include")] = 10,
+    include_cross_project: Annotated[
+        bool,
+        Query(description="Explicitly include summaries from other projects"),
+    ] = False,
 ) -> Any:
     from app.services.memory.continuity_injector import build_continuity_context
     try:
@@ -238,6 +242,9 @@ async def get_continuity_context(
             project_id=project_id,
             days=days,
             max_sessions=max_sessions,
+            include_cross_project=include_cross_project,
+            include_live_sessions=True,
+            allow_unscoped=project_id is None,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to build continuity context: {e}") from e

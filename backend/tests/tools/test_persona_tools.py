@@ -994,7 +994,7 @@ class TestSteerConsultation:
         assert kwargs["agent_slug"] == "analyst"
         assert kwargs["thinking_level"] == "low"
         assert kwargs["use_memory"] is True
-        assert kwargs["memory_group_id"] == "project-test-project"
+        assert kwargs["memory_group_id"] == "project:test-project"
         assert tool_names == {
             "read_file",
             "research_web",

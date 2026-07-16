@@ -9,8 +9,8 @@ from app.services.tools.base import Tool
 READ_PERSONALITY_TOOL = Tool(
     name="read_personality",
     description=(
-        "Read your current personality document. This defines your personality, "
-        "principles, and operating style. Use this to review before making changes."
+        "Read your current persona identity and voice document. It may describe tone, "
+        "interpersonal style, and stable identity traits, but it is not an operational-policy store."
     ),
     input_schema={"type": "object", "properties": {}},
     category="persona-memory",
@@ -22,9 +22,11 @@ READ_PERSONALITY_TOOL = Tool(
 WRITE_PERSONALITY_TOOL = Tool(
     name="write_personality",
     description=(
-        "Update your personality document. IMPORTANT: You MUST call read_personality first "
+        "Update your persona identity and voice document. IMPORTANT: You MUST call "
+        "read_personality first "
         "and include ALL existing sections in your update — this tool replaces the full document. "
-        "Only update when you've learned something fundamental about how you operate. "
+        "Store only identity, tone, and interpersonal-style traits; reusable safety, tool, workflow, "
+        "or project instructions belong in Agent Hub DB prompts. "
         "Always tell the human when you update it. Dramatic shrinkage (>50%) will be rejected."
     ),
     input_schema={
@@ -32,18 +34,18 @@ WRITE_PERSONALITY_TOOL = Tool(
         "properties": {
             "personality": {
                 "type": "string",
-                "description": "The new personality document (markdown)",
+                "description": "Persona identity, tone, and interpersonal-style document (markdown)",
             },
             "reason": {
                 "type": "string",
-                "description": "Why you're updating your personality — what you learned",
+                "description": "Why the stable identity or voice changed",
             },
         },
         "required": ["personality", "reason"],
     },
     category="persona-memory",
-    search_keywords=["update personality", "rewrite principles"],
-    usage_examples=["Update the personality document after learning a durable operating preference."],
+    search_keywords=["update personality", "identity", "voice"],
+    usage_examples=["Update the personality document after confirming a durable voice preference."],
     defer_loading=True,
 )
 
@@ -52,8 +54,11 @@ WRITE_PERSONALITY_TOOL = Tool(
 WRITE_USER_CONTEXT_TOOL = Tool(
     name="write_user_context",
     description=(
-        "Update your knowledge about the user. IMPORTANT: You MUST call read_user_context first "
+        "Update identity, preferences, or current state about the user. IMPORTANT: You MUST call "
+        "read_user_context first "
         "and include ALL existing sections in your update — this tool replaces the full document. "
+        "Do not store reusable safety, tool, workflow, or project policy here; those belong in "
+        "Agent Hub DB prompts. "
         "Never submit a shorter document unless the user explicitly asked you to remove information. "
         "Dramatic shrinkage (>50%) will be rejected as a safety measure."
     ),
@@ -62,7 +67,7 @@ WRITE_USER_CONTEXT_TOOL = Tool(
         "properties": {
             "user_context": {
                 "type": "string",
-                "description": "The updated user context document (markdown)",
+                "description": "Updated user identity, preference, or current-state document (markdown)",
             },
         },
         "required": ["user_context"],
@@ -75,7 +80,7 @@ WRITE_USER_CONTEXT_TOOL = Tool(
 
 READ_USER_CONTEXT_TOOL = Tool(
     name="read_user_context",
-    description="Read your current knowledge about the user.",
+    description="Read current user identity, preferences, and state stored on the persona row.",
     input_schema={"type": "object", "properties": {}},
     category="persona-memory",
     search_keywords=["user context", "preferences"],
@@ -267,6 +272,11 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
             "only_missing_compact": {
                 "type": "boolean",
                 "description": "Review long active memories that still lack compact prompt-ready content",
+                "default": False,
+            },
+            "only_incomplete_audit": {
+                "type": "boolean",
+                "description": "Review only memories missing the full per-criterion audit record",
                 "default": False,
             },
             "schedule_type": {

@@ -2,17 +2,105 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
+import time
 from functools import lru_cache
 from pathlib import Path
 from subprocess import TimeoutExpired
 
-from app.utils.safe_subprocess import run_process
+from app.utils.safe_subprocess import create_process, run_process
 
 _CANONICAL_WORKSPACE_ROOT = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _MANIFEST_NAME = "project.identity.json"
+_REGISTRY_CACHE_SECONDS = 300.0
+_registry_roots: dict[str, str] | None = None
+_registry_loaded_at = 0.0
+_registry_lock = asyncio.Lock()
+
+
+class ProjectRegistryUnavailable(RuntimeError):
+    """The canonical SummitFlow project registry could not be read."""
+
+
+async def get_registered_project_roots(*, refresh: bool = False) -> dict[str, str]:
+    """Return the canonical ``st projects`` registry using async subprocess I/O."""
+    global _registry_loaded_at, _registry_roots
+    if (
+        not refresh
+        and _registry_roots is not None
+        and time.monotonic() - _registry_loaded_at < _REGISTRY_CACHE_SECONDS
+    ):
+        return dict(_registry_roots)
+
+    async with _registry_lock:
+        if (
+            not refresh
+            and _registry_roots is not None
+            and time.monotonic() - _registry_loaded_at < _REGISTRY_CACHE_SECONDS
+        ):
+            return dict(_registry_roots)
+        process = None
+        try:
+            process_env = dict(os.environ)
+            # Agent Hub's module path contains a top-level ``app`` package that
+            # would shadow SummitFlow's package inside the st executable.
+            process_env.pop("PYTHONPATH", None)
+            process_env.pop("PYTHONHOME", None)
+            process = await create_process(
+                "st",
+                "projects",
+                "list",
+                "-v",
+                env=process_env,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+        except TimeoutError as exc:
+            if process is not None:
+                process.kill()
+                await process.communicate()
+            raise ProjectRegistryUnavailable(str(exc)) from exc
+        except OSError as exc:
+            raise ProjectRegistryUnavailable(str(exc)) from exc
+        if process.returncode != 0:
+            detail = stderr.decode(errors="replace").strip()
+            raise ProjectRegistryUnavailable(
+                f"st projects list failed ({process.returncode}): {detail}"
+            )
+        try:
+            payload = json.loads(stdout.decode())
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ProjectRegistryUnavailable("st projects list returned invalid JSON") from exc
+        if not isinstance(payload, list):
+            raise ProjectRegistryUnavailable("st projects list returned a non-list payload")
+
+        roots: dict[str, str] = {}
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            project_id = item.get("id")
+            root_path = item.get("root_path")
+            if not isinstance(project_id, str) or not project_id.strip():
+                continue
+            if not isinstance(root_path, str) or not root_path.strip():
+                continue
+            roots[project_id.strip()] = os.path.realpath(
+                os.path.expanduser(root_path.strip())
+            )
+        if not roots:
+            raise ProjectRegistryUnavailable("st projects list returned no project roots")
+        _registry_roots = roots
+        _registry_loaded_at = time.monotonic()
+        return dict(roots)
+
+
+def invalidate_registered_project_roots() -> None:
+    """Clear the async SummitFlow project registry cache."""
+    global _registry_loaded_at, _registry_roots
+    _registry_roots = None
+    _registry_loaded_at = 0.0
 
 
 def _env_override(project_id: str) -> Path | None:

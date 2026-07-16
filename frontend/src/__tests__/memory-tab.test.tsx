@@ -218,7 +218,9 @@ describe('MemoryTab', () => {
     fireEvent.click(link)
 
     await waitFor(() => {
-      expect(screen.getByText(/Policy caps · agent_coding/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Context selection · agent_coding/),
+      ).toBeInTheDocument()
     })
 
     await waitFor(() => {
@@ -267,7 +269,7 @@ describe('MemoryTab', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Policy caps · agent_runtime/),
+        screen.getByText(/Context selection · agent_runtime/),
       ).toBeInTheDocument()
     })
   })

@@ -59,6 +59,14 @@ TOOL_FILE_ALLOWLIST = {
     # Live service-side tool runtime used by complete_internal/build_direct_tool_runner.
     APP / "services" / "tools" / "tool_handler.py",
 }
+CANONICAL_PREINJECTION_ALLOWLIST = {
+    APP / "api" / "complete" / "complete_execution.py",
+    APP / "api" / "complete" / "execution.py",
+    APP / "services" / "agent_routing_completion.py",
+    APP / "services" / "completion" / "service.py",
+    APP / "services" / "orchestration" / "subagent_executor.py",
+    APP / "workflows" / "completion.py",
+}
 
 
 def _tree(path: Path) -> ast.Module:
@@ -125,6 +133,20 @@ def test_tool_loop_file_family_stays_collapsed() -> None:
         if path not in TOOL_FILE_ALLOWLIST
     ]
     assert offenders == []
+
+
+def test_canonical_context_preinjection_bypass_stays_narrowly_allowlisted() -> None:
+    """Only paths that first build canonical delivery may skip reinjection."""
+    users: set[Path] = set()
+    for path in APP.rglob("*.py"):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "canonical_context_preinjected":
+                    continue
+                users.add(path)
+    assert users == CANONICAL_PREINJECTION_ALLOWLIST
 
 
 def test_each_provider_module_registers_exactly_once() -> None:

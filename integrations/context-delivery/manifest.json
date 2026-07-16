@@ -1,0 +1,140 @@
+{
+  "schema_version": "agent-hub.context-adapters.v1",
+  "links": [
+    {
+      "surface": "shared",
+      "source": "integrations/context-delivery/bin/agent-hub-context",
+      "target": ".local/bin/agent-hub-context"
+    },
+    {
+      "surface": "shared",
+      "source": "integrations/context-delivery/bin/agent-hub-context-client",
+      "target": ".local/bin/agent-hub-context-client"
+    },
+    {
+      "surface": "claude_code",
+      "source": "integrations/context-delivery/claude/launcher",
+      "target": ".local/bin/agent-hub-claude"
+    },
+    {
+      "surface": "claude_code",
+      "source": "integrations/context-delivery/claude/launcher",
+      "target": ".claude/bin/claude"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/settings.json",
+      "target": ".claude/settings.json"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/bin/claude-gpt",
+      "target": ".local/bin/claude-gpt"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/claude-gpt-settings.json",
+      "target": ".claude/claude-gpt-settings.json"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/hooks/SessionStart.sh",
+      "target": ".claude/hooks/SessionStart.sh"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/hooks/canonical-context-metadata.sh",
+      "target": ".claude/hooks/canonical-context-metadata.sh"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/hooks/PostToolUse.sh",
+      "target": ".claude/hooks/PostToolUse.sh"
+    },
+    {
+      "surface": "claude_code",
+      "source": "../claude-config/hooks/Stop.sh",
+      "target": ".claude/hooks/Stop.sh"
+    },
+    {
+      "surface": "codex",
+      "source": "../codex-config/config.toml",
+      "target": ".codex/config.toml"
+    },
+    {
+      "surface": "codex",
+      "source": "../codex-config/bin/codex",
+      "target": ".codex/bin/codex"
+    },
+    {
+      "surface": "pi",
+      "source": "integrations/context-delivery/pi/agent-hub.ts",
+      "target": ".pi/agent/extensions/agent-hub.ts"
+    }
+  ],
+  "retired": [
+    {
+      "surface": "claude_code",
+      "target": ".claude/hooks/memory-client.sh"
+    },
+    {
+      "surface": "claude_code",
+      "target": ".claude/hooks/memory-failure-notice.sh"
+    },
+    {
+      "surface": "claude_code",
+      "target": ".claude/hooks/runtime-context-startup.sh"
+    },
+    {
+      "surface": "claude_code",
+      "target": ".claude/agent-hub/runtime-context.md"
+    },
+    {
+      "surface": "claude_code",
+      "target": ".claude/CLAUDE.md"
+    },
+    {
+      "surface": "codex",
+      "target": ".codex/generated/agent-hub-session-start.md"
+    },
+    {
+      "surface": "codex",
+      "target": ".codex/hooks/session-start.sh"
+    },
+    {
+      "surface": "pi",
+      "target": ".pi/agent/agent-hub/runtime-context.md"
+    }
+  ],
+  "hooks": [
+    {
+      "surface": "claude_code",
+      "path": ".claude/settings.json",
+      "event": "SessionStart",
+      "matcher": "",
+      "timeout": 10,
+      "command": "{home}/.local/bin/agent-hub-context-client bind --surface claude_code"
+    },
+    {
+      "surface": "claude_code",
+      "path": ".claude/settings.json",
+      "event": "SubagentStart",
+      "matcher": "",
+      "timeout": 10,
+      "command": "{home}/.local/bin/agent-hub-context-client bind --surface claude_code"
+    },
+    {
+      "surface": "gemini",
+      "path": ".gemini/settings.json",
+      "event": "BeforeModel",
+      "sequential": true,
+      "timeout": 60000,
+      "command": "{home}/.local/bin/agent-hub-context-client hook --surface gemini",
+      "remove_same_command_from_other_events": true,
+      "remove_commands_containing": [
+        "aico-mandates-gemini.sh",
+        "st mandates"
+      ]
+    }
+  ]
+}

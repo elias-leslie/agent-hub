@@ -1,0 +1,839 @@
+#!/usr/bin/env python3
+"""Thin, harness-neutral client for canonical Agent Hub context delivery.
+
+The Agent Hub backend owns selection, ordering, authority, and failure policy.
+This client only transports native harness metadata, validates the versioned
+delivery contract, persists immutable evidence artifacts, and adapts the
+rendered payload to hook JSON when requested.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import contextlib
+import hashlib
+import json
+import os
+import re
+import signal
+import sys
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "agent-hub.context.v1"
+CONTEXT_VERSION = "1"
+SURFACES = ("agent_hub", "claude_code", "codex", "gemini", "mcp", "pi")
+DEFAULT_PROVIDER = {
+    "claude_code": "anthropic",
+    "codex": "openai",
+    "gemini": "google",
+    "pi": "pi",
+}
+
+
+class ContractError(RuntimeError):
+    """Raised when the canonical CLI does not return its declared contract."""
+
+
+def _common_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--surface", required=True, choices=SURFACES)
+    parser.add_argument("--cwd")
+    parser.add_argument("--project")
+    parser.add_argument("--session")
+    parser.add_argument("--task")
+    parser.add_argument("--branch")
+    parser.add_argument("--query")
+    parser.add_argument("--provider")
+    parser.add_argument("--model")
+    parser.add_argument("--task-type")
+    parser.add_argument("--phase")
+    parser.add_argument("--profile")
+    parser.add_argument("--agent-slug")
+    parser.add_argument("--consumer-tag", action="append", default=[])
+    parser.add_argument("--repo-root")
+    parser.add_argument("--capability", action="append", default=[])
+    parser.add_argument("--metadata", action="append", default=[], metavar="KEY=VALUE")
+    parser.add_argument("--artifact-root")
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Validate and adapt canonical Agent Hub context deliveries."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    deliver = subparsers.add_parser("deliver", help="Deliver context and persist artifacts.")
+    _common_arguments(deliver)
+    deliver.add_argument(
+        "--emit",
+        choices=("descriptor", "json", "text", "text-path"),
+        default="text",
+    )
+
+    hook = subparsers.add_parser(
+        "hook", help="Read native hook JSON on stdin and emit additive hook JSON."
+    )
+    _common_arguments(hook)
+    hook.add_argument("--hook-event", help="Override hook_event_name from stdin")
+
+    bind = subparsers.add_parser(
+        "bind",
+        help="Bind a launcher-injected immutable delivery to native session metadata.",
+    )
+    _common_arguments(bind)
+    bind.add_argument("--hook-event", help="Override hook_event_name from stdin")
+    return parser
+
+
+def _subprocess_timeout_seconds() -> float:
+    raw = os.getenv("AGENT_HUB_CONTEXT_TIMEOUT_SECONDS", "15")
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ContractError(
+            "AGENT_HUB_CONTEXT_TIMEOUT_SECONDS must be a positive number"
+        ) from exc
+    if value <= 0:
+        raise ContractError("AGENT_HUB_CONTEXT_TIMEOUT_SECONDS must be positive")
+    return value
+
+
+async def _run(*argv: str, stdin: bytes | None = None) -> tuple[int, bytes, bytes]:
+    process = await asyncio.create_subprocess_exec(
+        *argv,
+        stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        async with asyncio.timeout(_subprocess_timeout_seconds()):
+            stdout, stderr = await process.communicate(stdin)
+    except TimeoutError as exc:
+        # The canonical CLI can spawn its own process tree. Kill the process
+        # group so a native hook timeout cannot leave a detached delivery
+        # running after the calling TUI has moved on.
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        await process.wait()
+        raise ContractError(
+            f"subprocess exceeded {_subprocess_timeout_seconds():g}s: {argv[0]}"
+        ) from exc
+    return process.returncode or 0, stdout, stderr
+
+
+async def _git_value(cwd: str, *args: str) -> str | None:
+    if not cwd:
+        return None
+    code, stdout, _stderr = await _run("git", "-C", cwd, *args)
+    if code != 0:
+        return None
+    value = stdout.decode("utf-8", errors="replace").strip()
+    return value or None
+
+
+async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> dict[str, Any]:
+    cwd = args.cwd or _string(hook.get("cwd")) or os.getcwd()
+    repo_root = args.repo_root or _string(hook.get("repo_root"))
+    if not repo_root:
+        repo_root = await _git_value(cwd, "rev-parse", "--show-toplevel")
+
+    # Project identity is registry-owned. Native callers may provide a known
+    # canonical ID; otherwise the backend resolves cwd/repo_root by containment
+    # against its canonical root registry or deliberately delivers global.
+    project = args.project or _string(hook.get("project_id"))
+
+    branch = args.branch or _string(hook.get("current_branch"))
+    if not branch:
+        branch = await _git_value(repo_root or cwd, "rev-parse", "--abbrev-ref", "HEAD")
+
+    native_session = _string(hook.get("session_id")) or _string(
+        hook.get("conversation_id")
+    )
+    aico_session = _string(os.getenv("AICO_SESSION_ID"))
+    # Aico's durable widget session is the cross-TUI delivery correlation ID.
+    # Native lifecycle bind hooks deliberately keep their real Claude/Codex ID
+    # so the immutable binding records both identities rather than conflating
+    # them. Other Aico markers remain audit hints, never project authority.
+    session = (
+        args.session
+        or (aico_session if args.command == "hook" else None)
+        or native_session
+        or str(uuid.uuid4())
+    )
+    task = (
+        args.task
+        or _string(hook.get("task_id"))
+        or _string(hook.get("external_id"))
+        or _string(os.getenv("SUMMITFLOW_TASK_ID"))
+    )
+    if not task and project and session:
+        task = await asyncio.to_thread(_task_from_lease, project, session)
+    query = (
+        args.query
+        or _string(hook.get("prompt"))
+        or _string(hook.get("initial_prompt"))
+        or _hook_request_query(hook)
+        or task
+    )
+    hook_event = (
+        getattr(args, "hook_event", None)
+        or _string(hook.get("hook_event_name"))
+        or "SessionStart"
+    )
+    source = _string(hook.get("source")) or _string(hook.get("reason"))
+    phase = args.phase or source or hook_event
+    subagent_type = _string(hook.get("agent_type")) or _string(hook.get("subagent_type"))
+    task_type = args.task_type or subagent_type
+    provider = args.provider or _string(hook.get("provider")) or DEFAULT_PROVIDER.get(args.surface)
+    llm_request = hook.get("llm_request")
+    request_model = (
+        _string(llm_request.get("model")) if isinstance(llm_request, dict) else None
+    )
+    model = (
+        args.model
+        or _string(hook.get("model"))
+        or request_model
+        or _surface_model(args.surface)
+    )
+
+    native_metadata = {
+        "hook_event_name": hook_event,
+        "source": source,
+        "turn_id": _string(hook.get("turn_id")) or _string(hook.get("prompt_id")),
+        "subagent_id": _string(hook.get("agent_id")) or _string(hook.get("subagent_id")),
+        "subagent_type": subagent_type,
+        "transcript_path": _string(hook.get("transcript_path")),
+        "native_session_id": native_session,
+        "aico_session_id": aico_session,
+        "aico_widget_id": _string(os.getenv("AICO_WIDGET_ID")),
+        "aico_project_hint": _string(os.getenv("AICO_PROJECT_ID")),
+        "invocation_id": str(uuid.uuid4()),
+    }
+    for raw in args.metadata:
+        key, separator, value = raw.partition("=")
+        if not separator or not key.strip():
+            raise ContractError(f"invalid --metadata {raw!r}; expected KEY=VALUE")
+        native_metadata[key.strip()] = value
+
+    return {
+        "surface": args.surface,
+        "cwd": cwd,
+        "repo_root": repo_root,
+        "project": project,
+        "session": session,
+        "task": task,
+        "branch": branch,
+        "query": query,
+        "provider": provider,
+        "model": model,
+        "task_type": task_type,
+        "phase": phase,
+        "profile": args.profile,
+        "agent_slug": args.agent_slug,
+        "consumer_tags": args.consumer_tag,
+        "capabilities": args.capability,
+        "hook_event": hook_event,
+        "native_metadata": {key: value for key, value in native_metadata.items() if value},
+    }
+
+
+def _hook_request_query(hook: dict[str, Any]) -> str | None:
+    request = hook.get("llm_request")
+    if not isinstance(request, dict):
+        return None
+    messages = request.get("messages")
+    if not isinstance(messages, list):
+        return None
+    for message in reversed(messages):
+        if not isinstance(message, dict):
+            continue
+        content = _string(message.get("content"))
+        if content:
+            return content
+        parts = message.get("parts")
+        if not isinstance(parts, list):
+            continue
+        text_parts = [
+            text
+            for part in parts
+            if isinstance(part, dict) and (text := _string(part.get("text")))
+        ]
+        if text_parts:
+            return "\n".join(text_parts)
+    return None
+
+
+def _surface_model(surface: str) -> str | None:
+    env_names = {
+        "claude_code": ("CLAUDE_MODEL",),
+        "codex": ("CODEX_MODEL",),
+        "gemini": ("GEMINI_MODEL",),
+        "pi": ("PI_MODEL",),
+    }
+    for name in env_names.get(surface, ()):
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
+
+
+def _task_from_lease(project: str, session: str) -> str | None:
+    path = Path.home() / ".summitflow/leases" / f"{project}.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    leases = value.get("leases", []) if isinstance(value, dict) else []
+    for lease in leases:
+        if not isinstance(lease, dict) or lease.get("session_id") != session:
+            continue
+        task = lease.get("task_id")
+        return task.strip() if isinstance(task, str) and task.strip() else None
+    return None
+
+
+def _string(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+async def _canonical_cli() -> str:
+    explicit = os.getenv("AGENT_HUB_CONTEXT_CLI")
+    candidates = [
+        explicit,
+        str(Path.home() / ".local/bin/agent-hub-context"),
+        str(Path(__file__).resolve().with_name("agent-hub-context")),
+        str(Path(__file__).resolve().parents[3] / "backend/.venv/bin/agent-hub-context"),
+    ]
+    for candidate in candidates:
+        if candidate and await asyncio.to_thread(os.access, candidate, os.X_OK):
+            return candidate
+    raise ContractError("agent-hub-context executable is missing; run the canonical adapter installer")
+
+
+def _delivery_command(cli: str, metadata: dict[str, Any]) -> list[str]:
+    command = [cli, "deliver", "--surface", metadata["surface"], "--format", "json"]
+    flags = (
+        ("--cwd", metadata["cwd"]),
+        ("--repo-root", metadata["repo_root"]),
+        ("--project", metadata["project"]),
+        ("--session", metadata["session"]),
+        ("--task", metadata["task"]),
+        ("--branch", metadata["branch"]),
+        ("--query", metadata["query"]),
+        ("--provider", metadata["provider"]),
+        ("--model", metadata["model"]),
+        ("--task-type", metadata["task_type"]),
+        ("--phase", metadata["phase"]),
+        ("--profile", metadata["profile"]),
+        ("--agent-slug", metadata["agent_slug"]),
+    )
+    for flag, value in flags:
+        if value:
+            command.extend((flag, value))
+    for capability in metadata["capabilities"]:
+        command.extend(("--capability", capability))
+    for consumer_tag in metadata["consumer_tags"]:
+        command.extend(("--consumer-tag", consumer_tag))
+
+    native = dict(metadata["native_metadata"])
+    direct_flags = (
+        ("--hook-event", native.pop("hook_event_name", None)),
+        ("--source", native.pop("source", None)),
+        ("--turn-id", native.pop("turn_id", None)),
+        ("--subagent-id", native.pop("subagent_id", None)),
+        ("--subagent-type", native.pop("subagent_type", None)),
+    )
+    for flag, value in direct_flags:
+        if value:
+            command.extend((flag, value))
+    for key, value in sorted(native.items()):
+        command.extend(("--metadata", f"{key}={value}"))
+    return command
+
+
+def _validate_contract(value: Any, *, expected_surface: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ContractError("canonical CLI returned a non-object JSON value")
+    expected = {
+        "schema_version": SCHEMA_VERSION,
+        "context_version": CONTEXT_VERSION,
+        "delivery_mode": "additive",
+        "recommended_role": "developer",
+        "native_context_policy": "preserve",
+        "payload_hash_algorithm": "sha256",
+    }
+    for field, wanted in expected.items():
+        if value.get(field) != wanted:
+            raise ContractError(f"invalid {field}: expected {wanted!r}, got {value.get(field)!r}")
+    if value.get("status") not in {"ok", "failed"}:
+        raise ContractError(f"invalid delivery status {value.get('status')!r}")
+    rendered = value.get("rendered")
+    if not isinstance(rendered, str) or not rendered.strip():
+        raise ContractError("canonical delivery rendered text is empty")
+    digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+    if value.get("payload_hash") != digest:
+        raise ContractError("canonical delivery payload_hash does not match rendered UTF-8 bytes")
+    if value.get("artifact_id") != f"context-{digest}":
+        raise ContractError("canonical delivery artifact_id does not match payload_hash")
+    if not isinstance(value.get("blocks"), list):
+        raise ContractError("canonical delivery blocks must be a list")
+    metadata = value.get("metadata")
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("consumer_surface"), str):
+        raise ContractError("canonical delivery metadata is missing consumer_surface")
+    if metadata["consumer_surface"] != expected_surface:
+        raise ContractError(
+            "canonical delivery consumer_surface does not match the requested surface: "
+            f"expected {expected_surface!r}, got {metadata['consumer_surface']!r}"
+        )
+
+    policy = value.get("required_policy")
+    if not isinstance(policy, dict):
+        raise ContractError("canonical delivery required_policy must be an object")
+    state = policy.get("state")
+    required = policy.get("required_source_ids")
+    delivered = policy.get("delivered_source_ids")
+    missing = policy.get("missing_source_ids")
+    pending = policy.get("pending_review_source_ids")
+    if state not in {"complete", "failed"}:
+        raise ContractError(f"invalid required_policy state {state!r}")
+    if not all(isinstance(items, list) and all(isinstance(item, str) for item in items) for items in (required, delivered, missing, pending)):
+        raise ContractError("canonical delivery required_policy ID fields must be string arrays")
+    required_set = set(required)
+    delivered_set = set(delivered)
+    missing_set = set(missing)
+    pending_set = set(pending)
+    if missing_set != required_set - delivered_set:
+        raise ContractError("canonical delivery required_policy missing IDs are incoherent")
+    if not pending_set <= required_set:
+        raise ContractError("canonical delivery pending-review IDs are not required sources")
+    if value["status"] == "ok":
+        if state != "complete" or missing:
+            raise ContractError("successful delivery does not have complete required policy")
+        if value.get("failure") is not None:
+            raise ContractError("successful delivery unexpectedly includes failure details")
+    else:
+        if state != "failed" or not isinstance(value.get("failure"), dict):
+            raise ContractError("failed delivery is missing coherent failure details")
+    return value
+
+
+def _adapter_failure(metadata: dict[str, Any], error: Exception) -> dict[str, Any]:
+    rendered = (
+        "<agent-hub-context-failure>\n"
+        "Agent Hub could not deliver or validate supplemental canonical context. "
+        "The external TUI continues with native model context only; no Agent Hub "
+        "payload was injected.\n"
+        f"{type(error).__name__}: {error}\n"
+        "</agent-hub-context-failure>"
+    )
+    digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+    now = datetime.now(UTC).isoformat()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "context_version": "adapter-failure",
+        "delivery_id": str(uuid.uuid4()),
+        "artifact_id": f"context-{digest}",
+        "generated_at": now,
+        "status": "failed",
+        "delivery_mode": "additive",
+        "recommended_role": "developer",
+        "native_context_policy": "preserve",
+        "precedence": "preserve native harness messages; add operator context without replacement",
+        "payload_hash_algorithm": "sha256",
+        "payload_hash": digest,
+        "metadata": {
+            "consumer_surface": metadata["surface"],
+            "consumer_profile": metadata.get("profile") or "agent_startup",
+            "capabilities": metadata.get("capabilities", []),
+            "project_id": metadata.get("project"),
+            "session_id": metadata.get("session"),
+            "task": metadata.get("task"),
+            "query": metadata.get("query") or "startup context",
+            "query_hash": hashlib.sha256(
+                (metadata.get("query") or "startup context").encode("utf-8")
+            ).hexdigest(),
+            "task_type": metadata.get("task_type"),
+            "phase": metadata.get("phase"),
+            "current_branch": metadata.get("branch"),
+            "cwd": metadata.get("cwd"),
+            "repo_root": metadata.get("repo_root"),
+            "provider": metadata.get("provider"),
+            "model": metadata.get("model"),
+            "client_metadata": metadata.get("native_metadata", {}),
+            "agent_slug": metadata.get("agent_slug"),
+            "consumer_tags": metadata.get("consumer_tags", []),
+        },
+        "blocks": [],
+        "rendered": rendered,
+        "estimated_tokens": max(1, len(rendered) // 4),
+        "required_policy": {
+            "state": "failed",
+            "required_source_ids": [],
+            "delivered_source_ids": [],
+            "missing_source_ids": [],
+            "pending_review_source_ids": [],
+        },
+        "failure": {
+            "operation": "canonical-context-adapter",
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        },
+    }
+
+
+def _safe_part(value: str | None, fallback: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value or "").strip("-.")
+    return cleaned[:120] or fallback
+
+
+def _write_artifacts_sync(
+    contract: dict[str, Any], metadata: dict[str, Any], artifact_root: str | None
+) -> tuple[Path, Path]:
+    root = Path(
+        artifact_root
+        or os.getenv("AGENT_HUB_CONTEXT_ARTIFACT_ROOT", "")
+        or Path.home() / ".local/state/agent-hub/context-deliveries"
+    ).expanduser()
+    directory = (
+        root
+        / _safe_part(metadata["surface"], "unknown-surface")
+        / _safe_part(metadata.get("project"), "global")
+        / _safe_part(metadata.get("session"), "unknown-session")
+    )
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(directory, 0o700)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+    stem = f"{stamp}-{contract['payload_hash'][:16]}-{uuid.uuid4().hex[:8]}"
+    json_path = directory / f"{stem}.json"
+    text_path = directory / f"{stem}.md"
+    _exclusive_write(
+        json_path,
+        (json.dumps(contract, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+    _exclusive_write(text_path, contract["rendered"].encode("utf-8"))
+    return json_path, text_path
+
+
+def _exclusive_write(path: Path, content: bytes) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(descriptor)
+
+
+def _write_binding_sync(
+    contract: dict[str, Any],
+    metadata: dict[str, Any],
+    contract_path: Path,
+    text_path: Path,
+    artifact_root: str | None,
+) -> Path:
+    canonical_metadata = contract["metadata"]
+    root = Path(
+        artifact_root
+        or os.getenv("AGENT_HUB_CONTEXT_ARTIFACT_ROOT", "")
+        or Path.home() / ".local/state/agent-hub/context-deliveries"
+    ).expanduser()
+    directory = (
+        root
+        / _safe_part(metadata["surface"], "unknown-surface")
+        / _safe_part(canonical_metadata.get("project_id"), "global")
+        / _safe_part(metadata.get("session"), "unknown-session")
+        / "bindings"
+    )
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(directory, 0o700)
+    now = datetime.now(UTC)
+    binding = {
+        "schema_version": "agent-hub.context-binding.v1",
+        "binding_id": str(uuid.uuid4()),
+        "bound_at": now.isoformat(),
+        "consumer_surface": metadata["surface"],
+        "hook_event": metadata["hook_event"],
+        "native_session_id": metadata.get("session"),
+        "native_subagent_id": metadata["native_metadata"].get("subagent_id"),
+        "native_subagent_type": metadata["native_metadata"].get("subagent_type"),
+        "canonical_session_id": canonical_metadata.get("session_id"),
+        "canonical_delivery_id": contract["delivery_id"],
+        "canonical_artifact_id": contract["artifact_id"],
+        "payload_hash": contract["payload_hash"],
+        "contract_path": str(contract_path),
+        "text_path": str(text_path),
+    }
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    path = directory / f"{stamp}-{contract['payload_hash'][:16]}-{uuid.uuid4().hex[:8]}.json"
+    _exclusive_write(
+        path,
+        (json.dumps(binding, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+    return path
+
+
+async def _bind_preinjected(
+    args: argparse.Namespace, hook: dict[str, Any]
+) -> tuple[dict[str, Any], Path]:
+    metadata = await _resolve_metadata(args, hook)
+    raw_contract_path = os.getenv("AGENT_HUB_CONTEXT_PREINJECTED_CONTRACT")
+    raw_text_path = os.getenv("AGENT_HUB_CONTEXT_PREINJECTED_TEXT")
+    expected_hash = os.getenv("AGENT_HUB_CONTEXT_PREINJECTED_HASH")
+    if not raw_contract_path or not raw_text_path or not expected_hash:
+        raise ContractError(
+            f"{metadata['surface']} was launched without the canonical "
+            "Agent Hub context launcher"
+        )
+    contract_path = Path(raw_contract_path)
+    text_path = Path(raw_text_path)
+    try:
+        raw_contract = await asyncio.to_thread(
+            contract_path.read_text, encoding="utf-8"
+        )
+        decoded = json.loads(raw_contract)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ContractError(f"preinjected canonical contract is unreadable: {exc}") from exc
+    contract = _validate_contract(decoded, expected_surface=metadata["surface"])
+    if contract["status"] != "ok":
+        raise ContractError("preinjected canonical contract is not successful")
+    try:
+        rendered = await asyncio.to_thread(text_path.read_text, encoding="utf-8")
+    except OSError as exc:
+        raise ContractError(f"preinjected canonical text is unreadable: {exc}") from exc
+    if rendered != contract["rendered"] or expected_hash != contract["payload_hash"]:
+        raise ContractError("preinjected canonical artifacts do not match their payload hash")
+    path = await asyncio.to_thread(
+        _write_binding_sync,
+        contract,
+        metadata,
+        contract_path,
+        text_path,
+        args.artifact_root,
+    )
+    return contract, path
+
+
+async def _deliver(args: argparse.Namespace, hook: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
+    metadata = await _resolve_metadata(args, hook)
+    try:
+        cli = await _canonical_cli()
+        command = _delivery_command(cli, metadata)
+        code, stdout, stderr = await _run(*command)
+        if stderr:
+            sys.stderr.write(stderr.decode("utf-8", errors="replace"))
+        try:
+            decoded = json.loads(stdout.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ContractError(f"canonical CLI returned invalid JSON (exit {code})") from exc
+        contract = _validate_contract(decoded, expected_surface=metadata["surface"])
+        expected_code = 0 if contract["status"] == "ok" else 2
+        if code != expected_code:
+            raise ContractError(
+                f"canonical CLI exit/status mismatch: exit={code} status={contract['status']}"
+            )
+    except Exception as exc:
+        contract = _adapter_failure(metadata, exc)
+        sys.stderr.write(f"agent-hub-context-client: {type(exc).__name__}: {exc}\n")
+
+    echoed = contract.get("metadata") if isinstance(contract.get("metadata"), dict) else {}
+    artifact_metadata = {
+        **metadata,
+        "project": echoed.get("project_id") or metadata.get("project"),
+        "session": echoed.get("session_id") or metadata.get("session"),
+    }
+    json_path, text_path = await asyncio.to_thread(
+        _write_artifacts_sync, contract, artifact_metadata, args.artifact_root
+    )
+    return contract, artifact_metadata, json_path, text_path
+
+
+async def _read_hook_input() -> dict[str, Any]:
+    raw = await asyncio.to_thread(sys.stdin.read)
+    if not raw.strip():
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ContractError(f"native hook stdin is invalid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ContractError("native hook stdin must be a JSON object")
+    return value
+
+
+async def _persist_failure_best_effort(
+    contract: dict[str, Any], metadata: dict[str, Any], artifact_root: str | None
+) -> None:
+    try:
+        await asyncio.to_thread(
+            _write_artifacts_sync, contract, metadata, artifact_root
+        )
+    except Exception as exc:
+        sys.stderr.write(
+            "agent-hub-context-client: could not persist degraded delivery evidence: "
+            f"{type(exc).__name__}: {exc}\n"
+        )
+
+
+def _descriptor(contract: dict[str, Any], json_path: Path, text_path: Path) -> dict[str, Any]:
+    return {
+        "schema_version": contract["schema_version"],
+        "status": contract["status"],
+        "payload_hash": contract["payload_hash"],
+        "delivery_id": contract["delivery_id"],
+        "artifact_id": contract["artifact_id"],
+        "contract_path": str(json_path),
+        "text_path": str(text_path),
+    }
+
+
+def _native_degraded_output(event: str) -> dict[str, Any]:
+    """Warn the native UI without blocking or injecting failure text."""
+    return {
+        "systemMessage": (
+            "Agent Hub supplemental context is unavailable; "
+            "continuing with native model context only"
+        ),
+        "hookSpecificOutput": {
+            "hookEventName": event,
+        },
+    }
+
+
+def _gemini_before_model_output(
+    event: str, hook: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    if contract["status"] == "failed":
+        return _native_degraded_output(event)
+    request = hook.get("llm_request")
+    if not isinstance(request, dict) or not isinstance(request.get("messages"), list):
+        raise ContractError("Gemini BeforeModel input is missing llm_request.messages")
+    messages = [
+        {"role": "user", "content": contract["rendered"]},
+        *request["messages"],
+    ]
+    modified = {
+        **request,
+        # Use one stable leading additive message on every provider request.
+        # Native history and the current real task retain their exact order.
+        "messages": messages,
+    }
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": event,
+            "llm_request": modified,
+        }
+    }
+
+
+async def _main(args: argparse.Namespace) -> int:
+    if args.command == "bind":
+        hook: dict[str, Any] = {}
+        try:
+            hook = await _read_hook_input()
+            await _bind_preinjected(args, hook)
+        except Exception as exc:
+            metadata = await _resolve_metadata(args, hook)
+            contract = _adapter_failure(metadata, exc)
+            sys.stderr.write(f"agent-hub-context-client bind: {type(exc).__name__}: {exc}\n")
+            await _persist_failure_best_effort(
+                contract, metadata, args.artifact_root
+            )
+            event = (
+                getattr(args, "hook_event", None)
+                or _string(hook.get("hook_event_name"))
+                or "SessionStart"
+            )
+            print(
+                json.dumps(
+                    _native_degraded_output(event),
+                    separators=(",", ":"),
+                )
+            )
+            return 0
+        print("{}")
+        return 0
+
+    if args.command == "hook":
+        try:
+            hook = await _read_hook_input()
+        except Exception as exc:
+            hook = {}
+            metadata = await _resolve_metadata(args, hook)
+            contract = _adapter_failure(metadata, exc)
+            await _persist_failure_best_effort(
+                contract, metadata, args.artifact_root
+            )
+        else:
+            try:
+                contract, metadata, _json_path, _text_path = await _deliver(args, hook)
+            except Exception as exc:
+                metadata = await _resolve_metadata(args, hook)
+                contract = _adapter_failure(metadata, exc)
+                sys.stderr.write(
+                    "agent-hub-context-client hook: "
+                    f"{type(exc).__name__}: {exc}\n"
+                )
+                await _persist_failure_best_effort(
+                    contract, metadata, args.artifact_root
+                )
+
+        event = getattr(args, "hook_event", None) or _string(hook.get("hook_event_name")) or "SessionStart"
+        if args.surface == "gemini" and event == "BeforeModel":
+            try:
+                output = _gemini_before_model_output(event, hook, contract)
+            except Exception as exc:
+                contract = _adapter_failure(metadata, exc)
+                await _persist_failure_best_effort(
+                    contract, metadata, args.artifact_root
+                )
+                output = _gemini_before_model_output(event, hook, contract)
+            print(json.dumps(output, separators=(",", ":")))
+            return 0
+        if contract["status"] == "failed":
+            sys.stderr.write(
+                f"agent-hub-context-client: {args.surface} supplemental context "
+                "unavailable; continuing with native model context only\n"
+            )
+            print(
+                json.dumps(
+                    _native_degraded_output(event),
+                    separators=(",", ":"),
+                )
+            )
+            return 0
+        output: dict[str, Any] = {
+            "hookSpecificOutput": {
+                "hookEventName": event,
+                "additionalContext": contract["rendered"],
+            }
+        }
+        print(json.dumps(output, separators=(",", ":")))
+        return 0
+
+    contract, _metadata, json_path, text_path = await _deliver(args, {})
+    if args.emit == "json":
+        print(json.dumps(contract, indent=2, sort_keys=True))
+    elif args.emit == "text":
+        sys.stdout.write(contract["rendered"])
+    elif args.emit == "text-path":
+        print(text_path)
+    else:
+        print(json.dumps(_descriptor(contract, json_path, text_path), sort_keys=True))
+    return 0 if contract["status"] == "ok" else 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    return asyncio.run(_main(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

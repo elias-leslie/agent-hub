@@ -81,6 +81,8 @@ class EpisodeStatus(StrEnum):
 class MemoryApplicability(BaseModel):
     """Targeting rules for when a memory should be eligible."""
 
+    consumer_surfaces: list[str] = Field(default_factory=list)
+    exclude_consumer_surfaces: list[str] = Field(default_factory=list)
     consumer_profiles: list[str] = Field(default_factory=list)
     exclude_consumer_profiles: list[str] = Field(default_factory=list)
     agent_slugs: list[str] = Field(default_factory=list)
@@ -111,6 +113,7 @@ class MemorySearchResult(BaseModel):
     created_at: datetime
     facts: list[str] = []
     scope: MemoryScope | None = None
+    scope_id: str | None = None
     category: MemoryCategory | None = None
     pinned: bool = False
     tags: list[str] = []

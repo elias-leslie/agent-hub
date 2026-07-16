@@ -58,6 +58,10 @@ class CompletionOptions:
     # Branch context for continuity scoping
     current_branch: str | None = None
 
+    # Canonical context applicability metadata.
+    agent_slug: str | None = None
+    consumer_surface: str | None = None
+
 
 @dataclass
 class CompletionServiceResult:

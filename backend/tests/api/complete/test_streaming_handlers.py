@@ -13,9 +13,14 @@ from app.api.complete.request_schemas import (
 from app.api.complete.streaming_handlers import (
     _build_sse_response,
     _compact_streaming_context,
+    _inject_streaming_memory,
     _setup_streaming_session,
+    handle_streaming_request,
 )
 from app.services.llm_messages import Message
+from app.services.memory.context_builder import ProgressiveContext
+from app.services.memory.context_injector_ops import inject_memory_block
+from app.services.memory.context_resilience import CanonicalContextInjectionFailed
 
 
 def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> None:
@@ -172,3 +177,94 @@ async def test_setup_streaming_session_does_not_persist_adaptive_metadata() -> N
     assert session_id == "sess-1"
     assert is_new is True
     assert session.provider_metadata is None
+
+
+@pytest.mark.asyncio
+async def test_agent_stream_forces_canonical_prompts_when_prompt_mode_none() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="do work")],
+        project_id="agent-hub",
+        agent_slug="coder",
+        prompt_mode="none",
+        use_memory=False,
+    )
+    resolved_agent = type(
+        "ResolvedAgent",
+        (),
+        {"agent": type("Agent", (), {"memory_config": {}, "slug": "coder"})()},
+    )()
+    original = [Message(role="user", content="do work")]
+    injected_dicts = inject_memory_block(
+        [{"role": "user", "content": "do work"}],
+        "## Safety Directive\nStay safe.",
+    )
+
+    with patch(
+        "app.api.complete.streaming_handlers.inject_progressive_context",
+        new=AsyncMock(return_value=(injected_dicts, ProgressiveContext())),
+    ) as inject_mock:
+        result = await _inject_streaming_memory(
+            request,
+            original,
+            "sess-1",
+            resolved_agent,
+            None,
+        )
+
+    inject_mock.assert_awaited_once()
+    assert inject_mock.await_args is not None
+    assert inject_mock.await_args.kwargs["include_prompts"] is True
+    assert inject_mock.await_args.kwargs["include_memories"] is False
+    assert result[0].role == "system"
+
+
+@pytest.mark.asyncio
+async def test_agent_stream_aborts_before_response_without_verified_context() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="do work")],
+        project_id="agent-hub",
+        agent_slug="coder",
+        prompt_mode="none",
+        max_turns=2,
+    )
+    resolved_agent = type("ResolvedAgent", (), {})()
+    build_response = AsyncMock()
+    raw_messages = [Message(role="user", content="do work")]
+
+    with (
+        patch(
+            "app.api.complete.streaming_handlers._setup_streaming_session",
+            new=AsyncMock(return_value=("sess-1", [], True)),
+        ),
+        patch(
+            "app.api.complete.streaming_handlers._inject_streaming_memory",
+            new=AsyncMock(return_value=raw_messages),
+        ),
+        patch(
+            "app.api.complete.streaming_handlers._compact_streaming_context",
+            new=AsyncMock(return_value=raw_messages),
+        ),
+        patch(
+            "app.api.complete.streaming_handlers._build_sse_response",
+            new=build_response,
+        ),
+        pytest.raises(
+            CanonicalContextInjectionFailed,
+            match="hash-verified Agent Hub canonical context envelope",
+        ),
+    ):
+        await handle_streaming_request(
+            request=request,
+            resolved_model="kimi-code/kimi-for-coding",
+            provider="kimi-code",
+            resolved_agent=resolved_agent,
+            agent_mandate_injection=None,
+            agent_used="coder",
+            model_used=None,
+            fallback_used=False,
+            db=None,
+            client_id=None,
+            request_source="pytest",
+        )
+
+    build_response.assert_not_awaited()

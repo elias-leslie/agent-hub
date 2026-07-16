@@ -46,8 +46,8 @@ def _canonicalize_model_chain(models: list[str] | None) -> list[str]:
     return canonical
 
 
-def _load_seed_data() -> tuple[list[dict], list[str]]:
-    """Load agents and deactivation list from seed_data.json."""
+def _load_seed_data() -> tuple[list[dict], set[str]]:
+    """Load bootstrap agents and insert-time inactive defaults."""
     if not SEED_FILE.exists():
         logger.error("seed_data.json not found at %s", SEED_FILE)
         logger.error("Run 'python -m scripts.export_seeds' to generate it from the database.")
@@ -63,7 +63,7 @@ def _load_seed_data() -> tuple[list[dict], list[str]]:
             meta.get("generated_at", "?"),
         )
 
-    return data["agents"], data.get("deactivate_slugs", [])
+    return data["agents"], set(data.get("deactivate_slugs", []))
 
 
 async def _seed_prompts(
@@ -165,7 +165,7 @@ async def seed_agents(db: AsyncSession) -> int:
             strategies=agent_data.get("strategies", {}),
             temperature=agent_data.get("temperature", 0.7),
             thinking_level=agent_data.get("thinking_level"),
-            is_active=True,
+            is_active=slug not in deactivate_slugs,
             is_coding_agent=agent_data.get("is_coding_agent", False),
             memory_config=agent_data.get("memory_config"),
             version=1,
@@ -180,15 +180,6 @@ async def seed_agents(db: AsyncSession) -> int:
         )
         created_agents += 1
         logger.info(f"Created agent: {slug}")
-
-    # Deactivate absorbed agents
-    for slug in deactivate_slugs:
-        result = await db.execute(select(Agent).where(Agent.slug == slug))
-        deactivate_agent = result.scalar_one_or_none()
-        if deactivate_agent and deactivate_agent.is_active:
-            deactivate_agent.is_active = False
-            deactivate_agent.version += 1
-            logger.info(f"Deactivated agent: {slug}")
 
     if prompts_data or assignments_data:
         created_prompts = await _seed_prompts(db, prompts_data, assignments_data)

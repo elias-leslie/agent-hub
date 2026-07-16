@@ -229,7 +229,7 @@ async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | N
         request_source=f"{REQUEST_SOURCE_PREFIX}{input.event_type}",
         agent_slug=input.agent_slug,
         use_memory=True,
-        memory_group_id=f"{input.project_id}:{TASK_TYPE_WAKE}:{input.event_type}",
+        memory_group_id=f"project:{input.project_id}",
         enable_caching=False,
         skip_cache=True,
         max_turns=max_turns,

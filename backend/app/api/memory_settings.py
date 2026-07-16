@@ -95,6 +95,9 @@ async def get_budget_usage() -> BudgetUsageResponse:
         try:
             continuity_ctx = await build_continuity_context(
                 max_sessions=settings.continuity_max_sessions,
+                include_cross_project=False,
+                include_live_sessions=True,
+                allow_unscoped=True,
             )
             if continuity_ctx.markdown:
                 continuity_tokens = count_tokens(continuity_ctx.markdown)

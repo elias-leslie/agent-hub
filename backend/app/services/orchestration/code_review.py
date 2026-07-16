@@ -23,6 +23,7 @@ class CodeReviewPattern(MakerChecker):
             name="code_generator",
             provider=maker_provider,
             project_id=project_id,
+            agent_slug="coder",
             system_prompt="""You are an expert programmer. Generate clean, well-documented code.
 Follow best practices and include error handling where appropriate.""",
             temperature=0.7,
@@ -32,6 +33,7 @@ Follow best practices and include error handling where appropriate.""",
             name="code_reviewer",
             provider=checker_provider,
             project_id=project_id,
+            agent_slug="reviewer",
             system_prompt="""You are a senior code reviewer. Review code for:
 1. Correctness - Does it solve the problem?
 2. Security - Any vulnerabilities?

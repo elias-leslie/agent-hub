@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Project / memory constants
 SCHEDULER_PROJECT = "agent-hub"
-SCHEDULER_MEMORY_GROUP = "agent-hub:scheduler"
+SCHEDULER_MEMORY_GROUP = "project:agent-hub"
 
 # Payload type constants
 PAYLOAD_TYPE_AGENT_TURN = "agent_turn"
@@ -315,6 +315,7 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     force_all = bool(payload.get("force_all") or False)
     include_archived = bool(payload.get("include_archived") or False)
     only_missing_compact = bool(payload.get("only_missing_compact") or False)
+    only_incomplete_audit = bool(payload.get("only_incomplete_audit") or False)
 
     async with async_session() as db:
         result = await run_memory_review_batch(
@@ -327,6 +328,7 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
             force_all=force_all,
             include_archived=include_archived,
             only_missing_compact=only_missing_compact,
+            only_incomplete_audit=only_incomplete_audit,
         )
         await db.commit()
 

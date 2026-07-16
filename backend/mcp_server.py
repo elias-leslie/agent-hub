@@ -1,14 +1,17 @@
 import os
-from pathlib import Path
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-from app.api.memory_agent_handlers import build_progressive_context_response
 from app.config import AGENT_HUB_BACKEND_PORT
+from app.db import async_session
 from app.services.memory.context_resilience import MemoryFailureDetails
 from app.services.memory.failure_reporting import MemoryFailureReport, report_memory_failure
-from app.services.memory.service import MemoryScope
+from app.services.runtime_context import (
+    CanonicalContextDeliveryRequest,
+    CanonicalContextDeliveryResponse,
+    build_canonical_context_delivery,
+)
 
 # Initialize FastMCP server
 mcp = FastMCP("agent-hub")
@@ -18,34 +21,43 @@ AGENT_HUB_API = os.getenv("AGENT_HUB_API", f"http://localhost:{AGENT_HUB_BACKEND
 DEFAULT_TIMEOUT = 30.0
 
 
+async def _get_canonical_context_delivery(
+    query: str,
+    project_id: str | None = None,
+) -> CanonicalContextDeliveryResponse:
+    """Build the same versioned delivery used by every other context surface."""
+    async with async_session() as db:
+        return await build_canonical_context_delivery(
+            db,
+            CanonicalContextDeliveryRequest(
+                consumer_surface="mcp",
+                consumer_profile="agent_startup",
+                project_id=project_id,
+                task=query,
+                query=query,
+            ),
+        )
+
+
 async def _query_progressive_context(query: str, project_id: str | None = None) -> str:
-    """Helper to query the centralized progressive-context builder directly."""
-    scope = MemoryScope.PROJECT if project_id else MemoryScope.GLOBAL
-    response = await build_progressive_context_response(
-        query=query,
-        scope=scope,
-        scope_id=project_id,
-        debug=False,
-        include_global=True,
-        task_type=None,
-        project_id=project_id,
-    )
-    if response.status != "ok" and response.failure is not None:
+    """Compatibility string projection of the canonical MCP delivery."""
+    delivery = await _get_canonical_context_delivery(query, project_id)
+    if delivery.status != "ok" and delivery.failure is not None:
         await report_memory_failure(
             MemoryFailureReport(
                 failure=MemoryFailureDetails(
-                    operation=response.failure.operation,
-                    attempts=response.failure.attempts,
-                    error_type=response.failure.error_type,
-                    error_message=response.failure.error_message,
-                    latency_ms=response.failure.latency_ms,
+                    operation=delivery.failure.operation,
+                    attempts=1,
+                    error_type=delivery.failure.error_type,
+                    error_message=delivery.failure.error_message,
+                    latency_ms=0,
                 ),
                 consumer_profile="mcp_system_instruction",
                 project_id=project_id,
-                source="mcp_progressive_context",
+                source="mcp_canonical_context",
             )
         )
-    return response.formatted
+    return delivery.rendered
 
 
 @mcp.resource("memory://context")
@@ -64,19 +76,7 @@ async def get_system_instruction() -> str:
     Get the authoritative system instructions (Mandates and Guardrails) for the current session.
     Use this to initialize your context.
     """
-    query = "system initialization"
-    context = await _query_progressive_context(query)
-
-    default_template = """You are an AI assistant integrated with the Agent-Hub Memory System.
-The following are the ACTIVE MANDATES and GUARDRAILS for this environment.
-You MUST adhere to these rules strictly.
-
-{context}"""
-
-    from app.services.prompt_service import get_prompt_content
-
-    template = await get_prompt_content("mcp-system-instruction", default_template)
-    return template.format(context=context)
+    return await _query_progressive_context("system initialization")
 
 
 @mcp.tool()
@@ -148,21 +148,5 @@ async def search_memory(query: str, limit: int = 5) -> str:
             return f"Error searching memory: {e!s}"
 
 
-def sync_gemini_context():
-    """Syncs the GEMINI.md context file on server startup."""
-    import subprocess
-
-    script_path = str(Path(__file__).resolve().parent.parent / "scripts" / "update_gemini_context.sh")
-    try:
-        # Run the sync script
-        result = subprocess.run([script_path], capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Failed to sync context: {result.stderr}")
-    except Exception as e:
-        print(f"Error running sync script: {e}")
-
-
 if __name__ == "__main__":
-    # Magic Hook: Sync context immediately when Antigravity starts this server
-    sync_gemini_context()
     mcp.run()

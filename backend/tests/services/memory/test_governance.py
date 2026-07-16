@@ -111,6 +111,10 @@ async def test_collect_memory_governance_snapshot_summarizes_routing_quality() -
     snapshot = await collect_memory_governance_snapshot(mock_db)
 
     assert snapshot["active_count"] == 5
+    assert snapshot["clean_review_count"] == 0
+    assert snapshot["pending_review_count"] == 5
+    assert snapshot["needs_action_review_count"] == 0
+    assert snapshot["review_coverage_count"] == 0
     assert snapshot["health_status"] == "critical"
     assert snapshot["by_context_kind"] == {
         "capability": 2,
@@ -134,7 +138,7 @@ async def test_collect_memory_governance_snapshot_summarizes_routing_quality() -
     assert snapshot["tool_capabilities_disabled_agent_count"] == 1
     assert snapshot["memory_exclusion_agent_count"] == 1
     assert snapshot["excluded_memory_uuid_count"] == 1
-    assert snapshot["hard_issue_count"] == 3
+    assert snapshot["hard_issue_count"] == 8
     assert snapshot["soft_issue_count"] == 2
     assert snapshot["soft_limit_breach_count"] == 0
-    assert snapshot["issue_count"] == 5
+    assert snapshot["issue_count"] == 10

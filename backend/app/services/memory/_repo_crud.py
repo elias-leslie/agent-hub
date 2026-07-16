@@ -199,7 +199,7 @@ class CrudRepository(RevisionRepository):
     ) -> Memory | None:
         """Get a single memory by full UUID."""
         uid = _uuid.UUID(str(memory_id)) if isinstance(memory_id, str) else memory_id
-        return await _with_session(db, lambda s: s.get(Memory, uid))  # type: ignore[arg-type,return-value]
+        return await _with_session(db, lambda s: s.get(Memory, uid))
 
     async def get_as_dict(
         self,

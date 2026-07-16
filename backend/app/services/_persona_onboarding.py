@@ -14,6 +14,11 @@ from app.services.persona_prompt_service import render_persona_onboarding_review
 
 logger = logging.getLogger(__name__)
 
+# Two existing catalog agents keep the dual-review gate route-independent:
+# `reviewer` supplies the review discipline and `chat` supplies an independent
+# general reading without hardcoding either model or provider here.
+_ONBOARDING_REVIEWER_AGENT_SLUGS = ("reviewer", "chat")
+
 
 async def _check_auto_approve(db: AsyncSession, persona: Persona) -> dict[str, str] | None:
     """If max attempts reached, auto-approve and return result dict; else None."""
@@ -75,7 +80,6 @@ async def submit_and_review_onboarding(
 ) -> dict[str, str]:
     """Submit for dual-model review; returns dict with 'status' and 'feedback'."""
     from app.api.complete.core import complete_internal
-    from app.constants import KIMI_CODE_FOR_CODING, REASONING_GEMINI_MODEL
     from app.db import async_session
 
     persona = await get_persona(db)
@@ -101,22 +105,16 @@ async def submit_and_review_onboarding(
     try:
         reviews = list(
             await asyncio.gather(
-                run_single_review(
-                    complete_internal,
-                    async_session,
-                    KIMI_CODE_FOR_CODING,
-                    "kimi-code",
-                    review_prompt,
-                    max_retries=2,
-                ),
-                run_single_review(
-                    complete_internal,
-                    async_session,
-                    REASONING_GEMINI_MODEL,
-                    "gemini",
-                    review_prompt,
-                    max_retries=2,
-                ),
+                *(
+                    run_single_review(
+                        complete_internal,
+                        async_session,
+                        agent_slug,
+                        review_prompt,
+                        max_retries=2,
+                    )
+                    for agent_slug in _ONBOARDING_REVIEWER_AGENT_SLUGS
+                )
             )
         )
     except Exception as e:

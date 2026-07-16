@@ -31,6 +31,17 @@ def _sanitize_runtime_prompt_content(content: str) -> str:
     return "\n".join(lines[index:]).lstrip("\n")
 
 
+def _sync_owned_agent_system_prompt_mirror(prompt: Prompt) -> None:
+    """Keep the legacy Agent column aligned; the owned prompt stays canonical."""
+    from app.services.owned_prompt_service import AGENT_SYSTEM_PROMPT_TYPE
+
+    owner_agent = prompt.__dict__.get("owner_agent")
+    if prompt.prompt_type != AGENT_SYSTEM_PROMPT_TYPE or owner_agent is None:
+        return
+    if owner_agent.system_prompt != prompt.content:
+        owner_agent.system_prompt = prompt.content
+
+
 async def record_prompt_revision(
     db: AsyncSession,
     prompt: Prompt,
@@ -164,6 +175,7 @@ async def update_prompt(
                 validate_compactness(str(value), kind="prompt")
             setattr(prompt, key, value)
 
+    _sync_owned_agent_system_prompt_mirror(prompt)
     await db.flush()
     await record_prompt_revision(
         db,
@@ -286,6 +298,7 @@ async def restore_prompt_revision(
     prompt.boot_eligible = revision.boot_eligible
     prompt.exclude_agents = list(revision.exclude_agents or [])
 
+    _sync_owned_agent_system_prompt_mirror(prompt)
     await db.flush()
     await record_prompt_revision(
         db,

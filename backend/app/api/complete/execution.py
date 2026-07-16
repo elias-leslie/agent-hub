@@ -19,6 +19,7 @@ from app.api.complete.tool_provisioner import provision_standard_tools
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing import complete_with_fallback
 from app.services.llm_messages import Message
+from app.services.memory.context_injector_ops import has_verified_canonical_context
 
 if TYPE_CHECKING:
 
@@ -177,13 +178,16 @@ async def execute_without_db(
 ) -> tuple[CompletionInternalResult, str]:
     """Execute completion without a database session.
 
-    Routes through :func:`complete_internal` with ``db=None`` so the
-    pi-mono pipeline handles every text completion.
+    Routes already-prepared request messages through :func:`complete_internal`
+    with ``db=None`` so the pi-mono pipeline handles every text completion.
+    The core verifies the canonical envelope before honoring the preinjected
+    marker.
     """
     from app.api.complete.core import complete_internal
 
+    message_dicts = _messages_to_dicts(messages_for_adapter)
     internal = await complete_internal(
-        messages=_messages_to_dicts(messages_for_adapter),
+        messages=message_dicts,
         model=resolved_model,
         provider=provider,
         temperature=request.temperature,
@@ -207,6 +211,7 @@ async def execute_without_db(
         task_type=request.task_type,
         phase=request.phase,
         current_branch=request.current_branch,
+        canonical_context_preinjected=has_verified_canonical_context(message_dicts),
     )
 
     return internal, resolved_model

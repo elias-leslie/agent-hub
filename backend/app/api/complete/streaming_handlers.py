@@ -20,7 +20,16 @@ from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
-from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
+from app.services.memory.context_builder_settings import (
+    memory_injection_enabled,
+    resolve_memory_consumer_profile,
+)
+from app.services.memory.context_injector_ops import has_verified_canonical_context
+from app.services.memory.context_resilience import (
+    CanonicalContextInjectionFailed,
+    build_unexpected_context_failure_notice,
+    require_successful_context_injection,
+)
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.work_chats import bind_request_context
 
@@ -97,18 +106,13 @@ def _build_streaming_messages(
     context_messages: list[Message],
     agent_mandate_injection: AgentMandateInjection | None,
 ) -> list[Message]:
-    """Build the list of messages for streaming, applying agent system prompt if needed."""
+    """Build base streaming messages before canonical/operator injection."""
     new_messages = [
         Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
         for m in request.messages
     ]
     messages = context_messages + new_messages if context_messages else new_messages
     messages = inject_work_context_message(messages, request.work_context)
-
-    if agent_mandate_injection:
-        messages = inject_system_prompt_into_messages(
-            messages, agent_mandate_injection.system_content
-        )
 
     return messages
 
@@ -118,18 +122,23 @@ async def _inject_streaming_memory(
     messages: list[Message],
     session_id: str,
     resolved_agent: ResolvedAgent | None,
+    db: AsyncSession | None,
 ) -> list[Message]:
     """Inject memory context into streaming messages.
 
-    Returns the updated messages list (unchanged if memory injection fails or is disabled).
+    Returns the updated messages list. Canonical failures abort before the
+    streaming model call rather than silently dropping operator context.
     """
-    if not request.use_memory:
+    agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
+    include_memories = request.use_memory and memory_injection_enabled(agent_memory_config)
+    agentic_request = bool(resolved_agent) or request.max_turns > 1 or request.execute_tools
+    include_prompts = agentic_request or (request.prompt_mode or "full") != "none"
+    if not include_memories and not include_prompts:
         return messages
 
     messages_dict = [{"role": m.role, "content": m.content} for m in messages]
     scope, scope_id = parse_memory_group_id(request.memory_group_id)
     try:
-        agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
         consumer_profile = resolve_memory_consumer_profile(agent_memory_config, surface="runtime")
         messages_dict, progressive_context = await inject_progressive_context(
             messages=messages_dict,
@@ -145,7 +154,12 @@ async def _inject_streaming_memory(
             current_branch=request.current_branch,
             consumer_profile=consumer_profile,
             consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
+            consumer_surface="agent_runtime",
+            include_prompts=include_prompts,
+            include_memories=include_memories,
+            db=db,
         )
+        require_successful_context_injection(progressive_context)
         memory_facts_count = (
             _memory_block_len(progressive_context, "mandates")
             + _memory_block_len(progressive_context, "guardrails")
@@ -163,9 +177,20 @@ async def _inject_streaming_memory(
             )
             for m in messages_dict
         ]
+    except CanonicalContextInjectionFailed:
+        raise
     except Exception as e:
-        logger.warning(f"Streaming: Memory injection failed (continuing without): {e}")
-        return messages
+        logger.exception("Streaming canonical context injection failed unexpectedly")
+        raise CanonicalContextInjectionFailed(
+            build_unexpected_context_failure_notice(
+                e,
+                operation="streaming_completion_context_injection",
+                consumer_profile=resolve_memory_consumer_profile(
+                    agent_memory_config, surface="runtime"
+                ),
+                project_id=request.project_id or scope_id,
+            )
+        ) from e
 
 
 async def _compact_streaming_context(
@@ -272,8 +297,25 @@ async def handle_streaming_request(
         request, provider, resolved_model, resolved_agent, db, client_id, request_source
     )
     messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
-    messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent)
+    messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent, db)
+    if agent_mandate_injection:
+        messages = inject_system_prompt_into_messages(
+            messages, agent_mandate_injection.system_content
+        )
     messages = await _compact_streaming_context(messages, resolved_model, session_id, db)
+    canonical_required = (
+        bool(resolved_agent)
+        or request.max_turns > 1
+        or request.execute_tools
+        or (request.prompt_mode or "full") != "none"
+        or request.use_memory
+    )
+    if canonical_required and not has_verified_canonical_context(
+        [{"role": message.role, "content": message.content} for message in messages]
+    ):
+        raise CanonicalContextInjectionFailed(
+            "streaming completion requires a hash-verified Agent Hub canonical context envelope"
+        )
     thinking_level = get_thinking_level(request, messages, resolved_agent)
     visible_tool_names = None
     if db and request.project_id:

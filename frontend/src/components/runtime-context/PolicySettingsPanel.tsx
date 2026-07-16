@@ -17,7 +17,7 @@ export function PolicySettingsPanel({ profile }: Props) {
         type="button"
         className={styles.btn}
         onClick={() => setOpen(true)}
-        title="Edit per-profile injection caps"
+        title="Edit optional-reference selection (required policy is always delivered)"
       >
         <Settings width={12} height={12} />
         Policy

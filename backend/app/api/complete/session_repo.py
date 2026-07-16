@@ -61,15 +61,9 @@ class SessionRequest:
 
 
 async def _validate_project(project_id: str) -> None:
-    from app.constants import VALID_PROJECT_IDS
-    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
+    from app.constants.projects import validate_project_id
 
-    if is_cache_stale():
-        await refresh_project_ids_cache()
-    if project_id not in VALID_PROJECT_IDS:
-        raise ValueError(
-            f"Unknown project_id '{project_id}'. Valid projects: {sorted(VALID_PROJECT_IDS)}"
-        )
+    await validate_project_id(project_id)
 
 
 def _apply_trace_id(session: DBSession, trace_id: str | None) -> None:

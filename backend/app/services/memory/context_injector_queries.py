@@ -62,12 +62,13 @@ async def get_episodes_by_tier(
             tier=tier,
             group_id=group_id,
             status="active",
+            limit=None,
             db=db,
         )
         return [_memory_to_dict(m) for m in memories]
     except Exception as e:
         logger.warning("Failed to get episodes by tier %s: %s", tier, e)
-        return []
+        raise
 
 
 async def get_auto_inject_references(
@@ -97,6 +98,7 @@ async def get_auto_inject_references(
             auto_inject=True,
             group_id=group_id,
             status="active",
+            limit=None,
             db=db,
         )
         return [_memory_to_dict(m) for m in memories]
@@ -126,12 +128,13 @@ async def get_pinned_episodes_by_tier(
             pinned=True,
             group_id=group_id,
             status="active",
+            limit=None,
             db=db,
         )
         return [_memory_to_dict(m) for m in memories]
     except Exception as e:
         logger.warning("Failed to get pinned episodes for tier %s: %s", tier, e)
-        return []
+        raise
 
 
 def _tokenize(text: str) -> set[str]:

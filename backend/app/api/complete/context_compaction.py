@@ -111,9 +111,9 @@ async def _summarize_messages(
 ) -> str | None:
     """Summarize a list of messages using the configured compaction agent.
 
-    Uses ``complete_internal(db=None)`` to avoid recursive session creation and
-    memory injection. Tokens are logged to CostLog against the parent session
-    for cost visibility.
+    Uses the caller's managed database session so canonical operator context is
+    verified before the compactor provider is invoked. Tokens are logged to
+    CostLog against the parent session for cost visibility.
     """
     if db is None:
         logger.warning("Context compaction skipped: database session unavailable")
@@ -155,8 +155,11 @@ async def _summarize_messages(
             model=resolved.model,
             provider=resolved.provider,
             temperature=agent.temperature,
-            project_id="",
-            db=None,
+            project_id="agent-hub",
+            db=db,
+            agent_slug=_COMPACTOR_AGENT_SLUG,
+            request_source="context_compaction",
+            use_memory=False,
             thinking_level=agent.thinking_level,
         )
 

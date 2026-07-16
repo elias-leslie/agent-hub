@@ -221,6 +221,7 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
                 user_messages_for_db=user_messages_for_db,
                 progress_callback=progress_callback,
                 use_memory=False,
+                canonical_context_preinjected=True,
                 **kwargs,
             )
 

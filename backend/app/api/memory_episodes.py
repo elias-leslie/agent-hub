@@ -38,6 +38,7 @@ from .memory_schemas import (
     EpisodeDetailResponse,
     HealthResponse,
     MemoryRestoreRequest,
+    MemoryReviewInventoryResponse,
     MemoryReviewRunRequest,
     MemoryReviewRunResponse,
     MemoryRevisionListResponse,
@@ -227,6 +228,18 @@ async def run_memory_review(
             force_all=request.force_all,
             include_archived=request.include_archived,
             only_missing_compact=request.only_missing_compact,
+            only_incomplete_audit=request.only_incomplete_audit,
         )
         await db.commit()
     return MemoryReviewRunResponse(**result.__dict__)
+
+
+@router.get("/review/inventory", response_model=MemoryReviewInventoryResponse)
+async def memory_review_inventory() -> MemoryReviewInventoryResponse:
+    """Return an auditable outcome row for every active memory."""
+    from app.db import async_session
+    from app.services.memory.review_inventory import collect_memory_review_inventory
+
+    async with async_session() as db:
+        inventory = await collect_memory_review_inventory(db)
+    return MemoryReviewInventoryResponse(**inventory)

@@ -36,7 +36,9 @@ class Agent(Base):
     slug: Mapped[str] = mapped_column(String(50), unique=True, index=True)  # "coder", "planner"
     name: Mapped[str] = mapped_column(String(100))  # "Code Generator", "Task Planner"
     description: Mapped[str | None] = mapped_column(Text, nullable=True)  # Short description for UI
-    system_prompt: Mapped[str] = mapped_column(Text)  # The agent's system prompt
+    # Compatibility mirror for older DTO/fallback paths. The assigned owned
+    # ``agent_system`` Prompt row is the canonical source.
+    system_prompt: Mapped[str] = mapped_column(Text)
     primary_model_id: Mapped[str] = mapped_column(
         String(100)
     )  # Agent Hub catalog model ID

@@ -487,6 +487,7 @@ async def test_execute_without_db_routes_through_complete_internal() -> None:
     assert kwargs["db"] is None
     assert kwargs["execute_tools"] is False
     assert kwargs["max_turns"] == 1
+    assert kwargs["canonical_context_preinjected"] is False
 
 
 @pytest.mark.asyncio

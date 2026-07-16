@@ -11,8 +11,6 @@ from app.models.agent import Agent
 from app.models.prompt import AgentPrompt, Prompt
 from app.services.prompt_catalog import (
     PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-    PERSONA_PERSONALITY_PROMPT_SLUG,
-    PERSONA_USER_CONTEXT_PROMPT_SLUG,
     build_agent_system_prompt_slug,
 )
 from app.services.prompt_service import get_prompt_by_slug, record_prompt_revision
@@ -21,8 +19,6 @@ STANDARD_PROMPT_TYPE = "standard"
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 GLOBAL_MANDATE_PROMPT_TYPE = "global_mandate"
 GLOBAL_GUARDRAIL_PROMPT_TYPE = "global_guardrail"
-PERSONA_PERSONALITY_PROMPT_TYPE = "persona_personality"
-PERSONA_USER_CONTEXT_PROMPT_TYPE = "persona_user_context"
 PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE = "persona_heartbeat_instructions"
 
 
@@ -182,42 +178,14 @@ async def sync_agent_system_prompt(
     )
 
 
-async def sync_persona_document_prompts(
+async def sync_persona_instruction_prompts(
     db: AsyncSession,
     *,
     agent: Agent,
-    personality: str,
-    user_context: str,
     heartbeat_instructions: str,
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> None:
-    await ensure_owned_prompt(
-        db,
-        agent=agent,
-        slug=PERSONA_PERSONALITY_PROMPT_SLUG,
-        name="Personality Document",
-        content=personality,
-        description="Persona editable personality document.",
-        prompt_type=PERSONA_PERSONALITY_PROMPT_TYPE,
-        role="persona-personality",
-        priority=20,
-        changed_by=changed_by,
-        change_reason=change_reason,
-    )
-    await ensure_owned_prompt(
-        db,
-        agent=agent,
-        slug=PERSONA_USER_CONTEXT_PROMPT_SLUG,
-        name="User Context",
-        content=user_context,
-        description="Persona editable freeform user notes.",
-        prompt_type=PERSONA_USER_CONTEXT_PROMPT_TYPE,
-        role="persona-user-context",
-        priority=30,
-        changed_by=changed_by,
-        change_reason=change_reason,
-    )
     await ensure_owned_prompt(
         db,
         agent=agent,
@@ -233,29 +201,14 @@ async def sync_persona_document_prompts(
     )
 
 
-async def get_persona_prompt_text(
-    db: AsyncSession,
-    *,
-    slug: str,
-) -> str | None:
-    prompt = await get_prompt_by_slug(db, slug)
-    if not prompt or not prompt.enabled:
-        return None
-    content = prompt.content.strip()
-    return content or None
-
-
 __all__ = [
     "AGENT_SYSTEM_PROMPT_TYPE",
     "GLOBAL_GUARDRAIL_PROMPT_TYPE",
     "GLOBAL_MANDATE_PROMPT_TYPE",
     "PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE",
-    "PERSONA_PERSONALITY_PROMPT_TYPE",
-    "PERSONA_USER_CONTEXT_PROMPT_TYPE",
     "STANDARD_PROMPT_TYPE",
     "ensure_owned_prompt",
     "get_owned_prompt",
-    "get_persona_prompt_text",
     "sync_agent_system_prompt",
-    "sync_persona_document_prompts",
+    "sync_persona_instruction_prompts",
 ]

@@ -99,6 +99,7 @@ export default function RuntimeContextPage() {
               fullContentLookup={ctx.fullContentLookup}
               rendered={ctx.preview?.rendered ?? ''}
               projectIndex={ctx.preview?.project_index ?? ''}
+              continuity={ctx.preview?.continuity ?? ''}
               toolCapabilities={ctx.preview?.tool_capabilities ?? ''}
               totalTokens={ctx.preview?.total_tokens ?? 0}
               budgetTokens={ctx.preview?.budget_tokens ?? 0}

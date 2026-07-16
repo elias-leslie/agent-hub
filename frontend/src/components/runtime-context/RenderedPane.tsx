@@ -18,9 +18,9 @@ interface Props {
   saving?: boolean
   fullContentLookup: Map<string, string>
   rendered: string
-  // Auxiliary blocks computed at session start (project_index +
-  // tool_capabilities). Empty strings render nothing.
+  // Auxiliary blocks computed at session start. Empty strings render nothing.
   projectIndex: string
+  continuity: string
   toolCapabilities: string
   totalTokens: number
   budgetTokens: number
@@ -40,6 +40,17 @@ function tokenSum(blocks: RuntimeContextBlock[]): number {
   return blocks.reduce((sum, block) => sum + block.token_count, 0)
 }
 
+function authorityRank(block: RuntimeContextBlock): number {
+  if (block.prompt_type === 'global_guardrail' || block.tier === 'guardrail') {
+    return 0
+  }
+  if (block.prompt_type === 'global_mandate' || block.tier === 'mandate') {
+    return 1
+  }
+  if (block.source_type === 'prompt') return 2
+  return 3
+}
+
 export function RenderedPane({
   blocks,
   excluded,
@@ -47,6 +58,7 @@ export function RenderedPane({
   fullContentLookup,
   rendered,
   projectIndex,
+  continuity,
   toolCapabilities,
   totalTokens,
   budgetTokens,
@@ -60,8 +72,8 @@ export function RenderedPane({
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  // Full text the agent actually sees: aux blocks first, then prompts/memories.
-  const fullRendered = [projectIndex, toolCapabilities, rendered]
+  // Full text the agent actually sees: authority-ordered operator context first.
+  const fullRendered = [rendered, projectIndex, continuity, toolCapabilities]
     .filter((chunk) => chunk && chunk.trim().length > 0)
     .join('\n')
   const handleCopy = async () => {
@@ -90,7 +102,7 @@ export function RenderedPane({
   // them around without restoring; their mode='exclude' is preserved on save.
   const excludedKeys = new Set(excluded.map(blockKey))
   const ordered = [...blocks, ...excluded].sort(
-    (a, b) => a.position - b.position,
+    (a, b) => authorityRank(a) - authorityRank(b) || a.position - b.position,
   )
   const sortableIds = ordered.map(
     (block) => `rendered:${block.source_type}:${block.source_id}`,
@@ -159,23 +171,10 @@ export function RenderedPane({
             (dropZone.isOver || isCrossPaneDragging) && styles.rowsDropTarget,
           )}
         >
-          {projectIndex ? (
-            <ComputedRow
-              slug="project-index"
-              title="Project Index"
-              content={projectIndex}
-              tokenCount={Math.max(1, Math.round(projectIndex.length / 4))}
-            />
-          ) : null}
-          {toolCapabilities ? (
-            <ComputedRow
-              slug="tool-capabilities"
-              title="Tool Capabilities"
-              content={toolCapabilities}
-              tokenCount={Math.max(1, Math.round(toolCapabilities.length / 4))}
-            />
-          ) : null}
-          {ordered.length === 0 && !projectIndex && !toolCapabilities ? (
+          {ordered.length === 0 &&
+          !projectIndex &&
+          !continuity &&
+          !toolCapabilities ? (
             <div className={styles.empty}>
               {isCrossPaneDragging ? 'Drop to pin' : 'No blocks resolved.'}
             </div>
@@ -199,6 +198,30 @@ export function RenderedPane({
               />
             )
           })}
+          {projectIndex ? (
+            <ComputedRow
+              slug="project-index"
+              title="Project Index"
+              content={projectIndex}
+              tokenCount={Math.max(1, Math.round(projectIndex.length / 4))}
+            />
+          ) : null}
+          {continuity ? (
+            <ComputedRow
+              slug="continuity"
+              title="Continuity"
+              content={continuity}
+              tokenCount={Math.max(1, Math.round(continuity.length / 4))}
+            />
+          ) : null}
+          {toolCapabilities ? (
+            <ComputedRow
+              slug="tool-capabilities"
+              title="Tool Capabilities"
+              content={toolCapabilities}
+              tokenCount={Math.max(1, Math.round(toolCapabilities.length / 4))}
+            />
+          ) : null}
         </div>
       </SortableContext>
 
@@ -217,6 +240,7 @@ export function RenderedPane({
         <RenderedPreviewModal
           rendered={rendered}
           projectIndex={projectIndex}
+          continuity={continuity}
           toolCapabilities={toolCapabilities}
           totalTokens={totalTokens}
           budgetTokens={budgetTokens}

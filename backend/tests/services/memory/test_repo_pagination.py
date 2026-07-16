@@ -71,6 +71,22 @@ async def test_list_paginated_created_at_sort_uses_created_at_column() -> None:
     assert "ORDER BY memories.created_at ASC, memories.id ASC" in compiled
 
 
+@pytest.mark.asyncio
+async def test_list_by_scope_and_tier_supports_uncapped_policy_retrieval() -> None:
+    """Required policy retrieval must not silently stop at the generic page size."""
+    repo = QueryRepository()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_result
+
+    await repo.list_by_scope_and_tier(tier="mandate", limit=None, db=mock_db)
+
+    stmt = mock_db.execute.call_args.args[0]
+    compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert " LIMIT " not in compiled
+
+
 def test_parse_pagination_cursor_accepts_legacy_timestamp_only() -> None:
     """Older cursor values should remain valid for backward compatibility."""
     created_at = datetime(2026, 3, 9, 20, 0, 0, tzinfo=UTC)

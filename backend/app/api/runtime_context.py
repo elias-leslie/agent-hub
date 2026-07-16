@@ -12,11 +12,14 @@ from app.db import get_db
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.runtime_context import (
     KNOWN_RUNTIME_PROFILES,
+    CanonicalContextDeliveryRequest,
+    CanonicalContextDeliveryResponse,
     RuntimeContextOverridePayload,
     RuntimeContextOverrideResponse,
     RuntimeContextPreviewResponse,
     RuntimeContextProfilePolicyResponse,
     RuntimeContextProfilePolicyUpdate,
+    build_canonical_context_delivery,
     get_runtime_context_profile_policy,
     list_runtime_context_overrides,
     render_runtime_context,
@@ -42,6 +45,16 @@ class RuntimeContextOverrideListResponse(BaseModel):
 
 class RuntimeContextOverrideReplaceRequest(BaseModel):
     overrides: list[RuntimeContextOverridePayload] = Field(default_factory=list)
+
+
+@router.post("/deliver", response_model=CanonicalContextDeliveryResponse)
+async def deliver_runtime_context(
+    request: CanonicalContextDeliveryRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> CanonicalContextDeliveryResponse:
+    """Return additive, versioned context for Agent Hub and external TUIs."""
+    return await build_canonical_context_delivery(db, request)
 
 
 @router.get("/profiles", response_model=RuntimeContextProfilesResponse)
