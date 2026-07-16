@@ -68,3 +68,33 @@ def validate_project_access(
                     "project_id": request.project_id,
                 },
             )
+
+
+def validate_audio_capability(request: CompletionRequest, resolved_model: str) -> None:
+    """Reject typed audio input unless the resolved model declares audio support."""
+    has_audio = any(
+        isinstance(message.content, list)
+        and any(
+            isinstance(block, dict) and block.get("type") == "audio"
+            for block in message.content
+        )
+        for message in request.messages
+    )
+    if not has_audio:
+        return
+
+    from app.constants.catalog import get_model_entry
+
+    entry = get_model_entry(resolved_model)
+    if entry is not None and entry.capabilities.supports_audio:
+        return
+
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "error": "unsupported_input_modality",
+            "model": resolved_model,
+            "modality": "audio",
+            "message": f"Model '{resolved_model}' does not support audio input.",
+        },
+    )

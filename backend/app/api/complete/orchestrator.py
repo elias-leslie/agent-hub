@@ -37,6 +37,7 @@ from app.llm.tool_loop import ToolLoopEvent, ToolRunner
 from app.llm.tool_loop import run as run_tool_loop
 from app.llm.types import (
     AssistantMessage,
+    AudioContent,
     Context,
     ImageContent,
     Message,
@@ -128,12 +129,14 @@ def _decode_tools(tools: list[Any] | None) -> list[Tool] | None:
     return decoded or None
 
 
-def _decode_user_content(content: Any) -> str | list[TextContent | ImageContent]:
+def _decode_user_content(
+    content: Any,
+) -> str | list[TextContent | ImageContent | AudioContent]:
     if isinstance(content, str):
         return content
     if not isinstance(content, list):
         return str(content)
-    blocks: list[TextContent | ImageContent] = []
+    blocks: list[TextContent | ImageContent | AudioContent] = []
     for block in content:
         if not isinstance(block, dict):
             continue
@@ -146,6 +149,15 @@ def _decode_user_content(content: Any) -> str | list[TextContent | ImageContent]
                     ImageContent(
                         data=str(source.get("data", "")),
                         mime_type=str(source.get("media_type", "image/png")),
+                    )
+                )
+        elif block.get("type") == "audio":
+            source = block.get("source") or {}
+            if source.get("type") == "base64":
+                blocks.append(
+                    AudioContent(
+                        data=str(source.get("data", "")),
+                        mime_type=str(source.get("media_type", "audio/wav")),
                     )
                 )
     return blocks or [TextContent(text="")]

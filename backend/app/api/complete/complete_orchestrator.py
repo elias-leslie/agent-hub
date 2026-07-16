@@ -16,7 +16,11 @@ from app.api.complete.handlers import build_cached_completion_response
 from app.api.complete.orchestration_helpers import build_session_and_messages, execute_and_respond
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
-from app.api.complete.validation import validate_agent_slug, validate_project_access
+from app.api.complete.validation import (
+    validate_agent_slug,
+    validate_audio_capability,
+    validate_project_access,
+)
 from app.routing.registry import get_provider_for_model, is_workload_provider
 from app.routing.resolution import (
     apply_mention_override,
@@ -138,6 +142,7 @@ async def _validate_and_resolve(
             request.agent_slug,
             resolved_model,
         )
+    validate_audio_capability(request, resolved_model)
     _guard_workload_routing(
         request=request,
         model=resolved_model,

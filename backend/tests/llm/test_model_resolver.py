@@ -8,6 +8,7 @@ def test_gemini_uses_google_sdk_default_endpoint() -> None:
 
     assert model.api == "google-generative-ai"
     assert model.base_url == ""
+    assert "audio" in model.input
 
 
 def test_nvidia_catalog_id_maps_to_upstream_model_id() -> None:
@@ -40,6 +41,7 @@ def test_codex_uses_chatgpt_codex_responses_endpoint() -> None:
     assert model.api == "openai-codex-responses"
     assert model.id == "gpt-5.4-mini"
     assert model.base_url == "https://chatgpt.com/backend-api/codex/responses"
+    assert "audio" not in model.input
 
 
 def test_cloudflare_catalog_id_maps_to_workers_ai_model_id(monkeypatch) -> None:

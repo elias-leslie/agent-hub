@@ -21,6 +21,7 @@ from app.llm.providers.faux import (
     register_faux_provider,
 )
 from app.llm.types import (
+    AudioContent,
     Context,
     SimpleStreamOptions,
     TextContent,
@@ -47,6 +48,14 @@ def test_build_context_from_messages_decodes_string_and_blocks() -> None:
                             "data": "ABC",
                         },
                     },
+                    {
+                        "type": "audio",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "audio/wav",
+                            "data": "UklGRg==",
+                        },
+                    },
                 ],
             },
         ]
@@ -61,6 +70,8 @@ def test_build_context_from_messages_decodes_string_and_blocks() -> None:
     assert isinstance(second.content, list)
     text_blocks = [b for b in second.content if isinstance(b, TextContent)]
     assert text_blocks and text_blocks[0].text == "look"
+    audio_blocks = [b for b in second.content if isinstance(b, AudioContent)]
+    assert audio_blocks == [AudioContent(data="UklGRg==", mime_type="audio/wav")]
 
 
 @pytest.mark.asyncio

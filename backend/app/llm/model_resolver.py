@@ -111,7 +111,11 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
         )
 
     caps = entry.capabilities
-    inputs: list = ["text"] + (["image"] if caps.has_vision else [])
+    inputs: list = (
+        ["text"]
+        + (["image"] if caps.has_vision else [])
+        + (["audio"] if caps.supports_audio else [])
+    )
     headers = {"User-Agent": "KimiCLI/1.5"} if provider in {"kimi-code", "kimi-coding"} else None
     return Model(
         id=upstream_id,

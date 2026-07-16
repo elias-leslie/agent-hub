@@ -224,6 +224,13 @@ class ImageContent:
 
 
 @dataclass(slots=True)
+class AudioContent:
+    data: str  # base64-encoded audio data
+    mime_type: str  # e.g. "audio/wav", "audio/mpeg"
+    type: Literal["audio"] = "audio"
+
+
+@dataclass(slots=True)
 class ToolCall:
     id: str
     name: str
@@ -265,7 +272,7 @@ StopReason = Literal["stop", "length", "toolUse", "error", "aborted"]
 # Messages
 # ---------------------------------------------------------------------------
 
-UserContent = TextContent | ImageContent
+UserContent = TextContent | ImageContent | AudioContent
 AssistantContent = TextContent | ThinkingContent | ToolCall
 ToolResultContent = TextContent | ImageContent
 
@@ -638,7 +645,7 @@ class Model[TApi: str]:
     provider: Provider
     base_url: str
     reasoning: bool
-    input: list[Literal["text", "image"]]
+    input: list[Literal["text", "image", "audio"]]
     cost: ModelCost
     context_window: int
     max_tokens: int
@@ -670,6 +677,7 @@ __all__ = [
     "AssistantImages",
     "AssistantMessage",
     "AssistantMessageEvent",
+    "AudioContent",
     "CacheRetention",
     "Compat",
     "Context",

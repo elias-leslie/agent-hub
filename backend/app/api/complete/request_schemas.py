@@ -15,14 +15,14 @@ class MessageInput(BaseModel):
 
     Content can be:
     - str: Simple text content
-    - list[dict]: Content blocks for vision (text + image)
+    - list[dict]: Typed content blocks (text, image, or audio)
 
-    Image block format:
+    Binary image/audio block format:
     {
-        "type": "image",
+        "type": "image" | "audio",
         "source": {
             "type": "base64",
-            "media_type": "image/png",
+            "media_type": "image/png" | "audio/wav",
             "data": "<base64-encoded-data>"
         }
     }

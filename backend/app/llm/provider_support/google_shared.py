@@ -13,6 +13,7 @@ from typing import Any
 from ..transform_messages import transform_messages
 from ..types import (
     AssistantMessage,
+    AudioContent,
     Context,
     ImageContent,
     Model,
@@ -104,7 +105,7 @@ def convert_messages(model: Model[Any], context: Context) -> list[dict[str, Any]
             for item in msg.content:
                 if isinstance(item, TextContent):
                     parts.append({"text": sanitize_surrogates(item.text)})
-                elif isinstance(item, ImageContent):
+                elif isinstance(item, (ImageContent, AudioContent)):
                     parts.append(
                         {"inline_data": {"mime_type": item.mime_type, "data": item.data}}
                     )

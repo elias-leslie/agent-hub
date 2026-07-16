@@ -46,6 +46,7 @@ from app.constants.models import (
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_FLASH_LITE_PREVIEW,
     GEMINI_3_1_PRO,
+    GEMINI_3_5_FLASH,
     GEMINI_FLASH,
     GEMINI_IMAGE,
     GEMINI_IMAGE_NANO,
@@ -126,6 +127,20 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
 
     # --- Gemini ---
+    ModelEntry(
+        id=GEMINI_3_5_FLASH, alias="3.5-flash", name="Gemini 3.5 Flash",
+        hint="Frontier speed", provider="gemini",
+        scores=ModelScores(coding=85, reasoning=94, planning=84, tool_use=86, instruction=90, design=90),
+        cost=ModelCost(
+            1.50, 9.00,
+            cache_read_per_million=0.15,
+            service_tiers={"default": 1.0, "batch": 0.5, "flex": 0.5, "priority": 1.8},
+        ),
+        context_window=1_048_576, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536),
+        release_date="2026-05-19", knowledge_cutoff="2025-01-01", family="gemini-flash",
+        availability="stable; free_tier; quotas_project_specific_ai_studio",
+    ),
     ModelEntry(
         id=GEMINI_FLASH, alias="flash", name="Gemini 3 Flash Preview",
         hint="Fast", provider="gemini",

@@ -60,8 +60,26 @@ def test_gemini_flash_lite_models_support_agentic_extraction() -> None:
         assert "free_tier" in info.availability
 
 
+def test_gemini_3_5_flash_supports_long_form_audio_review() -> None:
+    entry = get_model_entry("gemini-3.5-flash")
+    assert entry is not None
+
+    info = _build_model_info(entry)
+
+    assert info.provider == "gemini"
+    assert info.capabilities.supports_audio is True
+    assert info.capabilities.has_thinking is True
+    assert info.capabilities.max_output_tokens == 65_536
+    assert info.context_window == 1_048_576
+    assert info.cost.input_per_m == 1.5
+    assert info.cost.output_per_m == 9.0
+    assert info.availability is not None
+    assert "stable" in info.availability
+
+
 def test_gemini_free_tier_catalog_includes_current_generation_models() -> None:
     for model_id in [
+        "gemini-3.5-flash",
         "gemini-3-flash-preview",
         "gemini-3.1-flash-lite",
         "gemini-3.1-flash-lite-preview",
