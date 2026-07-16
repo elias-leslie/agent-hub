@@ -31,6 +31,7 @@ from app.memory.injection import inject_memory_context
 from app.routing.registry import is_workload_provider
 from app.services.llm_errors import ProviderError
 
+from .error_summary import build_error_summary
 from .orchestrator import build_context_from_messages, run_completion
 from .progress import AgentProgress
 from .schemas import MessageInput  # re-export for back-compat callers
@@ -207,6 +208,10 @@ async def complete_internal(
     content, tagged_thinking = _assistant_text_and_tagged_thinking(message)
     thinking_content, thinking_tokens = _assistant_thinking(message, tagged_thinking)
     cited_uuids = await extract_cited_uuids(content, memory_group_id) if use_memory else []
+    execution_error = (
+        message.error_message if message.stop_reason in {"error", "aborted"} else None
+    )
+    execution_status = message.stop_reason if execution_error else "success"
 
     return CompletionInternalResult(
         message=message,
@@ -218,6 +223,13 @@ async def complete_internal(
         thinking_tokens=thinking_tokens,
         turns=result.turns,
         tool_calls_count=result.tool_calls_count,
+        status=execution_status,
+        error=execution_error,
+        error_summary=build_error_summary(
+            execution_status=execution_status,
+            execution_error=execution_error,
+            final_finish_reason=message.stop_reason,
+        ),
         compression_stats=compression_stats or None,
         model_used=model,
         requested_model=requested_model or model,

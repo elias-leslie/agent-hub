@@ -104,6 +104,53 @@ async def test_new_pipeline_single_turn_text_response() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_pipeline_surfaces_provider_error_details() -> None:
+    """Provider terminal errors must not collapse into an unexplained empty response."""
+    reg = register_faux_provider()
+    try:
+        reg.set_responses(
+            [
+                faux_assistant_message(
+                    [],
+                    stop_reason="error",
+                    error_message="429 Too Many Requests: project quota exhausted",
+                )
+            ]
+        )
+        model = reg.get_model()
+        assert model is not None
+
+        with patch("app.api.complete.core.resolve_llm_model", return_value=model):
+            result = await complete_internal(
+                temperature=0.0,
+                messages=[{"role": "user", "content": "hi"}],
+                model=model.id,
+                provider=model.provider,
+                project_id="agent-hub",
+                db=None,
+                use_memory=False,
+            )
+
+        assert result.content == ""
+        assert result.finish_reason == "error"
+        assert result.status == "error"
+        assert result.error == "429 Too Many Requests: project quota exhausted"
+        assert result.error_summary == {
+            "count": 3,
+            "items": [
+                {
+                    "kind": "execution_error",
+                    "message": "429 Too Many Requests: project quota exhausted",
+                },
+                {"kind": "execution_status", "message": "error"},
+                {"kind": "finish_reason", "message": "error"},
+            ],
+        }
+    finally:
+        reg.unregister()
+
+
+@pytest.mark.asyncio
 async def test_new_pipeline_skips_memory_injection_when_use_memory_false() -> None:
     """``use_memory=False`` must not call inject_memory_context at all."""
     reg = register_faux_provider()

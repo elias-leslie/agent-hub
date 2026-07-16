@@ -15,6 +15,7 @@ EXCLUDED_SLUGS = {
     "market-pulse-scout",
     "minimax-plan-test",
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
+    "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
 }
 GROK_ALLOWED_SLUGS = {
@@ -63,3 +64,11 @@ def test_seed_agents_do_not_use_grok_by_default() -> None:
         grok_models = [model for model in models if "xai/" in model or "grok" in model]
 
         assert not grok_models, f"{agent['slug']} should not use Grok/xAI by default: {grok_models}"
+
+
+def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    audio_critic = next(agent for agent in data["agents"] if agent["slug"] == "game-audio-critic")
+
+    assert audio_critic["primary_model_id"] == "gemini-3.5-flash"
+    assert audio_critic["fallback_models"] == ["gemini-2.5-flash"]
