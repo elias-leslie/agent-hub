@@ -11,6 +11,7 @@ Replaces the 13 ``gemini_*`` files in ``backend/app/adapters/``.
 from __future__ import annotations
 
 import asyncio
+import base64
 import itertools
 import json
 import logging
@@ -443,7 +444,14 @@ def _part_to_dict(part: Any) -> dict[str, Any]:
     """Normalize a Gemini ``Part`` (Pydantic-like) to a plain dict."""
 
     if isinstance(part, dict):
-        return part
+        out = dict(part)
+        if "thought_signature" in out:
+            signature = _normalize_thought_signature(out["thought_signature"])
+            if signature is None:
+                out.pop("thought_signature")
+            else:
+                out["thought_signature"] = signature
+        return out
     out: dict[str, Any] = {}
     for attr in ("text", "thought", "thought_signature", "function_call", "inline_data"):
         value = getattr(part, attr, None)
@@ -459,9 +467,23 @@ def _part_to_dict(part: Any) -> dict[str, Any]:
                     "mime_type": getattr(value, "mime_type", None),
                     "data": getattr(value, "data", None),
                 }
+            elif attr == "thought_signature":
+                signature = _normalize_thought_signature(value)
+                if signature is not None:
+                    out[attr] = signature
             else:
                 out[attr] = value
     return out
+
+
+def _normalize_thought_signature(value: Any) -> str | None:
+    """Keep universal history string-based while preserving Google SDK bytes exactly."""
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return base64.b64encode(value).decode("ascii")
+    return None
 
 
 def stream_simple_google(

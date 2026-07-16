@@ -65,7 +65,10 @@ def _resolve_thought_signature(is_same_model: bool, signature: str | None) -> st
 
 def requires_tool_call_id(model_id: str) -> bool:
     """Some Google-API-fronted models require explicit tool-call IDs."""
-    return model_id.startswith("gpt-oss-")
+    gemini_version = _gemini_major_version(model_id)
+    return model_id.startswith("gpt-oss-") or (
+        gemini_version is not None and gemini_version >= 3
+    )
 
 
 def _gemini_major_version(model_id: str) -> int | None:
@@ -86,7 +89,7 @@ def convert_messages(model: Model[Any], context: Context) -> list[dict[str, Any]
     """Convert universal messages to Gemini ``Content[]`` format."""
 
     def _normalize_id(id_: str, _m: Model[Any], _src: AssistantMessage) -> str:
-        if not requires_tool_call_id(model.id):
+        if not model.id.startswith("gpt-oss-"):
             return id_
         cleaned = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in id_)
         return cleaned[:64]
