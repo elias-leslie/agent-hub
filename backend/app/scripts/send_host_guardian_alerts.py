@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,19 @@ def load_events(path: Path) -> list[dict[str, Any]]:
     return events
 
 
-def load_last_event_id(path: Path) -> str | None:
+def load_state(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
     except (OSError, json.JSONDecodeError):
-        return None
-    value = payload.get("last_event_id") if isinstance(payload, dict) else None
+        pass
+    return {}
+
+
+def load_last_event_id(path: Path) -> str | None:
+    state = load_state(path)
+    value = state.get("last_event_id")
     return str(value) if value else None
 
 
@@ -77,11 +85,57 @@ def format_event(event: dict[str, Any]) -> tuple[str, str] | None:
     return title, "\n".join(lines)
 
 
-def save_last_event_id(path: Path, event_id: str) -> None:
+def get_alert_key(event: dict[str, Any]) -> str:
+    status = str(event.get("status") or "unknown")
+    issues = event.get("issues") or []
+    codes = sorted([str(issue.get("code") or "unknown") for issue in issues if isinstance(issue, dict)])
+    return f"{status}:{','.join(codes)}"
+
+
+def should_suppress_cooldown(
+    event: dict[str, Any],
+    state: dict[str, Any],
+    now_timestamp: float,
+    cooldown_seconds: float = 43200.0,
+) -> bool:
+    status = str(event.get("status") or "unknown")
+    if status == "healthy":
+        return False
+    key = get_alert_key(event)
+    last_notifications = state.get("last_notifications") or {}
+    if isinstance(last_notifications, dict) and key in last_notifications:
+        try:
+            last_time = float(last_notifications[key])
+            if now_timestamp - last_time < cooldown_seconds:
+                return True
+        except (ValueError, TypeError):
+            pass
+    return False
+
+
+def update_notification_state(event: dict[str, Any], state: dict[str, Any], now_timestamp: float) -> None:
+    status = str(event.get("status") or "unknown")
+    if status == "healthy":
+        state["last_notifications"] = {}
+    else:
+        key = get_alert_key(event)
+        stored = state.get("last_notifications")
+        last_notifs: dict[str, Any] = stored if isinstance(stored, dict) else {}
+        last_notifs[key] = now_timestamp
+        state["last_notifications"] = last_notifs
+
+
+def save_state(path: Path, state_payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"last_event_id": event_id}) + "\n", encoding="utf-8")
+    temporary.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def save_last_event_id(path: Path, event_id: str) -> None:
+    state = load_state(path)
+    state["last_event_id"] = event_id
+    save_state(path, state)
 
 
 async def deliver(title: str, body: str) -> int:
@@ -93,23 +147,26 @@ async def run_alerts(*, events_path: Path, state_path: Path, dry_run: bool) -> i
     events = load_events(events_path)
     if not events:
         return 0
-    last_event_id = load_last_event_id(state_path)
-    pending = pending_events(events, last_event_id)
+    state = load_state(state_path)
+    last_event_id = state.get("last_event_id")
+    pending = pending_events(events, str(last_event_id) if last_event_id else None)
     sent = 0
+    now_ts = time.time()
     for event in pending:
         event_id = str(event["event_id"])
         rendered = format_event(event)
         if rendered is not None:
             title, body = rendered
-            if dry_run:
-                print(f"{title}\n\n{body}")
-            else:
-                await deliver(title, body)
-            sent += 1
+            if not should_suppress_cooldown(event, state, now_ts):
+                if dry_run:
+                    print(f"{title}\n\n{body}")
+                else:
+                    await deliver(title, body)
+                update_notification_state(event, state, now_ts)
+                sent += 1
+        state["last_event_id"] = event_id
         if not dry_run:
-            # Advance only after successful delivery (or an intentionally
-            # suppressed initial healthy event), making timer retries safe.
-            save_last_event_id(state_path, event_id)
+            save_state(state_path, state)
     return sent
 
 

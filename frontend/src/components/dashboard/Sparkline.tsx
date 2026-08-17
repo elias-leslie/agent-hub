@@ -17,22 +17,15 @@ export function Sparkline({
   height?: number
   showDot?: boolean
 }) {
-  if (!data || data.length < 2) {
-    if (width && height) {
-      return (
-        <div
-          className="flex items-center justify-center text-[9px] text-slate-400"
-          style={{ width, height }}
-        >
-          No data
-        </div>
-      )
-    }
-    return <div className="h-full w-full bg-slate-800 rounded animate-pulse" />
+  let chartData = data
+  if (!chartData || chartData.length === 0) {
+    chartData = [0, 0, 0, 0, 0, 0, 0]
+  } else if (chartData.length === 1) {
+    chartData = [0, 0, 0, 0, 0, 0, chartData[0]]
   }
 
-  const min = Math.min(...data)
-  const max = Math.max(...data)
+  const min = Math.min(...chartData)
+  const max = Math.max(...chartData)
   const range = max - min || 1
 
   const colorMap = {
@@ -48,9 +41,9 @@ export function Sparkline({
   if (!width || !height) {
     const vw = 100
     const vh = 100
-    const points = data
+    const points = chartData
       .map((v, i) => {
-        const x = (i / (data.length - 1)) * vw
+        const x = (i / (chartData.length - 1)) * vw
         const y = vh - ((v - min) / range) * (vh * 0.8) - vh * 0.1
         return `${x},${y}`
       })
@@ -77,7 +70,7 @@ export function Sparkline({
             cx={vw}
             cy={
               vh -
-              ((data[data.length - 1] - min) / range) * (vh * 0.8) -
+              ((chartData[chartData.length - 1] - min) / range) * (vh * 0.8) -
               vh * 0.1
             }
             r="3"
@@ -93,8 +86,8 @@ export function Sparkline({
   const effectiveWidth = width - padding * 2
   const effectiveHeight = height - padding * 2
 
-  const points = data.map((value, index) => {
-    const x = padding + (index / (data.length - 1)) * effectiveWidth
+  const points = chartData.map((value, index) => {
+    const x = padding + (index / (chartData.length - 1)) * effectiveWidth
     const y =
       padding + effectiveHeight - ((value - min) / range) * effectiveHeight
     return `${x},${y}`

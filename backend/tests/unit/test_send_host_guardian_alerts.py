@@ -7,6 +7,8 @@ from app.scripts.send_host_guardian_alerts import (
     format_event,
     load_events,
     pending_events,
+    should_suppress_cooldown,
+    update_notification_state,
 )
 
 
@@ -53,3 +55,24 @@ def test_recovery_event_is_reported() -> None:
 
     assert rendered is not None
     assert rendered[0] == "Host recovered"
+
+
+def test_alert_cooldown_suppresses_repeated_warnings() -> None:
+    event = {
+        "status": "warning",
+        "issues": [{"code": "root_disk_warning", "message": "root disk 86% used"}],
+    }
+    state = {}
+    now = 100000.0
+
+    assert not should_suppress_cooldown(event, state, now)
+
+    update_notification_state(event, state, now)
+    assert state["last_notifications"]["warning:root_disk_warning"] == now
+
+    # Within cooldown (e.g. 15 minutes later)
+    assert should_suppress_cooldown(event, state, now + 900)
+
+    # After cooldown (13 hours later)
+    assert not should_suppress_cooldown(event, state, now + 46800)
+
