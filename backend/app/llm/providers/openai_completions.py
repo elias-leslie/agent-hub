@@ -139,6 +139,11 @@ class _Compat:
     cache_control_format: Literal["anthropic"] | None = None
     send_session_affinity_headers: bool = False
     supports_long_cache_retention: bool = True
+    # Endpoints that reason by DEFAULT, so silence has to be requested explicitly.
+    # Ollama serves several models (gemma4, qwen3, …) with thinking on unless the
+    # caller opts out; the reasoning tokens consume max_tokens and the response
+    # comes back 200 OK with an EMPTY content string. See _reasoning_params.
+    reasons_by_default: bool = False
 
 
 def _detect_compat(model: Model[Any]) -> _Compat:
@@ -157,6 +162,7 @@ def _detect_compat(model: Model[Any]) -> _Compat:
     is_cf_workers = provider == "cloudflare-workers-ai" or "api.cloudflare.com" in base_url
     is_cf_gateway = provider == "cloudflare-ai-gateway" or "gateway.ai.cloudflare.com" in base_url
     is_minimax = provider == "minimax" or "api.minimax.io" in base_url
+    is_ollama = provider == "local" or ":11434" in base_url
 
     is_non_standard = (
         provider == "cerebras"
@@ -215,6 +221,7 @@ def _detect_compat(model: Model[Any]) -> _Compat:
         cache_control_format=cache_control_format,
         send_session_affinity_headers=False,
         supports_long_cache_retention=not (is_together or is_cf_workers or is_cf_gateway),
+        reasons_by_default=is_ollama,
     )
 
 
@@ -255,6 +262,7 @@ def _get_compat(model: Model[Any]) -> _Compat:
         supports_long_cache_retention=pick(
             user.supports_long_cache_retention, detected.supports_long_cache_retention
         ),
+        reasons_by_default=detected.reasons_by_default,
     )
 
 
@@ -636,6 +644,12 @@ def build_params(
         off_value = (model.thinking_level_map or {}).get("off")
         if isinstance(off_value, str):
             params["reasoning_effort"] = off_value
+    elif not model.reasoning and compat.reasons_by_default:
+        # The catalog says this model does not reason, but the endpoint reasons
+        # unless told otherwise. Without this the reasoning stream eats the whole
+        # max_tokens budget and the caller gets content="" with no error at all —
+        # which silently kills the local rung that 77 of 79 agents fall back to.
+        params["reasoning_effort"] = "none"
 
     # OpenRouter provider routing.
     if "openrouter.ai" in (model.base_url or "") and isinstance(model.compat, OpenAICompletionsCompat) and model.compat.open_router_routing:

@@ -57,6 +57,7 @@ from app.constants.models import (
     LOCAL_QWEN2_5_CODER_14B,
     LOCAL_QWEN3_30B_A3B,
     LOCAL_QWEN3_CODER_30B_A3B,
+    LOCAL_QWEN3_VL_8B_INSTRUCT,
     MINIMAX_IMAGE_01,
     MINIMAX_M2_5,
     MINIMAX_M2_5_HIGHSPEED,
@@ -625,6 +626,18 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(has_vision=True, supports_tool_execution=True, max_output_tokens=8_192),
         release_date="2026-06-03", family="gemma",
         availability="requires_local_openai_endpoint; qat_q4_0_~8gb_vram_100pct_gpu",
+    ),
+    ModelEntry(
+        id=LOCAL_QWEN3_VL_8B_INSTRUCT, alias="local/qwen-vl", name="Qwen3-VL 8B Instruct (Local)",
+        hint="Local receipt/document OCR", provider="local",
+        scores=ModelScores(coding=48, reasoning=60, planning=52, tool_use=56, instruction=78, design=50),
+        cost=ModelCost(0.00, 0.00), context_window=32_768, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, supports_tool_execution=True, max_output_tokens=16_384),
+        release_date="2026-02-01", family="qwen",
+        # Scored 16/16 line items, exact subtotal/tax/total on a real Walmart thermal
+        # receipt photo in 12s. Dynamic-resolution tiling is what Gemma 4 lacks: Gemma
+        # bills one 256-token tile for the whole page, Qwen3-VL bills ~4.1k.
+        availability="requires_local_openai_endpoint; ~6.1gb_vram; use_instruct_not_bare_8b_tag",
     ),
     ModelEntry(
         id=LOCAL_QWEN3_CODER_30B_A3B, alias="local/qwen-coder", name="Qwen3-Coder 30B-A3B (Local)",
