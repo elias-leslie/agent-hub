@@ -89,6 +89,15 @@ DEEPSEEK_V4_FLASH = "deepseek/deepseek-v4-flash"
 DEEPSEEK_V4_PRO = "deepseek/deepseek-v4-pro"
 
 # NVIDIA NIM models (Free tier — chat)
+# Verified live against integrate.api.nvidia.com on 2026-08-17. NIM retires models
+# aggressively (410 Gone with an EOL date), so re-probe before adding a new id here.
+NVIDIA_GLM_5_2 = "nvidia/glm-5.2"
+NVIDIA_MINIMAX_M3 = "nvidia/minimax-m3"
+NVIDIA_DEEPSEEK_V4_FLASH_0731 = "nvidia/deepseek-v4-flash-0731"
+NVIDIA_GPT_OSS_120B = "nvidia/gpt-oss-120b"
+NVIDIA_NEMOTRON_3_SUPER = "nvidia/nemotron-3-super-120b-a12b"
+NVIDIA_NEMOTRON_3_5_LIGHTNING = "nvidia/nemotron-3.5-lightning-30b-a3b"
+# Retired upstream — kept so historical rows and aliases still resolve.
 NVIDIA_QWEN_3_5 = "nvidia/qwen3.5-397b-a17b"
 NVIDIA_DEEPSEEK_V4_FLASH = "nvidia/deepseek-v4-flash"
 NVIDIA_MINIMAX_M2_7 = "nvidia/minimax-m2.7"

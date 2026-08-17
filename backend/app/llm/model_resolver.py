@@ -75,6 +75,14 @@ _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
         "nemotron-3-120b": "@cf/nvidia/nemotron-3-120b-a12b",
     },
     "nvidia": {
+        "glm-5.2": "z-ai/glm-5.2",
+        "minimax-m3": "minimaxai/minimax-m3",
+        "deepseek-v4-flash-0731": "deepseek-ai/deepseek-v4-flash-0731",
+        "gpt-oss-120b": "openai/gpt-oss-120b",
+        "nemotron-3-super-120b-a12b": "nvidia/nemotron-3-super-120b-a12b",
+        "nemotron-3.5-lightning-30b-a3b": "nvidia/nemotron-3.5-lightning-30b-a3b",
+        # Retired upstream (410/404) — mappings kept so old rows resolve to a
+        # clear provider error instead of a confusing "unknown model".
         "qwen3.5-397b-a17b": "qwen/qwen3.5-397b-a17b",
         "deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
         "minimax-m2.7": "minimaxai/minimax-m2.7",
