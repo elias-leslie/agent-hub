@@ -129,6 +129,41 @@ def _extract_access_token(raw_value: str) -> str:
     return token if isinstance(token, str) and token else raw_value
 
 
+def _get_cached_api_keys(provider: str) -> list[str]:
+    from app.services.credential_manager import get_credential_manager
+
+    manager = get_credential_manager()
+    for candidate in _credential_providers(provider):
+        keys = manager.get_api_keys(candidate)
+        if keys:
+            return keys
+    return []
+
+
+def get_env_api_keys(provider: str) -> list[str]:
+    """Return every API key configured for ``provider``, in failover order.
+
+    Providers that hold several accounts (Gemini today) expose the whole pool so
+    the caller can rotate; single-key providers return a one-element list, which
+    keeps the calling code uniform.
+    """
+    env_keys = find_env_keys(provider)
+    if env_keys:
+        raw = os.environ.get(env_keys[0]) or ""
+        # A pooled provider may list several keys in one variable.
+        values = [value.strip() for value in raw.replace("\n", ",").split(",")]
+        found = [value for value in values if value]
+        if found:
+            return found
+
+    cached = _get_cached_api_keys(provider)
+    if cached:
+        return cached
+
+    single = get_env_api_key(provider)
+    return [single] if single else []
+
+
 def get_env_api_key(provider: str) -> str | None:
     """Return the API key for ``provider`` from env/cache, or ``None``.
 

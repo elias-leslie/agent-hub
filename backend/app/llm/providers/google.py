@@ -21,8 +21,9 @@ from typing import Any, Literal
 
 from google import genai
 
+from ..api_key_pool import mark_key_failure, mark_key_success, ordered_keys
 from ..api_registry import register_api_provider
-from ..env_api_keys import get_env_api_key
+from ..env_api_keys import get_env_api_key, get_env_api_keys
 from ..event_stream import AssistantMessageEventStream
 from ..provider_support.google_shared import (
     GoogleThinkingLevel,
@@ -244,6 +245,17 @@ def _update_usage(usage_metadata: Any, model: Model[Any]) -> Usage:
     return usage
 
 
+def _select_pool_key(model: Model[Any]) -> str | None:
+    """Pick the account to serve this request, or ``None`` when there is no pool.
+
+    Gemini enforces quota per project, so several accounts means several free
+    tiers. ``ordered_keys`` rotates healthy accounts to spread sustained load
+    and sinks recently-refused ones to the back.
+    """
+    candidates = ordered_keys(model.provider, get_env_api_keys(model.provider))
+    return candidates[0] if candidates else None
+
+
 def stream_google(
     model: Model[Any],
     context: Context,
@@ -276,10 +288,10 @@ def stream_google(
                     ThinkingEndEvent(content_index=idx, content=block.thinking, partial=output)
                 )
 
-        try:
-            api_key = (options.api_key if options else None) or get_env_api_key(model.provider) or ""
-            client = _create_client(model, api_key, options.headers if options else None)
+        explicit_key = options.api_key if options else None
+        pool_key = None if explicit_key else _select_pool_key(model)
 
+        try:
             params = _build_params(model, context, options)
             if options and options.on_payload is not None:
                 maybe = options.on_payload(params, model)
@@ -290,6 +302,8 @@ def stream_google(
 
             stream.push(StartEvent(partial=output))
 
+            api_key = explicit_key or pool_key or get_env_api_key(model.provider) or ""
+            client = _create_client(model, api_key, options.headers if options else None)
             iterator = await client.aio.models.generate_content_stream(**params)
 
             async for chunk in iterator:
@@ -420,6 +434,9 @@ def stream_google(
             if output.stop_reason in ("aborted", "error"):
                 raise RuntimeError(output.error_message or "An unknown error occurred")
 
+            if pool_key is not None:
+                mark_key_success(model.provider, pool_key)
+
             done_reason = output.stop_reason if output.stop_reason in ("stop", "length", "toolUse") else "stop"
             stream.push(DoneEvent(reason=done_reason, message=output))
             stream.end()
@@ -430,6 +447,19 @@ def stream_google(
             stream.end()
         except Exception as exc:
             aborted = bool(options and options.signal is not None and options.signal.is_set())
+            # Teach the pool which account refused us. The request itself is not
+            # retried here — Agent Hub's own model ladder covers this attempt,
+            # and benching the key routes the next one to a live account.
+            if pool_key is not None and not aborted:
+                cooldown = mark_key_failure(model.provider, pool_key, exc)
+                if cooldown is not None:
+                    logger.warning(
+                        "%s key ...%s benched for %.0fs after refusal: %s",
+                        model.provider,
+                        pool_key[-4:],
+                        cooldown,
+                        str(exc)[:200],
+                    )
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) or type(exc).__name__
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
@@ -493,11 +523,13 @@ def stream_simple_google(
 ) -> AssistantMessageEventStream:
     if options is None:
         options = SimpleStreamOptions()
-    api_key = options.api_key or get_env_api_key(model.provider)
-    if not api_key:
+    if not (options.api_key or get_env_api_key(model.provider)):
         raise RuntimeError(f"No API key for provider: {model.provider}")
 
-    base = build_base_options(model, options, api_key)
+    # Only an explicit caller-supplied key is pinned here. Leaving it unset lets
+    # stream_google() pick from the account pool and rotate on refusal; baking a
+    # resolved key in at this point would defeat that.
+    base = build_base_options(model, options, options.api_key)
     if options.reasoning is None:
         return stream_google(
             model,
