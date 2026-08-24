@@ -75,7 +75,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/memory',
     label: 'Memory',
     icon: Brain,
-    description: 'Knowledge graph',
+    description: 'Semantic store',
   },
   {
     href: '/runtime-context',
