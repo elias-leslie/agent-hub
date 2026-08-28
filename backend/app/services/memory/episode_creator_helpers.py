@@ -9,6 +9,8 @@ import json
 import logging
 from datetime import datetime
 
+from app.llm.api_key_pool import is_billing_failure
+
 from .applicability import normalize_applicability, normalize_context_kind
 from .embedder import EMBEDDING_MODEL
 from .episode_creator_models import CreateResult
@@ -156,7 +158,14 @@ def is_rate_limit_error(e: Exception) -> bool:
 
 
 def handle_rate_limit_error(e: Exception) -> CreateResult:
-    """Build a CreateResult for Gemini rate-limit exceptions."""
+    """Build a CreateResult for Gemini rate-limit and billing exceptions.
+
+    Gemini reports a depleted prepay balance as 429 RESOURCE_EXHAUSTED, the same
+    status as a quota bounce, so the two have to be told apart here. Telling the
+    operator to wait out a billing stop would be wrong: the balance does not
+    refill on its own, and every retry fails identically until someone tops the
+    account up.
+    """
     quota = extract_gemini_quota_details(e)
     quota_summary = ""
     if quota.get("quota_metric"):
@@ -165,6 +174,14 @@ def handle_rate_limit_error(e: Exception) -> CreateResult:
             f" limit={quota.get('quota_limit', '?')}"
             f" consumer={quota.get('consumer', '?')}]"
         )
+    if is_billing_failure(e):
+        detail = (
+            "Every Gemini account in the key pool is out of credit, so embedding "
+            f"failed (model: {EMBEDDING_MODEL}).{quota_summary} Top up billing at "
+            "https://ai.studio/projects or add a funded key; retrying will not clear this."
+        )
+        logger.error("Gemini billing stop during embed%s: %s", quota_summary, e)
+        return CreateResult(success=False, validation_error=detail)
     detail = (
         "Gemini API rate limit hit during embedding "
         f"(model: {EMBEDDING_MODEL}).{quota_summary} Wait a few minutes and retry."

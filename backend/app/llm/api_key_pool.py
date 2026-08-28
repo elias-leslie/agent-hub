@@ -61,6 +61,17 @@ def classify_key_failure(error: BaseException) -> float | None:
     return None
 
 
+def is_billing_failure(error: BaseException) -> bool:
+    """Return True when the account is out of credit rather than over quota.
+
+    Gemini reports a depleted prepay balance as 429 RESOURCE_EXHAUSTED, the same
+    status as a quota bounce, so callers that want to tell the operator what to
+    do next have to look at the message.
+    """
+    message = str(error).lower()
+    return any(marker in message for marker in _BILLING_MARKERS)
+
+
 def _status_code(message: str) -> int | None:
     match = re.search(r"\b(4\d{2}|5\d{2})\b", message)
     return int(match.group(1)) if match else None
