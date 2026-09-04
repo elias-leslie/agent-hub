@@ -15,6 +15,7 @@ CLAUDE_OPUS_4_7 = "claude-opus-4-7"
 CLAUDE_HAIKU = "claude-haiku-4-5"
 
 # Gemini 3 models (Google)
+GEMINI_3_8_FLASH = "gemini-3.8-flash"
 GEMINI_3_7_FLASH = "gemini-3.7-flash"
 GEMINI_3_5_FLASH = "gemini-3.5-flash"
 GEMINI_FLASH = "gemini-3-flash-preview"

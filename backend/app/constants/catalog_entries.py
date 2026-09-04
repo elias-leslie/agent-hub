@@ -48,6 +48,7 @@ from app.constants.models import (
     GEMINI_3_1_PRO,
     GEMINI_3_5_FLASH,
     GEMINI_3_7_FLASH,
+    GEMINI_3_8_FLASH,
     GEMINI_FLASH,
     GEMINI_IMAGE,
     GEMINI_IMAGE_NANO,
@@ -135,6 +136,25 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
 
     # --- Gemini ---
+    ModelEntry(
+        id=GEMINI_3_8_FLASH, alias="3.8-flash", name="Gemini 3.8 Flash",
+        hint="Agentic flagship", provider="gemini",
+        scores=ModelScores(coding=89, reasoning=95, planning=88, tool_use=91, instruction=92, design=90),
+        cost=ModelCost(
+            0.75, 3.75,
+            cache_read_per_million=0.075,
+            service_tiers={"default": 1.0, "batch": 0.5, "flex": 0.5, "priority": 1.8},
+        ),
+        context_window=1_048_576, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536),
+        # knowledge_cutoff is left unset: Google's model page states a September
+        # 2026 "latest update" but publishes no training cutoff for this model.
+        release_date="2026-09-01", family="gemini-flash",
+        # Free tier covers input, output and context caching; Google Search
+        # grounding is the one thing it does not cover. Thinking is low/medium/
+        # high only — this model has no "minimal" level.
+        availability="stable; free_tier_no_search_grounding; promo_pricing_through_2026-12-31_then_1.50_7.50",
+    ),
     ModelEntry(
         id=GEMINI_3_7_FLASH, alias="3.7-flash", name="Gemini 3.7 Flash",
         hint="Agentic flagship", provider="gemini",
