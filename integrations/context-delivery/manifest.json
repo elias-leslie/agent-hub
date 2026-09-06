@@ -63,6 +63,11 @@
     },
     {
       "surface": "codex",
+      "source": "../codex-config/hooks.json",
+      "target": ".codex/hooks.json"
+    },
+    {
+      "surface": "codex",
       "source": "../codex-config/bin/codex",
       "target": ".codex/bin/codex"
     },

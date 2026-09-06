@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,7 @@ import hashlib
 import json
 import os
 import sys
+import tomllib
 import time
 
 args = sys.argv[1:]
@@ -774,6 +776,10 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
         fake_codex / "config.toml",
     )
     shutil.copy2(
+        REPO_ROOT.parent / "codex-config/hooks.json",
+        fake_codex / "hooks.json",
+    )
+    shutil.copy2(
         REPO_ROOT.parent / "codex-config/bin/codex",
         fake_codex / "bin/codex",
     )
@@ -833,6 +839,7 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     assert (home / ".claude/claude-gpt-settings.json").is_symlink()
     assert (home / ".codex/bin/codex").is_symlink()
     assert (home / ".codex/config.toml").is_symlink()
+    assert (home / ".codex/hooks.json").resolve() == fake_codex / "hooks.json"
     assert not (home / ".codex/generated/agent-hub-session-start.md").exists()
     assert not (home / ".codex/hooks/session-start.sh").exists()
     assert not (home / ".claude/CLAUDE.md").exists()
@@ -964,9 +971,13 @@ def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks() -> None:
     assert 'if descriptor["status"] != "ok"' in wrapper
     assert "timeout=20" in wrapper
     assert "except subprocess.TimeoutExpired" in wrapper
-    assert "[[hooks.SessionStart]]" in config
-    assert "[[hooks.SubagentStart]]" in config
-    assert config.count("agent-hub-context-client bind --surface codex") == 2
+    assert set(tomllib.loads(config)["hooks"]) == {"state"}
+    hooks = json.loads((codex_root / "hooks.json").read_text())["hooks"]
+    for event in ("SessionStart", "SubagentStart"):
+        assert len(hooks[event]) == 1
+        assert hooks[event][0]["hooks"][0]["command"] == (
+            "/home/kasadis/.local/bin/agent-hub-context-client bind --surface codex"
+        )
 
 
 def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
