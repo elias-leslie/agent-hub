@@ -29,7 +29,13 @@ RESET_CONFIRMATION = "Conversation reset. Your next text message will start a fr
 SESSION_KEY_PREFIX = "agent-hub:telegram:chat"
 TELEGRAM_CHAT_MAX_TURNS = 8
 TELEGRAM_CONNECT_TIMEOUT_SECONDS = 10.0
-TELEGRAM_READ_TIMEOUT_SECONDS = 30.0
+# How long Telegram is asked to hold an empty getUpdates open before answering.
+# Fifty seconds is the longest the API accepts, and for a bot that is idle most
+# of the day it is the difference between six requests a minute and one: the
+# call blocks on the server instead of being reissued. The read timeout has to
+# outlast it, or the client gives up on a poll the server is still holding.
+TELEGRAM_POLL_TIMEOUT_SECONDS = 50.0
+TELEGRAM_READ_TIMEOUT_SECONDS = 65.0
 TELEGRAM_WRITE_TIMEOUT_SECONDS = 10.0
 TELEGRAM_POOL_TIMEOUT_SECONDS = 10.0
 TELEGRAM_CONNECTION_POOL_SIZE = 4
@@ -378,7 +384,10 @@ class AgentHubTelegramBot:
             started = True
             if application.updater is None:
                 raise RuntimeError("telegram updater unavailable")
-            await application.updater.start_polling(drop_pending_updates=False)
+            await application.updater.start_polling(
+                drop_pending_updates=False,
+                timeout=int(TELEGRAM_POLL_TIMEOUT_SECONDS),
+            )
             polling_started = True
             await self.heartbeat()
             heartbeat_task = asyncio.create_task(self.heartbeat_loop())

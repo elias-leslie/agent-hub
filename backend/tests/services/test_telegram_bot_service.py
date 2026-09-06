@@ -14,6 +14,7 @@ from app.services.telegram_bot_service import (
     TELEGRAM_CONNECT_TIMEOUT_SECONDS,
     TELEGRAM_CONNECTION_POOL_SIZE,
     TELEGRAM_MAX_KEEPALIVE_CONNECTIONS,
+    TELEGRAM_POLL_TIMEOUT_SECONDS,
     TELEGRAM_POOL_TIMEOUT_SECONDS,
     TELEGRAM_READ_TIMEOUT_SECONDS,
     TELEGRAM_WRITE_TIMEOUT_SECONDS,
@@ -348,3 +349,109 @@ async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytes
 
     write_status.assert_awaited_with(runner_status="degraded", last_error="telegram auth failed")
     app_instance.shutdown.assert_awaited_once()
+
+
+def test_the_read_timeout_outlasts_the_long_poll() -> None:
+    """A poll the server is still holding must not be abandoned by the client.
+
+    getUpdates blocks on Telegram's side for the requested timeout. If the HTTP
+    read timeout is the shorter of the two, every single poll is torn down and
+    reissued, which is the opposite of what long polling is for.
+    """
+    assert TELEGRAM_POLL_TIMEOUT_SECONDS <= 50.0  # the API's ceiling
+    assert TELEGRAM_READ_TIMEOUT_SECONDS > TELEGRAM_POLL_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_run_polling_asks_telegram_to_hold_the_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An idle bot should be waiting on one open request, not reissuing them."""
+
+    captured: dict[str, Any] = {}
+
+    class _FakeRedis:
+        async def close(self) -> None:
+            return None
+
+    class _SessionCtx:
+        async def __aenter__(self):
+            return AsyncMock()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Filter:
+        def __and__(self, _other):
+            return self
+
+        def __invert__(self):
+            return self
+
+    class _Updater:
+        async def start_polling(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+            raise RuntimeError("stop after recording")
+
+    class _Application:
+        job_queue = None
+
+        def __init__(self) -> None:
+            self.updater = _Updater()
+            self.bot = types.SimpleNamespace(
+                get_me=AsyncMock(return_value=types.SimpleNamespace(username="bot"))
+            )
+            self.start = AsyncMock()
+            self.stop = AsyncMock()
+            self.shutdown = AsyncMock()
+
+        def add_handler(self, _handler) -> None:
+            return None
+
+        async def initialize(self) -> None:
+            return None
+
+    app_instance = _Application()
+
+    class _Builder:
+        def token(self, _token: str):
+            return self
+
+        def request(self, _request):
+            return self
+
+        def get_updates_request(self, _request):
+            return self
+
+        def build(self):
+            return app_instance
+
+    telegram_ext = types.SimpleNamespace(
+        Application=types.SimpleNamespace(builder=lambda: _Builder()),
+        CommandHandler=lambda *args, **kwargs: object(),
+        MessageHandler=lambda *args, **kwargs: object(),
+        filters=types.SimpleNamespace(
+            ChatType=types.SimpleNamespace(PRIVATE=_Filter()),
+            TEXT=_Filter(),
+            COMMAND=_Filter(),
+        ),
+    )
+    telegram_request = types.SimpleNamespace(HTTPXRequest=lambda **kwargs: object())
+
+    monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
+    monkeypatch.setattr("app.services.telegram_bot_service.async_session", lambda: _SessionCtx())
+    monkeypatch.setattr("app.services.telegram_bot_service.reconcile_first_party_clients", AsyncMock())
+    monkeypatch.setattr(
+        "app.services.telegram_bot_service.load_runtime_config",
+        AsyncMock(return_value={"token": "token", "allowlist_error": None}),
+    )
+    monkeypatch.setitem(sys.modules, "telegram", types.SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "telegram.ext", telegram_ext)
+    monkeypatch.setitem(sys.modules, "telegram.request", telegram_request)
+
+    bot = AgentHubTelegramBot()
+    monkeypatch.setattr(bot, "write_runner_status", AsyncMock())
+
+    with pytest.raises(RuntimeError, match="stop after recording"):
+        await bot.run_polling()
+
+    assert captured["timeout"] == int(TELEGRAM_POLL_TIMEOUT_SECONDS)
+    assert captured["drop_pending_updates"] is False
