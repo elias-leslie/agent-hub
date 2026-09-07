@@ -83,6 +83,8 @@ jobs:
   private-context-integration:
     runs-on: ubuntu-24.04
     env:
+      # Required at app import; adapter tests use isolated subprocess fixtures, not DB I/O.
+      AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
       CONTEXT_CONFIG_ROOT: ${{ github.workspace }}/.ci-config
     defaults:
       run:
