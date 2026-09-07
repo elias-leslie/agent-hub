@@ -723,6 +723,7 @@ async def test_claude_session_hook_is_not_suppressed_by_a_stale_launcher_hash(
 
 
 @pytest.mark.asyncio
+@pytest.mark.private_context
 async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     fake_repo = workspace / "agent-hub"
@@ -954,6 +955,7 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     assert json.loads(drift_stdout)["passed"] is False
 
 
+@pytest.mark.private_context
 def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks() -> None:
     codex_root = REPO_ROOT.parent / "codex-config"
     wrapper = (codex_root / "bin/codex").read_text()
@@ -993,6 +995,7 @@ def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
     assert "stop-work notice" not in extension
 
 
+@pytest.mark.private_context
 def test_claude_sources_do_not_add_parallel_model_context() -> None:
     claude_root = REPO_ROOT.parent / "claude-config"
     summitflow_root = REPO_ROOT.parent / "summitflow"
@@ -1015,6 +1018,7 @@ def test_claude_sources_do_not_add_parallel_model_context() -> None:
     assert not (claude_root / "templates/project-bootstrap/CLAUDE.md.template").exists()
 
 
+@pytest.mark.private_context
 def test_claude_gpt_is_a_source_owned_transport_only_wrapper() -> None:
     claude_root = REPO_ROOT.parent / "claude-config"
     wrapper = (claude_root / "bin/claude-gpt").read_text()
@@ -1050,6 +1054,7 @@ def _hook_request_body(log_path: Path, endpoint: str) -> dict[str, object]:
         ("openai", "claude-gpt", "gpt-transport-test"),
     ],
 )
+@pytest.mark.private_context
 async def test_claude_lifecycle_metadata_matches_normal_and_gpt_transport(
     tmp_path: Path,
     provider: str,
@@ -1172,6 +1177,7 @@ exit 0
         (("interactive prompt",), 0, "startup", None),
     ],
 )
+@pytest.mark.private_context
 async def test_codex_launcher_places_developer_context_in_consuming_parser(
     tmp_path: Path,
     arguments: tuple[str, ...],
@@ -1250,6 +1256,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
         ("fork", "session-id", "native fork prompt"),
     ],
 )
+@pytest.mark.private_context
 async def test_codex_launcher_does_not_claim_fresh_context_on_saved_thread(
     tmp_path: Path,
     arguments: tuple[str, ...],
@@ -1303,6 +1310,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
 
 
 @pytest.mark.asyncio
+@pytest.mark.private_context
 async def test_codex_launcher_preserves_native_launch_on_failed_context(
     tmp_path: Path,
 ) -> None:
@@ -1581,7 +1589,13 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
     ("launcher", "real_env", "arguments", "native_name"),
     [
         (CLAUDE_LAUNCHER, "CLAUDE_REAL", ("-p", "native Claude task"), "Claude"),
-        (CODEX_LAUNCHER, "CODEX_REAL", ("exec", "native Codex task"), "Codex"),
+        pytest.param(
+            CODEX_LAUNCHER,
+            "CODEX_REAL",
+            ("exec", "native Codex task"),
+            "Codex",
+            marks=pytest.mark.private_context,
+        ),
     ],
 )
 async def test_launchers_preserve_native_call_when_artifacts_cannot_be_written(

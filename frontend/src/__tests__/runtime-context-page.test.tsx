@@ -183,7 +183,7 @@ describe('RuntimeContextPage', () => {
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
     // Token gauge surfaces both used and budget within the gauge region.
-    const gauge = screen.getByLabelText('Token gauge')
+    const gauge = screen.getByLabelText('Token telemetry')
     expect(gauge).toHaveTextContent('42')
     expect(gauge).toHaveTextContent('3,500 tok')
   })
@@ -229,8 +229,13 @@ describe('RuntimeContextPage', () => {
     })
     await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
 
-    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
-    fireEvent.click(excludeButtons[excludeButtons.length - 1])
+    const excludeButton = screen
+      .getAllByTitle('Exclude from boot context')
+      .find((button) =>
+        button.parentElement?.parentElement?.textContent?.includes('Use st'),
+      )
+    expect(excludeButton).toBeDefined()
+    fireEvent.click(excludeButton!)
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
@@ -322,9 +327,13 @@ describe('RuntimeContextPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
-    // Click the memory row's exclude (last rendered row).
-    fireEvent.click(excludeButtons[excludeButtons.length - 1])
+    const excludeButton = screen
+      .getAllByTitle('Exclude from boot context')
+      .find((button) =>
+        button.parentElement?.parentElement?.textContent?.includes('Use st'),
+      )
+    expect(excludeButton).toBeDefined()
+    fireEvent.click(excludeButton!)
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(

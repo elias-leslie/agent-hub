@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from app.constants.catalog_entries import MODEL_CATALOG
+
 EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
@@ -16,12 +18,21 @@ EXCLUDED_SLUGS = {
     "minimax-plan-test",
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "game-audio-critic",  # audio input requires an audio-capable model chain
+    "household-receipt-vision",
+    "provider-liveness-probe",
     "ux-polisher",
 }
 GROK_ALLOWED_SLUGS = {
     "game-art-critic",  # tested as best current image critique primary
 }
 SEED_FILE = Path(__file__).resolve().parents[2] / "scripts" / "seed_agents_data" / "seed_data.json"
+SINGLE_FAMILY_AGENTS = {
+    "jobs-cover-codex": "codex/",
+    "jobs-critic-codex": "codex/",
+    "jobs-evaluator-codex": "codex/",
+    "jobs-critic-gemini": "gemini-",
+    "jobs-tailor-gemini": "gemini-",
+}
 
 
 def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None:
@@ -32,7 +43,7 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
 
     for agent in agents:
         slug = agent["slug"]
-        if slug in EXCLUDED_SLUGS:
+        if slug in EXCLUDED_SLUGS or slug in SINGLE_FAMILY_AGENTS:
             continue
         if agent.get("name", "").startswith("Committee "):
             continue
@@ -49,9 +60,45 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
         assert not any(model.startswith("claude-") for model in model_chain), (
             f"{slug} should not route Agent Hub workloads to Claude: {model_chain}"
         )
-        assert any(model.startswith(("codex/", "kimi-code/", "minimax/")) for model in model_chain), (
+        assert slug == "jobs-company" or any(model.startswith(("codex/", "kimi-code/", "minimax/")) for model in model_chain), (
             f"{slug} should include at least one subscription-backed route: {model_chain}"
         )
+
+
+def test_second_opinion_agents_keep_independent_model_families() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    agents = {agent["slug"]: agent for agent in data["agents"]}
+
+    for slug, prefix in SINGLE_FAMILY_AGENTS.items():
+        agent = agents[slug]
+        assert agent["fallback_models"], slug
+        chain = [agent["primary_model_id"], *agent["fallback_models"]]
+        assert len(chain) == len(set(chain)), slug
+        assert all(model.startswith(prefix) for model in chain), slug
+
+
+def test_company_research_keeps_its_gemini_primary() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    company_agent = next(agent for agent in data["agents"] if agent["slug"] == "jobs-company")
+
+    assert company_agent["primary_model_id"].startswith("gemini-")
+
+
+def test_provider_liveness_probe_does_not_hide_failure_with_fallbacks() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    probe = next(agent for agent in data["agents"] if agent["slug"] == "provider-liveness-probe")
+
+    assert probe["primary_model_id"]
+    assert not probe["fallback_models"]
+
+
+def test_receipt_vision_uses_a_vision_capable_primary() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    receipt_agent = next(agent for agent in data["agents"] if agent["slug"] == "household-receipt-vision")
+    catalog = {entry.id: entry for entry in MODEL_CATALOG}
+
+    assert receipt_agent["primary_model_id"] in catalog
+    assert catalog[receipt_agent["primary_model_id"]].capabilities.has_vision
 
 
 def test_seed_agents_do_not_use_grok_by_default() -> None:
