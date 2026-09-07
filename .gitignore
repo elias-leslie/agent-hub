@@ -62,6 +62,9 @@ docker/workspace-packages/
 
 # Project data
 data/
+# Immutable migration inputs must ship with fresh checkouts.
+!backend/alembic/data/
+!backend/alembic/data/*.json
 backups/
 backup-index.json
 

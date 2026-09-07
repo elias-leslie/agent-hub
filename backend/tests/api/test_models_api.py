@@ -3,10 +3,22 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import pytest
+
 from app.api.models import _build_catalog_health, _build_model_info
+from app.constants import catalog
 from app.constants.catalog import get_model_entry
 from app.constants.catalog_types import ModelCapabilities, ModelCost, ModelEntry, ModelScores
 from app.models.model_enrichment import ModelEnrichment
+
+
+@pytest.fixture(autouse=True)
+def seed_catalog():
+    """Catalog helper tests use seed entries, independent of app lifespan hydration."""
+    entries, aliases = list(catalog.MODEL_CATALOG), dict(catalog.MODEL_ALIASES)
+    catalog.replace_runtime_model_catalog(list(catalog.SEED_MODEL_CATALOG))
+    yield
+    catalog.replace_runtime_model_catalog(entries, aliases)
 
 
 def test_build_model_info_includes_extended_capabilities() -> None:

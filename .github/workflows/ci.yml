@@ -30,6 +30,7 @@ jobs:
           --health-retries 5
     env:
       AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
+      CONTEXT_CONFIG_ROOT: ${{ github.workspace }}/.ci-config
       TEST_AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
       # HATCHET_CLIENT_TOKEN is intentionally unset: tests/conftest.py supplies a
       # structurally-valid dummy JWT via setdefault(). Setting it here overrides that,
@@ -42,6 +43,22 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
+      - name: Checkout Codex adapter sources
+        uses: actions/checkout@v5
+        with:
+          repository: elias-leslie/codex-config
+          path: .ci-config/codex-config
+          ssh-key: ${{ secrets.CODEX_CONFIG_READ_KEY }}
+          persist-credentials: false
+      - name: Checkout Claude adapter sources
+        uses: actions/checkout@v5
+        with:
+          repository: elias-leslie/claude-config
+          # Portable context adapters; default branch contains workstation symlinks.
+          ref: fc24af5d1405330ca2c3c95234fbf04dca3be6d8
+          path: .ci-config/claude-config
+          ssh-key: ${{ secrets.CLAUDE_CONFIG_READ_KEY }}
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
@@ -62,6 +79,42 @@ jobs:
         run: uv run pytest
       - name: Build backend package
         run: uv build
+
+  private-context-integration:
+    runs-on: ubuntu-24.04
+    env:
+      # Required at app import; adapter tests use isolated subprocess fixtures, not DB I/O.
+      AGENT_HUB_DB_URL: postgresql://agent_hub_app:test@localhost:5432/agent_hub_test
+      CONTEXT_CONFIG_ROOT: ${{ github.workspace }}/.ci-config
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Checkout Codex adapter sources
+        uses: actions/checkout@v5
+        with:
+          repository: elias-leslie/codex-config
+          path: .ci-config/codex-config
+          ssh-key: ${{ secrets.CODEX_CONFIG_READ_KEY }}
+          persist-credentials: false
+      - name: Checkout Claude adapter sources
+        uses: actions/checkout@v5
+        with:
+          repository: elias-leslie/claude-config
+          # Portable context adapters; default branch contains workstation symlinks.
+          ref: fc24af5d1405330ca2c3c95234fbf04dca3be6d8
+          path: .ci-config/claude-config
+          ssh-key: ${{ secrets.CLAUDE_CONFIG_READ_KEY }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - name: Install adapter test dependencies
+        run: uv sync --all-extras --dev
+      - name: Test private context adapters
+        run: uv run pytest tests/integrations/test_context_delivery_adapters.py
 
   frontend:
     runs-on: ubuntu-24.04

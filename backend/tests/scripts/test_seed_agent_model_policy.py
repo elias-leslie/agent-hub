@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from app.constants.catalog_entries import MODEL_CATALOG
+
 EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
@@ -17,6 +19,14 @@ EXCLUDED_SLUGS = {
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
+    "provider-liveness-probe",  # probe must not conceal provider failure via fallback
+    # Explicit comparison/critic lanes retain provider identity.
+    "jobs-cover-codex",
+    "jobs-critic-codex",
+    "jobs-critic-gemini",
+    "jobs-evaluator-codex",
+    "jobs-tailor-gemini",
+    "household-receipt-vision",  # vision extraction; not a text-agent subscription policy
 }
 GROK_ALLOWED_SLUGS = {
     "game-art-critic",  # tested as best current image critique primary
@@ -71,4 +81,8 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
     audio_critic = next(agent for agent in data["agents"] if agent["slug"] == "game-audio-critic")
 
     assert audio_critic["primary_model_id"] == "gemini-3.5-flash"
-    assert audio_critic["fallback_models"] == ["gemini-2.5-flash"]
+    entries = {entry.id: entry for entry in MODEL_CATALOG}
+    assert any(
+        model in entries and entries[model].capabilities.supports_audio
+        for model in audio_critic["fallback_models"]
+    ), "Audio critique needs an audio-capable quota fallback"

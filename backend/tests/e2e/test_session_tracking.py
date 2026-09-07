@@ -28,8 +28,13 @@ def mock_session():
 
 
 @pytest.fixture
-def client(mock_session):
+def client(mock_session, monkeypatch):
     """Test client with mocked database and source headers."""
+
+    monkeypatch.setattr(
+        "app.core.project_roots.get_registered_project_roots",
+        AsyncMock(return_value={"summitflow": "/test/summitflow", "monkey-fight": "/test/monkey-fight"}),
+    )
 
     async def override_get_db():
         yield mock_session
