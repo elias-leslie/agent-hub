@@ -135,3 +135,9 @@ def test_read_tier_includes_propose_tools() -> None:
 def test_dispatcher_knows_all_three_propose_tools() -> None:
     for name in ("propose_thorough", "propose_committee", "propose_honing"):
         assert name in DirectToolExecutor.DISPATCHABLE_TOOLS
+
+
+def test_company_research_has_only_public_web_tools() -> None:
+    names = {tool.name for tool in _AGENT_TOOL_REGISTRY["jobs-company"]}
+    assert names == {"research_web", "search_web", "fetch_web_page"}
+    assert names <= _READ_TOOLS

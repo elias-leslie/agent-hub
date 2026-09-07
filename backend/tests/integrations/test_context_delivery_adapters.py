@@ -15,7 +15,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CLIENT = REPO_ROOT / "integrations/context-delivery/bin/agent-hub-context-client"
 CLAUDE_LAUNCHER = REPO_ROOT / "integrations/context-delivery/claude/launcher"
-CODEX_LAUNCHER = REPO_ROOT.parent / "codex-config/bin/codex"
+CONFIG_ROOT = Path(os.environ.get("CONTEXT_CONFIG_ROOT", REPO_ROOT.parent))
+CODEX_LAUNCHER = CONFIG_ROOT / "codex-config/bin/codex"
 
 
 @pytest.fixture(autouse=True)
@@ -772,15 +773,15 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     )
     (fake_codex / "bin").mkdir(parents=True)
     shutil.copy2(
-        REPO_ROOT.parent / "codex-config/config.toml",
+        CONFIG_ROOT / "codex-config/config.toml",
         fake_codex / "config.toml",
     )
     shutil.copy2(
-        REPO_ROOT.parent / "codex-config/hooks.json",
+        CONFIG_ROOT / "codex-config/hooks.json",
         fake_codex / "hooks.json",
     )
     shutil.copy2(
-        REPO_ROOT.parent / "codex-config/bin/codex",
+        CONFIG_ROOT / "codex-config/bin/codex",
         fake_codex / "bin/codex",
     )
     (home / ".gemini").mkdir(parents=True)
@@ -955,7 +956,7 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
 
 
 def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks() -> None:
-    codex_root = REPO_ROOT.parent / "codex-config"
+    codex_root = CONFIG_ROOT / "codex-config"
     wrapper = (codex_root / "bin/codex").read_text()
     wrapper_commands = "\n".join(
         line for line in wrapper.splitlines() if not line.lstrip().startswith("#")
@@ -994,7 +995,7 @@ def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
 
 
 def test_claude_sources_do_not_add_parallel_model_context() -> None:
-    claude_root = REPO_ROOT.parent / "claude-config"
+    claude_root = CONFIG_ROOT / "claude-config"
     summitflow_root = REPO_ROOT.parent / "summitflow"
     session_start = (claude_root / "hooks/SessionStart.sh").read_text()
     post_tool_use = (claude_root / "hooks/PostToolUse.sh").read_text()
@@ -1016,7 +1017,7 @@ def test_claude_sources_do_not_add_parallel_model_context() -> None:
 
 
 def test_claude_gpt_is_a_source_owned_transport_only_wrapper() -> None:
-    claude_root = REPO_ROOT.parent / "claude-config"
+    claude_root = CONFIG_ROOT / "claude-config"
     wrapper = (claude_root / "bin/claude-gpt").read_text()
     settings = json.loads((claude_root / "claude-gpt-settings.json").read_text())
 
@@ -1056,7 +1057,7 @@ async def test_claude_lifecycle_metadata_matches_normal_and_gpt_transport(
     transport_variant: str | None,
     contract_model: str,
 ) -> None:
-    claude_root = REPO_ROOT.parent / "claude-config"
+    claude_root = CONFIG_ROOT / "claude-config"
     home = tmp_path / "home"
     hooks_dir = home / ".claude/hooks"
     hooks_dir.mkdir(parents=True)
