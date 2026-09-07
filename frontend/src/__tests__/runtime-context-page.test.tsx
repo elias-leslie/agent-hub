@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RuntimeContextPage from '@/app/runtime-context/page'
 import { ToastProvider } from '@/components/error/toast'
@@ -182,8 +188,8 @@ describe('RuntimeContextPage', () => {
       ).toBeGreaterThan(0)
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    // Token gauge surfaces both used and budget within the gauge region.
-    const gauge = screen.getByLabelText('Token gauge')
+    // Telemetry shows usage and its non-enforced target.
+    const gauge = screen.getByLabelText('Token telemetry')
     expect(gauge).toHaveTextContent('42')
     expect(gauge).toHaveTextContent('3,500 tok')
   })
@@ -229,8 +235,11 @@ describe('RuntimeContextPage', () => {
     })
     await waitFor(() => expect(screen.getByText('Use st')).toBeInTheDocument())
 
-    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
-    fireEvent.click(excludeButtons[excludeButtons.length - 1])
+    const memoryRow = screen.getByText('Use st').parentElement?.parentElement
+    expect(memoryRow).toBeTruthy()
+    fireEvent.click(
+      within(memoryRow as HTMLElement).getByTitle('Exclude from boot context'),
+    )
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
@@ -322,9 +331,11 @@ describe('RuntimeContextPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Use st')).toBeInTheDocument()
     })
-    const excludeButtons = screen.getAllByTitle('Exclude from boot context')
-    // Click the memory row's exclude (last rendered row).
-    fireEvent.click(excludeButtons[excludeButtons.length - 1])
+    const memoryRow = screen.getByText('Use st').parentElement?.parentElement
+    expect(memoryRow).toBeTruthy()
+    fireEvent.click(
+      within(memoryRow as HTMLElement).getByTitle('Exclude from boot context'),
+    )
 
     await waitFor(() => {
       expect(replaceRuntimeOverrides).toHaveBeenCalledWith(
