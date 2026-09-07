@@ -153,6 +153,7 @@ forbidden_modules = ["app.llm.providers"]
 
 [tool.pytest.ini_options]
 markers = [
+    "private_context: requires private companion repositories; run through the private context workflow",
     "unit: marks tests as unit tests (fast, no external dependencies)",
     "integration: marks tests as integration tests (requires database/services)",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

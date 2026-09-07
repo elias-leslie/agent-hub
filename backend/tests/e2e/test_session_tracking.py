@@ -28,13 +28,23 @@ def mock_session():
 
 
 @pytest.fixture
-def client(mock_session):
+def client(mock_session, monkeypatch):
     """Test client with mocked database and source headers."""
 
     async def override_get_db():
         yield mock_session
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr("app.constants.projects._cached_project_ids", None)
+    monkeypatch.setattr("app.constants.projects._cached_roots", None)
+    monkeypatch.setattr("app.constants.projects._cache_timestamp", 0.0)
+    monkeypatch.setattr(
+        "app.core.project_roots.get_registered_project_roots",
+        AsyncMock(return_value={
+            "summitflow": "/test/summitflow",
+            "monkey-fight": "/test/monkey-fight",
+        }),
+    )
     yield APITestClient(app)
     app.dependency_overrides.clear()
 

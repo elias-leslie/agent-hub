@@ -59,7 +59,7 @@ jobs:
         # test ERRORs. Build the schema first.
         run: uv run alembic upgrade head
       - name: Test backend
-        run: uv run pytest
+        run: uv run pytest -m "not private_context"
       - name: Build backend package
         run: uv build
 
