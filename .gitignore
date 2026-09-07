@@ -62,6 +62,8 @@ docker/workspace-packages/
 
 # Project data
 data/
+!backend/alembic/data/
+!backend/alembic/data/7f4e2d1c9b8a_audited_context.json
 backups/
 backup-index.json
 
