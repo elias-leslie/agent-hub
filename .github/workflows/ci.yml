@@ -54,6 +54,8 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: elias-leslie/claude-config
+          # Portable context adapters; default branch contains workstation symlinks.
+          ref: fc24af5d1405330ca2c3c95234fbf04dca3be6d8
           path: .ci-config/claude-config
           ssh-key: ${{ secrets.CLAUDE_CONFIG_READ_KEY }}
           persist-credentials: false
