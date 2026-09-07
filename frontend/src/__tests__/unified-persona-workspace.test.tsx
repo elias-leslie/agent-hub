@@ -995,7 +995,7 @@ describe('UnifiedPersonaWorkspace', () => {
       })
     })
 
-    expect(screen.getByText('Ready queue is clear')).toBeInTheDocument()
+    expect(await screen.findByText('Ready queue is clear')).toBeInTheDocument()
     expect(screen.getAllByText('Checks passed').length).toBeGreaterThan(0)
     expect(
       screen.queryByText(/PERSONA SAFETY BOUNDARIES/i),
@@ -1047,7 +1047,7 @@ describe('UnifiedPersonaWorkspace', () => {
       page: 1,
       page_size: 500,
     })
-    expect(screen.getByText('Ready queue is clear')).toBeInTheDocument()
+    expect(await screen.findByText('Ready queue is clear')).toBeInTheDocument()
     expect(screen.queryByText('No additional work')).not.toBeInTheDocument()
   })
 
