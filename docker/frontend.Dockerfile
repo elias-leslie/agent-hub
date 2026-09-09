@@ -3,7 +3,7 @@
 # Port: 3003
 
 # ── Stage 0: Dev Runtime ─────────────────────────────────────────
-FROM node:20-slim AS dev
+FROM node:24-slim AS dev
 
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
@@ -14,6 +14,7 @@ COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
 RUN CI=true pnpm install --frozen-lockfile
+RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
 
 WORKDIR /workspace/frontend
 
@@ -25,7 +26,7 @@ ENV HOSTNAME=0.0.0.0
 CMD ["pnpm", "dev", "--hostname", "0.0.0.0", "--port", "3003"]
 
 # ── Stage 1: Build ───────────────────────────────────────────────
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 
@@ -36,6 +37,7 @@ COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
 RUN CI=true pnpm install --frozen-lockfile
+RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
 
 # Build with standalone output, then prune pnpm store
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -49,7 +51,7 @@ ENV NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID=${AGENT_HUB_DASHBOARD_CLIENT_ID}
 RUN pnpm --filter frontend build && pnpm store prune
 
 # ── Stage 2: Runner ──────────────────────────────────────────────
-FROM node:20-slim
+FROM node:24-slim
 
 RUN useradd -m -s /bin/bash appuser
 
