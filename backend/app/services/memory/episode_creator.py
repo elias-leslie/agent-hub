@@ -41,14 +41,6 @@ from .service import MemoryScope, MemorySource, build_group_id
 
 logger = logging.getLogger(__name__)
 
-VERBOSE_PATTERNS = [
-    "memory_retrieval",
-    "memory_storage",
-    "embedding_generation",
-    "cache_hit",
-    "cache_miss",
-]
-
 # Gemini embedding limit is ~8K tokens.
 EMBEDDING_BATCH_MAX_TOKENS = int(os.environ.get("EMBEDDING_BATCH_MAX_TOKENS", "8000"))
 EMBEDDING_BATCH_CONCURRENCY = int(os.environ.get("EMBEDDING_BATCH_CONCURRENCY", "4"))
@@ -143,10 +135,9 @@ async def create_episode_internal(
     sensitivity_tier: str,
     changed_by: str | None,
     change_reason: str | None,
-    bypass_compactness: bool = False,
 ) -> CreateResult:
     """Internal implementation of episode creation."""
-    if (result := validate_content(content, config, bypass_compactness=bypass_compactness)) is not None:
+    if (result := validate_content(content, config)) is not None:
         return result
 
     if (result := await _check_duplicate(content, config)) is not None:
@@ -356,7 +347,6 @@ class EpisodeCreator:
         sensitivity_tier: str = "normal",
         changed_by: str | None = None,
         change_reason: str | None = None,
-        bypass_compactness: bool = False,
     ) -> CreateResult:
         """Create a new memory episode in PostgreSQL.
 
@@ -383,7 +373,6 @@ class EpisodeCreator:
             sensitivity_tier=sensitivity_tier,
             changed_by=changed_by,
             change_reason=change_reason,
-            bypass_compactness=bypass_compactness,
         )
 
     async def batch_create(

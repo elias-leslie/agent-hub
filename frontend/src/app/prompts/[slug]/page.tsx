@@ -13,7 +13,6 @@ import {
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { PromptRevisionHistory } from '@/app/prompts/[slug]/components/PromptRevisionHistory'
-import { CompactnessMeter } from '@/components/CompactnessMeter'
 import {
   deletePrompt,
   fetchPrompt,
@@ -282,7 +281,10 @@ export default function PromptEditPage() {
                     onChange={(e) => setContent(e.target.value)}
                     className="control-input min-h-[26rem] resize-y font-mono text-[13px] leading-6"
                   />
-                  <CompactnessMeter content={content} kind="prompt" />
+                  <p className="text-xs text-slate-400">
+                    {content.length} characters · ~
+                    {Math.ceil(content.length / 4)} tokens (estimate)
+                  </p>
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-2">

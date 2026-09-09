@@ -23,7 +23,6 @@ async def validate_learning_request(request: SaveLearningRequest) -> SaveLearnin
     EpisodeValidator.validate_content(
         request.content,
         tier=request.injection_tier.value,
-        bypass_compactness=request.bypass_compactness,
     )
     EpisodeValidator.validate_summary(request.summary)
     EpisodeValidator.validate_reusability(request.content)
@@ -75,7 +74,6 @@ async def store_learning_episode(
         summary=request.summary,
         changed_by="save_learning",
         change_reason=request.change_reason or "Learning saved",
-        bypass_compactness=request.bypass_compactness,
     )
 
     if not result.success:

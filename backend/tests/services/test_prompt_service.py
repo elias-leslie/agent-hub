@@ -9,7 +9,6 @@ import pytest
 
 from app.models.agent import Agent
 from app.models.prompt import Prompt, PromptRevision
-from app.services.compactness import CompactnessValidationError
 from app.services.prompt_service import (
     create_prompt,
     get_prompt_content,
@@ -61,17 +60,6 @@ class TestPromptServiceRevisions:
         assert revision.changed_by == "pytest"
         assert revision.change_reason == "create test"
 
-    @pytest.mark.asyncio
-    async def test_create_prompt_rejects_non_caveman_content(self) -> None:
-        db = create_mock_db_session()
-
-        with pytest.raises(CompactnessValidationError, match="strict Caveman gate"):
-            await create_prompt(
-                db,
-                slug="test-prompt",
-                name="Test Prompt",
-                content="You should be thorough. For example, explain every option in detail.",
-            )
 
     @pytest.mark.asyncio
     async def test_update_prompt_records_revision(self) -> None:
@@ -128,32 +116,7 @@ class TestPromptServiceRevisions:
 
         assert owner.system_prompt == "new canonical content"
 
-    @pytest.mark.asyncio
-    async def test_update_prompt_rejects_non_caveman_content(self) -> None:
-        db = create_mock_db_session()
-        prompt = _make_prompt(content="old content")
 
-        with patch(
-            "app.services.prompt_service.get_prompt_by_slug",
-            new=AsyncMock(return_value=prompt),
-        ), pytest.raises(CompactnessValidationError, match="strict Caveman gate"):
-            await update_prompt(
-                db,
-                "persona-heartbeat-instructions",
-                content="You should be thorough. For example, explain every option in detail.",
-            )
-
-    @pytest.mark.asyncio
-    async def test_create_prompt_rejects_offer_back_content(self) -> None:
-        db = create_mock_db_session()
-
-        with pytest.raises(CompactnessValidationError, match="offer-back phrasing found"):
-            await create_prompt(
-                db,
-                slug="test-prompt",
-                name="Test Prompt",
-                content="Answer exact. If you want more, ask for details.",
-            )
 
     @pytest.mark.asyncio
     async def test_restore_prompt_revision_restores_snapshot_and_records_restore(self) -> None:

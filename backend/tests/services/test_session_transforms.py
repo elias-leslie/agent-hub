@@ -198,10 +198,11 @@ def test_build_session_response_marks_session_status_when_live_matches() -> None
 
 def test_build_session_list_items_classifies_benchmark_attribution() -> None:
     session = _session(
-        request_source="manual/caveman-mini-baseline",
+        request_source="manual/network-baseline",
         provider_metadata={
             "repo_root": "/srv/workspaces/projects/agent-hub",
             "source_client": "summitflow",
+            "session_kind": "benchmark",
         },
     )
 
@@ -209,7 +210,7 @@ def test_build_session_list_items_classifies_benchmark_attribution() -> None:
 
     assert item.attribution_kind == "benchmark"
     assert item.attribution_label == "Benchmark"
-    assert item.attribution_detail == "manual/caveman-mini-baseline"
+    assert item.attribution_detail == "manual/network-baseline"
 
 
 def test_build_session_response_classifies_autonomous_attribution() -> None:

@@ -124,7 +124,7 @@ def session_attribution(session: Session) -> dict[str, str | None]:
     request_source = optional_str(session.request_source)
     logical_client = source_client(session)
 
-    if request_source and request_source.startswith("manual/caveman"):
+    if metadata_value(session, "session_kind") == "benchmark":
         return {
             "attribution_kind": "benchmark",
             "attribution_label": "Benchmark",
