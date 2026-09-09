@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.private_context
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CLIENT = REPO_ROOT / "integrations/context-delivery/bin/agent-hub-context-client"
 CLAUDE_LAUNCHER = REPO_ROOT / "integrations/context-delivery/claude/launcher"

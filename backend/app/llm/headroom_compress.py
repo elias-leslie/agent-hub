@@ -13,7 +13,7 @@ The transform classes need only the Rust engine (``headroom._core``) plus
 ``pydantic`` / ``tiktoken`` / ``opentelemetry-api`` — all of which are already
 base dependencies. The ``compression`` optional group installs the engine with
 ``litellm`` (and ``ast-grep-cli``) excluded from resolution; see
-``pyproject.toml`` ``[tool.uv] override-dependencies``. An import-guard test
+``pyproject.toml`` ``[tool.uv] exclude-dependencies``. An import-guard test
 asserts ``litellm`` never loads on this path.
 
 Safety model — results stay self-contained and readable
