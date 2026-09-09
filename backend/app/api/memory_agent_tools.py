@@ -257,27 +257,9 @@ async def api_save_learning(
                 "error": "validation_error",
                 "message": e.message,
                 "details": [{"message": pattern} for pattern in e.detected_patterns],
-                "hint": """FORMAT_STANDARD for memory episodes:
-
-| # | Rule | Check |
-|---|------|-------|
-| 1 | Topic header | Must start with a bold topic header like **Git Safety**: |
-| 2 | Imperative mood | Commands not suggestions |
-| 3 | Strong verb first | Lead with use / never / always / check / follow |
-| 4 | One atomic rule | Single concept per episode, not a list |
-| 5 | No custom delimiters | No ::, -> except in tables |
-| 6 | No conversational | No please/remember/note:/you should |
-| 7 | Terse content | Prefer 3 sentences max and 280 chars max |
-| 8 | Summary | 10-40 chars |
-
-Valid compact saves are stored as prompt-ready compact_content and defer routine review until cadence. Invalid or bulky saves create review debt.
-
-Example of GOOD format:
-  **Git Publish**: Use commit.sh --push --msg "description" for new commits. Use commit.sh --current --push for clean ahead branches. Why: both stay on the canonical publish path.
-
-Example of BAD format:
-  When working with git, you should remember to always commit first.
-  Please don't use git stash because it might cause lost work.""",
+                "hint": "Store short reusable knowledge in memory, with a 10-40 character summary. "
+                "Keep operational journals in task/session records and long explanations in the wiki. "
+                "Reusable instructions belong in Agent Hub prompts.",
             },
         ) from e
     except Exception as e:

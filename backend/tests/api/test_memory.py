@@ -146,7 +146,7 @@ class TestUpdateEpisodeEndpoint:
             "**Episode Refresh**: Use refreshed episode content."
         )
         assert update_kwargs["metadata"]["compact_status"] == "source_ready"
-        assert update_kwargs["metadata"]["source_quality_method"] == "format_standard"
+        assert update_kwargs["metadata"]["source_quality_method"] == "source_size"
 
     @pytest.mark.asyncio
     async def test_update_episode_tier_only(
@@ -198,19 +198,19 @@ class TestUpdateEpisodeEndpoint:
     async def test_update_episode_rejects_invalid_content_for_existing_tier(
         self, client: AsyncClient
     ):
-        """Content-only updates should still enforce the topic-header format."""
+        """Content-only updates must reject blank content before embedding."""
         mock_repo = AsyncMock()
         mock_repo.get_as_dict = AsyncMock(return_value={"injection_tier": "mandate"})
 
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
                 "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                json={"content": "**Git Safety**: Git commits should use commit.sh in Agent Hub sessions."},
+                json={"content": "   "},
             )
 
         assert response.status_code == 422
         body = response.json()
-        assert "direct imperative" in body["message"].lower()
+        assert "empty" in body["message"].lower()
         assert body["error"] == "validation_error"
 
     @pytest.mark.asyncio
@@ -230,11 +230,11 @@ class TestSaveLearningEndpoint:
 
     @pytest.mark.asyncio
     async def test_save_learning_validation_uses_message_and_hint(self, client: AsyncClient):
-        """Invalid learning format should return normalized validation payload."""
+        """Non-reusable session journals should return actionable validation details."""
         response = await client.post(
             "/api/memory/save-learning",
             json={
-                "content": "Use commit.sh --push --msg \"description\" for new commits. Use commit.sh --current --push for clean ahead branches.",
+                "content": "## Heartbeat: 20:56 EST\n\n### Orient\n- Active tasks: 1",
                 "summary": "Use commit flow",
                 "injection_tier": "mandate",
             },
@@ -243,8 +243,8 @@ class TestSaveLearningEndpoint:
         assert response.status_code == 422
         body = response.json()
         assert body["error"] == "validation_error"
-        assert "bold topic header" in body["message"].lower()
-        assert "FORMAT_STANDARD" in body["hint"]
+        assert "reusable" in body["message"].lower()
+        assert "long explanations" in body["hint"]
 
     @pytest.mark.asyncio
     async def test_save_learning_persists_context_routing_fields(self, client: AsyncClient):
