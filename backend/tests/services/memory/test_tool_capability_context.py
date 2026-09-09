@@ -5,11 +5,24 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from app.services.memory import tool_capability_context as tcc
 
 
 def _stub_run(stdout: str = "", stderr: str = "", returncode: int = 0):
     return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+
+
+@pytest.mark.parametrize("task", ["briefing", "agent-admin", "model-admin", "vm-repair", "recording", "future-workflow"])
+@pytest.mark.parametrize("profile", ["agent_startup", "agent_runtime", "agent_preview"])
+def test_registry_owns_specialized_task_routing(task, profile) -> None:
+    with patch.object(tcc, "run_process", return_value=_stub_run(stdout="references: {}")) as run:
+        tcc.format_tool_capability_context(consumer_profile=profile, task_type=task, bash_available=True)
+    cmd = run.call_args.args[0]
+    assert "--task" in cmd
+    assert cmd[cmd.index("--task") + 1] == task
+    assert cmd[cmd.index("--density") + 1] == ("adaptive" if profile == "agent_startup" else "task")
 
 
 def test_format_tool_capability_context_wraps_manifest_body() -> None:

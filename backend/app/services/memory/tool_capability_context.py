@@ -15,12 +15,6 @@ from app.utils.safe_subprocess import run_process
 
 from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
-_FRONTEND_TASK_TYPES = {"frontend", "ui-design", "design-review", "test", "verification"}
-_RUNTIME_TASK_TYPES = {
-    "backend", "frontend", "ui-design", "refactor", "bug-fix", "test",
-    "performance", "config", "devops", "database", "exploration",
-    "heartbeat", "wake", "review",
-}
 _GENERIC_TASK_TYPES = {None, "", "chat"}
 
 
@@ -30,12 +24,10 @@ def _profile_filters(
 ) -> tuple[str | None, str | None]:
     """Decide whether to filter on task_type for the given consumer profile.
 
-    Task context applies at startup and during execution. Generic tasks keep
-    the essential guide without unrelated task-specific entries.
+    Forward non-generic task types unchanged. The canonical registry owns
+    applicability; an adapter allowlist would discard specialized workflows.
     """
     if task_type in _GENERIC_TASK_TYPES:
-        return (None, None)
-    if task_type not in _RUNTIME_TASK_TYPES and task_type not in _FRONTEND_TASK_TYPES:
         return (None, None)
     return (task_type, None)
 
@@ -46,9 +38,7 @@ def _density_for_context(consumer_profile: str | None, task_type: str | None) ->
         return "adaptive"
     if task_type in _GENERIC_TASK_TYPES:
         return "core"
-    if task_type in _RUNTIME_TASK_TYPES or task_type in _FRONTEND_TASK_TYPES:
-        return "task"
-    return "core"
+    return "task"
 
 
 def _run_manifest(cmd: list[str]) -> str:
