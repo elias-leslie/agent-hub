@@ -25,11 +25,10 @@ from typing import Any
 
 SCHEMA_VERSION = "agent-hub.context.v1"
 CONTEXT_VERSION = "1"
-SURFACES = ("agent_hub", "claude_code", "codex", "gemini", "mcp", "pi", "antigravity")
+SURFACES = ("agent_hub", "claude_code", "codex", "mcp", "pi", "antigravity")
 DEFAULT_PROVIDER = {
     "claude_code": "anthropic",
     "codex": "openai",
-    "gemini": "google",
     "pi": "pi",
 }
 
@@ -271,7 +270,6 @@ def _surface_model(surface: str) -> str | None:
     env_names = {
         "claude_code": ("CLAUDE_MODEL",),
         "codex": ("CODEX_MODEL",),
-        "gemini": ("GEMINI_MODEL",),
         "pi": ("PI_MODEL",),
     }
     for name in env_names.get(surface, ()):
@@ -710,32 +708,6 @@ def _native_degraded_output(event: str) -> dict[str, Any]:
     }
 
 
-def _gemini_before_model_output(
-    event: str, hook: dict[str, Any], contract: dict[str, Any]
-) -> dict[str, Any]:
-    if contract["status"] == "failed":
-        return _native_degraded_output(event)
-    request = hook.get("llm_request")
-    if not isinstance(request, dict) or not isinstance(request.get("messages"), list):
-        raise ContractError("Gemini BeforeModel input is missing llm_request.messages")
-    messages = [
-        {"role": "user", "content": contract["rendered"]},
-        *request["messages"],
-    ]
-    modified = {
-        **request,
-        # Use one stable leading additive message on every provider request.
-        # Native history and the current real task retain their exact order.
-        "messages": messages,
-    }
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": event,
-            "llm_request": modified,
-        }
-    }
-
-
 async def _main(args: argparse.Namespace) -> int:
     if args.command == "bind":
         hook: dict[str, Any] = {}
@@ -789,17 +761,6 @@ async def _main(args: argparse.Namespace) -> int:
                 )
 
         event = getattr(args, "hook_event", None) or _string(hook.get("hook_event_name")) or "SessionStart"
-        if args.surface == "gemini" and event == "BeforeModel":
-            try:
-                output = _gemini_before_model_output(event, hook, contract)
-            except Exception as exc:
-                contract = _adapter_failure(metadata, exc)
-                await _persist_failure_best_effort(
-                    contract, metadata, args.artifact_root
-                )
-                output = _gemini_before_model_output(event, hook, contract)
-            print(json.dumps(output, separators=(",", ":")))
-            return 0
         if contract["status"] == "failed":
             sys.stderr.write(
                 f"agent-hub-context-client: {args.surface} supplemental context "

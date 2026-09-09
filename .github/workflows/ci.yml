@@ -113,6 +113,9 @@ jobs:
           python-version: "3.13"
       - name: Install adapter test dependencies
         run: uv sync --all-extras --dev
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
       - name: Test private context adapters
         run: uv run pytest tests/integrations/test_context_delivery_adapters.py
 

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SURFACES = ("claude_code", "codex", "gemini", "pi", "antigravity")
+SURFACES = ("claude_code", "codex", "pi", "antigravity")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -306,6 +306,36 @@ def _check_hook(path: Path, entry: dict[str, Any], home: Path) -> dict[str, str]
     return {"target": str(path), "state": "drift", "event": entry["event"]}
 
 
+def _retire_hooks(home: Path, entry: dict[str, Any], *, check: bool) -> dict[str, str]:
+    """Remove owned hooks without changing other settings or native imports."""
+    path = _target(home, entry["path"])
+    if not path.exists():
+        return {"target": str(path), "state": "ok"}
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict) or not isinstance(value.get("hooks", {}), dict):
+        return {"target": str(path), "state": "invalid"}
+    original = copy.deepcopy(value)
+    hooks = value.get("hooks", {})
+    for event, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        for command in entry.get("commands", []):
+            groups = _remove_exact_command(groups, command.format(home=home))
+        hooks[event] = _remove_legacy_hooks(groups, entry.get("fragments", []))
+    if value == original:
+        return {"target": str(path), "state": "ok"}
+    if check:
+        return {"target": str(path), "state": "legacy"}
+    if path.is_symlink():
+        raise RuntimeError(
+            f"retired hooks remain in source-linked settings: {path}; "
+            "update the canonical source"
+        )
+    backup = _backup_file(home, path)
+    path.write_text(json.dumps(value, indent=2) + "\n")
+    return {"target": str(path), "state": "retired", "backup": str(backup)}
+
+
 def _plugin_registration(home: Path, entry: dict[str, Any], *, check: bool) -> dict[str, str]:
     """Maintain the registration schema emitted by native `agy plugin install`.
 
@@ -367,6 +397,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.check
             else _merge_hook(path, entry, home)
         )
+
+    for entry in manifest.get("retired_hooks", []):
+        if entry["surface"] == "shared" or entry["surface"] in selected:
+            results.append(_retire_hooks(home, entry, check=args.check))
 
     for entry in manifest.get("plugin_registrations", []):
         if entry["surface"] in selected:
