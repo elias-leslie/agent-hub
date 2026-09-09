@@ -1,0 +1,4 @@
+{
+  "name": "agent-hub-context",
+  "description": "Retrieve supplemental context from the canonical Agent Hub service."
+}

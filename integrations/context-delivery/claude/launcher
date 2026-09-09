@@ -132,6 +132,8 @@ async def _context_descriptor(argv: list[str]) -> tuple[dict[str, str], str | No
         "deliver",
         "--surface",
         "claude_code",
+        "--capability",
+        "bash",
         "--cwd",
         os.getcwd(),
         "--provider",
@@ -275,14 +277,9 @@ def _write_user_appends_sync(parent: Path, appends: list[str]) -> Path:
 
 
 def _exec_native_degraded(real: str, argv: list[str], error: object) -> NoReturn:
-    native_label = (
-        "Claude GPT"
-        if os.getenv("AGENT_HUB_CONTEXT_TRANSPORT_VARIANT") == "claude-gpt"
-        else "Claude"
-    )
     sys.stderr.write(
         "agent-hub-claude: Agent Hub supplemental context is unavailable; "
-        f"continuing with native {native_label} context only ({error})\n"
+        f"continuing with native Claude context only ({error})\n"
     )
     environment = os.environ.copy()
     for key in (

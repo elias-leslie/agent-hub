@@ -134,7 +134,16 @@ class RuntimeContextBlockResponse(BaseModel):
     sensitivity_tier: str | None = None
 
 
+class CanonicalComponentDiagnostic(BaseModel):
+    """Explain optional context selection without adding prose to model input."""
+
+    component: Literal["project_index", "tool_capabilities", "continuity"]
+    state: Literal["included", "inapplicable", "unavailable"]
+    reason: str
+
+
 class RuntimeContextPreviewResponse(BaseModel):
+    status: CanonicalDeliveryStatus = "ok"
     consumer_profile: str
     project_id: str | None
     query: str
@@ -337,6 +346,7 @@ class CanonicalContextDeliveryResponse(BaseModel):
     estimated_tokens: int
     required_policy: CanonicalPolicyCompleteness
     failure: CanonicalContextFailure | None = None
+    component_diagnostics: list[CanonicalComponentDiagnostic] = Field(default_factory=list)
     preview: CanonicalContextPreviewProjection | None = None
 
 
@@ -367,6 +377,7 @@ class _RuntimeContextSelection:
     budget_enabled: bool
     expected_required_source_ids: list[str] = field(default_factory=list)
     operator_excluded_required_source_ids: list[str] = field(default_factory=list)
+    component_diagnostics: list[CanonicalComponentDiagnostic] = field(default_factory=list)
 
 
 def _override_response(row: RuntimeContextOverride) -> RuntimeContextOverrideResponse:
@@ -463,6 +474,7 @@ async def render_runtime_context(
     projection = delivery.preview
     if projection is None:
         return RuntimeContextPreviewResponse(
+            status=delivery.status,
             consumer_profile=delivery.metadata.consumer_profile,
             project_id=delivery.metadata.project_id,
             query=delivery.metadata.query,
@@ -473,6 +485,7 @@ async def render_runtime_context(
             overrides=[],
         )
     return RuntimeContextPreviewResponse(
+        status=delivery.status,
         consumer_profile=delivery.metadata.consumer_profile,
         project_id=delivery.metadata.project_id,
         query=delivery.metadata.query,
@@ -497,6 +510,7 @@ async def _select_runtime_context(
     *,
     consumer_profile: str,
     consumer_surface: str,
+    capabilities: list[str],
     project_id: str | None,
     query: str,
     task_type: str | None,
@@ -576,7 +590,9 @@ async def _select_runtime_context(
     rendered_blocks = [block for block in candidates if block.mode != "exclude"]
     excluded_blocks = [block for block in candidates if block.mode == "exclude"]
 
-    project_index_block, tool_capability_block = await _compute_auxiliary_blocks(
+    project_index_block, tool_capability_block, diagnostics = await _compute_auxiliary_blocks(
+        consumer_surface=consumer_surface,
+        capabilities=capabilities,
         consumer_profile=consumer_profile,
         agent_slug=agent_slug,
         project_id=project_id,
@@ -622,6 +638,7 @@ async def _select_runtime_context(
         overrides=[_override_response(row) for row in override_rows],
         project_index=project_index_block,
         tool_capabilities=tool_capability_block,
+        component_diagnostics=diagnostics,
         expected_required_source_ids=expected_required_source_ids,
         operator_excluded_required_source_ids=operator_excluded_required_source_ids,
     )
@@ -655,6 +672,7 @@ async def build_canonical_context_delivery(
             db,
             consumer_profile=effective_request.consumer_profile,
             consumer_surface=effective_request.consumer_surface,
+            capabilities=effective_request.capabilities,
             agent_slug=effective_request.agent_slug,
             consumer_tags=effective_request.consumer_tags,
             project_id=effective_request.project_id,
@@ -676,29 +694,40 @@ async def build_canonical_context_delivery(
         )
 
         continuity = ""
+        continuity_state: Literal["included", "inapplicable", "unavailable"] = "inapplicable"
+        continuity_reason = "disabled" if not effective_request.include_continuity else "no_project"
         if effective_request.project_id and effective_request.include_continuity:
-            from app.services.memory.continuity_injector import (
-                build_continuity_context,
-            )
-
-            settings = await get_memory_settings(db)
-            if settings.continuity_enabled:
-                continuity_context = await build_continuity_context(
-                    project_id=effective_request.project_id,
-                    current_branch=effective_request.current_branch,
-                    max_sessions=(
-                        effective_request.continuity_max_sessions
-                        or settings.continuity_max_sessions
-                    ),
-                    include_cross_project=(
-                        effective_request.continuity_cross_project
-                    ),
-                    include_live_sessions=(
-                        effective_request.continuity_live_sessions
-                    ),
-                    exclude_session_id=effective_request.session_id,
+            try:
+                from app.services.memory.continuity_injector import (
+                    build_continuity_context,
                 )
-                continuity = continuity_context.markdown.strip()
+
+                settings = await get_memory_settings(db)
+                if settings.continuity_enabled:
+                    continuity_context = await build_continuity_context(
+                        project_id=effective_request.project_id,
+                        current_branch=effective_request.current_branch,
+                        max_sessions=(
+                            effective_request.continuity_max_sessions
+                            or settings.continuity_max_sessions
+                        ),
+                        include_cross_project=(
+                            effective_request.continuity_cross_project
+                        ),
+                        include_live_sessions=(
+                            effective_request.continuity_live_sessions
+                        ),
+                        exclude_session_id=effective_request.session_id,
+                    )
+                    continuity = continuity_context.markdown.strip()
+                continuity_state = "included" if continuity else "inapplicable"
+                continuity_reason = "selected" if continuity else "no_sessions_or_disabled"
+            except Exception:
+                continuity_state = "unavailable"
+                continuity_reason = "continuity_generation_failed"
+        selection.component_diagnostics.append(CanonicalComponentDiagnostic(
+            component="continuity", state=continuity_state, reason=continuity_reason,
+        ))
 
         ordered_runtime_blocks = _order_runtime_blocks_for_delivery(
             selection.blocks
@@ -750,6 +779,7 @@ async def build_canonical_context_delivery(
             payload_hash=payload_hash,
             metadata=metadata,
             blocks=blocks,
+            component_diagnostics=selection.component_diagnostics,
             rendered=rendered,
             estimated_tokens=count_tokens(rendered),
             required_policy=CanonicalPolicyCompleteness(
@@ -1115,42 +1145,63 @@ def _sha256_text(value: str) -> str:
 async def _compute_auxiliary_blocks(
     *,
     consumer_profile: str,
+    consumer_surface: str,
+    capabilities: list[str],
     agent_slug: str | None,
     project_id: str | None,
     task_type: str | None,
     include_project_index: bool,
     include_tool_capabilities: bool,
-) -> tuple[str, str]:
-    """Mirror context_injector_ops.run_injection_operation auxiliary blocks.
+) -> tuple[str, str, list[CanonicalComponentDiagnostic]]:
+    """Select guidance using the caller's tools, without granting execution rights."""
+    diagnostics: list[CanonicalComponentDiagnostic] = []
+    project_index_block = ""
+    if include_project_index:
+        try:
+            project_index_block = await asyncio.to_thread(
+                format_project_index_context, project_id,
+                consumer_profile=consumer_profile, task_type=task_type,
+            )
+            diagnostics.append(CanonicalComponentDiagnostic(
+                component="project_index",
+                state="included" if project_index_block else "inapplicable",
+                reason="selected" if project_index_block else "no_index_entries",
+            ))
+        except Exception:
+            diagnostics.append(CanonicalComponentDiagnostic(
+                component="project_index", state="unavailable", reason="index_generation_failed",
+            ))
+    else:
+        diagnostics.append(CanonicalComponentDiagnostic(
+            component="project_index", state="inapplicable", reason="disabled_by_request",
+        ))
 
-    The frontend preview must match what an agent actually receives at
-    session start: authority-ordered prompts/memory first, followed by these
-    computed project and capability blocks.
-    """
-    project_index_block = (
-        await asyncio.to_thread(
-            format_project_index_context,
-            project_id,
-            consumer_profile=consumer_profile,
-            task_type=task_type,
-        )
-        if include_project_index
-        else ""
-    )
     if not include_tool_capabilities:
-        return project_index_block, ""
-    visible_tool_names = (
-        await get_visible_tools_for_project(project_id) if project_id else frozenset()
-    )
-    bash_available = ("bash" in visible_tool_names) if project_id else None
-    # Usage-weighted adaptive tool selection for startup: score the project's st
-    # telemetry and let the manifest curate floor + relevant surfaces. Any failure
-    # yields no scores, and format_tool_capability_context falls back to full.
+        diagnostics.append(CanonicalComponentDiagnostic(
+            component="tool_capabilities", state="inapplicable", reason="disabled_by_request",
+        ))
+        return project_index_block, "", diagnostics
+
+    if consumer_surface in {"agent_hub", "runtime_context_preview"}:
+        visible = await get_visible_tools_for_project(project_id) if project_id else frozenset()
+        bash_available = "bash" in visible if project_id else None
+    else:
+        # External TUI/MCP capabilities describe the actual caller. Internal
+        # agent permissions neither enable nor disable that caller's shell.
+        bash_available = "bash" in capabilities or "shell" in capabilities
+    if bash_available is False or (agent_slug == "persona" and bash_available is not True):
+        diagnostics.append(CanonicalComponentDiagnostic(
+            component="tool_capabilities", state="inapplicable", reason="shell_unavailable",
+        ))
+        return project_index_block, "", diagnostics
+
     tool_scores: dict[str, float] | None = None
     if project_id and resolve_consumer_profile(consumer_profile) == MemoryConsumerProfile.AGENT_STARTUP:
         try:
             tool_scores = await decay_score_by_surface(project_id) or None
         except Exception:
+            # Usage is optional ranking evidence; the adaptive essential floor
+            # remains available when telemetry has no rows or cannot be read.
             tool_scores = None
     tool_capability_block = await asyncio.to_thread(
         format_tool_capability_context,
@@ -1161,7 +1212,12 @@ async def _compute_auxiliary_blocks(
         agent_slug=agent_slug,
         tool_scores=tool_scores,
     )
-    return project_index_block, tool_capability_block
+    diagnostics.append(CanonicalComponentDiagnostic(
+        component="tool_capabilities",
+        state="included" if tool_capability_block else "unavailable",
+        reason="selected" if tool_capability_block else "manifest_failed_or_empty",
+    ))
+    return project_index_block, tool_capability_block, diagnostics
 
 
 async def _filter_live_override_rows(

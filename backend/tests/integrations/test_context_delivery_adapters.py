@@ -154,6 +154,7 @@ async def test_client_persists_distinct_immutable_artifacts(
     assert first_code == second_code == 0
     first = json.loads(first_stdout)
     second = json.loads(second_stdout)
+    assert first["evidence_stage"] == "generated"
     assert first["payload_hash"] == hashlib.sha256(b"canonical context").hexdigest()
     assert first["contract_path"] != second["contract_path"]
     assert first["text_path"] != second["text_path"]
@@ -433,6 +434,7 @@ async def test_codex_binding_records_real_native_session_without_reinjecting(
     binding_paths = list(artifact_root.rglob("bindings/*.json"))
     assert len(binding_paths) == 1
     binding = json.loads(binding_paths[0].read_text())
+    assert binding["evidence_stage"] == "bound"
     assert binding["native_session_id"] == "real-codex-session"
     assert binding["payload_hash"] == descriptor["payload_hash"]
     assert binding["contract_path"] == descriptor["contract_path"]
@@ -764,10 +766,10 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     _executable(fake_claude / "hooks/PostToolUse.sh", "#!/bin/sh\nexit 0\n")
     _executable(fake_claude / "hooks/Stop.sh", "#!/bin/sh\nexit 0\n")
     _executable(
-        fake_claude / "bin/claude-gpt",
+        fake_claude / "bin/custom-transport",
         '#!/bin/sh\nexec "$HOME/.claude/bin/claude" "$@"\n',
     )
-    (fake_claude / "claude-gpt-settings.json").write_text(
+    (fake_claude / "custom-transport-settings.json").write_text(
         json.dumps({"model": "gpt-test", "env": {"ANTHROPIC_AUTH_TOKEN": "unused"}})
         + "\n"
     )
@@ -805,6 +807,10 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
         }
     }
     (home / ".gemini/settings.json").write_text(json.dumps(old_gemini))
+    (home / ".gemini/config").mkdir()
+    (home / ".gemini/config/import_manifest.json").write_text(json.dumps({
+        "imports": [{"name": "unrelated-plugin", "source": "operator"}]
+    }))
     (home / ".codex/bin").mkdir(parents=True)
     _executable(home / ".codex/bin/codex", "#!/bin/sh\n# old mutable wrapper\n")
     (home / ".codex/config.toml").write_text("# old home config\n")
@@ -814,6 +820,8 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     _executable(home / ".codex/hooks/session-start.sh", "#!/bin/sh\nexit 0\n")
     (home / ".claude").mkdir(parents=True)
     (home / ".claude/CLAUDE.md").write_text("stale parallel policy")
+    _executable(home / ".local/bin/claude-gpt", "#!/bin/sh\nexit 0\n")
+    (home / ".claude/claude-gpt-settings.json").write_text("{}")
 
     surfaces = [
         "--surface",
@@ -824,6 +832,8 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
         "gemini",
         "--surface",
         "pi",
+        "--surface",
+        "antigravity",
     ]
     code, stdout, _ = await _run(
         sys.executable,
@@ -835,9 +845,13 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
         *surfaces,
     )
     assert code == 0, stdout
+    imports = json.loads((home / ".gemini/config/import_manifest.json").read_text())["imports"]
+    assert imports[0] == {"name": "unrelated-plugin", "source": "operator"}
+    assert [item["name"] for item in imports] == ["unrelated-plugin", "agent-hub-context"]
+    assert (home / ".gemini/config/plugins/agent-hub-context/rules/canonical-context.md").is_symlink()
     assert (home / ".claude/bin/claude").is_symlink()
-    assert (home / ".local/bin/claude-gpt").is_symlink()
-    assert (home / ".claude/claude-gpt-settings.json").is_symlink()
+    assert not (home / ".local/bin/claude-gpt").exists()
+    assert not (home / ".claude/claude-gpt-settings.json").exists()
     assert (home / ".codex/bin/codex").is_symlink()
     assert (home / ".codex/config.toml").is_symlink()
     assert (home / ".codex/hooks.json").resolve() == fake_codex / "hooks.json"
@@ -1016,25 +1030,6 @@ def test_claude_sources_do_not_add_parallel_model_context() -> None:
     assert not (claude_root / "templates/project-bootstrap/CLAUDE.md.template").exists()
 
 
-def test_claude_gpt_is_a_source_owned_transport_only_wrapper() -> None:
-    claude_root = CONFIG_ROOT / "claude-config"
-    wrapper = (claude_root / "bin/claude-gpt").read_text()
-    settings = json.loads((claude_root / "claude-gpt-settings.json").read_text())
-
-    assert 'canonical_claude="${HOME}/.claude/bin/claude"' in wrapper
-    assert "jq -s '.[0] * .[1]'" in wrapper
-    assert "--setting-sources project,local" in wrapper
-    assert '--settings "$merged_settings_file"' in wrapper
-    assert "AGENT_HUB_CONTEXT_PROVIDER=openai" in wrapper
-    assert "AGENT_HUB_CONTEXT_TRANSPORT_VARIANT=claude-gpt" in wrapper
-    assert 'AGENT_HUB_CONTEXT_MODEL="$context_model"' in wrapper
-    assert "agent-hub-context-client" not in wrapper
-    assert "CLAUDE.md" not in wrapper
-    assert "system-prompt" not in wrapper
-    assert "hooks" not in settings
-    assert settings["env"]["ANTHROPIC_AUTH_TOKEN"] == "unused"
-
-
 def _hook_request_body(log_path: Path, endpoint: str) -> dict[str, object]:
     for raw in log_path.read_text().splitlines():
         argv = json.loads(raw)
@@ -1048,10 +1043,10 @@ def _hook_request_body(log_path: Path, endpoint: str) -> dict[str, object]:
     ("provider", "transport_variant", "contract_model"),
     [
         ("anthropic", None, "claude-normal-test"),
-        ("openai", "claude-gpt", "gpt-transport-test"),
+        ("openai", "custom-transport", "custom-transport-test"),
     ],
 )
-async def test_claude_lifecycle_metadata_matches_normal_and_gpt_transport(
+async def test_claude_lifecycle_metadata_matches_normal_and_custom_transport(
     tmp_path: Path,
     provider: str,
     transport_variant: str | None,
@@ -1444,14 +1439,14 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
 
 
 @pytest.mark.asyncio
-async def test_claude_launcher_records_aico_gpt_transport_metadata(
+async def test_claude_launcher_records_aico_custom_transport_metadata(
     tmp_path: Path,
 ) -> None:
     canonical = tmp_path / "canonical.md"
     canonical.write_text("AGENT HUB GPT CANONICAL")
     contract = tmp_path / "contract.json"
     contract.write_text("{}")
-    settings = tmp_path / "claude-gpt-settings.json"
+    settings = tmp_path / "custom-transport-settings.json"
     settings.write_text(json.dumps({"model": "gpt-test-model"}))
     client_log = tmp_path / "client.json"
     real_log = tmp_path / "real.json"
@@ -1493,7 +1488,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
             "CLAUDE_REAL": str(fake_real),
             "AGENT_HUB_CONTEXT_CLIENT": str(fake_client),
             "AGENT_HUB_CONTEXT_PROVIDER": "openai",
-            "AGENT_HUB_CONTEXT_TRANSPORT_VARIANT": "claude-gpt",
+            "AGENT_HUB_CONTEXT_TRANSPORT_VARIANT": "custom-transport",
             "AICO_SESSION_ID": "aico-gpt-session",
         },
     )
@@ -1505,7 +1500,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
     assert invoked[invoked.index("--model") + 1] == "gpt-test-model"
     assert invoked[invoked.index("--session") + 1] == "aico-gpt-session"
     assert invoked[invoked.index("--metadata") + 1] == (
-        "transport_variant=claude-gpt"
+        "transport_variant=custom-transport"
     )
     launched = json.loads(real_log.read_text())
     assert launched[-4:] == ["--settings", str(settings), "-p", "native GPT task"]
@@ -1514,7 +1509,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("transport_variant", "native_label"),
-    [(None, "Claude"), ("claude-gpt", "Claude GPT")],
+    [(None, "Claude"), ("custom-transport", "Claude")],
 )
 async def test_claude_launcher_preserves_native_launch_on_failed_context(
     tmp_path: Path,

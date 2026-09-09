@@ -120,6 +120,8 @@ async function deliver(ctx: ExtensionContext, prompt: string, currentSessionId: 
 		"deliver",
 		"--surface",
 		"pi",
+		"--capability",
+		"bash",
 		"--cwd",
 		ctx.cwd,
 		"--session",

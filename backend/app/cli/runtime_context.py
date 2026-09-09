@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(response.model_dump(mode="json"), indent=2, sort_keys=True))
     elif args.command == "status":
         print(
-            f"runtime_context=OK profile={response.consumer_profile} "
+            f"runtime_context={response.status.upper()} profile={response.consumer_profile} "
             f"project={response.project_id or '-'} blocks={len(response.blocks)} "
             f"tokens={response.total_tokens}"
         )
@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             response.non_negotiables,
         ]
         print("\n".join(chunk for chunk in chunks if chunk))
-    return 0
+    return 0 if response.status == "ok" else 2
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from typing import Any
 
 SCHEMA_VERSION = "agent-hub.context.v1"
 CONTEXT_VERSION = "1"
-SURFACES = ("agent_hub", "claude_code", "codex", "gemini", "mcp", "pi")
+SURFACES = ("agent_hub", "claude_code", "codex", "gemini", "mcp", "pi", "antigravity")
 DEFAULT_PROVIDER = {
     "claude_code": "anthropic",
     "codex": "openai",
@@ -559,6 +559,7 @@ def _write_binding_sync(
         "schema_version": "agent-hub.context-binding.v1",
         "binding_id": str(uuid.uuid4()),
         "bound_at": now.isoformat(),
+        "evidence_stage": "bound",
         "consumer_surface": metadata["surface"],
         "hook_event": metadata["hook_event"],
         "native_session_id": metadata.get("session"),
@@ -689,6 +690,8 @@ def _descriptor(contract: dict[str, Any], json_path: Path, text_path: Path) -> d
         "payload_hash": contract["payload_hash"],
         "delivery_id": contract["delivery_id"],
         "artifact_id": contract["artifact_id"],
+        "evidence_stage": "generated" if contract["status"] == "ok" else "missing",
+        "component_diagnostics": contract.get("component_diagnostics", []),
         "contract_path": str(json_path),
         "text_path": str(text_path),
     }

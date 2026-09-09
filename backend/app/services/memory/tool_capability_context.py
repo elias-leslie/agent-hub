@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-from functools import lru_cache
 
 from app.utils.safe_subprocess import run_process
 
@@ -31,12 +30,9 @@ def _profile_filters(
 ) -> tuple[str | None, str | None]:
     """Decide whether to filter on task_type for the given consumer profile.
 
-    Startup profile sees the full set; runtime profiles filter unless the task
-    type is generic ("", "chat", None), matching the prior policy.
+    Task context applies at startup and during execution. Generic tasks keep
+    the essential guide without unrelated task-specific entries.
     """
-    profile = resolve_consumer_profile(consumer_profile)
-    if profile == MemoryConsumerProfile.AGENT_STARTUP:
-        return (None, None)
     if task_type in _GENERIC_TASK_TYPES:
         return (None, None)
     if task_type not in _RUNTIME_TASK_TYPES and task_type not in _FRONTEND_TASK_TYPES:
@@ -47,7 +43,7 @@ def _profile_filters(
 def _density_for_context(consumer_profile: str | None, task_type: str | None) -> str:
     profile = resolve_consumer_profile(consumer_profile)
     if profile == MemoryConsumerProfile.AGENT_STARTUP:
-        return "full"
+        return "adaptive"
     if task_type in _GENERIC_TASK_TYPES:
         return "core"
     if task_type in _RUNTIME_TASK_TYPES or task_type in _FRONTEND_TASK_TYPES:
@@ -63,10 +59,9 @@ def _run_manifest(cmd: list[str]) -> str:
         result = run_process(cmd, capture_output=True, text=True, timeout=5, check=False, env=env)
     except Exception:
         return ""
-    return (result.stdout or "").strip()
+    return (result.stdout or "").strip() if result.returncode == 0 else ""
 
 
-@lru_cache(maxsize=64)
 def _manifest_inject(
     task_type: str | None,
     agent_slug: str | None,
@@ -91,8 +86,8 @@ def _manifest_inject_adaptive(
 ) -> str:
     """Render the adaptive-density manifest, passing usage scores via a temp file.
 
-    Not lru_cached: scores are per-project and time-varying, so a cache keyed on
-    (task, agent, profile, density) would serve stale/cross-project output.
+    Scores are per-project and time-varying. Never cache a failed command or
+    stale command guidance across requests.
     """
     import json
     import tempfile
@@ -134,11 +129,9 @@ def format_tool_capability_context(
 ) -> str:
     """Render the <tool-usage> block by calling `st tools manifest --format inject`.
 
-    When `tool_scores` (usage-keyed 0-100 decay scores) are supplied for the
-    startup profile, the block is curated via the `adaptive` density: an
-    always-on floor plus usage-relevant surfaces. Any failure or empty result
-    falls back to the static density (full for startup) so the block is never
-    lost — fail to full, never to empty.
+    Startup uses the adaptive essential floor even without telemetry. Task and
+    optional usage scores select additional relevant commands. Missing command
+    output remains empty so the delivery contract can report it as unavailable.
     """
     if agent_slug == "persona" and bash_available is not True:
         return ""
@@ -150,9 +143,7 @@ def format_tool_capability_context(
         adaptive_body = _manifest_inject_adaptive(
             effective_task, agent_slug, consumer_profile, tool_scores
         )
-        if adaptive_body:
-            return f"<tool-usage>\n{adaptive_body}\n</tool-usage>"
-        # else: fall through to the static density below (fail to full).
+        return f"<tool-usage>\n{adaptive_body}\n</tool-usage>" if adaptive_body else ""
     density = _density_for_context(consumer_profile, task_type)
     body = _manifest_inject(effective_task, agent_slug, consumer_profile, density)
     if not body:
