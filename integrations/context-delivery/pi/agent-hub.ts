@@ -115,13 +115,16 @@ function reportDegraded(ctx: ExtensionContext, warning: string): void {
 	}
 }
 
-async function deliver(ctx: ExtensionContext, prompt: string, currentSessionId: string): Promise<DeliveryContract> {
+async function deliver(
+	ctx: ExtensionContext,
+	prompt: string,
+	currentSessionId: string,
+	hasShell: boolean,
+): Promise<DeliveryContract> {
 	const args = [
 		"deliver",
 		"--surface",
 		"pi",
-		"--capability",
-		"bash",
 		"--cwd",
 		ctx.cwd,
 		"--session",
@@ -133,6 +136,7 @@ async function deliver(ctx: ExtensionContext, prompt: string, currentSessionId: 
 		"--emit",
 		"json",
 	];
+	if (hasShell) args.push("--capability", "bash");
 	if (ctx.model?.provider) args.push("--provider", ctx.model.provider);
 	if (ctx.model?.id) args.push("--model", ctx.model.id);
 	if (process.env.SUMMITFLOW_TASK_ID) args.push("--task", process.env.SUMMITFLOW_TASK_ID);
@@ -179,7 +183,9 @@ export default function agentHubContext(pi: ExtensionAPI) {
 		pendingContract = undefined;
 		pendingFailure = undefined;
 		try {
-			const contract = await deliver(ctx, event.text, currentSessionId);
+			const contract = await deliver(
+				ctx, event.text, currentSessionId, pi.getActiveTools().includes("bash"),
+			);
 			lastHash = contract.payload_hash;
 			lastStatus = contract.status === "ok" ? "ok" : "failed";
 			if (contract.status === "failed") {
@@ -205,7 +211,9 @@ export default function agentHubContext(pi: ExtensionAPI) {
 		}
 		try {
 			const contract =
-				pendingContract ?? (await deliver(ctx, event.prompt, currentSessionId));
+				pendingContract ?? (await deliver(
+					ctx, event.prompt, currentSessionId, pi.getActiveTools().includes("bash"),
+				));
 			pendingContract = undefined;
 			lastHash = contract.payload_hash;
 			lastStatus = contract.status === "ok" ? "ok" : "failed";

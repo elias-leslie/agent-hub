@@ -567,129 +567,10 @@ async def test_client_times_out_a_hung_canonical_cli_and_persists_failure(
     assert "exceeded 0.05s" in stderr
 
 
-@pytest.mark.asyncio
-async def test_gemini_before_model_preserves_native_request_on_failed_delivery(
-    tmp_path: Path, fake_context_cli: Path
-) -> None:
-    env = {
-        **os.environ,
-        "AGENT_HUB_CONTEXT_CLI": str(fake_context_cli),
-        "FAKE_STATUS": "failed",
-        "FAKE_RENDERED": "required context unavailable",
-    }
-    code, stdout, _ = await _run(
-        str(CLIENT),
-        "hook",
-        "--surface",
-        "gemini",
-        "--artifact-root",
-        str(tmp_path / "artifacts"),
-        env=env,
-        stdin=json.dumps(
-            {
-                "hook_event_name": "BeforeModel",
-                "session_id": "gemini-session",
-                "cwd": str(REPO_ROOT),
-                "llm_request": {
-                    "model": "gemini-test",
-                    "messages": [{"role": "user", "content": "do work"}],
-                    "config": {"systemInstruction": "NATIVE GEMINI"},
-                },
-            }
-        ),
-    )
-
-    output = json.loads(stdout)
-    assert code == 0
-    assert "decision" not in output
-    assert "reason" not in output
-    assert "continue" not in output
-    assert "llm_request" not in output["hookSpecificOutput"]
-    assert "continuing with native model context only" in output["systemMessage"]
 
 
-@pytest.mark.asyncio
-async def test_gemini_hook_degrades_when_delivery_artifacts_cannot_be_written(
-    tmp_path: Path, fake_context_cli: Path
-) -> None:
-    blocked_root = tmp_path / "not-a-directory"
-    blocked_root.write_text("file blocks artifact directory creation")
-    env = {**os.environ, "AGENT_HUB_CONTEXT_CLI": str(fake_context_cli)}
-
-    code, stdout, stderr = await _run(
-        str(CLIENT),
-        "hook",
-        "--surface",
-        "gemini",
-        "--artifact-root",
-        str(blocked_root),
-        env=env,
-        stdin=json.dumps(
-            {
-                "hook_event_name": "BeforeModel",
-                "session_id": "gemini-session",
-                "cwd": str(REPO_ROOT),
-                "llm_request": {
-                    "model": "gemini-test",
-                    "messages": [{"role": "user", "content": "native task"}],
-                    "config": {"systemInstruction": "NATIVE GEMINI"},
-                },
-            }
-        ),
-    )
-
-    output = json.loads(stdout)
-    assert code == 0
-    assert "llm_request" not in output["hookSpecificOutput"]
-    assert "continue" not in output
-    assert "continuing with native model context only" in output["systemMessage"]
-    assert "could not persist degraded delivery evidence" in stderr
 
 
-@pytest.mark.asyncio
-async def test_gemini_before_model_appends_exact_bytes_without_mutating_native_system(
-    tmp_path: Path, fake_context_cli: Path
-) -> None:
-    rendered = "CANONICAL <tool-usage>literal tags</tool-usage>"
-    argv_log = tmp_path / "argv.json"
-    env = {
-        **os.environ,
-        "AGENT_HUB_CONTEXT_CLI": str(fake_context_cli),
-        "FAKE_RENDERED": rendered,
-        "FAKE_ARGV_LOG": str(argv_log),
-    }
-    original_request = {
-        "model": "gemini-test",
-        "messages": [{"role": "user", "content": "do work"}],
-        "config": {"systemInstruction": "NATIVE GEMINI"},
-    }
-    code, stdout, stderr = await _run(
-        str(CLIENT),
-        "hook",
-        "--surface",
-        "gemini",
-        "--artifact-root",
-        str(tmp_path / "artifacts"),
-        env=env,
-        stdin=json.dumps(
-            {
-                "hook_event_name": "BeforeModel",
-                "session_id": "gemini-session",
-                "cwd": str(REPO_ROOT),
-                "llm_request": original_request,
-            }
-        ),
-    )
-
-    output = json.loads(stdout)
-    request = output["hookSpecificOutput"]["llm_request"]
-    assert code == 0, stderr
-    assert request["config"] == original_request["config"]
-    assert request["messages"][0] == {"role": "user", "content": rendered}
-    assert request["messages"][1:] == original_request["messages"]
-    assert request["messages"][-1] == {"role": "user", "content": "do work"}
-    invoked = json.loads(argv_log.read_text())
-    assert invoked[invoked.index("--model") + 1] == "gemini-test"
 
 
 @pytest.mark.asyncio
@@ -788,7 +669,9 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     )
     (home / ".gemini").mkdir(parents=True)
     old_gemini = {
+        "theme": "operator-choice",
         "hooks": {
+            "AfterTool": [{"command": "operator-hook"}],
             "SessionStart": [
                 {"command": "/old/aico-mandates-gemini.sh", "timeout": 5000}
             ],
@@ -829,8 +712,6 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
         "--surface",
         "codex",
         "--surface",
-        "gemini",
-        "--surface",
         "pi",
         "--surface",
         "antigravity",
@@ -862,7 +743,9 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     claude_settings = json.loads((fake_claude / "settings.json").read_text())
     assert "SubagentStart" in claude_settings["hooks"]
     gemini_settings = json.loads((home / ".gemini/settings.json").read_text())
-    assert "BeforeModel" in gemini_settings["hooks"]
+    assert gemini_settings["theme"] == "operator-choice"
+    assert gemini_settings["hooks"]["AfterTool"] == [{"command": "operator-hook"}]
+    assert not gemini_settings["hooks"].get("BeforeModel")
     assert not gemini_settings["hooks"].get("BeforeAgent")
     assert "aico-mandates-gemini.sh" not in json.dumps(gemini_settings)
     install_result = json.loads(stdout)
@@ -905,52 +788,18 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     assert check_code == 0, check_stdout
     assert json.loads(check_stdout)["passed"] is True
 
-    gemini_settings = json.loads((home / ".gemini/settings.json").read_text())
-    gemini_settings["hooks"]["BeforeModel"][-1]["hooks"][0]["timeout"] = 1
+    # A stale launcher must not silently reinstall its retired hook.
+    gemini_settings["hooks"]["BeforeModel"] = [{"hooks": [{
+        "type": "command",
+        "command": f"{home}/.local/bin/agent-hub-context-client hook --surface gemini --capability bash",
+    }]}]
     (home / ".gemini/settings.json").write_text(json.dumps(gemini_settings))
-    shape_code, shape_stdout, _ = await _run(
-        sys.executable,
-        str(fake_repo / "integrations/context-delivery/install.py"),
-        "--repo-root",
-        str(fake_repo),
-        "--home",
-        str(home),
-        "--surface",
-        "gemini",
-        "--check",
+    retired_code, retired_stdout, _ = await _run(
+        sys.executable, str(fake_repo / "integrations/context-delivery/install.py"),
+        "--repo-root", str(fake_repo), "--home", str(home), "--check",
     )
-    assert shape_code == 1
-    assert json.loads(shape_stdout)["passed"] is False
-
-    repair_code, repair_stdout, _ = await _run(
-        sys.executable,
-        str(fake_repo / "integrations/context-delivery/install.py"),
-        "--repo-root",
-        str(fake_repo),
-        "--home",
-        str(home),
-        "--surface",
-        "gemini",
-    )
-    assert repair_code == 0, repair_stdout
-    gemini_settings = json.loads((home / ".gemini/settings.json").read_text())
-    gemini_settings["hooks"]["BeforeModel"].append(
-        gemini_settings["hooks"]["BeforeModel"][-1]
-    )
-    (home / ".gemini/settings.json").write_text(json.dumps(gemini_settings))
-    duplicate_code, duplicate_stdout, _ = await _run(
-        sys.executable,
-        str(fake_repo / "integrations/context-delivery/install.py"),
-        "--repo-root",
-        str(fake_repo),
-        "--home",
-        str(home),
-        "--surface",
-        "gemini",
-        "--check",
-    )
-    assert duplicate_code == 1
-    assert json.loads(duplicate_stdout)["passed"] is False
+    assert retired_code == 1
+    assert json.loads(retired_stdout)["passed"] is False
 
     (home / ".pi/agent/extensions/agent-hub.ts").unlink()
     (home / ".pi/agent/extensions/agent-hub.ts").write_text("drift")
@@ -1006,6 +855,63 @@ def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
     assert "continuing with native context only" in extension
     assert "return { systemPrompt: event.systemPrompt }" in extension
     assert "stop-work notice" not in extension
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("active_tools", [[], ["read"], ["read", "bash"]])
+@pytest.mark.parametrize("status", ["ok", "failed"])
+async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
+    tmp_path: Path, fake_context_cli: Path, active_tools: list[str], status: str
+) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    _, version, _ = await _run(node, "--version")
+    if int(version.lstrip("v").split(".")[0]) < 24:
+        pytest.skip("Node 24 required for built-in TypeScript execution")
+    client_log = tmp_path / "client-argv.json"
+    harness = tmp_path / "pi-check.mjs"
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness.write_text(
+        "import install from " + json.dumps(extension.as_uri()) + ";\n"
+        "const handlers = new Map();\n"
+        "install({\n"
+        "  on: (name, handler) => handlers.set(name, handler),\n"
+        "  registerCommand: () => {},\n"
+        "  getActiveTools: () => JSON.parse(process.env.ACTIVE_TOOLS),\n"
+        "});\n"
+        "const ctx = {cwd: process.cwd(), hasUI: false,\n"
+        "  sessionManager: {getSessionFile: () => '/tmp/pi-check.jsonl'}};\n"
+        "await handlers.get('session_start')({}, ctx);\n"
+        "const input = await handlers.get('input')({text: 'check'}, ctx);\n"
+        "const result = await handlers.get('before_agent_start')(\n"
+        "  {prompt: 'check', systemPrompt: 'Native Pi prompt'}, ctx);\n"
+        "console.log(JSON.stringify({input, result}));\n"
+    )
+    code, stdout, stderr = await _run(
+        node, str(harness),
+        env={
+            **os.environ,
+            "ACTIVE_TOOLS": json.dumps(active_tools),
+            "AGENT_HUB_CONTEXT_CLIENT": str(fake_context_cli),
+            "FAKE_ARGV_LOG": str(client_log),
+            "FAKE_RENDERED": "Exact canonical payload <unchanged>",
+            "FAKE_STATUS": status,
+        },
+    )
+    assert code == 0, stderr
+    result = json.loads(stdout)
+    assert result["input"] == {"action": "continue"}
+    expected = "Native Pi prompt"
+    if status == "ok":
+        expected += "\n\nExact canonical payload <unchanged>"
+    else:
+        assert "continuing with native context only" in stderr
+    assert result["result"]["systemPrompt"] == expected
+    arguments = json.loads(client_log.read_text())
+    assert ("--capability" in arguments) == ("bash" in active_tools)
+    if "bash" in active_tools:
+        assert arguments[arguments.index("--capability") + 1] == "bash"
 
 
 def test_claude_sources_do_not_add_parallel_model_context() -> None:
@@ -1244,6 +1150,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
             "native exec resume prompt",
         ),
         ("fork", "session-id", "native fork prompt"),
+        ("exec", "fork", "session-id", "native exec fork prompt"),
     ],
 )
 async def test_codex_launcher_does_not_claim_fresh_context_on_saved_thread(
@@ -1288,7 +1195,7 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
     )
 
     assert code == 0
-    phase = "fork" if arguments[0] == "fork" else "resume"
+    phase = "fork" if "fork" in arguments else "resume"
     assert f"continuing native {phase} without a fresh Agent Hub payload" in stderr
     assert not client_log.exists()
     launched = json.loads(real_log.read_text())

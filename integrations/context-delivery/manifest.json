@@ -143,22 +143,6 @@
       "matcher": "",
       "timeout": 10,
       "command": "{home}/.local/bin/agent-hub-context-client bind --surface claude_code"
-    },
-    {
-      "surface": "gemini",
-      "path": ".gemini/settings.json",
-      "event": "BeforeModel",
-      "sequential": true,
-      "timeout": 60000,
-      "command": "{home}/.local/bin/agent-hub-context-client hook --surface gemini --capability bash",
-      "remove_same_command_from_other_events": true,
-      "remove_commands_containing": [
-        "aico-mandates-gemini.sh",
-        "st mandates"
-      ],
-      "retired_commands": [
-        "{home}/.local/bin/agent-hub-context-client hook --surface gemini"
-      ]
     }
   ],
   "plugin_registrations": [
@@ -167,6 +151,19 @@
       "path": ".gemini/config/import_manifest.json",
       "name": "agent-hub-context",
       "source": "antigravity"
+    }
+  ],
+  "retired_hooks": [
+    {
+      "surface": "shared",
+      "path": ".gemini/settings.json",
+      "commands": [
+        "{home}/.local/bin/agent-hub-context-client hook --surface gemini",
+        "{home}/.local/bin/agent-hub-context-client hook --surface gemini --capability bash"
+      ],
+      "fragments": [
+        "aico-mandates-gemini.sh"
+      ]
     }
   ]
 }

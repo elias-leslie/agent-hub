@@ -13,9 +13,9 @@ failure text, and records no successful preinjection claim. This does not weaken
 the canonical assembler's internal contract validation; it prevents an external
 context dependency from blocking the native model.
 
-Supported adapters are Claude Code, Codex, Gemini CLI, Pi, and Antigravity CLI.
-Claude and Codex receive additive launch context; Gemini receives it at
-BeforeModel; Pi appends it in `before_agent_start`. Antigravity uses a native
+Supported adapters are Claude Code, Codex, Pi, and Antigravity CLI.
+Claude and Codex receive additive launch context; Pi appends it in
+`before_agent_start`. Antigravity uses a native
 always-on rule that asks the agent to retrieve canonical context through its
 shell. Retrieval requires the native command permission. It is not automatic
 system-prompt injection. All shell-capable adapters declare `bash` for guidance
@@ -29,23 +29,20 @@ payloads that each TUI otherwise spills from native hook output into truncated
 previews. Their native SessionStart/SubagentStart hooks only bind the immutable
 launch artifact to real session/subagent IDs, preventing a second context copy.
 
-OpenCode, Hermes CLI, and Claude GPT are retired. Historical delivery metadata
+OpenCode, Hermes CLI, Claude GPT, and Gemini CLI are retired. Historical delivery metadata
 and saved sessions remain readable. The installer removes the old Claude GPT
 launcher/settings links; it does not revive retired clients.
 
-The verified Codex resume/fork behavior restores saved developer instructions on both resume and fork and
+Codex 0.153.4 restores saved developer instructions on both resume and fork and
 ignores a fresh override, even when the override is passed to the consuming
 subcommand parser. For those two commands the wrapper therefore warns, preserves
 the raw native invocation and saved thread context, and deliberately creates no
 fresh Agent Hub delivery or binding claim. This avoids falsely claiming that a
 new payload reached the model.
 
-Gemini's BeforeModel adapter places the exact canonical text in one stable
-leading request message while preserving all original messages and
-`config.systemInstruction`. BeforeAgent's
-`additionalContext` channel is intentionally not used because Gemini escapes
-angle brackets there, which would make model-visible bytes diverge from the
-canonical payload hash.
+Pi declares shell capability only while its `bash` tool is active. Starting Pi
+with `--no-tools` or a read-only tool selection retains shared policy without
+requesting shell command guidance.
 
 Install all supported adapters:
 
@@ -56,8 +53,8 @@ python3 integrations/context-delivery/install.py
 Install or verify one surface:
 
 ```bash
-python3 integrations/context-delivery/install.py --surface gemini
-python3 integrations/context-delivery/install.py --surface gemini --check
+python3 integrations/context-delivery/install.py --surface antigravity
+python3 integrations/context-delivery/install.py --surface antigravity --check
 ```
 
 The installer uses source symlinks rather than copies. Active adapter code
