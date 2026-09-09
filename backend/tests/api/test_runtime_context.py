@@ -42,6 +42,33 @@ from app.services.runtime_context import (
 
 
 @pytest.mark.asyncio
+async def test_optional_continuity_failure_preserves_required_context() -> None:
+    selection = _RuntimeContextSelection(
+        consumer_profile="agent_startup", project_id="agent-hub", query="startup",
+        blocks=[RuntimeContextBlockResponse(
+            id="prompt:operator", source_type="prompt", source_id="operator",
+            title="Operator", content="Preserve native instructions.", token_count=4,
+            origin="auto", mode="order", position=100,
+        )], excluded=[], overrides=[], project_index="", tool_capabilities="",
+        budget_tokens=0, budget_enabled=False,
+    )
+    with (
+        patch("app.services.runtime_context._resolve_canonical_project_id", new=AsyncMock(return_value="agent-hub")),
+        patch("app.services.runtime_context._select_runtime_context", new=AsyncMock(return_value=selection)),
+        patch("app.services.runtime_context.get_memory_settings", new=AsyncMock(return_value=SimpleNamespace(continuity_enabled=True, continuity_max_sessions=3))),
+        patch("app.services.memory.continuity_injector.build_continuity_context", new=AsyncMock(side_effect=RuntimeError("continuity unavailable"))),
+    ):
+        response = await build_canonical_context_delivery(
+            AsyncMock(), CanonicalContextDeliveryRequest(consumer_surface="codex", project_id="agent-hub")
+        )
+    assert response.status == "ok"
+    assert "Preserve native instructions." in response.rendered
+    assert response.component_diagnostics[-1].model_dump() == {
+        "component": "continuity", "state": "unavailable", "reason": "continuity_generation_failed",
+    }
+
+
+@pytest.mark.asyncio
 async def test_canonical_project_resolution_uses_longest_registered_root() -> None:
     request = CanonicalContextDeliveryRequest(
         consumer_surface="codex",

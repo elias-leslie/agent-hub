@@ -12,12 +12,7 @@ def _stub_run(stdout: str = "", stderr: str = "", returncode: int = 0):
     return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
 
 
-def _clear_cache() -> None:
-    tcc._manifest_inject.cache_clear()
-
-
 def test_format_tool_capability_context_wraps_manifest_body() -> None:
-    _clear_cache()
     inject_body = "mandates:\n  st.pulse:\n    cmd: st pulse --gate\n    when: session start"
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout=inject_body)):
         rendered = tcc.format_tool_capability_context(
@@ -34,7 +29,6 @@ def test_format_tool_capability_context_wraps_manifest_body() -> None:
 
 
 def test_format_tool_capability_context_invokes_manifest_with_filters() -> None:
-    _clear_cache()
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")) as mocked:
         tcc.format_tool_capability_context(
             consumer_profile="agent_runtime",
@@ -53,7 +47,6 @@ def test_format_tool_capability_context_invokes_manifest_with_filters() -> None:
 
 
 def test_format_tool_capability_context_drops_filter_for_chat_runtime() -> None:
-    _clear_cache()
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")) as mocked:
         tcc.format_tool_capability_context(
             consumer_profile="agent_preview",
@@ -66,8 +59,7 @@ def test_format_tool_capability_context_drops_filter_for_chat_runtime() -> None:
     assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "core"
 
 
-def test_format_tool_capability_context_uses_full_density_for_startup() -> None:
-    _clear_cache()
+def test_format_tool_capability_context_uses_adaptive_density_for_startup() -> None:
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")) as mocked:
         tcc.format_tool_capability_context(
             consumer_profile="agent_startup",
@@ -76,12 +68,11 @@ def test_format_tool_capability_context_uses_full_density_for_startup() -> None:
             bash_available=True,
         )
     cmd = mocked.call_args.args[0]
-    assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "full"
+    assert "--density" in cmd and cmd[cmd.index("--density") + 1] == "adaptive"
     assert "--task" not in cmd
 
 
 def test_format_tool_capability_context_returns_empty_when_bash_unavailable() -> None:
-    _clear_cache()
     with patch.object(tcc, "run_process") as mocked:
         rendered = tcc.format_tool_capability_context(
             consumer_profile="agent_runtime",
@@ -94,7 +85,6 @@ def test_format_tool_capability_context_returns_empty_when_bash_unavailable() ->
 
 
 def test_format_tool_capability_context_fails_closed_for_persona_without_bash() -> None:
-    _clear_cache()
     rendered = tcc.format_tool_capability_context(
         consumer_profile="agent_runtime",
         task_type="wake",
@@ -106,7 +96,6 @@ def test_format_tool_capability_context_fails_closed_for_persona_without_bash() 
 
 
 def test_format_tool_capability_context_returns_empty_when_manifest_empty() -> None:
-    _clear_cache()
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="")):
         rendered = tcc.format_tool_capability_context(
             consumer_profile="agent_runtime",
@@ -118,7 +107,6 @@ def test_format_tool_capability_context_returns_empty_when_manifest_empty() -> N
 
 
 def test_format_tool_capability_context_sanitizes_python_env() -> None:
-    _clear_cache()
     captured: dict = {}
 
     def _capture(cmd, **kwargs):
@@ -141,7 +129,6 @@ def test_format_tool_capability_context_sanitizes_python_env() -> None:
 
 
 def test_build_tool_capability_payload_wraps_inject_body() -> None:
-    _clear_cache()
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")):
         payload = tcc.build_tool_capability_payload(
             consumer_profile="agent_runtime",
@@ -151,3 +138,24 @@ def test_build_tool_capability_payload_wraps_inject_body() -> None:
         )
     assert payload is not None
     assert payload["tool_usage"].startswith("<tool-usage>")
+
+
+def test_startup_without_scores_keeps_task_and_uses_adaptive_guide() -> None:
+    with patch.object(tcc, "run_process", return_value=_stub_run(stdout="mandates: {}")) as run:
+        tcc.format_tool_capability_context(
+            consumer_profile="agent_startup", task_type="backend", bash_available=True,
+        )
+    cmd = run.call_args.args[0]
+    assert cmd[cmd.index("--density") + 1] == "adaptive"
+    assert cmd[cmd.index("--task") + 1] == "backend"
+
+
+def test_failed_manifest_stdout_is_not_delivered_or_cached() -> None:
+    with patch.object(tcc, "run_process", side_effect=[
+        _stub_run(stdout="partial output", returncode=1),
+        _stub_run(stdout="mandates: {}"),
+    ]) as run:
+        args = dict(consumer_profile="agent_runtime", task_type="backend", bash_available=True)
+        assert tcc.format_tool_capability_context(**args) == ""
+        assert "mandates: {}" in tcc.format_tool_capability_context(**args)
+    assert run.call_count == 2

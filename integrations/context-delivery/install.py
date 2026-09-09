@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SURFACES = ("claude_code", "codex", "gemini", "pi")
+SURFACES = ("claude_code", "codex", "gemini", "pi", "antigravity")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -221,6 +221,11 @@ def _merge_hook(path: Path, entry: dict[str, Any], home: Path) -> dict[str, str]
     hooks = value.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         raise RuntimeError(f"settings hooks must be a JSON object: {path}")
+    for retired in entry.get("retired_commands", []):
+        command = retired.format(home=home)
+        for event, groups in list(hooks.items()):
+            if isinstance(groups, list):
+                hooks[event] = _remove_exact_command(groups, command)
     fragments = entry.get("remove_commands_containing", [])
     if fragments:
         for existing_event, existing_groups in list(hooks.items()):
@@ -278,6 +283,12 @@ def _check_hook(path: Path, entry: dict[str, Any], home: Path) -> dict[str, str]
     if any(fragment in serialized for fragment in fragments):
         return {"target": str(path), "state": "legacy", "event": entry["event"]}
     hooks = value.get("hooks", {})
+    if isinstance(hooks, dict) and any(
+        isinstance(groups, list) and _contains_exact_command(groups, retired.format(home=home))
+        for retired in entry.get("retired_commands", [])
+        for groups in hooks.values()
+    ):
+        return {"target": str(path), "state": "legacy", "event": entry["event"]}
     command = entry["command"].format(home=home)
     if (
         entry.get("remove_same_command_from_other_events")
@@ -293,6 +304,33 @@ def _check_hook(path: Path, entry: dict[str, Any], home: Path) -> dict[str, str]
     if isinstance(hooks, dict) and _canonical_hook_is_exact(hooks, entry, home):
         return {"target": str(path), "state": "ok", "event": entry["event"]}
     return {"target": str(path), "state": "drift", "event": entry["event"]}
+
+
+def _plugin_registration(home: Path, entry: dict[str, Any], *, check: bool) -> dict[str, str]:
+    """Maintain the registration schema emitted by native `agy plugin install`.
+
+    Only this plugin's registration is added; other native imports are retained.
+    Plugin code and rules are installed separately as source links.
+    """
+    path = _target(home, entry["path"])
+    value = json.loads(path.read_text()) if path.exists() else {"imports": []}
+    if not isinstance(value, dict) or not isinstance(value.get("imports"), list):
+        return {"target": str(path), "state": "invalid"}
+    if any(isinstance(item, dict) and item.get("name") == entry["name"] for item in value["imports"]):
+        return {"target": str(path), "state": "ok"}
+    if check:
+        return {"target": str(path), "state": "unregistered"}
+    backup = _backup_file(home, path) if path.exists() else None
+    value["imports"].append({
+        "name": entry["name"], "source": entry["source"],
+        "importedAt": datetime.now(UTC).isoformat(), "components": None,
+    })
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2) + "\n")
+    result = {"target": str(path), "state": "configured"}
+    if backup:
+        result["backup"] = str(backup)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -329,6 +367,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.check
             else _merge_hook(path, entry, home)
         )
+
+    for entry in manifest.get("plugin_registrations", []):
+        if entry["surface"] in selected:
+            results.append(_plugin_registration(home, entry, check=args.check))
 
     failed = any(
         result["state"] not in {"ok", "linked", "configured", "retired"}

@@ -3,6 +3,20 @@
 from app.cli.runtime_context import _build_parser, _parse_metadata
 
 
+def test_status_reports_failed_assembly(monkeypatch, capsys) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.cli import runtime_context
+
+    monkeypatch.setattr(runtime_context, "_render", AsyncMock(return_value=SimpleNamespace(
+        status="failed", consumer_profile="agent_startup", project_id="agent-hub",
+        blocks=[], total_tokens=0,
+    )))
+    assert runtime_context.main(["status"]) == 2
+    assert "runtime_context=FAILED" in capsys.readouterr().out
+
+
 def test_deliver_parser_accepts_shared_tui_contract_flags() -> None:
     args = _build_parser().parse_args(
         [
