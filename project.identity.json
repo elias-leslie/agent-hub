@@ -13,6 +13,7 @@
     "backend_port": 8003,
     "frontend_port": 3003,
     "backend_dir": "backend",
+    "backend_extras": ["compression"],
     "frontend_dir": "frontend",
     "health_endpoint": "/health"
   },
