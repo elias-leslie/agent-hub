@@ -136,7 +136,6 @@ export interface AddEpisodeRequest {
   preserve_stats_from?: string
   context_kind?: MemoryContextKind
   applicability?: MemoryApplicability
-  bypass_compactness?: boolean
 }
 
 export interface AddEpisodeResponse {

@@ -21,7 +21,6 @@ from .agent_benchmark import (
 from .agent_performance_log import AgentPerformanceLog
 from .base import Base
 from .client import APIKey, Client, ClientControl
-from .compactness_policy import CompactnessPolicy
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog

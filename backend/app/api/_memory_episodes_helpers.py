@@ -176,7 +176,6 @@ async def _build_content_update(
         EpisodeValidator.validate_content(
             request.content,
             tier=effective_tier,
-            bypass_compactness=getattr(request, "bypass_compactness", False),
         )
     except EpisodeValidationError as e:
         raise HTTPException(

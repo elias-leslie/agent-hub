@@ -129,13 +129,6 @@ class SaveLearningRequest(BaseModel):
         ),
     )
     change_reason: str | None = Field(None, description="Why this learning is being recorded")
-    bypass_compactness: bool = Field(
-        False,
-        description=(
-            "Override: skip the strict-Caveman compactness gate. Use only when one "
-            "combined memory is more token-efficient than splitting into atomic rules."
-        ),
-    )
 
 
 class SaveLearningResponse(BaseModel):

@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.main import _startup
-from app.services.compactness_policy import DEFAULTS as COMPACTNESS_DEFAULTS
 
 
 def test_ensure_builtin_providers_registered_restores_cleared_registry() -> None:
@@ -76,10 +75,6 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
-    ), patch(
-        "app.services.compactness_policy.load_policy_from_db",
-        new_callable=AsyncMock,
-        return_value=COMPACTNESS_DEFAULTS,
     ):
         await _startup()
 
@@ -148,10 +143,6 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
-    ), patch(
-        "app.services.compactness_policy.load_policy_from_db",
-        new_callable=AsyncMock,
-        return_value=COMPACTNESS_DEFAULTS,
     ):
         await _startup()
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
-from app.services.compactness import CompactnessValidationError, validate_compactness
-
 
 class EpisodeValidationError(Exception):
     """Raised when episode content fails validation."""
@@ -18,14 +16,8 @@ class EpisodeValidationError(Exception):
 
 
 class EpisodeValidator:
-    """Validates episode content for quality and conciseness."""
+    """Validates memory records and their suitability for long-term storage."""
 
-    ANY_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*\n][^*\n]{0,78}\*\*:")
-    CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?<![\|])\s*::\s*|(?<!\|)\s*->\s*(?!\|)"
-    )
-    LIST_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?m)^\s*(?:[-*]|\d+\.)\s+")
-    MULTI_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?m)^\*\*[^*\n][^*\n]{0,78}\*\*:")
     HEARTBEAT_JOURNAL_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
     )
@@ -39,149 +31,28 @@ class EpisodeValidator:
         r"(?im)^\[session summary:"
     )
 
-    # Verbose patterns that indicate conversational/verbose content
-    VERBOSE_PATTERNS: ClassVar[list[str]] = [
-        "you should",
-        "i recommend",
-        "please",
-        "thank you",
-        "let me know",
-        "feel free",
-        "i suggest",
-        "you might want",
-        "consider using",
-        "it would be",
-        "it's important to",
-        "make sure",
-        "remember",
-        "note:",
-        "important:",
-    ]
-    IMPERATIVE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"^\*\*[^*\n][^*\n]{0,78}\*\*:\s*"
-        r"(?:Use|Never|Always|Check|Follow|Avoid|Run|Keep|Prefer|Treat|Record|Verify|Fix|Delete|Remove|Commit|Push|Restart|Rebuild|File|Store|Apply|Stop|Set|Add)\b"
-    )
 
     @classmethod
-    def validate_content(
-        cls,
-        content: str,
-        tier: str | None = None,
-        *,
-        bypass_compactness: bool = False,
-    ) -> None:
-        """
-        Validate episode content for conciseness and declarative style.
-
-        Args:
-            content: Episode content to validate
-            tier: Optional tier for exact header enforcement
-            bypass_compactness: When true, skip the strict-Caveman gate. Other
-                rules (header, atomic structure, custom delimiters, verbose
-                patterns) still run. Used by the UI "Save anyway" override.
-
-        Raises:
-            EpisodeValidationError: If content fails validation (header, conversational, delimiters)
-        """
-        detected = []
-        content_lower = content.lower()
-
-        # Rule 1: Header format
-        if tier and tier not in {"mandate", "guardrail", "reference"}:
+    def validate_content(cls, content: str, tier: str | None = None) -> None:
+        """Validate record shape without prescribing a writing style."""
+        if tier and tier not in {"mandate", "guardrail", "reference", "archive"}:
             raise EpisodeValidationError(
                 message=f"Unsupported memory tier {tier!r}.",
                 detected_patterns=["Unsupported Tier"],
             )
-        if not cls.ANY_HEADER_PATTERN.match(content):
-            message = (
-                "Episode must start with a bold topic header. "
-                "Format: '**Topic**: Content...'. "
-                "Example: '**Service Scripts**: Use ./scripts/rebuild.sh...'"
-            )
-            detected_patterns = ["Missing Header"]
+        if not content.strip():
             raise EpisodeValidationError(
-                message=message,
-                detected_patterns=detected_patterns,
+                message="Memory content must not be empty.",
+                detected_patterns=["Empty Content"],
             )
-
-        if tier and not cls.IMPERATIVE_PATTERN.match(content):
-            raise EpisodeValidationError(
-                message="Episode must start with a direct imperative after the topic header.",
-                detected_patterns=["Weak Imperative"],
-            )
-
-        if cls.LIST_PATTERN.search(content) or len(cls.MULTI_HEADER_PATTERN.findall(content)) > 1:
-            raise EpisodeValidationError(
-                message="Episode must express one atomic rule, not a list or multi-header block.",
-                detected_patterns=["Non-Atomic Structure"],
-            )
-
-        # Rule 6: Conversational patterns
-        for pattern in cls.VERBOSE_PATTERNS:
-            if pattern in content_lower:
-                detected.append(pattern)
-
-        if detected:
-            raise EpisodeValidationError(
-                message=f"Episode content is too verbose. "
-                f"Write declarative facts, not conversational advice. "
-                f"Detected patterns: {', '.join(repr(p) for p in detected)}",
-                detected_patterns=detected,
-            )
-
-        # Rule 5: Custom delimiters (:: or -> outside tables)
-        if cls.CUSTOM_DELIMITER_PATTERN.search(content):
-            raise EpisodeValidationError(
-                message="Do not use custom delimiters like '::' or '->'. "
-                "Use standard punctuation or tables.",
-                detected_patterns=["Custom Delimiters"],
-            )
-
-        if not bypass_compactness:
-            try:
-                validate_compactness(content, kind="memory")
-            except CompactnessValidationError as exc:
-                raise EpisodeValidationError(
-                    message="Episode failed strict Caveman gate. " + "; ".join(exc.errors),
-                    detected_patterns=list(exc.errors),
-                ) from exc
 
     @classmethod
-    def validate_content_simple(
-        cls,
-        content: str,
-        *,
-        bypass_compactness: bool = False,
-    ) -> str | None:
-        """
-        Lightweight validation for generated learnings.
-
-        Returns error message if invalid, None if valid.
-        Used by episode_creator for lightweight validation.
-
-        bypass_compactness: When true, skip the strict-Caveman gate. Used by
-        the UI "Save anyway" override.
-        """
-        content_lower = content.lower()
-        detected = []
-
-        if cls.CUSTOM_DELIMITER_PATTERN.search(content):
-            return "Do not use custom delimiters like '::' or '->'. Use standard punctuation or tables."
-
-        for pattern in cls.VERBOSE_PATTERNS:
-            if pattern in content_lower:
-                detected.append(pattern)
-
-        if detected:
-            return (
-                "Content is too verbose. Write declarative facts, not conversational advice. "
-                f"Detected patterns: {', '.join(repr(p) for p in detected)}"
-            )
-        if not bypass_compactness:
-            try:
-                validate_compactness(content, kind="memory")
-            except CompactnessValidationError as exc:
-                return "Episode failed strict Caveman gate. " + "; ".join(exc.errors)
+    def validate_content_simple(cls, content: str) -> str | None:
+        """Return a content-validation error for generated learnings."""
+        try:
+            cls.validate_content(content)
+        except EpisodeValidationError as exc:
+            return str(exc)
         return None
 
     @classmethod

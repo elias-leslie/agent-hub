@@ -63,12 +63,9 @@ async def handle_add_episode(
         sensitivity_tier=enrichment.sensitivity_tier,
         changed_by="api",
         change_reason=request.change_reason or "Episode added",
-        bypass_compactness=request.bypass_compactness,
     )
     if not result.success:
-        # Validation failures (Caveman gate, verbose patterns, etc.) are user
-        # input errors — return 422 so the UI can surface the message and
-        # offer the bypass_compactness override.
+        # Content validation failures are actionable client errors.
         message = result.validation_error or "Failed to add episode"
         raise HTTPException(
             status_code=422,

@@ -16,10 +16,6 @@ interface UseEpisodeEditorProps {
   onClose: () => void
 }
 
-interface SaveOptions {
-  bypassCompactness?: boolean
-}
-
 export function useEpisodeEditor({
   episode,
   onSaved,
@@ -34,7 +30,6 @@ export function useEpisodeEditor({
   )
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [canBypass, setCanBypass] = useState(false)
 
   const initialRenderMode = episode.render_mode ?? null
 
@@ -45,7 +40,7 @@ export function useEpisodeEditor({
     summary !== (episode.summary ?? '') ||
     renderMode !== initialRenderMode
 
-  async function handleSave(options: SaveOptions = {}) {
+  async function handleSave() {
     if (!hasChanges) {
       onClose()
       return
@@ -53,7 +48,6 @@ export function useEpisodeEditor({
 
     setIsSaving(true)
     setError(null)
-    setCanBypass(false)
 
     try {
       const contentOrTierChanged =
@@ -70,7 +64,6 @@ export function useEpisodeEditor({
           source_description: episode.source_description,
           injection_tier: tier,
           preserve_stats_from: episode.uuid,
-          bypass_compactness: options.bypassCompactness,
         })
         newUuid = newEpisode.uuid
 
@@ -104,11 +97,6 @@ export function useEpisodeEditor({
       const message =
         err instanceof Error ? err.message : 'Failed to save changes'
       setError(message)
-      // The strict-Caveman gate is the only error path the UI can override.
-      // Detect it by message; bypass shouldn't appear for header/atomic/etc.
-      if (/strict Caveman gate/i.test(message)) {
-        setCanBypass(true)
-      }
     } finally {
       setIsSaving(false)
     }
@@ -127,7 +115,6 @@ export function useEpisodeEditor({
     setRenderMode,
     isSaving,
     error,
-    canBypass,
     hasChanges,
     handleSave,
   }

@@ -26,14 +26,12 @@ MAX_SOURCE_COMPACT_CONTENT_CHARS = 420
 def validate_content(
     content: str,
     config: IngestionConfig,
-    *,
-    bypass_compactness: bool = False,
 ) -> CreateResult | None:
     """Return a failure CreateResult if validation fails, else None."""
     if not config.validate:
         return None
     validation_error = EpisodeValidator.validate_content_simple(
-        content, bypass_compactness=bypass_compactness
+        content
     )
     if validation_error:
         return CreateResult(success=False, validation_error=validation_error)
@@ -92,13 +90,13 @@ def build_source_quality_metadata(
         enriched["compact_status"] = "source_ready"
         enriched["source_compact_validated_at"] = checked_at_iso
         enriched["source_quality_checked_at"] = checked_at_iso
-        enriched["source_quality_method"] = "format_standard"
+        enriched["source_quality_method"] = "source_size"
     else:
         enriched.setdefault("compact_content", compact_content)
         enriched.setdefault("compact_status", "source_ready")
         enriched.setdefault("source_compact_validated_at", checked_at_iso)
         enriched.setdefault("source_quality_checked_at", checked_at_iso)
-        enriched.setdefault("source_quality_method", "format_standard")
+        enriched.setdefault("source_quality_method", "source_size")
     return enriched
 
 

@@ -63,26 +63,7 @@ class TestEpisodeCreatorValidation:
         # Should not raise exception
         EpisodeValidator.validate_content(content)
 
-    @pytest.mark.parametrize(
-        "pattern",
-        EpisodeValidator.VERBOSE_PATTERNS,
-    )
-    def test_rejects_verbose_patterns(self, pattern: str):
-        """Test that verbose patterns are rejected."""
-        content = f"**Topic**: This is content with {pattern} in it."
-        with pytest.raises(EpisodeValidationError) as exc:
-            EpisodeValidator.validate_content(content)
 
-        assert "too verbose" in str(exc.value).lower()
-        assert pattern in str(exc.value)
-
-    def test_case_insensitive_pattern_detection(self):
-        """Test that pattern detection is case insensitive."""
-        content = "**Advice**: I RECOMMEND using this pattern."
-        with pytest.raises(EpisodeValidationError) as exc:
-            EpisodeValidator.validate_content(content)
-
-        assert "i recommend" in str(exc.value)
 
     def test_accepts_topic_header_when_tier_is_provided(self):
         """Tier-aware validation should accept topic headers because tier lives in metadata."""
@@ -91,44 +72,9 @@ class TestEpisodeCreatorValidation:
             tier="mandate",
         )
 
-    def test_rejects_non_caveman_example_heavy_content(self) -> None:
-        with pytest.raises(EpisodeValidationError) as exc:
-            EpisodeValidator.validate_content(
-                "**Prompt Hygiene**: Use strict prose. For example, explain every option.",
-                tier="mandate",
-            )
 
-        assert "strict caveman gate" in str(exc.value).lower()
-        assert "example markers found" in str(exc.value).lower()
 
-    def test_bypass_compactness_skips_caveman_gate(self) -> None:
-        # Long-sentence error normally fails the gate; bypass should let it through.
-        long_content = (
-            "**Topic**: Use the canonical runbook entry today before any other "
-            "operator action because every fallback path eventually flows back."
-        )
-        EpisodeValidator.validate_content(
-            long_content, tier="mandate", bypass_compactness=True
-        )
 
-    def test_bypass_compactness_still_enforces_other_rules(self) -> None:
-        # Bypass should NOT skip header/atomic/verbose/delimiter rules.
-        with pytest.raises(EpisodeValidationError):
-            EpisodeValidator.validate_content(
-                "no header here",
-                tier="mandate",
-                bypass_compactness=True,
-            )
-
-    def test_rejects_missing_bold_topic_header_when_tier_is_provided(self):
-        """Tier-aware validation should still require a bold topic header."""
-        with pytest.raises(EpisodeValidationError) as exc:
-            EpisodeValidator.validate_content(
-                'Use commit.sh --push --msg "description" for new commits. Use commit.sh --current --push for clean ahead branches.',
-                tier="mandate",
-            )
-
-        assert "bold topic header" in str(exc.value).lower()
 
     @pytest.mark.parametrize(
         ("content", "needle"),
@@ -178,6 +124,24 @@ class TestEpisodeCreatorCreate:
 
         # Default embedder returns a 768-dim vector
         self.mock_embedder.embed.return_value = [0.1] * 768
+
+    @pytest.mark.asyncio
+    async def test_create_preserves_facts_uncertainty_and_markdown(self):
+        content = "A timeout could indicate packet loss.\n\n- For example, compare a successful request."
+        new_uuid = str(uuid.uuid4())
+        self.mock_repo.create.return_value.id = uuid.UUID(new_uuid)
+        with patch(
+            "app.services.memory.episode_creator.find_exact_duplicate",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await self.creator.create(
+                content=content,
+                name="network_evidence",
+                config=LEARNING,
+                injection_tier="reference",
+            )
+        assert result.success is True
+        assert self.mock_repo.create.call_args.kwargs["content"] == content
 
     @pytest.mark.asyncio
     async def test_create_success(self):
@@ -232,21 +196,21 @@ class TestEpisodeCreatorCreate:
         metadata = create_kwargs["metadata"]
         assert metadata["compact_content"] == content
         assert metadata["compact_status"] == "source_ready"
-        assert metadata["source_quality_method"] == "format_standard"
+        assert metadata["source_quality_method"] == "source_size"
         assert metadata["source_compact_validated_at"]
 
     @pytest.mark.asyncio
     async def test_create_validation_failure(self):
-        """Test creation fails with verbose content when validation enabled."""
+        """Test creation rejects empty content when validation enabled."""
         result = await self.creator.create(
-            content="You should always use this pattern.",
+            content="   ",
             name="bad_pattern",
             config=GOLDEN_STANDARD,  # validate=True
         )
 
         assert result.success is False
         assert result.validation_error is not None
-        assert "too verbose" in result.validation_error.lower()
+        assert "empty" in result.validation_error.lower()
 
     @pytest.mark.asyncio
     async def test_create_rejects_heartbeat_journal_for_learning_profile(self):

@@ -1,7 +1,6 @@
 'use client'
 
 import { FileText, Pin } from 'lucide-react'
-import { CompactnessMeter } from '@/components/CompactnessMeter'
 import type { RenderMode } from '@/lib/memory-api'
 import { cn } from '@/lib/utils'
 
@@ -183,7 +182,6 @@ export function EpisodeFormFields({
           placeholder="Enter memory content..."
         />
         <p className="text-xs text-slate-400">{content.length} characters</p>
-        <CompactnessMeter content={content} kind="memory" />
       </div>
     </>
   )

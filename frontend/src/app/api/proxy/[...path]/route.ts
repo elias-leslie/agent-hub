@@ -113,7 +113,10 @@ export async function PUT(request: Request, { params }: RouteContext) {
   const { path } = await params
   const guard = dashboardProxyGuard(request, path)
   if (guard) return guard
-  const url = buildUpstreamUrl(path)
+  const url = buildUpstreamUrl(
+    path,
+    new URL(request.url).searchParams.toString(),
+  )
   const body = await request.text()
   const response = await fetch(url, {
     method: 'PUT',

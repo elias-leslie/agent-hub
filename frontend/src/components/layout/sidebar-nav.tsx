@@ -4,7 +4,6 @@ import {
   Brain,
   BrainCircuit,
   Cpu,
-  Gauge,
   History,
   LayoutDashboard,
   MessageSquare,
@@ -82,12 +81,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Runtime Context',
     icon: BrainCircuit,
     description: 'CLI/TUI injection',
-  },
-  {
-    href: '/compactness',
-    label: 'Compactness',
-    icon: Gauge,
-    description: 'Caveman gate caps',
   },
   {
     href: '/access-control',
