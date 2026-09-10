@@ -123,6 +123,7 @@ def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPr
     return AgentPreviewResponse(
         slug=agent.slug,
         name=agent.name,
+        canonical_context=preview.get("canonical_context"),
         **{k: preview[k] for k in (
             "combined_prompt",
             "full_context",

@@ -19,6 +19,8 @@ EXCLUDED_SLUGS = {
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
+    "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
+    "neri-reviewer",
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
     # Explicit comparison/critic lanes retain provider identity.
     "jobs-cover-codex",
@@ -86,3 +88,14 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
         model in entries and entries[model].capabilities.supports_audio
         for model in audio_critic["fallback_models"]
     ), "Audio critique needs an audio-capable quota fallback"
+
+
+
+def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    roles = {agent["slug"]: agent for agent in data["agents"] if agent["slug"] in {"neri-hunter", "neri-reviewer"}}
+    assert set(roles) == {"neri-hunter", "neri-reviewer"}
+    for agent in roles.values():
+        assert agent["primary_model_id"].startswith("codex/")
+        assert not agent.get("fallback_models")
+        assert not agent.get("escalation_model_id")

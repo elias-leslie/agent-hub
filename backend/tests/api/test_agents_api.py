@@ -845,3 +845,19 @@ class TestAgentVersionsEndpoint:
             data = response.json()
             assert len(data) == 2
             assert data[0]["version"] == 2
+
+
+def test_preview_response_preserves_public_canonical_delivery_metadata():
+    from app.api.agents import _build_preview_response
+
+    contract = {'delivery_id': 'delivery-test', 'artifact_id': 'context-test', 'status': 'ok',
+                'payload_hash': 'sha256-test', 'block_ids': ['prompt:platform-context'],
+                'source_ids': ['platform-context']}
+    preview = {'combined_prompt': 'Role', 'full_context': 'Role', 'memory_query': '',
+               'memory_debug': {}, 'loaded_memory_uuids': [], 'reference_uuids': [],
+               'reference_index_uuids': [], 'mandate_count': 0, 'guardrail_count': 0,
+               'mandate_uuids': [], 'guardrail_uuids': [], 'task_type': None, 'phase': None,
+               'project_id': 'neri', 'task_prompt': None, 'sections': [], 'prompt_budget': {},
+               'full_context_estimated_tokens': 1, 'canonical_context': contract}
+    response = _build_preview_response(make_mock_dto(), preview)
+    assert response.model_dump()['canonical_context'] == contract
