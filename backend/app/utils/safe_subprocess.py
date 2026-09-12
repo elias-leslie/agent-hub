@@ -45,17 +45,25 @@ async def create_process(
     *command: str,
     working_dir: Path | None = None,
     stdin: int | None = None,
+    stdout: int | None = asyncio.subprocess.PIPE,
+    stderr: int | None = asyncio.subprocess.PIPE,
     env: dict[str, str] | None = None,
+    limit: int | None = None,
 ) -> asyncio.subprocess.Process:
     """Start a subprocess with an absolute launcher and close_fds=False."""
+    kwargs: dict[str, Any] = {
+        "stdin": stdin,
+        "stdout": stdout,
+        "stderr": stderr,
+        "env": env,
+        "close_fds": False,
+        "start_new_session": True,
+    }
+    if limit is not None:
+        kwargs["limit"] = limit
     return await asyncio.create_subprocess_exec(
         *_env_command(command, working_dir=working_dir),
-        stdin=stdin,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-        close_fds=False,
-        start_new_session=True,
+        **kwargs,
     )
 
 

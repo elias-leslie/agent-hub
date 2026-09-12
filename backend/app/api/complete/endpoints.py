@@ -16,6 +16,7 @@ from app.api.complete.schemas import (
     CompletionResponse,
     EstimateRequest,
     EstimateResponse,
+    NativeContinuationCloseRequest,
 )
 from app.db import get_db
 
@@ -61,6 +62,24 @@ async def cancel_stream(request: CancelStreamRequest) -> dict[str, object]:
 
     cancelled = StreamContext.cancel(request.session_id)
     return {"cancelled": cancelled, "session_id": request.session_id}
+
+
+@router.post("/complete/native/close")
+async def close_native_session(
+    request: NativeContinuationCloseRequest,
+    http_request: Request,
+    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
+) -> dict[str, object]:
+    """Close one exact retained native generation without running another turn."""
+    from app.api.complete.native_continuation import close_native_continuation
+
+    return await close_native_continuation(
+        session_id=request.session_id,
+        generation=request.generation,
+        controller_generation=request.controller_generation,
+        client_id=getattr(http_request.state, "client_id", None),
+        db=db,
+    )
 
 
 @router.post("/estimate", response_model=EstimateResponse)
