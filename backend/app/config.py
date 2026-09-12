@@ -53,8 +53,10 @@ class Settings(BaseSettings):
 
     # Database
     agent_hub_db_url: str = ""
-    agent_hub_db_pool_size: int = Field(default=20, ge=1)
-    agent_hub_db_max_overflow: int = Field(default=10, ge=0)
+    # Keep few idle connections while preserving the existing 30-call burst
+    # capacity used by concurrent session/status inspection.
+    agent_hub_db_pool_size: int = Field(default=5, ge=1)
+    agent_hub_db_max_overflow: int = Field(default=25, ge=0)
     agent_hub_db_pool_timeout: int = Field(default=30, ge=1)
     agent_hub_db_pool_recycle: int = Field(default=1800, ge=30)
 
