@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -182,6 +183,61 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return f"<Session id={self.id!r} project={self.project_id!r} status={self.status!r}>"
+
+
+class NativeContinuationTurn(Base):
+    """Durable receipt for one accepted Codex native-thread turn."""
+
+    __tablename__ = "native_continuation_turns"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    accepted_turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    context_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    instruction_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    tool_policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    runtime_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    agent_used: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="accepted")
+    native_thread_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    native_turn_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reasoning_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    usage_known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            "generation",
+            "request_id",
+            name="uq_native_continuation_turn_request",
+        ),
+        Index(
+            "ix_native_continuation_turn_session_generation",
+            "session_id",
+            "generation",
+            "accepted_turn",
+        ),
+    )
 
 
 class CostLog(Base):

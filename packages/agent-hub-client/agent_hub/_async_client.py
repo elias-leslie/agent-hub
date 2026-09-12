@@ -20,6 +20,7 @@ from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
     MessageInput,
+    NativeContinuation,
     RoutingConfig,
     StreamChunk,
     ToolDefinition,
@@ -153,6 +154,7 @@ class AsyncAgentHubClient(
         skip_cache: bool = False,
         response_format: dict[str, Any] | None = None,
         disable_agent_fallbacks: bool = False,
+        native_continuation: NativeContinuation | dict[str, Any] | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously. Use agent_slug for routing with mandates."""
         if not agent_slug and not model:
@@ -195,6 +197,7 @@ class AsyncAgentHubClient(
             skip_cache=skip_cache,
             response_format=response_format,
             disable_agent_fallbacks=disable_agent_fallbacks,
+            native_continuation=native_continuation,
         )
 
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
@@ -205,6 +208,32 @@ class AsyncAgentHubClient(
         )
 
         return handle_completion_response(response, self)
+
+    async def close_native_continuation(
+        self,
+        *,
+        session_id: str,
+        generation: int,
+        controller_generation: str,
+    ) -> dict[str, Any]:
+        """Close one exact retained native generation without executing a turn."""
+        self._check_disabled()
+        client = await self._get_client()
+        headers = self._inject_tracking_headers("sdk.close_native_continuation")
+        response = await client.post(
+            "/api/complete/native/close",
+            json={
+                "session_id": session_id,
+                "generation": generation,
+                "controller_generation": controller_generation,
+            },
+            headers=headers,
+        )
+        if not response.is_success:
+            from agent_hub._utils import handle_error
+
+            handle_error(response)
+        return response.json()
 
     async def workflow(
         self,
