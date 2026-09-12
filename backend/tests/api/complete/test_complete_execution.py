@@ -125,7 +125,7 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
 
 
 @pytest.mark.asyncio
-async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_success() -> None:
+async def test_codex_to_gemini_fallback_preserves_failure_reason_and_request_contract() -> None:
     req = SimpleNamespace(
         temperature=0.0,
         project_id="agent-hub",
@@ -144,10 +144,10 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
         phase=None,
         agent_slug="refactor",
     )
-    agent = SimpleNamespace(agent=SimpleNamespace(fallback_models=["codex/gpt-5.4", "gemini-2.5-pro"]))
+    agent = SimpleNamespace(agent=SimpleNamespace(fallback_models=["gemini-3.8-flash", "gemini-3.5-flash-lite"]))
     success = CompletionInternalResult(
         content="done",
-        model="gemini-2.5-pro",
+        model="gemini-3.5-flash-lite",
         provider="gemini",
         input_tokens=1,
         output_tokens=1,
@@ -157,8 +157,8 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
         cited_uuids=[],
     )
     side_effect = [
-        ProviderError(provider="claude", message="primary blew up"),
-        ProviderError(provider="codex", message="first fallback blew up"),
+        ProviderError(provider="codex", message="primary blew up"),
+        ProviderError(provider="gemini", message="first fallback quota exhausted"),
         success,
     ]
 
@@ -168,26 +168,36 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
             raise value
         return value
 
-    with patch("app.api.complete.complete_execution._run_internal", new=AsyncMock(side_effect=fake_run_internal)):
+    messages = [Message(role="system", content="Use supplied evidence; never invent missing values.")]
+    response_format = {"type": "json_object", "schema": {"type": "object"}}
+    with patch("app.api.complete.complete_execution._run_internal", new=AsyncMock(side_effect=fake_run_internal)) as run:
         from app.api.complete.complete_execution import _run_with_agentic_fallback
 
         result = await _run_with_agentic_fallback(
             req=req,
-            primary_model="claude-sonnet-4-6",
-            provider="claude",
+            primary_model="codex/gpt-5.5",
+            provider="codex",
             agent=agent,
-            msgs=[],
+            msgs=messages,
             db=AsyncMock(),
             sid="sess-1",
             client_id=None,
             source=None,
             thinking=None,
             tools=None,
-            fmt=None,
+            fmt=response_format,
             skip_cache=False,
         )
 
-    assert result.model_used == "gemini-2.5-pro"
+    assert [call.args[1] for call in run.await_args_list] == [
+        "codex/gpt-5.5", "gemini-3.8-flash", "gemini-3.5-flash-lite",
+    ]
+    for call in run.await_args_list:
+        assert call.args[0] is req
+        assert call.args[4] is messages
+        assert call.args[11] is response_format
+    assert result.requested_model == "codex/gpt-5.5"
+    assert result.model_used == "gemini-3.5-flash-lite"
     assert result.fallback_used is True
     assert result.fallback_reason == "ProviderError: primary blew up"
 
