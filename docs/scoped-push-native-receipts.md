@@ -38,7 +38,9 @@ legacy row; the migration does not infer an application or owner.
 
 The existing identified SummitFlow proxy retains an explicit compatibility
 path: it can send to its own scoped subscriptions and unscoped legacy rows,
-never another application. Verified scoped calls do not include legacy rows.
+never another application. This path applies only when both `application_id`
+and the internal service header are omitted; a missing or invalid credential on
+an explicitly scoped call cannot silently fall back. Verified scoped calls do not include legacy rows.
 Direct Agent Hub transport callers default to its dashboard application owner,
 not a broadcast. Neri must register its own application service-worker
 subscription before receiving alerts. Application inboxes remain in their

@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request
 
 from app.config import settings
 from app.middleware.access_control_auth import get_cached_client, require_service_client
-from app.middleware.access_control_paths import is_internal_request
+from app.middleware.access_control_paths import INTERNAL_SERVICE_HEADER, is_internal_request
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,8 @@ async def resolve_push_scope(request: Request, application_id: str | None) -> Pu
     if verified:
         client = await require_service_client(request)
     else:
+        if application_id is not None or request.headers.get(INTERNAL_SERVICE_HEADER) is not None:
+            raise HTTPException(status_code=401, detail="Verified internal service required.")
         # Explicit compatibility path for the existing SummitFlow proxy. This
         # preserves its identified localhost trust; it cannot reach other apps.
         client_id = getattr(request.state, "client_id", None)

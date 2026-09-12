@@ -51,7 +51,18 @@ async def test_legacy_summitflow_cannot_claim_another_application() -> None:
         assert scope.include_legacy
         with pytest.raises(HTTPException) as raised:
             await resolve_push_scope(request(verified=False, client_id="summitflow"), "neri")
-    assert raised.value.status_code == 403
+    assert raised.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_invalid_service_secret_cannot_fall_back_to_legacy_summitflow() -> None:
+    value = Request({"type": "http", "headers": [
+        (b"x-client-id", b"summitflow"), (b"x-agent-hub-internal", b"invalid-fixture-secret"),
+    ]})
+    value.state.client_id = "summitflow"
+    with pytest.raises(HTTPException) as raised:
+        await resolve_push_scope(value, None)
+    assert raised.value.status_code == 401
 
 
 @pytest.mark.asyncio
