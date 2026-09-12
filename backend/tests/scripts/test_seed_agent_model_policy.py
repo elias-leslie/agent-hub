@@ -106,3 +106,19 @@ def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
         assert agent["primary_model_id"].startswith("codex/")
         assert not agent.get("fallback_models")
         assert not agent.get("escalation_model_id")
+
+
+
+def test_portfolio_agents_prefer_codex_with_capable_gemini_fallbacks() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    roles = {agent["slug"]: agent for agent in data["agents"]}
+    entries = {entry.id: entry for entry in MODEL_CATALOG}
+    for slug in ("persona", "financial-document-reviewer"):
+        agent = roles[slug]
+        assert agent["primary_model_id"].startswith("codex/")
+        # Codex is preferred, not required. Keep the stronger Gemini route
+        # ahead of the lighter route that passed the bounded grounding checks.
+        assert agent["fallback_models"] == ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+        for model in agent["fallback_models"]:
+            assert entries[model].capabilities.supports_tool_execution
+            assert entries[model].capabilities.supports_pdf
