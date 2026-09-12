@@ -87,14 +87,14 @@ class TestSession:
                 "updated_at": "2026-01-06T12:00:00Z",
                 "messages": [
                     {
-                        "id": 1,
+                        "id": "message-1",
                         "role": "user",
                         "content": "Hello",
                         "tokens": 5,
                         "created_at": "2026-01-06T12:00:00Z",
                     },
                     {
-                        "id": 2,
+                        "id": "message-2",
                         "role": "assistant",
                         "content": "Hi there!",
                         "tokens": 8,
@@ -221,7 +221,7 @@ class TestSessionContext:
                 "updated_at": "2026-01-06T11:00:00Z",
                 "messages": [
                     {
-                        "id": 1,
+                        "id": "message-1",
                         "role": "user",
                         "content": "Previous message",
                         "tokens": 10,
@@ -404,14 +404,14 @@ class TestSessionPersistence:
                 "updated_at": "2026-01-06T12:01:00Z",
                 "messages": [
                     {
-                        "id": 1,
+                        "id": "message-1",
                         "role": "user",
                         "content": "Hello",
                         "tokens": 5,
                         "created_at": "2026-01-06T12:00:00Z",
                     },
                     {
-                        "id": 2,
+                        "id": "message-2",
                         "role": "assistant",
                         "content": "Hi!",
                         "tokens": 3,
@@ -446,14 +446,14 @@ class TestSessionPersistence:
                 "updated_at": "2026-01-06T12:01:00Z",
                 "messages": [
                     {
-                        "id": 1,
+                        "id": "message-1",
                         "role": "user",
                         "content": "Hello",
                         "tokens": 5,
                         "created_at": "2026-01-06T12:00:00Z",
                     },
                     {
-                        "id": 2,
+                        "id": "message-2",
                         "role": "assistant",
                         "content": "Hi!",
                         "tokens": 3,

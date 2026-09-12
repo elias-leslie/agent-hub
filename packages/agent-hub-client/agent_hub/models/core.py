@@ -55,6 +55,11 @@ class CompletionResponse(BaseModel):
     session_id: str = Field(..., description="Session ID")
     finish_reason: str | None = Field(default=None)
     from_cache: bool = Field(default=False)
+    agent_used: str | None = None
+    model_used: str | None = None
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    error_summary: dict[str, Any] | None = None
     # Tool calling (when model requests tool execution)
     tool_calls: list[ToolCall] | None = Field(
         default=None, description="Tool calls to execute"

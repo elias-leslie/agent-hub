@@ -29,10 +29,10 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from app.llm.event_stream import AssistantMessageEventStream
-from app.llm.stream import stream as llm_stream
+from app.llm.stream import stream_simple as llm_stream
 from app.llm.tool_loop import ToolLoopEvent, ToolRunner
 from app.llm.tool_loop import run as run_tool_loop
 from app.llm.types import (
@@ -45,7 +45,9 @@ from app.llm.types import (
     SimpleStreamOptions,
     StopReason,
     TextContent,
+    ThinkingLevel,
     Tool,
+    Usage,
     UserMessage,
 )
 
@@ -57,6 +59,14 @@ class OrchestratorResult:
     message: AssistantMessage
     turns: int = 1
     tool_calls_count: int = 0
+
+
+def completion_options(temperature: float, thinking_level: str | None, max_tokens: int | None = None) -> SimpleStreamOptions:
+    """One options mapping for HTTP streaming, single-turn and tool execution."""
+    reasoning = "xhigh" if thinking_level == "ultrathink" else thinking_level
+    if reasoning not in {None, "minimal", "low", "medium", "high", "xhigh"}:
+        raise ValueError(f"Unsupported thinking level: {thinking_level}")
+    return SimpleStreamOptions(temperature=temperature, reasoning=cast(ThinkingLevel | None, reasoning), max_tokens=max_tokens)
 
 
 def build_context_from_messages(
@@ -84,11 +94,16 @@ def build_context_from_messages(
         # Context.system_prompt, not on the messages list. Caller is
         # expected to pass it via the system_prompt argument, but
         # accept role='system' for backward compatibility.
-        elif role == "system" and isinstance(content, str) and system_prompt is None:
-            system_prompt = content
-        # role == "assistant" / "tool" replay paths are handled by the
-        # session loader before this function is called. Skipping here
-        # keeps the orchestrator focused on its single job.
+        elif role == "system" and isinstance(content, str):
+            system_prompt = "\n\n".join(part for part in (system_prompt, content) if part)
+        elif role == "assistant":
+            blocks = [block for block in _decode_user_content(content) if isinstance(block, TextContent)] if isinstance(content, list) else [TextContent(text=str(content))]
+            universal_messages.append(AssistantMessage(
+                content=blocks, api="", provider="", model="", usage=Usage(),
+                stop_reason="stop", timestamp=int(time.time() * 1000),
+            ))
+        # External tool-message replay is not reconstructed here. The native
+        # tool loop retains its own typed tool history within an execution.
 
     return Context(
         messages=universal_messages,

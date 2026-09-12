@@ -105,8 +105,12 @@ class CompletionInternalResult:
         self.container_state = container
         self.turn_count = turns
         self.executed_tool_call_count = tool_calls_count
-        self.execution_status = status
-        self.execution_error = error
+        terminal_failure = message.stop_reason in {"error", "aborted"}
+        self.execution_status = message.stop_reason if terminal_failure else status
+        self.execution_error = (
+            error or message.error_message or f"Provider returned finish_reason={message.stop_reason}"
+            if terminal_failure else error
+        )
         self.container_ref = container_id
         self.progress_entries = progress_log or []
         self.failure_summary = error_summary

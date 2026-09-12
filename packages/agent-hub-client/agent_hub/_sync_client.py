@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from agent_hub._agents import AgentOperationsMixin
 from agent_hub._base import BaseClientMixin
 from agent_hub._completion import build_completion_payload, handle_completion_response
 from agent_hub._image import generate_image_sync
@@ -25,6 +26,7 @@ from agent_hub.models import (
 
 class AgentHubClient(
     BaseClientMixin,
+    AgentOperationsMixin,
     SessionOperationsMixin,
     MemoryOperationsMixin,
 ):

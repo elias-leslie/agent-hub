@@ -7,6 +7,8 @@ from pathlib import Path
 
 from app.constants.catalog_entries import MODEL_CATALOG
 
+SUBSCRIPTION_ONLY_SLUGS = {"learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator"}
+
 EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
@@ -44,6 +46,11 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
 
     for agent in agents:
         slug = agent["slug"]
+        if slug in SUBSCRIPTION_ONLY_SLUGS:
+            assert agent["primary_model_id"].startswith("codex/")
+            assert all(model.startswith("codex/") for model in agent.get("fallback_models", []))
+            assert not agent.get("escalation_model_id") or agent["escalation_model_id"].startswith("codex/")
+            continue
         if slug in EXCLUDED_SLUGS:
             continue
         if agent.get("name", "").startswith("Committee "):

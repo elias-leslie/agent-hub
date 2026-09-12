@@ -121,7 +121,7 @@ def apply_mention_override(
     request: CompletionRequest,
     resolved_model: str,
 ) -> tuple[str, str]:
-    """Apply @mention model override if present in messages.
+    """Apply an explicit model or @mention through the same routing contract.
 
     Strips the @mention from the message content so the LLM doesn't see
     routing directives, and the cache key is based on clean content +
@@ -129,13 +129,25 @@ def apply_mention_override(
     """
     # Lazy import — parse_mention is a string utility currently colocated with
     # the HTTP package; routing layer doesn't take a hard dep on api/complete.
+    from fastapi import HTTPException
+
     from app.api.complete.helpers import parse_mention, strip_mention_preserving_content_blocks
+    from app.constants import get_model_entry, resolve_model
+
+    explicit_model = getattr(request, "model", None)
+    if explicit_model:
+        explicit_model = resolve_model(explicit_model)
+        if get_model_entry(explicit_model) is None:
+            raise HTTPException(status_code=400, detail=f"Unknown model: {explicit_model}")
+        resolved_model = explicit_model
 
     if request.messages:
         last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
             mentioned_model, _cleaned_content = parse_mention(last_user_msg.content)
             if mentioned_model:
+                if explicit_model and explicit_model != mentioned_model:
+                    raise HTTPException(status_code=400, detail="Conflicting model field and @mention.")
                 resolved_model = mentioned_model
                 provider = get_provider(resolved_model)
                 last_user_msg.content = strip_mention_preserving_content_blocks(last_user_msg.content)

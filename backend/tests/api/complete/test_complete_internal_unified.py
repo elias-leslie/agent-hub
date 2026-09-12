@@ -963,3 +963,22 @@ async def test_new_pipeline_result_shape_matches_downstream_contract() -> None:
         assert result.requested_provider == "codex"
     finally:
         reg.unregister()
+
+
+@pytest.mark.asyncio
+async def test_requested_sampling_and_reasoning_reach_the_provider() -> None:
+    from app.api.complete.orchestrator import OrchestratorResult
+    reg = register_faux_provider()
+    try:
+        model = reg.get_model()
+        assert model is not None
+        with (
+            patch("app.api.complete.core.resolve_llm_model", return_value=model),
+            patch("app.api.complete.core.run_completion", new=AsyncMock(return_value=OrchestratorResult(CompletionInternalResult(content="ok").message))) as run,
+        ):
+            await complete_internal(messages=[{"role": "user", "content": "hi"}], model=model.id, provider=model.provider, project_id="agent-hub", temperature=0.25, thinking_level="low", use_memory=False, db=None)
+        options = run.call_args.kwargs["options"]
+        assert options.temperature == 0.25
+        assert options.reasoning == "low"
+    finally:
+        reg.unregister()
