@@ -47,6 +47,7 @@ from app.constants.models import (
     GEMINI_3_1_FLASH_LITE_PREVIEW,
     GEMINI_3_1_PRO,
     GEMINI_3_5_FLASH,
+    GEMINI_3_5_FLASH_LITE,
     GEMINI_3_7_FLASH,
     GEMINI_3_8_FLASH,
     GEMINI_FLASH,
@@ -136,6 +137,18 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
 
     # --- Gemini ---
+    # Official model/pricing docs checked 2026-09-12. No benchmark scores
+    # have been verified; zero denotes unmeasured here, not a quality result.
+    ModelEntry(
+        id=GEMINI_3_5_FLASH_LITE, alias="3.5-flash-lite", name="Gemini 3.5 Flash-Lite",
+        hint="Routine extraction; benchmarks unmeasured", provider="gemini",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=0, design=0),
+        cost=ModelCost(0.30, 2.50, cache_read_per_million=0.03),
+        context_window=1_048_576, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536),
+        family="gemini-flash-lite",
+        availability="stable; free_tier_no_search_grounding; benchmarks_unmeasured",
+    ),
     ModelEntry(
         id=GEMINI_3_8_FLASH, alias="3.8-flash", name="Gemini 3.8 Flash",
         hint="Agentic flagship", provider="gemini",

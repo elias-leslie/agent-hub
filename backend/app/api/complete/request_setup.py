@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -142,6 +143,16 @@ def build_message_list(
         for m in request.messages
     ]
     all_messages = context_messages + new_messages if context_messages else new_messages
+    instructions = []
+    if getattr(request, "system_prompt", None):
+        instructions.append(request.system_prompt)
+    response_format = getattr(request, "response_format", None)
+    if response_format and response_format.type == "json_object":
+        instructions.append("Return only a valid JSON object, without markdown or surrounding narration.")
+        if response_format.schema_:
+            instructions.append("Required output JSON Schema:\n" + json.dumps(response_format.schema_, separators=(",", ":")))
+    if instructions:
+        all_messages = [Message(role="system", content="\n\n".join(instructions)), *all_messages]
     all_messages = inject_work_context_message(all_messages, request.work_context)
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
     return all_messages, messages_dict

@@ -39,6 +39,10 @@ async def _store_error_event(
         )
         session = await db.get(Session, session_id)
         if session is not None:
+            if model_used:
+                from app.api.complete.session_repo import apply_execution_metadata
+
+                apply_execution_metadata(session, requested_model=model_used, effective_model=model_used, fallback_used=False)
             session.status = "failed"
             session.health_detail = health_detail_for_error(error_message)
             mark_session_terminal_state(

@@ -202,6 +202,9 @@ class AgentPreviewResponse(BaseModel):
     sections: list[AgentPreviewSection] = Field(default_factory=list)
     prompt_budget: dict[str, Any] = Field(default_factory=dict)
     full_context_estimated_tokens: int = 0
+    canonical_context: dict[str, Any] | None = Field(
+        default=None, description="Public canonical delivery identity, version, hash, and source metadata"
+    )
 
 
 class AgentMetrics(BaseModel):

@@ -35,7 +35,7 @@ from app.services.memory.context_injector_ops import has_verified_canonical_cont
 from app.services.memory.context_resilience import CanonicalContextInjectionFailed
 
 from .error_summary import build_error_summary
-from .orchestrator import build_context_from_messages, run_completion
+from .orchestrator import build_context_from_messages, completion_options, run_completion
 from .progress import AgentProgress
 from .schemas import MessageInput  # re-export for back-compat callers
 from .session_repo import (
@@ -218,6 +218,7 @@ async def complete_internal(
     result = await run_completion(
         llm_model,
         context,
+        options=completion_options(temperature, thinking_level),
         execute_tools=execute_tools,
         run_tool=run_tool,
         max_turns=max_turns,
@@ -230,10 +231,11 @@ async def complete_internal(
     content, tagged_thinking = _assistant_text_and_tagged_thinking(message)
     thinking_content, thinking_tokens = _assistant_thinking(message, tagged_thinking)
     cited_uuids = await extract_cited_uuids(content, memory_group_id) if use_memory else []
+    terminal_failure = message.stop_reason in {"error", "aborted"}
     execution_error = (
-        message.error_message if message.stop_reason in {"error", "aborted"} else None
+        message.error_message or f"Provider returned finish_reason={message.stop_reason}" if terminal_failure else None
     )
-    execution_status = message.stop_reason if execution_error else "success"
+    execution_status = message.stop_reason if terminal_failure else "success"
 
     return CompletionInternalResult(
         message=message,

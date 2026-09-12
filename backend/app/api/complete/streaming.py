@@ -43,7 +43,7 @@ from app.llm.types import (
 from app.routing.registry import get_provider_for_model
 from app.services.llm_messages import Message
 
-from .orchestrator import build_context_from_messages, run_completion_stream
+from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
 from .schemas import MessageInput
 from .sse_writer import SseWriter
 from .streaming_context import StreamContext
@@ -299,9 +299,6 @@ async def stream_completion(
     proxies. When tools are provided, the universal tool loop drives the
     multi-turn exchange.
     """
-    del max_tokens  # Universal pipeline derives max_tokens from the catalog.
-    del temperature  # Threaded via SimpleStreamOptions when needed.
-
     ctx = StreamContext.open(
         session_id=session_id,
         model=model,
@@ -370,6 +367,7 @@ async def stream_completion(
                 events = run_completion_stream(
                     llm_model,
                     context,
+                    options=completion_options(temperature, thinking_level, max_tokens),
                     execute_tools=execute_tools,
                     run_tool=run_tool,
                     max_turns=max(max_tool_turns, 1) if execute_tools else 1,

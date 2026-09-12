@@ -33,8 +33,6 @@ from app.services.memory.context_resilience import (
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.work_chats import bind_request_context
 
-from .work_context import inject_work_context_message
-
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,13 +105,9 @@ def _build_streaming_messages(
     agent_mandate_injection: AgentMandateInjection | None,
 ) -> list[Message]:
     """Build base streaming messages before canonical/operator injection."""
-    new_messages = [
-        Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
-        for m in request.messages
-    ]
-    messages = context_messages + new_messages if context_messages else new_messages
-    messages = inject_work_context_message(messages, request.work_context)
+    from .request_setup import build_message_list
 
+    messages, _ = build_message_list(request, context_messages)
     return messages
 
 

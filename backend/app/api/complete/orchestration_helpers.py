@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.complete.complete_execution import execute_completion
@@ -25,6 +25,7 @@ from app.api.complete.request_setup import (
 )
 from app.api.complete.schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
 from app.routing.resolution import inject_agent_system_prompt
+from app.services.llm_errors import ProviderError
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -92,11 +93,25 @@ async def process_result(
         loaded_uuids = loaded_uuids_in
         sid = session_id
         fallback_reason = getattr(result, "fallback_reason", None)
+    # A provider failure is not a malformed caller request or a successful answer.
+    # Check before schema validation and success persistence/cache writes.
+    if cr.finish_reason in {"error", "aborted"}:
+        message = cr.error or cr.message.error_message or f"Provider returned finish_reason={cr.finish_reason}"
+        upstream_status = re.match(r"^(429|503)\b", message)
+        raise ProviderError(
+            message=message,
+            provider=cr.provider,
+            status_code=int(upstream_status.group(1)) if upstream_status else 502,
+        )
     rf = request.response_format
     if rf and rf.type == "json_object" and rf.schema_:
         is_valid, err = validate_json_response(cr.content, rf.schema_)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=f"Model output does not match JSON schema: {err}")
+            raise ProviderError(
+                message=f"Model output does not match JSON schema: {err}",
+                provider=cr.provider,
+                status_code=502,
+            )
     response = await process_completion_result(
         cr, request, resolved_model, sid, db, session, skip_cache, messages_dict,
         ctx_info, memory_facts, loaded_uuids, agent_used,

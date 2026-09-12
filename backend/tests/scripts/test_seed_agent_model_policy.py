@@ -7,6 +7,8 @@ from pathlib import Path
 
 from app.constants.catalog_entries import MODEL_CATALOG
 
+SUBSCRIPTION_ONLY_SLUGS = {"learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator"}
+
 EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
@@ -19,6 +21,8 @@ EXCLUDED_SLUGS = {
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
+    "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
+    "neri-reviewer",
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
     # Explicit comparison/critic lanes retain provider identity.
     "jobs-cover-codex",
@@ -42,6 +46,11 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
 
     for agent in agents:
         slug = agent["slug"]
+        if slug in SUBSCRIPTION_ONLY_SLUGS:
+            assert agent["primary_model_id"].startswith("codex/")
+            assert all(model.startswith("codex/") for model in agent.get("fallback_models", []))
+            assert not agent.get("escalation_model_id") or agent["escalation_model_id"].startswith("codex/")
+            continue
         if slug in EXCLUDED_SLUGS:
             continue
         if agent.get("name", "").startswith("Committee "):
@@ -86,3 +95,14 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
         model in entries and entries[model].capabilities.supports_audio
         for model in audio_critic["fallback_models"]
     ), "Audio critique needs an audio-capable quota fallback"
+
+
+
+def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    roles = {agent["slug"]: agent for agent in data["agents"] if agent["slug"] in {"neri-hunter", "neri-reviewer"}}
+    assert set(roles) == {"neri-hunter", "neri-reviewer"}
+    for agent in roles.values():
+        assert agent["primary_model_id"].startswith("codex/")
+        assert not agent.get("fallback_models")
+        assert not agent.get("escalation_model_id")

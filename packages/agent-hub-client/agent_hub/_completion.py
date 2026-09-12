@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 
 from agent_hub._utils import handle_error
-from agent_hub.exceptions import ClientDisabledError
+from agent_hub.exceptions import ClientDisabledError, ServerError
 from agent_hub.models import (
     CompletionResponse,
     MessageInput,
@@ -211,4 +211,10 @@ def handle_completion_response(
             client_instance._disabled_reason = e.reason
             raise
 
-    return CompletionResponse.model_validate(response.json())
+    result = CompletionResponse.model_validate(response.json())
+    if result.finish_reason in {"error", "aborted"}:
+        raise ServerError(
+            f"Completion {result.finish_reason} (session {result.session_id}, model {result.model}).",
+            status_code=502,
+        )
+    return result

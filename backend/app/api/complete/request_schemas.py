@@ -98,10 +98,10 @@ class CompletionRequest(BaseModel):
 
     model: str | None = Field(
         default=None,
-        description="DEPRECATED: Use agent_slug instead. Direct model specification is no longer supported.",
-        deprecated=True,
+        description="Optional catalog model override for the required agent_slug. Omit for canonical agent routing. Conflicting @mentions are rejected.",
     )
     messages: list[MessageInput] = Field(..., description="Conversation messages")
+    system_prompt: str | None = Field(default=None, description="Application instructions appended to canonical operator and agent context.")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, max_length=100, description="Existing session ID to continue")
     parent_session_id: str | None = Field(

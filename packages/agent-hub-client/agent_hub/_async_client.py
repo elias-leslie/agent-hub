@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from agent_hub._agents import AsyncAgentOperationsMixin
 from agent_hub._base import BaseClientMixin
 from agent_hub._completion import build_completion_payload, handle_completion_response
 from agent_hub._image import generate_image_async
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 class AsyncAgentHubClient(
     BaseClientMixin,
+    AsyncAgentOperationsMixin,
     AsyncSessionOperationsMixin,
     AsyncMemoryOperationsMixin,
 ):

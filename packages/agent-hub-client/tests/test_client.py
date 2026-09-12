@@ -24,7 +24,7 @@ class TestAgentHubClient:
         client = AgentHubClient()
         assert client.base_url == "http://localhost:8003"
         assert client.api_key is None
-        assert client.timeout == 120.0
+        assert client.timeout is None
 
     def test_init_custom(self) -> None:
         """Test client initialization with custom values."""
@@ -249,7 +249,7 @@ class TestAgentHubClient:
                 "updated_at": "2026-01-06T12:00:00Z",
                 "messages": [
                     {
-                        "id": 1,
+                        "id": "message-1",
                         "role": "user",
                         "content": "Hello",
                         "tokens": 5,
