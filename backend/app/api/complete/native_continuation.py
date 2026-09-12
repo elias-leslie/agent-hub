@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -662,6 +663,25 @@ async def execute_native_continuation(
             await _persist_external_usage(request, session_id, result, resolved_model)
         status = 409 if isinstance(exc, NativeRuntimeLost) else 502
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+    except asyncio.CancelledError:
+        await get_native_runtime_manager().close(session_id, continuation.generation)
+        session = await _lock_session(db, session_id)
+        receipt.status = "failed"
+        receipt.runtime_status = "unavailable"
+        receipt.error_code = "native_cancelled"
+        if _owns_pending_turn(
+            _native_metadata(session), identity, continuation.request_id
+        ):
+            _set_native_metadata(
+                session,
+                {
+                    **pending_metadata,
+                    "status": "unavailable",
+                    "last_error_code": "native_cancelled",
+                },
+            )
+        await db.commit()
+        raise
     except TimeoutError as exc:
         session = await _lock_session(db, session_id)
         receipt.status = "failed"
