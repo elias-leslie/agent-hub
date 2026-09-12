@@ -18,6 +18,24 @@ from .usage_schemas import (
 )
 
 
+class NativeContinuationInfo(BaseModel):
+    """Observed state for one retained native-thread turn."""
+
+    generation: int
+    turn: int
+    request_id: str
+    context_version: str
+    instruction_hash: str
+    tool_policy_hash: str
+    native_thread_id: str
+    native_turn_id: str | None = None
+    runtime_status: str
+    duplicate: bool = False
+    input_mode: str
+    reasoning_tokens: int = 0
+    usage_known: bool = True
+
+
 class CompletionResponse(BaseModel):
     """Response body for completion endpoint."""
 
@@ -88,6 +106,10 @@ class CompletionResponse(BaseModel):
     cited_uuids: list[str] = Field(
         default_factory=list,
         description="UUIDs of memory items referenced/cited in response",
+    )
+    native_continuation: NativeContinuationInfo | None = Field(
+        default=None,
+        description="Retained native-thread receipt when native continuation was requested.",
     )
 
 
