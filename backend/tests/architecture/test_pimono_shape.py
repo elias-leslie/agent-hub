@@ -49,6 +49,7 @@ RESULT_SHAPE_ALLOWLIST = {
     (APP / "api" / "persona" / "schema_improvement.py", "PersonaHeartbeatFieldSession"),
     (APP / "models" / "agent_benchmark.py", "AgentBenchmarkAttempt"),
     (APP / "models" / "agent_performance_log.py", "AgentPerformanceLog"),
+    (APP / "models" / "session.py", "NativeContinuationTurn"),
     (APP / "services" / "analytics" / "models.py", "CostLogExportRow"),
     (APP / "services" / "completion" / "types.py", "CompletionServiceResult"),
     (APP / "services" / "orchestration" / "subagent_models.py", "SubagentResult"),

@@ -3,6 +3,7 @@
 from time import monotonic
 from typing import Any
 
+from fastapi import HTTPException, Request
 from sqlalchemy import select
 
 from app.db import async_session
@@ -58,6 +59,26 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
 def invalidate_client_cache(client_id: str) -> None:
     """Invalidate cached client data (call after status changes)."""
     _client_cache.pop(client_id, None)
+
+
+async def require_service_client(request: Request) -> dict[str, Any]:
+    """Verify the existing service secret and resolve its registered client binding.
+
+    Ordinary X-Client-Id middleware is identification only. This stronger seam is
+    used for scoped push and private receipt recovery, not human authentication.
+    """
+    from app.middleware.access_control_constants import CLIENT_ID_HEADER
+    from app.middleware.access_control_paths import is_internal_request
+
+    if not is_internal_request(request):
+        raise HTTPException(status_code=401, detail="Verified internal service required.")
+    client_id = request.headers.get(CLIENT_ID_HEADER)
+    if not client_id:
+        raise HTTPException(status_code=401, detail="Registered service client required.")
+    client = await get_cached_client(client_id)
+    if client is None or client.get("status") != "active":
+        raise HTTPException(status_code=403, detail="Service client is not active.")
+    return client
 
 
 def detect_tool_type(source_client: str | None) -> str:

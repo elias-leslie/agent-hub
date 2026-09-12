@@ -9,6 +9,7 @@ from agent_hub.exceptions import ClientDisabledError, ServerError
 from agent_hub.models import (
     CompletionResponse,
     MessageInput,
+    NativeContinuation,
     RoutingConfig,
     ToolDefinition,
     ToolResultMessage,
@@ -103,6 +104,7 @@ def _apply_execution_fields(
     current_branch: str | None,
     skip_cache: bool,
     response_format: dict[str, Any] | None,
+    native_continuation: NativeContinuation | dict[str, Any] | None,
 ) -> None:
     """Apply execution/runtime optional fields to payload in-place."""
     if container_id:
@@ -131,6 +133,12 @@ def _apply_execution_fields(
         payload["skip_cache"] = True
     if response_format:
         payload["response_format"] = response_format
+    if native_continuation:
+        payload["native_continuation"] = (
+            native_continuation.model_dump(exclude_none=True)
+            if isinstance(native_continuation, NativeContinuation)
+            else native_continuation
+        )
 
 
 def build_completion_payload(
@@ -156,6 +164,7 @@ def build_completion_payload(
     skip_cache: bool = False,
     response_format: dict[str, Any] | None = None,
     disable_agent_fallbacks: bool = False,
+    native_continuation: NativeContinuation | dict[str, Any] | None = None,
     stream: bool = False,
 ) -> dict[str, Any]:
     """Build completion request payload.
@@ -179,6 +188,7 @@ def build_completion_payload(
         trace_id, timeout_seconds, thinking_level, system_prompt,
         resume_session_id, include_roles, current_branch, skip_cache,
         response_format,
+        native_continuation,
     )
     if stream:
         payload["stream"] = True

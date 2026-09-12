@@ -9,6 +9,8 @@ from .request_schemas import (
     CompletionRequest,
     EstimateRequest,
     MessageInput,
+    NativeContinuationCloseRequest,
+    NativeContinuationRequest,
     ResponseFormat,
     SourceMetadata,
     ToolDefinition,
@@ -19,6 +21,8 @@ from .response_schemas import (
     AsyncTaskStatusResponse,
     CompletionResponse,
     EstimateResponse,
+    NativeContinuationInfo,
+    NativeContinuationReceiptResponse,
     StreamingChunk,
 )
 from .usage_schemas import (
@@ -42,6 +46,10 @@ __all__ = [
     "EstimateRequest",
     "EstimateResponse",
     "MessageInput",
+    "NativeContinuationCloseRequest",
+    "NativeContinuationInfo",
+    "NativeContinuationReceiptResponse",
+    "NativeContinuationRequest",
     "OutputUsageInfo",
     "ResponseFormat",
     "SourceMetadata",
