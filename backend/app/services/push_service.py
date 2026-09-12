@@ -1,7 +1,6 @@
 """Web Push notification service.
 
-Shared push delivery for all projects. Manages subscriptions and sends
-notifications via the Web Push protocol with VAPID authentication.
+Shared, application-scoped Web Push transport. It owns no application inbox.
 """
 
 from __future__ import annotations
@@ -12,13 +11,14 @@ import uuid
 from typing import Any, cast
 
 from pywebpush import WebPushException, webpush
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.push_subscription import PushSubscription
+from app.services.push_scope import PushScope
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,16 @@ async def save_subscription(
     endpoint: str,
     p256dh: str,
     auth: str,
+    *,
+    scope: PushScope,
     user_email: str | None = None,
 ) -> dict[str, Any]:
-    """Save or update a push subscription (upsert by endpoint)."""
+    """Upsert within a principal's application; never steal another scope.
+
+    Endpoint uniqueness is global: distinct application service workers create
+    distinct endpoints. A legacy endpoint can be explicitly re-registered only
+    by presenting its existing keys, rather than guessing its old ownership.
+    """
     sub_id = str(uuid.uuid4())[:8]
 
     stmt = (
@@ -45,6 +52,8 @@ async def save_subscription(
             endpoint=endpoint,
             p256dh_key=p256dh,
             auth_key=auth,
+            application_id=scope.application_id,
+            owner_id=scope.owner_id,
             user_email=user_email,
         )
         .on_conflict_do_update(
@@ -52,31 +61,53 @@ async def save_subscription(
             set_={
                 "p256dh_key": p256dh,
                 "auth_key": auth,
+                "application_id": scope.application_id,
+                "owner_id": scope.owner_id,
                 "user_email": user_email,
             },
+            where=or_(
+                and_(PushSubscription.application_id == scope.application_id,
+                     PushSubscription.owner_id == scope.owner_id),
+                and_(PushSubscription.application_id.is_(None),
+                     PushSubscription.owner_id.is_(None),
+                     PushSubscription.p256dh_key == p256dh,
+                     PushSubscription.auth_key == auth),
+            ),
         )
         .returning(PushSubscription.id)
     )
     result = await db.execute(stmt)
-    await db.commit()
-
     row = result.scalar_one_or_none()
-    return {"id": row or sub_id, "endpoint": endpoint}
+    if row is None:
+        await db.rollback()
+        raise ValueError("Subscription belongs to a different application or owner.")
+    await db.commit()
+    return {"id": row, "application_id": scope.application_id, "owner_id": scope.owner_id}
 
 
-async def delete_subscription(db: AsyncSession, endpoint: str) -> bool:
-    """Remove a push subscription by endpoint."""
-    stmt = delete(PushSubscription).where(PushSubscription.endpoint == endpoint)
+def subscription_scope(scope: PushScope):
+    """NULL legacy scope is reachable only through the named compatibility path."""
+    owned = and_(PushSubscription.application_id == scope.application_id,
+                 PushSubscription.owner_id == scope.owner_id)
+    if scope.include_legacy and scope.application_id == "summitflow":
+        return or_(owned, and_(PushSubscription.application_id.is_(None),
+                              PushSubscription.owner_id.is_(None)))
+    return owned
+
+
+async def delete_subscription(db: AsyncSession, endpoint: str, *, scope: PushScope) -> bool:
+    """Remove only a subscription visible to the same service principal."""
+    stmt = delete(PushSubscription).where(PushSubscription.endpoint == endpoint, subscription_scope(scope))
     result = await db.execute(stmt)
     await db.commit()
     return cast(CursorResult[Any], result).rowcount > 0
 
 
 async def get_subscriptions(
-    db: AsyncSession, user_email: str | None = None
+    db: AsyncSession, *, scope: PushScope, user_email: str | None = None
 ) -> list[PushSubscription]:
-    """Get all subscriptions, optionally filtered by user email."""
-    stmt = select(PushSubscription).order_by(PushSubscription.created_at.desc())
+    """Get only subscriptions for the bound application and service owner."""
+    stmt = select(PushSubscription).where(subscription_scope(scope)).order_by(PushSubscription.created_at.desc())
     if user_email:
         stmt = stmt.where(PushSubscription.user_email == user_email)
     result = await db.execute(stmt)
@@ -87,27 +118,31 @@ async def send_push(
     db: AsyncSession,
     payload: dict[str, Any],
     user_email: str | None = None,
+    *,
+    scope: PushScope | None = None,
 ) -> int:
-    """Send push notification to all (or user-specific) subscriptions.
+    """Send only within the bound application/owner and return provider acceptances.
 
-    Returns the number of successful deliveries. Never raises.
-    Loads subscriptions first, releases the DB connection, then sends
-    pushes (network I/O) without holding a connection.
+    Existing direct Agent Hub callers are confined to its dashboard principal.
+    A provider acceptance is not evidence of notification display or human receipt.
     """
     if not is_configured():
         logger.debug("Web Push not configured (missing VAPID keys)")
         return 0
 
-    subs = await get_subscriptions(db, user_email=user_email)
+    scope = scope or PushScope("agent-hub", settings.agent_hub_dashboard_client_id)
+    subs = await get_subscriptions(db, scope=scope, user_email=user_email)
     if not subs:
         return 0
 
-    # Snapshot subscription data before releasing DB state
+    # Copy subscription identity before transport and concurrent updates.
     sub_infos = [
         {
             "id": sub.id,
             "endpoint": sub.endpoint,
             "keys": {"p256dh": sub.p256dh_key, "auth": sub.auth_key},
+            "application_id": sub.application_id,
+            "owner_id": sub.owner_id,
         }
         for sub in subs
     ]
@@ -115,10 +150,10 @@ async def send_push(
     vapid_claims = {"sub": settings.vapid_subject}
     data = json.dumps(payload)
     sent = 0
-    expired_endpoints: list[str] = []
-    delivered_ids: list[str] = []
+    expired: list[dict[str, Any]] = []
+    delivered: list[dict[str, Any]] = []
 
-    # Send pushes without holding DB session active
+    # Send from the captured identity; never log endpoint keys or provider errors.
     for info in sub_infos:
         try:
             webpush(
@@ -131,35 +166,36 @@ async def send_push(
                 vapid_claims=vapid_claims,
             )
             sent += 1
-            delivered_ids.append(info["id"])
+            delivered.append(info)
         except WebPushException as e:
             if hasattr(e, "response") and e.response is not None and e.response.status_code == 410:
-                logger.info("Push subscription expired, removing: %s", info["endpoint"][:50])
-                expired_endpoints.append(info["endpoint"])
+                logger.info("Push subscription expired: %s", info["id"])
+                expired.append(info)
             else:
-                logger.exception("Failed to send push to %s", info["endpoint"][:50])
-        except Exception:
-            logger.exception("Unexpected error sending push to %s", info["endpoint"][:50])
+                logger.warning("Push delivery failed for subscription %s", info["id"])
+        except Exception as exc:
+            logger.warning("Push delivery failed for subscription %s (%s)", info["id"], type(exc).__name__)
 
-    # Batch DB updates after all network I/O is done
-    if expired_endpoints:
-        stmt = delete(PushSubscription).where(
-            PushSubscription.endpoint.in_(expired_endpoints)
-        )
-        await db.execute(stmt)
-
-    if delivered_ids:
-        from sqlalchemy import update
-
-        stmt = update(PushSubscription).where(
-            PushSubscription.id.in_(delivered_ids)
-        ).values(last_used_at=func.now())
-        await db.execute(stmt)
-
-    if expired_endpoints or delivered_ids:
+    # Reconcile DB updates after network I/O.
+    # Fence cleanup against a concurrent key rotation or explicit re-registration.
+    for info in expired:
+        await db.execute(delete(PushSubscription).where(_sent_subscription(info)))
+    for info in delivered:
+        await db.execute(update(PushSubscription).where(_sent_subscription(info)).values(last_used_at=func.now()))
+    if expired or delivered:
         await db.commit()
 
     if sent > 0:
         logger.info("Push delivered to %d/%d subscriptions", sent, len(sub_infos))
 
     return sent
+
+
+def _sent_subscription(info: dict[str, Any]):
+    return and_(
+        PushSubscription.id == info["id"],
+        PushSubscription.application_id == info["application_id"],
+        PushSubscription.owner_id == info["owner_id"],
+        PushSubscription.p256dh_key == info["keys"]["p256dh"],
+        PushSubscription.auth_key == info["keys"]["auth"],
+    )

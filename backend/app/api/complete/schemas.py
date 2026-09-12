@@ -22,6 +22,7 @@ from .response_schemas import (
     CompletionResponse,
     EstimateResponse,
     NativeContinuationInfo,
+    NativeContinuationReceiptResponse,
     StreamingChunk,
 )
 from .usage_schemas import (
@@ -47,6 +48,7 @@ __all__ = [
     "MessageInput",
     "NativeContinuationCloseRequest",
     "NativeContinuationInfo",
+    "NativeContinuationReceiptResponse",
     "NativeContinuationRequest",
     "OutputUsageInfo",
     "ResponseFormat",

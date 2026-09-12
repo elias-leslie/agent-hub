@@ -21,6 +21,7 @@ from app.api.complete.schemas import (
     CompletionRequest,
     CompletionResponse,
     NativeContinuationInfo,
+    NativeContinuationReceiptResponse,
     UsageInfo,
 )
 from app.models import NativeContinuationTurn, Session
@@ -748,6 +749,67 @@ async def execute_native_continuation(
             ),
         )
     return _response_from_receipt(receipt, session_id, duplicate=False)
+
+
+async def lookup_native_receipt(
+    *,
+    session_id: str,
+    project_id: str,
+    generation: int,
+    request_id: str,
+    controller_generation: str,
+    client_id: str | None,
+    db: AsyncSession | None,
+    expected_turn: int | None = None,
+    context_version: str | None = None,
+    payload_hash: str | None = None,
+) -> NativeContinuationReceiptResponse:
+    """Read an exact persisted turn; never acquire runtime ownership or run a model."""
+    if db is None or not client_id:
+        raise HTTPException(status_code=401, detail="Identified client required.")
+    session = await db.get(Session, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Native continuation session not found.")
+    _validate_session_owner(session, client_id=client_id, project_id=project_id)
+    metadata = _native_metadata(session)
+    if (
+        metadata.get("generation") != generation
+        or metadata.get("controller_generation") != controller_generation
+    ):
+        raise HTTPException(status_code=409, detail="Native continuation generation changed.")
+    receipt = await _find_receipt(db, session_id, generation, request_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Native continuation receipt not found.")
+    for name, expected in (
+        ("expected_turn", expected_turn),
+        ("context_version", context_version),
+        ("payload_hash", payload_hash),
+    ):
+        if expected is not None and getattr(receipt, name) != expected:
+            raise HTTPException(status_code=409, detail=f"Native receipt {name} differs.")
+    result = NativeContinuationReceiptResponse(
+        status="uncertain",
+        session_id=session_id,
+        generation=generation,
+        request_id=request_id,
+        receipt_status=receipt.status,
+        runtime_status=receipt.runtime_status,
+        expected_turn=receipt.expected_turn,
+        accepted_turn=receipt.accepted_turn,
+        context_version=receipt.context_version,
+        payload_hash=receipt.payload_hash,
+        instruction_hash=receipt.instruction_hash,
+        tool_policy_hash=receipt.tool_policy_hash,
+        error_code=receipt.error_code,
+    )
+    if receipt.status == "completed":
+        result.status = "completed"
+        result.completion = _response_from_receipt(receipt, session_id, duplicate=True)
+    elif receipt.status == "failed":
+        result.status = "failed"
+    elif receipt.status == "superseded":
+        result.status = "superseded"
+    return result
 
 
 async def close_native_continuation(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -111,6 +111,25 @@ class CompletionResponse(BaseModel):
         default=None,
         description="Retained native-thread receipt when native continuation was requested.",
     )
+
+
+class NativeContinuationReceiptResponse(BaseModel):
+    """Lookup-only observation; a missing/unfinished turn is never replayed."""
+
+    status: Literal["completed", "uncertain", "failed", "superseded"]
+    session_id: str
+    generation: int
+    request_id: str
+    receipt_status: str
+    runtime_status: str
+    expected_turn: int
+    accepted_turn: int
+    context_version: str
+    payload_hash: str
+    instruction_hash: str
+    tool_policy_hash: str
+    error_code: str | None = None
+    completion: CompletionResponse | None = None
 
 
 class AsyncTaskResponse(BaseModel):

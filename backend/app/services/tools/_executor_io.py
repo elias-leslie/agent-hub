@@ -44,7 +44,7 @@ async def send_push(
     severity: str = "info",
     tag: str | None = None,
 ) -> str:
-    """Send a push notification to all subscribed devices."""
+    """Send to the Agent Hub dashboard principal's application subscriptions."""
     try:
         from app.db import async_session
         from app.services.push_service import send_push as _send_push

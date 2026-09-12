@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from app.api.complete.schemas import (
     EstimateRequest,
     EstimateResponse,
     NativeContinuationCloseRequest,
+    NativeContinuationReceiptResponse,
 )
 from app.db import get_db
 
@@ -78,6 +79,43 @@ async def close_native_session(
         generation=request.generation,
         controller_generation=request.controller_generation,
         client_id=getattr(http_request.state, "client_id", None),
+        db=db,
+    )
+
+
+@router.get("/complete/native/receipt", response_model=NativeContinuationReceiptResponse)
+async def native_receipt(
+    http_request: Request,
+    response: Response,
+    session_id: Annotated[str, Query(min_length=1, max_length=100)],
+    project_id: Annotated[str, Query(min_length=1, max_length=100)],
+    generation: Annotated[int, Query(ge=1)],
+    request_id: Annotated[str, Query(min_length=1, max_length=100)],
+    controller_generation: Annotated[str, Query(min_length=1, max_length=100)],
+    expected_turn: Annotated[int | None, Query(ge=0)] = None,
+    context_version: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    payload_hash: Annotated[str | None, Query(pattern="^[a-f0-9]{64}$")] = None,
+    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
+) -> NativeContinuationReceiptResponse:
+    """Inspect a saved turn without provider, generation, or transcript side effects."""
+    from app.api.complete.native_continuation import lookup_native_receipt
+    from app.middleware.access_control_auth import require_service_client
+    from app.models.client import check_project_access
+
+    response.headers["Cache-Control"] = "no-store"
+    client = await require_service_client(http_request)
+    if not check_project_access(client.get("allowed_projects", "[]"), project_id):
+        raise HTTPException(status_code=403, detail="Project not allowed.")
+    return await lookup_native_receipt(
+        session_id=session_id,
+        project_id=project_id,
+        generation=generation,
+        request_id=request_id,
+        controller_generation=controller_generation,
+        expected_turn=expected_turn,
+        context_version=context_version,
+        payload_hash=payload_hash,
+        client_id=client["id"],
         db=db,
     )
 
