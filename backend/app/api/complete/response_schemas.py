@@ -113,6 +113,19 @@ class CompletionResponse(BaseModel):
     )
 
 
+class NativeContinuationAccounting(BaseModel):
+    """Accounting retained for a terminal native turn, without generated content."""
+
+    model_used: str | None = None
+    agent_used: str | None = None
+    input_tokens: int
+    cache_read_tokens: int
+    output_tokens: int
+    reasoning_tokens: int
+    total_tokens: int
+    usage_known: bool
+
+
 class NativeContinuationReceiptResponse(BaseModel):
     """Lookup-only observation; a missing/unfinished turn is never replayed."""
 
@@ -129,6 +142,7 @@ class NativeContinuationReceiptResponse(BaseModel):
     instruction_hash: str
     tool_policy_hash: str
     error_code: str | None = None
+    accounting: NativeContinuationAccounting | None = None
     completion: CompletionResponse | None = None
 
 

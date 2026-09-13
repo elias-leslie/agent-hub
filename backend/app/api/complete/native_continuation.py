@@ -20,6 +20,7 @@ from app.api.complete.schemas import (
     CacheInfo,
     CompletionRequest,
     CompletionResponse,
+    NativeContinuationAccounting,
     NativeContinuationInfo,
     NativeContinuationReceiptResponse,
     UsageInfo,
@@ -183,6 +184,24 @@ def _response_from_receipt(
             reasoning_tokens=receipt.reasoning_tokens,
             usage_known=receipt.usage_known,
         ),
+    )
+
+
+def _accounting_from_receipt(
+    receipt: NativeContinuationTurn,
+) -> NativeContinuationAccounting | None:
+    """Return terminal usage without making an unsuccessful proposal retrievable."""
+    if receipt.status not in {"completed", "failed", "superseded"} or not receipt.usage_known:
+        return None
+    return NativeContinuationAccounting(
+        model_used=receipt.model_used,
+        agent_used=receipt.agent_used,
+        input_tokens=receipt.input_tokens,
+        cache_read_tokens=receipt.cache_read_tokens,
+        output_tokens=receipt.output_tokens,
+        reasoning_tokens=receipt.reasoning_tokens,
+        total_tokens=receipt.input_tokens + receipt.output_tokens,
+        usage_known=True,
     )
 
 
@@ -801,6 +820,7 @@ async def lookup_native_receipt(
         instruction_hash=receipt.instruction_hash,
         tool_policy_hash=receipt.tool_policy_hash,
         error_code=receipt.error_code,
+        accounting=_accounting_from_receipt(receipt),
     )
     if receipt.status == "completed":
         result.status = "completed"

@@ -61,6 +61,13 @@ async def test_receipt_hit_is_lookup_only(lookup_db: AsyncMock, status: str) -> 
         result = await lookup(lookup_db, expected_turn=1, context_version="fixture-2")
     assert result.status == ("uncertain" if status == "accepted" else status)
     assert (result.completion is not None) == (status == "completed")
+    assert (result.accounting is not None) == (status != "accepted")
+    if result.accounting:
+        assert result.accounting.input_tokens == 12
+        assert result.accounting.cache_read_tokens == 4
+        assert result.accounting.output_tokens == 3
+        assert result.accounting.total_tokens == 15
+        assert not hasattr(result.accounting, "content")
     if result.completion:
         assert result.completion.content == receipt.content
         assert result.completion.native_continuation.duplicate is True
@@ -70,6 +77,20 @@ async def test_receipt_hit_is_lookup_only(lookup_db: AsyncMock, status: str) -> 
     lookup_db.add.assert_not_called()
     lookup_db.commit.assert_not_called()
     lookup_db.flush.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_unknown_terminal_usage_is_not_reported_as_zero(lookup_db: AsyncMock) -> None:
+    receipt = stored_receipt("superseded")
+    receipt.usage_known = False
+    with patch(
+        "app.api.complete.native_continuation._find_receipt",
+        AsyncMock(return_value=receipt),
+    ):
+        result = await lookup(lookup_db)
+    assert result.status == "superseded"
+    assert result.accounting is None
+    assert result.completion is None
 
 
 @pytest.mark.asyncio
@@ -147,3 +168,38 @@ async def test_get_route_returns_exact_receipt_without_completion(lookup_db: Asy
     assert denied.status_code == 403
     complete.assert_not_called()
     runtime.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["failed", "superseded"])
+async def test_get_route_returns_terminal_accounting_without_content(
+    lookup_db: AsyncMock, status: str,
+) -> None:
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: lookup_db
+    params = dict(session_id="fixture-session", project_id="fixture-project", generation=3,
+                  request_id="fixture-request", controller_generation="fixture-controller")
+    with (
+        patch("app.api.complete.native_continuation._find_receipt",
+              AsyncMock(return_value=stored_receipt(status))),
+        patch("app.middleware.access_control_auth.get_cached_client", AsyncMock(return_value={
+            "id": "fixture-client", "status": "active", "allowed_projects": '["fixture-project"]',
+        })),
+    ):
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://fixture") as client:
+            response = await client.get(
+                "/api/complete/native/receipt", params=params,
+                headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1",
+                         "X-Client-Id": "fixture-client"},
+            )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == status
+    assert body["completion"] is None
+    assert body["accounting"] == {
+        "model_used": "fixture-model", "agent_used": "fixture-reader",
+        "input_tokens": 12, "cache_read_tokens": 4, "output_tokens": 3,
+        "reasoning_tokens": 0, "total_tokens": 15, "usage_known": True,
+    }
+    assert "content" not in body["accounting"]
