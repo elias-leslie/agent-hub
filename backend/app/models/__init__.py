@@ -37,6 +37,7 @@ from .push_subscription import PushSubscription
 from .runtime_context import RuntimeContextOverride
 from .session import (
     CostLog,
+    NativeContinuationTurn,
     Session,
     SessionEvent,
     SessionEventType,
@@ -76,6 +77,7 @@ __all__ = [
     "ModelCatalogSyncState",
     "ModelEnrichment",
     "NarrationTag",
+    "NativeContinuationTurn",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",

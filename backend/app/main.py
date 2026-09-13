@@ -151,6 +151,10 @@ async def _startup() -> None:
 
 async def _shutdown() -> None:
     """Run all shutdown tasks."""
+    from app.services.native_continuation_runtime import shutdown_native_runtime_manager
+
+    await shutdown_native_runtime_manager()
+    logger.info("Native continuation runtimes stopped")
     await stop_all_stream_bridges()
     logger.info("Hatchet stream bridges stopped")
     await shutdown_usage_tracker()

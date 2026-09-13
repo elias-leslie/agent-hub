@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -93,6 +93,59 @@ class WorkContext(BaseModel):
     pane_id: str | None = Field(default=None, max_length=100)
 
 
+class NativeContinuationRequest(BaseModel):
+    """Explicit delta-context contract for a retained Codex native thread."""
+
+    mode: Literal["snapshot", "delta"]
+    generation: int = Field(..., ge=1)
+    request_id: str = Field(..., min_length=1, max_length=100)
+    expected_turn: int = Field(..., ge=0)
+    context_version: str = Field(..., min_length=1, max_length=100)
+    role: Literal["hunter", "reviewer"]
+    controller_generation: str = Field(..., min_length=1, max_length=100)
+    instruction_hash: str | None = Field(
+        default=None,
+        pattern="^[0-9a-f]{64}$",
+        description="Instruction hash returned by the snapshot turn; required for deltas.",
+    )
+    tool_policy_hash: str | None = Field(
+        default=None,
+        pattern="^[0-9a-f]{64}$",
+        description="Tool-policy hash returned by the snapshot turn; required for deltas.",
+    )
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max", "ultra"] = "xhigh"
+    cyber_access_program: Literal["standard"] | None = Field(
+        default=None,
+        description=(
+            "Optional native cyber-access request. This requests provider treatment but does "
+            "not assert entitlement or observed delivery."
+        ),
+    )
+    close_after: bool = False
+
+    @model_validator(mode="after")
+    def _validate_continuation(self) -> NativeContinuationRequest:
+        if self.mode == "snapshot" and self.expected_turn != 0:
+            raise ValueError("Snapshot continuation requires expected_turn=0.")
+        if self.mode == "delta" and self.expected_turn == 0:
+            raise ValueError("Delta continuation requires expected_turn greater than zero.")
+        if self.mode == "delta" and (not self.instruction_hash or not self.tool_policy_hash):
+            raise ValueError("Delta continuation requires instruction_hash and tool_policy_hash.")
+        if self.role == "reviewer" and (
+            self.mode != "snapshot" or self.expected_turn != 0 or not self.close_after
+        ):
+            raise ValueError("Reviewer native turns must be fresh snapshots with close_after=true.")
+        return self
+
+
+class NativeContinuationCloseRequest(BaseModel):
+    """Close one exact retained native generation."""
+
+    session_id: str = Field(..., min_length=1, max_length=100)
+    generation: int = Field(..., ge=1)
+    controller_generation: str = Field(..., min_length=1, max_length=100)
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -104,6 +157,13 @@ class CompletionRequest(BaseModel):
     system_prompt: str | None = Field(default=None, description="Application instructions appended to canonical operator and agent context.")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, max_length=100, description="Existing session ID to continue")
+    native_continuation: NativeContinuationRequest | None = Field(
+        default=None,
+        description=(
+            "Retained Codex native-thread contract. Snapshot sends a complete selected context; "
+            "delta sends only newly recorded state. This path never prepends the stored transcript."
+        ),
+    )
     parent_session_id: str | None = Field(
         default=None,
         max_length=100,
@@ -253,6 +313,34 @@ class CompletionRequest(BaseModel):
         if raw_turns is None or raw_turns == 1:
             return {**data, "max_turns": DEFAULT_AGENTIC_MAX_TURNS}
         return data
+
+    @model_validator(mode="after")
+    def _validate_native_continuation(self) -> CompletionRequest:
+        if self.native_continuation is None:
+            return self
+        if self.stream or self.async_execution or self.execute_tools or self.max_turns != 1:
+            raise ValueError(
+                "Native continuation requires a synchronous single turn with tool execution disabled."
+            )
+        if self.tools or self.enable_programmatic_tools or self.container_id:
+            raise ValueError("Native continuation does not permit model tools or containers.")
+        if self.use_memory:
+            raise ValueError(
+                "Native continuation requires use_memory=false; selected context belongs in the snapshot."
+            )
+        if len(self.messages) != 1 or self.messages[0].role != "user":
+            raise ValueError("Native continuation requires exactly one user message per turn.")
+        if not isinstance(self.messages[0].content, str):
+            raise ValueError("Native continuation currently accepts text input only.")
+        if self.native_continuation.mode == "snapshot" and not self.system_prompt:
+            raise ValueError("Native continuation snapshots require system_prompt instructions.")
+        if not self.session_id:
+            raise ValueError(
+                "Native continuation requires a caller-supplied session_id for retry safety."
+            )
+        if len(self.session_id) > 36:
+            raise ValueError("Native continuation session_id must fit the durable session key.")
+        return self
 
 
 class EstimateRequest(BaseModel):
