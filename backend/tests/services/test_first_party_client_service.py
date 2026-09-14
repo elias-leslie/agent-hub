@@ -201,3 +201,45 @@ class TestReconcileFirstPartyClients:
         assert created_clients == changed
         mock_db.commit.assert_awaited_once()
         assert mock_invalidate_client_cache.call_count == len(changed)
+
+    @pytest.mark.asyncio
+    async def test_preserves_registered_projects_for_summitflow_owned_client(self) -> None:
+        existing = Client(
+            id="summitflow",
+            display_name="summitflow",
+            client_type="internal",
+            status="active",
+            allowed_projects='["summitflow", "agent-hub", "security-research", "neri"]',
+        )
+        mock_db = _mock_db({"summitflow": existing})
+
+        with (
+            patch(
+                "app.services.first_party_client_service.settings.agent_hub_dashboard_client_id",
+                "",
+            ),
+            patch(
+                "app.services.first_party_client_service.settings.portfolio_client_id",
+                "",
+            ),
+            patch(
+                "app.services.first_party_client_service.settings.summitflow_client_id",
+                "",
+            ),
+            patch(
+                "app.services.first_party_client_service.settings.monkey_fight_client_id",
+                "",
+            ),
+            patch(
+                "app.services.first_party_client_service.invalidate_client_cache"
+            ) as mock_invalidate_client_cache,
+        ):
+            changed = await reconcile_first_party_clients(mock_db)
+
+        assert "summitflow" not in changed
+        assert existing.allowed_projects == (
+            '["summitflow", "agent-hub", "security-research", "neri"]'
+        )
+        assert "summitflow" not in [
+            call.args[0] for call in mock_invalidate_client_cache.call_args_list
+        ]

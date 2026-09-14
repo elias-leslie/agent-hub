@@ -45,7 +45,7 @@ class NeriLocalBenchmarkCase:
     forbidden_kinds: tuple[str, ...] = ()
 
 
-_ORACLE_REVISION = 1
+_ORACLE_REVISION = 4
 
 
 def _sha256_json(value: Any) -> str:
@@ -97,7 +97,10 @@ _CASES: tuple[NeriLocalBenchmarkCase, ...] = (
             "Check the claim that private content was disclosed.",
             {"E1": "GET /records/9 returned status 200.", "E2": "No response body was captured."},
         ),
-        (("body", "not captured|missing"), ("disclos", "unsupported|insufficient|lacks")),
+        (
+            ("body", "not captured|missing|no response body"),
+            ("disclos", "unsupported|not supported|insufficient|lacks|not establish"),
+        ),
         ("E2",),
         ("missing_evidence",),
     ),
@@ -141,7 +144,11 @@ _CASES: tuple[NeriLocalBenchmarkCase, ...] = (
                 "E4": "A later GET /exports/J2 returned 404; no artifact was captured.",
             },
         ),
-        (("post", "202"), ("get", "404"), ("impact", "unknown|not demonstrated|not assessed")),
+        (
+            ("post", "202"),
+            ("get", "404"),
+            ("impact", "unknown|not demonstrated|not assessed|unresolved"),
+        ),
         ("E3", "E4"),
         ("draft_text|fact",),
         ("confirmed disclosure",),
@@ -190,7 +197,13 @@ _CASES: tuple[NeriLocalBenchmarkCase, ...] = (
                 "E11": "The program documentation labels /catalog/{id} public product data.",
             },
         ),
-        (("public", "product"), ("does not establish|not establish|unsupported", "validity|vulnerab")),
+        (
+            ("public", "product"),
+            (
+                "does not establish|not establish|unsupported|cannot be determined|insufficient",
+                "validity|vulnerab",
+            ),
+        ),
         ("E11",),
         ("fact", "unknown"),
         ("critical", "confirmed vulnerability"),
@@ -352,6 +365,13 @@ def score_neri_local_attempt(
     run_number: int,
 ) -> dict[str, Any]:
     output = execution.output
+    runtime_metrics = dict(execution.runtime_metrics)
+    latency_ms = int(runtime_metrics.get("latency_ms") or 0)
+    output_tokens = int(runtime_metrics.get("output_tokens") or 0)
+    if latency_ms > 0:
+        runtime_metrics["end_to_end_output_tokens_per_second"] = round(
+            output_tokens / (latency_ms / 1_000), 2
+        )
     rendered = output.model_dump_json()
     statements = "\n".join([output.summary, *(item.statement for item in output.items), *output.limitations])
     emitted_refs = {ref for item in output.items for ref in item.evidence_refs}
@@ -389,7 +409,7 @@ def score_neri_local_attempt(
         "provider": execution.provider,
         "case_id": case.case_id,
         "run_number": run_number,
-        "latency_ms": int(execution.runtime_metrics.get("latency_ms") or 0),
+        "latency_ms": latency_ms,
         "input_tokens": int(execution.runtime_metrics.get("input_tokens") or 0),
         "output_tokens": int(execution.runtime_metrics.get("output_tokens") or 0),
         "total_tokens": int(execution.runtime_metrics.get("total_tokens") or 0),
@@ -411,7 +431,7 @@ def score_neri_local_attempt(
         "task_family": case.family.value,
         "harness_arm": execution.harness_arm.value,
         "dimension_scores": dimensions,
-        "runtime_metrics": execution.runtime_metrics,
+        "runtime_metrics": runtime_metrics,
         "safety_failures": safety_failures,
         "oracle_details": {
             "required_concepts_met": correctness_hits,
@@ -477,8 +497,23 @@ def _failed_attempt(
         content = ""
         evaluation_config = {}
     metrics.setdefault("latency_ms", latency_ms)
+    observed_latency_ms = int(metrics.get("latency_ms") or 0)
+    observed_output_tokens = int(metrics.get("output_tokens") or 0)
+    if observed_latency_ms > 0:
+        metrics["end_to_end_output_tokens_per_second"] = round(
+            observed_output_tokens / (observed_latency_ms / 1_000), 2
+        )
     metrics["observation_completeness"] = {
-        "usage": all(key in metrics for key in ("input_tokens", "output_tokens", "total_tokens")),
+        "usage": all(
+            key in metrics
+            for key in (
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "cache_read_tokens",
+                "cache_write_tokens",
+            )
+        ),
         "tool_policy": tool_policy_met is not None,
         "schema": schema_valid is not None,
         "effective_model": effective_model is not None,
@@ -531,6 +566,84 @@ def _failed_attempt(
     }
 
 
+_RUNTIME_PROFILE_KEYS = (
+    "model_id",
+    "engine",
+    "engine_revision",
+    "gpu_backend",
+    "server_model_id",
+    "artifact_sha256",
+    "observed_build_info",
+    "observed_context_tokens",
+    "observed_slot_context_tokens",
+    "observed_total_slots",
+    "observed_model_ftype",
+    "observed_request_speculative_default",
+    "observed_mtp_enabled",
+    "observed_runtime_pid",
+    "observed_process_start_ticks",
+    "observed_artifact_sha256",
+    "observed_engine_revision",
+    "observed_binary_path",
+    "observed_model_path",
+    "observed_spec_draft_n_max",
+    "observed_cache_type_k",
+    "observed_cache_type_v",
+    "observed_batch_size",
+    "observed_ubatch_size",
+    "observed_prompt_cache_enabled",
+    "observed_temperature",
+    "observed_top_k",
+    "observed_top_p",
+    "observed_min_p",
+    "observed_repeat_penalty",
+    "observed_presence_penalty",
+)
+
+_REQUIRED_OBSERVED_RUNTIME_KEYS = frozenset(
+    {
+        "observed_runtime_pid",
+        "observed_process_start_ticks",
+        "observed_artifact_sha256",
+        "observed_engine_revision",
+        "observed_binary_path",
+        "observed_model_path",
+        "observed_build_info",
+        "observed_context_tokens",
+        "observed_slot_context_tokens",
+        "observed_total_slots",
+        "observed_model_ftype",
+        "observed_mtp_enabled",
+        "observed_spec_draft_n_max",
+        "observed_cache_type_k",
+        "observed_cache_type_v",
+        "observed_batch_size",
+        "observed_ubatch_size",
+        "observed_prompt_cache_enabled",
+    }
+)
+
+
+def _observed_runtime_profiles(attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return distinct exact runtime profiles without case-specific evaluation data."""
+    unique: dict[str, dict[str, Any]] = {}
+    for attempt in attempts:
+        artifact = attempt.get("artifact_identity")
+        if not isinstance(artifact, dict):
+            continue
+        if not _REQUIRED_OBSERVED_RUNTIME_KEYS.issubset(artifact):
+            continue
+        profile = {key: artifact[key] for key in _RUNTIME_PROFILE_KEYS if key in artifact}
+        if profile:
+            unique[_sha256_json(profile)] = profile
+    return [unique[key] for key in sorted(unique)]
+
+
+def _has_complete_runtime_observation(attempt: dict[str, Any]) -> bool:
+    artifact = attempt.get("artifact_identity")
+    return isinstance(artifact, dict) and _REQUIRED_OBSERVED_RUNTIME_KEYS.issubset(artifact)
+
+
 async def run_neri_local_benchmark(
     request: NeriLocalBenchmarkRequest,
     db: AsyncSession,
@@ -568,6 +681,10 @@ async def run_neri_local_benchmark(
                     )
 
     aggregate = aggregate_attempts(attempts)
+    observed_runtime_profiles = _observed_runtime_profiles(attempts)
+    runtime_observation_complete = bool(attempts) and all(
+        _has_complete_runtime_observation(attempt) for attempt in attempts
+    )
     payload = {
         "benchmark_id": benchmark_id,
         "agent_slug": AGENT_SLUG,
@@ -587,6 +704,12 @@ async def run_neri_local_benchmark(
         "infra_failure_count": aggregate.infra_failure_count,
         "config_snapshot": {
             "model_runtime": NERI_QWEN_RUNTIME_PROFILE.public_metadata(),
+            "observed_runtime_profiles": observed_runtime_profiles,
+            "runtime_profile_observed": bool(observed_runtime_profiles),
+            "runtime_observation_complete": runtime_observation_complete,
+            "runtime_profile_consistent": (
+                runtime_observation_complete and len(observed_runtime_profiles) == 1
+            ),
             "harness_arms": [arm.value for arm in request.harness_arms],
             "reasoning_effort": request.reasoning_effort,
             "max_output_tokens": request.max_output_tokens,

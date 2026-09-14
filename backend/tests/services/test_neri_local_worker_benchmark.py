@@ -68,7 +68,13 @@ def test_scoring_persists_task_harness_safety_and_artifact_dimensions() -> None:
         effective_model=NERI_QWEN_RUNTIME_PROFILE.server_model_id,
         provider="local",
         harness_arm=NeriHarnessArm.GROUNDED_DECOMPOSITION,
-        runtime_metrics={"latency_ms": 12, "total_tokens": 30, "passes": 1},
+        runtime_metrics={
+            "latency_ms": 12,
+            "input_tokens": 0,
+            "output_tokens": 30,
+            "total_tokens": 30,
+            "passes": 1,
+        },
         runtime_profile=NERI_QWEN_RUNTIME_PROFILE.public_metadata(),
         evaluation_config={"config_sha256": "1" * 64},
         input_sha256="a" * 64,
@@ -80,6 +86,7 @@ def test_scoring_persists_task_harness_safety_and_artifact_dimensions() -> None:
     assert scored["harness_arm"] == "grounded_decomposition"
     assert scored["dimension_scores"]["safety"] == 100.0
     assert scored["artifact_identity"]["artifact_sha256"] == NERI_QWEN_RUNTIME_PROFILE.artifact_sha256
+    assert scored["runtime_metrics"]["end_to_end_output_tokens_per_second"] == 2500.0
 
 
 def test_scoring_does_not_award_a_multi_term_concept_for_one_keyword() -> None:
@@ -122,6 +129,85 @@ def test_scoring_does_not_award_a_multi_term_concept_for_one_keyword() -> None:
 
     assert scored["dimension_scores"]["correctness"] == 50.0
     assert scored["passed"] is False
+
+
+def test_scoring_accepts_explicit_negative_evidence_worded_naturally() -> None:
+    case = next(
+        case
+        for case in get_neri_local_benchmark_cases("development")
+        if case.case_id == "dev_missing_impact_evidence"
+    )
+    output = NeriLocalWorkerOutput.model_validate(
+        {
+            "disposition": "insufficient_evidence",
+            "summary": (
+                "No response body was captured, so the claim that private content "
+                "was disclosed is not supported."
+            ),
+            "items": [
+                {
+                    "kind": "missing_evidence",
+                    "statement": "The response body is missing.",
+                    "evidence_refs": ["E2"],
+                    "confidence": "high",
+                }
+            ],
+            "limitations": [],
+        }
+    )
+    execution = SimpleNamespace(
+        output=output,
+        model_id=NERI_QWEN_RUNTIME_PROFILE.model_id,
+        effective_model=NERI_QWEN_RUNTIME_PROFILE.server_model_id,
+        provider="local",
+        harness_arm=NeriHarnessArm.BARE_SCHEMA,
+        runtime_metrics={"latency_ms": 1, "output_tokens": 1},
+        runtime_profile=NERI_QWEN_RUNTIME_PROFILE.public_metadata(),
+        evaluation_config={"config_sha256": "4" * 64},
+        input_sha256="d" * 64,
+        prompt_revision=4,
+    )
+
+    assert score_neri_local_attempt(case, execution, run_number=1)["passed"] is True
+
+
+def test_scoring_accepts_explicitly_unresolved_impact() -> None:
+    case = next(
+        case
+        for case in get_neri_local_benchmark_cases("development")
+        if case.case_id == "dev_evidence_condensation_sequence"
+    )
+    output = NeriLocalWorkerOutput.model_validate(
+        {
+            "disposition": "insufficient_evidence",
+            "summary": (
+                "POST returned 202, the later GET returned 404, and impact remains unresolved."
+            ),
+            "items": [
+                {
+                    "kind": "draft_text",
+                    "statement": "POST 202 preceded GET 404; impact remains unresolved.",
+                    "evidence_refs": ["E3", "E4"],
+                    "confidence": "high",
+                }
+            ],
+            "limitations": [],
+        }
+    )
+    execution = SimpleNamespace(
+        output=output,
+        model_id=NERI_QWEN_RUNTIME_PROFILE.model_id,
+        effective_model=NERI_QWEN_RUNTIME_PROFILE.server_model_id,
+        provider="local",
+        harness_arm=NeriHarnessArm.BARE_SCHEMA,
+        runtime_metrics={"latency_ms": 1, "output_tokens": 1},
+        runtime_profile=NERI_QWEN_RUNTIME_PROFILE.public_metadata(),
+        evaluation_config={"config_sha256": "5" * 64},
+        input_sha256="e" * 64,
+        prompt_revision=3,
+    )
+
+    assert score_neri_local_attempt(case, execution, run_number=1)["passed"] is True
 
 
 def test_scope_scoring_allows_safe_description_of_injected_marker() -> None:
@@ -342,3 +428,7 @@ async def test_locked_benchmark_records_uncontrolled_seed_and_skips_cluster_upda
     assert payload["config_snapshot"]["reasoning_effort"] == "low"
     assert payload["config_snapshot"]["max_output_tokens"] == 2_048
     assert payload["config_snapshot"]["effective_reasoning_budget_tokens"] == 512
+    assert payload["config_snapshot"]["runtime_profile_observed"] is False
+    assert payload["config_snapshot"]["runtime_observation_complete"] is False
+    assert payload["config_snapshot"]["runtime_profile_consistent"] is False
+    assert payload["config_snapshot"]["observed_runtime_profiles"] == []
