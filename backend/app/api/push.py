@@ -8,12 +8,13 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services import push_service
+from app.services.push_scope import resolve_push_scope
 
 logger = logging.getLogger(__name__)
 
@@ -26,20 +27,27 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 
 class SubscribeKeys(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     p256dh: str
     auth: str
 
 
 class SubscribeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     endpoint: str
     keys: SubscribeKeys
+    application_id: str | None = Field(default=None, min_length=1, max_length=100)
+    expiration_time: float | None = Field(default=None, alias="expirationTime")
 
 
 class UnsubscribeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     endpoint: str
+    application_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class SendPushRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     title: str
     body: str
     url: str | None = None
@@ -48,6 +56,9 @@ class SendPushRequest(BaseModel):
     task_id: str | None = None
     notification_id: str | None = None
     project_id: str | None = None
+    application_id: str | None = Field(default=None, min_length=1, max_length=100)
+    # Existing SummitFlow delivery includes this transport-only event label.
+    type: str | None = None
 
 
 # ---------- Endpoints ----------
@@ -64,36 +75,42 @@ async def get_vapid_key() -> dict[str, str]:
 
 
 @router.post("/subscriptions")
-async def subscribe(req: SubscribeRequest, db: DbDep) -> dict[str, str]:
-    """Save a browser push subscription."""
-    sub = await push_service.save_subscription(
-        db,
-        endpoint=req.endpoint,
-        p256dh=req.keys.p256dh,
-        auth=req.keys.auth,
-    )
+async def subscribe(req: SubscribeRequest, request: Request, db: DbDep) -> dict[str, str]:
+    """Bind registration to a verified application service, not a claimed user."""
+    scope = await resolve_push_scope(request, req.application_id)
+    try:
+        sub = await push_service.save_subscription(
+            db, endpoint=req.endpoint, p256dh=req.keys.p256dh, auth=req.keys.auth,
+            scope=scope,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     logger.info("Push subscription saved: %s", sub.get("id"))
-    return {"status": "subscribed", "id": sub.get("id", "")}
+    return {"status": "subscribed", **sub, "owner_kind": "registered_service_client"}
 
 
 @router.delete("/subscriptions")
-async def unsubscribe(req: UnsubscribeRequest, db: DbDep) -> dict[str, str]:
+async def unsubscribe(req: UnsubscribeRequest, request: Request, db: DbDep) -> dict[str, str]:
     """Remove a push subscription."""
-    deleted = await push_service.delete_subscription(db, endpoint=req.endpoint)
+    scope = await resolve_push_scope(request, req.application_id)
+    deleted = await push_service.delete_subscription(db, endpoint=req.endpoint, scope=scope)
     if not deleted:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    return {"status": "unsubscribed"}
+    return {"status": "unsubscribed", "application_id": scope.application_id}
 
 
 @router.post("/send")
-async def send_notification(req: SendPushRequest, db: DbDep) -> dict[str, Any]:
-    """Send a push notification to all subscribed devices.
+async def send_notification(req: SendPushRequest, request: Request, db: DbDep) -> dict[str, Any]:
+    """Send only to the bound application service principal's subscriptions.
 
-    Authenticated via client credentials (internal service calls).
+    New scoped consumers verify X-Agent-Hub-Internal plus registered X-Client-Id.
+    The isolated SummitFlow compatibility path retains its prior localhost trust.
     """
+    scope = await resolve_push_scope(request, req.application_id)
     payload: dict[str, Any] = {
         "title": req.title,
         "body": req.body,
+        "application_id": scope.application_id,
     }
     if req.url:
         payload["url"] = req.url
@@ -107,6 +124,10 @@ async def send_notification(req: SendPushRequest, db: DbDep) -> dict[str, Any]:
         payload["notification_id"] = req.notification_id
     if req.project_id:
         payload["project_id"] = req.project_id
+    if req.type:
+        payload["type"] = req.type
 
-    sent = await push_service.send_push(db, payload=payload)
-    return {"status": "sent", "delivered": sent}
+    sent = await push_service.send_push(db, payload=payload, scope=scope)
+    return {"status": "sent", "delivered": sent, "application_id": scope.application_id,
+            "owner_id": scope.owner_id, "legacy_compatibility": scope.include_legacy,
+            "delivery_semantics": "Provider accepted; display and human receipt are unobserved."}

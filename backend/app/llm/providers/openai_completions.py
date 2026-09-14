@@ -24,7 +24,9 @@ import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from urllib.parse import urlparse
 
+import httpx
 from openai import AsyncOpenAI
 from openai._exceptions import OpenAIError
 
@@ -144,6 +146,8 @@ class _Compat:
     # caller opts out; the reasoning tokens consume max_tokens and the response
     # comes back 200 OK with an EMPTY content string. See _reasoning_params.
     reasons_by_default: bool = False
+    reasoning_budget_tokens: dict[str, int] = field(default_factory=dict)
+    loopback_only_transport: bool = False
 
 
 def _detect_compat(model: Model[Any]) -> _Compat:
@@ -261,6 +265,12 @@ def _get_compat(model: Model[Any]) -> _Compat:
         ),
         supports_long_cache_retention=pick(
             user.supports_long_cache_retention, detected.supports_long_cache_retention
+        ),
+        reasoning_budget_tokens=pick(
+            user.reasoning_budget_tokens, detected.reasoning_budget_tokens
+        ),
+        loopback_only_transport=pick(
+            user.loopback_only_transport, detected.loopback_only_transport
         ),
         reasons_by_default=detected.reasons_by_default,
     )
@@ -617,6 +627,8 @@ def build_params(
             "enable_thinking": bool(reasoning_effort),
             "preserve_thinking": True,
         }
+        if reasoning_effort and reasoning_effort in compat.reasoning_budget_tokens:
+            params["reasoning_budget_tokens"] = compat.reasoning_budget_tokens[reasoning_effort]
     elif compat.thinking_format == "deepseek" and model.reasoning:
         params["thinking"] = {"type": "enabled" if reasoning_effort else "disabled"}
         if reasoning_effort:
@@ -758,10 +770,22 @@ def create_client(
     if model.provider == "cloudflare-ai-gateway":
         headers["cf-aig-authorization"] = f"Bearer {api_key}"
 
+    http_client: httpx.AsyncClient | None = None
+    if compat.loopback_only_transport:
+        endpoint = urlparse(model.base_url or "")
+        if endpoint.scheme not in {"http", "https"} or endpoint.hostname not in {
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        }:
+            raise ValueError("Loopback-only completion transport received a non-loopback URL")
+        http_client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
+
     return AsyncOpenAI(
         api_key=api_key or "placeholder",
         base_url=model.base_url,
         default_headers=headers,
+        http_client=http_client,
     )
 
 
@@ -922,13 +946,15 @@ def stream_openai_completions(
                 if chunk_id and not output.response_id:
                     output.response_id = chunk_id
                 chunk_model = getattr(chunk, "model", None)
-                if (
-                    isinstance(chunk_model, str)
-                    and chunk_model
-                    and chunk_model != model.id
-                    and not output.response_model
-                ):
-                    output.response_model = chunk_model
+                if isinstance(chunk_model, str) and chunk_model:
+                    if (
+                        compat.loopback_only_transport
+                        and output.response_model
+                        and output.response_model != chunk_model
+                    ):
+                        raise ValueError("Restricted runtime reported inconsistent model identities")
+                    if not output.response_model:
+                        output.response_model = chunk_model
 
                 usage = getattr(chunk, "usage", None)
                 if usage is not None:

@@ -168,6 +168,9 @@ class Settings(BaseSettings):
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"
     local_openai_api_key: str = ""
+    # Dedicated llama.cpp endpoint for the pinned Neri Qwen candidate. Keeping
+    # this separate prevents an evaluation from repointing every Ollama model.
+    neri_local_qwen_base_url: str = "http://127.0.0.1:8100/v1"
     # Ollama-compatible keep_alive for local Gemma 4 calls. This keeps the
     # model warm during a short critique burst, then unloads it from GPU after
     # the idle window instead of wasting VRAM indefinitely.

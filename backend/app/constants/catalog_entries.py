@@ -56,6 +56,7 @@ from app.constants.models import (
     GEMINI_IMAGE_NANO2,
     KIMI_CODE_FOR_CODING,
     LOCAL_GEMMA_4_12B,
+    LOCAL_NERI_QWEN3_8_27B_IQ3_S,
     LOCAL_QWEN2_5_CODER_14B,
     LOCAL_QWEN3_30B_A3B,
     LOCAL_QWEN3_CODER_30B_A3B,
@@ -659,6 +660,28 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(has_vision=True, supports_tool_execution=True, max_output_tokens=8_192),
         release_date="2026-06-03", family="gemma",
         availability="requires_local_openai_endpoint; qat_q4_0_~8gb_vram_100pct_gpu",
+    ),
+    ModelEntry(
+        id=LOCAL_NERI_QWEN3_8_27B_IQ3_S,
+        alias="local/neri-qwen",
+        name="Qwen3.8 27B GSQ/RCO IQ3_S (Neri candidate)",
+        hint="Unqualified local Neri worker",
+        provider="local",
+        # Neri's own held-out suite is authoritative. Zeroes prevent public
+        # benchmark claims from being mistaken for locally demonstrated skill.
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=0, design=0),
+        cost=ModelCost(0.00, 0.00),
+        context_window=32_768,
+        speed_tier="medium",
+        capabilities=ModelCapabilities(
+            has_thinking=True,
+            supports_tool_execution=False,
+            supports_xhigh=True,
+            max_output_tokens=8_192,
+        ),
+        release_date="2026-08-01",
+        family="qwen",
+        availability="experimental_local_only; pinned_iq3_s_mtp_artifact; not_promoted",
     ),
     ModelEntry(
         id=LOCAL_QWEN3_VL_8B_INSTRUCT, alias="local/qwen-vl", name="Qwen3-VL 8B Instruct (Local)",

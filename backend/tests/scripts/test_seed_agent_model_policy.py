@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from app.constants.catalog_entries import MODEL_CATALOG
+from app.constants.models import LOCAL_NERI_QWEN3_8_27B_IQ3_S
 
 SUBSCRIPTION_ONLY_SLUGS = {"learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator"}
 
@@ -23,6 +24,7 @@ EXCLUDED_SLUGS = {
     "ux-polisher",
     "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
     "neri-reviewer",
+    "neri-local-candidate",  # passive local qualification must fail visibly, never fall back
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
     # Explicit comparison/critic lanes retain provider identity.
     "jobs-cover-codex",
@@ -106,6 +108,31 @@ def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
         assert agent["primary_model_id"].startswith("codex/")
         assert not agent.get("fallback_models")
         assert not agent.get("escalation_model_id")
+
+
+def test_neri_local_candidate_is_exact_fallback_free_and_memory_free() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    candidate = next(agent for agent in data["agents"] if agent["slug"] == "neri-local-candidate")
+
+    assert candidate["primary_model_id"] == LOCAL_NERI_QWEN3_8_27B_IQ3_S
+    assert candidate["fallback_models"] == []
+    assert candidate.get("escalation_model_id") is None
+    assert candidate["max_concurrency"] == 1
+    memory = candidate["memory_config"]
+    assert not any(
+        memory[key]
+        for key in (
+            "injection_enabled",
+            "project_index_enabled",
+            "tool_capabilities_enabled",
+            "include_mandates",
+            "include_guardrails",
+            "include_references",
+            "reference_index_enabled",
+            "continuity_enabled",
+        )
+    )
+    assert memory["audience_tags"] == []
 
 
 

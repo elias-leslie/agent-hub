@@ -294,8 +294,8 @@ class AssistantMessage:
     stop_reason: StopReason
     timestamp: int  # Unix ms
     role: Literal["assistant"] = "assistant"
-    # Concrete chunk.model when different from the requested model
-    # (e.g. OpenRouter ``auto`` -> ``anthropic/...``).
+    # Concrete non-empty chunk.model reported by the provider. This remains
+    # separate from the requested model even when both values are equal.
     response_model: str | None = None
     # Provider-specific response/message identifier when the upstream API exposes one.
     response_id: str | None = None
@@ -595,6 +595,8 @@ class OpenAICompletionsCompat:
     cache_control_format: Literal["anthropic"] | None = None
     send_session_affinity_headers: bool | None = None
     supports_long_cache_retention: bool | None = None
+    reasoning_budget_tokens: dict[str, int] | None = None
+    loopback_only_transport: bool | None = None
 
 
 @dataclass(slots=True)

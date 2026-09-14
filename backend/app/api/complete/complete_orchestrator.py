@@ -133,15 +133,16 @@ async def _validate_and_resolve(
         await resolve_agent_and_model(request, db, rh)
     )
     http_request.state.agent_slug = request.agent_slug
-    pre_override_model = resolved_model
-    resolved_model, provider = apply_mention_override(request, resolved_model)
-    if request.agent_slug and resolved_model != pre_override_model:
-        logger.debug(
-            "DEBUG[%s] Agent routing override: %s -> %s (requested via mention)",
-            rh,
-            request.agent_slug,
-            resolved_model,
-        )
+    if request.native_continuation is None:
+        pre_override_model = resolved_model
+        resolved_model, provider = apply_mention_override(request, resolved_model)
+        if request.agent_slug and resolved_model != pre_override_model:
+            logger.debug(
+                "DEBUG[%s] Agent routing override: %s -> %s (requested via mention)",
+                rh,
+                request.agent_slug,
+                resolved_model,
+            )
     validate_audio_capability(request, resolved_model)
     _guard_workload_routing(
         request=request,
@@ -191,6 +192,20 @@ async def orchestrate_completion(
         provider=provider,
         resolved_agent=resolved_agent,
     )
+    if request.native_continuation is not None:
+        from app.api.complete.native_continuation import execute_native_continuation
+
+        return await execute_native_continuation(
+            request,
+            resolved_model=resolved_model,
+            provider=provider,
+            resolved_agent=resolved_agent,
+            mandate=mandate,
+            agent_used=agent_used,
+            db=db,
+            client_id=client_id,
+            request_source=source,
+        )
     if request.stream:
         return await handle_streaming_request(
             request=request, resolved_model=resolved_model, provider=provider,

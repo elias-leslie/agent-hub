@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
 from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
+from app.llm.runtime_profiles import get_model_runtime_profile, neri_qwen_compat
 from app.llm.types import Api, Model, ModelCost
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
@@ -91,19 +92,35 @@ _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
 }
 
 
-def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
+def resolve_llm_model(
+    model_id: str,
+    provider: str,
+    *,
+    allow_restricted_runtime: bool = False,
+) -> Model[Api]:
     """Build a pi-mono ``Model[Api]`` from the legacy catalog.
 
     ``model_id`` is the resolved (alias-expanded) model id; ``provider`` is the
     provider name from ``app.services.agent_routing.get_provider_for_model``.
     """
     resolved_id = resolve_model(model_id)
-    upstream_id = _upstream_model_id(resolved_id, provider)
+    runtime_profile = get_model_runtime_profile(resolved_id)
+    if runtime_profile is not None and not allow_restricted_runtime:
+        raise ValueError(
+            f"Restricted runtime model requires its dedicated execution boundary: {resolved_id}"
+        )
+    upstream_id = (
+        runtime_profile.server_model_id
+        if runtime_profile is not None
+        else _upstream_model_id(resolved_id, provider)
+    )
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
-    base_url = _resolve_base_url(provider)
+    base_url = runtime_profile.base_url if runtime_profile is not None else _resolve_base_url(provider)
 
     if entry is None:
+        if runtime_profile is not None:
+            raise ValueError(f"Pinned runtime model is absent from the catalog: {resolved_id}")
         # Catalog miss — return a minimal Model so the adapter can still try.
         return Model(
             id=upstream_id,
@@ -142,6 +159,7 @@ def resolve_llm_model(model_id: str, provider: str) -> Model[Api]:
         context_window=entry.context_window,
         max_tokens=caps.max_output_tokens,
         headers=headers,
+        compat=neri_qwen_compat() if runtime_profile is not None else None,
     )
 
 

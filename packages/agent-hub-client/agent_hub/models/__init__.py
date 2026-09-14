@@ -11,6 +11,8 @@ from agent_hub.models.content import (
 from agent_hub.models.core import (
     CompletionResponse,
     ContainerInfo,
+    NativeContinuation,
+    NativeContinuationInfo,
     RoutingConfig,
     StreamChunk,
 )
@@ -41,6 +43,8 @@ __all__ = [
     "ToolResultMessage",
     # Core models
     "ContainerInfo",
+    "NativeContinuation",
+    "NativeContinuationInfo",
     "RoutingConfig",
     "CompletionResponse",
     "StreamChunk",

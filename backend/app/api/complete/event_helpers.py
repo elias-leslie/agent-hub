@@ -78,6 +78,7 @@ async def save_events(
     agent_id: str | None = None,
     duration_ms: int | None = None,
     source_metadata: dict[str, object] | None = None,
+    commit: bool = True,
 ) -> None:
     """Save user messages, thinking, and assistant response as events."""
     await _save_user_message_events(db, session_id, user_messages, input_tokens, agent_id, source_metadata)
@@ -102,4 +103,5 @@ async def save_events(
         duration_ms=duration_ms,
         **(source_metadata or {}),
     )
-    await db.commit()
+    if commit:
+        await db.commit()

@@ -44,6 +44,41 @@ class RoutingConfig(BaseModel):
     )
 
 
+class NativeContinuation(BaseModel):
+    """Delta-context request for a retained Codex native thread."""
+
+    mode: Literal["snapshot", "delta"]
+    generation: int
+    request_id: str
+    expected_turn: int
+    context_version: str
+    role: Literal["hunter", "reviewer"]
+    controller_generation: str
+    instruction_hash: str | None = None
+    tool_policy_hash: str | None = None
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max", "ultra"] = "xhigh"
+    cyber_access_program: Literal["standard"] | None = None
+    close_after: bool = False
+
+
+class NativeContinuationInfo(BaseModel):
+    """Observed receipt for a retained Codex native-thread turn."""
+
+    generation: int
+    turn: int
+    request_id: str
+    context_version: str
+    instruction_hash: str
+    tool_policy_hash: str
+    native_thread_id: str
+    native_turn_id: str | None = None
+    runtime_status: str
+    duplicate: bool = False
+    input_mode: str
+    reasoning_tokens: int = 0
+    usage_known: bool = True
+
+
 class CompletionResponse(BaseModel):
     """Response from completion endpoint."""
 
@@ -83,6 +118,7 @@ class CompletionResponse(BaseModel):
         default_factory=list,
         description="Memory episode UUIDs loaded for this execution",
     )
+    native_continuation: NativeContinuationInfo | None = None
 
     @field_validator("memory_uuids", "cited_uuids", mode="before")
     @classmethod

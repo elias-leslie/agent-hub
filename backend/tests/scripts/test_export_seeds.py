@@ -40,11 +40,13 @@ def test_serialize_agent_keeps_non_persona_names() -> None:
         thinking_level="medium",
         is_coding_agent=True,
         memory_config=None,
+        max_concurrency=1,
     )
 
     exported = _serialize_agent(agent, None)
 
     assert exported["name"] == "Code Generator"
+    assert exported["max_concurrency"] == 1
 
 
 def test_normalized_seed_payload_ignores_generated_at() -> None:

@@ -399,6 +399,15 @@ class AgentBenchmarkAttemptDetail(BaseModel):
     fallback_used: bool = False
     provider: str | None = None
     effective_model: str | None = None
+    task_family: str | None = None
+    harness_arm: str | None = None
+    dimension_scores: dict[str, float] = Field(default_factory=dict)
+    runtime_metrics: dict[str, Any] = Field(default_factory=dict)
+    safety_failures: list[str] = Field(default_factory=list)
+    oracle_details: dict[str, Any] = Field(default_factory=dict)
+    artifact_identity: dict[str, Any] = Field(default_factory=dict)
+    input_sha256: str | None = None
+    prompt_revision: int | None = None
 
 
 class AgentBenchmarkRunDetail(BaseModel):
