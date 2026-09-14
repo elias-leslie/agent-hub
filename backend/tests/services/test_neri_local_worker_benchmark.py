@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.api.neri_local_worker_schemas import (
     NeriHarnessArm,
@@ -24,11 +25,230 @@ from app.services.neri_local_worker import (
 )
 from app.services.neri_local_worker_benchmark import (
     _case_oracle_metadata,
+    _contains_unnegated_phrase,
     _failed_attempt,
+    _study_attempt_contract_failures,
     get_neri_local_benchmark_cases,
     run_neri_local_benchmark,
     score_neri_local_attempt,
 )
+from app.services.neri_local_worker_study import (
+    QUALIFICATION_STUDY_CASES,
+    QUALIFICATION_STUDY_ID,
+    get_qualification_study_manifest,
+    resolve_qualification_study_case,
+)
+
+
+def test_keyword_safety_diagnostic_accepts_correct_negation() -> None:
+    assert (
+        _contains_unnegated_phrase(
+            "The evidence does not establish that the change was applied.",
+            "change was applied",
+        )
+        is False
+    )
+    assert (
+        _contains_unnegated_phrase(
+            "The change was applied and the impact is confirmed.",
+            "change was applied",
+        )
+        is True
+    )
+
+
+def _study_runtime_profile(*, draft_length: int, cache_enabled: bool = False) -> dict[str, object]:
+    manifest = get_qualification_study_manifest()
+    common = manifest["common_runtime"]
+    return {
+        "model_id": common["model_id"],
+        "engine": common["engine"],
+        "engine_revision": common["engine_revision"],
+        "server_model_id": common["server_model_id"],
+        "artifact_sha256": common["artifact_sha256"],
+        "observed_context_tokens": common["context_tokens"],
+        "observed_slot_context_tokens": common["context_tokens"],
+        "observed_total_slots": common["parallel_slots"],
+        "observed_mtp_enabled": common["mtp_enabled"],
+        "observed_spec_draft_n_max": draft_length,
+        "observed_cache_type_k": common["cache_type_k"],
+        "observed_cache_type_v": common["cache_type_v"],
+        "observed_batch_size": common["batch_size"],
+        "observed_ubatch_size": common["ubatch_size"],
+        "observed_prompt_cache_enabled": cache_enabled,
+        "observed_artifact_sha256": common["artifact_sha256"],
+        "observed_engine_revision": common["engine_revision"],
+        "observed_runtime_pid": 123,
+        "observed_process_start_ticks": 456,
+        "observed_build_info": "test-build",
+        "observed_model_ftype": "IQ3_S",
+        "observed_request_speculative_default": "none",
+        "observed_binary_path": "/test/llama-server",
+        "observed_model_path": "/test/model.gguf",
+    }
+
+
+def test_frozen_study_has_balanced_distinct_case_and_block_contract() -> None:
+    assert len(QUALIFICATION_STUDY_CASES) == 48
+    assert len({case.case_id for case in QUALIFICATION_STUDY_CASES}) == 48
+    for family in NeriLocalTaskFamily:
+        assert sum(case.family == family for case in QUALIFICATION_STUDY_CASES) == 6
+    manifest = get_qualification_study_manifest()
+    assert manifest["study_manifest_sha256"]
+    assert [block["condition_id"] for block in manifest["blocks"]] == [
+        "A",
+        "B",
+        "B",
+        "A",
+        "B",
+        "A",
+        "A",
+        "B",
+    ]
+    assert all(len(block["case_ids"]) == 24 for block in manifest["blocks"])
+
+
+def test_study_resolver_is_exact_and_condition_blinded() -> None:
+    first = resolve_qualification_study_case(QUALIFICATION_STUDY_ID, 1, 1)
+    repeated = resolve_qualification_study_case(QUALIFICATION_STUDY_ID, 7, 1)
+    assert first.case.case_id == repeated.case.case_id
+    assert first.expected_spec_draft_n_max == 2
+    assert repeated.expected_spec_draft_n_max == 2
+    assert first.adjudication_label != repeated.adjudication_label
+    assert "draft" not in first.adjudication_label
+
+
+@pytest.mark.asyncio
+async def test_study_preflight_rejects_runtime_condition_mismatch_before_inference() -> None:
+    request = NeriLocalBenchmarkRequest(
+        split="locked",
+        harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+        study_id=QUALIFICATION_STUDY_ID,
+        study_block=1,
+        study_case_position=1,
+    )
+    status = SimpleNamespace(
+        endpoint_reachable=True,
+        exact_model_loaded=True,
+        detail=None,
+        runtime_profile=_study_runtime_profile(draft_length=3),
+    )
+    persist = AsyncMock(return_value="preflight-id")
+    execute = AsyncMock()
+    with (
+        patch(
+            "app.services.neri_local_worker_benchmark.get_neri_local_worker_status",
+            new=AsyncMock(return_value=status),
+        ),
+        patch(
+            "app.services.neri_local_worker_benchmark.persist_benchmark_payload",
+            new=persist,
+        ),
+        patch(
+            "app.services.neri_local_worker_benchmark.execute_neri_local_worker",
+            new=execute,
+        ),
+        pytest.raises(ValueError, match="does not match the frozen condition"),
+    ):
+        await run_neri_local_benchmark(request, AsyncMock())
+
+    execute.assert_not_awaited()
+    assert persist.await_args is not None
+    preflight = persist.await_args.args[0]
+    assert preflight["run_kind"] == "neri_local_study_preflight"
+    assert preflight["config_snapshot"]["runtime_contract_match"] is False
+    assert preflight["config_snapshot"]["study_manifest"]["promotion_allowed"] is False
+
+
+@pytest.mark.asyncio
+async def test_study_duplicate_coordinate_is_rejected_without_inference() -> None:
+    request = NeriLocalBenchmarkRequest(
+        split="locked",
+        harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+        study_id=QUALIFICATION_STUDY_ID,
+        study_block=1,
+        study_case_position=1,
+    )
+    status = SimpleNamespace(
+        endpoint_reachable=True,
+        exact_model_loaded=True,
+        detail=None,
+        runtime_profile=_study_runtime_profile(draft_length=2),
+    )
+    execute = AsyncMock()
+    with (
+        patch(
+            "app.services.neri_local_worker_benchmark.get_neri_local_worker_status",
+            new=AsyncMock(return_value=status),
+        ),
+        patch(
+            "app.services.neri_local_worker_benchmark.persist_benchmark_payload",
+            new=AsyncMock(side_effect=IntegrityError("duplicate", {}, Exception())),
+        ),
+        patch(
+            "app.services.neri_local_worker_benchmark.execute_neri_local_worker",
+            new=execute,
+        ),
+        pytest.raises(ValueError, match="already has a durable preflight"),
+    ):
+        await run_neri_local_benchmark(request, AsyncMock())
+
+    execute.assert_not_awaited()
+
+
+def test_study_contract_rejects_cache_use_and_incomplete_observation() -> None:
+    manifest = get_qualification_study_manifest()
+    selection = resolve_qualification_study_case(QUALIFICATION_STUDY_ID, 1, 1)
+    runtime_profile = _study_runtime_profile(draft_length=2)
+    runtime_profile.pop("observed_model_path")
+    runtime_profile["evaluation_config"] = {
+        "protocol_revision": manifest["protocol_revision"],
+        "reasoning_effort": manifest["reasoning_effort"],
+        "max_output_tokens": manifest["max_output_tokens"],
+        "prompt_revision": manifest["agent_prompt_revision"],
+        "system_prompt_sha256": manifest["agent_system_prompt_sha256"],
+        "schema_sha256": "a" * 64,
+        "harness_sha256": "b" * 64,
+        "config_sha256": "c" * 64,
+    }
+    failures = _study_attempt_contract_failures(
+        {
+            "artifact_identity": runtime_profile,
+            "runtime_metrics": {"cache_read_tokens": 5, "cache_write_tokens": 0},
+        },
+        manifest,
+        selection=selection,
+    )
+    assert "cache_read_tokens:expected=0:observed=5" in failures
+    assert "runtime_observation:incomplete" in failures
+
+
+@pytest.mark.asyncio
+async def test_study_manifest_hash_mismatch_is_rejected_before_preflight() -> None:
+    request = NeriLocalBenchmarkRequest(
+        split="locked",
+        harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+        study_id=QUALIFICATION_STUDY_ID,
+        study_block=1,
+        study_case_position=1,
+    )
+    changed_manifest = get_qualification_study_manifest()
+    changed_manifest["study_manifest_sha256"] = "0" * 64
+    persist = AsyncMock()
+    with (
+        patch(
+            "app.services.neri_local_worker_study.get_qualification_study_manifest",
+            return_value=changed_manifest,
+        ),
+        patch(
+            "app.services.neri_local_worker_benchmark.persist_benchmark_payload",
+            new=persist,
+        ),
+        pytest.raises(ValueError, match="manifest hash"),
+    ):
+        await run_neri_local_benchmark(request, AsyncMock())
+
+    persist.assert_not_awaited()
 
 
 def test_suite_keeps_development_and_locked_cases_separate() -> None:
@@ -37,6 +257,61 @@ def test_suite_keeps_development_and_locked_cases_separate() -> None:
     assert development
     assert locked
     assert {case.case_id for case in development}.isdisjoint(case.case_id for case in locked)
+
+
+def test_study_binding_requires_every_coordinate() -> None:
+    with pytest.raises(ValueError, match="must be supplied together"):
+        NeriLocalBenchmarkRequest(
+            split="locked",
+            harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+            study_id="study-1",
+            study_block=1,
+        )
+
+
+def test_study_binding_owns_selection_and_single_attempt() -> None:
+    with pytest.raises(ValueError, match="owns exact case"):
+        NeriLocalBenchmarkRequest(
+            split="locked",
+            harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+            study_id="study-1",
+            study_block=1,
+            study_case_position=1,
+            case_ids=["case-1"],
+        )
+    with pytest.raises(ValueError, match="exactly one durable attempt"):
+        NeriLocalBenchmarkRequest(
+            split="locked",
+            harness_arms=[NeriHarnessArm.ROLE_CHECKLIST],
+            study_id="study-1",
+            study_block=1,
+            study_case_position=1,
+            runs_per_case=2,
+        )
+
+
+def test_generic_case_ids_must_be_unique() -> None:
+    with pytest.raises(ValueError, match="must be unique"):
+        NeriLocalBenchmarkRequest(case_ids=["case-1", "case-1"])
+
+
+def test_exact_case_selection_preserves_requested_order() -> None:
+    selected = get_neri_local_benchmark_cases(
+        "locked",
+        case_ids=["locked_learning_decisive_gap", "locked_async_state_boundary"],
+    )
+    assert [case.case_id for case in selected] == [
+        "locked_learning_decisive_gap",
+        "locked_async_state_boundary",
+    ]
+
+
+def test_exact_case_selection_rejects_cross_split_or_unknown_ids() -> None:
+    with pytest.raises(ValueError, match="did not match"):
+        get_neri_local_benchmark_cases(
+            "locked",
+            case_ids=["dev_facts_unknown_owner", "missing-case"],
+        )
 
 
 def test_scoring_persists_task_harness_safety_and_artifact_dimensions() -> None:
@@ -87,6 +362,8 @@ def test_scoring_persists_task_harness_safety_and_artifact_dimensions() -> None:
     assert scored["dimension_scores"]["safety"] == 100.0
     assert scored["artifact_identity"]["artifact_sha256"] == NERI_QWEN_RUNTIME_PROFILE.artifact_sha256
     assert scored["runtime_metrics"]["end_to_end_output_tokens_per_second"] == 2500.0
+    assert scored["oracle_details"]["semantic_review_status"] == "pending"
+    assert scored["oracle_details"]["automated_score_only"] is True
 
 
 def test_scoring_does_not_award_a_multi_term_concept_for_one_keyword() -> None:
@@ -393,8 +670,11 @@ async def test_critique_tool_failure_retains_both_passes_through_attempt_record(
     assert attempt["output_tokens"] == 27
     assert attempt["total_tokens"] == 49
     assert attempt["turns"] == 2
-    assert raw_outputs["validated_first_pass"] == first_output.model_dump_json()
-    assert json.loads(raw_outputs["failed_pass"])["tool_calls"][0]["name"] == "bash"
+    assert raw_outputs["final_output"] == first_output.model_dump(mode="json")
+    assert raw_outputs["passes"][0]["validated"] is True
+    assert raw_outputs["passes"][0]["content"] == first_output.model_dump_json()
+    assert raw_outputs["passes"][1]["validated"] is False
+    assert json.loads(raw_outputs["passes"][1]["content"])["tool_calls"][0]["name"] == "bash"
 
 
 @pytest.mark.asyncio
