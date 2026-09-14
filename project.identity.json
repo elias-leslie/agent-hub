@@ -25,7 +25,8 @@
     ],
     "optional_workers": [
       "agent-hub-hatchet-agent-worker.service",
-      "agent-hub-telegram-bot.service"
+      "agent-hub-telegram-bot.service",
+      "agent-hub-neri-local-qwen.service"
     ]
   },
   "hosts": {

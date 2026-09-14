@@ -519,7 +519,14 @@ async def get_agent_benchmark_run_detail(
              "tool_requirement_met": a.tool_requirement_met,
              "latency_ms": int(a.latency_ms or 0), "total_tokens": int(a.total_tokens or 0),
              "turns": int(a.turns or 0), "tool_calls_count": int(a.tool_calls_count or 0),
-             "fallback_used": a.fallback_used, "provider": a.provider, "effective_model": a.effective_model}
+             "fallback_used": a.fallback_used, "provider": a.provider, "effective_model": a.effective_model,
+             "task_family": a.task_family, "harness_arm": a.harness_arm,
+             "dimension_scores": dict(a.dimension_scores or {}),
+             "runtime_metrics": dict(a.runtime_metrics or {}),
+             "safety_failures": list(a.safety_failures or []),
+             "oracle_details": dict(a.oracle_details or {}),
+             "artifact_identity": dict(a.artifact_identity or {}),
+             "input_sha256": a.input_sha256, "prompt_revision": a.prompt_revision}
             for a in attempts
         ],
     }

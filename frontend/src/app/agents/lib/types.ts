@@ -66,6 +66,15 @@ export interface AgentBenchmarkAttemptDetail {
   fallback_used: boolean
   provider: string | null
   effective_model: string | null
+  task_family: string | null
+  harness_arm: string | null
+  dimension_scores: Record<string, number>
+  runtime_metrics: Record<string, unknown>
+  safety_failures: string[]
+  oracle_details: Record<string, unknown>
+  artifact_identity: Record<string, unknown>
+  input_sha256: string | null
+  prompt_revision: number | null
 }
 
 export interface AgentBenchmarkRunDetail {

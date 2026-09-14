@@ -19,6 +19,7 @@ from app.api.complete.schemas import (
     NativeContinuationCloseRequest,
     NativeContinuationReceiptResponse,
 )
+from app.constants.models import LOCAL_NERI_QWEN3_8_27B_IQ3_S
 from app.db import get_db
 
 router = APIRouter()
@@ -45,6 +46,14 @@ async def complete(
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
     """
+    if request.agent_slug == "neri-local-candidate" or request.model == LOCAL_NERI_QWEN3_8_27B_IQ3_S:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The Neri local candidate is available only through the bounded "
+                "/api/neri/local-worker interface."
+            ),
+        )
     # Set early so request telemetry includes agent attribution even for early failures.
     http_request.state.agent_slug = request.agent_slug
     skip_cache = bool(x_skip_cache and x_skip_cache.lower() == "true")

@@ -1,0 +1,24 @@
+[Unit]
+Description=Agent Hub Neri local Qwen candidate (llama.cpp, on demand)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__/backend
+Environment="PATH=%h/bin:%h/.local/bin:__PROJECT_ROOT__/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+Environment="PYTHONUNBUFFERED=1"
+Environment="NERI_LOCAL_QWEN_CONTEXT=32768"
+Environment="NERI_LOCAL_QWEN_ENABLE_MTP=0"
+EnvironmentFile=-%h/.config/agent-hub/neri-local-qwen.env
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python __PROJECT_ROOT__/backend/scripts/run_neri_local_qwen.py
+Restart=no
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-neri-local-qwen
+
+[Install]
+WantedBy=default.target

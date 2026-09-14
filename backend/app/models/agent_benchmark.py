@@ -153,6 +153,29 @@ class AgentBenchmarkAttempt(Base):
     failure_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     fallback_used: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
+    # Rich task-family evidence for model-plus-harness evaluations. Generic
+    # benchmarks leave these nullable/empty; Neri uses them to show where a
+    # candidate shines or fails without creating a second evaluation ledger.
+    task_family: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    harness_arm: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    dimension_scores: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    runtime_metrics: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    safety_failures: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    oracle_details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    artifact_identity: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    input_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     primary_action: Mapped[str | None] = mapped_column(String(32), nullable=True)
     should_dispatch: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     should_close: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

@@ -168,6 +168,7 @@ async def seed_agents(db: AsyncSession) -> int:
             is_active=slug not in deactivate_slugs,
             is_coding_agent=agent_data.get("is_coding_agent", False),
             memory_config=agent_data.get("memory_config"),
+            max_concurrency=agent_data.get("max_concurrency"),
             version=1,
         )
         db.add(agent)

@@ -133,6 +133,7 @@ LOCAL_QWEN3_CODER_30B_A3B = "local/qwen3-coder:30b-a3b"
 LOCAL_QWEN3_30B_A3B = "local/qwen3:30b-a3b"
 LOCAL_QWEN2_5_CODER_14B = "local/qwen2.5-coder:14b"
 LOCAL_GEMMA_4_12B = "local/gemma4:12b-it-qat"
+LOCAL_NERI_QWEN3_8_27B_IQ3_S = "local/qwen3.8-27b-gsq-rco-iq3_s-mtp"
 # Document/receipt vision. Use the *-instruct tag explicitly: the bare ``qwen3-vl:8b``
 # tag resolves to the same weights as ``qwen3-vl:8b-thinking`` (verified by manifest
 # digest ed12a4674d72), whose reasoning cannot be turned off and which returns an
