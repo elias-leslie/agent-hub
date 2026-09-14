@@ -124,6 +124,7 @@ class NeriLocalWorkerError(RuntimeError):
         partial_output: NeriLocalWorkerOutput | None = None,
         partial_content: str = "",
         failed_content: str = "",
+        pass_evidence: list[dict[str, Any]] | None = None,
     ) -> None:
         super().__init__(message)
         self.failure_kind = failure_kind
@@ -139,6 +140,7 @@ class NeriLocalWorkerError(RuntimeError):
         self.partial_output = partial_output
         self.partial_content = partial_content
         self.failed_content = failed_content
+        self.pass_evidence = list(pass_evidence or [])
 
     def enrich(self, **evidence: Any) -> NeriLocalWorkerError:
         """Attach evidence known by an outer execution layer without overwriting observations."""
@@ -718,11 +720,31 @@ def _combine_pass_metrics(
     return combined
 
 
+def _pass_evidence(
+    pass_number: int,
+    *,
+    content: str,
+    metrics: dict[str, int | str | None],
+    validated: bool,
+    failure_kind: str | None = None,
+) -> dict[str, Any]:
+    """Retain one model pass verbatim with its own cost and validation result."""
+    return {
+        "pass_number": pass_number,
+        "validated": validated,
+        "failure_kind": failure_kind,
+        "content": content,
+        "content_sha256": hashlib.sha256(content.encode()).hexdigest(),
+        "runtime_metrics": dict(metrics),
+    }
+
+
 async def execute_neri_local_worker(
     request: NeriLocalWorkerRequest,
     db: AsyncSession,
 ) -> NeriLocalWorkerExecution:
     """Run a fresh, tool-free, memory-free local inference and validate its output."""
+    worker_started = time.perf_counter()
     _assert_runtime_identity()
     packet_bytes = request.packet.model_dump_json().encode()
     input_sha256 = hashlib.sha256(packet_bytes).hexdigest()
@@ -754,6 +776,7 @@ async def execute_neri_local_worker(
         prompt_revision=agent.version,
     )
     observed_runtime: dict[str, Any] = {}
+    pass_evidence: list[dict[str, Any]] = []
     try:
         async with _EXECUTION_LOCK:
             observed_runtime = await _get_observed_runtime_metadata()
@@ -764,6 +787,15 @@ async def execute_neri_local_worker(
                     request=request,
                 )
             except NeriLocalWorkerError as first_exc:
+                pass_evidence.append(
+                    _pass_evidence(
+                        1,
+                        content=first_exc.failed_content,
+                        metrics=first_exc.runtime_metrics,
+                        validated=False,
+                        failure_kind=first_exc.failure_kind,
+                    )
+                )
                 if (
                     request.harness_arm not in _REPAIRABLE_ARMS
                     or first_exc.failure_kind not in {"schema", "evidence"}
@@ -779,6 +811,15 @@ async def execute_neri_local_worker(
                         request=request,
                     )
                 except NeriLocalWorkerError as second_exc:
+                    pass_evidence.append(
+                        _pass_evidence(
+                            2,
+                            content=second_exc.failed_content,
+                            metrics=second_exc.runtime_metrics,
+                            validated=False,
+                            failure_kind=second_exc.failure_kind,
+                        )
+                    )
                     second_exc.runtime_metrics = _combine_pass_metrics(
                         first_metrics,
                         second_exc.runtime_metrics,
@@ -788,7 +829,16 @@ async def execute_neri_local_worker(
                     second_exc.runtime_metrics["first_pass_failure_kind"] = (
                         first_exc.failure_kind
                     )
+                    second_exc.pass_evidence = list(pass_evidence)
                     raise
+                pass_evidence.append(
+                    _pass_evidence(
+                        2,
+                        content=content,
+                        metrics=second_metrics,
+                        validated=True,
+                    )
+                )
                 metrics = _combine_pass_metrics(
                     first_metrics,
                     second_metrics,
@@ -798,6 +848,14 @@ async def execute_neri_local_worker(
                 metrics["first_pass_failure_kind"] = first_exc.failure_kind
             else:
                 metrics = dict(first_metrics)
+                pass_evidence.append(
+                    _pass_evidence(
+                        1,
+                        content=content,
+                        metrics=first_metrics,
+                        validated=True,
+                    )
+                )
             if request.harness_arm == NeriHarnessArm.CRITIQUE_REPAIR:
                 if not metrics.get("repair_triggered"):
                     try:
@@ -807,6 +865,15 @@ async def execute_neri_local_worker(
                             request=request,
                         )
                     except NeriLocalWorkerError as exc:
+                        pass_evidence.append(
+                            _pass_evidence(
+                                2,
+                                content=exc.failed_content,
+                                metrics=exc.runtime_metrics,
+                                validated=False,
+                                failure_kind=exc.failure_kind,
+                            )
+                        )
                         exc.runtime_metrics = _combine_pass_metrics(
                             first_metrics,
                             exc.runtime_metrics,
@@ -815,7 +882,16 @@ async def execute_neri_local_worker(
                         )
                         exc.partial_output = output
                         exc.partial_content = content
+                        exc.pass_evidence = list(pass_evidence)
                         raise
+                    pass_evidence.append(
+                        _pass_evidence(
+                            2,
+                            content=_content,
+                            metrics=second_metrics,
+                            validated=True,
+                        )
+                    )
                     metrics = _combine_pass_metrics(
                         first_metrics,
                         second_metrics,
@@ -825,6 +901,11 @@ async def execute_neri_local_worker(
             elif not metrics.get("repair_triggered"):
                 metrics["passes"] = 1
     except NeriLocalWorkerError as exc:
+        if not exc.pass_evidence:
+            exc.pass_evidence = list(pass_evidence)
+        exc.runtime_metrics.setdefault(
+            "worker_elapsed_ms", int((time.perf_counter() - worker_started) * 1_000)
+        )
         artifact_identity = {
             **NERI_QWEN_RUNTIME_PROFILE.public_metadata(),
             **observed_runtime,
@@ -838,6 +919,9 @@ async def execute_neri_local_worker(
         )
         raise
 
+    metrics["worker_elapsed_ms"] = int(
+        (time.perf_counter() - worker_started) * 1_000
+    )
     return NeriLocalWorkerExecution(
         output=output,
         model_id=LOCAL_NERI_QWEN3_8_27B_IQ3_S,
@@ -850,6 +934,7 @@ async def execute_neri_local_worker(
         evaluation_config=evaluation_config,
         runtime_profile={**NERI_QWEN_RUNTIME_PROFILE.public_metadata(), **observed_runtime},
         runtime_metrics=metrics,
+        pass_evidence=pass_evidence,
     )
 
 

@@ -118,6 +118,15 @@ class NeriLocalWorkerRequest(_StrictModel):
     max_output_tokens: int = Field(default=4_096, ge=256, le=8_192)
 
 
+class NeriLocalWorkerPassEvidence(_StrictModel):
+    pass_number: int = Field(ge=1, le=2)
+    validated: bool
+    failure_kind: str | None = None
+    content: str = Field(max_length=65_536)
+    content_sha256: str = Field(min_length=64, max_length=64)
+    runtime_metrics: dict[str, int | str | None]
+
+
 class NeriLocalWorkerExecution(_StrictModel):
     output: NeriLocalWorkerOutput
     model_id: str
@@ -130,6 +139,7 @@ class NeriLocalWorkerExecution(_StrictModel):
     evaluation_config: dict[str, Any]
     runtime_profile: dict[str, Any]
     runtime_metrics: dict[str, bool | int | float | str | None]
+    pass_evidence: list[NeriLocalWorkerPassEvidence] = Field(min_length=1, max_length=2)
 
 
 class NeriLocalWorkerStatus(_StrictModel):
@@ -148,16 +158,79 @@ class NeriLocalBenchmarkRequest(_StrictModel):
         default_factory=lambda: list(NeriHarnessArm), min_length=1, max_length=4
     )
     task_families: list[NeriLocalTaskFamily] | None = Field(default=None, max_length=8)
+    case_ids: list[str] | None = Field(default=None, min_length=1, max_length=32)
+    study_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    study_block: int | None = Field(default=None, ge=1, le=8)
+    study_case_position: int | None = Field(default=None, ge=1, le=24)
+    study_replacement: int = Field(default=0, ge=0, le=3)
     runs_per_case: int = Field(default=1, ge=1, le=3)
     reasoning_effort: Literal["low", "medium", "xhigh"] = "xhigh"
     max_output_tokens: int = Field(default=4_096, ge=256, le=8_192)
     persist: bool = True
+
+    @field_validator("case_ids")
+    @classmethod
+    def validate_case_ids(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        if any(
+            not value
+            or len(value) > 120
+            or any(
+                character
+                not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
+                for character in value
+            )
+            for value in values
+        ):
+            raise ValueError("case_ids must contain 1-120 character identifiers")
+        if len(values) != len(set(values)):
+            raise ValueError("case_ids must be unique")
+        return values
+
+    @model_validator(mode="after")
+    def validate_study_binding(self) -> NeriLocalBenchmarkRequest:
+        study_fields = (self.study_id, self.study_block, self.study_case_position)
+        if any(value is not None for value in study_fields) and any(
+            value is None for value in study_fields
+        ):
+            raise ValueError(
+                "study_id, study_block, and study_case_position must be supplied together"
+            )
+        if self.study_id is not None:
+            if self.split != "locked":
+                raise ValueError("study mode requires the locked split")
+            if self.case_ids is not None or self.task_families is not None:
+                raise ValueError("study mode owns exact case and family selection")
+            if self.runs_per_case != 1:
+                raise ValueError("study mode runs exactly one durable attempt per request")
+            if self.harness_arms != [NeriHarnessArm.ROLE_CHECKLIST]:
+                raise ValueError("study mode requires exactly the role_checklist harness")
+            if not self.persist:
+                raise ValueError("study mode requires durable persistence")
+        elif self.study_replacement:
+            raise ValueError("study_replacement requires study mode")
+        return self
 
 
 class NeriLocalBenchmarkResponse(_StrictModel):
     benchmark_id: str
     persisted_run_id: str | None = None
     split: str
+    case_ids: list[str]
+    suite_oracle_sha256: str
+    study_id: str | None = None
+    study_manifest_sha256: str | None = None
+    study_block: int | None = None
+    study_case_position: int | None = None
+    study_replacement: int = 0
+    adjudication_label: str | None = None
+    preflight_run_id: str | None = None
     attempts: int
     passed_attempts: int
     infra_failures: int
@@ -175,6 +248,7 @@ __all__ = [
     "NeriLocalWorkerItem",
     "NeriLocalWorkerOutput",
     "NeriLocalWorkerPacket",
+    "NeriLocalWorkerPassEvidence",
     "NeriLocalWorkerRequest",
     "NeriLocalWorkerStatus",
     "NeriPacketEvidence",

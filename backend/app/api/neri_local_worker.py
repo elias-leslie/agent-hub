@@ -63,7 +63,7 @@ async def benchmark(
     db: Annotated[AsyncSession, Depends(get_db)],
     _auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> NeriLocalBenchmarkResponse:
-    """Run a bounded development or locked harness comparison sequentially."""
+    """Run a bounded, exactly identified harness comparison sequentially."""
     require_project_access(http_request, _PROJECT_ID)
     try:
         return await run_neri_local_benchmark(request, db)

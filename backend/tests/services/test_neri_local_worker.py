@@ -618,6 +618,9 @@ async def test_critique_arm_runs_exactly_two_tool_free_passes() -> None:
     assert one_pass.await_count == 2
     assert result.runtime_metrics["passes"] == 2
     assert result.runtime_metrics["latency_ms"] == 22
+    assert int(result.runtime_metrics["worker_elapsed_ms"] or 0) >= 0
+    assert len(result.pass_evidence) == 2
+    assert all(item.validated for item in result.pass_evidence)
     assert result.prompt_revision == 7
 
 
@@ -668,10 +671,18 @@ async def test_structured_arms_repair_first_pass_schema_failure(
     assert result.runtime_metrics["first_pass_validated"] is False
     assert result.runtime_metrics["first_pass_failure_kind"] == "schema"
     assert result.runtime_metrics["latency_ms"] == 22
+    assert [item.validated for item in result.pass_evidence] == [False, True]
+    assert result.pass_evidence[0].content == "{bad-json"
+    assert result.pass_evidence[0].failure_kind == "schema"
+    assert result.pass_evidence[0].runtime_metrics["total_tokens"] == 20
+    assert result.pass_evidence[1].runtime_metrics["total_tokens"] == 25
 
 
 @pytest.mark.asyncio
-async def test_critique_arm_never_retries_tool_policy_failure() -> None:
+@pytest.mark.parametrize("failure_kind", ["identity", "infra", "tool_policy"])
+async def test_critique_arm_never_retries_boundary_failure(
+    failure_kind: str,
+) -> None:
     agent = SimpleNamespace(
         primary_model_id=LOCAL_NERI_QWEN3_8_27B_IQ3_S,
         fallback_models=[],
@@ -682,8 +693,8 @@ async def test_critique_arm_never_retries_tool_policy_failure() -> None:
     service = SimpleNamespace(get_by_slug=AsyncMock(return_value=agent))
     one_pass = AsyncMock(
         side_effect=NeriLocalWorkerError(
-            "unexpected tool call",
-            failure_kind="tool_policy",
+            "non-retryable boundary failure",
+            failure_kind=failure_kind,
             failed_content='{"tool":"bash"}',
         )
     )
@@ -701,4 +712,6 @@ async def test_critique_arm_never_retries_tool_policy_failure() -> None:
         )
 
     assert one_pass.await_count == 1
-    assert raised.value.failure_kind == "tool_policy"
+    assert raised.value.failure_kind == failure_kind
+    assert len(raised.value.pass_evidence) == 1
+    assert raised.value.pass_evidence[0]["failure_kind"] == failure_kind
