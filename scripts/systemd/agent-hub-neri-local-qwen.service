@@ -9,7 +9,13 @@ Environment="PATH=%h/bin:%h/.local/bin:__PROJECT_ROOT__/backend/.venv/bin:/usr/l
 Environment="HOME=%h"
 Environment="PYTHONUNBUFFERED=1"
 Environment="NERI_LOCAL_QWEN_CONTEXT=32768"
-Environment="NERI_LOCAL_QWEN_ENABLE_MTP=0"
+Environment="NERI_LOCAL_QWEN_ENABLE_MTP=1"
+Environment="NERI_LOCAL_QWEN_SPEC_DRAFT_N_MAX=3"
+Environment="NERI_LOCAL_QWEN_CACHE_TYPE_K=q4_0"
+Environment="NERI_LOCAL_QWEN_CACHE_TYPE_V=q4_0"
+Environment="NERI_LOCAL_QWEN_BATCH_SIZE=2048"
+Environment="NERI_LOCAL_QWEN_UBATCH_SIZE=512"
+Environment="NERI_LOCAL_QWEN_CACHE_PROMPT=1"
 EnvironmentFile=-%h/.config/agent-hub/neri-local-qwen.env
 ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python __PROJECT_ROOT__/backend/scripts/run_neri_local_qwen.py
 Restart=no

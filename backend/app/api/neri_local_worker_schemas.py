@@ -129,7 +129,7 @@ class NeriLocalWorkerExecution(_StrictModel):
     prompt_revision: int
     evaluation_config: dict[str, Any]
     runtime_profile: dict[str, Any]
-    runtime_metrics: dict[str, int | float | str | None]
+    runtime_metrics: dict[str, bool | int | float | str | None]
 
 
 class NeriLocalWorkerStatus(_StrictModel):

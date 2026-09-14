@@ -27,12 +27,6 @@ def _clean_client_id(value: str) -> str:
     return value.strip()
 
 
-def _serialize_allowed_projects(projects: tuple[str, ...] | None) -> str | None:
-    if projects is None:
-        return None
-    return json.dumps(list(projects))
-
-
 def _parse_allowed_projects(value: str | None) -> list[str] | None:
     if value is None:
         return None
@@ -138,7 +132,21 @@ async def reconcile_first_party_clients(db: AsyncSession) -> list[str]:
     for spec in _iter_first_party_client_specs():
         result = await db.execute(select(Client).where(Client.id == spec.client_id))
         client = result.scalar_one_or_none()
-        desired_allowed_projects = _serialize_allowed_projects(spec.allowed_projects)
+        desired_projects = (
+            list(spec.allowed_projects) if spec.allowed_projects is not None else None
+        )
+        current_projects = (
+            _parse_allowed_projects(client.allowed_projects) if client is not None else None
+        )
+        if (
+            spec.display_name == "summitflow"
+            and desired_projects is not None
+            and current_projects is not None
+        ):
+            desired_projects = list(dict.fromkeys([*desired_projects, *current_projects]))
+        desired_allowed_projects = (
+            json.dumps(desired_projects) if desired_projects is not None else None
+        )
 
         if client is None:
             db.add(
@@ -160,9 +168,7 @@ async def reconcile_first_party_clients(db: AsyncSession) -> list[str]:
         if client.client_type != spec.client_type:
             client.client_type = spec.client_type
             updated = True
-        if _parse_allowed_projects(client.allowed_projects) != (
-            list(spec.allowed_projects) if spec.allowed_projects is not None else None
-        ):
+        if current_projects != desired_projects:
             client.allowed_projects = desired_allowed_projects
             updated = True
 

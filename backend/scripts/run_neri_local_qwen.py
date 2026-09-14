@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -20,6 +21,76 @@ ARTIFACT_SHA256 = "58fd826723939933dc86f45b7fe04545cbc2de1c70f6fe2cdd3858c87a98c
 LLAMA_CPP_COMMIT = "f1e44dcc11d8802d107bd7331a3d3fd3e6f57b93"
 SERVER_ALIAS = "qwen3.8-27b-neri-iq3_s"
 ALLOWED_CONTEXTS = frozenset({32_768, 65_536})
+ALLOWED_CACHE_TYPES = frozenset({"q4_0", "q8_0"})
+ALLOWED_BATCH_SIZES = frozenset({512, 1_024, 2_048})
+ALLOWED_UBATCH_SIZES = frozenset({256, 512, 1_024})
+RUNTIME_RECEIPT_NAME = "agent-hub-neri-local-qwen.json"
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if value not in {"0", "1"}:
+        raise RuntimeError(f"{name} must be 0 or 1")
+    return value == "1"
+
+
+def _process_start_ticks(pid: int | str = "self") -> int:
+    fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
+    if len(fields) < 22:
+        raise RuntimeError("could not read managed runtime process start identity")
+    return int(fields[21])
+
+
+@dataclass(frozen=True, slots=True)
+class NeriQwenRuntimeConfig:
+    """Validated non-secret knobs for one controlled runtime profile."""
+
+    context_tokens: int
+    mtp_enabled: bool
+    spec_draft_n_max: int
+    cache_type_k: str
+    cache_type_v: str
+    batch_size: int
+    ubatch_size: int
+    prompt_cache_enabled: bool
+
+    @classmethod
+    def from_environment(cls) -> NeriQwenRuntimeConfig:
+        config = cls(
+            context_tokens=int(os.environ.get("NERI_LOCAL_QWEN_CONTEXT", "32768")),
+            mtp_enabled=_env_bool("NERI_LOCAL_QWEN_ENABLE_MTP", True),
+            spec_draft_n_max=int(
+                os.environ.get("NERI_LOCAL_QWEN_SPEC_DRAFT_N_MAX", "3")
+            ),
+            cache_type_k=os.environ.get("NERI_LOCAL_QWEN_CACHE_TYPE_K", "q4_0"),
+            cache_type_v=os.environ.get("NERI_LOCAL_QWEN_CACHE_TYPE_V", "q4_0"),
+            batch_size=int(os.environ.get("NERI_LOCAL_QWEN_BATCH_SIZE", "2048")),
+            ubatch_size=int(os.environ.get("NERI_LOCAL_QWEN_UBATCH_SIZE", "512")),
+            prompt_cache_enabled=_env_bool("NERI_LOCAL_QWEN_CACHE_PROMPT", True),
+        )
+        config.validate()
+        return config
+
+    def validate(self) -> None:
+        if self.context_tokens not in ALLOWED_CONTEXTS:
+            raise RuntimeError(f"context must be one of {sorted(ALLOWED_CONTEXTS)}")
+        if self.cache_type_k not in ALLOWED_CACHE_TYPES:
+            raise RuntimeError(f"K cache type must be one of {sorted(ALLOWED_CACHE_TYPES)}")
+        if self.cache_type_v not in ALLOWED_CACHE_TYPES:
+            raise RuntimeError(f"V cache type must be one of {sorted(ALLOWED_CACHE_TYPES)}")
+        if self.batch_size not in ALLOWED_BATCH_SIZES:
+            raise RuntimeError(f"batch size must be one of {sorted(ALLOWED_BATCH_SIZES)}")
+        if self.ubatch_size not in ALLOWED_UBATCH_SIZES:
+            raise RuntimeError(f"ubatch size must be one of {sorted(ALLOWED_UBATCH_SIZES)}")
+        if self.ubatch_size > self.batch_size:
+            raise RuntimeError("ubatch size cannot exceed batch size")
+        if not 1 <= self.spec_draft_n_max <= 8:
+            raise RuntimeError("MTP draft length must be between 1 and 8")
+
+    def public_metadata(self) -> dict[str, int | str | bool]:
+        return asdict(self)
 
 
 def _sha256(path: Path) -> str:
@@ -104,7 +175,11 @@ def _unload_ollama_models() -> list[str]:
     return unloaded
 
 
-def _build_command(binary: Path, model: Path, context_tokens: int, enable_mtp: bool) -> list[str]:
+def _build_command(
+    binary: Path,
+    model: Path,
+    config: NeriQwenRuntimeConfig,
+) -> list[str]:
     command = [
         str(binary),
         "-m",
@@ -114,11 +189,15 @@ def _build_command(binary: Path, model: Path, context_tokens: int, enable_mtp: b
         "-ngl",
         "99",
         "-c",
-        str(context_tokens),
+        str(config.context_tokens),
         "--cache-type-k",
-        "q4_0",
+        config.cache_type_k,
         "--cache-type-v",
-        "q4_0",
+        config.cache_type_v,
+        "--batch-size",
+        str(config.batch_size),
+        "--ubatch-size",
+        str(config.ubatch_size),
         "-fa",
         "on",
         "--jinja",
@@ -143,9 +222,52 @@ def _build_command(binary: Path, model: Path, context_tokens: int, enable_mtp: b
         "localhost",
         "--no-webui",
     ]
-    if enable_mtp:
-        command.extend(["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"])
+    command.append("--cache-prompt" if config.prompt_cache_enabled else "--no-cache-prompt")
+    if config.mtp_enabled:
+        command.extend(
+            [
+                "--spec-type",
+                "draft-mtp",
+                "--spec-draft-n-max",
+                str(config.spec_draft_n_max),
+            ]
+        )
     return command
+
+
+def _write_runtime_receipt(
+    runtime_dir: Path,
+    config: NeriQwenRuntimeConfig,
+    *,
+    binary: Path,
+    model: Path,
+) -> None:
+    """Publish the exact managed launch profile for benchmark provenance."""
+    receipt_path = runtime_dir / RUNTIME_RECEIPT_NAME
+    temporary_path = runtime_dir / f".{RUNTIME_RECEIPT_NAME}.{os.getpid()}"
+    payload = {
+        "pid": os.getpid(),
+        "process_start_ticks": _process_start_ticks(),
+        "artifact_sha256": ARTIFACT_SHA256,
+        "engine_revision": LLAMA_CPP_COMMIT,
+        "server_model_id": SERVER_ALIAS,
+        "binary_path": str(binary),
+        "model_path": str(model),
+        **config.public_metadata(),
+    }
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(temporary_path, flags, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, receipt_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -154,10 +276,7 @@ def main() -> None:
     args = parser.parse_args()
     binary = _server_binary()
     model = _model_path()
-    context_tokens = int(os.environ.get("NERI_LOCAL_QWEN_CONTEXT", "32768"))
-    if context_tokens not in ALLOWED_CONTEXTS:
-        raise RuntimeError(f"context must be one of {sorted(ALLOWED_CONTEXTS)}")
-    enable_mtp = os.environ.get("NERI_LOCAL_QWEN_ENABLE_MTP", "0") == "1"
+    config = NeriQwenRuntimeConfig.from_environment()
     _verify_runtime(binary, model)
     if args.check_only:
         print(
@@ -167,8 +286,7 @@ def main() -> None:
                     "artifact_sha256": ARTIFACT_SHA256,
                     "llama_cpp_commit": LLAMA_CPP_COMMIT,
                     "server_alias": SERVER_ALIAS,
-                    "context_tokens": context_tokens,
-                    "mtp": enable_mtp,
+                    **config.public_metadata(),
                 }
             )
         )
@@ -186,7 +304,8 @@ def main() -> None:
     unloaded = _unload_ollama_models()
     if unloaded:
         print(f"Released Ollama GPU models: {', '.join(unloaded)}", file=sys.stderr)
-    command = _build_command(binary, model, context_tokens, enable_mtp)
+    _write_runtime_receipt(runtime_dir, config, binary=binary, model=model)
+    command = _build_command(binary, model, config)
     os.execv(command[0], command)
 
 
