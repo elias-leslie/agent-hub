@@ -53,7 +53,14 @@ async def evaluate(
     try:
         return await execute_neri_local_worker(request, db)
     except NeriLocalWorkerError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "neri_local_worker_failed",
+                "message": "Neri local worker failed its bounded execution contract",
+                "details": {"failure_receipt": exc.failure_receipt().model_dump(mode="json")},
+            },
+        ) from exc
 
 
 @router.post("/benchmarks", response_model=NeriLocalBenchmarkResponse)
