@@ -77,6 +77,7 @@ _ARTIFACT_IDENTITY_KEYS = frozenset({
     "observed_cache_type_v",
     "observed_context_tokens",
     "observed_engine_revision",
+    "observed_idle_sleep_seconds",
     "observed_mtp_enabled",
     "observed_prompt_cache_enabled",
     "observed_spec_draft_n_max",
@@ -339,6 +340,7 @@ def _validate_runtime_receipt(payload: Any) -> dict[str, Any]:
     batch_size = payload.get("batch_size")
     ubatch_size = payload.get("ubatch_size")
     prompt_cache_enabled = payload.get("prompt_cache_enabled")
+    idle_sleep_seconds = payload.get("idle_sleep_seconds")
     pid = payload.get("pid")
     process_start_ticks = payload.get("process_start_ticks")
     binary_path = payload.get("binary_path")
@@ -357,6 +359,8 @@ def _validate_runtime_receipt(payload: Any) -> dict[str, Any]:
         raise NeriLocalWorkerError("Neri runtime receipt batch relationship is invalid", failure_kind="identity")
     if not isinstance(prompt_cache_enabled, bool):
         raise NeriLocalWorkerError("Neri runtime receipt cache state is invalid", failure_kind="identity")
+    if not isinstance(idle_sleep_seconds, int) or not 60 <= idle_sleep_seconds <= 3_600:
+        raise NeriLocalWorkerError("Neri runtime receipt idle sleep is invalid", failure_kind="identity")
     if not isinstance(pid, int) or pid <= 1:
         raise NeriLocalWorkerError("Neri runtime receipt PID is invalid", failure_kind="identity")
     if not isinstance(process_start_ticks, int) or process_start_ticks <= 0:
@@ -382,6 +386,7 @@ def _validate_runtime_receipt(payload: Any) -> dict[str, Any]:
         "observed_batch_size": batch_size,
         "observed_ubatch_size": ubatch_size,
         "observed_prompt_cache_enabled": prompt_cache_enabled,
+        "observed_idle_sleep_seconds": idle_sleep_seconds,
         "observed_binary_path": binary_path,
         "observed_model_path": model_path,
         "receipt_context_tokens": context_tokens,
@@ -420,6 +425,7 @@ def _validate_runtime_process(receipt: dict[str, Any], command_line: bytes) -> N
         "--host": "127.0.0.1",
         "--port": "8100",
         "--cors-origins": "localhost",
+        "--sleep-idle-seconds": str(receipt["observed_idle_sleep_seconds"]),
     }
     for flag, expected in expected_values.items():
         positions = [index for index, value in enumerate(argv) if value == flag]

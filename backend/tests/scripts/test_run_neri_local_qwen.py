@@ -28,6 +28,7 @@ def _config(**overrides: object) -> NeriQwenRuntimeConfig:
         "batch_size": 2_048,
         "ubatch_size": 512,
         "prompt_cache_enabled": True,
+        "idle_sleep_seconds": 300,
     }
     values.update(overrides)
     return NeriQwenRuntimeConfig(**values)
@@ -49,6 +50,7 @@ def test_baseline_launcher_is_loopback_single_slot_without_mtp() -> None:
     assert "--cache-prompt" in command
     assert "--cors-origins localhost" in joined
     assert "--no-webui" in command
+    assert "--sleep-idle-seconds 300" in joined
     assert "--spec-type" not in command
 
 
@@ -88,6 +90,8 @@ def test_runtime_profile_rejects_unbounded_experiment_values() -> None:
         _config(spec_draft_n_max=9).validate()
     with pytest.raises(RuntimeError, match="K cache type"):
         _config(cache_type_k="f16").validate()
+    with pytest.raises(RuntimeError, match="idle sleep"):
+        _config(idle_sleep_seconds=0).validate()
 
 
 def test_runtime_receipt_preserves_exact_non_secret_profile(tmp_path: Path) -> None:
@@ -105,6 +109,7 @@ def test_runtime_receipt_preserves_exact_non_secret_profile(tmp_path: Path) -> N
     assert receipt["mtp_enabled"] is True
     assert receipt["spec_draft_n_max"] == 3
     assert receipt["cache_type_k"] == "q4_0"
+    assert receipt["idle_sleep_seconds"] == 300
     assert receipt["binary_path"] == "/opt/llama/bin/llama-server"
     assert receipt["model_path"] == "/models/qwen.gguf"
     assert receipt_path.stat().st_mode & 0o777 == 0o600

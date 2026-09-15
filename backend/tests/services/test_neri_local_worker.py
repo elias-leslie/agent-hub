@@ -247,6 +247,7 @@ def test_runtime_receipt_adds_exact_tuning_provenance() -> None:
             "batch_size": 2_048,
             "ubatch_size": 512,
             "prompt_cache_enabled": False,
+            "idle_sleep_seconds": 300,
             "binary_path": "/opt/llama/bin/llama-server",
             "model_path": "/models/qwen.gguf",
         }
@@ -259,6 +260,7 @@ def test_runtime_receipt_adds_exact_tuning_provenance() -> None:
     assert observed["observed_spec_draft_n_max"] == 3
     assert observed["observed_prompt_cache_enabled"] is False
     assert observed["observed_cache_type_k"] == "q4_0"
+    assert observed["observed_idle_sleep_seconds"] == 300
 
 
 def _runtime_receipt_payload(**overrides: object) -> dict[str, object]:
@@ -276,6 +278,7 @@ def _runtime_receipt_payload(**overrides: object) -> dict[str, object]:
         "batch_size": 2_048,
         "ubatch_size": 512,
         "prompt_cache_enabled": True,
+        "idle_sleep_seconds": 300,
         "binary_path": "/opt/llama/bin/llama-server",
         "model_path": "/models/qwen.gguf",
     }
@@ -325,6 +328,8 @@ def _runtime_command() -> list[str]:
         "--cors-origins",
         "localhost",
         "--no-webui",
+        "--sleep-idle-seconds",
+        "300",
         "--cache-prompt",
         "--spec-type",
         "draft-mtp",
