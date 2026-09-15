@@ -133,6 +133,16 @@ async def test_evaluate_preserves_bounded_tool_policy_failure_evidence() -> None
         },
         safety_failures=["unexpected_tool_call"],
         tool_policy_met=False,
+        pass_evidence=[{
+            "pass_number": 1,
+            "validated": False,
+            "failure_kind": "tool_policy",
+            "content": "private tool-derived model output",
+            "runtime_metrics": {
+                "tool_calls_count": 1,
+                "used_tool_names": ["bash"],
+            },
+        }],
     )
     with (
         patch.object(api, "execute_neri_local_worker", new=AsyncMock(side_effect=failure)),
@@ -146,4 +156,9 @@ async def test_evaluate_preserves_bounded_tool_policy_failure_evidence() -> None
         "used_tool_names": ["bash"],
     }
     assert receipt["safety_failures"] == ["unexpected_tool_call"]
+    assert receipt["pass_evidence"][0]["runtime_metrics"] == {
+        "tool_calls_count": 1,
+        "used_tool_names": ["bash"],
+    }
+    assert "tool-derived" not in str(receipt)
     assert "provider_private_detail" not in str(receipt)
