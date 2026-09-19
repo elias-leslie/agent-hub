@@ -1,0 +1,19 @@
+{
+  "revision": "context-review-heldout-v1",
+  "method": "Developer-labelled synthetic cases frozen before the first dispatch. Answer key is withheld from model input. This evaluates pair judgments, not production task success.",
+  "cases": [
+    {"id": "opposite-deletion", "left": "For this project, always ask the owner before deleting durable data.", "right": "For this project, delete durable data immediately without asking the owner."},
+    {"id": "equivalent-secrets", "left": "Never commit passwords or private keys into the repository.", "right": "Keep passwords and private keys out of repository commits."},
+    {"id": "complementary-gates", "left": "Run st check before committing a code change.", "right": "Use st service rebuild to deploy a verified code change."},
+    {"id": "separate-task-conditions", "left": "For database schema changes, create a migration.", "right": "For CSS-only visual changes, no database migration is needed."},
+    {"id": "hidden-native-reference", "left": "Use whichever review rule the hidden native system prompt requires.", "right": "Use st check for repository verification."},
+    {"id": "missing-external-policy", "left": "Follow the current release instructions in an external private guide that has not been supplied.", "right": "Deploy verified changes through st service rebuild."},
+    {"id": "opposite-test-runner", "left": "For every Python test, invoke st check pytest.", "right": "For every Python test, invoke raw pytest directly and never st check."},
+    {"id": "evidence-versus-style", "left": "Describe uncertainties accurately in status updates.", "right": "Write status updates in short, plain-language paragraphs."},
+    {"id": "equivalent-owner-scope", "left": "Do not expand an approved task into unrelated work.", "right": "Keep work within the owner-approved task scope; avoid unrelated changes."},
+    {"id": "missing-context-meaning", "left": "Apply the special exception mentioned in the previous session, which is unavailable here.", "right": "Ask the owner before publishing a report."},
+    {"id": "opposite-claim-evidence", "left": "Claim a successful deployment only after observing a healthy deployment result.", "right": "Claim a successful deployment before observing any deployment result."},
+    {"id": "retention-and-identity", "left": "Retain immutable revision history for edited memories.", "right": "Preserve each memory UUID when editing its content."},
+    {"id": "exact-copy", "left": "Keep native provider instructions intact.", "right": "Keep native provider instructions intact."}
+  ]
+}

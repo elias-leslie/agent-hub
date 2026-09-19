@@ -38,6 +38,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Explicit applicability audience tag; repeatable",
     )
+    deliver_parser.add_argument("--workflow", action="append", default=[], help="Explicitly activate a workflow for this delivery/session")
+    deliver_parser.add_argument("--source-id", action="append", default=[], help="Retrieve an applicable on-demand source")
     deliver_parser.add_argument("--project", help="Canonical project ID")
     deliver_parser.add_argument("--session", help="Consumer session ID")
     deliver_parser.add_argument("--task", help="Current task or initial prompt")
@@ -68,6 +70,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output exact rendered text or the full versioned contract",
     )
+
+    feedback_parser = subparsers.add_parser("feedback", help="Record optional structured context feedback")
+    for argument in ("source-type", "source-id", "source-revision", "session-id", "turn-id", "assessment", "evidence"):
+        feedback_parser.add_argument("--" + argument, required=True)
 
     render_parser = subparsers.add_parser("render", help="Render formatted runtime context.")
     render_parser.add_argument("query_arg", nargs="?", help="Selection query")
@@ -135,6 +141,8 @@ async def _deliver(args: argparse.Namespace):
         capabilities=args.capability,
         agent_slug=(args.agent_slug or "").strip() or None,
         consumer_tags=args.consumer_tag,
+        workflow_ids=args.workflow,
+        requested_source_ids=args.source_id,
         project_id=(args.project or "").strip() or None,
         session_id=(args.session or "").strip() or None,
         task=args.task,
@@ -153,9 +161,19 @@ async def _deliver(args: argparse.Namespace):
         return await build_canonical_context_delivery(db, request)
 
 
+async def _feedback(args: argparse.Namespace) -> dict:
+    from app.services.context_governance import ContextFeedback, record_feedback
+    request = ContextFeedback(**{key: value for key, value in vars(args).items() if key != "command"}, actor_type="agent")
+    async with async_session() as db:
+        return await record_feedback(db, request, "agent:native-cli")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "feedback":
+        print(json.dumps(asyncio.run(_feedback(args))))
+        return 0
     if args.command == "deliver":
         try:
             response = asyncio.run(_deliver(args))

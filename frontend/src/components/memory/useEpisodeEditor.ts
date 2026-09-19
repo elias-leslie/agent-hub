@@ -4,11 +4,7 @@ import type {
   MemoryEpisode,
   RenderMode,
 } from '@/lib/memory-api'
-import {
-  addEpisode,
-  deleteMemory,
-  updateEpisodeProperties,
-} from '@/lib/memory-api'
+import { updateEpisode, updateEpisodeProperties } from '@/lib/memory-api'
 
 interface UseEpisodeEditorProps {
   episode: MemoryEpisode
@@ -55,19 +51,8 @@ export function useEpisodeEditor({
       const pinnedChanged = pinned !== (episode.pinned ?? false)
       const summaryChanged = summary !== (episode.summary ?? '')
 
-      let newUuid = episode.uuid
-
       if (contentOrTierChanged) {
-        const newEpisode = await addEpisode({
-          content,
-          source: episode.source,
-          source_description: episode.source_description,
-          injection_tier: tier,
-          preserve_stats_from: episode.uuid,
-        })
-        newUuid = newEpisode.uuid
-
-        await deleteMemory(episode.uuid)
+        await updateEpisode(episode.uuid, { content, injection_tier: tier })
       }
 
       const propsToUpdate: {
@@ -88,7 +73,7 @@ export function useEpisodeEditor({
         propsToUpdate.render_mode = renderMode
       }
       if (Object.keys(propsToUpdate).length > 0) {
-        await updateEpisodeProperties(newUuid, propsToUpdate)
+        await updateEpisodeProperties(episode.uuid, propsToUpdate)
       }
 
       onSaved()

@@ -12,6 +12,7 @@ export {
   fetchMemoryGroups,
   fetchMemoryList,
   fetchSimilarEpisodes,
+  updateEpisode,
   updateEpisodeProperties,
   updateEpisodeTier,
 } from './memory/episodes'

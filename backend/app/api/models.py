@@ -119,7 +119,7 @@ def _build_model_info(
         alias=e.alias,
         hint=e.hint,
         provider=e.provider,
-        routable=is_workload_provider(e.provider),
+        routable=is_workload_provider(e.provider) and e.capabilities.supports_chat,
         scores=scores,
         cost=ModelCostInfo(
             input_per_m=input_per_m,
@@ -145,6 +145,9 @@ def _build_model_info(
             supports_xhigh=e.capabilities.supports_xhigh,
             supports_session_cache=e.capabilities.supports_session_cache,
             max_output_tokens=e.capabilities.max_output_tokens,
+            supports_chat=e.capabilities.supports_chat,
+            supports_typed_judgment=e.capabilities.supports_typed_judgment,
+            max_state_question_tokens=e.capabilities.max_state_question_tokens,
         ),
         release_date=e.release_date,
         knowledge_cutoff=e.knowledge_cutoff,

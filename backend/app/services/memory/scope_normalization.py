@@ -58,3 +58,11 @@ async def normalize_legacy_scope_rows() -> dict[str, int]:
         "global_scope_project_group": _result_rowcount(global_with_project_group),
         "project_scope_missing_scope_id": _result_rowcount(project_missing_scope_id),
     }
+
+
+def normalize_scope_identity(scope: str, scope_id: str | None) -> tuple[str, str | None]:
+    """Read legacy project/agent prefixes without broadening an unknown scope."""
+    kind, separator, target = scope.partition(":")
+    if separator and kind in {"project", "agent"}:
+        return kind, scope_id or target or None
+    return scope, scope_id

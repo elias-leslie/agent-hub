@@ -441,9 +441,9 @@ async def test_canonical_delivery_has_stable_hash_order_and_provenance() -> None
         capabilities=["developer_context"],
     )
 
-    with patch(
-        "app.services.runtime_context._select_runtime_context",
-        new=AsyncMock(return_value=selection),
+    with (
+        patch("app.services.context_governance.session_workflows", new=AsyncMock(return_value=[])),
+        patch("app.services.runtime_context._select_runtime_context", new=AsyncMock(return_value=selection)),
     ):
         response = await build_canonical_context_delivery(AsyncMock(), request)
 
@@ -493,9 +493,9 @@ async def test_canonical_delivery_budget_is_telemetry_not_a_payload_ceiling() ->
         budget_enabled=True,
     )
 
-    with patch(
-        "app.services.runtime_context._select_runtime_context",
-        new=AsyncMock(return_value=selection),
+    with (
+        patch("app.services.context_governance.session_workflows", new=AsyncMock(return_value=[])),
+        patch("app.services.runtime_context._select_runtime_context", new=AsyncMock(return_value=selection)),
     ):
         response = await build_canonical_context_delivery(
             AsyncMock(),
@@ -543,9 +543,9 @@ async def test_canonical_delivery_fails_when_applicable_required_policy_is_missi
         budget_enabled=False,
         expected_required_source_ids=["required-mandate"],
     )
-    with patch(
-        "app.services.runtime_context._select_runtime_context",
-        new=AsyncMock(return_value=selection),
+    with (
+        patch("app.services.context_governance.session_workflows", new=AsyncMock(return_value=[])),
+        patch("app.services.runtime_context._select_runtime_context", new=AsyncMock(return_value=selection)),
     ):
         response = await build_canonical_context_delivery(
             AsyncMock(),
@@ -637,7 +637,7 @@ async def test_build_prompt_blocks_auto_includes_enabled_global_prompt() -> None
     blocks = await _build_prompt_blocks(db, overrides=[], override_by_key={}, excluded=set())
     assert len(blocks) == 1
     assert blocks[0].source == "auto"
-    assert blocks[0].auto_reason == "global"
+    assert blocks[0].auto_reason == "global scope; always"
     assert blocks[0].mode == "order"
 
 
@@ -867,7 +867,7 @@ async def test_build_prompt_blocks_pin_marks_pinned() -> None:
     )
     assert len(blocks) == 1
     assert blocks[0].source == "pinned"
-    assert blocks[0].auto_reason is None
+    assert blocks[0].auto_reason == "project scope; always"
     assert blocks[0].position == 42
     assert blocks[0].mode == "include"
     assert blocks[0].scope == "project"
@@ -959,9 +959,9 @@ async def test_delivery_endpoint_returns_authenticated_canonical_contract(api_cl
         budget_tokens=3500,
         budget_enabled=False,
     )
-    with patch(
-        "app.services.runtime_context._select_runtime_context",
-        new=AsyncMock(return_value=selection),
+    with (
+        patch("app.services.context_governance.session_workflows", new=AsyncMock(return_value=[])),
+        patch("app.services.runtime_context._select_runtime_context", new=AsyncMock(return_value=selection)),
     ):
         response = api_client.post(
             "/api/runtime-context/deliver",

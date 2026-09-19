@@ -204,10 +204,13 @@ async def collect_runtime_prompt_sections(
     # Global prompt ownership is assembled once by canonical context. An old or
     # redundant AgentPrompt assignment must not duplicate that content in the
     # agent-specific layer.
+    from app.services.context_policy import source_policy
+
     agent_specific_assignments = [
         assignment
         for assignment in assignments
         if not assignment.prompt.is_global
+        and (assignment.prompt.owner_agent_id is not None or (source_policy(assignment.prompt).scope == "unassigned" and not source_policy(assignment.prompt).workflows))
     ]
     enabled_assignments = [
         assignment

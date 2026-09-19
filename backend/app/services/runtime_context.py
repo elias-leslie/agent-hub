@@ -21,6 +21,12 @@ from app.models.runtime_context import (
     RuntimeContextOverride,
     RuntimeContextProfilePolicy,
 )
+from app.services.context_policy import (
+    lock_placement_layer,
+    policy_match,
+    source_policy,
+    source_revision,
+)
 from app.services.memory.applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
@@ -130,6 +136,8 @@ class RuntimeContextBlockResponse(BaseModel):
     # integer row version plus a content hash; prompts use an exact content
     # hash because the prompt table has no mutable version column.
     source_revision: str | None = None
+    required: bool = False
+    disclosure: str = "full"
     review_status: str | None = None
     sensitivity_tier: str | None = None
 
@@ -178,6 +186,8 @@ class CanonicalContextDeliveryRequest(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     agent_slug: str | None = Field(None, max_length=100)
     consumer_tags: list[str] = Field(default_factory=list)
+    workflow_ids: list[str] = Field(default_factory=list)
+    requested_source_ids: list[str] = Field(default_factory=list)
     project_id: str | None = Field(None, max_length=100)
     session_id: str | None = Field(None, max_length=200)
     task: str | None = None
@@ -216,6 +226,8 @@ class CanonicalContextMetadata(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     agent_slug: str | None = None
     consumer_tags: list[str] = Field(default_factory=list)
+    workflow_ids: list[str] = Field(default_factory=list)
+    requested_source_ids: list[str] = Field(default_factory=list)
     project_id: str | None = None
     session_id: str | None = None
     task: str | None = None
@@ -254,6 +266,7 @@ class CanonicalContextProvenance(BaseModel):
     source_id: str
     source_revision: str
     origin: str
+    disclosure: str = "full"
     reason: str | None = None
     scope: str | None = None
     scope_id: str | None = None
@@ -418,6 +431,7 @@ async def replace_runtime_context_overrides(
     project_id: str | None,
     overrides: list[RuntimeContextOverridePayload],
 ) -> list[RuntimeContextOverrideResponse]:
+    await lock_placement_layer(db, consumer_profile, project_id)
     overrides = await _filter_live_override_items(db, overrides)
     await db.execute(
         delete(RuntimeContextOverride).where(
@@ -529,6 +543,7 @@ async def _select_runtime_context(
     include_project_index: bool,
     include_tool_capabilities: bool,
     variant: str | None,
+    delivery_request: CanonicalContextDeliveryRequest | None = None,
 ) -> _RuntimeContextSelection:
     """Select and order prompts/memory once for previews and real delivery."""
     override_rows = await _load_override_rows(
@@ -557,6 +572,7 @@ async def _select_runtime_context(
                 override_by_key,
                 excluded_keys,
                 agent_slug=agent_slug,
+                delivery_request=delivery_request,
                 include_mandates=include_mandates,
                 include_guardrails=include_guardrails,
             )
@@ -584,6 +600,7 @@ async def _select_runtime_context(
             override_by_key=override_by_key,
             excluded=excluded_keys,
             expected_required_source_ids=expected_required_memory_ids,
+            delivery_request=delivery_request,
         ))
     candidates.sort(key=lambda block: (block.position, _source_sort(block.source_type), block.source_id))
 
@@ -616,7 +633,7 @@ async def _select_runtime_context(
                 for block in candidates
                 if block.mode != "exclude"
                 and (
-                    block.source_type == "prompt"
+                    block.required
                     or block.tier in {"mandate", "guardrail"}
                 )
             ]
@@ -661,6 +678,11 @@ async def build_canonical_context_delivery(
     metadata = _canonical_metadata(effective_request, query)
 
     try:
+        if effective_request.session_id:
+            from app.services.context_governance import session_workflows
+            activated = await session_workflows(db, effective_request.consumer_surface, effective_request.session_id)
+            effective_request = effective_request.model_copy(update={"workflow_ids": list(dict.fromkeys([*activated, *effective_request.workflow_ids]))})
+        metadata = _canonical_metadata(effective_request, query)
         resolved_project_id = await _resolve_canonical_project_id(effective_request)
         if resolved_project_id != effective_request.project_id:
             effective_request = effective_request.model_copy(
@@ -691,6 +713,7 @@ async def build_canonical_context_delivery(
             include_project_index=effective_request.include_project_index,
             include_tool_capabilities=effective_request.include_tool_capabilities,
             variant=effective_request.variant,
+            delivery_request=effective_request,
         )
 
         continuity = ""
@@ -909,6 +932,8 @@ def _canonical_metadata(
         consumer_profile=request.consumer_profile.strip(),
         capabilities=list(dict.fromkeys(capability.strip() for capability in request.capabilities if capability.strip())),
         agent_slug=request.agent_slug,
+        workflow_ids=request.workflow_ids,
+        requested_source_ids=request.requested_source_ids,
         consumer_tags=list(
             dict.fromkeys(tag.strip() for tag in request.consumer_tags if tag.strip())
         ),
@@ -992,7 +1017,7 @@ def _build_canonical_blocks(
 
     for runtime_block in _order_runtime_blocks_for_delivery(selection.blocks):
         kind = _canonical_block_kind(runtime_block)
-        required = runtime_block.source_type == "prompt" or kind in {"mandate", "guardrail"}
+        required = runtime_block.required or kind in {"mandate", "guardrail"}
         blocks.append(
             CanonicalContextBlock(
                 order=len(blocks),
@@ -1004,6 +1029,7 @@ def _build_canonical_blocks(
                 content=runtime_block.content,
                 estimated_tokens=runtime_block.token_count,
                 provenance=CanonicalContextProvenance(
+                    disclosure=runtime_block.disclosure,
                     source_type=runtime_block.source_type,
                     source_id=runtime_block.source_id,
                     source_revision=runtime_block.source_revision
@@ -1052,7 +1078,7 @@ def _canonical_authority(block: RuntimeContextBlockResponse) -> str:
             return "operator_guardrail"
         if block.prompt_type == GLOBAL_MANDATE_PROMPT_TYPE:
             return "operator_mandate"
-        return "operator_instruction"
+        return "capability_reference" if block.disclosure == "index" else "operator_instruction"
     return {
         "mandate": "operator_mandate",
         "guardrail": "operator_guardrail",
@@ -1340,40 +1366,27 @@ async def _build_prompt_blocks(
     agent_slug: str | None = None,
     include_mandates: bool = True,
     include_guardrails: bool = True,
+    delivery_request: CanonicalContextDeliveryRequest | None = None,
 ) -> list[RuntimeContextBlockResponse]:
-    pinned_slugs = {
-        item.source_id
-        for item in overrides
-        if item.enabled and item.source_type == "prompt" and item.mode == "include"
-    }
-    # ``Prompt.is_global`` is the ownership contract: every enabled global DB
-    # prompt applies to every agent unless explicitly excluded. Runtime
-    # overrides may additionally pin a non-global prompt for this profile.
-    stmt = select(Prompt).where(Prompt.enabled.is_(True)).where(
-        or_(Prompt.is_global.is_(True), Prompt.slug.in_(list(pinned_slugs)))
-        if pinned_slugs
-        else Prompt.is_global.is_(True)
-    )
-    result = await db.execute(stmt)
-    prompts = list(result.scalars().all())
-
+    result = await db.execute(select(Prompt).where(Prompt.enabled.is_(True)))
     blocks: list[RuntimeContextBlockResponse] = []
-    for prompt in prompts:
+    context = delivery_request or CanonicalContextDeliveryRequest(consumer_surface="agent_runtime", agent_slug=agent_slug)
+    for prompt in result.scalars().all():
         key = ("prompt", prompt.slug)
         ovr = override_by_key.get(key)
         is_pinned = bool(ovr and ovr.mode == "include")
-        if not prompt.is_global and not is_pinned:
-            # Agent-owned/assigned prompts are appended by the internal-agent
-            # prompt stack. They are never shared operator startup context.
+        if prompt.owner_agent_id is not None:
+            # Owned prompts are composed by the existing agent prompt stack.
             continue
-        if not prompt.is_global and (
-            prompt.owner_agent_id is not None
-            or ovr is None
-            or ovr.project_id is None
-        ):
-            # Only operator-owned prompts may be promoted into shared context,
-            # and that promotion must be explicit for one project. Agent-owned
-            # prompts remain solely in the agent prompt stack.
+        policy = source_policy(prompt)
+        # Compatibility for old, unmigrated fixtures/imports only.
+        if getattr(prompt, "context_policy", None) is None and is_pinned and ovr and ovr.project_id:
+            policy = policy.model_copy(update={"scope": "project", "targets": [ovr.project_id]})
+            if delivery_request is None:
+                context = context.model_copy(update={"project_id": ovr.project_id})
+        matches, reason = policy_match(policy, context, requested=is_pinned or prompt.slug in context.requested_source_ids)
+        indexed = reason == "available on demand" and context.include_reference_index
+        if (not matches and not indexed) or (policy.scope == "global" and not context.include_global):
             continue
         if agent_slug and agent_slug in (prompt.exclude_agents or []):
             continue
@@ -1381,32 +1394,24 @@ async def _build_prompt_blocks(
             continue
         if prompt.prompt_type == GLOBAL_GUARDRAIL_PROMPT_TYPE and not include_guardrails:
             continue
-        is_excluded = key in excluded
-        position = ovr.position if ovr else _default_prompt_position(prompt)
-        tags = []
-        if prompt.prompt_type and prompt.prompt_type != "standard":
-            tags.append(prompt.prompt_type)
-        scope = "global" if prompt.is_global else "project"
-        blocks.append(
-            RuntimeContextBlockResponse(
-                id=f"prompt:{prompt.slug}",
-                source_type="prompt",
-                source_id=prompt.slug,
-                title=prompt.name,
-                content=prompt.content,
-                token_count=count_tokens(prompt.content),
-                origin="override" if is_pinned else "auto",
-                source="pinned" if is_pinned else "auto",
-                auto_reason=None if is_pinned else "global",
-                mode="exclude" if is_excluded else ("include" if is_pinned else "order"),
-                position=position,
-                prompt_type=prompt.prompt_type,
-                scope=scope,
-                scope_id=None if prompt.is_global else ovr.project_id if ovr else None,
-                tags=tags,
-                source_revision=f"sha256:{_sha256_text(prompt.content)}",
-            )
-        )
+        explicit_request = prompt.slug in context.requested_source_ids
+        content = prompt.content if explicit_request or policy.required or policy.format == "full" else prompt.description or prompt.content
+        if indexed:
+            content = f"Available on demand: {prompt.name} (source_id: {prompt.slug}; kind: prompt). " + (prompt.description or "")
+            content += "\nRetrieve through canonical context delivery with requested_source_ids containing this source ID."
+
+        blocks.append(RuntimeContextBlockResponse(
+            id=f"prompt:{prompt.slug}", source_type="prompt", source_id=prompt.slug,
+            title=prompt.name, content=content, token_count=count_tokens(content),
+            origin="override" if is_pinned else "auto", source="pinned" if is_pinned else "auto",
+            auto_reason=reason, mode="exclude" if key in excluded else "include" if is_pinned else "order",
+            position=ovr.position if ovr else _default_prompt_position(prompt),
+            prompt_type="reference_index" if indexed else prompt.prompt_type, required=policy.required and not indexed,
+            disclosure="index" if indexed else "full" if explicit_request else policy.format,
+            scope=policy.scope, scope_id=",".join(policy.targets) or None,
+            render_mode=policy.format, tags=[prompt.prompt_type] if prompt.prompt_type else [],
+            source_revision=source_revision(prompt),
+        ))
     blocks.sort(key=lambda block: (block.position, block.source_id))
     return blocks
 
@@ -1434,6 +1439,7 @@ async def _build_memory_blocks(
     override_by_key: dict[tuple[str, str], _ResolvedOverride],
     excluded: set[tuple[str, str]],
     expected_required_source_ids: list[str] | None = None,
+    delivery_request: CanonicalContextDeliveryRequest | None = None,
 ) -> list[RuntimeContextBlockResponse]:
     scope = MemoryScope.PROJECT if project_id else MemoryScope.GLOBAL
     context = await build_progressive_context(
@@ -1502,13 +1508,60 @@ async def _build_memory_blocks(
     forced_uuids = {item.uuid for item in forced_items}
     auto_items.extend((item, _tier_for_memory(item), 0) for item in forced_items)
 
+    if delivery_request is not None:
+        rows = list((await db.execute(select(Memory).where(Memory.status == "active"))).scalars())
+        by_id = {str(row.id): row for row in rows}
+        already = {item.uuid for item, _, _ in auto_items}
+        for row in rows:
+            policy = source_policy(row)
+            if policy.scope == "global" and not include_global:
+                continue
+            requested = str(row.id) in delivery_request.requested_source_ids
+            workflow = bool(set(policy.workflows).intersection(delivery_request.workflow_ids))
+            indexed = policy.activation == "on_demand" and include_reference_index
+            if str(row.id) not in already and (requested or workflow or indexed or policy.activation in {"always", "triggered"}):
+                matched, _ = policy_match(policy, delivery_request, requested=requested or indexed)
+                allowed_tier = {1: include_mandates, 2: include_guardrails}.get(row.tier, include_references)
+                if matched and allowed_tier and str(row.id) not in exclude_memory_uuids and not set(row.tags or []).intersection(exclude_tags):
+                    item = episode_to_result(MemoryRepository._to_dict(row))
+                    if item:
+                        auto_items.append((item, _tier_for_memory(item), 0))
+        filtered = []
+        ineligible = set()
+        for item, tier, index in auto_items:
+            row = by_id.get(item.uuid)
+            if row is not None:
+                if source_policy(row).scope == "global" and not include_global:
+                    ineligible.add(item.uuid)
+                    continue
+                requested = item.uuid in delivery_request.requested_source_ids or item.uuid in forced_uuids
+                match, _ = policy_match(source_policy(row), delivery_request, requested=requested)
+                if not match:
+                    if source_policy(row).activation == "on_demand":
+                        eligible, _ = policy_match(source_policy(row), delivery_request, requested=True)
+                        if eligible and include_reference_index:
+                            apply_render_tier(item, "L0", "on_demand_index")
+                            filtered.append((item, "capability", index))
+                    ineligible.add(item.uuid)
+                    continue
+                if requested:
+                    tier = _tier_for_memory(item)
+                    apply_render_tier(item, "L2", "explicit_request")
+                elif tier != "capability" and row.render_mode:
+                    full = row.render_mode == "full" or not (item.compact_content or row.summary)
+                    apply_render_tier(item, "L2" if full else {"compact": "L1", "summary": "L0"}[row.render_mode], "source_full_format" if full else "user_override")
+            filtered.append((item, tier, index))
+        auto_items = filtered
+        if expected_required_source_ids is not None:
+            expected_required_source_ids[:] = [key for key in expected_required_source_ids if key not in ineligible]
+
     # Apply per-profile/per-project tier overrides before reading rendered content.
     for item, block_tier, _index in auto_items:
         ovr = override_by_key.get(("memory", item.uuid))
         if block_tier in {"mandate", "guardrail"}:
             apply_render_tier(item, "L2", "canonical_required_policy")
-        elif ovr and ovr.tier_override:
-            apply_render_tier(item, ovr.tier_override, "user_override")
+        elif ovr and ovr.tier_override and not (delivery_request and item.uuid in delivery_request.requested_source_ids):
+            apply_render_tier(item, ovr.tier_override, "source_full_format" if ovr.tier_override == "L2" else "user_override")
 
     memory_revisions = await _load_memory_source_revisions(
         db, [item.uuid for item, _tier, _index in auto_items if item.uuid]
@@ -1523,6 +1576,8 @@ async def _build_memory_blocks(
             override and override.mode == "include"
         )
         content = get_rendered_content(item)
+        if item.render_reason == "on_demand_index":
+            content = f"Available on demand (source_id: {item.uuid}; kind: memory). {content}\nRetrieve through canonical context delivery with requested_source_ids containing this source ID."
         position = override.position if override else _default_memory_position(tier, item, index)
         scope_value = item.scope.value if item.scope else None
         memory_scope = scope_value or "global"
@@ -1541,6 +1596,7 @@ async def _build_memory_blocks(
                 mode="exclude" if is_excluded else (override.mode if override else "order"),
                 position=position,
                 tier=tier,
+                disclosure="index" if tier == "capability" else {"L0": "summary", "L1": "compact", "L2": "full"}.get(item.render_tier, "full"),
                 render_tier=item.render_tier,
                 render_mode=item.render_mode,
                 tier_override=override.tier_override if override else None,
@@ -1570,13 +1626,8 @@ async def _load_memory_source_revisions(
             continue
     if not parsed_ids:
         return {}
-    result = await db.execute(
-        select(Memory.id, Memory.version, Memory.content).where(Memory.id.in_(parsed_ids))
-    )
-    return {
-        str(memory_id): f"v{version}:sha256:{_sha256_text(content)}"
-        for memory_id, version, content in result.all()
-    }
+    result = await db.execute(select(Memory).where(Memory.id.in_(parsed_ids)))
+    return {str(row.id): source_revision(row) for row in result.scalars()}
 
 
 async def _fetch_forced_memory_items(

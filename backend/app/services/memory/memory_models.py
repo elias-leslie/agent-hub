@@ -27,6 +27,7 @@ class MemoryScope(StrEnum):
 
     GLOBAL = "global"  # System-wide learnings (coding standards, common gotchas)
     PROJECT = "project"  # Project-specific patterns and knowledge
+    AGENT = "agent"  # Instructions and knowledge scoped to an explicit agent
 
 
 class MemoryCategory(StrEnum):

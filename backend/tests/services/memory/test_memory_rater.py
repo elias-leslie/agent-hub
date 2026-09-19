@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -72,12 +72,17 @@ class TestRateSessionMemories:
         assert result.helpful_count == 0
 
     @pytest.mark.asyncio
-    async def test_rates_and_credits_memories(self) -> None:
+    async def test_rates_and_retains_attributed_evidence(self) -> None:
         """Full flow: fetches, rates, credits helpful/harmful."""
         loaded = [f"uuid-{i}" for i in range(5)]
         contents = {uuid: f"content for {uuid}" for uuid in loaded}
+        session = MagicMock()
+        session.return_value.__aenter__ = AsyncMock(return_value=AsyncMock())
+        session.return_value.__aexit__ = AsyncMock()
 
         with (
+            patch("app.db.async_session", session),
+            patch("app.services.context_governance.record", new=AsyncMock()) as evidence,
             patch(
                 "app.services.memory.memory_rater.get_memories_loaded",
                 new_callable=AsyncMock,
@@ -114,8 +119,11 @@ class TestRateSessionMemories:
         assert result.helpful_count == 2
         assert result.harmful_count == 1
         assert result.neutral_count == 2
-        mock_helpful.assert_called_once_with(["uuid-0", "uuid-1"])
-        mock_harmful.assert_called_once_with(["uuid-2"])
+        mock_helpful.assert_not_called()
+        mock_harmful.assert_not_called()
+        assert evidence.await_count == 5
+        assert evidence.await_args is not None
+        assert evidence.await_args.args[3]["signal"] == "agent-rated"
 
     @pytest.mark.asyncio
     async def test_handles_empty_memory_contents(self) -> None:

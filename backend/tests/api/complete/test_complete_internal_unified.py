@@ -339,6 +339,7 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
             prompt_type=AGENT_SYSTEM_PROMPT_TYPE,
             name="Persona System Prompt",
             slug="persona-system-prompt",
+            owner_agent_id=9,
             content=f"<agent_persona>{owned_prompt_marker}</agent_persona>",
             updated_at=None,
         ),

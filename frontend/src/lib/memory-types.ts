@@ -3,7 +3,7 @@
  */
 
 // Memory scope types (matching backend MemoryScope enum)
-export type MemoryScope = 'global' | 'project' | 'task'
+export type MemoryScope = 'global' | 'project' | 'agent' | 'task'
 
 // Memory category types (tier-first taxonomy)
 export type MemoryCategory = 'mandate' | 'guardrail' | 'reference' | 'archive'

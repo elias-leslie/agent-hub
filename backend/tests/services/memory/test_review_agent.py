@@ -32,6 +32,8 @@ def _memory(**overrides):
         "content": "Use st search before repo spelunking.",
         "memory_type": "mandate",
         "tier": 1,
+        "version": 1,
+        "render_mode": "full",
         "context_kind": "policy",
         "scope": "global",
         "scope_id": None,
@@ -725,7 +727,7 @@ def test_apply_decision_applies_high_confidence_summary_and_tags() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_memory_review_batch_marks_last_reviewed() -> None:
+async def test_run_memory_review_batch_records_proposal_without_mutating_source() -> None:
     memory = _memory(
         content=(
             "Use st search before repo spelunking so agents start from canonical "
@@ -782,10 +784,15 @@ async def test_run_memory_review_batch_marks_last_reviewed() -> None:
 
     assert result.status == "completed"
     assert result.reviewed_count == 1
-    assert memory.review_status == "clean"
-    assert memory.last_reviewed_at is not None
-    assert memory.metadata_["last_review"]["decision"] == "keep"
-    assert memory.metadata_["compact_content"] == "Use st search before repo spelunking."
+    assert memory.review_status == "pending"
+    assert memory.last_reviewed_at is None
+    assert "last_review" not in memory.metadata_
+    assert "compact_content" not in memory.metadata_
+    proposals = [call.args[0] for call in mock_db.add.call_args_list if getattr(call.args[0], "kind", None) == "curator_proposal"]
+    assert len(proposals) == 1
+    assert proposals[0].payload["automatic_application"] is False
+    assert proposals[0].payload["decision"]["compact_content"] == "Use st search before repo spelunking."
+
 
 
 @pytest.mark.asyncio

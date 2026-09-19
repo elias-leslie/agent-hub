@@ -61,6 +61,7 @@ async def record_prompt_revision(
         enabled=prompt.enabled,
         boot_eligible=prompt.boot_eligible,
         exclude_agents=list(prompt.exclude_agents or []),
+        context_policy=prompt.context_policy,
         owner_agent_id=prompt.owner_agent_id,
         prompt_type=prompt.prompt_type,
         deletion_locked=prompt.deletion_locked,
@@ -109,6 +110,7 @@ async def create_prompt(
     is_global: bool = False,
     enabled: bool = True,
     boot_eligible: bool = False,
+    context_policy: dict[str, Any] | None = None,
     exclude_agents: list[str] | None = None,
     owner_agent_id: int | None = None,
     prompt_type: str = "standard",
@@ -125,6 +127,7 @@ async def create_prompt(
         is_global=is_global,
         enabled=enabled,
         boot_eligible=boot_eligible,
+        context_policy=context_policy,
         exclude_agents=exclude_agents or [],
         owner_agent_id=owner_agent_id,
         prompt_type=prompt_type,
@@ -171,6 +174,10 @@ async def update_prompt(
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
 
+    if "is_global" in kwargs and prompt.context_policy is not None:
+        policy = dict(prompt.context_policy)
+        policy.update(scope="global" if prompt.is_global else "unassigned", targets=[])
+        prompt.context_policy = policy
     _sync_owned_agent_system_prompt_mirror(prompt)
     await db.flush()
     await record_prompt_revision(
@@ -291,6 +298,7 @@ async def restore_prompt_revision(
     prompt.is_global = revision.is_global
     prompt.enabled = revision.enabled
     prompt.boot_eligible = revision.boot_eligible
+    prompt.context_policy = revision.context_policy
     prompt.exclude_agents = list(revision.exclude_agents or [])
 
     _sync_owned_agent_system_prompt_mirror(prompt)

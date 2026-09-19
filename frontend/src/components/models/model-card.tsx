@@ -72,6 +72,9 @@ export function ModelCard({
 }: ModelCardProps) {
   const providerColor =
     PROVIDER_COLORS[model.provider] ?? DEFAULT_PROVIDER_COLOR
+  const typedOnly =
+    model.capabilities.supports_typed_judgment &&
+    !model.capabilities.supports_chat
   const hasEnrichment = !!model.enrichment
   const pricing = formatCatalogModelPricing(model)
   const syncedAt = formatSyncMoment(model.enrichment?.synced_at)
@@ -127,7 +130,7 @@ export function ModelCard({
             )}
             {!model.routable && (
               <div className="mt-2 inline-flex rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-                Reference only
+                {typedOnly ? 'Typed judgments' : 'Reference only'}
               </div>
             )}
           </div>
@@ -153,9 +156,11 @@ export function ModelCard({
             <div className="text-xs text-slate-400 mb-1">Composite Score</div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-slate-100">
-                {model.scores.composite}
+                {typedOnly ? 'Unrated' : model.scores.composite}
               </span>
-              <span className="text-xs text-slate-400">/100</span>
+              <span className="text-xs text-slate-400">
+                {typedOnly ? 'generative benchmarks' : '/100'}
+              </span>
             </div>
           </div>
 

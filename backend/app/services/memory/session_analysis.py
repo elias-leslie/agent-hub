@@ -28,7 +28,7 @@ from .session_queries import (
     get_session_group_id,
     store_cite_event,
 )
-from .usage_tracker import track_helpful, track_referenced_batch, track_success_batch
+from .usage_tracker import track_referenced_batch, track_success_batch
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +125,6 @@ async def _credit_citations(session_id: str, resolved_uuids: list[str]) -> int:
     new_uuids = [uuid for uuid in resolved_uuids if uuid not in existing_uuids]
     if new_uuids:
         await track_referenced_batch(new_uuids)
-        for uuid in new_uuids:
-            track_helpful(uuid)
         await store_cite_event(session_id, new_uuids)
     all_cited_uuids = list(dict.fromkeys([*sorted(existing_uuids), *resolved_uuids]))
     await update_citation_metrics(session_id=session_id, memories_cited=all_cited_uuids)

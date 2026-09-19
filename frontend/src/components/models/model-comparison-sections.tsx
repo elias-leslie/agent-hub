@@ -38,7 +38,11 @@ export function ScoreBreakdown({ models }: SectionProps) {
           </div>
           <div className="space-y-2">
             {models.map((model) => {
-              const score = model.scores[category]
+              const score =
+                model.capabilities.supports_typed_judgment &&
+                !model.capabilities.supports_chat
+                  ? null
+                  : model.scores[category]
               const providerColor = PROVIDER_COLORS[model.provider]
               return (
                 <div key={model.id} className="flex items-center gap-3">
@@ -64,11 +68,11 @@ export function ScoreBreakdown({ models }: SectionProps) {
                           'bg-gradient-to-r from-',
                         ),
                       )}
-                      style={{ width: `${score}%` }}
+                      style={{ width: `${score ?? 0}%` }}
                     />
                   </div>
                   <span className="text-xs font-mono font-semibold text-slate-300 w-10 text-right">
-                    {score}
+                    {score ?? 'Unrated'}
                   </span>
                 </div>
               )
@@ -103,7 +107,10 @@ export function CompositeScore({ models }: SectionProps) {
                 </span>
               </div>
               <div className="text-2xl font-bold text-slate-100">
-                {model.scores.composite}
+                {model.capabilities.supports_typed_judgment &&
+                !model.capabilities.supports_chat
+                  ? 'Unrated'
+                  : model.scores.composite}
               </div>
             </div>
           )

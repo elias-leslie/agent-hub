@@ -1,0 +1,15 @@
+{
+  "opposite-deletion": "conflict",
+  "equivalent-secrets": "redundant",
+  "complementary-gates": "distinct",
+  "separate-task-conditions": "distinct",
+  "hidden-native-reference": "unknown",
+  "missing-external-policy": "unknown",
+  "opposite-test-runner": "conflict",
+  "evidence-versus-style": "distinct",
+  "equivalent-owner-scope": "redundant",
+  "missing-context-meaning": "unknown",
+  "opposite-claim-evidence": "conflict",
+  "retention-and-identity": "distinct",
+  "exact-copy": "redundant"
+}

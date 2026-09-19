@@ -1,0 +1,67 @@
+{
+  "review_id": "437e83b1-9a93-4ee2-99c3-b11b24e2f7e5",
+  "reviewer": {
+    "agent_slug": "memory-curator",
+    "model": "codex/gpt-5.5",
+    "session_id": "b4bb76cf-272c-40aa-b757-deb6b9052c7a"
+  },
+  "failure": null,
+  "findings": [],
+  "evidence_hash": "2ee7d25250787d0bfe6f8564485b911fbb3bab0eccb99d6c3b1d13f7b25e05cd",
+  "coverage": {
+    "eligible_sources": 16,
+    "candidate_pairs": 1,
+    "native": "unobservable",
+    "candidate_method": "all selected pairs",
+    "context": {
+      "consumer_surface": "codex",
+      "consumer_profile": "agent_startup",
+      "capabilities": [],
+      "agent_slug": null,
+      "consumer_tags": [],
+      "workflow_ids": [],
+      "requested_source_ids": [],
+      "project_id": "agent-hub",
+      "session_id": null,
+      "task": null,
+      "query": null,
+      "task_type": null,
+      "phase": null,
+      "current_branch": null,
+      "cwd": null,
+      "repo_root": null,
+      "provider": null,
+      "model": null,
+      "include_global": true,
+      "include_prompts": true,
+      "include_memories": true,
+      "include_mandates": true,
+      "include_guardrails": true,
+      "include_references": true,
+      "include_reference_index": true,
+      "exclude_tags": [],
+      "exclude_memory_uuids": [],
+      "include_project_index": true,
+      "include_tool_capabilities": true,
+      "include_continuity": true,
+      "continuity_max_sessions": null,
+      "continuity_cross_project": false,
+      "continuity_live_sessions": false,
+      "variant": null,
+      "client_metadata": {}
+    },
+    "exhaustive": false
+  },
+  "source_revisions": [
+    {
+      "source_type": "prompt",
+      "source_id": "narration-tags",
+      "revision": "sha256:fe2eea01cecf082849551134527482620cde2e27d305691573fe116784d583e2"
+    },
+    {
+      "source_type": "prompt",
+      "source_id": "safety-directive",
+      "revision": "sha256:57f01441a3c8dee0db6962c5564b92eda9a0dfc20d522ab6ff565eeace2e690e"
+    }
+  ]
+}

@@ -29,6 +29,9 @@ export interface ModelCapabilities {
   supports_verbosity: boolean
   supports_xhigh: boolean
   supports_session_cache: boolean
+  supports_chat?: boolean
+  supports_typed_judgment?: boolean
+  max_state_question_tokens?: number | null
   max_output_tokens: number
 }
 

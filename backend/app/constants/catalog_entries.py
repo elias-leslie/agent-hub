@@ -1032,3 +1032,15 @@ def get_max_output_tokens(model_id: str) -> int:
     provider use its native default.
     """
     return _MODEL_MAX_OUTPUT_TOKENS.get(model_id, _MAX_OUTPUT_TOKENS_FALLBACK)
+
+# Official contract verified 2026-09-19: https://docs.typesafe.ai/models.
+# Zero scores mean unrated for the generative benchmark axes, not measured accuracy.
+MODEL_CATALOG.append(ModelEntry(
+    id="jev-1.13.0", alias="jev-1.13", name="Jev 1.13 · typed judgments",
+    hint="Text-only typed classification; no chat or tools. Generative scores are unrated. $0.042/M input, free output.",
+    provider="typesafe", scores=ModelScores(0, 0, 0, 0, 0, 0),
+    cost=ModelCost(input_per_m=0.042, output_per_m=0), context_window=64000,
+    speed_tier="fast", capabilities=ModelCapabilities(supports_chat=False,
+        supports_typed_judgment=True, max_state_question_tokens=32000, max_output_tokens=0),
+    family="jev", availability="Typed System One API; not a generative chat model",
+))

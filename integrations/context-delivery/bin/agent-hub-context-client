@@ -237,6 +237,7 @@ async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> d
         "capabilities": args.capability,
         "hook_event": hook_event,
         "native_metadata": {key: value for key, value in native_metadata.items() if value},
+        "workflow_ids": [value.strip() for value in os.getenv("AGENT_HUB_WORKFLOWS", "").split(",") if value.strip()],
     }
 
 
@@ -335,6 +336,8 @@ def _delivery_command(cli: str, metadata: dict[str, Any]) -> list[str]:
     for flag, value in flags:
         if value:
             command.extend((flag, value))
+    for workflow in metadata.get("workflow_ids", []):
+        command.extend(("--workflow", workflow))
     for capability in metadata["capabilities"]:
         command.extend(("--capability", capability))
     for consumer_tag in metadata["consumer_tags"]:

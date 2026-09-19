@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory_unified import Memory, MemoryReviewRun
 
-from ._review_agent_apply import _apply_decision
 from ._review_agent_decisions import MemoryReviewBatchResult
 from ._review_agent_select import select_memories_due_for_review
 
@@ -94,33 +93,20 @@ async def _apply_review_decisions(
 ) -> int:
     needs_action_count = sum(1 for decision in decisions if decision.review_status == "needs_action")
     if not dry_run:
-        from sqlalchemy import select
+        from dataclasses import asdict
 
-        from .repository import get_memory_repository
+        from app.services.context_governance import record
+        from app.services.context_policy import source_revision, source_snapshot
 
-        active_memory_ids = {
-            str(memory_id)
-            for memory_id in (
-                await db.execute(select(Memory.id).where(Memory.status == "active"))
-            ).scalars()
-        }
         by_uuid = {decision.uuid: decision for decision in decisions}
         for memory in memories:
-            decision = by_uuid[str(memory.id)]
-            _apply_decision(
-                memory,
-                decision,
-                datetime.now(UTC),
-                active_memory_ids=active_memory_ids,
-            )
-            if isinstance(memory, Memory):
-                await get_memory_repository().record_revision(
-                    db,
-                    memory,
-                    action=f"review_{decision.decision}",
-                    changed_by="agent:memory-curator",
-                    change_reason=decision.reason,
-                )
+            await record(db, "curator_proposal", "agent:memory-curator", {
+                "source": source_snapshot(memory), "revision": source_revision(memory),
+                "source_version": memory.version,
+                "decision": asdict(by_uuid[str(memory.id)]),
+                "coverage": "memory review with observable canonical context; hidden native prompts unobservable",
+                "status": "proposed", "automatic_application": False,
+            })
     return needs_action_count
 
 
@@ -147,6 +133,7 @@ async def _completed_result(
     run.metadata_ = {
         "session_id": session_id,
         "dry_run": dry_run,
+        "proposal_only": True,
         "force_all": force_all,
         "only_missing_compact": only_missing_compact,
         "only_incomplete_audit": only_incomplete_audit,

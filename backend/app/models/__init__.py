@@ -22,6 +22,7 @@ from .agent_performance_log import AgentPerformanceLog
 from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
+from .context_governance import ContextJudgment, ContextRecord
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
@@ -64,6 +65,8 @@ __all__ = [
     "Client",
     "ClientControl",
     "CompactnessPolicy",
+    "ContextJudgment",
+    "ContextRecord",
     "CostLog",
     "Credential",
     "FeedbackItem",

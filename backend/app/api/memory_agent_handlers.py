@@ -123,6 +123,8 @@ async def _build_progressive_context_response_once(
     consumer_surface: str = "progressive_context",
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
+    workflow_ids: list[str] | None = None,
+    requested_source_ids: list[str] | None = None,
 ) -> ProgressiveContextResponse:
     """Adapt one canonical delivery to the legacy progressive response shape."""
     start_time = time.monotonic()
@@ -146,6 +148,8 @@ async def _build_progressive_context_response_once(
                     consumer_profile=consumer_profile or "agent_runtime",
                     agent_slug=consumer_agent_slug,
                     consumer_tags=consumer_tags or [],
+                    workflow_ids=workflow_ids or [],
+                    requested_source_ids=requested_source_ids or [],
                     project_id=effective_project_id,
                     session_id=session_id,
                     task=query,
@@ -202,6 +206,8 @@ async def build_progressive_context_response(
     consumer_surface: str = "progressive_context",
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
+    workflow_ids: list[str] | None = None,
+    requested_source_ids: list[str] | None = None,
 ) -> ProgressiveContextResponse:
     """Build progressive context response with retries and fail-closed fallback."""
 
@@ -223,6 +229,8 @@ async def build_progressive_context_response(
             consumer_surface=consumer_surface,
             consumer_agent_slug=consumer_agent_slug,
             consumer_tags=consumer_tags,
+            workflow_ids=workflow_ids,
+            requested_source_ids=requested_source_ids,
         )
 
     response, failure, attempts, latency_ms = await run_with_memory_retries(
