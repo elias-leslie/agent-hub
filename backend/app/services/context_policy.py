@@ -23,14 +23,14 @@ from app.services.memory.memory_models import MemoryApplicability
 class ContextPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
     scope: Literal["global", "project", "agent", "unassigned"] = "unassigned"
-    targets: list[str] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list, description="Explicit targets are required for project/agent scope; global/unassigned scope must have no targets.")
     workflows: list[str] = Field(default_factory=list)
-    activation: Literal["always", "triggered", "on_demand", "relevant"] = "always"
+    activation: Literal["always", "triggered", "on_demand", "relevant"] = Field(default="always", description="Required rules cannot be on_demand. Triggered disclosure requires a task type or phase.")
     task_types: list[str] = Field(default_factory=list)
     phases: list[str] = Field(default_factory=list)
     applicability: dict[str, list[str]] = Field(default_factory=dict)
-    required: bool = True
-    format: Literal["full", "compact", "summary"] = "full"
+    required: bool = Field(default=True, description="Required rules must use format=full and cannot use activation=on_demand. Do not downgrade authority merely to shorten delivery.")
+    format: Literal["full", "compact", "summary"] = Field(default="full", description="Use full whenever required=true. Compact and summary are only for advisory sources with an appropriate short form.")
 
     @model_validator(mode="after")
     def validate_policy(self) -> ContextPolicy:
@@ -105,6 +105,29 @@ def policy_match(policy: ContextPolicy, context: Any, *, requested: bool = False
 
 def semantic_hash(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+
+
+def policies_overlap(left: ContextPolicy, right: ContextPolicy) -> bool:
+    """Conservative candidate discovery, never authorization or proof of conflict."""
+    common_workflow = bool(set(left.workflows) & set(right.workflows))
+    if not common_workflow:
+        if "unassigned" in {left.scope, right.scope}:
+            return False
+        if left.scope == right.scope and left.scope in {"project", "agent"} and not set(left.targets) & set(right.targets):
+            return False
+    for key in ("consumer_profiles", "consumer_surfaces", "agent_slugs"):
+        a, b = set(left.applicability.get(key, [])), set(right.applicability.get(key, []))
+        if a and b and not a & b:
+            return False
+        if a and a <= set(right.applicability.get("exclude_" + key, [])):
+            return False
+        if b and b <= set(left.applicability.get("exclude_" + key, [])):
+            return False
+    for key in ("task_types", "phases"):
+        a, b = set(getattr(left, key)), set(getattr(right, key))
+        if left.activation == right.activation == "triggered" and a and b and not a & b:
+            return False
+    return True
 
 
 def source_snapshot(row: Any) -> dict[str, Any]:

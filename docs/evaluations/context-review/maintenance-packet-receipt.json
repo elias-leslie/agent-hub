@@ -1,0 +1,22 @@
+{
+  "method": "Same live selected memory batch and tokenizer; compare previous full-catalog evidence preparation with current applicable-candidate preparation. No model calls; not a native delivery or task-quality measurement.",
+  "selected_memories": 10,
+  "selected_ids": [
+    "bbd29f87-664c-4b9b-bbf6-70bf9efd0be7",
+    "b04cd005-c10c-4aa0-b4e4-3a42336b3506",
+    "b2bc0915-b582-4987-ad41-2fa3e9cc4f3e",
+    "6d8eee57-77cc-468b-a183-f96347f3986d",
+    "f3d59a6b-2da2-4675-bdaf-1fa6e12b04ff",
+    "c35555c9-ef0e-45d0-942f-e7390bf66604",
+    "6d4aaa2d-a42f-4f0f-b8b9-4fc35d5267e8",
+    "06f24723-5d1c-45f3-96df-48145f2353f5",
+    "9e7561ac-2552-4c27-a9d9-befacc8af515",
+    "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63"
+  ],
+  "baseline_estimated_input_tokens": 75438,
+  "current_estimated_input_tokens": 20745,
+  "baseline_sha256": "f68ad84bebd46d4e442227d7937d670817a408497c52fac3cbf876c97180c408",
+  "current_sha256": "b1c60d46bf7bb712ab45081f93a26f34132a2ec5a376ea351c94b2d9b3694cbc",
+  "model_calls": 0,
+  "quality": "Candidate narrowing is non-exhaustive and retains required co-applicable authority. No cheaper generative model qualification claimed."
+}

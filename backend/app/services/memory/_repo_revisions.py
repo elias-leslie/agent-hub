@@ -64,6 +64,13 @@ class RevisionRepository:
         )
         db.add(revision)
         await db.flush()
+        if memory.status == "active":
+            from app.services.context_maintenance import enqueue
+            from app.services.context_policy import source_revision, source_snapshot
+            await enqueue(db, kind="review_due", sources=[{**source_snapshot(memory), "revision": source_revision(memory)}], context={},
+                summary=f"Changed memory: {memory.name or memory.uuid_short}",
+                recommendation="Review the exact changed memory against applicable authority and candidates.",
+                detail={"memory_revision_id": str(revision.id), "change_reason": change_reason})
         return revision
 
     async def list_revisions(

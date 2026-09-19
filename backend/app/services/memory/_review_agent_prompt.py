@@ -169,6 +169,7 @@ def build_memory_review_prompt(
     authority_prompts: list[Any] | None = None,
     authority_prompt_assignments: list[dict[str, Any]] | None = None,
     computed_tool_capabilities: str = "",
+    coverage: dict[str, Any] | None = None,
 ) -> str:
     """Build the bounded data payload consumed by the DB-owned curator prompt."""
     payload = [_memory_payload(memory) for memory in memories]
@@ -216,6 +217,7 @@ def build_memory_review_prompt(
     schema_json = json.dumps(REVIEW_SCHEMA, separators=(",", ":"), sort_keys=True)
     return (
         f"Governance snapshot JSON:\n{governance_json}\n\n"
+        f"Evidence coverage JSON:\n{json.dumps(coverage or {}, separators=(',', ':'))}\n\n"
         f"Memory batch JSON:\n{memories_json}\n\n"
         f"Active memory corpus for conflict and redundancy checks:\n{corpus_json}\n\n"
         f"Higher-authority enabled DB prompts for conflict checks:\n{authority_json}\n\n"

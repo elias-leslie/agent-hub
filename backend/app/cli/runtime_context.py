@@ -19,6 +19,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render runtime context for external agentic CLIs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    maintenance = subparsers.add_parser("maintenance", help="Inspect or handle canonical context maintenance. Routine work belongs to the scheduled curator.")
+    maintenance.add_argument("--request-file", help="JSON MaintenanceRequest file; use - for stdin. Omit to list relevant items.")
+    maintenance.add_argument("--project")
+    maintenance.add_argument("--surface", default="codex")
+    maintenance.add_argument("--session", help="Stable native session ID for claims and explicit acknowledgment")
+    maintenance.add_argument("--agent-slug")
+    maintenance.add_argument("--profile", default="agent_startup")
+    maintenance.add_argument("--workflow", action="append", default=[])
+    maintenance.add_argument("--task-type")
+    maintenance.add_argument("--phase")
+    maintenance.add_argument("--consumer-tag", action="append", default=[])
+    maintenance.add_argument("--include-background", action="store_true")
+    maintenance.add_argument("--include-closed", action="store_true")
+    maintenance.add_argument("--schema", action="store_true", help="Show the exact action schema and evidence requirements")
+
     deliver_parser = subparsers.add_parser(
         "deliver",
         help="Deliver the canonical additive Agent Hub context contract.",
@@ -171,6 +186,13 @@ async def _feedback(args: argparse.Namespace) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "maintenance":
+        from app.services.context_maintenance_actions import MaintenanceRequest
+        if args.schema:
+            print(json.dumps(MaintenanceRequest.model_json_schema(), indent=2))
+            return 0
+        print(json.dumps(asyncio.run(_maintenance(args)), indent=2))
+        return 0
     if args.command == "feedback":
         print(json.dumps(asyncio.run(_feedback(args))))
         return 0
@@ -205,6 +227,24 @@ def main(argv: list[str] | None = None) -> int:
         ]
         print("\n".join(chunk for chunk in chunks if chunk))
     return 0 if response.status == "ok" else 2
+
+
+async def _maintenance(args: argparse.Namespace) -> dict:
+    from pathlib import Path
+
+    from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
+    if args.request_file:
+        raw = await asyncio.to_thread(sys.stdin.read if args.request_file == "-" else Path(args.request_file).read_text)
+        request = MaintenanceRequest.model_validate_json(raw)
+    else:
+        request = MaintenanceRequest(context=CanonicalContextDeliveryRequest(consumer_surface=args.surface,
+            project_id=args.project, session_id=args.session, agent_slug=args.agent_slug,
+            consumer_profile=args.profile, workflow_ids=args.workflow, task_type=args.task_type, phase=args.phase, consumer_tags=args.consumer_tag), include_closed=args.include_closed, include_background=args.include_background)
+    async with async_session() as db:
+        if request.action in {"review", "reconcile", "repair", "apply", "resolve", "dismiss"}:
+            from app.services.credential_manager import get_credential_manager
+            await get_credential_manager().load(db)
+        return await handle_maintenance(db, request, "agent:native-cli")
 
 
 if __name__ == "__main__":

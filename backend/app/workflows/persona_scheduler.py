@@ -318,9 +318,12 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     only_incomplete_audit = bool(payload.get("only_incomplete_audit") or False)
 
     async with async_session() as db:
+        from app.services.context_maintenance_worker import run_context_maintenance
+        maintenance: dict[str, Any] = await run_context_maintenance(db, batch_limit=batch_limit) if not dry_run else {"reviewed_count": 0, "status": "dry_run"}
+        remaining = batch_limit - maintenance["reviewed_count"]
         result = await run_memory_review_batch(
             db=db,
-            batch_limit=batch_limit,
+            batch_limit=remaining,
             cadence_days=cadence_days,
             reviewer_agent_slug=reviewer_agent_slug,
             reviewer_model_id=reviewer_model_id,
@@ -329,8 +332,11 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
             include_archived=include_archived,
             only_missing_compact=only_missing_compact,
             only_incomplete_audit=only_incomplete_audit,
-        )
+        ) if remaining > 0 else None
         await db.commit()
+
+    if result is None:
+        return JobExecutionResult(output=f"Context maintenance {maintenance['status']}: reviewed={maintenance['reviewed_count']}; rolling memory review continues next scheduled batch.")
 
     return JobExecutionResult(
         output=(
@@ -339,6 +345,7 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
             f"needs_action={result.needs_action_count} failed={result.failed_count} "
             f"reviewer={result.reviewer_agent_slug} model={result.reviewer_model_id or 'n/a'} "
             f"run={result.run_id or 'n/a'}"
+            f"; context_maintenance={maintenance['status']} reviewed={maintenance['reviewed_count']}"
         ),
         session_id=result.session_id,
     )

@@ -738,7 +738,10 @@ async def test_run_memory_review_batch_records_proposal_without_mutating_source(
     execute_result.scalars.return_value.all.return_value = [memory]
     mock_db = AsyncMock()
     mock_db.add = MagicMock()
-    mock_db.execute.return_value = execute_result
+    empty = MagicMock()
+    empty.scalars.return_value.all.return_value = []
+    empty.scalar_one_or_none.return_value = None
+    mock_db.execute.side_effect = [execute_result, execute_result, empty, empty, empty]
 
     with (
         patch(

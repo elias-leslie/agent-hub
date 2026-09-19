@@ -224,8 +224,8 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["status", "run_due", "schedule"],
-                "description": "status=inspect review queue, run_due=run one or more batches, schedule=create recurring review job",
+                "enum": ["status", "run_due", "schedule", "maintenance"],
+                "description": "status=inspect review queue, run_due=run batches, schedule=create recurring review job, maintenance=inspect or act on canonical maintenance work",
                 "default": "status",
             },
             "batch_limit": {
@@ -292,6 +292,10 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
                 "type": "string",
                 "description": "IANA timezone for cron scheduling",
                 "default": "UTC",
+            },
+            "maintenance_request": {
+                "type": "object",
+                "description": "Canonical maintenance request. Omit with action=maintenance to retrieve its current schema. Supports evidence, claims, corrections, owner answers and acknowledgment.",
             },
         },
     },

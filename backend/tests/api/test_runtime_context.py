@@ -63,7 +63,7 @@ async def test_optional_continuity_failure_preserves_required_context() -> None:
         )
     assert response.status == "ok"
     assert "Preserve native instructions." in response.rendered
-    assert response.component_diagnostics[-1].model_dump() == {
+    assert next(d for d in response.component_diagnostics if d.component == "continuity").model_dump() == {
         "component": "continuity", "state": "unavailable", "reason": "continuity_generation_failed",
     }
 

@@ -71,6 +71,14 @@ async def record_prompt_revision(
     )
     db.add(revision)
     await db.flush()
+    from app.services.context_maintenance import enqueue
+    from app.services.context_policy import source_policy, source_revision, source_snapshot
+    policy = source_policy(prompt)
+    if prompt.enabled and (prompt.owner_agent_id is not None or policy.scope != "unassigned" or policy.workflows):
+        await enqueue(db, kind="review_due", sources=[{**source_snapshot(prompt), "revision": source_revision(prompt)}], context={},
+            summary=f"Changed context: {prompt.name or prompt.slug}",
+            recommendation="Review the exact changed source against applicable authority and candidates.",
+            detail={"prompt_revision_id": revision.id, "change_reason": change_reason})
     return revision
 
 

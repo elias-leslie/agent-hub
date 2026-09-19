@@ -264,6 +264,7 @@ async def review_memory_system(
     schedule_type: str | None = None,
     schedule_value: str | None = None,
     timezone: str = "UTC",
+    maintenance_request: dict | None = None,
 ) -> str:
     """Inspect, run, or schedule dedicated memory-curator review batches."""
     batch_limit = _bounded_int(batch_limit, default=10, minimum=1, maximum=_MAX_TOOL_BATCH_LIMIT)
@@ -289,6 +290,17 @@ async def review_memory_system(
         )
 
     try:
+        if action == "maintenance":
+            from app.db import async_session
+            from app.services.context_maintenance_actions import (
+                MaintenanceRequest,
+                handle_maintenance,
+            )
+            if maintenance_request is None:
+                return _json({"schema": MaintenanceRequest.model_json_schema()})
+            async with async_session() as db:
+                result = await handle_maintenance(db, MaintenanceRequest.model_validate(maintenance_request), "agent:review-memory-system")
+                return _json(result)
         if action == "status":
             return await _review_status(
                 cadence_days=cadence_days,
