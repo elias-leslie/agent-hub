@@ -46,6 +46,7 @@ export function MaintenancePanel({
       }),
   })
   const items = queue.data?.items ?? []
+  const health = queue.data?.health
   const decisions = items.filter((item) => item.state === 'waiting_owner')
   const handoffs = items.filter(
     (item) => item.state === 'pending' && item.handoff_needed,
@@ -80,6 +81,20 @@ export function MaintenancePanel({
     setReason('')
     setError(null)
   }
+  const healthLabel = {
+    healthy: 'Maintenance is healthy.',
+    working: 'Maintenance is working in the background.',
+    needs_attention: 'Maintenance has unresolved issues.',
+    awaiting_owner: 'Maintenance is waiting for your decision.',
+    unverified: 'Maintenance status is unverified.',
+  } as const
+  const formatTime = (value: string | null) =>
+    value
+      ? new Intl.DateTimeFormat(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(new Date(value))
+      : 'Not recorded'
   return (
     <section
       className={styles.review}
@@ -100,6 +115,28 @@ export function MaintenancePanel({
         Relevant agents receive work that needs investigation. Only questions
         that need your judgment appear as decisions.
       </p>
+      {health && (
+        <div aria-label="Maintenance health">
+          <p>
+            <strong>{healthLabel[health.state]}</strong>
+          </p>
+          <p>
+            Last successful review:{' '}
+            {formatTime(health.last_successful_review_at)}
+            {' · '}
+            {health.schedule_enabled
+              ? `Next scheduled run: ${formatTime(health.next_run_at)}`
+              : 'Automatic maintenance is not scheduled.'}
+          </p>
+          <p>
+            {health.unresolved_failures} unresolved failures ·{' '}
+            {health.technical_work} agent repair tasks (
+            {health.technical_blocked} blocked) ·{' '}
+            {health.active_counts.waiting_owner ?? decisions.length} owner
+            decisions
+          </p>
+        </div>
+      )}
       {queue.isPending ? (
         <p>Loading maintenance activity…</p>
       ) : queue.error ? (
@@ -108,8 +145,8 @@ export function MaintenancePanel({
         </p>
       ) : (
         <p>
-          {decisions.length} owner decisions · {handoffs.length} agent handoffs
-          ·{' '}
+          {decisions.length} owner decisions · {handoffs.length} curator
+          follow-ups ·{' '}
           {
             items.filter(
               (item) =>
@@ -136,13 +173,15 @@ export function MaintenancePanel({
           <article key={item.id} className={styles.finding}>
             <small>
               {item.state.replaceAll('_', ' ')} ·{' '}
-              {item.claim_owner
-                ? 'Claimed by an agent'
-                : item.handoff_needed
-                  ? 'Available to relevant agents'
-                  : item.state === 'pending'
-                    ? 'Background review'
-                    : 'Recorded activity'}
+              {item.technical_work
+                ? `Agent repair task${item.technical_work.status ? ` · ${item.technical_work.status.replaceAll('_', ' ')}` : ''}`
+                : item.claim_owner
+                  ? 'Claimed by an agent'
+                  : item.handoff_needed
+                    ? 'Queued for curator follow-up'
+                    : item.state === 'pending'
+                      ? 'Background review'
+                      : 'Recorded activity'}
             </small>
             <p>{item.summary}</p>
             <button type="button" onClick={() => select(item)}>

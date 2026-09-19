@@ -226,6 +226,7 @@ async def test_curator_retains_exact_evidence_and_failed_response_provenance(pas
     response = json.dumps({'findings': [finding]})
     request = ContextReviewRequest(context=CanonicalContextDeliveryRequest(consumer_surface='codex'), mode='curator', dry_run=False)
     with (patch('app.services.context_review.prepare_review', new=AsyncMock(return_value=prepared)),
+          patch('app.services.context_review.context_review_identity', new=AsyncMock(return_value='test-reviewer')),
           patch('app.services.memory._review_agent_call._call_reviewer_agent', new=AsyncMock(return_value=(response, 'catalog-model', 'review-session'))),
           patch('app.services.context_review.record', new=AsyncMock(return_value='review-id')) as recorded):
         result = await run_review(AsyncMock(), request, 'operator')

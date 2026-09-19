@@ -60,6 +60,8 @@ Consequently this implementation uses narrow typed pair classification, explicit
 
 ## Repeating the evaluations
 
+The [autonomous recovery receipt](autonomous-recovery-receipt.json) retains the later production verification: two validated context reviews, eight successfully reviewed memories, rejected recovery assessments, and one idempotent technical task. The live project had automatic task execution disabled, so queue admission did not mean that task ran. Remaining findings and this execution gate are reported honestly; no autonomous live source edit or new Jev qualification is claimed.
+
 From the repository root, the scripts support a read-only estimate/registration preview unless `--execute` is supplied:
 
 ```sh
