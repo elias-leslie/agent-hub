@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _INVALIDATED_PROVIDERS: set[str] = set()
 REFERENCE_ONLY_WORKLOAD_PROVIDERS = frozenset({"anthropic", "claude"})
+CREDENTIAL_ONLY_PROVIDERS = frozenset({"typesafe"})
 
 
 def get_provider_for_model(model: str) -> str:
@@ -88,6 +89,11 @@ def list_workload_providers() -> list[str]:
     return [provider for provider in list_providers() if is_workload_provider(provider)]
 
 
+def list_credential_providers() -> list[str]:
+    """Return workload and explicitly non-routing credential provider names."""
+    return sorted(set(list_workload_providers()) | CREDENTIAL_ONLY_PROVIDERS)
+
+
 def invalidate(provider: str) -> None:
     """Record provider credential invalidation.
 
@@ -127,6 +133,7 @@ ValidWorkloadProvider = Annotated[str, BeforeValidator(_validate_workload_provid
 
 
 __all__ = [
+    "CREDENTIAL_ONLY_PROVIDERS",
     "REFERENCE_ONLY_WORKLOAD_PROVIDERS",
     "ValidProvider",
     "ValidWorkloadProvider",
@@ -135,6 +142,7 @@ __all__ = [
     "invalidate",
     "is_workload_model",
     "is_workload_provider",
+    "list_credential_providers",
     "list_providers",
     "list_workload_providers",
 ]

@@ -55,6 +55,7 @@ class NeriQwenRuntimeConfig:
     batch_size: int
     ubatch_size: int
     prompt_cache_enabled: bool
+    idle_sleep_seconds: int
 
     @classmethod
     def from_environment(cls) -> NeriQwenRuntimeConfig:
@@ -69,6 +70,9 @@ class NeriQwenRuntimeConfig:
             batch_size=int(os.environ.get("NERI_LOCAL_QWEN_BATCH_SIZE", "2048")),
             ubatch_size=int(os.environ.get("NERI_LOCAL_QWEN_UBATCH_SIZE", "512")),
             prompt_cache_enabled=_env_bool("NERI_LOCAL_QWEN_CACHE_PROMPT", True),
+            idle_sleep_seconds=int(
+                os.environ.get("NERI_LOCAL_QWEN_IDLE_SLEEP_SECONDS", "300")
+            ),
         )
         config.validate()
         return config
@@ -88,6 +92,8 @@ class NeriQwenRuntimeConfig:
             raise RuntimeError("ubatch size cannot exceed batch size")
         if not 1 <= self.spec_draft_n_max <= 8:
             raise RuntimeError("MTP draft length must be between 1 and 8")
+        if not 60 <= self.idle_sleep_seconds <= 3_600:
+            raise RuntimeError("idle sleep must be between 60 and 3600 seconds")
 
     def public_metadata(self) -> dict[str, int | str | bool]:
         return asdict(self)
@@ -221,6 +227,8 @@ def _build_command(
         "--cors-origins",
         "localhost",
         "--no-webui",
+        "--sleep-idle-seconds",
+        str(config.idle_sleep_seconds),
     ]
     command.append("--cache-prompt" if config.prompt_cache_enabled else "--no-cache-prompt")
     if config.mtp_enabled:

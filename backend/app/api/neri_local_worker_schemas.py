@@ -138,8 +138,61 @@ class NeriLocalWorkerExecution(_StrictModel):
     prompt_revision: int
     evaluation_config: dict[str, Any]
     runtime_profile: dict[str, Any]
-    runtime_metrics: dict[str, bool | int | float | str | None]
+    runtime_metrics: dict[str, Any]
     pass_evidence: list[NeriLocalWorkerPassEvidence] = Field(min_length=1, max_length=2)
+
+
+class NeriLocalWorkerFailurePass(_StrictModel):
+    """Sanitized evidence for one unsuccessful model pass."""
+
+    pass_number: int = Field(ge=1, le=2)
+    validated: bool
+    failure_kind: str | None = Field(default=None, max_length=40)
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    content_length: int = Field(ge=0, le=65_536)
+    runtime_metrics: dict[str, bool | int | float | str | list[str] | None]
+
+    @field_validator("runtime_metrics")
+    @classmethod
+    def validate_runtime_metrics(
+        cls, values: dict[str, bool | int | float | str | list[str] | None]
+    ) -> dict[str, bool | int | float | str | list[str] | None]:
+        for key, value in values.items():
+            if isinstance(value, str) and len(value) > 240:
+                raise ValueError(f"runtime metric {key} exceeds 240 characters")
+            if isinstance(value, list) and (
+                key != "used_tool_names"
+                or len(value) > 32
+                or any(not item or len(item) > 160 for item in value)
+            ):
+                raise ValueError("only bounded used_tool_names lists are permitted")
+        return values
+
+
+class NeriFailureReceipt(_StrictModel):
+    """Private, sanitized failure contract returned to Neri for durable diagnosis."""
+
+    contract_version: Literal["neri-failure-receipt-v1"] = "neri-failure-receipt-v1"
+    failure_kind: str = Field(min_length=1, max_length=40, pattern=r"^[a-z][a-z0-9_]*$")
+    runtime_metrics: dict[str, bool | int | float | str | list[str] | None] = Field(
+        default_factory=dict
+    )
+    effective_model: str | None = Field(default=None, max_length=240)
+    safety_failures: list[str] = Field(default_factory=list, max_length=32)
+    schema_valid: bool | None = None
+    tool_policy_met: bool | None = None
+    artifact_identity: dict[str, Any] = Field(default_factory=dict)
+    artifact_identity_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    input_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    prompt_revision: int | None = Field(default=None, ge=1)
+    evaluation_config: dict[str, Any] = Field(default_factory=dict)
+    evaluation_config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    partial_output_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    partial_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    partial_content_length: int = Field(default=0, ge=0, le=65_536)
+    failed_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    failed_content_length: int = Field(default=0, ge=0, le=65_536)
+    pass_evidence: list[NeriLocalWorkerFailurePass] = Field(default_factory=list, max_length=2)
 
 
 class NeriLocalWorkerStatus(_StrictModel):
