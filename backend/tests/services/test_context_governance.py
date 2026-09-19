@@ -1,6 +1,7 @@
 """Regression cases for scope leaks, stale edits, draft rollback and cache identity."""
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -208,3 +209,30 @@ async def test_explicit_native_snapshot_is_compared_with_each_selected_source():
     with patch('app.services.context_review.inventory', new=AsyncMock(return_value={'sources': sources})):
         result = await prepare_review(AsyncMock(), request)
     assert result['pairs'] == [['a', 'b'], ['a', 'native:visible'], ['b', 'native:visible']]
+
+
+@pytest.mark.parametrize('passage, valid', [('Preserve scope.', True), ('Preserve scope.\n\nBatch routine checks.', False)])
+@pytest.mark.asyncio
+async def test_curator_retains_exact_evidence_and_failed_response_provenance(passage, valid):
+    from app.services.context_review import ContextReviewRequest, run_review
+
+    prepared = {'sources': [
+        {'source_id': 'a', 'content': 'Preserve scope.\n\nKeep detailed evidence.\n\nBatch routine checks.'},
+        {'source_id': 'b', 'content': 'Preserve scope.'},
+    ], 'pairs': [['a', 'b']], 'findings': []}
+    finding = {'kind': 'redundancy', 'source_ids': ['a', 'b'],
+        'passages': {'a': passage, 'b': 'Preserve scope.'}, 'explanation': 'Same obligation.',
+        'uncertainty': 'Other obligations differ.', 'remedy': 'Review duplicate.', 'proposed_edits': []}
+    response = json.dumps({'findings': [finding]})
+    request = ContextReviewRequest(context=CanonicalContextDeliveryRequest(consumer_surface='codex'), mode='curator', dry_run=False)
+    with (patch('app.services.context_review.prepare_review', new=AsyncMock(return_value=prepared)),
+          patch('app.services.memory._review_agent_call._call_reviewer_agent', new=AsyncMock(return_value=(response, 'catalog-model', 'review-session'))),
+          patch('app.services.context_review.record', new=AsyncMock(return_value='review-id')) as recorded):
+        result = await run_review(AsyncMock(), request, 'operator')
+    assert result['reviewer'] == {'agent_slug': 'memory-curator', 'model': 'catalog-model', 'session_id': 'review-session'}
+    assert bool(result['findings']) is valid
+    assert ('failure' not in result) is valid
+    if not valid:
+        assert result['unvalidated_response'] == response
+        assert result['failure'] == 'Reviewer passage does not match immutable evidence'
+    assert recorded.call_args.args[1] == 'context_review'

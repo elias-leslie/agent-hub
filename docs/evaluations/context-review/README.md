@@ -29,6 +29,8 @@ The startup reduction was 2,084 estimated tokens in this comparison. Total token
 
 Configuration binding and native tool/usage events were observed. Hidden system instructions and exact provider request bodies were not observed. The experiment cannot prove that the model attended to every supplied instruction.
 
+A subsequent live curator review compared the Safety Directive with the two global owner-mandate memories. Review `ea51fb0c-e6cb-42d9-813a-6960040e7069` identified redundancy but joined non-contiguous source excerpts; the evidence validator rejected the response and retained it without source changes. After making the response schema explicitly require one contiguous quotation per source, review `067feca9-6c71-4e85-9a97-5326f487edac` returned two validated redundancy findings through `memory-curator` on `codex/gpt-5.5`. Both records remain in canonical review history. This is a corrected repeat, not an independent qualification. Regression tests retain rejection of joined excerpts and verify reviewer provenance for rejected responses.
+
 ## Source-frozen repeat
 
 `native-runtime-frozen-v1.json` retains a fresh repeat registered with a fingerprint of every relevant source/test file. All six runs verified that the checkout remained unchanged. All six final answers were inspected and correct for the requested read-only inspections. The same canonical startup payload sizes were used. Later review-eligibility and catalog-display fixes are outside this measured snapshot.
