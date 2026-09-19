@@ -133,6 +133,11 @@ export interface ContextMaintenanceItem {
   handoff_needed: boolean
   claim_owner: string | null
   updated_at: string
+  technical_work?: {
+    task_id?: string
+    status?: string
+    [key: string]: unknown
+  } | null
   decision: {
     question?: string
     recommendation?: string
@@ -147,8 +152,34 @@ export interface ContextMaintenanceItem {
   }
 }
 
+export interface ContextMaintenanceHealth {
+  state:
+    | 'healthy'
+    | 'working'
+    | 'needs_attention'
+    | 'awaiting_owner'
+    | 'unverified'
+  scope: 'system'
+  active_counts: Record<string, number>
+  unresolved_failures: number
+  technical_work: number
+  technical_blocked: number
+  last_successful_review_at: string | null
+  last_memory_run: {
+    id: string
+    status: string
+    reviewed: number
+    failed: number
+    completed_at: string | null
+  } | null
+  schedule_enabled: boolean
+  next_run_at: string | null
+  verification: string
+}
+
 export interface ContextMaintenanceView {
   items: ContextMaintenanceItem[]
+  health?: ContextMaintenanceHealth
 }
 
 export async function contextRequest<T>(

@@ -43,6 +43,8 @@ async def _review_status(
 
     statuses = ["active", "archived"] if include_archived else ["active"]
     async with async_session() as db:
+        from app.services.context_maintenance_health import maintenance_health
+        health = await maintenance_health(db)
         status_rows = await db.execute(
             select(Memory.review_status, func.count())
             .where(Memory.status.in_(statuses))
@@ -95,7 +97,8 @@ async def _review_status(
 
     return _json(
         {
-            "status": "ok",
+            "status": health["state"],
+            "maintenance": health,
             "cadence_days": cadence_days,
             "force_all": force_all,
             "include_archived": include_archived,

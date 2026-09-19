@@ -14,7 +14,8 @@ from app.services.context_tracker import log_token_usage
 from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_complete, publish_message
 from app.services.response_cache import get_response_cache
-from app.services.session_live_activity import mark_session_completed
+from app.services.session_health import health_detail_for_error
+from app.services.session_live_activity import mark_session_completed, mark_session_terminal_state
 from app.services.token_counter import build_output_usage, estimate_cost
 
 from .event_helpers import save_events
@@ -47,6 +48,8 @@ async def save_and_track(
     fallback_reason: str | None = None,
     publish_messages: bool = False,
     duration_ms: int | None = None,
+    execution_status: str = "success",
+    execution_error: str | None = None,
 ) -> None:
     """Save events and track token usage, costs, and session status."""
     source_metadata = (
@@ -75,8 +78,8 @@ async def save_and_track(
         requested_max_turns=request.max_turns,
         orchestration_path="tool_loop" if request.execute_tools or request.max_turns > 1 else "single_turn",
         final_finish_reason=getattr(result, "finish_reason", None),
-        execution_status="success",
-        execution_error=None,
+        execution_status=execution_status,
+        execution_error=execution_error,
         turns_completed=turns_completed,
         tool_calls_count=tool_calls_count,
     )
@@ -125,21 +128,32 @@ async def save_and_track(
             "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,
             "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
         })
-    if is_new_session:
-        mark_session_completed(
-            session,
-            summary="Execution completed",
-            termination_reason=None,
-        )
+    if execution_status == "success":
+        if is_new_session:
+            mark_session_completed(
+                session,
+                summary="Execution completed",
+                termination_reason=None,
+            )
+        else:
+            session.health_detail = "completed"
     else:
-        session.health_detail = "completed"
+        session.status = "failed"
+        session.health_detail = health_detail_for_error(execution_error or execution_status)
+        mark_session_terminal_state(
+            session,
+            phase="error",
+            status="error",
+            summary=f"Completion failed: {(execution_error or execution_status)[:120]}",
+            termination_reason=execution_error or execution_status,
+        )
     session.last_activity_at = datetime.now(UTC)
     await store_child_session_lifecycle_event(
         db,
         session,
         SessionEventType.CHILD_SESSION_RESULT,
-        summary="Child session completed",
-        status="completed",
+        summary="Child session completed" if execution_status == "success" else "Child session failed",
+        status="completed" if execution_status == "success" else "failed",
     )
     await db.commit()
 

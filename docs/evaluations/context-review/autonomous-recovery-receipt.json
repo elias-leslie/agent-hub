@@ -1,0 +1,234 @@
+{
+  "date": "2026-09-19",
+  "task_id": "task-7cfbb03130cb47a8",
+  "verification": "production execution plus isolated PostgreSQL regression tests; not proof of native model receipt",
+  "scheduled_job_id": "b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+  "scheduled_review": {
+    "context_review_calls": 2,
+    "validated_context_reviews": 2,
+    "memory_run_id": "ebdb7c40-c517-4c90-b36a-1d4076cba0ae",
+    "memory_status": "completed",
+    "memories_reviewed": 8,
+    "failed": 0
+  },
+  "failed_recovery_receipts": [
+    "26515faa-1f09-4b76-b703-378ff6822eb7",
+    "5de62028-89de-42a0-ae9b-56fa753cd30f"
+  ],
+  "recovery_observations": [
+    "First response did not match the recovery schema. Immutable response retained; source unchanged.",
+    "Worker subprocess inherited PYTHONPATH, preventing project URL resolution. Fixed by using the existing async registered-project lookup.",
+    "Explicit schema in the request produced schema-valid JSON, but extra authority keys did not identify supplied sources. Rejected without source mutation; retained and assigned technical work.",
+    "Instructions now explicitly restrict authority keys to supplied source_id values; this final wording has not been separately qualified with another paid call.",
+    "Two repeated task dispatch requests returned the same existing task and created no additional task.",
+    "Proxy trigger returned HTTP 500 while backend continued. Completion verified from persisted memory run and schedule run_count/last_run_at, without resubmitting the trigger.",
+    "The curator system prompt still assumed batch or findings output. Canonical DB instructions now explicitly support recovery-decision output and historical-fact assessment; this final prompt revision has not had another paid qualification call.",
+    "Closed five finished provider sessions through the canonical session API after confirming retained results; missing historical token usage was not backfilled."
+  ],
+  "state_after_recovery": {
+    "replay": [
+      {
+        "status": "pending",
+        "task_id": "task-b4dade7d593545f8",
+        "created": false
+      },
+      {
+        "status": "pending",
+        "task_id": "task-b4dade7d593545f8",
+        "created": false
+      }
+    ],
+    "health": {
+      "state": "needs_attention",
+      "scope": "system",
+      "active_counts": {
+        "pending": 20
+      },
+      "unresolved_failures": 1,
+      "technical_work": 1,
+      "technical_blocked": 0,
+      "last_successful_review_at": "2026-09-19T22:16:25.334978+00:00",
+      "last_memory_run": {
+        "id": "ebdb7c40-c517-4c90-b36a-1d4076cba0ae",
+        "status": "completed",
+        "reviewed": 8,
+        "failed": 0,
+        "completed_at": "2026-09-19T22:19:02.106319+00:00"
+      },
+      "schedule_enabled": true,
+      "next_run_at": "2026-09-20T04:17:00+00:00",
+      "verification": "canonical generation and retained review outcomes; native model receipt unobserved"
+    }
+  },
+  "canonical_delivery_before_new_findings": {
+    "global": {
+      "status": "ok",
+      "estimated_tokens": 2873,
+      "research_policy_present": false,
+      "maintenance_attention": {
+        "counts": {},
+        "evidence_stage": "available; not proof of native model receipt",
+        "items": {},
+        "new_relevant": 0
+      }
+    },
+    "agent-hub": {
+      "status": "ok",
+      "estimated_tokens": 4151,
+      "research_policy_present": false,
+      "maintenance_attention": {
+        "counts": {},
+        "evidence_stage": "available; not proof of native model receipt",
+        "items": {},
+        "new_relevant": 0
+      }
+    },
+    "security-research": {
+      "status": "ok",
+      "estimated_tokens": 5086,
+      "research_policy_present": true,
+      "maintenance_attention": {
+        "counts": {},
+        "evidence_stage": "available; not proof of native model receipt",
+        "items": {},
+        "new_relevant": 0
+      }
+    }
+  },
+  "quality": {
+    "canonical_quick_gate_passed": true,
+    "pytest_passed": 3408,
+    "pytest_skipped": 49,
+    "postgresql_integration_passed": 14,
+    "frontend_browser_errors": 0,
+    "accounting_focused_tests_passed": 42,
+    "note": "Final broad pytest passed; subsequent focused lint fixes and full type check passed. Managed closeout reruns its required publication checks."
+  },
+  "limits": [
+    "Remaining findings are pending assessment, not confirmed defects.",
+    "Pending technical task is ownership, not verified resolution.",
+    "Jev remains optional; no new screening qualification claimed.",
+    "No autonomous content edit was exercised against live owner sources in this verification; PostgreSQL tests cover validated apply, stale evidence and undo."
+  ],
+  "routine_configuration": {
+    "observed_date": "2026-09-19",
+    "project_auto_exec_enabled": true,
+    "persona_heartbeat_enabled": false,
+    "legacy_tier_optimizer_enabled": false,
+    "legacy_memory_cleanup_enabled": false,
+    "summitflow_general_task_generation_enabled": false,
+    "curator_schedule": "17 4 * * * UTC",
+    "shared_batch_items": 10,
+    "regular_review_cadence_days": 45,
+    "reviewer_agent": "memory-curator",
+    "observed_primary_model": "codex/gpt-5.5",
+    "observed_thinking_level": "high",
+    "jev_routine_enabled": false,
+    "note": "Model routes are catalog state, not a new hardcoded default; shared item allowance does not bound provider calls or tokens.",
+    "summitflow_work_pickup_enabled": true,
+    "summitflow_external_origins": [
+      "agent-hub-context-maintenance"
+    ],
+    "max_concurrent_technical_tasks": 1,
+    "observed_reviewer_fallbacks": [
+      "kimi-code/kimi-for-coding",
+      "moonshot/kimi-k2.6",
+      "deepseek/deepseek-v4-pro",
+      "minimax/MiniMax-M3",
+      "nvidia/glm-5.2",
+      "gemini-3.7-flash",
+      "cloudflare/gpt-oss-120b",
+      "local/gemma4:12b-it-qat"
+    ],
+    "daily_token_budget": null
+  },
+  "usage_evidence": {
+    "historical_actual_tokens": null,
+    "unknown_reason": "Direct reviewer complete_internal callers did not persist returned usage; no cost_log or session_event receipt exists for these five calls.",
+    "context_evidence_token_estimates": [
+      7766,
+      8617
+    ],
+    "estimate_scope": "Evidence JSON only, excluding instructions, schema, reasoning, output and other review/recovery calls; not provider-reported usage."
+  },
+  "final_production_health": {
+    "technical_reconciliation": {
+      "inspected": 1,
+      "replayed": 0,
+      "completed": 0,
+      "blocked": 0,
+      "errors": 0
+    },
+    "health": {
+      "state": "needs_attention",
+      "scope": "system",
+      "active_counts": {
+        "pending": 21
+      },
+      "unresolved_failures": 1,
+      "technical_work": 1,
+      "technical_blocked": 0,
+      "last_successful_review_at": "2026-09-19T22:16:25.334978+00:00",
+      "last_memory_run": {
+        "id": "ebdb7c40-c517-4c90-b36a-1d4076cba0ae",
+        "status": "completed",
+        "reviewed": 8,
+        "failed": 0,
+        "completed_at": "2026-09-19T22:19:02.106319+00:00"
+      },
+      "schedule_enabled": true,
+      "next_run_at": "2026-09-20T04:17:00+00:00",
+      "verification": "canonical generation and retained review outcomes; native model receipt unobserved"
+    }
+  },
+  "final_canonical_delivery": {
+    "global": {
+      "status": "ok",
+      "estimated_tokens": 2873,
+      "required_policy_state": "complete",
+      "maintenance_attention": {
+        "new_relevant": 0,
+        "counts": {},
+        "items": {},
+        "evidence_stage": "available; not proof of native model receipt"
+      },
+      "research_policy_present": false
+    },
+    "agent-hub": {
+      "status": "ok",
+      "estimated_tokens": 4151,
+      "required_policy_state": "complete",
+      "maintenance_attention": {
+        "new_relevant": 0,
+        "counts": {},
+        "items": {},
+        "evidence_stage": "available; not proof of native model receipt"
+      },
+      "research_policy_present": false
+    },
+    "security-research": {
+      "status": "ok",
+      "estimated_tokens": 5086,
+      "required_policy_state": "complete",
+      "maintenance_attention": {
+        "new_relevant": 0,
+        "counts": {},
+        "items": {},
+        "evidence_stage": "available; not proof of native model receipt"
+      },
+      "research_policy_present": true
+    }
+  },
+  "final_canonical_delivery_request": {
+    "capabilities": [
+      "bash"
+    ],
+    "query": "startup context",
+    "consumer_surface": "codex",
+    "consumer_profile": "agent_startup"
+  },
+  "deployments": {
+    "agent_hub_full_rebuild": "716365f1e32b4588bbb80b39c328a3f8",
+    "state": "succeeded"
+  }
+}

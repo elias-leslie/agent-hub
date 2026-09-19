@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from app.core.project_roots import resolve_project_root
 
 logger = logging.getLogger(__name__)
 
 
-def _read_project_index(project_id: str) -> dict[str, object] | None:
+def _read_project_index(project_id: str, *, root: Path | None = None) -> dict[str, object] | None:
     """Read and parse a project's .index.yaml, returning None on failure."""
-    root = resolve_project_root(project_id)
+    root = root or resolve_project_root(project_id)
     if root is None:
         return None
     index_path = root / ".index.yaml"
@@ -42,9 +43,9 @@ def _read_project_ports(project_id: str) -> str:
     return ""
 
 
-def _read_project_api_url(project_id: str) -> str:
+def _read_project_api_url(project_id: str, *, root: Path | None = None) -> str:
     """Read the canonical local API URL for a project from .index.yaml."""
-    data = _read_project_index(project_id)
+    data = _read_project_index(project_id, root=root)
     if not data:
         return ""
     urls = data.get("urls", {})

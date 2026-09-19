@@ -117,11 +117,13 @@ async def handle_maintenance(db: AsyncSession, request: MaintenanceRequest, acto
     visible = await relevant_items(db, request.context, include_closed=request.include_closed or request.action == "inspect")
     if request.action == "list":
         from app.models.prompt import Prompt
+        from app.services.context_maintenance_health import maintenance_health
         guidance = (await db.execute(select(Prompt.content).where(Prompt.slug == "context-maintenance-workflow", Prompt.enabled.is_(True)))).scalar_one_or_none()
         listed = [row for row in visible if request.include_background or request.include_closed or request.context.agent_slug == "memory-curator"
             or row.detail.get("handoff_needed") or row.state == "waiting_owner" or (row.claim_session and row.claim_session == request.context.session_id)]
         return {"items": [item_snapshot(row, details=False) for row in listed], "background_items": len(visible) - len(listed),
                 "attention": await attention_summary(db, request.context),
+                "health": await maintenance_health(db),
                 "guidance": guidance, "guidance_source": "prompt:context-maintenance-workflow" if guidance else None}
     if request.item_id not in {row.id for row in visible}:
         raise HTTPException(404, "Maintenance item is not applicable to this context")

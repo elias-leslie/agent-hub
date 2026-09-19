@@ -10,6 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.llm_errors import AuthenticationError
+from app.services.memory._review_agent_call import (
+    _complete_review_with_model,
+    _finalize_review_exception,
+    _persist_review_result,
+)
 from app.services.memory.review_agent import (
     MemoryReviewDecision,
     _apply_decision,
@@ -741,7 +746,24 @@ async def test_run_memory_review_batch_records_proposal_without_mutating_source(
     empty = MagicMock()
     empty.scalars.return_value.all.return_value = []
     empty.scalar_one_or_none.return_value = None
-    mock_db.execute.side_effect = [execute_result, execute_result, empty, empty, empty]
+    source_result = MagicMock()
+    source_result.scalars.return_value.all.return_value = [memory]
+    mock_db.execute.side_effect = [
+        execute_result,
+        execute_result,
+        empty,
+        empty,
+        empty,
+        empty,
+        source_result,
+    ]
+    lock_db = AsyncMock()
+    lock_result = MagicMock()
+    lock_result.scalar_one.return_value = True
+    lock_db.execute.return_value = lock_result
+    lock_context = MagicMock()
+    lock_context.__aenter__ = AsyncMock(return_value=lock_db)
+    lock_context.__aexit__ = AsyncMock(return_value=None)
 
     with (
         patch(
@@ -782,6 +804,18 @@ async def test_run_memory_review_batch_records_proposal_without_mutating_source(
                 "session-1",
             ),
         ),
+        patch(
+            "app.services.context_reviewer_identity.reviewer_identity",
+            new=AsyncMock(return_value="reviewer-identity"),
+        ),
+        patch(
+            "app.db.async_session",
+            return_value=lock_context,
+        ),
+        patch(
+            "app.services.context_governance.record",
+            new=AsyncMock(return_value="receipt-1"),
+        ) as recorded,
     ):
         result = await run_memory_review_batch(db=mock_db, batch_limit=1)
 
@@ -791,10 +825,10 @@ async def test_run_memory_review_batch_records_proposal_without_mutating_source(
     assert memory.last_reviewed_at is None
     assert "last_review" not in memory.metadata_
     assert "compact_content" not in memory.metadata_
-    proposals = [call.args[0] for call in mock_db.add.call_args_list if getattr(call.args[0], "kind", None) == "curator_proposal"]
+    proposals = [call.args[3] for call in recorded.call_args_list if call.args[1] == "curator_proposal"]
     assert len(proposals) == 1
-    assert proposals[0].payload["automatic_application"] is False
-    assert proposals[0].payload["decision"]["compact_content"] == "Use st search before repo spelunking."
+    assert proposals[0]["automatic_application"] is False
+    assert proposals[0]["decision"]["compact_content"] == "Use st search before repo spelunking."
 
 
 
@@ -844,7 +878,12 @@ async def test_call_reviewer_agent_does_not_fallback_on_auth_failure() -> None:
             "app.api.complete.core.complete_internal",
             new_callable=AsyncMock,
             side_effect=AuthenticationError("codex"),
-        ) as complete_internal,pytest.raises(AuthenticationError)
+        ) as complete_internal,
+        patch(
+            "app.services.memory._review_agent_call._finalize_review_exception",
+            new_callable=AsyncMock,
+        ),
+        pytest.raises(AuthenticationError)
     ):
         await _call_reviewer_agent(
             mock_db,
@@ -901,6 +940,10 @@ async def test_call_reviewer_agent_falls_back_on_empty_content() -> None:
                 SimpleNamespace(content=valid, session_id="valid-session"),
             ],
         ) as complete_internal,
+        patch(
+            "app.services.memory._review_agent_call._persist_review_result",
+            new_callable=AsyncMock,
+        ),
     ):
         content, model, session_id = await _call_reviewer_agent(
             mock_db,
@@ -913,3 +956,131 @@ async def test_call_reviewer_agent_falls_back_on_empty_content() -> None:
     assert model == "codex/gpt-5.4-mini"
     assert session_id == "valid-session"
     assert complete_internal.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_complete_review_with_model_persists_result_after_provider_returns() -> None:
+    db = AsyncMock()
+    resolved = SimpleNamespace(
+        agent=SimpleNamespace(temperature=0.2, thinking_level="medium"),
+    )
+    result = SimpleNamespace(content='{"reviews": []}', session_id="ignored")
+
+    with (
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=result,
+        ) as complete_internal,
+        patch(
+            "app.services.memory._review_agent_call._persist_review_result",
+            new_callable=AsyncMock,
+        ) as persist_result,
+    ):
+        returned = await _complete_review_with_model(
+            db=db,
+            messages=[{"role": "user", "content": "review"}],
+            model="codex/gpt-5.5",
+            provider="codex",
+            resolved=resolved,
+            reviewer_agent_slug="memory-curator",
+        )
+
+    assert returned is result
+    assert complete_internal.await_args is not None
+    assert persist_result.await_args is not None
+    assert complete_internal.await_args.kwargs["session_id"]
+    assert persist_result.await_args.kwargs["session_id"] == complete_internal.await_args.kwargs["session_id"]
+
+
+@pytest.mark.asyncio
+async def test_complete_review_with_model_preserves_early_provider_error_without_session() -> None:
+    db = AsyncMock()
+    db.get.return_value = None
+    resolved = SimpleNamespace(
+        agent=SimpleNamespace(temperature=0.2, thinking_level="medium"),
+    )
+
+    with patch(
+        "app.api.complete.core.complete_internal",
+        new_callable=AsyncMock,
+        side_effect=AuthenticationError("codex unavailable"),
+    ), pytest.raises(AuthenticationError, match="codex unavailable"):
+        await _complete_review_with_model(
+            db=db,
+            messages=[{"role": "user", "content": "review"}],
+            model="codex/gpt-5.5",
+            provider="codex",
+            resolved=resolved,
+            reviewer_agent_slug="memory-curator",
+        )
+
+
+@pytest.mark.asyncio
+async def test_persist_review_result_passes_provider_error_to_accounting() -> None:
+    db = AsyncMock()
+    db.get.return_value = SimpleNamespace()
+    result = SimpleNamespace(
+        content="",
+        error="provider stopped",
+        model="codex/gpt-5.5",
+        model_used=None,
+    )
+
+    with patch(
+        "app.services.memory._review_agent_call.save_and_track",
+        new_callable=AsyncMock,
+    ) as save:
+        await _persist_review_result(
+            db,
+            session_id="review-session",
+            messages=[{"role": "user", "content": "review"}],
+            result=result,
+            model="codex/gpt-5.5",
+            reviewer_agent_slug="memory-curator",
+            temperature=0.2,
+        )
+
+    assert save.await_args is not None
+    assert save.await_args.kwargs["execution_status"] == "error"
+    assert save.await_args.kwargs["execution_error"] == "provider stopped"
+
+
+@pytest.mark.asyncio
+async def test_finalize_review_exception_closes_session_without_usage() -> None:
+    db = AsyncMock()
+    session = SimpleNamespace(
+        provider_metadata={},
+        status="active",
+        health_detail=None,
+        agent_slug="memory-curator",
+        client_id=None,
+        request_source="memory_review",
+    )
+    db.get.return_value = session
+
+    with (
+        patch(
+            "app.services.event_storage.store_error_event",
+            new_callable=AsyncMock,
+        ) as store_error,
+        patch(
+            "app.api.complete.execution_observability.persist_execution_observability",
+            new_callable=AsyncMock,
+        ) as persist_observability,
+    ):
+        await _finalize_review_exception(
+            db,
+            session_id="review-session",
+            model="codex/gpt-5.5",
+            provider="codex",
+            reviewer_agent_slug="memory-curator",
+            error=RuntimeError("provider unavailable"),
+        )
+
+    assert session.status == "failed"
+    assert session.health_detail == "model_error"
+    store_error.assert_awaited_once()
+    assert persist_observability.await_args is not None
+    assert persist_observability.await_args.kwargs["execution_status"] == "error"
+    db.commit.assert_awaited_once()

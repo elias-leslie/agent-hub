@@ -43,6 +43,8 @@ def item_snapshot(row: ContextMaintenanceItem, *, details: bool = True) -> dict[
     result["handoff_needed"] = row.state in ACTIVE_STATES and bool(row.detail.get("handoff_needed"))
     if details:
         result.update(sources=row.sources, evidence_ids=row.evidence_ids, detail=row.detail)
+    work = row.detail.get("technical_work")
+    result["technical_work"] = {key: work.get(key) for key in ("task_id", "status", "task_owned", "error")} if work else None
     return result
 
 
@@ -68,12 +70,21 @@ async def enqueue(db: AsyncSession, *, kind: str, sources: list[dict[str, Any]],
     if inserted is not None:
         return inserted
     row = (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.fingerprint == fingerprint).with_for_update())).scalar_one()
+    if kind == "review_failed" and row.state in {"resolved", "dismissed"} and evidence_id and evidence_id not in row.evidence_ids:
+        # A later failed audit is a new incident even when its source revision
+        # is unchanged. Preserve the prior repair without reusing its task.
+        previous = {"resolution": row.resolution, "detail": row.detail}
+        generation = row.detail.get("generation", 0) + 1
+        row.state, row.version, row.resolution = "pending", row.version + 1, {}
+        row.claim_owner, row.claim_session, row.decision = None, None, {}
+        row.detail = {**(detail or {}), "generation": generation}
+        await maintenance_event(db, row, "system:context-maintenance", "review_failure_recurred", previous)
     if kind in {"token_count", "dangling_placement"} and row.state == "resolved":
         previous = row.resolution
         row.state, row.version, row.resolution = "pending", row.version + 1, {}
         await maintenance_event(db, row, "system:context-maintenance", "derived_drift_recurred", {"previous_resolution": previous})
     if evidence_id and evidence_id not in row.evidence_ids:
-        # Repeated evidence neither reopens dismissed work nor resets a claim.
+        # Repeated evidence neither reopens work nor resets a claim.
         row.evidence_ids = [*row.evidence_ids, evidence_id]
         if (detail or {}).get("handoff_needed") and row.state in ACTIVE_STATES:
             row.detail = {**row.detail, **(detail or {})}
@@ -150,7 +161,7 @@ async def ingest_review(db: AsyncSession, record: ContextRecord) -> None:
             ContextMaintenanceItem.state.in_(ACTIVE_STATES), ContextMaintenanceItem.kind.in_(["review_failed", "review_due"])).with_for_update())).scalars()
         for item in pending:
             expected = {(s["source_type"], s["source_id"], s["revision"]) for s in item.sources}
-            if expected and expected <= reviewed and (not item.context or item.context == context_binding(context)):
+            if expected and expected <= reviewed and all(context_binding(context).get(key) == value for key, value in item.context.items()):
                 item.state, item.version = "resolved", item.version + 1
                 item.resolution = {"verification": "validated_review_of_exact_sources", "review_id": record.id}
                 item.claim_owner, item.claim_session = None, None
@@ -215,6 +226,8 @@ async def attention_summary(db: AsyncSession, context: Any) -> dict[str, Any]:
     caretaker = context.agent_slug == "memory-curator"
     pending = [r for r in rows if acknowledged.get(r.id, 0) < r.version
         and (not r.claim_session or r.claim_session == context.session_id)
+        and (caretaker or r.state == "claimed" or r.state == "waiting_owner"
+             or (context.project_id == "agent-hub" and r.detail.get("technical_blocked")))
         and ((r.state == "pending" and (caretaker or r.detail.get("handoff_needed")))
              or (r.state == "claimed" and r.claim_session == context.session_id)
              or (r.state == "waiting_owner" and not r.decision.get("reported")))]

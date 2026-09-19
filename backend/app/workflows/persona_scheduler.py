@@ -320,7 +320,7 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     async with async_session() as db:
         from app.services.context_maintenance_worker import run_context_maintenance
         maintenance: dict[str, Any] = await run_context_maintenance(db, batch_limit=batch_limit) if not dry_run else {"reviewed_count": 0, "status": "dry_run"}
-        remaining = batch_limit - maintenance["reviewed_count"]
+        remaining = batch_limit - maintenance.get("processed_count", maintenance["reviewed_count"])
         result = await run_memory_review_batch(
             db=db,
             batch_limit=remaining,

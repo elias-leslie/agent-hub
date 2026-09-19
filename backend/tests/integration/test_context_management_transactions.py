@@ -35,7 +35,12 @@ from app.services.runtime_context import CanonicalContextDeliveryRequest
 
 
 @pytest_asyncio.fixture
-async def maintenance_db():
+async def maintenance_db(monkeypatch):
+    from unittest.mock import AsyncMock
+    # Integration exercises local transactions only; never dispatch a real
+    # implementation task from a fixture's deliberately invalid provider result.
+    monkeypatch.setattr('app.services.context_maintenance_tasks.dispatch_technical_work', AsyncMock(return_value={'status': 'queued', 'task_id': 'test-recovery'}))
+    monkeypatch.setattr('app.services.context_maintenance_tasks.reconcile_technical_work', AsyncMock(return_value={}))
     async with _get_engine().connect() as connection:
         assert (await connection.execute(text('SELECT current_database()'))).scalar() == 'agent_hub_test'
         try:
@@ -83,6 +88,8 @@ async def test_maintenance_dedup_scope_preview_ack_and_claims(maintenance_db):
     assert (await attention_summary(db, context))['new_relevant'] == 0  # background work costs no startup text
     item = await db.get(ContextMaintenanceItem, item_id)
     item.detail = {'handoff_needed': True}
+    assert (await attention_summary(db, context))['new_relevant'] == 0  # scheduled semantic recovery owns this
+    item.detail = {'handoff_needed': True, 'technical_blocked': True}
     await db.flush()
     first = await build_canonical_context_delivery(db, context)
     second = await build_canonical_context_delivery(db, context)
@@ -132,7 +139,9 @@ async def test_maintenance_owner_question_reporting_and_answer(maintenance_db):
     answered = await handle_maintenance(db, MaintenanceRequest(action='answer', context=maintenance_context('second'), item_id=item_id, expected_version=5, reason='Project', evidence='Operator entered Project in the UI'), 'dashboard:operator', operator=True)
     assert answered['item']['state'] == 'pending'
     assert answered['item']['decision']['answer'] == 'Project'
-    assert (await attention_summary(db, maintenance_context('third')))['new_relevant'] == 1
+    assert (await attention_summary(db, maintenance_context('third')))['new_relevant'] == 0
+    curator_context = maintenance_context('curator').model_copy(update={'agent_slug': 'memory-curator'})
+    assert (await attention_summary(db, curator_context))['new_relevant'] == 1
 
 
 @pytest.mark.integration
@@ -252,6 +261,181 @@ async def test_revision_hooks_and_grouped_background_review(maintenance_db):
     await record_prompt_revision(db, prompt, action='update', changed_by='test')
     await db.commit()
     assert all(item.state == 'resolved' for item in (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_due'))).scalars())
+
+
+@pytest.mark.integration
+async def test_changed_reviewer_recovers_retained_failure_and_replay_makes_no_calls(maintenance_db):
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_governance import record
+    from app.services.context_maintenance_worker import run_context_maintenance
+
+    db = maintenance_db
+    _, _, source = await maintenance_fixture(db, kind='review_due')
+    await record(db, 'context_review', 'test', {'sources': [source], 'reviewer_identity': 'obsolete-schema',
+        'coverage': {'context': {'consumer_surface': 'codex'}}, 'failure': 'Required rules must be delivered in full'})
+    await db.commit()
+    reviewer = AsyncMock(return_value=('{"findings": []}', 'catalog-model', 'recovered-session'))
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
+        first = await run_context_maintenance(db, batch_limit=10)
+        second = await run_context_maintenance(db, batch_limit=10)
+    reviewer.assert_awaited_once()
+    assert first['recovery_count'] == 1
+    assert second['model_calls'] == 0
+    failures = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalars())
+    assert failures and all(item.state == 'resolved' for item in failures)
+
+
+@pytest.mark.integration
+async def test_semantic_recovery_applies_exact_correction_and_retains_undo(maintenance_db):
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance_recovery import recover_item
+
+    db = maintenance_db
+    prompt, item_id, source = await maintenance_fixture(db, handoff=True, kind='targeting')
+    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Correct clear scope and disclosure errors using canonical history.',
+        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
+    await db.commit()
+    response = {'action': 'apply', 'reason': 'Add a faithful navigation summary without changing the rule.',
+        'authority_passages': {source['source_id']: source['content']},
+        'edits': [{'source_type': 'prompt', 'source_id': source['source_id'], 'expected_revision': source['revision'],
+            'summary': 'Canonical workflow'}]}
+    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
+    item = await db.get(ContextMaintenanceItem, item_id)
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
+        result = await recover_item(db, item, maintenance_context())
+    assert 'failure' not in result
+    assert item.state == 'resolved'
+    assert prompt.content == source['content']
+    change_id = item.resolution['change_id']
+    assert item.resolution['verification'] == 'canonical_generation'
+    await undo_change(db, change_id, 'test')
+    await db.commit()
+    restored = await get_source(db, 'prompt', source['source_id'])
+    assert isinstance(restored, Prompt)
+    assert restored.description == source['summary']
+
+
+@pytest.mark.integration
+async def test_invalid_recovery_cannot_mutate_or_repeat_inference(maintenance_db):
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance_recovery import recover_item
+
+    db = maintenance_db
+    _, item_id, source = await maintenance_fixture(db, handoff=True)
+    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Preserve authority and exact evidence.',
+        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
+    await db.commit()
+    response = {'action': 'apply', 'reason': 'An unsupported edit', 'authority_passages': {source['source_id']: 'Invented passage'},
+        'edits': [{'source_type': 'prompt', 'source_id': source['source_id'], 'expected_revision': source['revision'], 'content': 'Must never be saved'}]}
+    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
+        first = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
+        second = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
+    reviewer.assert_awaited_once()
+    assert first['failure'] == 'ValueError' and second['model_calls'] == 0
+    assert (await get_source(db, 'prompt', source['source_id'])).content == source['content']
+    receipts = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance_recovery'))).scalars())
+    assert len(receipts) == 1 and 'Invented passage' in receipts[0].payload['response']
+
+
+@pytest.mark.integration
+async def test_later_review_failure_reopens_resolved_incident_once(maintenance_db):
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_governance import record
+    db = maintenance_db
+    _, _, source = await maintenance_fixture(db, kind='review_due')
+    packet = {'sources': [source], 'reviewer': {'agent_slug': 'memory-curator'}, 'coverage': {'context': {}}}
+    await record(db, 'context_review', 'test', {**packet, 'failure': 'Original unavailable provider'})
+    item = (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalar_one()
+    item.detail = {**item.detail, 'technical_work': {'task_id': 'original-repair', 'status': 'completed_pending_revalidation'}}
+    await record(db, 'context_review', 'test', packet)
+    assert item.state == 'resolved'
+    latest = await record(db, 'context_review', 'test', {**packet, 'failure': 'Later provider failure'})
+    assert item.state == 'pending' and item.detail['generation'] == 1
+    assert 'technical_work' not in item.detail and item.detail['handoff_needed']
+    from app.services.context_maintenance import ingest_review
+    await ingest_review(db, await db.get(ContextRecord, latest))
+    assert item.detail['generation'] == 1
+    history = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance'))).scalars())
+    assert any(row.payload.get('action') == 'review_failure_recurred' and
+        row.payload['evidence']['detail']['technical_work']['task_id'] == 'original-repair' for row in history)
+
+
+@pytest.mark.integration
+async def test_changed_review_keeps_competing_claim_and_rejected_dismissal(maintenance_db):
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance_recovery import RecoveryDecision, _retry_changed_review
+    db = maintenance_db
+    _, item_id, _ = await maintenance_fixture(db, handoff=True, kind='review_failed')
+    item = await db.get(ContextMaintenanceItem, item_id)
+    async def competing_review(*args, **kwargs):
+        item.claim_owner, item.claim_session = 'agent:interactive', 'other-session'
+        item.version += 1
+        await db.commit()
+        return json.dumps({'findings': []}), 'catalog-model', 'review-session'
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', AsyncMock(side_effect=competing_review)):
+        result = await _retry_changed_review(db, item, maintenance_context(), 'corrected-reviewer')
+    assert 'ownership changed' in result['failure']
+    assert item.state == 'claimed' and item.claim_owner == 'agent:interactive'
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match='exact supporting source passages'):
+        RecoveryDecision(action='dismiss', reason='Unsupported model assertion')
+
+
+@pytest.mark.integration
+async def test_regular_review_failure_reservation_and_changed_input_recovery(maintenance_db):
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.models.memory_unified import MemoryReviewRun
+    from app.services.memory import _review_agent_runner as runner
+    from app.services.memory._review_agent_decisions import MemoryReviewDecision
+
+    db = maintenance_db
+    memory = Memory(content='A dated fixture records an observed successful delivery.', name='Recovery fixture',
+        memory_type='reference', scope='global', tier=3, status='active', token_count=10, metadata_={})
+    db.add(memory)
+    await db.commit()
+    sources = runner._memory_review_sources([memory])
+    prepared = runner._ReviewInputs(prompt='Frozen evidence', sources=sources, evidence={}, reviewer_identity='before-fix', attempt_key='frozen-failure')
+    provider = AsyncMock(side_effect=RuntimeError('Provider unavailable'))
+    with (patch.object(runner, '_load_batch_memories', AsyncMock(return_value=[memory])),
+          patch.object(runner, '_prepare_review_inputs', AsyncMock(return_value=prepared)),
+          patch.object(runner, '_call_review_for_memories', provider)):
+        first = await runner.run_memory_review_batch(db=db, batch_limit=1)
+        await db.commit()
+        second = await runner.run_memory_review_batch(db=db, batch_limit=1, force_all=True)
+        await db.commit()
+    assert first.status == 'failed' and second.status == 'blocked'
+    provider.assert_awaited_once()
+    runs = list((await db.execute(select(MemoryReviewRun))).scalars())
+    assert len(runs) == 1 and runs[0].metadata_['attempt']['status'] == 'failed'
+    failures = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalars())
+    assert len(failures) == 1
+    decision = MemoryReviewDecision(uuid=str(memory.id), decision='keep', review_status='clean', confidence=1,
+        reason='Exact fixture retained.', checks={key: 'pass' for key in ('currency', 'correctness', 'appropriateness',
+            'scope_applicability', 'conflict', 'redundancy', 'lifecycle', 'authority', 'token_efficiency')})
+    prepared = runner._ReviewInputs(prompt='Frozen evidence', sources=sources, evidence={}, reviewer_identity='after-fix', attempt_key='corrected-reviewer')
+    with (patch.object(runner, '_load_batch_memories', AsyncMock(return_value=[memory])),
+          patch.object(runner, '_prepare_review_inputs', AsyncMock(return_value=prepared)),
+          patch.object(runner, '_call_review_for_memories', AsyncMock(return_value=('{}', 'catalog-model', 'fixed-session'))),
+          patch('app.services.memory.review_agent.parse_memory_review_content', return_value=[decision])):
+        recovered = await runner.run_memory_review_batch(db=db, batch_limit=1)
+        await db.commit()
+    assert recovered.status == 'completed'
+    assert failures[0].state == 'resolved'
+    assert memory.content == sources[0]['content']
 
 
 def apply_test_migrations(connection):

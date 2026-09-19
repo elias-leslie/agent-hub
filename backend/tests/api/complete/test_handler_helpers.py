@@ -201,6 +201,74 @@ async def test_save_and_track_persists_agentic_observability_counts() -> None:
     assert observability_args.kwargs["tool_calls_count"] == 1
 
 
+@pytest.mark.asyncio
+async def test_save_and_track_persists_usage_and_failed_session_for_error_result() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="review")],
+        project_id="agent-hub",
+        agent_slug="memory-curator",
+    )
+    result = SimpleNamespace(
+        content="",
+        provider="codex",
+        input_tokens=17,
+        output_tokens=5,
+        thinking_content=None,
+        thinking_tokens=None,
+        cache_metrics=None,
+        finish_reason="error",
+        turns=1,
+        tool_calls_count=0,
+        tool_calls=None,
+    )
+    result.error = "provider unavailable"
+    db = AsyncMock()
+    session = SimpleNamespace(
+        status="active",
+        provider="codex",
+        model="codex/gpt-5.5",
+        models_used=[],
+        providers_used=[],
+        provider_metadata={},
+    )
+
+    with (
+        patch("app.api.complete.handler_helpers.save_events", new_callable=AsyncMock),
+        patch(
+            "app.api.complete.handler_helpers.persist_execution_observability",
+            new_callable=AsyncMock,
+        ) as mock_observability,
+        patch(
+            "app.api.complete.handler_helpers.estimate_cost",
+            return_value=MagicMock(total_cost_usd=0.0),
+        ),
+        patch(
+            "app.api.complete.handler_helpers.log_token_usage",
+            new_callable=AsyncMock,
+        ) as mock_log_tokens,
+        patch("app.api.complete.handler_helpers.publish_complete", new_callable=AsyncMock),
+        patch("app.services.quota.record_token_usage", new_callable=AsyncMock),
+    ):
+        await save_and_track(
+            db=db,
+            session=session,
+            session_id="review-session",
+            request=request,
+            result=result,
+            resolved_model="codex/gpt-5.5",
+            is_new_session=True,
+            execution_status="error",
+            execution_error=result.error,
+        )
+
+    assert session.status == "failed"
+    assert session.health_detail == "model_error"
+    assert mock_log_tokens.await_args is not None
+    assert mock_observability.await_args is not None
+    assert mock_log_tokens.await_args.args[3:5] == (17, 5)
+    assert mock_observability.await_args.kwargs["execution_status"] == "error"
+
+
 def test_make_completion_response_preserves_agentic_counts() -> None:
     result = SimpleNamespace(
         content="done",

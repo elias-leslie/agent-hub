@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.complete.handler_helpers import save_and_track
+from app.api.complete.schemas import CompletionRequest, MessageInput
+from app.models import Session as DBSession
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
 from ._review_agent_decisions import (
@@ -124,25 +128,152 @@ async def _complete_review_with_model(
 ) -> Any:
     from app.api.complete.core import complete_internal
 
-    return await complete_internal(
+    # Reserve a distinct session for every model attempt.  Supplying the id
+    # lets us close it even when the provider raises before returning a result.
+    session_id = str(uuid4())
+    try:
+        result = await complete_internal(
+            messages=messages,
+            model=model,
+            provider=provider,
+            temperature=resolved.agent.temperature,
+            project_id="agent-hub",
+            db=db,
+            session_id=session_id,
+            agent_slug=reviewer_agent_slug,
+            request_source="memory_review",
+            use_memory=False,
+            enable_caching=False,
+            skip_cache=True,
+            max_turns=1,
+            execute_tools=False,
+            thinking_level=resolved.agent.thinking_level,
+            response_format={"type": "json_object", "schema": response_schema or REVIEW_SCHEMA},
+            task_type="review",
+            phase="memory_review",
+        )
+    except Exception as exc:
+        await _finalize_review_exception(
+            db,
+            session_id=session_id,
+            model=model,
+            provider=provider,
+            reviewer_agent_slug=reviewer_agent_slug,
+            error=exc,
+        )
+        raise
+
+    await _persist_review_result(
+        db,
+        session_id=session_id,
         messages=messages,
+        result=result,
         model=model,
-        provider=provider,
+        reviewer_agent_slug=reviewer_agent_slug,
         temperature=resolved.agent.temperature,
+    )
+    return result
+
+
+async def _persist_review_result(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    messages: list[dict[str, Any]],
+    result: Any,
+    model: str,
+    reviewer_agent_slug: str,
+    temperature: float,
+) -> None:
+    """Persist one direct reviewer completion through the canonical accounting path."""
+    session = await db.get(DBSession, session_id)
+    if session is None:
+        raise RuntimeError(f"Memory review completion session {session_id} was not created")
+    request = CompletionRequest(
+        messages=[MessageInput.model_validate(message) for message in messages],
+        model=model,
+        temperature=temperature,
         project_id="agent-hub",
-        db=db,
-        agent_slug=reviewer_agent_slug,
-        request_source="memory_review",
-        use_memory=False,
         enable_caching=False,
-        skip_cache=True,
+        use_memory=False,
+        agent_slug=reviewer_agent_slug,
         max_turns=1,
         execute_tools=False,
-        thinking_level=resolved.agent.thinking_level,
-        response_format={"type": "json_object", "schema": response_schema or REVIEW_SCHEMA},
         task_type="review",
         phase="memory_review",
     )
+    error = getattr(result, "error", None)
+    await save_and_track(
+        db=db,
+        session=session,
+        session_id=session_id,
+        request=request,
+        result=result,
+        resolved_model=model,
+        model_used=getattr(result, "model_used", None) or getattr(result, "model", None) or model,
+        is_new_session=True,
+        execution_status="error" if error else "success",
+        execution_error=error,
+    )
+
+
+async def _finalize_review_exception(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    model: str,
+    provider: str,
+    reviewer_agent_slug: str,
+    error: Exception,
+) -> None:
+    """Close a reviewer session when the provider raises before a result exists."""
+    from app.api.complete.execution_observability import persist_execution_observability
+    from app.services.event_storage import store_error_event
+    from app.services.session_health import health_detail_for_error
+    from app.services.session_live_activity import mark_session_terminal_state
+
+    await db.rollback()
+    session = await db.get(DBSession, session_id)
+    if session is None:
+        logger.warning(
+            "Memory review provider failed before session %s was persisted: %s",
+            session_id,
+            error,
+        )
+        return
+    message = str(error)
+    await store_error_event(
+        db,
+        session_id,
+        "MemoryReviewProviderError",
+        message,
+        agent_id=reviewer_agent_slug,
+        model_used=model,
+    )
+    session.status = "failed"
+    session.health_detail = health_detail_for_error(error)
+    mark_session_terminal_state(
+        session,
+        phase="error",
+        status="error",
+        summary=f"Memory review provider error: {message[:120]}",
+        termination_reason=message,
+    )
+    await persist_execution_observability(
+        db,
+        session,
+        session_id,
+        provider=provider,
+        model_used=model,
+        requested_max_turns=1,
+        orchestration_path="single_turn",
+        final_finish_reason="error",
+        execution_status="error",
+        execution_error=message,
+        turns_completed=0,
+        tool_calls_count=0,
+    )
+    await db.commit()
 
 
 __all__ = ["_call_reviewer_agent"]
