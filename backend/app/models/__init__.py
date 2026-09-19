@@ -44,6 +44,7 @@ from .session import (
     SessionSummarySegment,
 )
 from .telemetry import RequestLog, TruncationEvent
+from .typesafe_jev import TypeSafeJevBudget, TypeSafeJevDispatch
 from .work_chat import ActionRequest, SessionBinding
 from .workflow_schedule_control import WorkflowScheduleControl
 
@@ -92,6 +93,8 @@ __all__ = [
     "SessionEventType",
     "SessionSummarySegment",
     "TruncationEvent",
+    "TypeSafeJevBudget",
+    "TypeSafeJevDispatch",
     "UsageStatLog",
     "WebhookSubscription",
     "WorkflowScheduleControl",
