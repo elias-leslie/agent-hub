@@ -66,6 +66,13 @@ class ObservationProvenance(StrictModel):
     purpose: str = Field(min_length=1)
 
 
+class SystemOneRequest(StrictModel):
+    """Reusable typed transport, without a pilot budget or ledger identity."""
+    state: JsonValue
+    questions: dict[str, JevQuestion] = Field(min_length=1)
+    model: str = Field(min_length=1)
+
+
 class TypeSafeJevRequest(StrictModel):
     request_id: UUID
     state: JsonValue

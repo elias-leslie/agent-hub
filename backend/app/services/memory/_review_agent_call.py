@@ -26,6 +26,7 @@ async def _call_reviewer_agent(
     prompt: str,
     reviewer_model_id: str | None = None,
     expected_uuids: set[str] | None = None,
+    response_schema: dict[str, Any] | None = None,
 ) -> tuple[str, str | None, str | None]:
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
@@ -56,6 +57,7 @@ async def _call_reviewer_agent(
                 provider=provider,
                 resolved=resolved,
                 reviewer_agent_slug=reviewer_agent_slug,
+                response_schema=response_schema,
             )
             if getattr(result, "error", None):
                 last_error = RuntimeError(f"Memory reviewer model {model} failed: {result.error}")
@@ -118,6 +120,7 @@ async def _complete_review_with_model(
     provider: str,
     resolved: Any,
     reviewer_agent_slug: str,
+    response_schema: dict[str, Any] | None = None,
 ) -> Any:
     from app.api.complete.core import complete_internal
 
@@ -136,7 +139,7 @@ async def _complete_review_with_model(
         max_turns=1,
         execute_tools=False,
         thinking_level=resolved.agent.thinking_level,
-        response_format={"type": "json_object", "schema": REVIEW_SCHEMA},
+        response_format={"type": "json_object", "schema": response_schema or REVIEW_SCHEMA},
         task_type="review",
         phase="memory_review",
     )

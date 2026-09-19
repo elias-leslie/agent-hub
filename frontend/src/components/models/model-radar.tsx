@@ -47,8 +47,23 @@ function buildScoreRow(
   return row
 }
 
-export function ModelRadar({ models, size = 'md' }: ModelRadarProps) {
-  if (models.length === 0) return null
+export function ModelRadar({
+  models: allModels,
+  size = 'md',
+}: ModelRadarProps) {
+  const models = allModels.filter(
+    (model) =>
+      !(
+        model.capabilities.supports_typed_judgment &&
+        !model.capabilities.supports_chat
+      ),
+  )
+  if (models.length === 0)
+    return (
+      <p className="text-xs text-slate-400">
+        Typed judgment models have no comparable generative benchmark rating.
+      </p>
+    )
 
   const chartData = [
     buildScoreRow('Coding', models, (model) => model.scores.coding),

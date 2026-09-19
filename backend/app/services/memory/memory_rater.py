@@ -1,8 +1,7 @@
 """Memory helpfulness rating for session analysis.
 
 After a session ends, rates which injected memories were actually helpful
-vs harmful based on the session transcript. This feeds into utility_score
-via the helpful_count / harmful_count counters on memory records.
+vs harmful based on the session transcript. Assessments are stored separately from user feedback, citations and delivery evidence.
 
 Called from the Hatchet summary workflow after summary generation.
 """
@@ -42,7 +41,7 @@ async def rate_session_memories(session_id: str, transcript: str) -> RatingResul
     1. Get loaded memory UUIDs from injection metrics
     2. Fetch memory content from PostgreSQL via MemoryRepository
     3. Ask LLM to rate each as helpful/neutral/harmful
-    4. Credit via track_helpful_batch / track_harmful_batch
+    4. Retain attributed assessment evidence without changing legacy utility counters
 
     Args:
         session_id: Session to rate memories for
@@ -62,14 +61,29 @@ async def rate_session_memories(session_id: str, transcript: str) -> RatingResul
     if not memory_contents:
         return empty
     ratings = await _rate_via_llm(session_id, transcript, memory_contents)
+    if not ratings:
+        return empty
     helpful = [u for u, r in ratings.items() if r == "helpful"]
     harmful = [u for u, r in ratings.items() if r == "harmful"]
-    if helpful:
-        from .usage_tracker import track_helpful_batch
-        await track_helpful_batch(helpful)
-    if harmful:
-        from .usage_tracker import track_harmful_batch
-        await track_harmful_batch(harmful)
+    # A model assessment is evidence with an actor, not an observed user outcome.
+    # Legacy utility counters mixed citations and ratings, so new ratings are separate.
+    import hashlib
+
+    from app.db import async_session
+    from app.services.context_governance import record
+    async with async_session() as db:
+        for source_id, rating in ratings.items():
+            await record(db, "feedback", "agent:memory-rater", {
+                "source_type": "memory", "source_id": source_id,
+                "source_revision": "sha256:" + hashlib.sha256(memory_contents[source_id].encode()).hexdigest(),
+                "revision_basis": "rated content; exact delivery revision unavailable",
+                "session_id": session_id, "turn_id": None, "signal": "agent-rated",
+                "assessment": {"helpful": "useful", "harmful": "conflicting"}.get(rating, "unknown"),
+                "evidence": "Retrospective automated assessment of a condensed session transcript",
+                "transcript_sha256": hashlib.sha256(transcript.encode()).hexdigest(),
+                "delivery_verified": False,
+            })
+        await db.commit()
     neutral_count = len(ratings) - len(helpful) - len(harmful)
     logger.info("Session %s: rated %d memories (helpful=%d, harmful=%d, neutral=%d)",
                 session_id, len(ratings), len(helpful), len(harmful), neutral_count)

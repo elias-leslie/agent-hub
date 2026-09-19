@@ -1,0 +1,105 @@
+[
+  {
+    "project": null,
+    "workflow": null,
+    "status": "ok",
+    "delivery_id": "2722edd9-101a-4df1-a668-0bd4bfb81dec",
+    "tokens": 2647,
+    "security_policy": false,
+    "sources": [
+      "safety-directive",
+      "narration-tags",
+      "web-research-routine",
+      "1a107b0e-79d3-40c4-9ba9-496337024e59",
+      "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+      "platform-context",
+      "tool-capabilities:agent_startup:global"
+    ],
+    "payload_hash": "6376f3d9eac647ec2a7507ecedf2f4ddf4ac05ba160272c8c78efc06395c7bb6",
+    "evidence": "canonical CLI generated, not model receipt"
+  },
+  {
+    "project": "agent-hub",
+    "workflow": null,
+    "status": "ok",
+    "delivery_id": "ecc79440-014e-43ec-a41f-1d2babc303aa",
+    "tokens": 3925,
+    "security_policy": false,
+    "sources": [
+      "safety-directive",
+      "narration-tags",
+      "web-research-routine",
+      "1a107b0e-79d3-40c4-9ba9-496337024e59",
+      "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+      "agent-hub-development-policy",
+      "coding-development-practice",
+      "platform-context",
+      "prompt-development-practice",
+      "tool-capabilities:agent_startup:agent-hub"
+    ],
+    "payload_hash": "5b1bf25158e86f86ccffbaffc4bd0b3d22564c7a4891ddb896c5448f329b66dd",
+    "evidence": "canonical CLI generated, not model receipt"
+  },
+  {
+    "project": "neri",
+    "workflow": null,
+    "status": "ok",
+    "delivery_id": "b0e16a46-7913-42cf-904b-e8093fdd589e",
+    "tokens": 2776,
+    "security_policy": false,
+    "sources": [
+      "safety-directive",
+      "narration-tags",
+      "web-research-routine",
+      "1a107b0e-79d3-40c4-9ba9-496337024e59",
+      "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+      "platform-context",
+      "tool-capabilities:agent_startup:neri"
+    ],
+    "payload_hash": "9b3dd2583c48bafafe2a668a9931174eeadab0d06e3e9d9b0505ed55c229695e",
+    "evidence": "canonical CLI generated, not model receipt"
+  },
+  {
+    "project": "security-research",
+    "workflow": null,
+    "status": "ok",
+    "delivery_id": "f6a50319-c754-4d4c-939e-44456a9e839e",
+    "tokens": 4860,
+    "security_policy": true,
+    "sources": [
+      "safety-directive",
+      "narration-tags",
+      "web-research-routine",
+      "1a107b0e-79d3-40c4-9ba9-496337024e59",
+      "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+      "platform-context",
+      "security-research-operating-policy",
+      "tool-capabilities:agent_startup:security-research"
+    ],
+    "payload_hash": "3fbcf8bdee5a2692e618f566c0f603434d367a0e993cdb6b27d6f3765c0aa617",
+    "evidence": "canonical CLI generated, not model receipt"
+  },
+  {
+    "project": "agent-hub",
+    "workflow": "security-research",
+    "status": "ok",
+    "delivery_id": "553e1537-8157-40b5-acac-e78452bd23ae",
+    "tokens": 6009,
+    "security_policy": true,
+    "sources": [
+      "safety-directive",
+      "narration-tags",
+      "web-research-routine",
+      "1a107b0e-79d3-40c4-9ba9-496337024e59",
+      "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+      "agent-hub-development-policy",
+      "coding-development-practice",
+      "platform-context",
+      "prompt-development-practice",
+      "security-research-operating-policy",
+      "tool-capabilities:agent_startup:agent-hub"
+    ],
+    "payload_hash": "b477edb36bc8b87b6857e8281e6c86a6bf99891d9c4f0937603cb6f6d5220828",
+    "evidence": "canonical CLI generated, not model receipt"
+  }
+]

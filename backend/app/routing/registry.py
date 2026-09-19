@@ -76,7 +76,7 @@ def list_providers() -> list[str]:
 
 def is_workload_provider(provider: str) -> bool:
     """Return whether Agent Hub may execute workloads through ``provider``."""
-    return provider not in REFERENCE_ONLY_WORKLOAD_PROVIDERS
+    return provider not in REFERENCE_ONLY_WORKLOAD_PROVIDERS | CREDENTIAL_ONLY_PROVIDERS
 
 
 def is_workload_model(model: str) -> bool:

@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, cast, func, or_, select, text
+from sqlalchemy import DateTime, String, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.context_governance import ContextRecord
 from app.models.memory_unified import Memory
 
 from ._review_agent_decisions import MIN_COMPACT_REVIEW_CONTENT_CHARS
@@ -19,7 +20,12 @@ def _effective_reviewed_at_expr() -> Any:
         func.nullif(Memory.metadata_["source_compact_validated_at"].astext, ""),
         DateTime(timezone=True),
     )
-    return func.coalesce(Memory.last_reviewed_at, source_validated_at)
+    proposal_reviewed_at = select(func.max(ContextRecord.created_at)).where(
+        ContextRecord.kind == "curator_proposal",
+        ContextRecord.payload["source"]["source_id"].as_string() == cast(Memory.id, String),
+        ContextRecord.payload["source_version"].as_integer() == Memory.version,
+    ).correlate(Memory).scalar_subquery()
+    return func.greatest(proposal_reviewed_at, func.coalesce(Memory.last_reviewed_at, source_validated_at))
 
 
 def build_review_filters(

@@ -24,6 +24,9 @@ DEFAULT_TIMEOUT = 30.0
 async def _get_canonical_context_delivery(
     query: str,
     project_id: str | None = None,
+    session_id: str | None = None,
+    workflow_ids: list[str] | None = None,
+    requested_source_ids: list[str] | None = None,
 ) -> CanonicalContextDeliveryResponse:
     """Build the same versioned delivery used by every other context surface."""
     async with async_session() as db:
@@ -33,6 +36,9 @@ async def _get_canonical_context_delivery(
                 consumer_surface="mcp",
                 consumer_profile="agent_startup",
                 project_id=project_id,
+                session_id=session_id,
+                workflow_ids=workflow_ids or [],
+                requested_source_ids=requested_source_ids or [],
                 task=query,
                 query=query,
             ),
@@ -60,6 +66,18 @@ async def _query_progressive_context(query: str, project_id: str | None = None) 
     return delivery.rendered
 
 
+@mcp.tool()
+async def retrieve_context(query: str, project_id: str | None = None, session_id: str | None = None,
+                           workflow_ids: list[str] | None = None, requested_source_ids: list[str] | None = None) -> dict:
+    """Retrieve applicable canonical context; activate workflows only at the user's explicit request.
+
+    Pass source IDs from the on-demand index to retrieve full source text. Native
+    instructions are preserved; this response is retrieval, not observed injection.
+    """
+    result = await _get_canonical_context_delivery(query, project_id, session_id, workflow_ids, requested_source_ids)
+    return result.model_dump(mode="json")
+
+
 @mcp.resource("memory://context")
 async def get_memory_context() -> str:
     """
@@ -77,6 +95,22 @@ async def get_system_instruction() -> str:
     Use this to initialize your context.
     """
     return await _query_progressive_context("system initialization")
+
+
+@mcp.tool()
+async def record_context_feedback(source_type: str, source_id: str, source_revision: str,
+                                  session_id: str, turn_id: str, assessment: str, evidence: str) -> dict:
+    """Optionally record an attributed agent assessment, without inline chat markers.
+
+    Do not infer usefulness from a citation, claim hidden prompt visibility, or
+    label an agent assessment as a user rating. No source is modified.
+    """
+    from app.services.context_governance import ContextFeedback, record_feedback
+    request = ContextFeedback(source_type=source_type, source_id=source_id, source_revision=source_revision,
+                              session_id=session_id, turn_id=turn_id, assessment=assessment,
+                              actor_type="agent", evidence=evidence)
+    async with async_session() as db:
+        return await record_feedback(db, request, "agent:mcp")
 
 
 @mcp.tool()

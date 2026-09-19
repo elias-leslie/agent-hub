@@ -177,7 +177,7 @@ def apply_render_tier(item: MemorySearchResult, tier: str, reason: str | None) -
         item.rendered_content = _build_summary(item)
     elif tier == PROMPT_TIER_L1:
         item.rendered_content = item.compact_content or item.overview
-    elif reason in {"consumer_profile_tag", "canonical_required_policy"}:
+    elif reason in {"consumer_profile_tag", "canonical_required_policy", "explicit_request", "source_full_format"}:
         item.rendered_content = item.content
     else:
         item.rendered_content = item.compact_content or item.content

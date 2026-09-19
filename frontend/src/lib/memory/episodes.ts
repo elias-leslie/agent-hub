@@ -190,3 +190,23 @@ export async function fetchSimilarEpisodes(
     'Similar episodes fetch failed',
   )
 }
+
+/** Update content and tier in place, preserving identity, targeting and statistics. */
+export async function updateEpisode(
+  episodeId: string,
+  request: {
+    content?: string
+    injection_tier?: MemoryCategory
+    change_reason?: string
+  },
+): Promise<{ success: boolean; episode_id: string; version: number }> {
+  return apiFetch(
+    `${API_BASE}/memory/episode/${episodeId}`,
+    {
+      method: 'PATCH',
+      headers: buildHeaders(undefined, 'application/json'),
+      body: JSON.stringify(request),
+    },
+    'Update memory failed',
+  )
+}

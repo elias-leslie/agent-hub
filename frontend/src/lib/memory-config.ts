@@ -66,6 +66,11 @@ export const SCOPE_CONFIG: Record<
     color: 'text-teal-400',
     bg: 'bg-teal-500/10 border-teal-400/40',
   },
+  agent: {
+    label: 'Agent',
+    color: 'text-violet-400',
+    bg: 'bg-violet-500/10 border-violet-400/40',
+  },
   task: {
     label: 'Task',
     color: 'text-orange-400',

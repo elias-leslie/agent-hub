@@ -172,6 +172,8 @@ async def get_progressive_context(
             )
         ),
     ] = None,
+    workflow_ids: Annotated[list[str] | None, Query()] = None,
+    requested_source_ids: Annotated[list[str] | None, Query()] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -199,6 +201,8 @@ async def get_progressive_context(
         session_id=session_id,
         current_branch=current_branch,
         consumer_profile=consumer_profile,
+        workflow_ids=workflow_ids,
+        requested_source_ids=requested_source_ids,
     )
 
 

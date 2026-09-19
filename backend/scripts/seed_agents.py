@@ -92,6 +92,8 @@ async def _seed_prompts(
             is_global=bool(prompt_data.get("is_global", False)),
             enabled=bool(prompt_data.get("enabled", True)),
             exclude_agents=prompt_data.get("exclude_agents", []),
+            context_policy=prompt_data.get("context_policy"),
+            boot_eligible=prompt_data.get("boot_eligible", False),
             owner_agent_id=owner_agent.id if owner_agent else None,
             prompt_type=prompt_data.get("prompt_type", "standard"),
             deletion_locked=bool(prompt_data.get("deletion_locked", False)),

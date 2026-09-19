@@ -51,6 +51,9 @@ class ModelCatalogEntry(Base):
     supports_verbosity: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     supports_xhigh: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     supports_session_cache: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    supports_chat: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    supports_typed_judgment: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    max_state_question_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
 
     release_date: Mapped[str | None] = mapped_column(String(40), nullable=True)

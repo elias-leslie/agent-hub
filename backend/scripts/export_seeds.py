@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -39,7 +39,7 @@ AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 
 PROMPT_EXPORT_FIELDS = [
     "slug", "name", "content", "description",
-    "is_global", "enabled", "exclude_agents", "prompt_type", "deletion_locked",
+    "is_global", "enabled", "context_policy", "boot_eligible", "exclude_agents", "prompt_type", "deletion_locked",
 ]
 
 
@@ -114,7 +114,11 @@ async def export_seeds(db: AsyncSession) -> dict:
 
     global_prompt_result = await db.execute(
         select(Prompt.slug).where(
-            Prompt.is_global.is_(True),
+            or_(
+                Prompt.is_global.is_(True),
+                Prompt.context_policy["scope"].as_string().in_(["project", "agent"]),
+                func.json_array_length(Prompt.context_policy["workflows"]) > 0,
+            ),
             Prompt.enabled.is_(True),
             Prompt.prompt_type != AGENT_SYSTEM_PROMPT_TYPE,
         )

@@ -80,6 +80,9 @@ class ModelCapabilitiesInfo(BaseModel):
     supports_verbosity: bool = False
     supports_xhigh: bool = False
     supports_session_cache: bool = False
+    supports_chat: bool = True
+    supports_typed_judgment: bool = False
+    max_state_question_tokens: int | None = None
     max_output_tokens: int = 8192
 
 

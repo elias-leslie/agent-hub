@@ -1,0 +1,768 @@
+{
+  "registration": {
+    "agent_slug": "coder",
+    "model": "codex/gpt-5.5",
+    "thinking": "xhigh",
+    "cases": [
+      {
+        "id": "scope",
+        "prompt": "Locate the function deciding whether a project-scoped context prompt applies. Explain how explicit workflows and consumer exclusions interact, citing the file and function.",
+        "expected": [
+          "policy_match",
+          "context_policy.py"
+        ]
+      },
+      {
+        "id": "retrieval",
+        "prompt": "Locate the test proving that an on-demand context prompt initially exposes an index rather than its full body. Explain how that test requests the full body, citing the test and request field.",
+        "expected": [
+          "test_on_demand_index",
+          "requested_source_ids"
+        ]
+      },
+      {
+        "id": "draft",
+        "prompt": "Locate the Runtime Context UI save flow and its server-side stale-update protection. Explain the preview gate and revision check with file/function references.",
+        "expected": [
+          "ContextManager",
+          "expected_revision"
+        ]
+      }
+    ],
+    "scope": "Three representative read-only development inspections; no code-writing generalization",
+    "comparison": "Current scoped delivery versus the same delivery with Security Research explicitly active",
+    "execution_order": [
+      [
+        "scope",
+        "scoped"
+      ],
+      [
+        "scope",
+        "research_active"
+      ],
+      [
+        "retrieval",
+        "research_active"
+      ],
+      [
+        "retrieval",
+        "scoped"
+      ],
+      [
+        "draft",
+        "scoped"
+      ],
+      [
+        "draft",
+        "research_active"
+      ]
+    ],
+    "expected_first_tool": "st search",
+    "retries": "none",
+    "user_interventions": 0,
+    "correctness": "Predeclared answer anchors plus retained final answer for human assessment",
+    "unnecessary_calls": "Report commands and failed calls; necessity requires human interpretation, not token counts",
+    "revision": "516370c68b1404faf0063faa34ddd455e79180a1",
+    "record_id": "72b310ab-ccef-437f-a486-8e405e40aee2"
+  },
+  "runs": [
+    {
+      "case": "scope",
+      "variant": "scoped",
+      "exit_code": 0,
+      "elapsed_seconds": 64.77465965299962,
+      "delivery_id": "1a30219e-2b84-4bf8-895f-e197d5e24897",
+      "payload_hash": "5b1bf25158e86f86ccffbaffc4bd0b3d22564c7a4891ddb896c5448f329b66dd",
+      "generated_tokens": 3925,
+      "first_command": "/bin/bash -lc 'rg -n \"project-scoped|project scoped|context prompt|context_prompt|consumer exclusion|consumer_exclusion|explicit workflow|explicit_workflow|workflow\" .'",
+      "first_tool_correct": false,
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'rg -n \"project-scoped|project scoped|context prompt|context_prompt|consumer exclusion|consumer_exclusion|explicit workflow|explicit_workflow|workflow\" .'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"def policy_match|class ContextPolicy|exclude_consumer_surfaces|workflow\" backend/app/services/context_policy.py'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,260p' backend/app/services/context_policy.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,140p' backend/tests/services/test_context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '216,255p' backend/app/services/memory/applicability.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_policy.py | sed -n '82,104p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/services/test_context_governance.py | sed -n '31,52p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"policy_match\\\\(|source_policy\\\\(|_build_prompt_blocks\\\" backend/app/services/runtime_context.py backend/app/services/context_governance.py backend/tests/services/test_context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '90,180p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1360,1408p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/memory/applicability.py | sed -n '216,255p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 0,
+      "failed_calls": 0,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 291196,
+          "cached_input_tokens": 241280,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2891,
+          "reasoning_output_tokens": 1465
+        }
+      ],
+      "uncached_input_tokens": 49916,
+      "answer_anchors_match": true,
+      "final": "The decision function is `policy_match` in [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:82). It is called from `_build_prompt_blocks` in [runtime_context.py](/srv/workspaces/projects/agent-hub/backend/app/services/runtime_context.py:1387) after each enabled prompt is converted to a `ContextPolicy`.\n\nHow it works: for a project-scoped policy, `scope_matches` is true when `context.project_id` is in `policy.targets`. A matching explicit workflow is also enough to pass the first gate because the check is `scope_matches or workflow` at [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:86). So an explicit workflow can make a project-scoped prompt apply even outside its normal project target.\n\nBut workflow activation does not bypass consumer exclusions. Immediately after the scope/workflow gate, `policy_match` calls `applicability_matches`; if consumer targeting fails, it returns false with `\"consumer excluded or does not match targeting\"` at [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:88). The delegated helper rejects excluded surfaces, profiles, agent slugs, and audience tags in [applicability.py](/srv/workspaces/projects/agent-hub/backend/app/services/memory/applicability.py:228).\n\nThe tests state the intended interaction clearly: `test_security_policy_requires_scope_or_explicit_workflow` shows explicit workflow activation can include the project prompt, and `test_workflow_never_bypasses_consumer_exclusion` shows that `exclude_consumer_surfaces=[\"codex\"]` still blocks it even with the matching workflow requested in [test_context_governance.py](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:35).",
+      "transcript_sha256": "ee44e033a8cf2104a68aed038b97b21c7711779f542cf8423555fb1bcb64398c",
+      "stderr": "Reading additional input from stdin...\n"
+    },
+    {
+      "case": "scope",
+      "variant": "research_active",
+      "exit_code": 0,
+      "elapsed_seconds": 78.79661004199988,
+      "delivery_id": "58b8c69e-98c5-4616-85fa-63f8e444c57d",
+      "payload_hash": "b477edb36bc8b87b6857e8281e6c86a6bf99891d9c4f0937603cb6f6d5220828",
+      "generated_tokens": 6009,
+      "first_command": "/bin/bash -lc 'rg -n \"project[-_ ]scoped|context prompt|consumer exclusion|explicit workflow|workflow|consumer\" .'",
+      "first_tool_correct": false,
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'rg -n \"project[-_ ]scoped|context prompt|consumer exclusion|explicit workflow|workflow|consumer\" .'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"exclude_consumer|excluded_consumer|consumer_exclusion|workflows|workflow_ids|applicab|project_id\\\" backend/app backend/tests --glob '\"'!**/seed_data.json'\"'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg --files backend/app backend/tests | rg \"context|prompt|runtime\"'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_governance.py | sed -n '1,260p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/models/context_governance.py | sed -n '1,260p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"prompt_appl|applies|explicit workflow|workflow_ids|exclude_consumer|exclude.*consumer|consumer_exclusion|workflows\" backend/app/services/context_governance.py backend/tests/services/test_context_governance.py backend/tests/api/test_runtime_context.py'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_policy.py | sed -n '1,280p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/services/test_context_governance.py | sed -n '1,110p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1,260p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"def _build_prompt_blocks|policy_match\\\\(\\\" backend/app/services/runtime_context.py backend/tests/api/test_runtime_context.py backend/tests/services/test_context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '500,760p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/api/test_runtime_context.py | sed -n '720,900p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1340,1415p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1500,1545p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/api/test_runtime_context.py | sed -n '900,980p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/memory/applicability.py | sed -n '1,240p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/memory/memory_models.py | sed -n '1,120p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"exclude_consumer_surfaces|consumer_surfaces|exclude_consumer_profiles|consumer_profiles|exclude_agent_slugs|agent_slugs|consumer_tags|exclude_consumer_tags\" backend/app/services/memory backend/tests/services backend/tests/api/test_runtime_context.py'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/memory/applicability.py | sed -n '228,270p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 0,
+      "failed_calls": 0,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 450390,
+          "cached_input_tokens": 376192,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3217,
+          "reasoning_output_tokens": 1157
+        }
+      ],
+      "uncached_input_tokens": 74198,
+      "answer_anchors_match": true,
+      "final": "The decision function is `policy_match` in [backend/app/services/context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:82). Prompt delivery calls it from `_build_prompt_blocks` in [backend/app/services/runtime_context.py](/srv/workspaces/projects/agent-hub/backend/app/services/runtime_context.py:1360), after deriving the prompt\u2019s `ContextPolicy` via `source_policy`.\n\nHow it works:\n\n- `policy_match` first computes whether the policy\u2019s workflows intersect the delivery request\u2019s `workflow_ids`, then separately checks scope. For a project-scoped policy, scope matches when `context.project_id` is in `policy.targets`.\n- A prompt applies if either the normal project scope matches or an explicit workflow matches. That is the `if not (scope_matches or workflow)` gate in [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:82).\n- Consumer exclusions are checked after that through `applicability_matches`. If the consumer surface/profile/agent/tags are excluded, `policy_match` returns false even if an explicit workflow matched.\n- So explicit workflow activation can substitute for project scope, but it cannot bypass consumer targeting/exclusions.\n\nThe regression tests spell this out: `test_security_policy_requires_scope_or_explicit_workflow` shows a `security-research` workflow activates the prompt outside the `security-research` project, while `test_workflow_never_bypasses_consumer_exclusion` confirms `exclude_consumer_surfaces=[\"codex\"]` still blocks it despite the workflow match in [backend/tests/services/test_context_governance.py](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:30).",
+      "transcript_sha256": "482c03ba3ab005ab1b1964c8e8635556c1049b59abd59aa9685f4aabdef93ded",
+      "stderr": "Reading additional input from stdin...\n"
+    },
+    {
+      "case": "retrieval",
+      "variant": "research_active",
+      "exit_code": 0,
+      "elapsed_seconds": 56.81441972900029,
+      "delivery_id": "73db4806-da93-4146-9d46-54da5fb5ba01",
+      "payload_hash": "b477edb36bc8b87b6857e8281e6c86a6bf99891d9c4f0937603cb6f6d5220828",
+      "generated_tokens": 6009,
+      "first_command": "/bin/bash -lc 'rg -n \"on-demand|on demand|context prompt|full body|index|request\" tests src'",
+      "first_tool_correct": false,
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'rg -n \"on-demand|on demand|context prompt|full body|index|request\" tests src'",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "command": "/bin/bash -lc ls",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"on-demand|on demand|context prompt|full body|body.*index|index.*body|include.*body|request.*body|context.*index\" backend frontend packages docs'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg --files backend frontend packages | rg \"(test|spec|tests)\"'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"test_on_demand_index|requested_source_ids|Available on demand|full source|source_id\" backend/tests backend/app'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,140p' backend/mcp_server.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/services/test_context_governance.py | sed -n '1,95p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '180,235p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1376,1408p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1400,1420p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 0,
+      "failed_calls": 1,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 261041,
+          "cached_input_tokens": 223232,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2216,
+          "reasoning_output_tokens": 979
+        }
+      ],
+      "uncached_input_tokens": 37809,
+      "answer_anchors_match": true,
+      "final": "Found it: [test_on_demand_index_has_no_full_procedure_and_explicit_request_loads_it](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:63).\n\nThe test creates an on-demand prompt with slug/source id `research` and full content `\"Procedure secret body...\"`. Its first request is just `CanonicalContextDeliveryRequest(consumer_surface=\"codex\")`, then it asserts the block has `disclosure == \"index\"` and that the full `row.content` is absent: [lines 64-72](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:64).\n\nIt requests the full body by copying the request with `requested_source_ids`: `request.model_copy(update={\"requested_source_ids\": [\"research\"]})`, then asserts the loaded block content equals the full prompt body and `disclosure == \"full\"`: [lines 73-75](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:73). The request field is `CanonicalContextDeliveryRequest.requested_source_ids`, defined in [runtime_context.py](/srv/workspaces/projects/agent-hub/backend/app/services/runtime_context.py:190). No files changed.",
+      "transcript_sha256": "6f136c95d0a2a53908851f68ce0217a4750a067b8ad1454122ccb22a5b1a4b5c",
+      "stderr": "Reading additional input from stdin...\n"
+    },
+    {
+      "case": "retrieval",
+      "variant": "scoped",
+      "exit_code": 0,
+      "elapsed_seconds": 44.85367274199962,
+      "delivery_id": "8703738b-c53d-48de-a2f1-fbac25c37be5",
+      "payload_hash": "5b1bf25158e86f86ccffbaffc4bd0b3d22564c7a4891ddb896c5448f329b66dd",
+      "generated_tokens": 3925,
+      "first_command": "/bin/bash -lc \"rg -n \\\"on[-_ ]?demand|context prompt|full body|index|reference|body\\\" tests src . -g '*test*' -g '*.py' -g '*.ts' -g '*.tsx' -g '*.json' -g '*.md'\"",
+      "first_tool_correct": false,
+      "commands": [
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"on[-_ ]?demand|context prompt|full body|index|reference|body\\\" tests src . -g '*test*' -g '*.py' -g '*.ts' -g '*.tsx' -g '*.json' -g '*.md'\"",
+          "exit_code": 2,
+          "status": "failed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"test_on_demand_index|requested_source_ids\\\" backend packages frontend -g '*test*' -g '*.py' -g '*.ts' -g '*.tsx'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,120p' backend/tests/services/test_context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '120,170p' backend/app/services/context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '180,240p' backend/app/services/runtime_context.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1376,1405p' backend/app/services/runtime_context.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1405,1435p' backend/app/services/runtime_context.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/services/test_context_governance.py | sed -n '55,80p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '190,205p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/runtime_context.py | sed -n '1384,1415p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 0,
+      "failed_calls": 1,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 182233,
+          "cached_input_tokens": 154880,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1898,
+          "reasoning_output_tokens": 752
+        }
+      ],
+      "uncached_input_tokens": 27353,
+      "answer_anchors_match": true,
+      "final": "Found it: [backend/tests/services/test_context_governance.py](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:63), test `test_on_demand_index_has_no_full_procedure_and_explicit_request_loads_it`.\n\nThe test creates an on-demand prompt whose slug is `research` and whose full content is `\"Procedure secret body. Do all twelve steps.\"` It first calls `_build_prompt_blocks` with only `CanonicalContextDeliveryRequest(consumer_surface=\"codex\")`, then asserts:\n\n- `indexed[0].disclosure == \"index\"`\n- `row.content not in indexed[0].content`\n\nThat proves the initial exposure is an index, not the full body.\n\nIt requests the full body on line 73 by copying the request with the request field:\n\n```python\nrequested_source_ids=[\"research\"]\n```\n\nSpecifically: `request.model_copy(update={\"requested_source_ids\": [\"research\"]})`. The follow-up assertions confirm full retrieval: `loaded[0].content == row.content` and `loaded[0].disclosure == \"full\"`. The request field is defined as `requested_source_ids` on [runtime_context.py](/srv/workspaces/projects/agent-hub/backend/app/services/runtime_context.py:190).",
+      "transcript_sha256": "2fe127d180a4acd84f311c4b7fe08c7fe49c68a1a72b98de290816358f64c2f2",
+      "stderr": "Reading additional input from stdin...\n"
+    },
+    {
+      "case": "draft",
+      "variant": "scoped",
+      "exit_code": 0,
+      "elapsed_seconds": 144.17525640299937,
+      "delivery_id": "2d95944f-dadf-43b3-9d6c-d208a316c1fc",
+      "payload_hash": "5b1bf25158e86f86ccffbaffc4bd0b3d22564c7a4891ddb896c5448f329b66dd",
+      "generated_tokens": 3925,
+      "first_command": "/bin/bash -lc 'rg -n \"Runtime Context|runtime context|runtime_context|context preview|preview gate|revision|stale\" .'",
+      "first_tool_correct": false,
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'rg -n \"Runtime Context|runtime context|runtime_context|context preview|preview gate|revision|stale\" .'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"Runtime Context|runtime context|runtimeContext|RuntimeContext|preview|revision|stale\\\" frontend/src --glob '\"'!**/*.map'\"'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"runtime_context|RuntimeContext|preview|revision|stale\\\" backend/app backend/tests --glob '\"'!alembic/**'\"'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,260p' frontend/src/components/runtime-context/ContextManager.tsx\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '260,560p' frontend/src/components/runtime-context/ContextManager.tsx\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '560,980p' frontend/src/components/runtime-context/ContextManager.tsx\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,240p' frontend/src/__tests__/runtime-context-page.test.tsx\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,240p' frontend/src/lib/api/context-management.ts\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,260p' backend/app/api/context_management.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"class SourceEdit|ContextDraft|expected_revision|apply_source_edit|preview_draft|save_draft|expected_placement_revision|Source changed|Placement changed\" backend/app backend/tests/services backend/tests/api'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,220p' backend/app/services/context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '220,380p' backend/app/services/context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '1,150p' backend/tests/services/test_context_governance.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '130,180p' backend/app/services/context_review.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"sed -n '180,240p' backend/app/services/context_review.py\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextManager.tsx | sed -n '1,240p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextManager.tsx | sed -n '900,955p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/lib/api/context-management.ts | sed -n '1,115p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/api/context_management.py | sed -n '1,70p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_governance.py | sed -n '1,90p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_governance.py | sed -n '165,320p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"def source_revision|def semantic_hash|def lock_placement_layer|def source_snapshot\" backend/app/services/context_policy.py'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_review.py | sed -n '145,185p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/__tests__/runtime-context-page.test.tsx | sed -n '80,210p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/services/test_context_governance.py | sed -n '75,110p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_policy.py | sed -n '100,138p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextInspector.tsx | sed -n '1,220p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextInspector.tsx | sed -n '220,360p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/app/runtime-context/page.tsx | sed -n '1,80p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"rg -n \\\"context_management|runtime-context|runtime_context\\\" backend/app/api backend/app/main.py backend/app -g '*.py'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/api/runtime_context.py | sed -n '1,45p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/lib/api/context-management.ts | sed -n '115,155p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"Placement rules changed|expected_placement_revision|placement_revision\" backend/tests frontend/src/__tests__ backend/app/services/context_governance.py frontend/src/components/runtime-context frontend/src/lib/api/context-management.ts'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/integration/test_context_management_transactions.py | sed -n '1,130p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_review.py | sed -n '180,190p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 0,
+      "failed_calls": 0,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 1366689,
+          "cached_input_tokens": 1278080,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 6142,
+          "reasoning_output_tokens": 2197
+        }
+      ],
+      "uncached_input_tokens": 88609,
+      "answer_anchors_match": true,
+      "final": "Read-only inspection only: I did not change files, create tasks, use network, or start services.\n\n**Save Flow**\nThe Runtime Context page mounts `ContextManager` from [page.tsx](/srv/workspaces/projects/agent-hub/frontend/src/app/runtime-context/page.tsx:5). `ContextManager` loads inventory, tracks staged `edits` and `placements`, and builds a `ContextDraft` containing `expected_placement_revision` from the current inventory in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:151).\n\nEdits are staged through `stage()`, which captures the original source `revision` into `expected_revision`, then clears any prior preview in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:165). Placement changes also clear the preview in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:182). The inspector UI calls those via policy/content controls and placement buttons in [ContextInspector.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextInspector.tsx:85) and [ContextInspector.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextInspector.tsx:236).\n\nThe preview gate is client-side: `Preview changes` posts the draft to `/preview` and stores the returned inventory in `preview` in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:206). `Save reviewed changes` is disabled unless there are changes, a preview exists, and `preview.delivery.status === 'ok'` in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:929). Saving then posts the same draft to `/save`, clears draft state, and refetches inventory/history in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:211).\n\nThe API client sends these to `/api/runtime-context/manage/*` in [context-management.ts](/srv/workspaces/projects/agent-hub/frontend/src/lib/api/context-management.ts:124). The backend mounts the management router under `/runtime-context` in [runtime_context.py](/srv/workspaces/projects/agent-hub/backend/app/api/runtime_context.py:31), with `/manage/preview` and `/manage/save` handled in [context_management.py](/srv/workspaces/projects/agent-hub/backend/app/api/context_management.py:40).\n\n**Stale Protection**\nThe server contract requires source edits to carry `expected_revision` and drafts to carry `expected_placement_revision` in [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:36). A source revision is `sha256:` plus a semantic hash of the current source snapshot in [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:126).\n\nOn save or preview, `apply_draft()` locks the placement layer, sorts source edits, and calls `apply_source_edit()` in [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:257). `apply_source_edit()` locks the source row, compares the live `source_revision(row)` with `edit.expected_revision`, and raises HTTP 409 before mutation if they differ in [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:172). Placement overrides have a parallel check: current placement snapshot hash must match `draft.expected_placement_revision`, or the server raises HTTP 409 in [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:271).\n\nPreview uses the real draft application path inside a nested transaction, then always rolls it back, so preview is an actual assembly check without persistence in [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:307). `/save` commits only after `apply_draft()` succeeds and rolls back on exceptions in [context_management.py](/srv/workspaces/projects/agent-hub/backend/app/api/context_management.py:45).\n\nRelevant tests: the UI test verifies preview is required and `expected_revision` is sent before save in [runtime-context-page.test.tsx](/srv/workspaces/projects/agent-hub/frontend/src/__tests__/runtime-context-page.test.tsx:131), and that a stale save rejection keeps the draft staged in [runtime-context-page.test.tsx](/srv/workspaces/projects/agent-hub/frontend/src/__tests__/runtime-context-page.test.tsx:169). Backend tests verify stale source edits fail before mutation in [test_context_governance.py](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:78) and preview rollback in [test_context_governance.py](/srv/workspaces/projects/agent-hub/backend/tests/services/test_context_governance.py:91).",
+      "transcript_sha256": "e04d30872e91da1108f8e2c77f72d5690fa47e6398a108c0bbce1fcf02d6408b",
+      "stderr": "Reading additional input from stdin...\n"
+    },
+    {
+      "case": "draft",
+      "variant": "research_active",
+      "exit_code": 0,
+      "elapsed_seconds": 80.5839068059995,
+      "delivery_id": "47ffd7fd-188e-4d95-b37b-bc4570890024",
+      "payload_hash": "b477edb36bc8b87b6857e8281e6c86a6bf99891d9c4f0937603cb6f6d5220828",
+      "generated_tokens": 6009,
+      "first_command": "/bin/bash -lc 'st search \"Runtime Context\"'",
+      "first_tool_correct": true,
+      "commands": [
+        {
+          "command": "/bin/bash -lc 'st search \"Runtime Context\"'",
+          "exit_code": 1,
+          "status": "failed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"Runtime Context|runtime context|runtime_context|context preview|preview\" .'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg --files . | rg \"(context|Context|runtime|Runtime|test|spec)\"'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextManager.tsx | sed -n '260,520p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/lib/api/context-management.ts | sed -n '1,220p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextManager.tsx | sed -n '1,260p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/api/context_management.py | sed -n '1,260p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_governance.py | sed -n '1,280p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextManager.tsx | sed -n '520,980p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_governance.py | sed -n '280,620p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/tests/integration/test_context_management_transactions.py | sed -n '1,180p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba backend/app/services/context_policy.py | sed -n '1,180p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"def source_revision|def semantic_hash|def lock_placement_layer\" backend/app/services/context_policy.py'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/__tests__/runtime-context-page.test.tsx | sed -n '1,220p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc 'rg -n \"onStage|onPlace|Disable source everywhere|Applies to|Stage\" frontend/src/components/runtime-context/ContextInspector.tsx'",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextInspector.tsx | sed -n '1,220p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        },
+        {
+          "command": "/bin/bash -lc \"nl -ba frontend/src/components/runtime-context/ContextInspector.tsx | sed -n '220,460p'\"",
+          "exit_code": 0,
+          "status": "completed"
+        }
+      ],
+      "discovery_calls": 1,
+      "failed_calls": 1,
+      "user_interventions": 0,
+      "usage": [
+        {
+          "input_tokens": 308637,
+          "cached_input_tokens": 240256,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3633,
+          "reasoning_output_tokens": 1409
+        }
+      ],
+      "uncached_input_tokens": 68381,
+      "answer_anchors_match": true,
+      "final": "No files changed.\n\n**UI Save Flow**\nThe Runtime Context editor lives in [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:30). Edits are staged in `stage()` with the source\u2019s original `revision` copied into `expected_revision` [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:165), and placement edits are staged separately in `place()` [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:182).\n\nThe draft sent to the backend includes `edits`, `placements`, `expected_placement_revision`, `reason`, and optional `proposal_id` [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:151).\n\n**Preview Gate**\n`Preview changes` calls `/preview` via `previewChanges()` [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:206). The save button is disabled until there are changes, a preview exists, and `preview.delivery.status === 'ok'` [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:922). Any new staged source/placement/context change clears the preview, forcing another preview before save [ContextManager.tsx](/srv/workspaces/projects/agent-hub/frontend/src/components/runtime-context/ContextManager.tsx:160).\n\nThe API helper posts these to `/api/runtime-context/manage/...` and surfaces server errors as exceptions [context-management.ts](/srv/workspaces/projects/agent-hub/frontend/src/lib/api/context-management.ts:124).\n\n**Server Revision Check**\nThe server routes are in [context_management.py](/srv/workspaces/projects/agent-hub/backend/app/api/context_management.py:40): `/preview` calls `preview_draft()`, while `/save` calls `apply_draft(..., preview=False)` and commits, rolling back on errors [context_management.py](/srv/workspaces/projects/agent-hub/backend/app/api/context_management.py:45).\n\nStale source protection happens in `apply_source_edit()`: it locks the source row, snapshots it, recomputes `source_revision(row)`, and rejects the edit with HTTP 409 if it differs from `edit.expected_revision` [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:172). `source_revision()` is a SHA-256 semantic hash of `source_snapshot(row)` [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:126).\n\nPlacement stale protection happens in `apply_draft()`: it locks the placement layer, snapshots current placements, and rejects with HTTP 409 if `expected_placement_revision` does not match the semantic hash of current placements [context_governance.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_governance.py:257). The placement lock uses a transaction-scoped advisory lock keyed by profile/project [context_policy.py](/srv/workspaces/projects/agent-hub/backend/app/services/context_policy.py:130).\n\n**Test Evidence**\nFrontend coverage verifies save is disabled before preview, preview sends the original `expected_revision`, and stale-save errors leave the draft staged [runtime-context-page.test.tsx](/srv/workspaces/projects/agent-hub/frontend/src/__tests__/runtime-context-page.test.tsx:131). Backend integration coverage verifies preview rolls back, save applies atomically, and a second save with the old revision returns 409 [test_context_management_transactions.py](/srv/workspaces/projects/agent-hub/backend/tests/integration/test_context_management_transactions.py:50).",
+      "transcript_sha256": "a884f1cd3ce7e4a0fb007d595cabd8d3c4816dbacfccf030edbcd4bb46e4a08d",
+      "stderr": "Reading additional input from stdin...\n"
+    }
+  ],
+  "model_receipt": "Native launch configuration and tool transcript observed; no hidden provider request inspection",
+  "interpretation": {
+    "correctness": "All six answers checked against the referenced implementation; all correct for their requested read-only inspections.",
+    "qualification": "Exploratory paired observation on a live development checkout, one run per case/variant. Code was being finalized during the run. Not a controlled performance qualification or evidence of general coding efficiency.",
+    "unnecessary_calls": "Exact commands retained. Broad initial ripgrep searches and repeated file reads are observed; an objective minimum-call oracle is unavailable, so excess-call counts remain unknown.",
+    "native_limits": "Configuration, canonical artifact and actual native tool/usage events observed. Hidden system prompt and provider request bytes unobservable.",
+    "conclusion": "Scoped startup removed 2084 generated tokens, but total input tokens and latency were not consistently lower. No performance guarantee or automatic model activation."
+  }
+}

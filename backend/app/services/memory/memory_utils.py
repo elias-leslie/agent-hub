@@ -55,6 +55,8 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
 
     if scope == MemoryScope.PROJECT:
         return f"project-{safe_id}"
+    if scope == MemoryScope.AGENT:
+        return f"agent-{safe_id}"
 
     # Should not reach here with current enum values
     raise ValueError(f"Unknown scope: {scope}")

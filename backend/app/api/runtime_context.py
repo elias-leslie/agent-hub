@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.context_management import router as management_router
 from app.db import get_db
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.runtime_context import (
@@ -28,6 +29,7 @@ from app.services.runtime_context import (
 )
 
 router = APIRouter(prefix="/runtime-context", tags=["runtime-context"])
+router.include_router(management_router)
 
 
 class RuntimeContextProfileResponse(BaseModel):

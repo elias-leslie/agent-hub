@@ -42,6 +42,7 @@ class Prompt(Base):
     boot_eligible: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    context_policy: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     owner_agent_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=True
@@ -119,6 +120,7 @@ class PromptRevision(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_global: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    context_policy: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     owner_agent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     prompt_type: Mapped[str] = mapped_column(

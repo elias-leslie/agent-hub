@@ -24,6 +24,7 @@ from app.api.typesafe_jev_schemas import (
     NoulQuestion,
     ScoreAnswer,
     ScoreQuestion,
+    SystemOneRequest,
     TypeSafeJevRequest,
     TypeSafeJevResult,
     TypeSafeProviderResponse,
@@ -77,7 +78,7 @@ def _cost_for_input_tokens(tokens: int) -> Decimal:
     return _money(Decimal(tokens) * JEV_INPUT_USD_PER_MILLION / Decimal(1_000_000))
 
 
-def _request_payload(request: TypeSafeJevRequest) -> dict[str, Any]:
+def _request_payload(request: TypeSafeJevRequest | SystemOneRequest) -> dict[str, Any]:
     return {
         "state": request.state,
         "model": request.model,
@@ -144,19 +145,20 @@ def resolve_typesafe_api_key() -> str:
 
 
 def _validate_provider_response(
-    request: TypeSafeJevRequest,
+    request: TypeSafeJevRequest | SystemOneRequest,
     response: TypeSafeProviderResponse,
+    max_input_tokens: int = JEV_MAX_INPUT_TOKENS,
 ) -> None:
-    if response.model != JEV_MODEL_ID:
+    if response.model != request.model:
         raise TypeSafeJevError(
             "model_version_changed",
-            f"expected {JEV_MODEL_ID}, provider reported {response.model}",
+            f"expected {request.model}, provider reported {response.model}",
             status_code=502,
         )
-    if response.usage.input_tokens > JEV_MAX_INPUT_TOKENS:
+    if response.usage.input_tokens > max_input_tokens:
         raise TypeSafeJevError(
             "provider_contract_changed",
-            "provider reported input usage above the documented 64k request limit",
+            "provider reported input usage above the configured model context window",
             status_code=502,
         )
     if response.answers.keys() != request.questions.keys():
@@ -433,10 +435,11 @@ async def _finalize_not_dispatched(
 
 
 async def call_typesafe_jev(
-    request: TypeSafeJevRequest,
+    request: TypeSafeJevRequest | SystemOneRequest,
     *,
     api_key: str,
     http_client: httpx.AsyncClient | None = None,
+    max_input_tokens: int = JEV_MAX_INPUT_TOKENS,
 ) -> tuple[TypeSafeProviderResponse, str | None]:
     """Call the official HTTP endpoint once and return a fully validated response."""
     owns_client = http_client is None
@@ -464,7 +467,7 @@ async def call_typesafe_jev(
                 status_code=502,
             ) from exc
         try:
-            _validate_provider_response(request, provider_response)
+            _validate_provider_response(request, provider_response, max_input_tokens)
         except TypeSafeJevError as exc:
             exc.provider_request_id = provider_request_id
             exc.provider_response = provider_response
