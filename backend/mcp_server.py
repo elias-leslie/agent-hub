@@ -88,6 +88,29 @@ async def get_memory_context() -> str:
     return await _query_progressive_context(query)
 
 
+@mcp.tool()
+async def context_maintenance(request: dict | None = None) -> dict:
+    """Inspect or act on the canonical maintenance queue using MaintenanceRequest.
+
+Omit request to retrieve the exact action schema on demand.
+Use action=list with context={consumer_surface:'mcp', project_id, session_id}.
+Inspect exact evidence and claim before work. Routine work is handled by the
+scheduled curator; raise only necessary decisions with a recommendation.
+Reported owner answers must quote a real conversation, never an inference.
+Use action=inspect for evidence, acknowledge with exact item versions after
+reading, and release claims at handoff. No source changes follow from a label.
+"""
+    from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
+    if request is None:
+        return {"schema": MaintenanceRequest.model_json_schema()}
+    parsed = MaintenanceRequest.model_validate(request)
+    async with async_session() as db:
+        if parsed.action in {"review", "reconcile", "repair", "apply", "resolve", "dismiss"}:
+            from app.services.credential_manager import get_credential_manager
+            await get_credential_manager().load(db)
+        return await handle_maintenance(db, parsed, "agent:mcp")
+
+
 @mcp.prompt("system_instruction")
 async def get_system_instruction() -> str:
     """

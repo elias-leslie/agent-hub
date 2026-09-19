@@ -191,6 +191,7 @@ async def test_execute_memory_review_clamps_scheduled_batch_limit():
 
     with (
         patch("app.db.async_session", return_value=FakeAsyncSession()),
+        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(return_value={"reviewed_count": 0, "status": "completed"})),
         patch(
             "app.services.memory.review_agent.run_memory_review_batch",
             new=AsyncMock(return_value=review_result),

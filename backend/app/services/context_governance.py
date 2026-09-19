@@ -96,8 +96,11 @@ async def record(db: AsyncSession, kind: str, actor: str, payload: dict[str, Any
         source_ids.add(payload["source_id"])
     if payload.get("source", {}).get("source_id"):
         source_ids.add(payload["source"]["source_id"])
-    db.add(ContextRecord(id=key, kind=kind, actor=actor, source_keys=sorted(source_ids), payload=payload))
+    evidence = ContextRecord(id=key, kind=kind, actor=actor, source_keys=sorted(source_ids), payload=payload)
+    db.add(evidence)
     await db.flush()
+    from app.services.context_maintenance import ingest_review
+    await ingest_review(db, evidence)
     return key
 
 

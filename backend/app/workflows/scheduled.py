@@ -274,7 +274,11 @@ async def memory_governance_task(input: EmptyInput, ctx: Context) -> dict[str, A
         return _disabled_schedule_result("memory_governance")
 
     async with async_session() as db:
+        from app.services.context_maintenance_reconcile import reconcile_maintenance
+        maintenance = await reconcile_maintenance(db)
+        await db.commit()
         snapshot = await collect_memory_governance_snapshot(db)
+    ctx.log(f"Context maintenance reconciliation: {maintenance}")
 
     result = MemoryGovernanceResult(
         status="success",

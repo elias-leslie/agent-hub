@@ -122,6 +122,35 @@ export interface ContextReview {
     entries?: { pair: string[]; status: string; result: unknown }[]
   }
 }
+export interface ContextMaintenanceItem {
+  id: string
+  version: number
+  kind: string
+  state: string
+  summary: string
+  recommendation: string
+  source_keys: string[]
+  handoff_needed: boolean
+  claim_owner: string | null
+  updated_at: string
+  decision: {
+    question?: string
+    recommendation?: string
+    options?: string[]
+    answer?: string
+    reported?: boolean
+  }
+  detail?: {
+    finding?: { passages: Record<string, string>; uncertainty: string }
+    failure?: string
+    background_reason?: string
+  }
+}
+
+export interface ContextMaintenanceView {
+  items: ContextMaintenanceItem[]
+}
+
 export async function contextRequest<T>(
   path: string,
   body?: unknown,

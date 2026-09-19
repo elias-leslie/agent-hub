@@ -104,7 +104,7 @@ async def _apply_review_decisions(
                 "source": source_snapshot(memory), "revision": source_revision(memory),
                 "source_version": memory.version,
                 "decision": asdict(by_uuid[str(memory.id)]),
-                "coverage": "memory review with observable canonical context; hidden native prompts unobservable",
+                "coverage": "co-applicable lexical candidates plus required prompt authority; not exhaustive; hidden native prompts unobservable",
                 "status": "proposed", "automatic_application": False,
             })
     return needs_action_count
@@ -185,6 +185,8 @@ async def _call_review_for_memories(
 
     from app.models.prompt import Prompt
     from app.models.runtime_context import RuntimeContextOverride
+    from app.services.context_policy import policies_overlap, source_policy, source_snapshot
+    from app.services.context_review import review_candidates
     from app.services.memory.tool_capability_context import (
         format_tool_capability_context,
     )
@@ -202,12 +204,27 @@ async def _call_review_for_memories(
     authority_prompts = list(
         (
             await db.execute(
-                select(Prompt).where(Prompt.enabled.is_(True))
+                select(Prompt).where(Prompt.enabled.is_(True), Prompt.owner_agent_id.is_(None))
             )
         )
         .scalars()
         .all()
     )
+    # Curate selected/changed records against co-applicable candidates, not
+    # every agent's unrelated system prompt. Required authority stays complete.
+    selected = {str(memory.id) for memory in memories}
+    corpus = [*memory_index, *authority_prompts]
+    snapshots = [source_snapshot(row) for row in corpus]
+    candidate_ids = {s["source_id"] for a, b in review_candidates(snapshots)
+                     if a["source_id"] in selected or b["source_id"] in selected for s in (a, b)}
+    selected_policies = [source_policy(memory) for memory in memories]
+
+    def coapplicable(row: Any) -> bool:
+        return any(policies_overlap(source_policy(row), policy) for policy in selected_policies)
+
+    memory_index = [row for row in memory_index if str(row.id) in selected or (str(row.id) in candidate_ids and coapplicable(row))]
+    authority_prompts = [row for row in authority_prompts if coapplicable(row) and (source_policy(row).required or row.slug in candidate_ids)]
+    authority_ids = {row.slug for row in authority_prompts}
     authority_prompt_assignments = [
         {
             "prompt_slug": row.source_id,
@@ -227,7 +244,7 @@ async def _call_review_for_memories(
             .scalars()
             .all()
         )
-        if getattr(row, "source_id", None)
+        if getattr(row, "source_id", None) in authority_ids
     ]
     computed_tool_capabilities = await asyncio.to_thread(
         format_tool_capability_context,
@@ -241,6 +258,9 @@ async def _call_review_for_memories(
         authority_prompts=authority_prompts,
         authority_prompt_assignments=authority_prompt_assignments,
         computed_tool_capabilities=computed_tool_capabilities,
+        coverage={"candidate_method": "co-applicable lexical candidates plus required authority", "exhaustive": False,
+                  "omitted_sources": len(corpus) - len(memory_index) - len(authority_prompts),
+                  "native_prompts": "unobservable; do not infer hidden provider instructions"},
     )
     return await facade._call_reviewer_agent(
         db,

@@ -1,0 +1,64 @@
+{
+  "status": "completed",
+  "reviewed_count": 2,
+  "model_calls": 2,
+  "reconciliation": {
+    "ingested_reviews": 0,
+    "superseded": 3,
+    "released_closed_sessions": 0,
+    "repaired": [],
+    "failed": [],
+    "model_calls": 0
+  },
+  "status_meaning": "Worker loop completed; neither semantic review validated. No source change from either proposal.",
+  "review_outcomes": [
+    {
+      "review_id": "5c0722f3-9283-4595-b4d2-5871017daaa9",
+      "reviewer": {
+        "agent_slug": "memory-curator",
+        "model": "codex/gpt-5.5",
+        "session_id": "7f1d616e-8684-4151-885e-951845c45c2a"
+      },
+      "outcome": "rejected_invalid_proposal",
+      "failure": "1 validation error for ReviewFinding\nproposed_edits.0.policy\n  Value error, Required rules must be delivered in full [type=value_error, input_value={'scope': 'project', 'tar...ue, 'format': 'compact'}, input_type=dict]",
+      "validated_findings": 0,
+      "source_count": 13,
+      "source_revisions_still_match": true,
+      "estimated_input_tokens": 7480,
+      "unvalidated_response_retained": true
+    },
+    {
+      "review_id": "d3822e46-f30f-4dfe-bfc9-86e4d4ecbeb9",
+      "reviewer": {
+        "agent_slug": "memory-curator",
+        "model": "codex/gpt-5.5",
+        "session_id": "8a45f7c8-395d-4258-98d7-ff1a4041647b"
+      },
+      "outcome": "rejected_invalid_proposal",
+      "failure": "1 validation error for ReviewFinding\nproposed_edits.0.policy\n  Value error, Required rules must be delivered in full [type=value_error, input_value={'scope': 'project', 'tar...ue, 'format': 'compact'}, input_type=dict]",
+      "validated_findings": 0,
+      "source_count": 15,
+      "source_revisions_still_match": true,
+      "estimated_input_tokens": 8139,
+      "unvalidated_response_retained": true
+    }
+  ],
+  "unchanged_replay": {
+    "status": "completed",
+    "reviewed_count": 0,
+    "model_calls": 0,
+    "reconciliation": {
+      "ingested_reviews": 0,
+      "superseded": 0,
+      "released_closed_sessions": 0,
+      "repaired": [],
+      "failed": [],
+      "model_calls": 0
+    }
+  },
+  "limitations": [
+    "This verifies rejection and retained handoff, not successful semantic review quality.",
+    "Estimated input tokens describe prepared source evidence, not billed usage.",
+    "Schema descriptions now expose the existing cross-field constraints; this change has not been requalified by another paid review."
+  ]
+}

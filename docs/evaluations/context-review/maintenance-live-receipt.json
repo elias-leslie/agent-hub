@@ -1,0 +1,331 @@
+{
+  "native_receipt": "unobserved",
+  "maintenance_model_calls": 0,
+  "changes": [
+    {
+      "item_id": "6810cab8-ed3e-498c-a504-535214e4e60e",
+      "resolution": {
+        "verification": "canonical_generation",
+        "payload_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+        "estimated_tokens": 4070,
+        "required_policy": {
+          "state": "complete",
+          "required_source_ids": [
+            "agent-hub-development-policy",
+            "safety-directive",
+            "narration-tags",
+            "web-research-routine",
+            "coding-development-practice",
+            "platform-context",
+            "prompt-development-practice",
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5"
+          ],
+          "delivered_source_ids": [
+            "safety-directive",
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5",
+            "narration-tags",
+            "web-research-routine",
+            "agent-hub-development-policy",
+            "coding-development-practice",
+            "platform-context",
+            "prompt-development-practice"
+          ],
+          "missing_source_ids": [],
+          "pending_review_source_ids": [
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5"
+          ],
+          "operator_excluded_source_ids": []
+        },
+        "native_model_receipt": "not observed",
+        "change_id": "599120a3-3f72-487e-a25c-21580f990517",
+        "assessment": "Restore the global Safety Directive required by the existing persona system, safety and autonomy prompts but omitted by its legacy exclusion. Archive the two fully subsumed global mandate memories after preserving that coverage. Retain source identities and undo history.",
+        "assessor": "agent:native-cli",
+        "verified_sources": [
+          {
+            "source_type": "prompt",
+            "source_id": "safety-directive",
+            "revision": "sha256:d9cd3936593c984a5968b4d0f9eab055d2c3b1eb97e6f08c868100522a4d0bbc"
+          },
+          {
+            "source_type": "memory",
+            "source_id": "1a107b0e-79d3-40c4-9ba9-496337024e59",
+            "revision": "sha256:19b853095c5c9806e6bf9cdd2363652f3879c112bacab1d9db7bb45f40ccef35"
+          }
+        ]
+      }
+    },
+    {
+      "item_id": "99f2209a-e016-4110-8df7-946631198d16",
+      "resolution": {
+        "verification": "canonical_generation",
+        "payload_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+        "estimated_tokens": 4070,
+        "required_policy": {
+          "state": "complete",
+          "required_source_ids": [
+            "agent-hub-development-policy",
+            "safety-directive",
+            "narration-tags",
+            "web-research-routine",
+            "coding-development-practice",
+            "platform-context",
+            "prompt-development-practice",
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5"
+          ],
+          "delivered_source_ids": [
+            "safety-directive",
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5",
+            "narration-tags",
+            "web-research-routine",
+            "agent-hub-development-policy",
+            "coding-development-practice",
+            "platform-context",
+            "prompt-development-practice"
+          ],
+          "missing_source_ids": [],
+          "pending_review_source_ids": [
+            "7846a2a7-71e8-4d7d-a20d-248b3cdd4a63",
+            "06f24723-5d1c-45f3-96df-48145f2353f5"
+          ],
+          "operator_excluded_source_ids": []
+        },
+        "native_model_receipt": "not observed",
+        "change_id": "599120a3-3f72-487e-a25c-21580f990517",
+        "assessment": "Restore the global Safety Directive required by the existing persona system, safety and autonomy prompts but omitted by its legacy exclusion. Archive the two fully subsumed global mandate memories after preserving that coverage. Retain source identities and undo history.",
+        "assessor": "agent:native-cli",
+        "verified_sources": [
+          {
+            "source_type": "prompt",
+            "source_id": "safety-directive",
+            "revision": "sha256:d9cd3936593c984a5968b4d0f9eab055d2c3b1eb97e6f08c868100522a4d0bbc"
+          },
+          {
+            "source_type": "memory",
+            "source_id": "9f3f51f3-d770-44b9-b1ea-5db10de92d4c",
+            "revision": "sha256:9a5355c667106ca811116d259253f70109a4f0c0560baf59f1824d85c0dcff4b"
+          }
+        ]
+      }
+    }
+  ],
+  "delivery_cases": [
+    {
+      "surface": "codex",
+      "profile": "agent_startup",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2972,
+      "after_tokens": 2791,
+      "after_hash": "64693c2a24d698ad284ab61d24ef70213297ddaee9e15640bf456beac7333dc1",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "codex",
+      "profile": "agent_startup",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 4336,
+      "after_tokens": 4070,
+      "after_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "codex",
+      "profile": "agent_promptops",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2698,
+      "after_tokens": 2517,
+      "after_hash": "93d4d3638df2061533280a086cb64a85542814812b6d1bb0bc281cff235bfc29",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "codex",
+      "profile": "agent_promptops",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 3847,
+      "after_tokens": 3667,
+      "after_hash": "64184db3f6a35243221ceaa5904629c3b73764452fe38d5685b00547022651f2",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "claude_code",
+      "profile": "agent_startup",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2972,
+      "after_tokens": 2791,
+      "after_hash": "64693c2a24d698ad284ab61d24ef70213297ddaee9e15640bf456beac7333dc1",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "claude_code",
+      "profile": "agent_startup",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 4251,
+      "after_tokens": 4070,
+      "after_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "claude_code",
+      "profile": "agent_promptops",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2698,
+      "after_tokens": 2517,
+      "after_hash": "93d4d3638df2061533280a086cb64a85542814812b6d1bb0bc281cff235bfc29",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "claude_code",
+      "profile": "agent_promptops",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 3847,
+      "after_tokens": 3667,
+      "after_hash": "64184db3f6a35243221ceaa5904629c3b73764452fe38d5685b00547022651f2",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "pi",
+      "profile": "agent_startup",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2972,
+      "after_tokens": 2791,
+      "after_hash": "64693c2a24d698ad284ab61d24ef70213297ddaee9e15640bf456beac7333dc1",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "pi",
+      "profile": "agent_startup",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 4251,
+      "after_tokens": 4070,
+      "after_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "pi",
+      "profile": "agent_promptops",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2698,
+      "after_tokens": 2517,
+      "after_hash": "93d4d3638df2061533280a086cb64a85542814812b6d1bb0bc281cff235bfc29",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "pi",
+      "profile": "agent_promptops",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 3847,
+      "after_tokens": 3667,
+      "after_hash": "64184db3f6a35243221ceaa5904629c3b73764452fe38d5685b00547022651f2",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "gemini",
+      "profile": "agent_startup",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2972,
+      "after_tokens": 2791,
+      "after_hash": "64693c2a24d698ad284ab61d24ef70213297ddaee9e15640bf456beac7333dc1",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "gemini",
+      "profile": "agent_startup",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 4251,
+      "after_tokens": 4070,
+      "after_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "gemini",
+      "profile": "agent_promptops",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2698,
+      "after_tokens": 2517,
+      "after_hash": "93d4d3638df2061533280a086cb64a85542814812b6d1bb0bc281cff235bfc29",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "gemini",
+      "profile": "agent_promptops",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 3847,
+      "after_tokens": 3667,
+      "after_hash": "64184db3f6a35243221ceaa5904629c3b73764452fe38d5685b00547022651f2",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "agent_runtime",
+      "profile": "agent_startup",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2972,
+      "after_tokens": 2791,
+      "after_hash": "64693c2a24d698ad284ab61d24ef70213297ddaee9e15640bf456beac7333dc1",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "agent_runtime",
+      "profile": "agent_startup",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 4251,
+      "after_tokens": 4070,
+      "after_hash": "3210e24f44ce1e35c316925985dee14a1decb0e3e861fafc2c0d9f0043e18dab",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "agent_runtime",
+      "profile": "agent_promptops",
+      "project": null,
+      "agent": null,
+      "before_tokens": 2698,
+      "after_tokens": 2517,
+      "after_hash": "93d4d3638df2061533280a086cb64a85542814812b6d1bb0bc281cff235bfc29",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "agent_runtime",
+      "profile": "agent_promptops",
+      "project": "agent-hub",
+      "agent": null,
+      "before_tokens": 3847,
+      "after_tokens": 3667,
+      "after_hash": "64184db3f6a35243221ceaa5904629c3b73764452fe38d5685b00547022651f2",
+      "required_policy": "complete"
+    },
+    {
+      "surface": "agent_runtime",
+      "profile": "agent_runtime",
+      "project": null,
+      "agent": "persona",
+      "before_tokens": 1330,
+      "after_tokens": 2041,
+      "after_hash": "90b9feae431320921725ce3558571f4db36d14264253c7c02455d2bb946b0c7e",
+      "required_policy": "complete"
+    }
+  ],
+  "persona_dependency": "Existing persona-system-prompt, persona-safety and jenny-autonomy-policy require the global Safety Directive; the actual persona preview omitted it because of exclude_agents=[persona].",
+  "guidance_change_id": "edeec4fe-1b96-49bd-ac8e-be291f0ca68f",
+  "reference_selection_limit": "Local multi-surface check did not initialize worker credentials; optional Gemini reference selection reported authentication unavailable and used its existing fallback. Required-policy assembly passed. This is not evidence of healthy optional retrieval or native model receipt."
+}

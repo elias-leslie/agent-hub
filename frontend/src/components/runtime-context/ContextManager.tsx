@@ -19,6 +19,7 @@ import { fetchProjectCatalog } from '@/lib/api/project-permissions'
 import { getModels } from '@/lib/models'
 import { ContextInspector } from './ContextInspector'
 import styles from './context-manager.module.css'
+import { MaintenancePanel } from './MaintenancePanel'
 import { PolicyModal } from './PolicyModal'
 
 const sourceKey = (source: { source_type: string; source_id: string }) =>
@@ -299,6 +300,11 @@ export function ContextManager() {
           Refresh
         </button>
       </header>
+      <MaintenancePanel
+        context={context}
+        sources={originalSources}
+        onSelect={(source) => setSelected(sourceKey(source))}
+      />
       <PolicyModal
         profile={context.consumer_profile}
         isOpen={policyOpen}

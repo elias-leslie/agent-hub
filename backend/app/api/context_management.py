@@ -20,6 +20,7 @@ from app.services.context_governance import (
     record_feedback,
     undo_change,
 )
+from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
 from app.services.context_review import ContextReviewRequest, run_review
 from app.services.runtime_context import CanonicalContextDeliveryRequest
 
@@ -93,3 +94,12 @@ async def feedback(request: ContextFeedback, db: DB, auth: Auth = None):
 @router.post("/review")
 async def review(request: ContextReviewRequest, db: DB, auth: Auth = None):
     return await run_review(db, request, actor(auth))
+
+
+@router.post("/maintenance")
+async def maintenance(request: MaintenanceRequest, db: DB, auth: Auth = None):
+    try:
+        return await handle_maintenance(db, request, actor(auth), operator=auth is None)
+    except Exception:
+        await db.rollback()
+        raise
