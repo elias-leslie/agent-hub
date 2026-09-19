@@ -25,6 +25,7 @@ from app.services.typesafe_jev import (
     PILOT_BUDGET_KEY,
     PILOT_CEILING_USD,
     TypeSafeJevError,
+    _finalize_known,
     _load_key_file,
     _request_sha256,
     call_typesafe_jev,
@@ -332,3 +333,61 @@ async def test_missing_key_is_recorded_as_not_dispatched(monkeypatch) -> None:
 
     assert result == "result"
     finalize.assert_awaited_once_with(ANY, dispatch, credential_error)
+
+
+@pytest.mark.asyncio
+async def test_finalize_refreshes_locked_budget_before_accounting(monkeypatch) -> None:
+    """A provider wait must not let a stale identity-map value erase concurrent spend."""
+    stale = TypeSafeJevBudget(
+        key=PILOT_BUDGET_KEY,
+        ceiling_usd=PILOT_CEILING_USD,
+        spent_usd=Decimal("0"),
+        reserved_usd=JEV_RESERVED_COST_USD,
+        model_id="jev-1.13.0",
+        pricing_contract=JEV_PRICING_CONTRACT,
+    )
+    refreshed = TypeSafeJevBudget(
+        key=PILOT_BUDGET_KEY,
+        ceiling_usd=PILOT_CEILING_USD,
+        spent_usd=Decimal("0.001000000"),
+        reserved_usd=JEV_RESERVED_COST_USD * 2,
+        model_id="jev-1.13.0",
+        pricing_contract=JEV_PRICING_CONTRACT,
+    )
+    current = TypeSafeJevDispatch(
+        request_id=str(uuid4()),
+        budget_key=PILOT_BUDGET_KEY,
+        request_sha256="e" * 64,
+        status="reserved",
+        model_requested="jev-1.13.0",
+        pricing_contract=JEV_PRICING_CONTRACT,
+        reserved_input_tokens=64_000,
+        reserved_cost_usd=JEV_RESERVED_COST_USD,
+        source_provenance=[],
+        rubric_provenance={},
+    )
+    db = AsyncMock()
+
+    async def scalar(statement):
+        if statement.get_execution_options().get("populate_existing"):
+            return refreshed
+        return stale
+
+    db.scalar.side_effect = scalar
+    monkeypatch.setattr(
+        "app.services.typesafe_jev._locked_dispatch",
+        AsyncMock(return_value=current),
+    )
+
+    _, budget = await _finalize_known(
+        db,
+        current,
+        _provider_response(),
+        provider_request_id="provider-request-4",
+        validation_error=None,
+    )
+
+    assert budget is refreshed
+    assert budget.spent_usd == Decimal("0.001016800")
+    assert budget.reserved_usd == JEV_RESERVED_COST_USD
+    db.commit.assert_awaited_once()

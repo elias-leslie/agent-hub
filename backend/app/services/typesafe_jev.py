@@ -232,11 +232,24 @@ async def _locked_budget(db: AsyncSession) -> TypeSafeJevBudget:
         select(TypeSafeJevBudget)
         .where(TypeSafeJevBudget.key == PILOT_BUDGET_KEY)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if budget is None:
         raise TypeSafeJevError("budget_missing", "TypeSafe Jev pilot budget is not initialized", status_code=503)
     _assert_budget_contract(budget)
     return budget
+
+
+async def _locked_dispatch(db: AsyncSession, request_id: str) -> TypeSafeJevDispatch:
+    dispatch = await db.scalar(
+        select(TypeSafeJevDispatch)
+        .where(TypeSafeJevDispatch.request_id == request_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if dispatch is None:
+        raise TypeSafeJevError("ledger_inconsistent", "reserved dispatch disappeared", status_code=503)
+    return dispatch
 
 
 async def _existing_dispatch(
@@ -361,9 +374,7 @@ async def _mark_uncertain(
     provider_request_id: str | None = None,
 ) -> TypeSafeJevBudget:
     budget = await _locked_budget(db)
-    current = await db.get(TypeSafeJevDispatch, dispatch.request_id)
-    if current is None:
-        raise TypeSafeJevError("ledger_inconsistent", "reserved dispatch disappeared", status_code=503)
+    current = await _locked_dispatch(db, dispatch.request_id)
     current.status = "uncertain"
     current.error_kind = kind
     current.error_detail = detail
@@ -382,9 +393,7 @@ async def _finalize_known(
     validation_error: TypeSafeJevError | None,
 ) -> tuple[TypeSafeJevDispatch, TypeSafeJevBudget]:
     budget = await _locked_budget(db)
-    current = await db.get(TypeSafeJevDispatch, dispatch.request_id)
-    if current is None:
-        raise TypeSafeJevError("ledger_inconsistent", "reserved dispatch disappeared", status_code=503)
+    current = await _locked_dispatch(db, dispatch.request_id)
     actual_cost = _cost_for_input_tokens(response.usage.input_tokens)
     budget.reserved_usd = _money(budget.reserved_usd - current.reserved_cost_usd)
     budget.spent_usd = _money(budget.spent_usd + actual_cost)
@@ -413,9 +422,7 @@ async def _finalize_not_dispatched(
 ) -> tuple[TypeSafeJevDispatch, TypeSafeJevBudget]:
     """Release a reservation when a local failure proves no provider call occurred."""
     budget = await _locked_budget(db)
-    current = await db.get(TypeSafeJevDispatch, dispatch.request_id)
-    if current is None:
-        raise TypeSafeJevError("ledger_inconsistent", "reserved dispatch disappeared", status_code=503)
+    current = await _locked_dispatch(db, dispatch.request_id)
     budget.reserved_usd = _money(budget.reserved_usd - current.reserved_cost_usd)
     current.status = "failed"
     current.error_kind = error.kind
