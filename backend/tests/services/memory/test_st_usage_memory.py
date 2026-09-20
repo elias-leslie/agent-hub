@@ -77,3 +77,20 @@ def test_parse_st_command_tracks_graph_subcommands_for_quick_use_memory() -> Non
     assert graph_query.key == "graph query"
     assert graph_fallow is not None
     assert graph_fallow.key == "graph fallow"
+
+
+def test_external_namespace_telemetry_needs_no_central_registration_or_content() -> None:
+    memory = build_st_usage_memory_from_commands([
+        "st -P fixture-project fixture-extension inspect 'private reviewed content' --token confidential",
+        "st fixture-extension --help",
+    ])
+    assert memory.observed == 2
+    assert memory.help_count == 1
+    assert len(memory.command_metrics) == 1
+    metric = memory.command_metrics[0]
+    assert metric.command_key == "fixture-extension"
+    assert metric.uses == 1
+    assert metric.help_lookups == 1
+    assert metric.injected_example is None
+    assert memory.quick == []
+    assert memory.quick_entries == []
