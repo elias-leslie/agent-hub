@@ -152,6 +152,24 @@ async def test_dispatch_freezes_safe_idempotent_request_and_keeps_item_pending()
 
 
 @pytest.mark.asyncio
+async def test_dispatch_flushes_task_id_before_secondary_observations() -> None:
+    item = _item()
+    db = SimpleNamespace(commit=AsyncMock(), flush=AsyncMock())
+    client = _Client(post_response=_Response({"id": "task-42", "status": "pending", "project_id": "agent-hub"}))
+
+    with (
+        patch("app.services.context_maintenance_tasks._project_api_url", new=AsyncMock(return_value="http://summitflow/api")),
+        patch("app.services.context_maintenance_tasks.httpx.AsyncClient", return_value=client),
+        patch("app.services.context_maintenance_tasks.maintenance_event", new=AsyncMock()),
+    ):
+        result = await dispatch_technical_work(db, item, reason="Recover the retained technical failure")
+
+    assert result["task_id"] == "task-42"
+    assert item.detail["technical_work"]["task_id"] == "task-42"
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_initial_dispatch_retains_pending_task_but_marks_disabled_permission() -> None:
     item = _item()
     db = SimpleNamespace(commit=AsyncMock())

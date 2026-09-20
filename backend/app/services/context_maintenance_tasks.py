@@ -8,6 +8,7 @@ stays pending until the canonical context queue is revalidated.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.context_governance import ContextMaintenanceItem
 from app.services.context_maintenance import ACTIVE_STATES, maintenance_event
@@ -38,6 +40,13 @@ _PICKUP_SCHEDULE_ID = "work_pickup"
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _mark_detail_changed(item: ContextMaintenanceItem) -> None:
+    # Unit tests use lightweight stand-ins; real ORM rows need the explicit
+    # JSON marker after nested technical_work mutations.
+    with suppress(Exception):
+        flag_modified(item, "detail")
 
 
 def _receipt(payload: dict[str, Any]) -> dict[str, Any]:
@@ -121,6 +130,7 @@ def _build_request(item: ContextMaintenanceItem, *, reason: str) -> dict[str, An
 
 async def _save_event(db: AsyncSession, item: ContextMaintenanceItem, action: str, evidence: dict[str, Any]) -> None:
     item.version += 1
+    _mark_detail_changed(item)
     await maintenance_event(db, item, "system:context-maintenance", action, evidence)
     await db.commit()
 
@@ -405,6 +415,11 @@ async def dispatch_technical_work(
         task_id = body.get("id") or body.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             raise ValueError("SummitFlow response did not contain a task ID")
+        work["task_id"] = task_id
+        item.detail = {**item.detail, "technical_work": work}
+        _mark_detail_changed(item)
+        if hasattr(db, "flush"):
+            await db.flush()
         task_status = str(body.get("status") or "pending")
         observed_status = "completed_pending_revalidation" if task_status == "completed" else task_status
         terminal_failure = observed_status in _TERMINAL_TASK_STATUSES or bool(body.get("archived"))
