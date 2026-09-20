@@ -299,6 +299,7 @@ async def _completed_result(
         reviewer_agent_slug=reviewer_agent_slug,
         reviewer_model_id=reviewer_model_id,
         session_id=session_id,
+        reviewed_uuids=[decision.uuid for decision in decisions],
     )
 
 

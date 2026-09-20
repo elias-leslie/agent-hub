@@ -92,7 +92,10 @@ class RevisionRepository:
             return list(result.scalars().all())
         async with async_session() as session:
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            revisions = list(result.scalars().all())
+            for revision in revisions:
+                session.expunge(revision)
+            return revisions
 
     async def get_revision(
         self,
@@ -120,7 +123,10 @@ class RevisionRepository:
             return result.scalar_one_or_none()
         async with async_session() as session:
             result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            revision = result.scalar_one_or_none()
+            if revision is not None:
+                session.expunge(revision)
+            return revision
 
     async def resolve_revision_id_prefix(
         self,

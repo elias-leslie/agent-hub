@@ -254,6 +254,8 @@ async def api_save_learning(
 
     try:
         return await handle_save_learning(request, scope, scope_id)
+    except HTTPException:
+        raise
     except EpisodeValidationError as e:
         raise HTTPException(
             status_code=422,

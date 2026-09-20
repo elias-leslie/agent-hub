@@ -229,6 +229,30 @@ class TestSaveLearningEndpoint:
     """Tests for POST /api/memory/save-learning endpoint."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("scope,target", [("project", None), ("project", "missing"), ("global", "neri")])
+    async def test_save_rejects_invalid_scope_before_storage(self, client, scope, target):
+        headers = {"x-memory-scope": scope}
+        if target is not None:
+            headers["x-scope-id"] = target
+        with (
+            patch("app.core.project_roots.get_registered_project_roots", new=AsyncMock(return_value={"neri": "/projects/neri"})),
+            patch("app.api.memory_agent_learning_saver.check_duplicate", new=AsyncMock()) as duplicate,
+        ):
+            response = await client.post("/api/memory/save-learning", headers=headers,
+                json={"content": "**Neri**: Preserve reference target evidence.", "summary": "Keep target evidence"})
+        assert response.status_code == 422
+        duplicate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_duplicate_check_is_scoped(self):
+        from app.api.memory_agent_helpers import check_duplicate
+        from app.services.memory.service import MemoryScope
+        with patch("app.services.memory.promotion.check_and_promote_duplicate", new=AsyncMock(return_value=SimpleNamespace(found_match=False))) as promote:
+            assert await check_duplicate("project fact", 80, MemoryScope.PROJECT, "neri") is None
+        assert promote.await_args is not None
+        assert promote.await_args.kwargs["group_id"] == "project-neri"
+
+    @pytest.mark.asyncio
     async def test_save_learning_validation_uses_message_and_hint(self, client: AsyncClient):
         """Non-reusable session journals should return actionable validation details."""
         response = await client.post(

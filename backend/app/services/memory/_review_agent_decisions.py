@@ -62,6 +62,7 @@ class MemoryReviewBatchResult:
     reviewer_model_id: str | None = None
     session_id: str | None = None
     errors: list[str] = field(default_factory=list)
+    reviewed_uuids: list[str] = field(default_factory=list)
 
 
 def _normalize_review_decision(decision: str, review_status: str, has_compact: bool) -> str | None:

@@ -334,6 +334,14 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
             only_incomplete_audit=only_incomplete_audit,
         ) if remaining > 0 else None
         await db.commit()
+        if not dry_run and result and result.needs_action_count and result.reviewed_uuids:
+            # Finish the selected batch's corrections in this run, using the
+            # existing source revisions/change history. Do not defer proposals
+            # until the next scheduled review or create routine repair tasks.
+            maintenance = await run_context_maintenance(
+                db, batch_limit=batch_limit, followup_source_ids=result.reviewed_uuids,
+            )
+            await db.commit()
 
     if result is None:
         return JobExecutionResult(output=f"Context maintenance {maintenance['status']}: reviewed={maintenance['reviewed_count']}; rolling memory review continues next scheduled batch.")

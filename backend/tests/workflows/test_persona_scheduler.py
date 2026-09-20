@@ -155,7 +155,7 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_execute_memory_review_clamps_scheduled_batch_limit():
+async def test_execute_memory_review_clamps_scheduled_batch_limit_and_repairs_findings():
     from app.services.memory.review_agent import DEFAULT_BATCH_LIMIT
     from app.workflows.persona_scheduler import _execute_memory_review
 
@@ -181,7 +181,8 @@ async def test_execute_memory_review_clamps_scheduled_batch_limit():
     review_result = SimpleNamespace(
         status="completed",
         reviewed_count=1,
-        needs_action_count=0,
+        needs_action_count=1,
+        reviewed_uuids=["memory-1"],
         failed_count=0,
         reviewer_agent_slug="memory-curator",
         reviewer_model_id="codex/gpt-5.4",
@@ -191,7 +192,7 @@ async def test_execute_memory_review_clamps_scheduled_batch_limit():
 
     with (
         patch("app.db.async_session", return_value=FakeAsyncSession()),
-        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(return_value={"reviewed_count": 0, "status": "completed"})),
+        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(return_value={"reviewed_count": 0, "status": "completed"})) as maintenance,
         patch(
             "app.services.memory.review_agent.run_memory_review_batch",
             new=AsyncMock(return_value=review_result),
@@ -204,3 +205,6 @@ async def test_execute_memory_review_clamps_scheduled_batch_limit():
     await_args = mock_review.await_args
     assert await_args is not None
     assert await_args.kwargs["batch_limit"] == DEFAULT_BATCH_LIMIT
+    assert maintenance.await_count == 2
+    assert maintenance.await_args is not None
+    assert maintenance.await_args.kwargs["followup_source_ids"] == ["memory-1"]

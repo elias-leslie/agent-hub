@@ -11,6 +11,7 @@ from itertools import product
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.context_governance import ContextMaintenanceItem
@@ -46,7 +47,45 @@ def review_context(item: ContextMaintenanceItem, assigned_slug: str | None = Non
     return None
 
 
-async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict[str, Any]:
+async def _recover_pending(db: AsyncSession, *, batch_limit: int | None = None,
+                           source_ids: list[str] | None = None, review_ids: list[str] | None = None) -> list[dict[str, Any]]:
+    """Apply one finite set of findings directly; revision changes retire stale siblings."""
+    from app.services.context_maintenance_reconcile import reconcile_maintenance
+    from app.services.context_maintenance_recovery import recover_item
+    from app.services.context_maintenance_tasks import dispatch_technical_work
+
+    await reconcile_maintenance(db)
+    statement = select(ContextMaintenanceItem).where(
+        ContextMaintenanceItem.state == "pending", ContextMaintenanceItem.claim_owner.is_(None),
+        ContextMaintenanceItem.detail.contains({"handoff_needed": True}),
+        or_(~ContextMaintenanceItem.detail.op("?")("technical_work"),
+            ContextMaintenanceItem.detail["technical_work"]["status"].as_string() == "completed_pending_revalidation"),
+    ).order_by(ContextMaintenanceItem.created_at, ContextMaintenanceItem.id)
+    if source_ids is not None:
+        statement = statement.where(ContextMaintenanceItem.source_keys.op("?|")(array(source_ids)))
+    if review_ids is not None:
+        statement = statement.where(ContextMaintenanceItem.evidence_ids.op("?|")(array(review_ids)))
+    if batch_limit is not None:
+        statement = statement.limit(batch_limit)
+    items = list((await db.execute(statement)).scalars())
+    results = []
+    for item in items:
+        await db.refresh(item)
+        if item.state != "pending" or item.claim_owner:
+            continue
+        context = review_context(item)
+        if context is None:
+            results.append({"model_calls": 0, "technical_work": await dispatch_technical_work(db, item,
+                reason="No verified common review context is available. Inspect source ownership and applicability.")})
+        else:
+            results.append(await recover_item(db, item, context))
+        await reconcile_maintenance(db)
+        await db.commit()
+    return results
+
+
+async def run_context_maintenance(db: AsyncSession, *, batch_limit: int,
+                                  followup_source_ids: list[str] | None = None) -> dict[str, Any]:
     from app.db import async_session
     from app.services.context_maintenance_reconcile import reconcile_maintenance
     from app.services.context_review import ContextReviewRequest, prepare_review, run_review
@@ -65,9 +104,8 @@ async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict
             item.detail = {**item.detail, "handoff_needed": True, "interrupted_review": True}
             await maintenance_event(db, item, WORKER_ACTOR, "interrupted_review", {"reason": "Prior worker no longer holds its database lock; inspect provider evidence before retrying."})
         await db.commit()
-        from app.services.context_maintenance_recovery import RECOVERY_ACTOR, recover_item
+        from app.services.context_maintenance_recovery import RECOVERY_ACTOR
         from app.services.context_maintenance_tasks import (
-            dispatch_technical_work,
             reconcile_technical_work,
         )
 
@@ -83,24 +121,11 @@ async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict
             await maintenance_event(db, item, WORKER_ACTOR, "recovery_owner_released", {"reason": "Previous worker no longer owns its database lock."})
         await db.commit()
         technical = await reconcile_technical_work(db)
-        recoveries = list((await db.execute(select(ContextMaintenanceItem).where(
-            ContextMaintenanceItem.state == "pending", ContextMaintenanceItem.claim_owner.is_(None),
-            ContextMaintenanceItem.detail.contains({"handoff_needed": True}),
-            or_(~ContextMaintenanceItem.detail.op("?")("technical_work"),
-                ContextMaintenanceItem.detail["technical_work"]["status"].as_string() == "completed_pending_revalidation"),
-        ).order_by(ContextMaintenanceItem.created_at, ContextMaintenanceItem.id).limit(batch_limit))).scalars())
-        recovery_results = []
-        for item in recoveries:
-            if item.detail.get("technical_work") and item.detail["technical_work"].get("status") != "completed_pending_revalidation":
-                continue
-            context = review_context(item)
-            if context is None:
-                recovery_results.append({"model_calls": 0, "technical_work": await dispatch_technical_work(db, item,
-                    reason="No verified common review context is available. Inspect source ownership and applicability.")})
-            else:
-                recovery_results.append(await recover_item(db, item, context))
+        recovery_results = await _recover_pending(db,
+            batch_limit=batch_limit if followup_source_ids is None else None,
+            source_ids=followup_source_ids)
         recovery_work = sum(not result.get("regular_review_revalidation") for result in recovery_results)
-        remaining = max(0, batch_limit - recovery_work)
+        remaining = max(0, batch_limit - recovery_work) if followup_source_ids is None else 0
         candidates = list((await db.execute(select(ContextMaintenanceItem).where(
             ContextMaintenanceItem.state == "pending",
             ~ContextMaintenanceItem.detail.contains({"handoff_needed": True}),
@@ -119,6 +144,7 @@ async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict
                 groups[key] = (context, [])
             groups[key][1].append(item.id)
         reviewed = model_calls = 0
+        completed_review_ids: list[str] = []
         for context, item_ids in groups.values():
             items = list((await db.execute(select(ContextMaintenanceItem).where(
                 ContextMaintenanceItem.id.in_(item_ids), ContextMaintenanceItem.state == "pending",
@@ -149,6 +175,8 @@ async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict
             except Exception as exc:
                 await db.rollback()
                 result = {"failure": type(exc).__name__}
+            if result.get("review_id"):
+                completed_review_ids.append(result["review_id"])
             items = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.id.in_(claimed_ids))
                 .order_by(ContextMaintenanceItem.id).with_for_update().execution_options(populate_existing=True))).scalars())
             for item in items:
@@ -170,6 +198,8 @@ async def run_context_maintenance(db: AsyncSession, *, batch_limit: int) -> dict
                 item.resolution = {"verification": "reviewed_exact_sources; no content change", "review_id": result.get("review_id"), "failure": result.get("failure"), "successor_items": downstream}
                 await maintenance_event(db, item, WORKER_ACTOR, "review_completed", item.resolution)
             await db.commit()
+        if completed_review_ids:
+            recovery_results.extend(await _recover_pending(db, review_ids=completed_review_ids))
         from app.services.context_governance import record
         from app.services.context_maintenance_health import maintenance_health
         health = await maintenance_health(db)
