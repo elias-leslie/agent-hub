@@ -60,6 +60,10 @@ RECOVERY_INSTRUCTION = (
     "Keys in authority_passages must be exact source_id values from evidence.sources; never invent labels "
     "such as workflow. For technical_work or owner_decision, authority_passages may be empty. "
     "Apply clear reversible corrections supported by existing authority; preserve owner intent and required rule force. "
+    "Correct routine scope mistakes directly and retain the canonical before/after history. "
+    "A rule explicitly about one registered project is evidence for narrowing its global scope; "
+    "unknown currency of an unrelated technical detail does not block that scope correction. "
+    "Do not create a task or request owner approval merely to retarget a clearly project-specific source. "
     "Do not invent a restriction or an approval requirement. Dismiss only a demonstrated false positive. "
     "For a genuinely missing owner preference use owner_decision with a concrete question and recommendation. "
     "For missing technical evidence, a code/configuration defect, or an unsupported operation use technical_work; "
@@ -120,12 +124,14 @@ async def recover_item(db: AsyncSession, item: ContextMaintenanceItem,
     item.detail = {**item.detail, "recovery_attempt": {"key": key, "status": "started", "reviewer_identity": identity}}
     await maintenance_event(db, item, RECOVERY_ACTOR, "recovery_started", item.detail["recovery_attempt"])
     await db.commit()
+    from app.core.project_roots import get_registered_project_roots
     packet = {"workflow": guidance, "item": {"id": item_id, "kind": item.kind, "summary": item.summary,
         "recommendation": item.recommendation, "detail": item.detail, "owner_answer": item.decision},
         "evidence": prepared}
     result: dict[str, Any] = {"model_calls": 1}
     receipt: str | None = None
     try:
+        packet["registered_projects"] = await get_registered_project_roots()
         content, model, session_id = await _call_reviewer_agent(db, reviewer_agent_slug="memory-curator",
             prompt=RECOVERY_INSTRUCTION + "\nSchema: " + json.dumps(RecoveryDecision.model_json_schema())
                 + "\nEvidence: " + json.dumps(packet), response_schema=RecoveryDecision.model_json_schema())

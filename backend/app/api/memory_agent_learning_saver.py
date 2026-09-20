@@ -100,11 +100,21 @@ async def save_learning_with_validation(
     scope_id: str | None,
 ) -> SaveLearningResponse:
     """Save learning with full validation and duplicate checking."""
+    from fastapi import HTTPException
+
+    if scope == MemoryScope.GLOBAL and scope_id is not None:
+        raise HTTPException(422, "Global memory scope cannot have a target")
+    if scope != MemoryScope.GLOBAL and not (scope_id and scope_id.strip()):
+        raise HTTPException(422, "Project/agent memory scope requires an explicit target")
+    if scope == MemoryScope.PROJECT:
+        from app.core.project_roots import get_registered_project_roots
+        if scope_id not in await get_registered_project_roots():
+            raise HTTPException(422, "Choose a registered project for memory scope")
     rejection = await validate_learning_request(request)
     if rejection:
         return rejection
 
-    reinforcement = await check_duplicate(request.content, request.confidence)
+    reinforcement = await check_duplicate(request.content, request.confidence, scope, scope_id)
     if reinforcement:
         return reinforcement
 

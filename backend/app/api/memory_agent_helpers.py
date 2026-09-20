@@ -1,6 +1,7 @@
 """Helper functions for memory agent handlers."""
 
 from app.services.memory.context_injector import ProgressiveContext
+from app.services.memory.service import MemoryScope
 
 from .memory_agent_schemas import SaveLearningResponse, ScoringBreakdown
 from .memory_schemas import BudgetUsageResponse
@@ -63,14 +64,16 @@ def build_budget_usage(context: ProgressiveContext) -> BudgetUsageResponse | Non
     )
 
 
-async def check_duplicate(content: str, confidence: int) -> SaveLearningResponse | None:
+async def check_duplicate(content: str, confidence: int, scope: MemoryScope, scope_id: str | None) -> SaveLearningResponse | None:
     """Check for duplicate learning and return response if found."""
     from app.services.memory.promotion import check_and_promote_duplicate
+    from app.services.memory.service import build_group_id
 
     try:
         reinforcement = await check_and_promote_duplicate(
             content=content,
             confidence=confidence,
+            group_id=build_group_id(scope, scope_id),
         )
 
         if reinforcement.found_match:
