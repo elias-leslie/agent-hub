@@ -1,13 +1,15 @@
 """Claimed maintenance actions use canonical edits and verify actual delivery."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from collections.abc import Mapping
+from typing import Any, Literal, cast
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.client import check_project_access
 from app.models.context_governance import ContextMaintenanceItem, ContextRecord
 from app.models.memory_unified import Memory
 from app.models.runtime_context import RuntimeContextOverride
@@ -44,7 +46,7 @@ class OwnerDecision(BaseModel):
 
 class MaintenanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "inspect", "acknowledge", "claim", "release", "recover", "defer", "resume", "dismiss", "escalate", "reported", "answer", "repair", "apply", "resolve", "review", "reconcile"] = "list"
+    action: Literal["list", "inspect", "acknowledge", "claim", "release", "recover", "defer", "resume", "dismiss", "escalate", "reported", "answer", "repair", "apply", "resolve", "review", "reconcile", "verify_work"] = "list"
     context: CanonicalContextDeliveryRequest
     item_id: str | None = None
     expected_version: int | None = None
@@ -57,6 +59,10 @@ class MaintenanceRequest(BaseModel):
     include_closed: bool = False
     include_background: bool = False
     review_mode: Literal["deterministic", "curator"] = "deterministic"
+    task_id: str | None = Field(default=None, min_length=1)
+    external_request_key: str | None = Field(default=None, min_length=1)
+    external_payload_digest: str | None = Field(default=None, min_length=1)
+    generation: int | None = Field(default=None, ge=0)
 
 
 async def verify_delivery(db: AsyncSession, context: CanonicalContextDeliveryRequest) -> dict[str, Any]:
@@ -104,7 +110,14 @@ async def repair_item(db: AsyncSession, row: ContextMaintenanceItem, actor: str)
     raise HTTPException(422, "This finding requires agent assessment; no mechanical repair is defined")
 
 
-async def handle_maintenance(db: AsyncSession, request: MaintenanceRequest, actor: str, *, operator: bool = False) -> dict[str, Any]:
+async def handle_maintenance(
+    db: AsyncSession,
+    request: MaintenanceRequest,
+    actor: str,
+    *,
+    operator: bool = False,
+    caller_service_client: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     if request.action == "reconcile":
         from app.services.context_maintenance_reconcile import reconcile_maintenance
         result = await reconcile_maintenance(db, actor=actor)
@@ -114,6 +127,31 @@ async def handle_maintenance(db: AsyncSession, request: MaintenanceRequest, acto
         result = await acknowledge(db, request.context, request.versions)
         await db.commit()
         return result
+    if request.action == "verify_work":
+        authorized = (
+            caller_service_client is not None
+            and request.context.project_id == "agent-hub"
+            and check_project_access(caller_service_client.get("allowed_projects"), "agent-hub")
+        )
+        if not authorized:
+            raise HTTPException(404, "Maintenance item is not applicable to this context")
+        statement = select(ContextMaintenanceItem).where(
+            ContextMaintenanceItem.id == request.item_id
+        ).execution_options(populate_existing=True)
+        row = (await db.execute(statement)).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(404, "Maintenance item was not found")
+        from app.services.context_maintenance_work_product import verify_work_product
+
+        return cast(dict[str, Any], await verify_work_product(
+            db,
+            row,
+            task_id=request.task_id,
+            external_request_key=request.external_request_key,
+            external_payload_digest=request.external_payload_digest,
+            generation=request.generation,
+        ))
+
     visible = await relevant_items(db, request.context, include_closed=request.include_closed or request.action == "inspect")
     if request.action == "list":
         from app.models.prompt import Prompt
@@ -125,7 +163,8 @@ async def handle_maintenance(db: AsyncSession, request: MaintenanceRequest, acto
                 "attention": await attention_summary(db, request.context),
                 "health": await maintenance_health(db),
                 "guidance": guidance, "guidance_source": "prompt:context-maintenance-workflow" if guidance else None}
-    if request.item_id not in {row.id for row in visible}:
+    visible_ids = {row.id for row in visible}
+    if request.item_id not in visible_ids:
         raise HTTPException(404, "Maintenance item is not applicable to this context")
     statement = select(ContextMaintenanceItem).where(ContextMaintenanceItem.id == request.item_id).execution_options(populate_existing=True)
     row = (await db.execute(statement if request.action == "inspect" else statement.with_for_update())).scalar_one()

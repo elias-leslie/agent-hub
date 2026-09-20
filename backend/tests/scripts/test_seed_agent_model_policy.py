@@ -8,7 +8,10 @@ from pathlib import Path
 from app.constants.catalog_entries import MODEL_CATALOG
 from app.constants.models import LOCAL_NERI_QWEN3_8_27B_IQ3_S
 
-SUBSCRIPTION_ONLY_SLUGS = {"learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator"}
+SUBSCRIPTION_ONLY_SLUGS = {
+    "learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator",
+    "memory-curator",  # owner-selected qualified subscription route; no API fallback
+}
 
 EXCLUDED_SLUGS = {
     "designer",
@@ -85,6 +88,18 @@ def test_seed_agents_do_not_use_grok_by_default() -> None:
         grok_models = [model for model in models if "xai/" in model or "grok" in model]
 
         assert not grok_models, f"{agent['slug']} should not use Grok/xAI by default: {grok_models}"
+
+
+def test_memory_curator_preserves_qualified_subscription_route() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    curator = next(agent for agent in data["agents"] if agent["slug"] == "memory-curator")
+
+    # Qualification covers this exact route and reasoning setting. Do not
+    # silently replace it with an unqualified model on provider failure.
+    assert curator["primary_model_id"] == "codex/gpt-5.6-luna"
+    assert curator["thinking_level"] == "low"
+    assert curator.get("fallback_models") == []
+    assert curator.get("escalation_model_id") is None
 
 
 def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
