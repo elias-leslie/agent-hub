@@ -8,6 +8,7 @@ stays pending until the canonical context queue is revalidated.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.context_governance import ContextMaintenanceItem
 from app.services.context_maintenance import ACTIVE_STATES, maintenance_event
@@ -40,6 +42,13 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _mark_detail_changed(item: ContextMaintenanceItem) -> None:
+    # Unit tests use lightweight stand-ins; real ORM rows need the explicit
+    # JSON marker after nested technical_work mutations.
+    with suppress(Exception):
+        flag_modified(item, "detail")
+
+
 def _receipt(payload: dict[str, Any]) -> dict[str, Any]:
     """Keep only stable task identity/status fields in the maintenance receipt."""
     return {
@@ -61,13 +70,17 @@ def _receipt(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _diagnosis(item: ContextMaintenanceItem) -> dict[str, Any]:
     """Build a task packet without copying source text or model packets."""
+    evidence_ids = {str(value) for value in (item.evidence_ids or [])}
+    recovery_attempt = (item.detail or {}).get("recovery_attempt")
+    if isinstance(recovery_attempt, dict) and recovery_attempt.get("receipt_id"):
+        evidence_ids.add(str(recovery_attempt["receipt_id"]))
     return {
         "maintenance_item_id": item.id,
         "kind": item.kind,
         "summary": str(item.summary or ""),
         "recommendation": str(item.recommendation or ""),
         "source_ids": sorted(str(value) for value in (item.source_keys or [])),
-        "evidence_ids": sorted(str(value) for value in (item.evidence_ids or [])),
+        "evidence_ids": sorted(evidence_ids),
     }
 
 
@@ -120,7 +133,9 @@ def _build_request(item: ContextMaintenanceItem, *, reason: str) -> dict[str, An
 
 
 async def _save_event(db: AsyncSession, item: ContextMaintenanceItem, action: str, evidence: dict[str, Any]) -> None:
-    item.version += 1
+    if item.state in ACTIVE_STATES:
+        item.version += 1
+    _mark_detail_changed(item)
     await maintenance_event(db, item, "system:context-maintenance", action, evidence)
     await db.commit()
 
@@ -341,6 +356,8 @@ async def dispatch_technical_work(
     work = dict(detail.get("technical_work") or {})
     existing_status = str(work.get("status") or "")
     existing_task_id = work.get("task_id")
+    if item.state not in ACTIVE_STATES:
+        return {"status": existing_status or "closed", "task_id": existing_task_id, "created": False}
     if existing_task_id and existing_status == "completed":
         work.update({"status": "completed_pending_revalidation", "task_owned": False})
         item.detail = {**detail, "technical_work": work, "handoff_needed": True, "technical_blocked": False}
@@ -405,6 +422,11 @@ async def dispatch_technical_work(
         task_id = body.get("id") or body.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             raise ValueError("SummitFlow response did not contain a task ID")
+        work["task_id"] = task_id
+        item.detail = {**item.detail, "technical_work": work}
+        _mark_detail_changed(item)
+        if hasattr(db, "flush"):
+            await db.flush()
         task_status = str(body.get("status") or "pending")
         observed_status = "completed_pending_revalidation" if task_status == "completed" else task_status
         terminal_failure = observed_status in _TERMINAL_TASK_STATUSES or bool(body.get("archived"))
@@ -451,7 +473,9 @@ async def dispatch_technical_work(
 
 async def reconcile_technical_work(db: AsyncSession) -> dict[str, Any]:
     """Replay lost acknowledgements and observe SummitFlow task lifecycle."""
-    rows = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.state.in_(ACTIVE_STATES)))).scalars())
+    rows = list((await db.execute(select(ContextMaintenanceItem).where(
+        ContextMaintenanceItem.state.in_((*ACTIVE_STATES, "resolved", "dismissed"))
+    ))).scalars())
     counts = {"inspected": 0, "replayed": 0, "completed": 0, "blocked": 0, "errors": 0}
     api_base = await _project_api_url()
     gated_items = [
@@ -471,14 +495,48 @@ async def reconcile_technical_work(db: AsyncSession) -> dict[str, Any]:
         work = dict((item.detail or {}).get("technical_work") or {})
         if not work:
             continue
+        if item.state not in ACTIVE_STATES and (item.resolution or {}).get("work_receipt"):
+            continue
         task_id = work.get("task_id")
         status = str(work.get("status") or "")
+        if not task_id and item.state not in ACTIVE_STATES and status in {"dispatch_pending", "dispatching"}:
+            if not api_base:
+                counts["errors"] += 1
+                continue
+            before_detail = dict(item.detail or {})
+            raw_request = work.get("request")
+            request: dict[str, Any] = raw_request if isinstance(raw_request, dict) else {}
+            request_key = str(work.get("external_request_key") or request.get("external_request_key") or _external_request_key(item))
+            endpoint = f"{api_base.rstrip('/')}/projects/{_TASK_PROJECT}/tasks"
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(endpoint, json=request)
+                if response.status_code < 400:
+                    parsed = response.json()
+                    body = parsed if isinstance(parsed, dict) else {}
+                    task_id = body.get("id") or body.get("task_id")
+                    if isinstance(task_id, str) and task_id:
+                        receipt = _receipt(body)
+                        work.update({"task_id": task_id, "receipt": receipt, "external_request_key": request_key,
+                                     "external_payload_digest": receipt.get("external_payload_digest"),
+                                     "observed_at": _now(), "task_owned": False, "generation": _generation(item)})
+                        if str(body.get("status") or "") == "completed":
+                            work["status"] = "completed_pending_revalidation"
+                            item.resolution = {**(item.resolution or {}), "work_receipt": receipt}
+                        item.detail = {**(item.detail or {}), "technical_work": work}
+                        await _save_observation(db, item, before_detail, "technical_work_observed", {"task_id": task_id, "status": work.get("status"), "receipt": receipt})
+            except Exception:
+                counts["errors"] += 1
+            continue
         if not task_id:
             if status in {"dispatch_pending", "dispatching"}:
                 result = await dispatch_technical_work(db, item, reason="Replay the frozen idempotent request after an uncertain delivery.")
                 counts["replayed"] += int(bool(result.get("created")))
             continue
         if status == "completed_pending_revalidation" or (status == "blocked" and not task_id):
+            if item.state not in ACTIVE_STATES and isinstance(work.get("receipt"), dict):
+                item.resolution = {**(item.resolution or {}), "work_receipt": work["receipt"]}
+                await _save_event(db, item, "technical_work_receipt_retained", {"task_id": task_id, "receipt": work["receipt"]})
             continue
         if not api_base:
             if status in _EXECUTION_GATED_TASK_STATUSES and permission is not None and pickup is not None:
@@ -517,9 +575,15 @@ async def reconcile_technical_work(db: AsyncSession) -> dict[str, Any]:
             if observed_status == "completed":
                 receipt = _receipt(body)
                 if status == "blocked" and _same_completed_receipt(work.get("receipt"), receipt):
+                    if item.state not in ACTIVE_STATES:
+                        item.resolution = {**(item.resolution or {}), "work_receipt": receipt}
+                        await _save_event(db, item, "technical_work_receipt_retained", {"task_id": task_id, "receipt": receipt})
                     continue
                 _clear_queued_gate_markers(work)
-                work.update({"status": "completed_pending_revalidation", "task_owned": False, "receipt": receipt, "observed_at": _now(), "generation": _generation(item)})
+                generation = _generation(item)
+                work.update({"status": "completed_pending_revalidation", "task_owned": False, "receipt": receipt, "observed_at": _now(), "generation": generation})
+                if item.state in {"resolved", "dismissed"}:
+                    item.resolution = {**(item.resolution or {}), "work_receipt": receipt}
                 item.detail = {**item.detail, "technical_work": work, "handoff_needed": True, "technical_blocked": False}
                 await _save_observation(db, item, before_detail, "technical_work_completed", {"task_id": task_id, "next": "pending_revalidation"})
                 counts["completed"] += 1

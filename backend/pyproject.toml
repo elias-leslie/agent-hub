@@ -49,6 +49,8 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "playwright>=1.57.0",
     "mcp>=1.20.0",
+    "agent-hub-st==0.1.0",
+    "summitflow-st-sdk==0.1.0",
 ]
 
 [project.scripts]
@@ -94,6 +96,10 @@ constraint-dependencies = [
     "pyasn1>=0.6.4",
     "pydantic-settings>=2.14.2",
 ]
+
+[tool.uv.sources]
+agent-hub-st = { path = "../docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl" }
+summitflow-st-sdk = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
 
 [build-system]
 requires = ["hatchling"]

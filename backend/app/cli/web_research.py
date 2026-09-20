@@ -7,6 +7,7 @@ import asyncio
 import json
 import sys
 
+from app.cli.web_benchmark import benchmark_web
 from app.services.tools._executor_web import fetch_web_page, research_web, search_web
 
 
@@ -15,6 +16,16 @@ def _resolve_required_arg(primary: str | None, fallback: str | None, name: str) 
     if not value:
         raise ValueError(f"{name} is required")
     return value
+
+
+def _add_output_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--compact",
+        "--raw",
+        dest="compact",
+        action="store_true",
+        help="Emit compact single-line JSON instead of pretty JSON",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -45,6 +56,7 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("d", "w", "m", "y"),
         help="Optional search recency filter",
     )
+    _add_output_options(search_parser)
 
     research_parser = subparsers.add_parser(
         "research",
@@ -82,6 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--focus-query",
         help="Optional question/topic used to focus the fetched page before truncation",
     )
+    research_parser.add_argument(
+        "--backend",
+        choices=("auto", "direct", "jina"),
+        default="auto",
+        help="Page fetch backend",
+    )
+    _add_output_options(research_parser)
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch and extract a webpage.")
     fetch_parser.add_argument("url_arg", nargs="?", help="HTTP or HTTPS URL")
@@ -96,6 +115,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--focus-query",
         help="Optional question/topic used to focus large pages before truncation",
     )
+    fetch_parser.add_argument(
+        "--backend",
+        choices=("auto", "direct", "jina"),
+        default="auto",
+        help="Page fetch backend",
+    )
+    _add_output_options(fetch_parser)
+
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Run deterministic local web fetch benchmarks.",
+    )
+    benchmark_parser.add_argument("--iterations", type=int, default=3)
+    benchmark_parser.add_argument("--max-chars", type=int, default=800)
+    _add_output_options(benchmark_parser)
     return parser
 
 
@@ -118,6 +152,7 @@ async def _run_command(args: argparse.Namespace) -> str:
             timelimit=args.timelimit,
             max_chars=args.max_chars,
             focus_query=args.focus_query,
+            backend=args.backend,
         )
     if args.command == "fetch":
         url = _resolve_required_arg(args.url, args.url_arg, "--url")
@@ -125,14 +160,30 @@ async def _run_command(args: argparse.Namespace) -> str:
             url=url,
             max_chars=args.max_chars,
             focus_query=args.focus_query,
+            backend=args.backend,
+        )
+    if args.command == "benchmark":
+        return await benchmark_web(
+            iterations=max(1, min(args.iterations, 10)),
+            max_chars=max(100, min(args.max_chars, 5000)),
         )
     raise ValueError(f"Unknown command: {args.command}")
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv == ["--describe-st"]:
+        from app.cli.web_extension import describe_extension
+
+        print(json.dumps(describe_extension(), sort_keys=True))
+        return 0
     parser = _build_parser()
     args = parser.parse_args(argv)
-    payload = asyncio.run(_run_command(args))
+    try:
+        payload = asyncio.run(_run_command(args))
+    except ValueError as exc:
+        print(f"ERROR {exc}", file=sys.stderr)
+        return 2
 
     try:
         parsed = json.loads(payload)
@@ -140,7 +191,9 @@ def main(argv: list[str] | None = None) -> int:
         print(payload)
         return 1
 
-    print(json.dumps(parsed, indent=2, sort_keys=True))
+    print(json.dumps(parsed, indent=None if args.compact else 2, sort_keys=True))
+    if args.command == "benchmark" and parsed.get("passed") is False:
+        return 1
     return 0 if "error" not in parsed else 1
 
 

@@ -347,6 +347,37 @@ async def test_invalid_recovery_cannot_mutate_or_repeat_inference(maintenance_db
 
 
 @pytest.mark.integration
+async def test_recovery_rejects_edits_outside_maintenance_item_sources(maintenance_db):
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance_recovery import recover_item
+    from app.services.context_policy import ContextPolicy
+
+    db = maintenance_db
+    _, item_id, source = await maintenance_fixture(db, handoff=True)
+    neighbor = Prompt(slug='neighbor-fixture', name='Neighbor fixture', content='Use the existing canonical workflow in this other source.',
+        enabled=True, is_global=True, prompt_type='standard', exclude_agents=[], context_policy=ContextPolicy(scope='global').model_dump())
+    db.add(neighbor)
+    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Preserve authority and exact evidence.',
+        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
+    await db.commit()
+    from app.services.context_policy import source_revision
+    response = {'action': 'apply', 'reason': 'Wrong item edit', 'authority_passages': {neighbor.slug: neighbor.content},
+        'edits': [{'source_type': 'prompt', 'source_id': neighbor.slug, 'expected_revision': source_revision(neighbor), 'content': 'Must never be saved'}]}
+    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
+        result = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
+    reviewer.assert_awaited_once()
+    assert result['failure'] == 'ValueError'
+    assert neighbor.content == 'Use the existing canonical workflow in this other source.'
+    assert (await get_source(db, 'prompt', source['source_id'])).content == source['content']
+    receipts = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance_recovery'))).scalars())
+    assert len(receipts) == 1 and 'neighbor-fixture' in receipts[0].payload['response']
+
+
+@pytest.mark.integration
 async def test_later_review_failure_reopens_resolved_incident_once(maintenance_db):
     from app.models.context_governance import ContextMaintenanceItem
     from app.services.context_governance import record

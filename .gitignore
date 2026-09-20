@@ -58,7 +58,9 @@ secrets.json
 
 # Legacy artifacts
 celerybeat-schedule*
-docker/workspace-packages/
+docker/workspace-packages/*
+!docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl
+!docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl
 
 # Project data
 data/

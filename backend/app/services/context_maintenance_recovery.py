@@ -69,7 +69,7 @@ RECOVERY_INSTRUCTION = (
     "For missing technical evidence, a code/configuration defect, or an unsupported operation use technical_work; "
     "it will become an owned autonomous implementation task. Never label technical uncertainty an owner decision. "
     "Do not infer hidden native prompts or claim native model receipt. Required rules must stay full. "
-    "Propose edits only to the item's source IDs, with their exact current revisions. Quote each edited source; "
+    "Propose edits only to item.source_keys, with their exact current revisions. Quote each edited source; "
     "for dismissal quote every source in the finding, explaining why its evidence does not establish a problem. "
     "Use only evidenced activation identifiers; do not invent workflows or phases that no consumer sends. "
     "Historical dated facts are not stale merely because present state is unknown. Dismiss unsupported findings "
@@ -126,7 +126,9 @@ async def recover_item(db: AsyncSession, item: ContextMaintenanceItem,
     await db.commit()
     from app.core.project_roots import get_registered_project_roots
     packet = {"workflow": guidance, "item": {"id": item_id, "kind": item.kind, "summary": item.summary,
-        "recommendation": item.recommendation, "detail": item.detail, "owner_answer": item.decision},
+        "recommendation": item.recommendation, "source_keys": item.source_keys,
+        "sources": evidence_identity(item.sources), "evidence_ids": item.evidence_ids,
+        "detail": item.detail, "owner_answer": item.decision},
         "evidence": prepared}
     result: dict[str, Any] = {"model_calls": 1}
     receipt: str | None = None
@@ -143,6 +145,11 @@ async def recover_item(db: AsyncSession, item: ContextMaintenanceItem,
             body = "\n".join(body.splitlines()[1:-1])
         decision = RecoveryDecision.model_validate_json(body)
         sources = {s["source_id"]: s for s in prepared["sources"]}
+        item_source_keys = set(item.source_keys or [])
+        if decision.action == "apply":
+            edited_source_keys = {edit.source_id for edit in decision.edits}
+            if not edited_source_keys or edited_source_keys - item_source_keys:
+                raise ValueError("Recovery edits must target this maintenance item's source IDs")
         for source_id, passage in decision.authority_passages.items():
             if source_id not in sources or not passage or passage not in sources[source_id]["content"]:
                 raise ValueError("Recovery authority must quote exact supplied source content")

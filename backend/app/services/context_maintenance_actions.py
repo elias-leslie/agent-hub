@@ -294,7 +294,12 @@ async def handle_maintenance(
             if source["source_type"] in {"prompt", "memory"}:
                 current = await get_source(db, source["source_type"], source["source_id"])
                 verified.append({"source_type": source["source_type"], "source_id": source["source_id"], "revision": source_revision(current)})
-        row.resolution = {**row.resolution, "verified_sources": verified}
+        work = (row.detail or {}).get("technical_work")
+        receipt = (work or {}).get("receipt") if isinstance(work, dict) else None
+        retained = {"verified_sources": verified}
+        if isinstance(receipt, dict):
+            retained["work_receipt"] = receipt
+        row.resolution = {**row.resolution, **retained}
         row.claim_owner, row.claim_session = None, None
     await db.flush()
     await maintenance_event(db, row, actor, request.action, {"reason": request.reason, "evidence": request.evidence, "resolution": row.resolution, "decision": row.decision})

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, TypedDict, cast
 
 from fastapi import HTTPException
@@ -65,21 +66,24 @@ def _result(
 
 
 def _receipt_matches(
-    receipt: Any,
+    receipts: Sequence[Any],
     *,
     task_id: str,
     external_request_key: str,
     external_payload_digest: str,
 ) -> bool:
-    if not isinstance(receipt, dict):
-        return False
-    return (
-        receipt.get("id") == task_id
-        and receipt.get("project_id") == "agent-hub"
-        and receipt.get("external_origin") == "agent-hub-context-maintenance"
-        and receipt.get("external_request_key") == external_request_key
-        and receipt.get("external_payload_digest") == external_payload_digest
-    )
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        if (
+            receipt.get("id") == task_id
+            and receipt.get("project_id") == "agent-hub"
+            and receipt.get("external_origin") == "agent-hub-context-maintenance"
+            and receipt.get("external_request_key") == external_request_key
+            and receipt.get("external_payload_digest") == external_payload_digest
+        ):
+            return True
+    return False
 
 
 async def _live_sources(
@@ -116,13 +120,21 @@ async def verify_work_product(
     generation: int | None,
 ) -> WorkProductVerification:
     """Verify one exact external work receipt against current canonical context."""
-    work = (row.detail or {}).get("technical_work")
+    detail = row.detail if isinstance(row.detail, dict) else {}
+    work = detail.get("technical_work")
     work = work if isinstance(work, dict) else {}
     receipt = work.get("receipt")
-    bound_task_id = work.get("task_id")
-    bound_request_key = work.get("external_request_key") or (work.get("request") or {}).get("external_request_key")
-    bound_digest = work.get("external_payload_digest") or (receipt or {}).get("external_payload_digest")
-    bound_generation = work.get("generation", (row.detail or {}).get("generation"))
+    receipt = receipt if isinstance(receipt, dict) else None
+    resolution = row.resolution if isinstance(row.resolution, dict) else {}
+    work_receipt = resolution.get("work_receipt")
+    work_receipt = work_receipt if isinstance(work_receipt, dict) else None
+    raw_request = work.get("request")
+    request: dict[str, Any] = raw_request if isinstance(raw_request, dict) else {}
+    receipts = [receipt, work_receipt]
+    bound_task_id = work.get("task_id") or (work_receipt or {}).get("id")
+    bound_request_key = work.get("external_request_key") or request.get("external_request_key") or (work_receipt or {}).get("external_request_key")
+    bound_digest = work.get("external_payload_digest") or (receipt or {}).get("external_payload_digest") or (work_receipt or {}).get("external_payload_digest")
+    bound_generation = work.get("generation", detail.get("generation"))
     if row.state not in {"resolved", "dismissed"}:
         return _result(verified=False, reason="maintenance item is not closed", row=row)
     if not all(isinstance(value, str) and value for value in (task_id, external_request_key, external_payload_digest)):
@@ -135,7 +147,7 @@ async def verify_work_product(
         or bound_digest != external_payload_digest
         or bound_generation != generation
         or not _receipt_matches(
-            receipt,
+            receipts,
             task_id=task_id,
             external_request_key=external_request_key,
             external_payload_digest=external_payload_digest,
@@ -149,7 +161,6 @@ async def verify_work_product(
             external_request_key=external_request_key,
             external_payload_digest=external_payload_digest,
         )
-    resolution = row.resolution if isinstance(row.resolution, dict) else {}
     required_policy = resolution.get("required_policy")
     if resolution.get("verification") != "canonical_generation" or not isinstance(required_policy, dict) or required_policy.get("state") != "complete":
         return _result(verified=False, reason="resolution does not retain a complete canonical generation", row=row)

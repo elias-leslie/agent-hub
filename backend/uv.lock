@@ -23,6 +23,7 @@ name = "agent-hub"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-hub-st" },
     { name = "alembic" },
     { name = "anthropic" },
     { name = "asyncpg" },
@@ -51,6 +52,7 @@ dependencies = [
     { name = "rank-bm25" },
     { name = "redis" },
     { name = "sqlalchemy" },
+    { name = "summitflow-st-sdk" },
     { name = "tenacity" },
     { name = "tiktoken" },
     { name = "trafilatura" },
@@ -78,6 +80,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl" },
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
@@ -116,6 +119,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "summitflow-st-sdk", path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "trafilatura", specifier = ">=2.0.0" },
@@ -125,6 +129,28 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
 ]
 provides-extras = ["compression", "dev"]
+
+[[package]]
+name = "agent-hub-st"
+version = "0.1.0"
+source = { path = "../docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pyyaml" },
+    { name = "summitflow-st-sdk" },
+    { name = "typer" },
+]
+wheels = [
+    { filename = "agent_hub_st-0.1.0-py3-none-any.whl", hash = "sha256:773f7ae10248474c904826ef84d27dc6a1f2050e209fbb271664435f88c11b1a" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "summitflow-st-sdk", specifier = "==0.1.0" },
+    { name = "typer", specifier = ">=0.15.0" },
+]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -2787,6 +2813,26 @@ wheels = [
 ]
 
 [[package]]
+name = "summitflow-st-sdk"
+version = "0.1.0"
+source = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pyyaml" },
+    { name = "typer" },
+]
+wheels = [
+    { filename = "summitflow_st_sdk-0.1.0-py3-none-any.whl", hash = "sha256:64a3d0291c716bdd6c1f74cda91c77902519a31394527e46de17b19c3e02ef26" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "typer", specifier = ">=0.15.0" },
+]
+
+[[package]]
 name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2943,6 +2989,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c5/2d/2663984ac11de6d78f74432b8b14ba64d170b45194312852b7543cf7fd56/ty-0.0.17-py3-none-win32.whl", hash = "sha256:305b6ed150b2740d00a817b193373d21f0767e10f94ac47abfc3b2e5a5aec809", size = 9672932, upload-time = "2026-02-13T13:27:08.522Z" },
     { url = "https://files.pythonhosted.org/packages/de/b5/39be78f30b31ee9f5a585969930c7248354db90494ff5e3d0756560fb731/ty-0.0.17-py3-none-win_amd64.whl", hash = "sha256:531828267527aee7a63e972f54e5eee21d9281b72baf18e5c2850c6b862add83", size = 10542138, upload-time = "2026-02-13T13:27:17.084Z" },
     { url = "https://files.pythonhosted.org/packages/40/b7/f875c729c5d0079640c75bad2c7e5d43edc90f16ba242f28a11966df8f65/ty-0.0.17-py3-none-win_arm64.whl", hash = "sha256:de9810234c0c8d75073457e10a84825b9cd72e6629826b7f01c7a0b266ae25b1", size = 10023068, upload-time = "2026-02-13T13:26:39.637Z" },
+]
+
+[[package]]
+name = "typer"
+version = "0.27.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "rich" },
+    { name = "shellingham" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/bf/205d0004930ede8f542fb58f601526fccf4ae7626075ca1e6c4de5d3d652/typer-0.27.2-py3-none-any.whl", hash = "sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d", size = 123130, upload-time = "2026-08-28T10:26:53.752Z" },
 ]
 
 [[package]]

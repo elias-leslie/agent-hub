@@ -35,10 +35,11 @@ def _project_execution_permission() -> Iterator[AsyncMock]:
 
 
 def _item(*, status: str | None = None, task_id: str | None = None, generation: int = 0,
-          technical_blocked: bool = False) -> SimpleNamespace:
+          technical_blocked: bool = False, recovery_receipt_id: str | None = None) -> SimpleNamespace:
     technical = {}
     if status is not None:
         technical = {"status": status, "task_id": task_id}
+    recovery_attempt = {"receipt_id": recovery_receipt_id} if recovery_receipt_id else {}
     return SimpleNamespace(
         id="maintenance-1",
         kind="review_failed",
@@ -48,7 +49,8 @@ def _item(*, status: str | None = None, task_id: str | None = None, generation: 
         evidence_ids=["review-1"],
         detail={"handoff_needed": True, "technical_blocked": technical_blocked,
                 **({"generation": generation} if generation else {}),
-                **({"technical_work": technical} if technical else {})},
+                **({"technical_work": technical} if technical else {}),
+                **({"recovery_attempt": recovery_attempt} if recovery_attempt else {})},
         state="pending",
         version=1,
     )
@@ -149,6 +151,42 @@ async def test_dispatch_freezes_safe_idempotent_request_and_keeps_item_pending()
     assert client.posts[0][0] == "http://summitflow/api/projects/agent-hub/tasks"
     assert event.await_count == 2
     assert db.commit.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_dispatch_includes_retained_recovery_receipt_reference() -> None:
+    item = _item(recovery_receipt_id="recovery-receipt-1")
+    db = SimpleNamespace(commit=AsyncMock())
+    client = _Client(post_response=_Response({"id": "task-42", "status": "pending", "project_id": "agent-hub"}))
+
+    with (
+        patch("app.services.context_maintenance_tasks._project_api_url", new=AsyncMock(return_value="http://summitflow/api")),
+        patch("app.services.context_maintenance_tasks.httpx.AsyncClient", return_value=client),
+        patch("app.services.context_maintenance_tasks.maintenance_event", new=AsyncMock()),
+    ):
+        await dispatch_technical_work(db, item, reason="Inspect retained recovery evidence")
+
+    references = item.detail["technical_work"]["request"]["references"]
+    assert "review-1" in references
+    assert "recovery-receipt-1" in references
+
+
+@pytest.mark.asyncio
+async def test_dispatch_flushes_task_id_before_secondary_observations() -> None:
+    item = _item()
+    db = SimpleNamespace(commit=AsyncMock(), flush=AsyncMock())
+    client = _Client(post_response=_Response({"id": "task-42", "status": "pending", "project_id": "agent-hub"}))
+
+    with (
+        patch("app.services.context_maintenance_tasks._project_api_url", new=AsyncMock(return_value="http://summitflow/api")),
+        patch("app.services.context_maintenance_tasks.httpx.AsyncClient", return_value=client),
+        patch("app.services.context_maintenance_tasks.maintenance_event", new=AsyncMock()),
+    ):
+        result = await dispatch_technical_work(db, item, reason="Recover the retained technical failure")
+
+    assert result["task_id"] == "task-42"
+    assert item.detail["technical_work"]["task_id"] == "task-42"
+    db.flush.assert_awaited_once()
 
 
 @pytest.mark.asyncio
