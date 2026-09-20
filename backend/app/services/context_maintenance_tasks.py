@@ -70,13 +70,17 @@ def _receipt(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _diagnosis(item: ContextMaintenanceItem) -> dict[str, Any]:
     """Build a task packet without copying source text or model packets."""
+    evidence_ids = {str(value) for value in (item.evidence_ids or [])}
+    recovery_attempt = (item.detail or {}).get("recovery_attempt")
+    if isinstance(recovery_attempt, dict) and recovery_attempt.get("receipt_id"):
+        evidence_ids.add(str(recovery_attempt["receipt_id"]))
     return {
         "maintenance_item_id": item.id,
         "kind": item.kind,
         "summary": str(item.summary or ""),
         "recommendation": str(item.recommendation or ""),
         "source_ids": sorted(str(value) for value in (item.source_keys or [])),
-        "evidence_ids": sorted(str(value) for value in (item.evidence_ids or [])),
+        "evidence_ids": sorted(evidence_ids),
     }
 
 
