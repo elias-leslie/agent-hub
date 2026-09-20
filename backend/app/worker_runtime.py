@@ -57,11 +57,12 @@ ALL_WORKFLOWS: tuple[WorkflowDef, ...] = OPS_WORKFLOWS + AGENT_WORKFLOWS
 
 
 async def init_worker_credentials() -> None:
-    """Load DB credentials into the singleton cache for worker processes."""
+    """Load credentials and the canonical DB model catalog for worker processes."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from app.config import settings
     from app.services.credential_manager import get_credential_manager
+    from app.services.model_catalog_service import refresh_runtime_model_catalog
 
     db_url = settings.agent_hub_db_url
     if db_url.startswith("postgresql://"):
@@ -74,6 +75,8 @@ async def init_worker_credentials() -> None:
             lambda: AsyncSession(engine, expire_on_commit=False)
         )
         logger.info("Worker: loaded %d credentials", loaded)
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            await refresh_runtime_model_catalog(db)
     finally:
         await engine.dispose()
 

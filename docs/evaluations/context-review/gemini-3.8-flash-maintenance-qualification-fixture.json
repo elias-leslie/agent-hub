@@ -1,0 +1,110 @@
+{
+  "revision": "synthetic-maintenance-qualification-v1",
+  "description": "Sanitized frozen fixture used unchanged for Gemini and Codex Luna low calls.",
+  "answer_key_provenance": "The owner/task instructions supplied the boundary requirements before calls, but no standalone answer-key file was materialized before the ephemeral calls. The answer_key field below was reconstructed afterward from those requirements and must not be treated as an independently preregistered score.",
+  "regular_review_context": {
+    "project_id": "project-beta",
+    "consumer_surface": "gemini",
+    "agent_slug": "memory-curator",
+    "task_type": "review",
+    "phase": "memory_review",
+    "authority_prompt_assignment": {
+      "prompt_slug": "synthetic-required-policy",
+      "project_id": "agent-hub",
+      "consumer_surface": "gemini"
+    },
+    "governance_snapshot": {
+      "health_status": "healthy",
+      "active_memory_count": 6,
+      "reviewed_count": 0,
+      "synthetic_fixture": true
+    },
+    "computed_tool_capability_block": "Synthetic capability block: canonical quality checks are available; no credentials or external tools.",
+    "coverage": {
+      "candidate_method": "synthetic retained failure cases",
+      "exhaustive": false,
+      "native_prompts": "unobservable",
+      "context": {"project_id": "project-beta", "consumer_surface": "gemini"}
+    }
+  },
+  "recovery_review_context": {
+    "project_id": "synthetic-project",
+    "consumer_surface": "gemini",
+    "agent_slug": "memory-curator",
+    "task_type": "review",
+    "phase": "memory_review",
+    "coverage": {"context": {"project_id": "synthetic-project", "consumer_surface": "gemini"}, "exhaustive": false, "native": "unobservable"}
+  },
+  "production_artifact_hashes": {
+    "review_schema_sha256": "237b857b3cff851d3b7794d3e2e65181a4512357876e2581ec914cc2722d8be8",
+    "recovery_schema_sha256": "29469203f1e7b734e3c8a6d22fa779deeaf30696ec16a4391bebb03e94e37db1",
+    "recovery_instruction_sha256": "63417353cf123636093b0d8211d552ceb57442b4e800eabd9b0694eb0f205e64",
+    "context_review_instruction_sha256": "ea5a8394ef3b5fa1624b9102b7a1e928ddf87f9d8d92e1de2cc939565006666f",
+    "prompt_builder_source_sha256": "89821363f93a49c06f1905fdb0f2da5c04debd31bb85847bcb3c44ae149a3ea9"
+  },
+  "regular_memories": [
+    {
+      "uuid": "11111111-1111-4111-8111-111111111111",
+      "name": "Current-state assertion",
+      "content": "The current synthetic provider endpoint is healthy and uses the latest route. No current observation or dated source is supplied."
+    },
+    {
+      "uuid": "22222222-2222-4222-8222-222222222222",
+      "name": "Dated incident",
+      "content": "On 2024-11-02, the synthetic service returned 502 at /legacy during a test. This records that historical event and makes no claim about current behavior."
+    },
+    {
+      "uuid": "33333333-3333-4333-8333-333333333333",
+      "name": "Project scope mismatch",
+      "content": "Use this synthetic deployment rule for project-alpha only; it must also be applied to project-beta without checking scope.",
+      "scope": "project:project-beta",
+      "applicability": {"project_ids": ["project-beta"]}
+    },
+    {
+      "uuid": "44444444-4444-4444-8444-444444444444",
+      "name": "Duplicate incident A",
+      "content": "Keep the synthetic incident receipt and preserve its immutable revision history."
+    },
+    {
+      "uuid": "55555555-5555-4555-8555-555555555555",
+      "name": "Duplicate incident B",
+      "content": "Keep the synthetic incident receipt and preserve its immutable revision history."
+    },
+    {
+      "uuid": "66666666-6666-4666-8666-666666666666",
+      "name": "Required preservation rule",
+      "content": "Always preserve immutable revision history for edited memories; never discard prior revisions.",
+      "memory_type": "guardrail",
+      "applicability": {"consumer_surfaces": ["codex", "gemini"]}
+    }
+  ],
+  "authority_prompt": {
+    "slug": "synthetic-required-policy",
+    "content": "Required policy: preserve immutable revision history for edited memories. Never discard prior revisions."
+  },
+  "recovery_sources": [
+    {
+      "source_type": "memory",
+      "source_id": "memory:synthetic-history",
+      "revision": "sha256:synthetic-history-v1",
+      "content": "On 2024-11-02, the synthetic service returned 502 at /legacy during a test. This dated record makes no claim about current behavior."
+    },
+    {
+      "source_type": "prompt",
+      "source_id": "prompt:synthetic-required-policy",
+      "revision": "sha256:synthetic-policy-v1",
+      "content": "Required policy: preserve immutable revision history for edited memories. Never discard prior revisions."
+    }
+  ],
+  "answer_key": {
+    "regular": {
+      "11111111-1111-4111-8111-111111111111": {"review_status": "needs_action", "currency": "unknown", "correctness": "unknown", "must_not_treat_unknown_as_contradiction": true},
+      "22222222-2222-4222-8222-222222222222": {"must_not_archive_only_because_current_state_is_unknown": true},
+      "33333333-3333-4333-8333-333333333333": {"review_status": "needs_action", "scope_issue_must_remain_visible": true},
+      "44444444-4444-4444-8444-444444444444": {"one_duplicate_may_remain_canonical": true},
+      "55555555-5555-4555-8555-555555555555": {"decision": "merge", "merge_target_uuid": "44444444-4444-4444-8444-444444444444"},
+      "66666666-6666-4666-8666-666666666666": {"review_status": "needs_action", "decision": "keep", "must_preserve_required_force": true, "must_include": "PROMPT_MIGRATION_REQUIRED", "must_not_archive_without_verified_delivery": true}
+    },
+    "recovery": {"action": "dismiss", "authority_ids": ["memory:synthetic-history", "prompt:synthetic-required-policy"], "exact_contiguous_quotes": true}
+  }
+}
