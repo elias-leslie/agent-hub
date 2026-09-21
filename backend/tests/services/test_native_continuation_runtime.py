@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
+import app.services.native_continuation_runtime as native_runtime
 from app.services.native_continuation_runtime import (
     NATIVE_TOOL_POLICY_HASH,
     NativeRuntimeKey,
@@ -13,8 +16,41 @@ from app.services.native_continuation_runtime import (
     NativeRuntimeManager,
     NativeTurnObservation,
     NativeTurnUsage,
+    _link_native_auth,
+    _runtime_binary,
     _turn_usage,
 )
+
+
+def test_temporary_runtime_shares_canonical_refresh_lock(tmp_path: Path) -> None:
+    canonical = tmp_path / "canonical"
+    temporary = tmp_path / "temporary"
+    canonical.mkdir()
+    temporary.mkdir()
+    auth = canonical / "auth.json"
+    auth.write_text("{}")
+
+    _link_native_auth(temporary, auth)
+
+    assert (temporary / "auth.json").resolve() == auth
+    assert (temporary / "auth-refresh.lock").resolve() == (
+        canonical / "auth-refresh.lock"
+    )
+
+
+def test_runtime_binary_uses_configured_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary = tmp_path / "codex"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o700)
+    monkeypatch.setattr(
+        native_runtime,
+        "get_settings",
+        lambda: SimpleNamespace(codex_native_binary=str(binary)),
+    )
+
+    assert _runtime_binary() == binary
 
 
 def _key(**changes: object) -> NativeRuntimeKey:

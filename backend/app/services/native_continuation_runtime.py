@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from app.config import get_settings
 from app.utils.safe_subprocess import create_process
 
 _DISABLED_FEATURES = (
@@ -103,6 +104,25 @@ class NativeTurnObservation:
 
 
 def _runtime_binary() -> Path:
+    configured = get_settings().codex_native_binary.strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            raise NativeRuntimeError(
+                "native_unavailable", "Configured Codex binary path must be absolute."
+            )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as error:
+            raise NativeRuntimeError(
+                "native_unavailable", "Configured Codex binary is unavailable."
+            ) from error
+        if not resolved.is_file() or not os.access(resolved, os.X_OK):
+            raise NativeRuntimeError(
+                "native_unavailable", "Configured Codex binary is not executable."
+            )
+        return resolved
+
     executable = shutil.which("codex")
     if not executable:
         raise NativeRuntimeError("native_unavailable", "Codex CLI is not installed.")
@@ -199,6 +219,19 @@ else:
             await process.wait()
 
 
+def _link_native_auth(home: Path, auth: Path) -> None:
+    """Share the canonical credential and refresh lock with a temporary runtime."""
+    canonical_auth = auth.resolve()
+    canonical_lock = canonical_auth.parent / "auth-refresh.lock"
+    flags = os.O_CREAT | os.O_RDWR | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(canonical_lock, flags, 0o600)
+    os.close(descriptor)
+    (home / "auth.json").symlink_to(canonical_auth)
+    (home / "auth-refresh.lock").symlink_to(canonical_lock)
+
+
 class _Protocol:
     def __init__(self, process: asyncio.subprocess.Process) -> None:
         self.process = process
@@ -245,6 +278,77 @@ class _Protocol:
                 result = message.get("result")
                 return result if isinstance(result, dict) else {}
             self.notifications.append(message)
+
+
+async def refresh_native_codex_auth() -> None:
+    """Ask the installed Codex runtime to refresh its canonical OAuth file."""
+    binary = _runtime_binary()
+    auth_root = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+    auth = auth_root / "auth.json"
+    if not auth.is_file():
+        raise NativeRuntimeError(
+            "native_auth_unavailable",
+            "Existing Codex file-based ChatGPT subscription sign-in is unavailable.",
+        )
+
+    tempdir = tempfile.TemporaryDirectory(prefix="agent-hub-auth-")
+    root = Path(tempdir.name)
+    home, work = root / "home", root / "work"
+    home.mkdir(mode=0o700)
+    work.mkdir(mode=0o700)
+    (home / "config.toml").write_text(_profile_config(binary))
+    _link_native_auth(home, auth)
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(home),
+        "CODEX_HOME": str(home),
+        "LANG": "C.UTF-8",
+    }
+    process: asyncio.subprocess.Process | None = None
+    try:
+        await _sandbox_preflight(binary, home, work, env)
+        process = await create_process(
+            str(binary),
+            "app-server",
+            "--stdio",
+            working_dir=work,
+            env=env,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            limit=2**20,
+        )
+        protocol = _Protocol(process)
+        async with asyncio.timeout(180):
+            await protocol.request(
+                "initialize",
+                {
+                    "clientInfo": {
+                        "name": "agent-hub-auth-broker",
+                        "version": "0.1.0",
+                    },
+                    "capabilities": {"experimentalApi": True},
+                },
+            )
+            await protocol.send({"method": "initialized"})
+            account = await protocol.request(
+                "account/read",
+                {"refreshToken": True},
+            )
+        if (account.get("account") or {}).get("type") != "chatgpt":
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "Native Codex did not confirm ChatGPT subscription authentication.",
+            )
+    finally:
+        if process is not None and process.returncode is None:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), 5)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+        tempdir.cleanup()
 
 
 def _safe_provider_error(error: object) -> NativeRuntimeError:
@@ -465,7 +569,7 @@ class NativeRuntimeManager:
         home.mkdir(mode=0o700)
         work.mkdir(mode=0o700)
         (home / "config.toml").write_text(_profile_config(binary))
-        (home / "auth.json").symlink_to(auth.resolve())
+        _link_native_auth(home, auth)
         env = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(home),

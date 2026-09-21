@@ -32,14 +32,21 @@ CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback"
 CODEX_SCOPE = "openid profile email offline_access"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
+_KNOWN_REFRESH_ERROR_CODES = frozenset(
+    {
+        "invalid_grant",
+        "refresh_token_invalidated",
+        "refresh_token_reused",
+    }
+)
 
 
 class CodexAuthError(RuntimeError):
-    """Codex OAuth token refresh failed — the stored refresh token is dead.
+    """Codex OAuth refresh proved that the active credential is unusable."""
 
-    Distinguishes auth-chain death (operator must Re-auth in the dashboard)
-    from transient provider errors so callers can alert on it specifically.
-    """
+
+class CodexAuthTransientError(RuntimeError):
+    """Codex OAuth refresh failed without proving the credential is dead."""
 
 
 # ---------------------------------------------------------------------------
@@ -263,25 +270,42 @@ async def refresh_access_token(refresh_token: str) -> CodexCredentials:
     Raises:
         RuntimeError: If the refresh request fails.
     """
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            CODEX_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-                "client_id": CODEX_CLIENT_ID,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                CODEX_TOKEN_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "client_id": CODEX_CLIENT_ID,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+    except httpx.HTTPError as exc:
+        raise CodexAuthTransientError("Codex token refresh request failed") from exc
 
     if resp.status_code != 200:
+        error_code = "unknown"
+        try:
+            payload = resp.json()
+            error = payload.get("error") if isinstance(payload, dict) else None
+            candidate = error.get("code") or error.get("type") if isinstance(error, dict) else error
+            if isinstance(candidate, str) and candidate in _KNOWN_REFRESH_ERROR_CODES:
+                error_code = candidate
+        except (ValueError, TypeError):
+            pass
         logger.error(
-            "Codex token refresh failed: %s %s — fix: Agent Hub Settings → LLM Providers"
-            " → Codex → Re-auth (wiki: codex-oauth-token-rotation)",
+            "Codex token refresh failed: status=%s code=%s",
             resp.status_code,
-            resp.text,
+            error_code,
         )
-        raise CodexAuthError(f"Codex token refresh failed (HTTP {resp.status_code})")
+        if resp.status_code in {400, 401, 403}:
+            raise CodexAuthError(
+                f"Codex token refresh rejected (HTTP {resp.status_code}, code={error_code})"
+            )
+        raise CodexAuthTransientError(
+            f"Codex token refresh unavailable (HTTP {resp.status_code})"
+        )
 
     data = resp.json()
     access_token = data.get("access_token")

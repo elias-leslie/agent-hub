@@ -1,12 +1,32 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.llm.providers.openai_codex_responses import _input_from_context, _raise_codex_http_error
+from app.adapters.codex_auth import CodexCredentials
+from app.llm.providers import openai_codex_responses
+from app.llm.providers.openai_codex_responses import (
+    _authenticated_response,
+    _input_from_context,
+    _raise_codex_http_error,
+)
 from app.llm.types import AssistantMessage, Context, TextContent, ToolCall, ToolResultMessage, Usage
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
+
+
+class _ResponseContext:
+    def __init__(self, response) -> None:
+        self.response = response
+        self.exit_count = 0
+
+    async def __aenter__(self):
+        return self.response
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        self.exit_count += 1
 
 
 def _assistant(content, *, response_id: str | None = None) -> AssistantMessage:
@@ -116,3 +136,118 @@ def test_codex_http_400_is_nonretriable_provider_error() -> None:
     assert not isinstance(err, (RateLimitError, AuthenticationError))
     assert err.status_code == 400
     assert err.retriable is False
+
+
+@pytest.mark.asyncio
+async def test_pre_stream_401_refreshes_and_retries_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initial = CodexCredentials(
+        access_token="initial-access",
+        refresh_token="initial-refresh",
+        account_id="account",
+    )
+    rotated = CodexCredentials(
+        access_token="rotated-access",
+        refresh_token="rotated-refresh",
+        account_id="account",
+    )
+    store = SimpleNamespace(
+        ensure_fresh=AsyncMock(return_value=initial),
+        recover_after_auth_failure=AsyncMock(return_value=rotated),
+    )
+    unauthorized = MagicMock(status_code=401)
+    unauthorized.aread = AsyncMock(return_value=b"unauthorized")
+    success = MagicMock(status_code=200)
+    first_context = _ResponseContext(unauthorized)
+    second_context = _ResponseContext(success)
+    client = MagicMock()
+    client.stream.side_effect = [first_context, second_context]
+    model = SimpleNamespace(base_url="https://example.test/codex")
+    monkeypatch.setattr(openai_codex_responses, "_credential_store", store)
+
+    async with _authenticated_response(client, model, {"stream": True}) as response:
+        assert response is success
+
+    assert client.stream.call_count == 2
+    assert client.stream.call_args_list[0].kwargs["headers"]["Authorization"] == (
+        "Bearer initial-access"
+    )
+    assert client.stream.call_args_list[1].kwargs["headers"]["Authorization"] == (
+        "Bearer rotated-access"
+    )
+    unauthorized.aread.assert_awaited_once_with()
+    store.recover_after_auth_failure.assert_awaited_once_with(
+        "initial-access",
+        "account",
+    )
+    assert first_context.exit_count == 1
+    assert second_context.exit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_repeated_pre_stream_401_does_not_refresh_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initial = CodexCredentials(
+        access_token="initial-access",
+        refresh_token="initial-refresh",
+        account_id="account",
+    )
+    rotated = CodexCredentials(
+        access_token="rotated-access",
+        refresh_token="rotated-refresh",
+        account_id="account",
+    )
+    store = SimpleNamespace(
+        ensure_fresh=AsyncMock(return_value=initial),
+        recover_after_auth_failure=AsyncMock(return_value=rotated),
+    )
+    responses = []
+    contexts = []
+    for _index in range(2):
+        response = MagicMock(status_code=401)
+        response.aread = AsyncMock(return_value=b"unauthorized")
+        responses.append(response)
+        contexts.append(_ResponseContext(response))
+    client = MagicMock()
+    client.stream.side_effect = contexts
+    model = SimpleNamespace(base_url="https://example.test/codex")
+    monkeypatch.setattr(openai_codex_responses, "_credential_store", store)
+
+    async with _authenticated_response(client, model, {"stream": True}) as response:
+        assert response is responses[1]
+
+    assert client.stream.call_count == 2
+    store.recover_after_auth_failure.assert_awaited_once_with(
+        "initial-access",
+        "account",
+    )
+    assert [context.exit_count for context in contexts] == [1, 1]
+
+
+@pytest.mark.asyncio
+async def test_pre_stream_403_does_not_attempt_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = CodexCredentials(
+        access_token="access",
+        refresh_token="refresh",
+        account_id="account",
+    )
+    store = SimpleNamespace(
+        ensure_fresh=AsyncMock(return_value=credentials),
+        recover_after_auth_failure=AsyncMock(),
+    )
+    forbidden = MagicMock(status_code=403)
+    context = _ResponseContext(forbidden)
+    client = MagicMock()
+    client.stream.return_value = context
+    model = SimpleNamespace(base_url="https://example.test/codex")
+    monkeypatch.setattr(openai_codex_responses, "_credential_store", store)
+
+    async with _authenticated_response(client, model, {"stream": True}) as response:
+        assert response is forbidden
+
+    store.recover_after_auth_failure.assert_not_awaited()
+    assert context.exit_count == 1
