@@ -236,7 +236,7 @@ async def exchange_code(code: str, code_verifier: str) -> CodexCredentials:
         )
 
     if resp.status_code != 200:
-        logger.error("Codex token exchange failed: %s %s", resp.status_code, resp.text)
+        logger.error("Codex token exchange failed: status=%s", resp.status_code)
         raise RuntimeError(f"Codex token exchange failed (HTTP {resp.status_code})")
 
     data = resp.json()

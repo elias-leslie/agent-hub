@@ -38,7 +38,6 @@ from app.api.oauth_store import (
     set_pending_flow,
     spawn_background_task,
 )
-from app.config import settings
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
 
@@ -57,11 +56,6 @@ _SUPPORTED_PROVIDERS = frozenset({"codex"})
 @router.post("/codex/authorize", response_model=OAuthAuthorizeResponse)
 async def authorize_codex() -> OAuthAuthorizeResponse:
     """Start Codex OAuth PKCE flow; backend starts a local callback server."""
-    if settings.codex_auth_authority == "native":
-        raise HTTPException(
-            status_code=409,
-            detail="Codex authentication is managed by the installed Codex CLI. Run `codex login`, then retry.",
-        )
     cleanup_expired_flows()
     cancel_active_server("codex")
     flow = create_codex_auth_flow()
@@ -119,12 +113,6 @@ async def exchange_oauth_code(
     """
     if provider not in _SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Exchange not supported for provider: {provider}")
-    if provider == "codex" and settings.codex_auth_authority == "native":
-        raise HTTPException(
-            status_code=409,
-            detail="Codex authentication is managed by the installed Codex CLI. Run `codex login`, then retry.",
-        )
-
     flow = get_pending_flow(body.state)
     if not flow:
         return OAuthExchangeResponse(success=False, provider=provider, error="Unknown or expired state")

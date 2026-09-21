@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
-from types import SimpleNamespace
+import json
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import app.services.native_continuation_runtime as native_runtime
+from app.adapters.codex_auth import CodexCredentials
 from app.services.native_continuation_runtime import (
     NATIVE_TOOL_POLICY_HASH,
     NativeRuntimeKey,
@@ -16,41 +16,214 @@ from app.services.native_continuation_runtime import (
     NativeRuntimeManager,
     NativeTurnObservation,
     NativeTurnUsage,
-    _link_native_auth,
-    _runtime_binary,
+    _login_with_agent_hub_auth,
+    _Protocol,
     _turn_usage,
 )
 
 
-def test_temporary_runtime_shares_canonical_refresh_lock(tmp_path: Path) -> None:
-    canonical = tmp_path / "canonical"
-    temporary = tmp_path / "temporary"
-    canonical.mkdir()
-    temporary.mkdir()
-    auth = canonical / "auth.json"
-    auth.write_text("{}")
-
-    _link_native_auth(temporary, auth)
-
-    assert (temporary / "auth.json").resolve() == auth
-    assert (temporary / "auth-refresh.lock").resolve() == (
-        canonical / "auth-refresh.lock"
-    )
-
-
-def test_runtime_binary_uses_configured_executable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.asyncio
+async def test_external_auth_refresh_uses_agent_hub_pair_without_refresh_token(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    binary = tmp_path / "codex"
-    binary.write_text("#!/bin/sh\n")
-    binary.chmod(0o700)
+    initial = CodexCredentials("initial-access", "private-initial", "account")
+    rotated = CodexCredentials("rotated-access", "private-rotated", "account")
+    protocol = _Protocol(MagicMock())
+    protocol.set_external_auth(initial)
+    send = AsyncMock()
+    protocol.send = send  # type: ignore[method-assign]
+    refresh = AsyncMock(return_value=rotated)
     monkeypatch.setattr(
         native_runtime,
-        "get_settings",
-        lambda: SimpleNamespace(codex_native_binary=str(binary)),
+        "ensure_fresh_codex_credentials",
+        refresh,
     )
 
-    assert _runtime_binary() == binary
+    await protocol._refresh_external_auth(
+        {
+            "id": 7,
+            "params": {
+                "reason": "unauthorized",
+                "previousAccountId": "account",
+            },
+        }
+    )
+
+    refresh.assert_awaited_once_with(
+        force_refresh=True,
+        stale_access_token="initial-access",
+        expected_account_id="account",
+    )
+    assert send.await_args is not None
+    response = send.await_args.args[0]
+    assert response["result"]["accessToken"] == "rotated-access"
+    assert "refresh" not in json.dumps(response).lower()
+
+
+@pytest.mark.asyncio
+async def test_external_auth_refresh_rejects_account_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protocol = _Protocol(MagicMock())
+    protocol.set_external_auth(
+        CodexCredentials("initial-access", "private-refresh", "account-a")
+    )
+    send = AsyncMock()
+    protocol.send = send  # type: ignore[method-assign]
+    refresh = AsyncMock()
+    monkeypatch.setattr(native_runtime, "ensure_fresh_codex_credentials", refresh)
+
+    with pytest.raises(native_runtime.NativeRuntimeError, match="different account"):
+        await protocol._refresh_external_auth(
+            {
+                "id": 8,
+                "params": {
+                    "reason": "unauthorized",
+                    "previousAccountId": "account-b",
+                },
+            }
+        )
+
+    refresh.assert_not_awaited()
+    assert send.await_args is not None
+    assert send.await_args.args[0]["error"]["code"] == -32001
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param(None, id="missing-params"),
+        pytest.param({}, id="missing-reason-and-account"),
+        pytest.param(
+            {"reason": "expired", "previousAccountId": "account"},
+            id="unsupported-reason",
+        ),
+        pytest.param(
+            {"reason": "unauthorized", "previousAccountId": None},
+            id="missing-bound-account",
+        ),
+    ],
+)
+async def test_external_auth_refresh_rejects_invalid_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    params: object,
+) -> None:
+    protocol = _Protocol(MagicMock())
+    protocol.set_external_auth(
+        CodexCredentials("initial-access", "private-refresh", "account")
+    )
+    send = AsyncMock()
+    protocol.send = send  # type: ignore[method-assign]
+    refresh = AsyncMock()
+    monkeypatch.setattr(native_runtime, "ensure_fresh_codex_credentials", refresh)
+    message: dict[str, object] = {"id": 9}
+    if params is not None:
+        message["params"] = params
+
+    with pytest.raises(native_runtime.NativeRuntimeError):
+        await protocol._refresh_external_auth(message)
+
+    refresh.assert_not_awaited()
+    assert send.await_args is not None
+    assert send.await_args.args[0]["error"]["code"] == -32001
+
+
+@pytest.mark.asyncio
+async def test_external_auth_refresh_timeout_cancels_callback_waiter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protocol = _Protocol(MagicMock())
+    protocol.set_external_auth(
+        CodexCredentials("initial-access", "private-refresh", "account")
+    )
+    send = AsyncMock()
+    protocol.send = send  # type: ignore[method-assign]
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def delayed_refresh(**_kwargs: object) -> CodexCredentials:
+        entered.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return CodexCredentials("rotated-access", "private-rotated", "account")
+
+    monkeypatch.setattr(
+        native_runtime, "ensure_fresh_codex_credentials", delayed_refresh
+    )
+    monkeypatch.setattr(
+        native_runtime, "_EXTERNAL_AUTH_CALLBACK_BUDGET_SECONDS", 0.001
+    )
+
+    with pytest.raises(native_runtime.NativeRuntimeError, match="deadline"):
+        await protocol._refresh_external_auth(
+            {
+                "id": 10,
+                "params": {
+                    "reason": "unauthorized",
+                    "previousAccountId": "account",
+                },
+            }
+        )
+
+    await entered.wait()
+    assert cancelled.is_set() is True
+    assert send.await_args is not None
+    assert send.await_args.args[0]["error"]["code"] == -32001
+
+
+@pytest.mark.asyncio
+async def test_native_login_receives_only_agent_hub_access_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = CodexCredentials(
+        "database-access", "private-database-refresh", "account"
+    )
+    protocol = _Protocol(MagicMock())
+    request = AsyncMock(return_value={"type": "chatgptAuthTokens"})
+    protocol.request = request  # type: ignore[method-assign]
+    ensure = AsyncMock(return_value=credentials)
+    monkeypatch.setattr(native_runtime, "ensure_fresh_codex_credentials", ensure)
+
+    await _login_with_agent_hub_auth(protocol)
+
+    ensure.assert_awaited_once_with()
+    assert request.await_args is not None
+    method, params = request.await_args.args
+    assert method == "account/login/start"
+    assert params == {
+        "type": "chatgptAuthTokens",
+        "accessToken": "database-access",
+        "chatgptAccountId": "account",
+        "chatgptPlanType": None,
+    }
+    assert "private-database-refresh" not in json.dumps(params)
+
+
+@pytest.mark.asyncio
+async def test_native_login_rejects_unsupported_external_auth_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protocol = _Protocol(MagicMock())
+    protocol.request = AsyncMock(return_value={})  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        native_runtime,
+        "ensure_fresh_codex_credentials",
+        AsyncMock(
+            return_value=CodexCredentials(
+                "database-access", "private-database-refresh", "account"
+            )
+        ),
+    )
+
+    with pytest.raises(
+        native_runtime.NativeRuntimeError,
+        match="does not support Agent Hub authentication",
+    ):
+        await _login_with_agent_hub_auth(protocol)
 
 
 def _key(**changes: object) -> NativeRuntimeKey:

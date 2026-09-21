@@ -65,7 +65,5 @@ def test_check_codex_token_status_marks_expired_legacy_jwt_without_refresh(
     cm = _FakeCredentialManager(_build_codex_jwt(expires_at=time.time() - 300), None)
 
     monkeypatch.setattr("app.api.oauth_status.get_credential_manager", lambda: cm)
-    monkeypatch.setattr("app.api.oauth_status.native_codex_credentials", lambda: None)
-    monkeypatch.setattr("app.api.oauth_status.settings.codex_auth_authority", "database")
 
     assert check_codex_token_status() == ("expired", None)

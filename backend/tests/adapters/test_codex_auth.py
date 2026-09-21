@@ -41,3 +41,22 @@ async def test_unknown_refresh_error_is_sanitized(
     combined = f"{exc_info.value}\n{caplog.text}"
     assert "private-provider-detail" not in combined
     assert "private-refresh-token" not in combined
+
+
+@pytest.mark.asyncio
+async def test_exchange_error_does_not_log_provider_body_or_code(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(codex_auth.httpx, "AsyncClient", _Client)
+
+    with (
+        caplog.at_level(logging.ERROR, logger=codex_auth.__name__),
+        pytest.raises(RuntimeError, match="HTTP 401") as exc_info,
+    ):
+        await codex_auth.exchange_code("private-authorization-code", "private-verifier")
+
+    combined = f"{exc_info.value}\n{caplog.text}"
+    assert "private-provider-detail" not in combined
+    assert "private-authorization-code" not in combined
+    assert "private-verifier" not in combined

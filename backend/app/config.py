@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -164,13 +164,6 @@ class Settings(BaseSettings):
     nvidia_api_key: str = ""
     cloudflare_api_key: str = ""
     cloudflare_account_id: str = ""
-
-    # Codex OAuth authority. Native mode delegates token rotation to the
-    # installed Codex runtime; database mode uses Agent Hub's encrypted pair.
-    codex_auth_authority: Literal["native", "database"] = "database"
-    # Optional pinned native Codex executable for retained runtimes and OAuth
-    # recovery. This avoids silently switching implementations on npm updates.
-    codex_native_binary: str = ""
 
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"
