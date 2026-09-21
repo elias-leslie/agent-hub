@@ -151,9 +151,11 @@ async def _startup() -> None:
 
 async def _shutdown() -> None:
     """Run all shutdown tasks."""
+    from app.services.codex_credentials import drain_codex_credential_refreshes
     from app.services.native_continuation_runtime import shutdown_native_runtime_manager
 
     await shutdown_native_runtime_manager()
+    await drain_codex_credential_refreshes()
     logger.info("Native continuation runtimes stopped")
     await stop_all_stream_bridges()
     logger.info("Hatchet stream bridges stopped")

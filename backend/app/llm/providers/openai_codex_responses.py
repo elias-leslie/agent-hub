@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 import time
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import Any
 
@@ -17,14 +18,11 @@ import httpx
 
 from app.adapters.codex_auth import (
     CodexCredentials,
-    extract_account_id,
-    parse_stored_oauth_token,
-    refresh_access_token,
-    serialize_stored_oauth_token,
 )
-from app.db import async_session
-from app.services.credential_manager import get_credential_manager
-from app.services.credential_upsert import upsert_credential
+from app.services.codex_credentials import (
+    cached_codex_credentials,
+    ensure_fresh_codex_credentials,
+)
 from app.services.llm_errors import (
     AuthenticationError,
     ProviderError,
@@ -64,47 +62,22 @@ _ID_PART_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 class _CodexCredentialStore:
-    def __init__(self) -> None:
-        self._refresh_lock = asyncio.Lock()
-
     def get(self) -> CodexCredentials:
-        manager = get_credential_manager()
-        token_value = manager.get("codex", "oauth_token") or manager.get_api_key("codex")
-        refresh_token = manager.get("codex", "refresh_token")
-        access_token, expires_at = parse_stored_oauth_token(token_value)
-        if not access_token:
-            raise RuntimeError("No Codex OAuth token configured")
-        return CodexCredentials(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            account_id=extract_account_id(access_token),
-            expires_at=expires_at,
-        )
+        return cached_codex_credentials()
 
     async def ensure_fresh(self) -> CodexCredentials:
-        credentials = self.get()
-        if not credentials.is_expired:
-            return credentials
-        if not credentials.refresh_token:
-            raise RuntimeError("Codex OAuth token is expired and has no refresh token")
+        return await ensure_fresh_codex_credentials()
 
-        async with self._refresh_lock:
-            credentials = self.get()
-            if not credentials.is_expired:
-                return credentials
-            if not credentials.refresh_token:
-                raise RuntimeError("Codex OAuth token is expired and has no refresh token")
-            refreshed = await refresh_access_token(credentials.refresh_token)
-            token_value = serialize_stored_oauth_token(refreshed)
-            manager = get_credential_manager()
-            manager.set("codex", "oauth_token", token_value)
-            if refreshed.refresh_token:
-                manager.set("codex", "refresh_token", refreshed.refresh_token)
-            async with async_session() as db:
-                await upsert_credential(db, "codex", "oauth_token", token_value)
-                if refreshed.refresh_token:
-                    await upsert_credential(db, "codex", "refresh_token", refreshed.refresh_token)
-            return refreshed
+    async def recover_after_auth_failure(
+        self,
+        stale_access_token: str,
+        expected_account_id: str,
+    ) -> CodexCredentials:
+        return await ensure_fresh_codex_credentials(
+            force_refresh=True,
+            stale_access_token=stale_access_token,
+            expected_account_id=expected_account_id,
+        )
 
 
 _credential_store = _CodexCredentialStore()
@@ -370,6 +343,37 @@ async def _parse_sse_lines(response: httpx.Response):
             continue
 
 
+@asynccontextmanager
+async def _authenticated_response(
+    client: httpx.AsyncClient,
+    model: Model[Any],
+    body: dict[str, Any],
+):
+    """Open a Codex stream, recovering once from a pre-stream HTTP 401."""
+    credentials = await _credential_store.ensure_fresh()
+    for attempt in range(2):
+        response_context = client.stream(
+            "POST",
+            model.base_url or _CODEX_API_URL,
+            json=body,
+            headers=_headers(credentials),
+        )
+        response = await response_context.__aenter__()
+        try:
+            if response.status_code == 401 and attempt == 0:
+                await response.aread()
+                credentials = await _credential_store.recover_after_auth_failure(
+                    credentials.access_token,
+                    credentials.account_id,
+                )
+                continue
+            yield response
+            return
+        finally:
+            await response_context.__aexit__(None, None, None)
+    raise RuntimeError("Codex authentication recovery exhausted")
+
+
 async def _run(
     stream: AssistantMessageEventStream,
     model: Model[Any],
@@ -396,16 +400,10 @@ async def _run(
     stream.push(StartEvent(partial=output))
 
     try:
-        credentials = await _credential_store.ensure_fresh()
         body = _body(model, context, options)
         async with (
             httpx.AsyncClient(timeout=None) as client,
-            client.stream(
-                "POST",
-                model.base_url or _CODEX_API_URL,
-                json=body,
-                headers=_headers(credentials),
-            ) as response,
+            _authenticated_response(client, model, body) as response,
         ):
                 if response.status_code >= 400:
                     error_body = (await response.aread()).decode("utf-8", errors="replace")

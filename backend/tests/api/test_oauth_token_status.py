@@ -45,24 +45,18 @@ async def test_exchange_codex_stores_structured_token(monkeypatch: pytest.Monkey
         account_id="acct",
         expires_at=1_234_567_890.0,
     )
-    upsert = AsyncMock()
+    replace = AsyncMock()
 
     monkeypatch.setattr("app.api.oauth_exchange.exchange_codex_code", AsyncMock(return_value=creds))
-    monkeypatch.setattr("app.api.oauth_exchange.upsert_credential", upsert)
+    monkeypatch.setattr("app.api.oauth_exchange.replace_codex_credentials", replace)
 
     result = await exchange_codex(
         OAuthExchangeRequest(code_input="test-code", state="state"),
         "verifier",
-        AsyncMock(),
     )
 
     assert result is None
-    oauth_value = upsert.await_args_list[0].args[3]
-    assert json.loads(oauth_value) == {
-        "access_token": creds.access_token,
-        "expires_at": creds.expires_at,
-    }
-    assert upsert.await_args_list[1].args[1:] == ("codex", "refresh_token", "refresh-token")
+    replace.assert_awaited_once_with(creds)
 
 
 def test_check_codex_token_status_marks_expired_legacy_jwt_without_refresh(

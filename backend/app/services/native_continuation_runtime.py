@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from app.adapters.codex_auth import CodexCredentials
+from app.services.codex_credentials import ensure_fresh_codex_credentials
 from app.utils.safe_subprocess import create_process
 
 _DISABLED_FEATURES = (
@@ -46,6 +48,7 @@ _TOOL_POLICY = {
 NATIVE_TOOL_POLICY_HASH = hashlib.sha256(
     json.dumps(_TOOL_POLICY, sort_keys=True, separators=(",", ":")).encode()
 ).hexdigest()
+_EXTERNAL_AUTH_CALLBACK_BUDGET_SECONDS = 9.0
 
 
 class NativeRuntimeError(RuntimeError):
@@ -204,6 +207,10 @@ class _Protocol:
         self.process = process
         self.sequence = 0
         self.notifications: list[dict[str, Any]] = []
+        self._credentials: CodexCredentials | None = None
+
+    def set_external_auth(self, credentials: CodexCredentials) -> None:
+        self._credentials = credentials
 
     async def send(self, message: dict[str, Any]) -> None:
         if self.process.stdin is None:
@@ -212,13 +219,18 @@ class _Protocol:
         await self.process.stdin.drain()
 
     async def receive(self) -> dict[str, Any]:
-        if self.process.stdout is None:
-            raise NativeRuntimeLost()
-        line = await self.process.stdout.readline()
-        if not line:
-            raise NativeRuntimeLost()
-        message = json.loads(line)
-        if "method" in message and "id" in message:
+        while True:
+            if self.process.stdout is None:
+                raise NativeRuntimeLost()
+            line = await self.process.stdout.readline()
+            if not line:
+                raise NativeRuntimeLost()
+            message = json.loads(line)
+            if "method" not in message or "id" not in message:
+                return message
+            if message["method"] == "account/chatgptAuthTokens/refresh":
+                await self._refresh_external_auth(message)
+                continue
             await self.send(
                 {
                     "id": message["id"],
@@ -231,7 +243,84 @@ class _Protocol:
             raise NativeRuntimeError(
                 "native_tool_denied", "Native reasoning requested a denied tool or approval."
             )
-        return message
+
+    async def _refresh_external_auth(self, message: dict[str, Any]) -> None:
+        credentials = self._credentials
+        if credentials is None:
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "Agent Hub has no credential bound to the native runtime.",
+            )
+        raw_params = message.get("params")
+        if not isinstance(raw_params, dict):
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "The native runtime sent an invalid authentication refresh request.",
+            )
+        params = raw_params
+        if params.get("reason") != "unauthorized":
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "The native runtime sent an unsupported authentication refresh reason.",
+            )
+        previous_account_id = params.get("previousAccountId")
+        if previous_account_id != credentials.account_id:
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "The native runtime requested credentials for a different account.",
+            )
+        refresh_task = asyncio.create_task(
+            ensure_fresh_codex_credentials(
+                force_refresh=True,
+                stale_access_token=credentials.access_token,
+                expected_account_id=credentials.account_id,
+            )
+        )
+        try:
+            refreshed = await asyncio.wait_for(
+                asyncio.shield(refresh_task),
+                timeout=_EXTERNAL_AUTH_CALLBACK_BUDGET_SECONDS,
+            )
+        except TimeoutError as error:
+            refresh_task.cancel()
+            await asyncio.gather(refresh_task, return_exceptions=True)
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "Agent Hub authentication refresh exceeded the native runtime deadline.",
+            ) from error
+        except Exception as error:
+            await self._reject_external_auth_refresh(message["id"])
+            raise NativeRuntimeError(
+                "native_auth_unavailable",
+                "Agent Hub could not refresh the native runtime credential.",
+            ) from error
+        self._credentials = refreshed
+        await self.send(
+            {
+                "id": message["id"],
+                "result": {
+                    "accessToken": refreshed.access_token,
+                    "chatgptAccountId": refreshed.account_id,
+                    "chatgptPlanType": None,
+                },
+            }
+        )
+
+    async def _reject_external_auth_refresh(self, request_id: object) -> None:
+        await self.send(
+            {
+                "id": request_id,
+                "error": {
+                    "code": -32001,
+                    "message": "Agent Hub authentication refresh failed.",
+                },
+            }
+        )
 
     async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         self.sequence += 1
@@ -245,6 +334,25 @@ class _Protocol:
                 result = message.get("result")
                 return result if isinstance(result, dict) else {}
             self.notifications.append(message)
+
+
+async def _login_with_agent_hub_auth(protocol: _Protocol) -> None:
+    credentials = await ensure_fresh_codex_credentials()
+    protocol.set_external_auth(credentials)
+    result = await protocol.request(
+        "account/login/start",
+        {
+            "type": "chatgptAuthTokens",
+            "accessToken": credentials.access_token,
+            "chatgptAccountId": credentials.account_id,
+            "chatgptPlanType": None,
+        },
+    )
+    if result.get("type") != "chatgptAuthTokens":
+        raise NativeRuntimeError(
+            "native_auth_unavailable",
+            "The installed Codex runtime does not support Agent Hub authentication.",
+        )
 
 
 def _safe_provider_error(error: object) -> NativeRuntimeError:
@@ -452,20 +560,12 @@ class NativeRuntimeManager:
 
     async def _start(self, key: NativeRuntimeKey, instructions: str) -> _RetainedRuntime:
         binary = _runtime_binary()
-        auth_root = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        auth = auth_root / "auth.json"
-        if not auth.is_file():
-            raise NativeRuntimeError(
-                "native_auth_unavailable",
-                "Existing Codex file-based ChatGPT subscription sign-in is unavailable.",
-            )
         tempdir = tempfile.TemporaryDirectory(prefix="agent-hub-native-")
         root = Path(tempdir.name)
         home, work = root / "home", root / "work"
         home.mkdir(mode=0o700)
         work.mkdir(mode=0o700)
         (home / "config.toml").write_text(_profile_config(binary))
-        (home / "auth.json").symlink_to(auth.resolve())
         env = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(home),
@@ -495,11 +595,12 @@ class NativeRuntimeManager:
                 },
             )
             await protocol.send({"method": "initialized"})
+            await _login_with_agent_hub_auth(protocol)
             account = await protocol.request("account/read", {"refreshToken": False})
             if (account.get("account") or {}).get("type") != "chatgpt":
                 raise NativeRuntimeError(
                     "native_auth_unavailable",
-                    "Native continuation requires existing ChatGPT subscription authentication.",
+                    "Native continuation did not accept Agent Hub authentication.",
                 )
             native_model = key.model.removeprefix("codex/")
             thread = await protocol.request(
