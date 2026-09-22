@@ -159,7 +159,11 @@ def resolve_llm_model(
         context_window=entry.context_window,
         max_tokens=caps.max_output_tokens,
         headers=headers,
-        compat=neri_qwen_compat() if runtime_profile is not None else None,
+        compat=(
+            neri_qwen_compat()
+            if (runtime_profile is not None or (provider == "local" and entry.family == "qwen"))
+            else None
+        ),
     )
 
 
