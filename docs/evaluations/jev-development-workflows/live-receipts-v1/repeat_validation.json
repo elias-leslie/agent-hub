@@ -1,0 +1,86 @@
+{
+  "id": "repeat_validation",
+  "use_case": "repeated_issues",
+  "kind": "different-context fixture",
+  "status": "succeeded",
+  "manifest_sha256": "24b36cdb91475812f00def613b352dbfa670a6f0ff07b9939b965b24d386ab49",
+  "request_sha256": "189a18613bf7d3b14d4c4a48556098a351f239f0dd06df38c7f0b616d1536818",
+  "model_requested": "jev-1.13.0",
+  "estimated_input_tokens": 2447,
+  "max_provider_cost_usd": "0.002688",
+  "started_at_utc": "2026-09-23T13:55:45.094266+00:00",
+  "source_coverage": [
+    {
+      "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-feedback-snapshot.txt",
+      "sha256": "ec86e61a2053b448da45c4969489b402471b7c054d721c54f76ff37f3f1f0c82"
+    },
+    {
+      "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-failed-task-snapshot.txt",
+      "sha256": "36190c8f4c1f711761822bc50dfad23611437f822e088c13ebe276b7bfa22723"
+    },
+    {
+      "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-paused-task-snapshot.txt",
+      "sha256": "ba663ab2ede65362aad8e7083be058e4d0e111b301ba20b0d0486c4668babec6"
+    }
+  ],
+  "request": {
+    "model": "jev-1.13.0",
+    "state": {
+      "original_feedback": {
+        "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-feedback-snapshot.txt",
+        "sha256": "ec86e61a2053b448da45c4969489b402471b7c054d721c54f76ff37f3f1f0c82",
+        "content": "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130|ah.sessions|friction|Same task checked 15+ times in heartbeat loop \u2014 no dedup/cooldown on repeated status checks|Same task checked 15+ times in heartbeat loop \u2014 no dedup/cooldown on repeated status checks||open|agent-hub||2026-03-05 12:18:55.630233+00|2026-03-12 23:46:04.634175+00\n"
+      },
+      "prior_attempts_and_context": [
+        {
+          "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-failed-task-snapshot.txt",
+          "sha256": "36190c8f4c1f711761822bc50dfad23611437f822e088c13ebe276b7bfa22723",
+          "content": "TASK:task-fabf41f3|failed|P2|task|STANDARD\nTITLE:Fix repeated step-999 auto-defects during task completion\nDESCRIPTION:Verified maintenance issue in agent-hub task completion plumbing: task-c4fbbd9d is blocked despite all implementation subtasks passing because the system keeps appending repeated 'Fix: auto-defect for step 999 (infrastructure failure)' entries. Recent persona evidence also verified a reconcile crash in the st done path. Create a focused bug to fix the completion/reconcile plumbing so successful maintenance lanes can close cleanly without spawning bogus step-999 auto-defects.\nRUNTIME:phase=plan\nHARNESS:runtime_eval|reasons:contract_runtime_signals\nOBJECTIVE:Fix the task completion/reconcile plumbing to prevent spawning bogus step-999 auto-defects during successful maintenance lane closure.\nCURRENT_SLICE:1.1 Locate step-999 auto-defect creation logic in reconcile/completion path\nBLOCKERS:none explicit\nRECENT_PROGRESS[3]\n  [2026-05-15 14:03:12] Subtask task: failed\n  [2026-05-15 14:03:12] Subtask task failed after 1 attempts: no_work_product\n  [2026-05-15 14:03:12] Execution paused - subtask verification failed\nNEXT_ACTION:1.1.1 Search for 'step.*999' pattern in backend code to find auto-defect creation\nKEY_FILES[3]:backend/app/hatchet_app.py,backend/packages/agent-hub-client/agent_hub/session.py,backend/tests/api/test_orchestration_workflow.py\nSPIRIT_ANTI:Do not add new completion gates or alter successful completion behavior; only fix the defect-spawning bug in the reconcile path.\nCONSTRAINTS[3]:Do not modify the hatchet client SDK unless the bug is in agent-hub-client session handling | Do not alter completion response schema | If step-999 is a legitimate user step, investigate further before blocking\nDONE_WHEN[7]:Root cause of repeated step-999 auto-defects is identified and fixed | Successful tasks can complete/reconcile without adding bogus infrastructure defect subtasks | Relevant tests cover the failure mode | Quality gates for touched code pass | No step-999 auto-defect entries are appended when all implementation subtasks pass | st done command completes without reconcile crash | Successfully completed tasks close cleanly without bogus defect blockers\nCOMPLETE_READY:no|gates:subtasks\nSYNC_SKIPS:1.1:plan-context | 1.2:plan-context | 1.3:plan-context | 1.4:plan-context\nCONTEXT:modify:backend/app/hatchet_app.py,backend/packages/agent-hub-client/agent_hub/session.py | create:backend/tests/api/test_orchestration_workflow.py | risks:1\nCONTRACT:urls=0|flows=1|api=0|negative=0|design=no\nDECISIONS[2]\nd1:Root cause hypothesis: reconcile loop on step 999\u2192The reconcile path triggers an auto-defect creation for step 999 when it encounters a completion response with index=-1 or missing, causing an infinite defect-appending loop\nd2:Search strategy: locate step-999 defect creation\u2192Search for 'step.*999' or '999' in defect/auto-defect creation code paths, then trace to reconcile/completion handlers\nSUBTASKS[4]:0/4:0%\n1.1   ____ [implementation] Locate step-999 auto-defect creation logic in reconcile/completion path [0/3]\n  1. ____ Search for 'step.*999' pattern in backend code to find auto-defect creation\n  2. ____ Search for auto-defect creation patterns near reconcile/completion logic\n  3. ____ Examine hatchet_app.py _LazyHatchet.task and completion handling\n1.2   ____ [implementation] Trace st done path and reconcile crash location [0/2]\n  1. ____ Search for reconcile function in backend/task handling code\n  2. ____ Examine Session.close and completion response handling\n1.3   ____ [implementation] Fix the step-999 auto-defect creation bug [0/1]\n  1. ____ Patch the auto-defect creation to skip step 999 (final completion sentinel)\n1.4   ____ [implementation] Add regression test for task completion without spurious defects [0/1]\n  1. ____ Add test case that simulates successful completion and verifies no step-999 defects are appended\n"
+        },
+        {
+          "source_id": "/srv/workspaces/projects/agent-hub/docs/evaluations/jev-development-workflows/repeat-paused-task-snapshot.txt",
+          "sha256": "ba663ab2ede65362aad8e7083be058e4d0e111b301ba20b0d0486c4668babec6",
+          "content": "TASK:task-9d33b7bf|paused|P2|task|STANDARD\nTITLE:Clear stranded duplicate session records for task-a2178df4 so maintenance lane can progress\nDESCRIPTION:Heartbeat verification found two active refactor sessions recorded against the same agent-hub task/worktree (task-a2178df4 on task-a2178df4/main) 35+ minutes after launch, while recent evidence already shows completion/reconcile plumbing is broken and producing bogus step-999 auto-defects. This leaves the maintenance lane blocked and prevents execution-ready follow-through on the actual fix task. Create an operational bug to repair/clear the stranded active-session state and restore accurate lane ownership.\nFRESHNESS:verify-system-project-state|task-text=historical|reshape-or-abandon-if-stale\nWORKFLOW:plan:approved|ready:yes|issues:0|decisions:3\nRUNTIME:phase=plan\nHARNESS:code_only\nOBJECTIVE:Clear stranded duplicate session records for task-a2178df4 to restore accurate lane ownership and unblock the maintenance lane.\nCURRENT_SLICE:1.1 Locate session storage for task-a2178df4 active records\nBLOCKERS:none explicit\nRECENT_PROGRESS[1]\n  [2026-05-22 16:37:55] Paused: Reviewed orphan branch; preserving branch work as paused task checkpoint for later follow-up\nNEXT_ACTION:1.1.1 Search for task-a2178df4 session references in codebase\nKEY_FILES[2]:backend/app/services/ownership_inventory.py,backend/app/services/maintenance_lane.py\nSPIRIT_ANTI:Do not modify production data without verification, do not alter unrelated session records, do not change ownership verification logic.\nCONSTRAINTS[3]:Do not modify other session records | Do not alter ownership verification logic | Only clear the stranded duplicate entries for task-a2178df4\nDONE_WHEN[7]:Duplicate stale active session records on the same task/worktree can be identified and cleared safely | Task lane ownership no longer remains blocked by reconcile-stranded ghost sessions | Relevant verification proves active session reporting/lane state is trustworthy again | Quality gates for touched code pass | Duplicate/stranded active session records for task-a2178df4 cleared from storage | Maintenance lane can progress without blockage from spurious active-session state | Ownership inventory accurately reflects single canonical session for task-a2178df4\nCOMPLETE_READY:no|gates:subtasks\nSYNC_SKIPS:1.1:plan-context | 1.2:plan-context | 1.3:plan-context\nCONTEXT:modify:backend/app/services/ownership_inventory.py,backend/app/services/maintenance_lane.py | risks:2\nSNAPSHOT:active|claimed_by:Elias Leslie|since:2026-05-22T16:37:55\nBASE_BRANCH:main\nTASK_BRANCH:task-9d33b7bf/main\nDECISIONS[3]\nd1:Where duplicate session state lives\u2192Check both task-ownership inventory and maintenance lane session tracking\nd2:Repair strategy\u2192Delete/clear the duplicate active-session entry while preserving legitimate completion records\nd3:Verification approach\u2192Query ownership inventory and lane state before/after to confirm single active session remains\nSUBTASKS[3]:0/3:0%\n1.1   ____ [investigation] Locate session storage for task-a2178df4 active records [0/3]\n  1. ____ Search for task-a2178df4 session references in codebase\n  2. ____ Examine ownership inventory service and how active sessions are tracked\n  3. ____ Check maintenance lane session tracking mechanism\n1.2   ____ [implementation] Clear duplicate/stranded session records for task-a2178df4 [0/3]\n  1. ____ Identify the exact records to delete (duplicate active sessions on task-a2178df4/main)\n  2. ____ Create operational fix to clear stranded session state\n  3. ____ Execute cleanup while preserving legitimate completion records\n1.3   ____ [verification] Verify maintenance lane unblocked and ownership accurate [0/2]\n  1. ____ Query ownership inventory to confirm single active session for task-a2178df4\n  2. ____ Verify maintenance lane can progress\n\nCHECKPOINT: task-9d33b7bf/main\n  active on current checkout\n"
+        }
+      ],
+      "incoming": {
+        "identical_error": "HTTP 503 was seen in a Gemini worker at revision A and a TypeSafe worker at revision B; there are no matching task identifiers."
+      },
+      "instruction": "A link suggests history to inspect; it never proves root cause, resolution, or permission to suppress a record."
+    },
+    "questions": {
+      "identical_error": {
+        "type": "choice",
+        "instructions": "Does state.incoming.identical_error establish the same unresolved concern as state.original_feedback? Do not equate identical error text across providers or revisions.",
+        "criteria": {
+          "same_concern": "This is another wording of the same unresolved concern; link history without inferring a root cause.",
+          "related_distinct": "There is a topical relationship, but the records show a distinct concern or context.",
+          "insufficient_evidence": "The supplied records do not establish whether the concerns are the same."
+        }
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "identical_error": {
+        "type": "choice",
+        "choice": "related_distinct",
+        "probabilities": {
+          "insufficient_evidence": 0.13,
+          "same_concern": 0.01,
+          "related_distinct": 0.86
+        },
+        "confidence": 0.78
+      }
+    },
+    "usage": {
+      "input_tokens": 3059,
+      "output_tokens": 52
+    }
+  },
+  "provider_request_id": "req_01a0ce8d0bbf7fbc904fb73818f70dfb",
+  "cost_usd": "0.000128478",
+  "elapsed_seconds": 0.261504944995977,
+  "completed_at_utc": "2026-09-23T13:55:45.358141+00:00"
+}

@@ -1,0 +1,131 @@
+{
+  "id": "skill_initial",
+  "use_case": "skill_discovery",
+  "kind": "live skill descriptions and task fixtures",
+  "status": "succeeded",
+  "manifest_sha256": "24b36cdb91475812f00def613b352dbfa670a6f0ff07b9939b965b24d386ab49",
+  "request_sha256": "01b49a5233b7dbee4677a51035f01b53e61b7e7e9178c99a203db7baddbe144c",
+  "model_requested": "jev-1.13.0",
+  "estimated_input_tokens": 929,
+  "max_provider_cost_usd": "0.002688",
+  "started_at_utc": "2026-09-23T13:55:25.597231+00:00",
+  "source_coverage": [
+    {
+      "source_id": "/home/kasadis/.codex/skills/codebase-design/SKILL.md",
+      "sha256": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
+    },
+    {
+      "source_id": "/home/kasadis/.codex/skills/.system/imagegen/SKILL.md",
+      "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+    },
+    {
+      "source_id": "/home/kasadis/.codex/skills/product-copy/SKILL.md",
+      "sha256": "0faf7894e168d2eec04267e552e353aa76e3cac39465f2d5c0a59cb028d3acd3"
+    },
+    {
+      "source_id": "/home/kasadis/.codex/skills/st-tools/SKILL.md",
+      "sha256": "48198edb413cca8665b97cbd69dc66353e8e542831f4022c53cbf5bd3acc46ef"
+    }
+  ],
+  "request": {
+    "model": "jev-1.13.0",
+    "state": {
+      "tasks": {
+        "seam": "Inspect the existing Jev provider and ledger code and identify a clean module interface; do not change code.",
+        "svg": "Edit an existing repository SVG icon to match its established vector icon system.",
+        "purchase": "Purchase a new external SaaS subscription without an owner decision."
+      },
+      "available_capabilities": {
+        "codebase_design": "\nname: codebase-design\ndescription: Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.\n",
+        "imagegen": "\nname: \"imagegen\"\ndescription: \"Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.\"\n",
+        "product_copy": "\nname: product-copy\ndescription: Write or review product UI copy against the owner-agreed SlopMiner profile; use for new interface text and requested slop cleanup passes, with agent judgment and optional narrow Jev checks.\n",
+        "st_tools": "\nname: st-tools\ndescription: Use SummitFlow ST for implementation task coordination, project inspection, quality gates, managed services, and Agent Hub administration. Load command details on demand.\n"
+      },
+      "eligibility": "Skill descriptions govern fit. A skill cannot authorize a purchase. The worker can edit an SVG directly using ordinary code tools. Multiple candidates or none may fit."
+    },
+    "questions": {
+      "seam": {
+        "type": "choice",
+        "instructions": "Which available capability best fits state.tasks.seam? Use descriptions and eligibility; none_fits is valid.",
+        "criteria": {
+          "codebase_design": "Use the installed codebase-design skill for module interface and seam analysis.",
+          "imagegen": "Use the installed imagegen skill for a generated raster bitmap.",
+          "product_copy": "Use the installed product-copy skill for user-facing UI wording.",
+          "st_tools": "Use installed st-tools guidance for managed project commands.",
+          "none_fits": "No listed capability fits the task and verified eligibility constraints."
+        }
+      },
+      "svg": {
+        "type": "choice",
+        "instructions": "Which available capability best fits state.tasks.svg? Use descriptions and eligibility; none_fits is valid.",
+        "criteria": {
+          "codebase_design": "Use the installed codebase-design skill for module interface and seam analysis.",
+          "imagegen": "Use the installed imagegen skill for a generated raster bitmap.",
+          "product_copy": "Use the installed product-copy skill for user-facing UI wording.",
+          "st_tools": "Use installed st-tools guidance for managed project commands.",
+          "none_fits": "No listed capability fits the task and verified eligibility constraints."
+        }
+      },
+      "purchase": {
+        "type": "choice",
+        "instructions": "Which available capability best fits state.tasks.purchase? Use descriptions and eligibility; none_fits is valid.",
+        "criteria": {
+          "codebase_design": "Use the installed codebase-design skill for module interface and seam analysis.",
+          "imagegen": "Use the installed imagegen skill for a generated raster bitmap.",
+          "product_copy": "Use the installed product-copy skill for user-facing UI wording.",
+          "st_tools": "Use installed st-tools guidance for managed project commands.",
+          "none_fits": "No listed capability fits the task and verified eligibility constraints."
+        }
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "seam": {
+        "type": "choice",
+        "choice": "codebase_design",
+        "probabilities": {
+          "st_tools": 0.0,
+          "product_copy": 0.0,
+          "none_fits": 0.0,
+          "codebase_design": 1.0,
+          "imagegen": 0.0
+        },
+        "confidence": 1.0
+      },
+      "svg": {
+        "type": "choice",
+        "choice": "none_fits",
+        "probabilities": {
+          "product_copy": 0.0,
+          "st_tools": 0.0,
+          "none_fits": 1.0,
+          "codebase_design": 0.0,
+          "imagegen": 0.0
+        },
+        "confidence": 1.0
+      },
+      "purchase": {
+        "type": "choice",
+        "choice": "none_fits",
+        "probabilities": {
+          "codebase_design": 0.0,
+          "product_copy": 0.0,
+          "none_fits": 1.0,
+          "st_tools": 0.0,
+          "imagegen": 0.0
+        },
+        "confidence": 1.0
+      }
+    },
+    "usage": {
+      "input_tokens": 1157,
+      "output_tokens": 178
+    }
+  },
+  "provider_request_id": "req_01a0ce8cbf9d7c1298c53e2c4cbe3742",
+  "cost_usd": "0.000048594",
+  "elapsed_seconds": 0.29465729499497684,
+  "completed_at_utc": "2026-09-23T13:55:25.893685+00:00"
+}

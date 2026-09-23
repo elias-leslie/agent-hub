@@ -31,8 +31,6 @@ from app.services.typesafe_jev import (  # noqa: E402
     resolve_typesafe_api_key,
 )
 
-MANIFEST = HERE / "live-packets-v1.json"
-RECEIPTS = HERE / "live-receipts-v1"
 MODEL_WINDOW_STATE_QUESTION = 32_000  # Verified TypeSafe Jev 1.13 model contract.
 HTTP_TIMEOUT_SECONDS = 30.0  # Existing Agent Hub external-HTTP precedent; default Jev transport is unbounded.
 
@@ -86,10 +84,10 @@ def replace_receipt(path: Path, receipt: dict) -> None:
     os.replace(temporary, path)
 
 
-async def run_one(packet: dict, manifest_hash: str, api_key: str) -> dict:
+async def run_one(packet: dict, manifest_hash: str, api_key: str, receipts: Path) -> dict:
     request, estimated_tokens = validate(packet)
     request_hash = canonical_hash(packet["request"])
-    path = RECEIPTS / f"{packet['id']}.json"
+    path = receipts / f"{packet['id']}.json"
     if path.exists():
         existing = json.loads(path.read_text())
         if existing.get("request_sha256") != request_hash or existing.get("manifest_sha256") != manifest_hash:
@@ -123,10 +121,13 @@ async def run_one(packet: dict, manifest_hash: str, api_key: str) -> dict:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", action="append", required=True, help="Frozen packet ID; repeat only for distinct IDs")
+    parser.add_argument("--version", choices=("v1", "v2"), default="v1")
     parser.add_argument("--validate-only", action="store_true", help="Check source hashes, schemas and model windows without a provider call")
     args = parser.parse_args()
-    manifest = json.loads(MANIFEST.read_text())
-    manifest_hash = sha(MANIFEST.read_text())
+    manifest_path = HERE / f"live-packets-{args.version}.json"
+    receipts = HERE / f"live-receipts-{args.version}"
+    manifest = json.loads(manifest_path.read_text())
+    manifest_hash = sha(manifest_path.read_text())
     packets = {p["id"]: p for p in manifest["packets"]}
     if len(args.id) != len(set(args.id)) or any(i not in packets for i in args.id):
         raise SystemExit("IDs must be unique and present in the frozen manifest")
@@ -138,7 +139,7 @@ async def main() -> None:
     # Resolve before marking any packet as attempted; this approved credential is never logged.
     api_key = resolve_typesafe_api_key()
     for id_ in args.id:
-        result = await run_one(packets[id_], manifest_hash, api_key)
+        result = await run_one(packets[id_], manifest_hash, api_key, receipts)
         print(json.dumps(result))
 
 
