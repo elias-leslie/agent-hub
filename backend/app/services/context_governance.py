@@ -92,6 +92,7 @@ async def record(db: AsyncSession, kind: str, actor: str, payload: dict[str, Any
     key = str(uuid.uuid4())
     source_ids = {s["source_id"] for s in payload.get("sources", []) if "source_id" in s}
     source_ids.update(c["before"]["source_id"] for c in payload.get("changes", []))
+    source_ids.update(payload.get("placement_source_ids", []))
     if payload.get("source_id"):
         source_ids.add(payload["source_id"])
     if payload.get("source", {}).get("source_id"):
@@ -100,6 +101,15 @@ async def record(db: AsyncSession, kind: str, actor: str, payload: dict[str, Any
     db.add(evidence)
     await db.flush()
     return key
+
+
+def changed_placement_source_ids(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[str]:
+    previous = {(item["source_type"], item["source_id"]): semantic_hash(item) for item in before}
+    current = {(item["source_type"], item["source_id"]): semantic_hash(item) for item in after}
+    return sorted({
+        source_id for source_type, source_id in previous.keys() | current.keys()
+        if previous.get((source_type, source_id)) != current.get((source_type, source_id))
+    })
 
 
 async def placement_snapshot(db: AsyncSession, context: CanonicalContextDeliveryRequest) -> list[dict[str, Any]]:
@@ -308,9 +318,11 @@ async def apply_draft(db: AsyncSession, draft: ContextDraft, actor: str, *, prev
     result["checks"] = deterministic_findings([s for s in result["sources"] if s["state"] in {"included", "indexed"}])
     result["changes"] = changes
     if not preview:
+        recorded_before_placements = before_placements if original_placements is None else original_placements
         result["change_id"] = await record(db, "change", actor, {
             "reason": draft.reason, "changes": changes, "context": draft.context.model_dump(mode="json"),
-            "before_placements": before_placements if original_placements is None else original_placements, "after_placements": result["placements"],
+            "placement_source_ids": changed_placement_source_ids(recorded_before_placements, result["placements"]),
+            "before_placements": recorded_before_placements, "after_placements": result["placements"],
         })
     return result
 

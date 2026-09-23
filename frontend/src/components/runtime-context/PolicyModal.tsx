@@ -76,6 +76,11 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
       onClose()
     },
   })
+  const referenceValue = form.reference.trim()
+  const referenceValid =
+    referenceValue === '' ||
+    (/^\d+$/.test(referenceValue) &&
+      Number.isSafeInteger(Number(referenceValue)))
 
   if (!isOpen) return null
 
@@ -92,10 +97,10 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
         <header className="flex items-center justify-between p-4 border-b border-slate-800">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">
-              Context selection · {profile}
+              Optional memories
             </h2>
             <p className="text-xs text-slate-400 font-mono">
-              Required mandates and guardrails are always delivered in full.
+              Choose how many optional memories Agent Hub can include.
             </p>
           </div>
           <button
@@ -108,12 +113,15 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
           </button>
         </header>
         <div className="p-4 space-y-3">
-          <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-            Mandates: always delivered · Guardrails: always delivered
-          </div>
+          {policyQuery.isPending && <p>Loading this setting…</p>}
+          {policyQuery.error && (
+            <p role="alert">
+              Could not load this setting. Close this window and try again.
+            </p>
+          )}
           <label className="block">
             <span className="text-xs uppercase tracking-[0.18em] text-slate-400 font-mono">
-              Optional reference item limit
+              Optional memories to include
             </span>
             <input
               type="number"
@@ -126,15 +134,20 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
                   reference: event.target.value,
                 }))
               }
-              placeholder="(uncapped)"
+              placeholder="No limit"
               className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 placeholder:text-slate-500"
             />
           </label>
+          {!referenceValid && (
+            <p role="alert">Enter a whole number or leave this blank.</p>
+          )}
           <p className="text-[11px] text-slate-500">
-            0 = uncapped. This affects semantic selection of optional references
-            only; it never truncates or rejects the finalized payload by token
-            size.
+            Leave blank or enter 0 for no limit. Required instructions are
+            always included in full.
           </p>
+          {saveMutation.error && (
+            <p role="alert">Could not save this setting. Try again.</p>
+          )}
         </div>
         <footer className="flex items-center justify-end gap-2 p-4 border-t border-slate-800">
           <button type="button" className={styles.btn} onClick={onClose}>
@@ -143,7 +156,12 @@ export function PolicyModal({ profile, isOpen, onClose }: Props) {
           <button
             type="button"
             className={cn(styles.btn, styles.btnPrimary)}
-            disabled={saveMutation.isPending}
+            disabled={
+              saveMutation.isPending ||
+              policyQuery.isPending ||
+              !!policyQuery.error ||
+              !referenceValid
+            }
             onClick={() => saveMutation.mutate()}
           >
             {saveMutation.isPending ? 'Saving…' : 'Save'}

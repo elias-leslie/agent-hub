@@ -85,9 +85,9 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/runtime-context',
-    label: 'Runtime Context',
+    label: 'Agent context',
     icon: BrainCircuit,
-    description: 'CLI/TUI injection',
+    description: 'Instructions and memories for agents',
   },
   {
     href: '/access-control',

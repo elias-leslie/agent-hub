@@ -1,14 +1,17 @@
 'use client'
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { MarkdownContent } from '@agent-hub/chat-ui'
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import { useState } from 'react'
 import { fetchAgents } from '@/lib/api/agents'
 import {
-  type ContextDraft,
   type ContextInventory,
   type ContextPolicy,
   type ContextRecord,
-  type ContextReview,
   type ContextSelection,
   type ContextSource,
   contextRequest,
@@ -16,20 +19,228 @@ import {
   type SourceEdit,
 } from '@/lib/api/context-management'
 import { fetchProjectCatalog } from '@/lib/api/project-permissions'
-import { ContextInspector } from './ContextInspector'
+import { ContextEditor } from './ContextEditor'
 import styles from './context-manager.module.css'
-import { MaintenancePanel } from './MaintenancePanel'
 import { PolicyModal } from './PolicyModal'
 
-const sourceKey = (source: { source_type: string; source_id: string }) =>
-  `${source.source_type}:${source.source_id}`
-const list = (value: string) =>
-  value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
+type PlacementMode = PlacementEdit['mode']
+type BulkAction = '' | 'scope' | 'enable' | 'disable' | 'archive'
+interface RowDraft {
+  original: ContextSource
+  edit: SourceEdit
+  context: ContextSelection
+  placementMode: PlacementMode
+  placement?: PlacementEdit
+  placementRevision: string
+}
+
+const keyOf = (source: { source_type: string; source_id: string }) =>
+  source.source_type + ':' + source.source_id
+const canEdit = (source: ContextSource) =>
+  source.source_type !== 'computed' && source.owner_agent_id === null
+const displayName = (source: ContextSource) =>
+  source.name.trim() ||
+  source.content.split('\n')[0]?.trim().slice(0, 72) ||
+  (source.source_type === 'memory' ? 'Untitled memory' : 'Untitled instruction')
+
+function usedBy(
+  source: ContextSource,
+  projects: { project_id: string; label: string }[],
+) {
+  const policy = source.policy
+  if (!policy) return 'Managed automatically'
+  if (policy.scope === 'global') return 'All projects'
+  if (policy.scope === 'unassigned')
+    return policy.workflows.length
+      ? 'Workflow: ' + policy.workflows.join(', ')
+      : 'Not assigned'
+  if (!policy.targets.length)
+    return policy.workflows.length
+      ? 'Workflow: ' + policy.workflows.join(', ')
+      : policy.scope === 'agent'
+        ? 'Choose an agent'
+        : 'Choose a project'
+  const targetNames = policy.targets
+    .map(
+      (target) =>
+        projects.find((project) => project.project_id === target)?.label ||
+        target,
+    )
+    .join(', ')
+  return policy.workflows.length
+    ? targetNames + ' or workflow: ' + policy.workflows.join(', ')
+    : targetNames
+}
+
+function previewStatus(source: ContextSource) {
+  switch (source.state) {
+    case 'included':
+      return 'Included in this preview'
+    case 'indexed':
+      return 'Available on request'
+    case 'eligible, not selected':
+      return 'Available, not included'
+    case 'excluded here':
+      return 'Left out of this preview'
+    case 'disabled':
+      return source.memory_status === 'archived' ? 'Archived' : 'Turned off'
+    case 'agent owned':
+      return 'Managed in agent settings'
+    default:
+      return 'Does not apply here'
+  }
+}
+
+function previewReason(source: ContextSource) {
+  if (source.state === 'included')
+    return 'This item matches the preview settings.'
+  if (source.state === 'indexed')
+    return 'The agent can request the full text when needed.'
+  if (source.state === 'eligible, not selected')
+    return 'The agent can use this item, but it was not chosen for this preview.'
+  if (source.state === 'excluded here')
+    return 'This item is left out for the selected project.'
+  if (source.state === 'disabled') return 'This item is turned off or archived.'
+  if (source.state === 'agent owned')
+    return 'Edit this item in its agent settings.'
+  if (source.reason.includes('available on demand'))
+    return 'The agent must request this item.'
+  if (
+    source.reason.includes('task trigger') ||
+    source.reason.includes('phase trigger')
+  )
+    return 'The chosen task or phase does not match this item.'
+  if (source.reason.includes('consumer'))
+    return 'This item is set for a different app or agent.'
+  return 'This item is set for a different project or agent.'
+}
+
+function changedSource(draft: RowDraft): SourceEdit | null {
+  const { original, edit } = draft
+  const result: SourceEdit = {
+    source_type: edit.source_type,
+    source_id: edit.source_id,
+    expected_revision: edit.expected_revision,
+  }
+  if (edit.name !== undefined && edit.name !== original.name)
+    result.name = edit.name
+  if (edit.content !== undefined && edit.content !== original.content)
+    result.content = edit.content
+  if (edit.summary !== undefined && edit.summary !== original.summary)
+    result.summary = edit.summary
+  if (edit.enabled !== undefined && edit.enabled !== original.enabled)
+    result.enabled = edit.enabled
+  if (
+    edit.policy !== undefined &&
+    JSON.stringify(edit.policy) !== JSON.stringify(original.policy)
+  )
+    result.policy = edit.policy
+  if (edit.archive && original.memory_status !== 'archived')
+    result.archive = true
+  return Object.keys(result).length > 3 ? result : null
+}
+const isDirty = (draft: RowDraft) =>
+  Boolean(changedSource(draft) || draft.placement)
+
+function validationError(draft: RowDraft): string | null {
+  const edit = changedSource(draft)
+  if (edit?.content !== undefined && !edit.content.trim())
+    return 'Enter text before saving.'
+  if (edit?.policy?.scope === 'project' && !edit.policy.targets.length)
+    return 'Choose a project before saving.'
+  if (edit?.policy?.scope === 'agent' && !edit.policy.targets.length)
+    return 'Choose an agent before saving.'
+  if (edit?.policy?.required && edit.policy.activation === 'on_demand')
+    return 'Required instructions must be included when they apply.'
+  if (draft.placement && !draft.context.project_id)
+    return 'Choose a project before changing its exception.'
+  return null
+}
+
+function changedItems(
+  record: ContextRecord,
+): { source_id: string; name: string }[] {
+  const changes = record.payload.changes
+  if (!Array.isArray(changes)) return []
+  return changes.flatMap((change) => {
+    if (!change || typeof change !== 'object') return []
+    const before = (change as { before?: unknown }).before
+    if (!before || typeof before !== 'object') return []
+    const item = before as { source_id?: unknown; name?: unknown }
+    if (typeof item.source_id !== 'string') return []
+    return [
+      {
+        source_id: item.source_id,
+        name: typeof item.name === 'string' && item.name ? item.name : 'Item',
+      },
+    ]
+  })
+}
+
+function affectedIds(record: ContextRecord): string[] {
+  const placementIds = record.payload.placement_source_ids
+  return [
+    ...changedItems(record).map((item) => item.source_id),
+    ...(Array.isArray(placementIds)
+      ? placementIds.filter((id): id is string => typeof id === 'string')
+      : []),
+  ]
+}
+
+function History({
+  source,
+  busy,
+  onUndo,
+}: {
+  source: ContextSource
+  busy: boolean
+  onUndo: (entry: ContextRecord) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const history = useQuery({
+    queryKey: ['agent-context-history', source.source_id],
+    queryFn: () =>
+      contextRequest<ContextRecord[]>(
+        '/history?source_id=' + encodeURIComponent(source.source_id),
+      ),
+    enabled: open,
+  })
+  const changes = (history.data ?? []).filter(
+    (entry) => entry.kind === 'change',
+  )
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>History</summary>
+      {history.isPending && open && <p>Loading changes…</p>}
+      {history.error && <p role="alert">Could not load this item’s history.</p>}
+      {!history.isPending && changes.length === 0 && <p>No changes yet.</p>}
+      {changes.map((entry) => {
+        const items = changedItems(entry)
+        return (
+          <div className={styles.historyEntry} key={entry.id}>
+            <div>
+              <strong>{new Date(entry.created_at).toLocaleString()}</strong>
+              <p>
+                {items.length > 1
+                  ? 'Changed ' +
+                    items.length +
+                    ' items: ' +
+                    items.map((item) => item.name).join(', ')
+                  : 'Changed this item'}
+              </p>
+            </div>
+            <button type="button" disabled={busy} onClick={() => onUndo(entry)}>
+              Undo
+            </button>
+          </div>
+        )
+      })}
+    </details>
+  )
+}
 
 export function ContextManager() {
+  const queryClient = useQueryClient()
   const [context, setContext] = useState<ContextSelection>({
     consumer_surface: 'codex',
     consumer_profile: 'agent_startup',
@@ -39,28 +250,22 @@ export function ContextManager() {
     requested_source_ids: [],
     query: 'startup context',
   })
-  const [edits, setEdits] = useState<Record<string, SourceEdit>>({})
-  const [placements, setPlacements] = useState<Record<string, PlacementEdit>>(
-    {},
-  )
-  const [preview, setPreview] = useState<ContextInventory | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [checked, setChecked] = useState<string[]>([])
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [drafts, setDrafts] = useState<Record<string, RowDraft>>({})
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all')
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [showRendered, setShowRendered] = useState(false)
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [showIncluded, setShowIncluded] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
-  const [review, setReview] = useState<ContextReview | null>(null)
-  const [reason, setReason] = useState('Operator context edit')
-  const [nativeText, setNativeText] = useState('')
-  const [proposalId, setProposalId] = useState<string | undefined>()
+  const [bulkAction, setBulkAction] = useState<BulkAction>('')
   const [bulkScope, setBulkScope] = useState<ContextPolicy['scope']>('project')
   const [bulkTarget, setBulkTarget] = useState('')
-  const [bulkActivation, setBulkActivation] =
-    useState<ContextPolicy['activation']>('always')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
+  const [rowNotices, setRowNotices] = useState<Record<string, string>>({})
+
   const projects = useQuery({
     queryKey: ['context-projects'],
     queryFn: fetchProjectCatalog,
@@ -69,1008 +274,715 @@ export function ContextManager() {
     queryKey: ['context-agents'],
     queryFn: () => fetchAgents(false),
   })
-  const query = useQuery({
+  const inventory = useQuery({
     queryKey: ['context-manager', context],
-    placeholderData: keepPreviousData,
     queryFn: () => contextRequest<ContextInventory>('/inventory', context),
+    placeholderData: keepPreviousData,
   })
-  const sources = [...(preview?.sources ?? query.data?.sources ?? [])].sort(
-    (a, b) => {
-      const rank: Record<string, number> = {
-        included: 0,
-        indexed: 1,
-        'eligible, not selected': 2,
-        'excluded here': 3,
-      }
-      return (
-        (rank[a.state] ?? 4) - (rank[b.state] ?? 4) ||
-        a.name.localeCompare(b.name)
-      )
-    },
+  const previewUpdating = inventory.isPlaceholderData
+  const sources = inventory.data?.sources ?? []
+  const rows = sources.filter((source) => {
+    const query = search.toLowerCase().trim()
+    const matchesText =
+      !query ||
+      [
+        source.name,
+        source.content,
+        source.summary,
+        usedBy(source, projects.data ?? []),
+      ].some((value) => value.toLowerCase().includes(query))
+    return (
+      matchesText &&
+      (typeFilter === 'all' || typeFilter === source.source_type) &&
+      (!showIncluded || source.state === 'included')
+    )
+  })
+  const selectedSources = sources.filter(
+    (source) => selected.has(keyOf(source)) && canEdit(source),
   )
-  const originalSources = query.data?.sources ?? []
-  const active = sources.find((source) => sourceKey(source) === selected)
-  const draftActive = active ? edits[sourceKey(active)] : undefined
-  const changes = Object.keys(edits).length + Object.keys(placements).length
-  const rows = useMemo(
-    () =>
-      sources.filter((source) => {
-        const text =
-          `${source.name} ${source.source_id} ${source.content} ${source.policy?.scope}`.toLowerCase()
-        return (
-          text.includes(search.toLowerCase()) &&
-          (filter === 'all' ||
-            source.source_type === filter ||
-            source.state === filter ||
-            (filter === 'changed' &&
-              Boolean(
-                edits[sourceKey(source)] || placements[sourceKey(source)],
-              )))
-        )
-      }),
-    [sources, search, filter, edits, placements],
+  const selectedHasDrafts = selectedSources.some((source) =>
+    Boolean(drafts[keyOf(source)]),
   )
-  const history = useQuery({
-    queryKey: [
-      'context-history',
-      active?.source_id,
-      query.data?.delivery.delivery_id,
-    ],
-    enabled: Boolean(active),
-    queryFn: () =>
-      contextRequest<ContextRecord[]>(
-        `/history?source_id=${encodeURIComponent(active?.source_id ?? '')}`,
-      ),
-  })
-  const editWarnings = Object.values(edits).flatMap((edit) => {
-    const warnings: string[] = []
-    if (edit.policy?.scope === 'project' && !edit.policy.targets.length)
-      warnings.push(`${edit.source_id}: choose a project target.`)
-    if (edit.policy?.required && edit.policy.activation === 'on_demand')
-      warnings.push(
-        `${edit.source_id}: required rules must be upfront or triggered. Choose advisory for on-demand references.`,
-      )
-    if (
-      edit.content &&
-      originalSources.some(
-        (source) =>
-          source.source_id !== edit.source_id &&
-          source.content.trim() === edit.content?.trim(),
-      )
-    )
-      warnings.push(
-        `${edit.source_id}: this text duplicates another source. Review its scope before saving.`,
-      )
-    return warnings
-  })
-  const changeSummaries = Object.values(edits).map((edit) => {
-    const original = originalSources.find(
-      (source) => sourceKey(source) === sourceKey(edit),
-    )
-    const fields: string[] = []
-    if (edit.name !== undefined && edit.name !== original?.name)
-      fields.push('Name')
-    if (edit.content !== undefined && edit.content !== original?.content)
-      fields.push('Content')
-    if (edit.summary !== undefined && edit.summary !== original?.summary)
-      fields.push('Short form')
-    if (edit.enabled !== undefined && edit.enabled !== original?.enabled)
-      fields.push(edit.enabled ? 'Enable' : 'Disable')
-    if (edit.archive) fields.push('Archive')
-    const scopeChanged =
-      edit.policy &&
-      original?.policy &&
-      (edit.policy.scope !== original.policy.scope ||
-        JSON.stringify(edit.policy.targets) !==
-          JSON.stringify(original.policy.targets))
-    if (scopeChanged) fields.push('Applies to')
-    if (
-      edit.policy &&
-      original?.policy &&
-      Object.keys(edit.policy).some(
-        (key) =>
-          key !== 'scope' &&
-          key !== 'targets' &&
-          JSON.stringify(edit.policy?.[key as keyof ContextPolicy]) !==
-            JSON.stringify(original.policy?.[key as keyof ContextPolicy]),
-      )
-    )
-      fields.push('Advanced rules')
-    const describeScope = (policy: ContextPolicy) =>
-      policy.scope === 'global'
-        ? 'Every project'
-        : policy.targets
-            .map(
-              (target) =>
-                projects.data?.find((project) => project.project_id === target)
-                  ?.label || target,
-            )
-            .join(', ') || policy.scope
-    return {
-      key: sourceKey(edit),
-      name: edit.name ?? original?.name ?? edit.source_id,
-      fields,
-      scope:
-        scopeChanged && original?.policy && edit.policy
-          ? `${describeScope(original.policy)} → ${describeScope(edit.policy)}`
-          : null,
-      scopeOnly: fields.length === 1 && fields[0] === 'Applies to',
-    }
-  })
-  const dirtyPlacement = Object.keys(placements).length > 0
-  const draft: ContextDraft = {
-    context,
-    edits: Object.values(edits),
-    placements: Object.values(placements),
-    expected_placement_revision: query.data?.placement_revision ?? '',
-    reason,
-    proposal_id: proposalId,
+
+  function clearSelection() {
+    setSelected(new Set())
+    setBulkAction('')
+    setError(null)
   }
 
-  function changeContext(update: Partial<ContextSelection>) {
-    setContext((current) => ({ ...current, ...update }))
-    setPreview(null)
-    setReview(null)
-  }
-  function stage(source: ContextSource, change: Partial<SourceEdit>) {
-    if (source.source_type === 'computed') return
-    const original =
-      originalSources.find((item) => sourceKey(item) === sourceKey(source)) ??
-      source
-    setEdits((current) => ({
-      ...current,
-      [sourceKey(source)]: {
-        ...current[sourceKey(source)],
-        source_type: source.source_type as 'prompt' | 'memory',
-        source_id: source.source_id,
-        expected_revision: original.revision,
-        ...change,
-      },
-    }))
-    setPreview(null)
-  }
-  function place(source: ContextSource, mode: PlacementEdit['mode']) {
-    if (source.source_type === 'computed') return
-    setPlacements((current) => ({
-      ...current,
-      [sourceKey(source)]: {
-        source_type: source.source_type as 'prompt' | 'memory',
-        source_id: source.source_id,
-        mode,
-      },
-    }))
-    setPreview(null)
-  }
-  async function perform(work: () => Promise<void>) {
+  function updateContext(change: Partial<ContextSelection>) {
+    setContext((current) => ({ ...current, ...change }))
+    clearSelection()
     setError(null)
     setNotice(null)
+  }
+  function toggleExpanded(key: string) {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  function startEdit(source: ContextSource) {
+    const key = keyOf(source)
+    if (!canEdit(source) || drafts[key] || inventory.isFetching) return
+    const mode =
+      inventory.data?.placements.find((item) => keyOf(item) === key)?.mode ??
+      'inherit'
+    setDrafts((current) => ({
+      ...current,
+      [key]: {
+        original: structuredClone(source),
+        edit: {
+          source_type: source.source_type as 'prompt' | 'memory',
+          source_id: source.source_id,
+          expected_revision: source.revision,
+        },
+        context: structuredClone(context),
+        placementMode: mode,
+        placementRevision: inventory.data?.placement_revision ?? '',
+      },
+    }))
+    setRowErrors((current) => ({ ...current, [key]: '' }))
+    setRowNotices((current) => ({ ...current, [key]: '' }))
+  }
+  function updateEdit(key: string, change: Partial<SourceEdit>) {
+    setDrafts((current) => {
+      const draft = current[key]
+      return draft
+        ? {
+            ...current,
+            [key]: { ...draft, edit: { ...draft.edit, ...change } },
+          }
+        : current
+    })
+    setRowErrors((current) => ({ ...current, [key]: '' }))
+  }
+  function updatePlacement(key: string, mode: PlacementMode) {
+    setDrafts((current) => {
+      const draft = current[key]
+      if (!draft) return current
+      return {
+        ...current,
+        [key]: {
+          ...draft,
+          placement:
+            mode === draft.placementMode
+              ? undefined
+              : {
+                  source_type: draft.edit.source_type,
+                  source_id: draft.edit.source_id,
+                  mode,
+                },
+        },
+      }
+    })
+    setRowErrors((current) => ({ ...current, [key]: '' }))
+  }
+  function cancelEdit(key: string) {
+    setDrafts((current) => {
+      const next = { ...current }
+      delete next[key]
+      return next
+    })
+    setRowErrors((current) => ({ ...current, [key]: '' }))
+  }
+  async function refreshSaved() {
+    await inventory.refetch()
+    await queryClient.invalidateQueries({ queryKey: ['agent-context-history'] })
+  }
+  async function saveRow(key: string) {
+    const draft = drafts[key]
+    if (!draft || busy) return
+    const problem = validationError(draft)
+    if (problem) {
+      setRowErrors((current) => ({ ...current, [key]: problem }))
+      return
+    }
+    const edit = changedSource(draft)
+    if (!edit && !draft.placement) {
+      cancelEdit(key)
+      return
+    }
     setBusy(true)
+    setRowErrors((current) => ({ ...current, [key]: '' }))
     try {
-      await work()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Context request failed')
+      await contextRequest<ContextInventory>('/save', {
+        context: draft.context,
+        edits: edit ? [edit] : [],
+        placements: draft.placement ? [draft.placement] : [],
+        expected_placement_revision: draft.placementRevision,
+        reason: 'Edited in Agent context',
+      })
+      cancelEdit(key)
+      await refreshSaved()
+      setRowNotices((current) => ({
+        ...current,
+        [key]:
+          'Saved. Agents can use this change the next time they receive context.',
+      }))
+    } catch (failure) {
+      setRowErrors((current) => ({
+        ...current,
+        [key]:
+          failure instanceof Error
+            ? failure.message
+            : 'Could not save. Your changes are still here.',
+      }))
     } finally {
       setBusy(false)
     }
   }
-  async function previewChanges() {
-    await perform(async () => {
-      setPreview(await contextRequest<ContextInventory>('/preview', draft))
-    })
+  async function undoChange(record: ContextRecord, rowKey: string) {
+    if (busy) return
+    const affected = affectedIds(record)
+    if (
+      affected.some((id) =>
+        Object.values(drafts).some(
+          (draft) => draft.edit.source_id === id && isDirty(draft),
+        ),
+      )
+    ) {
+      setRowErrors((current) => ({
+        ...current,
+        [rowKey]:
+          'Save or cancel edits to these items before undoing this change.',
+      }))
+      return
+    }
+    setBusy(true)
+    setRowErrors((current) => ({ ...current, [rowKey]: '' }))
+    try {
+      await contextRequest(
+        '/changes/' + encodeURIComponent(record.id) + '/undo',
+        {},
+      )
+      setDrafts((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([, draft]) => !affected.includes(draft.edit.source_id),
+          ),
+        ),
+      )
+      await refreshSaved()
+      setRowNotices((current) => ({ ...current, [rowKey]: 'Change undone.' }))
+    } catch (failure) {
+      setRowErrors((current) => ({
+        ...current,
+        [rowKey]:
+          failure instanceof Error
+            ? failure.message
+            : 'Could not undo this change.',
+      }))
+    } finally {
+      setBusy(false)
+    }
   }
-  async function saveChanges() {
-    await perform(async () => {
-      await contextRequest<ContextInventory>('/save', draft)
-      setEdits({})
-      setPlacements({})
-      setPreview(null)
-      setProposalId(undefined)
-      await query.refetch()
-      await history.refetch()
+  async function applyBulk() {
+    if (busy || !bulkAction || !selectedSources.length) return
+    if (selectedHasDrafts) {
+      setError(
+        'Save or cancel edits to the selected items before applying an action.',
+      )
+      return
+    }
+    if (bulkAction === 'scope' && bulkScope !== 'global' && !bulkTarget) {
+      setError(bulkScope === 'agent' ? 'Choose an agent.' : 'Choose a project.')
+      return
+    }
+    setError(null)
+    const edits: SourceEdit[] = selectedSources.flatMap((source) => {
+      if (
+        bulkAction === 'archive' &&
+        (source.source_type !== 'memory' || source.memory_status === 'archived')
+      )
+        return []
+      if (bulkAction === 'enable' && source.enabled) return []
+      if (bulkAction === 'disable' && !source.enabled) return []
+      if (
+        bulkAction === 'scope' &&
+        source.policy?.scope === bulkScope &&
+        source.policy.workflows.length === 0 &&
+        (bulkScope === 'global'
+          ? source.policy.targets.length === 0
+          : source.policy.targets.length === 1 &&
+            source.policy.targets[0] === bulkTarget)
+      )
+        return []
+      const edit: SourceEdit = {
+        source_type: source.source_type as 'prompt' | 'memory',
+        source_id: source.source_id,
+        expected_revision: source.revision,
+      }
+      if (bulkAction === 'scope' && source.policy)
+        edit.policy = {
+          ...source.policy,
+          scope: bulkScope,
+          targets: bulkScope === 'global' ? [] : [bulkTarget],
+          workflows: [],
+        }
+      else if (bulkAction === 'enable') edit.enabled = true
+      else if (bulkAction === 'disable') edit.enabled = false
+      else if (bulkAction === 'archive') edit.archive = true
+      return [edit]
+    })
+    if (!edits.length) {
+      setNotice('These items already have that setting.')
+      return
+    }
+    setBusy(true)
+    try {
+      await contextRequest<ContextInventory>('/save', {
+        context,
+        edits,
+        placements: [],
+        expected_placement_revision: inventory.data?.placement_revision ?? '',
+        reason: 'Bulk change in Agent context',
+      })
+      setSelected(new Set())
+      setBulkAction('')
+      await refreshSaved()
       setNotice(
-        'Saved. Changes apply to future context generation. Existing native session messages cannot be retracted.',
+        'Updated ' + edits.length + (edits.length === 1 ? ' item.' : ' items.'),
       )
-    })
-  }
-  async function reviewContext(dryRun: boolean) {
-    await perform(async () => {
-      setReview(
-        await contextRequest<ContextReview>('/review', {
-          context,
-          source_ids: checked
-            .map(
-              (key) =>
-                sources.find((source) => sourceKey(source) === key)?.source_id,
-            )
-            .filter(Boolean),
-          mode: 'deterministic',
-          dry_run: dryRun,
-          native_snapshots: nativeText
-            ? [
-                {
-                  name: 'operator-supplied-native-snapshot',
-                  content: nativeText,
-                  revision: 'operator-supplied',
-                  surface: context.consumer_surface,
-                },
-              ]
-            : [],
-        }),
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : 'Could not apply this action.',
       )
-    })
+    } finally {
+      setBusy(false)
+    }
   }
-  const delivery = preview?.delivery ?? query.data?.delivery
-  const bulkSources = sources.filter(
-    (source) =>
-      checked.includes(sourceKey(source)) &&
-      source.policy &&
-      source.owner_agent_id === null,
-  )
 
   return (
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1>Runtime context</h1>
+          <h1>Agent context</h1>
           <p>
-            Manage when instructions and memory become available. Preview uses
-            the same assembler as delivery.
+            View and edit the instructions and memories your agents can use.
           </p>
         </div>
         <button
           type="button"
-          disabled={changes > 0}
-          onClick={() => setPolicyOpen(true)}
-        >
-          Reference selection policy
-        </button>
-        <button
-          type="button"
-          disabled={busy || query.isFetching}
-          onClick={() =>
-            void perform(async () => {
-              setPreview(null)
-              await query.refetch()
-            })
-          }
+          disabled={inventory.isFetching}
+          onClick={() => void inventory.refetch()}
         >
           Refresh
         </button>
       </header>
-      <MaintenancePanel
-        context={context}
-        sources={originalSources}
-        onSelect={(source) => setSelected(sourceKey(source))}
-      />
+      <section className={styles.previewControls} aria-label="Preview settings">
+        <div className={styles.previewFields}>
+          <label>
+            Project
+            <select
+              value={context.project_id ?? ''}
+              onChange={(event) =>
+                updateContext({ project_id: event.target.value || null })
+              }
+            >
+              <option value="">No project</option>
+              {projects.data?.map((project) => (
+                <option key={project.project_id} value={project.project_id}>
+                  {project.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            App
+            <select
+              value={context.consumer_surface}
+              onChange={(event) => {
+                const surface = event.target.value
+                updateContext({
+                  consumer_surface: surface,
+                  capabilities: ['codex', 'claude_code', 'pi'].includes(surface)
+                    ? ['bash']
+                    : [],
+                })
+              }}
+            >
+              <option value="codex">Codex</option>
+              <option value="claude_code">Claude Code</option>
+              <option value="pi">Pi</option>
+              <option value="agent_runtime">Agent Hub</option>
+              <option value="mcp">MCP</option>
+            </select>
+          </label>
+        </div>
+        <details>
+          <summary>Preview options</summary>
+          <div className={styles.previewFields}>
+            <label>
+              Profile
+              <select
+                value={context.consumer_profile}
+                onChange={(event) =>
+                  updateContext({ consumer_profile: event.target.value })
+                }
+              >
+                {(inventory.data?.profiles ?? [context.consumer_profile]).map(
+                  (profile) => (
+                    <option key={profile} value={profile}>
+                      {profile.replaceAll('_', ' ')}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <label>
+              Task type
+              <input
+                value={context.task_type ?? ''}
+                placeholder="Any"
+                onChange={(event) =>
+                  updateContext({ task_type: event.target.value || null })
+                }
+              />
+            </label>
+            <label>
+              Phase
+              <input
+                value={context.phase ?? ''}
+                placeholder="Any"
+                onChange={(event) =>
+                  updateContext({ phase: event.target.value || null })
+                }
+              />
+            </label>
+          </div>
+        </details>
+        <details>
+          <summary>View full preview</summary>
+          <p>
+            This is what Agent Hub would send with these settings. Existing
+            conversations may still have older text.
+          </p>
+          {previewUpdating ? (
+            <p role="status">Updating preview…</p>
+          ) : inventory.data?.delivery.status === 'failed' ? (
+            <p role="alert">Could not build the preview.</p>
+          ) : (
+            <pre>{inventory.data?.delivery.rendered ?? 'Loading preview…'}</pre>
+          )}
+        </details>
+        <details>
+          <summary>Optional memory settings</summary>
+          <button type="button" onClick={() => setPolicyOpen(true)}>
+            Set how many optional memories to include
+          </button>
+        </details>
+      </section>
       <PolicyModal
         profile={context.consumer_profile}
         isOpen={policyOpen}
         onClose={() => {
           setPolicyOpen(false)
-          setPreview(null)
-          void query.refetch()
+          void inventory.refetch()
         }}
       />
-      <section className={styles.previewControls} aria-label="Preview context">
-        <strong>Preview as</strong>
+      <div className={styles.toolbar}>
+        <input
+          type="search"
+          aria-label="Search instructions and memories"
+          placeholder="Search instructions and memories"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value)
+            clearSelection()
+          }}
+        />
         <label>
-          Project
+          Type
           <select
-            aria-label="Preview project"
-            value={context.project_id ?? ''}
-            disabled={dirtyPlacement}
-            onChange={(event) =>
-              changeContext({ project_id: event.target.value || null })
-            }
+            value={typeFilter}
+            onChange={(event) => {
+              setTypeFilter(event.target.value)
+              clearSelection()
+            }}
           >
-            <option value="">No project (global)</option>
-            {projects.data?.map((project) => (
-              <option key={project.project_id} value={project.project_id}>
-                {project.label || project.project_id}
-              </option>
-            ))}
+            <option value="all">All</option>
+            <option value="prompt">Instructions</option>
+            <option value="memory">Memories</option>
+            <option value="computed">Other</option>
           </select>
         </label>
-        <label>
-          Consumer
-          <select
-            value={context.consumer_surface}
-            disabled={dirtyPlacement}
-            onChange={(event) =>
-              changeContext({
-                consumer_surface: event.target.value,
-                capabilities: ['codex', 'claude_code', 'pi'].includes(
-                  event.target.value,
-                )
-                  ? ['bash']
-                  : [],
-              })
-            }
-          >
-            <option value="codex">Codex</option>
-            <option value="claude_code">Claude Code</option>
-            <option value="pi">Pi</option>
-            <option value="agent_runtime">Internal agent</option>
-            <option value="mcp">MCP</option>
-          </select>
-        </label>
-        <label>
-          Profile
-          <select
-            value={context.consumer_profile}
-            disabled={dirtyPlacement}
-            onChange={(event) =>
-              changeContext({ consumer_profile: event.target.value })
-            }
-          >
-            {(query.data?.profiles ?? [context.consumer_profile]).map(
-              (profile) => (
-                <option key={profile} value={profile}>
-                  {profile.replaceAll('_', ' ')}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
-        <label>
-          Task type
+        <label className={styles.inlineCheck}>
           <input
-            value={context.task_type ?? ''}
-            placeholder="Any"
-            onChange={(event) =>
-              changeContext({ task_type: event.target.value || null })
-            }
+            type="checkbox"
+            checked={showIncluded}
+            onChange={(event) => {
+              setShowIncluded(event.target.checked)
+              clearSelection()
+            }}
           />
+          Included in preview
         </label>
-        <label>
-          Phase
-          <input
-            value={context.phase ?? ''}
-            placeholder="Any"
-            onChange={(event) =>
-              changeContext({ phase: event.target.value || null })
-            }
-          />
-        </label>
-        <label>
-          Active workflows
-          <input
-            value={context.workflow_ids.join(', ')}
-            placeholder="None"
-            onChange={(event) =>
-              changeContext({ workflow_ids: list(event.target.value) })
-            }
-          />
-        </label>
-        <details>
-          <summary>Session and retrieval</summary>
-          <div className={styles.previewControls}>
-            <label>
-              Session
-              <input
-                value={context.session_id ?? ''}
-                placeholder="Optional session ID"
-                onChange={(event) =>
-                  changeContext({ session_id: event.target.value || null })
-                }
-              />
-            </label>
-            <label>
-              Agent
-              <input
-                list="context-agents"
-                value={context.agent_slug ?? ''}
-                placeholder="Optional agent slug"
-                onChange={(event) =>
-                  changeContext({ agent_slug: event.target.value || null })
-                }
-              />
-            </label>
-            <label>
-              Selection query
-              <input
-                value={context.query}
-                onChange={(event) =>
-                  changeContext({ query: event.target.value })
-                }
-              />
-            </label>
-            <button
-              type="button"
-              disabled={!context.session_id || busy}
-              onClick={() =>
-                void perform(async () => {
-                  await contextRequest('/workflows', {
-                    consumer_surface: context.consumer_surface,
-                    session_id: context.session_id,
-                    workflow_ids: context.workflow_ids,
-                  })
-                  setNotice(
-                    'Workflow activation saved for this session. It takes effect when the client next requests context.',
-                  )
-                })
-              }
-            >
-              Save workflow activation for session
-            </button>
-          </div>
-        </details>
-        <p>
-          These selectors change the preview. Source scope changes are staged in
-          the inspector.
-        </p>
-      </section>
-      {(error || query.error) && (
-        <div role="alert" className={styles.error}>
+        <span>
+          {rows.length} {rows.length === 1 ? 'item' : 'items'}
+        </span>
+      </div>
+      {(error || inventory.error) && (
+        <p role="alert" className={styles.error}>
           {error ??
-            (query.error instanceof Error
-              ? query.error.message
-              : 'Unable to load context')}
-        </div>
+            (inventory.error instanceof Error
+              ? inventory.error.message
+              : 'Could not load items.')}
+        </p>
       )}
       {notice && (
         <p role="status" className={styles.notice}>
           {notice}
         </p>
       )}
-      {delivery?.status === 'failed' && (
-        <p role="alert" className={styles.error}>
-          Context generation failed: {delivery.failure?.error_message}
-        </p>
+      {previewUpdating && <p role="status">Updating preview…</p>}
+      {inventory.isPending && <p>Loading instructions and memories…</p>}
+      {!inventory.isPending && !inventory.error && rows.length === 0 && (
+        <p className={styles.empty}>No items match your search or filters.</p>
       )}
-      <div className={styles.toolbar}>
-        <input
-          aria-label="Search context"
-          placeholder="Search names, content or scope…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <select
-          aria-label="Filter context"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        >
-          {[
-            'all',
-            'included',
-            'excluded here',
-            'not applicable',
-            'prompt',
-            'memory',
-            'computed',
-            'changed',
-          ].map((value) => (
-            <option key={value}>{value}</option>
-          ))}
-        </select>
-        <span>
-          {rows.length} sources ·{' '}
-          {delivery?.estimated_tokens.toLocaleString() ?? '…'} generated tokens
-          {preview &&
-            ` (${(preview.token_delta ?? 0) >= 0 ? '+' : ''}${preview.token_delta ?? 0})`}
-        </span>
-        <button type="button" onClick={() => setShowRendered(!showRendered)}>
-          Exact rendered context
-        </button>
-      </div>
-      {showRendered && (
-        <section className={styles.rendered}>
-          <p>
-            Generated preview only. Binding, observed model delivery, retrieval
-            and saved session context are separate evidence stages.
-          </p>
-          {preview?.baseline && (
-            <details>
-              <summary>
-                Before · {preview.baseline.estimated_tokens} tokens
-              </summary>
-              <pre>{preview.baseline.rendered}</pre>
-            </details>
+      {selectedSources.length > 0 && (
+        <section className={styles.bulk} aria-label="Selected items">
+          <strong>{selectedSources.length} selected</strong>
+          <label>
+            Actions
+            <select
+              value={bulkAction}
+              onChange={(event) =>
+                setBulkAction(event.target.value as BulkAction)
+              }
+            >
+              <option value="">Choose an action</option>
+              <option value="scope">Change where used</option>
+              <option value="enable">Turn on</option>
+              <option value="disable">Turn off</option>
+              {selectedSources.every(
+                (source) => source.source_type === 'memory',
+              ) && <option value="archive">Archive memories</option>}
+            </select>
+          </label>
+          {bulkAction === 'scope' && (
+            <>
+              {selectedSources.some(
+                (source) => source.policy?.workflows.length,
+              ) && (
+                <p>
+                  This also removes the selected items’ workflow exceptions.
+                </p>
+              )}
+              <label>
+                Used by
+                <select
+                  value={bulkScope}
+                  onChange={(event) => {
+                    setBulkScope(event.target.value as ContextPolicy['scope'])
+                    setBulkTarget('')
+                  }}
+                >
+                  <option value="global">All projects</option>
+                  <option value="project">A project</option>
+                  <option value="agent">An agent</option>
+                </select>
+              </label>
+              {bulkScope === 'project' && (
+                <label>
+                  Project
+                  <select
+                    value={bulkTarget}
+                    onChange={(event) => setBulkTarget(event.target.value)}
+                  >
+                    <option value="">Choose a project</option>
+                    {projects.data?.map((project) => (
+                      <option
+                        key={project.project_id}
+                        value={project.project_id}
+                      >
+                        {project.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {bulkScope === 'agent' && (
+                <label>
+                  Agent
+                  <select
+                    value={bulkTarget}
+                    onChange={(event) => setBulkTarget(event.target.value)}
+                  >
+                    <option value="">Choose an agent</option>
+                    {agents.data?.agents.map((agent) => (
+                      <option key={agent.slug} value={agent.slug}>
+                        {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </>
           )}
-          <pre>{delivery?.rendered}</pre>
-        </section>
-      )}
-      {checked.length > 0 && (
-        <section className={styles.bulk} aria-label="Bulk context changes">
-          <strong>{checked.length} selected</strong>
-          <label>
-            Scope
-            <select
-              value={bulkScope}
-              onChange={(event) =>
-                setBulkScope(event.target.value as ContextPolicy['scope'])
-              }
-            >
-              <option value="project">Project</option>
-              <option value="global">Global</option>
-              <option value="agent">Agent</option>
-            </select>
-          </label>
-          <label>
-            Target
-            <input
-              list="context-projects"
-              value={bulkTarget}
-              onChange={(event) => setBulkTarget(event.target.value)}
-            />
-          </label>
+          {selectedHasDrafts && (
+            <p>
+              Save or cancel edits to the selected items before applying an
+              action.
+            </p>
+          )}
           <button
             type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => {
-                if (source.policy)
-                  stage(source, {
-                    policy: {
-                      ...(edits[sourceKey(source)]?.policy ?? source.policy),
-                      scope: bulkScope,
-                      targets: bulkScope === 'global' ? [] : list(bulkTarget),
-                    },
-                  })
-              })
+            disabled={
+              busy || !bulkAction || selectedHasDrafts || inventory.isFetching
             }
+            onClick={() => void applyBulk()}
           >
-            Stage scope
+            Apply
           </button>
-          <label>
-            Loads
-            <select
-              value={bulkActivation}
-              onChange={(event) =>
-                setBulkActivation(
-                  event.target.value as ContextPolicy['activation'],
-                )
-              }
-            >
-              <option value="always">Upfront</option>
-              <option value="on_demand">On demand</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => {
-                if (source.policy)
-                  stage(source, {
-                    policy: {
-                      ...(edits[sourceKey(source)]?.policy ?? source.policy),
-                      activation: bulkActivation,
-                    },
-                  })
-              })
-            }
-          >
-            Stage disclosure
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => place(source, 'exclude'))
-            }
-          >
-            Exclude here
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => place(source, 'inherit'))
-            }
-          >
-            Restore inherited selection
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => stage(source, { enabled: true }))
-            }
-          >
-            Stage enable
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources.forEach((source) => stage(source, { enabled: false }))
-            }
-          >
-            Stage disable
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              bulkSources
-                .filter((source) => source.source_type === 'memory')
-                .forEach((source) => stage(source, { archive: true }))
-            }
-          >
-            Stage memory archive
-          </button>
-          <button type="button" onClick={() => setChecked([])}>
+          <button type="button" onClick={clearSelection}>
             Clear selection
           </button>
         </section>
       )}
-      <datalist id="context-projects">
-        {projects.data?.map((project) => (
-          <option key={project.project_id} value={project.project_id}>
-            {project.label}
-          </option>
-        ))}
-      </datalist>
-      <datalist id="context-agents">
-        {agents.data?.agents.map((agent) => (
-          <option key={agent.slug} value={agent.slug}>
-            {agent.name}
-          </option>
-        ))}
-      </datalist>
-      <div className={styles.workspace}>
-        <div className={styles.tableWrap} aria-busy={query.isFetching}>
-          <table>
-            <thead>
-              <tr>
-                <th>Select</th>
-                <th>Name / kind</th>
-                <th>Applies to</th>
-                <th>Loads</th>
-                <th>Format</th>
-                <th>State and reason</th>
-                <th>Tokens</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((source) => {
-                const key = sourceKey(source)
-                const edit = edits[key]
-                const policy = edit?.policy ?? source.policy
-                return (
-                  <tr
-                    key={key}
-                    className={key === selected ? styles.selected : undefined}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${source.name}`}
-                        checked={checked.includes(key)}
-                        onChange={(event) =>
-                          setChecked((current) =>
-                            event.target.checked
-                              ? [...current, key]
-                              : current.filter((item) => item !== key),
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={styles.sourceName}
-                        onClick={() => setSelected(key)}
-                      >
-                        {edit?.name ?? source.name}
-                      </button>
-                      <small>
-                        {source.source_type} · {source.authority}
-                        {edit || placements[key] ? ' · staged' : ''}
-                      </small>
-                    </td>
-                    <td>
-                      {policy
-                        ? `${policy.scope}${policy.targets.length ? `: ${policy.targets.join(', ')}` : ''}`
-                        : 'Computed'}
-                      {policy?.workflows.length ? (
-                        <small>
-                          or workflow: {policy.workflows.join(', ')}
-                        </small>
-                      ) : null}
-                    </td>
-                    <td>
-                      {policy?.activation === 'always'
-                        ? 'Upfront'
-                        : (policy?.activation.replace('_', ' ') ?? 'Runtime')}
-                    </td>
-                    <td>{policy?.format ?? 'Full'}</td>
-                    <td>
-                      {placements[key]?.mode
-                        ? `${placements[key].mode} (staged)`
-                        : source.state}
-                      <small>{source.reason}</small>
-                    </td>
-                    <td>{source.tokens.toLocaleString()}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {!query.isFetching && rows.length === 0 && (
-            <p className={styles.empty}>No sources match these filters.</p>
-          )}
-        </div>
-        {active ? (
-          <ContextInspector
-            key={sourceKey(active)}
-            source={active}
-            projects={projects.data ?? []}
-            edit={draftActive}
-            context={context}
-            history={history.data ?? []}
-            findings={review?.findings ?? []}
-            onStage={(change) => stage(active, change)}
-            onRetrieve={() =>
-              changeContext({
-                requested_source_ids: context.requested_source_ids.includes(
-                  active.source_id,
-                )
-                  ? context.requested_source_ids.filter(
-                      (id) => id !== active.source_id,
-                    )
-                  : [...context.requested_source_ids, active.source_id],
-              })
-            }
-            onPlace={(mode) => place(active, mode)}
-            onProposal={(id) => {
-              setProposalId(id)
-              setNotice(
-                'This draft is linked to review evidence. Saving will check that the evidence is still current.',
-              )
-            }}
-            onUndo={(id) =>
-              void perform(async () => {
-                await contextRequest(`/changes/${id}/undo`, {})
-                setEdits({})
-                setPlacements({})
-                setPreview(null)
-                await query.refetch()
-                await history.refetch()
-                setNotice('Change undone as a new history entry.')
-              })
-            }
-            onFeedback={(payload) =>
-              void perform(async () => {
-                await contextRequest('/feedback', payload)
-                await history.refetch()
-                setNotice(
-                  'Explicit feedback recorded separately from citation and delivery signals.',
-                )
-              })
-            }
-          />
-        ) : (
-          <aside className={styles.inspector}>
-            <h2>Inspect a source</h2>
-            <p>
-              Select a name to edit its scope, disclosure and content, see why
-              it applies, or review history.
-            </p>
-            <p>
-              Computed capabilities stay owned by their registry. Native system
-              prompts are preserved and may be unobservable.
-            </p>
-          </aside>
-        )}
+      <div className={styles.listHeader} aria-hidden="true">
+        <span />
+        <span>Name</span>
+        <span>Type</span>
+        <span>Used by</span>
+        <span>In this preview</span>
       </div>
-      <section className={styles.review}>
-        <h2>Context review</h2>
-        <details>
-          <summary>Compare a visible native prompt</summary>
-          <p>
-            Only text you supply is compared. This does not expose or verify
-            hidden provider instructions.
-          </p>
-          <label>
-            Native prompt snapshot
-            <textarea
-              rows={6}
-              value={nativeText}
-              onChange={(event) => {
-                setNativeText(event.target.value)
-                setReview(null)
-              }}
-            />
-          </label>
-        </details>
-        <p>
-          Checks compare sources that can apply together in this preview.
-          Findings are proposals; hidden native prompts cannot be audited.
-          Lexical candidate selection can miss indirect conflicts.
-        </p>
-        <div className={styles.toolbar}>
-          <button
-            type="button"
-            disabled={busy || changes > 0}
-            onClick={() => void reviewContext(true)}
-          >
-            Check and estimate
-          </button>
-        </div>
-        {changes > 0 && (
-          <p>
-            Save or discard staged edits before reviewing their durable
-            revisions.
-          </p>
-        )}
-        {review && (
-          <>
-            <p>
-              {review.coverage.eligible_sources} eligible sources ·{' '}
-              {review.coverage.candidate_pairs} candidate pairs · approximately{' '}
-              {review.estimated_input_tokens.toLocaleString()} input tokens
-              before reviewer instructions.
-            </p>
-            {review.reason && <p>{review.reason}</p>}
-            {review.failure && <p className={styles.error}>{review.failure}</p>}
-            {review.screening && (
-              <>
-                <p>
-                  {review.screening.cache_hits} cached ·{' '}
-                  {review.screening.new_calls} new calls · estimated new cost $
-                  {review.screening.estimated_new_cost_usd.toFixed(6)}
-                  {review.screening.actual_new_cost_usd !== undefined
-                    ? ` · usage-priced new cost $${review.screening.actual_new_cost_usd.toFixed(6)}`
-                    : ''}
-                </p>
-                <p>{review.screening.qualification}</p>
-                <details>
-                  <summary>Typed screening results</summary>
-                  <pre>{JSON.stringify(review.screening.entries, null, 2)}</pre>
-                </details>
-              </>
-            )}
-            {review.findings.map((finding, index) => (
-              <article
-                key={`${finding.kind}-${index}`}
-                className={styles.finding}
-              >
-                <strong>
-                  {finding.kind}: {finding.explanation}
-                </strong>
-                <p>{finding.remedy}</p>
-                <small>{finding.uncertainty}</small>
-                {review.review_id && !!finding.proposed_edits?.length && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEdits((current) => ({
-                        ...current,
-                        ...Object.fromEntries(
-                          (finding.proposed_edits ?? []).map((edit) => [
-                            sourceKey(edit),
-                            edit,
-                          ]),
-                        ),
-                      }))
-                      setProposalId(review.review_id)
-                      setPreview(null)
-                    }}
-                  >
-                    Stage proposed changes
-                  </button>
-                )}
-                <details>
-                  <summary>Exact passages</summary>
-                  <pre>{JSON.stringify(finding.passages, null, 2)}</pre>
-                </details>
-              </article>
-            ))}
-            {review.findings.length === 0 && (
-              <p>
-                No deterministic findings. This does not establish that all
-                context is necessary or conflict-free.
-              </p>
-            )}
-            {review.review_id && (
-              <button
-                type="button"
-                onClick={() => setProposalId(review.review_id)}
-              >
-                Link edits to this review
-              </button>
-            )}
-          </>
-        )}
-      </section>
-      {editWarnings.map((warning) => (
-        <p className={styles.notice} key={warning}>
-          {warning}
-        </p>
-      ))}
-      {(preview ?? query.data)?.placement_warnings?.map((warning) => (
-        <p className={styles.notice} key={sourceKey(warning)}>
-          {warning.source_id}: {warning.reason}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setPlacements((current) => ({
-                ...current,
-                [sourceKey(warning)]: {
-                  source_type: warning.source_type,
-                  source_id: warning.source_id,
-                  mode: 'inherit',
-                },
-              }))
-              setPreview(null)
-            }}
-          >
-            Stage removal of placement
-          </button>
-        </p>
-      ))}
-      {preview?.checks?.map((check, index) => (
-        <p className={styles.notice} key={`${check.kind}-${index}`}>
-          {check.explanation} {check.remedy}
-        </p>
-      ))}
-      {changes > 0 && (
-        <section
-          className={styles.changeSummary}
-          aria-label="Staged change summary"
-        >
-          <h2>{preview ? 'Previewed changes' : 'Staged changes'}</h2>
-          <ul>
-            {changeSummaries.map((change) => (
-              <li key={change.key}>
-                <strong>{change.name}</strong>:{' '}
-                {change.fields.join(', ') || 'No field changes'}
-                {change.scope && <span> · {change.scope}</span>}
-                {change.scopeOnly && (
-                  <small>Scope only. Content unchanged.</small>
-                )}
-              </li>
-            ))}
-            {Object.values(placements).map((placement) => (
-              <li key={`placement:${sourceKey(placement)}`}>
-                {originalSources.find(
-                  (source) => sourceKey(source) === sourceKey(placement),
-                )?.name ?? placement.source_id}
-                : placement in {context.project_id} ({placement.mode})
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <footer className={styles.saveBar}>
-        <strong>{changes} staged changes</strong>
-        <label>
-          Reason
-          <input
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || query.isFetching || !changes}
-          onClick={() => void previewChanges()}
-        >
-          Preview changes
-        </button>
-        <button
-          type="button"
-          className={styles.primary}
-          disabled={
-            busy ||
-            query.isFetching ||
-            !changes ||
-            !preview ||
-            preview.delivery.status !== 'ok'
-          }
-          onClick={() => void saveChanges()}
-        >
-          Save reviewed changes
-        </button>
-        <button
-          type="button"
-          disabled={busy || !changes}
-          onClick={() => {
-            setEdits({})
-            setPlacements({})
-            setPreview(null)
-            setProposalId(undefined)
-          }}
-        >
-          Discard draft
-        </button>
-        {busy && <span role="status">Working…</span>}
-      </footer>
+      <div
+        role="list"
+        className={
+          previewUpdating
+            ? styles.sourceList + ' ' + styles.updating
+            : styles.sourceList
+        }
+        aria-busy={inventory.isFetching}
+        aria-hidden={previewUpdating}
+        inert={previewUpdating}
+      >
+        {rows.map((source) => {
+          const key = keyOf(source)
+          const open = expanded.has(key)
+          const draft = drafts[key]
+          const placementMode =
+            draft?.placement?.mode ??
+            inventory.data?.placements.find((item) => keyOf(item) === key)
+              ?.mode ??
+            'inherit'
+          return (
+            <section role="listitem" key={key} className={styles.row}>
+              <div className={styles.rowHeader}>
+                <input
+                  type="checkbox"
+                  aria-label={'Select ' + displayName(source)}
+                  checked={selected.has(key)}
+                  disabled={!canEdit(source) || busy || inventory.isFetching}
+                  onChange={() =>
+                    setSelected((current) => {
+                      const next = new Set(current)
+                      if (next.has(key)) next.delete(key)
+                      else next.add(key)
+                      return next
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className={styles.rowButton}
+                  aria-label={displayName(source)}
+                  aria-describedby={'summary-' + key}
+                  aria-expanded={open}
+                  disabled={inventory.isFetching}
+                  onClick={() => toggleExpanded(key)}
+                >
+                  <strong>{displayName(source)}</strong>
+                  <span>
+                    {source.source_type === 'prompt'
+                      ? 'Instruction'
+                      : source.source_type === 'memory'
+                        ? 'Memory'
+                        : 'Other'}
+                  </span>
+                  <span>{usedBy(source, projects.data ?? [])}</span>
+                  <span>{previewStatus(source)}</span>
+                </button>
+                <span id={'summary-' + key} className={styles.srOnly}>
+                  {source.source_type === 'prompt'
+                    ? 'Instruction'
+                    : source.source_type === 'memory'
+                      ? 'Memory'
+                      : 'Other'}
+                  . Used by {usedBy(source, projects.data ?? [])}.
+                  {previewStatus(source)}.
+                </span>
+              </div>
+              {open && (
+                <div className={styles.rowBody}>
+                  {draft ? (
+                    <ContextEditor
+                      source={draft.original}
+                      edit={draft.edit}
+                      projects={projects.data ?? []}
+                      agents={agents.data?.agents ?? []}
+                      context={draft.context}
+                      placementMode={placementMode}
+                      onChange={(change) => updateEdit(key, change)}
+                      onPlacement={(mode) => updatePlacement(key, mode)}
+                      onSave={() => void saveRow(key)}
+                      onCancel={() => cancelEdit(key)}
+                      busy={busy || inventory.isFetching}
+                      error={rowErrors[key] || null}
+                    />
+                  ) : (
+                    <>
+                      <div className={styles.content}>
+                        <MarkdownContent content={source.content} />
+                      </div>
+                      <p className={styles.previewNote}>
+                        {previewStatus(source)}. {previewReason(source)}
+                      </p>
+                      {canEdit(source) ? (
+                        <button
+                          type="button"
+                          disabled={busy || inventory.isFetching}
+                          onClick={() => startEdit(source)}
+                        >
+                          Edit
+                        </button>
+                      ) : (
+                        <p>
+                          {source.source_type === 'computed'
+                            ? 'This item is managed automatically.'
+                            : 'Edit this item in its agent settings.'}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {rowErrors[key] && !draft && (
+                    <p role="alert" className={styles.error}>
+                      {rowErrors[key]}
+                    </p>
+                  )}
+                  {rowNotices[key] && (
+                    <p role="status" className={styles.notice}>
+                      {rowNotices[key]}
+                    </p>
+                  )}
+                  {source.source_type !== 'computed' && (
+                    <History
+                      source={source}
+                      busy={busy || inventory.isFetching}
+                      onUndo={(entry) => void undoChange(entry, key)}
+                    />
+                  )}
+                </div>
+              )}
+            </section>
+          )
+        })}
+      </div>
     </main>
   )
 }

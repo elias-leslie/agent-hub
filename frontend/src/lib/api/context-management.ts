@@ -40,6 +40,7 @@ export interface ContextSource {
   tokens: number
   rendered: string | null
   review_status: string | null
+  memory_status?: string | null
 }
 export interface ContextDelivery {
   status: 'ok' | 'failed'

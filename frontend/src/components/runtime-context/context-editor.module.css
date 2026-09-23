@@ -1,0 +1,168 @@
+.editor {
+  padding: 18px;
+  border: 1px solid #334154;
+  border-radius: 9px;
+  background: #121923;
+  color: var(--text-primary, #dce3ed);
+  min-width: 0;
+}
+.editor fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.editor input,
+.editor select,
+.editor textarea,
+.editor button {
+  font: inherit;
+  color: inherit;
+  border: 1px solid #364357;
+  border-radius: 7px;
+  background: #131a24;
+  padding: 8px 10px;
+}
+.editor button {
+  cursor: pointer;
+}
+.editor button:hover:not(:disabled) {
+  border-color: #77d6b0;
+  background: #1b302c;
+}
+.editor :is(button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid #7acbb9;
+  outline-offset: 2px;
+}
+.editor :is(button, input, select, textarea):disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.editor input[type="checkbox"],
+.editor input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: #67cba4;
+  flex: none;
+}
+.editor p {
+  color: var(--text-secondary, #aab5c5);
+  line-height: 1.5;
+  margin: 6px 0;
+}
+.mainFields,
+.detailFields {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.mainFields {
+  margin-bottom: 16px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  color: #abb9cd;
+  font-size: 13px;
+  min-width: 0;
+}
+.field > :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+}
+.field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.section {
+  border-top: 1px solid #334154;
+  padding-top: 14px;
+  margin-top: 14px;
+}
+.section > summary,
+.nestedDetails > summary {
+  cursor: pointer;
+  color: #dce3ed;
+  font-weight: 600;
+}
+.section > .detailFields,
+.nestedDetails > .detailFields {
+  padding-top: 14px;
+}
+.nestedDetails {
+  border-top: 1px solid #334154;
+  padding-top: 12px;
+}
+.targetPicker {
+  margin-top: 12px;
+}
+.targetList {
+  max-height: 190px;
+  overflow-y: auto;
+  border: 1px solid #364357;
+  border-radius: 7px;
+  padding: 5px;
+  margin-top: 8px;
+}
+.target {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.target:hover {
+  background: #1b302c;
+}
+.target small {
+  color: #9dacbf;
+  overflow-wrap: anywhere;
+}
+.hint {
+  font-size: 12px;
+}
+.choices {
+  display: grid;
+  gap: 8px;
+}
+.choices label,
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+.error {
+  padding: 10px 12px;
+  background: #3a1f29;
+  border: 1px solid #a94c62;
+  border-radius: 7px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.editor .primary {
+  background: #285343;
+  border-color: #70c69f;
+}
+.readOnly {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+@media (max-width: 600px) {
+  .editor {
+    padding: 12px;
+  }
+  .actions button {
+    flex: 1 1 140px;
+  }
+  .target {
+    align-items: flex-start;
+  }
+}

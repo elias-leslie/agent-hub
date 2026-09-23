@@ -12,7 +12,9 @@ from app.services.context_governance import (
     ContextDraft,
     SourceEdit,
     apply_source_edit,
+    changed_placement_source_ids,
     preview_draft,
+    record,
 )
 from app.services.context_policy import ContextPolicy, policy_match, source_revision
 from app.services.context_review import deterministic_findings
@@ -102,6 +104,27 @@ async def test_draft_rolls_back_even_if_canonical_assembly_fails():
     transaction.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()
     db.expire_all.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_placement_only_change_is_linked_to_its_item():
+    db = AsyncMock()
+    await record(db, "change", "operator", {
+        "changes": [],
+        "placement_source_ids": ["research"],
+        "before_placements": [{"source_id": "unrelated"}],
+        "after_placements": [{"source_id": "unrelated"}],
+    })
+    entry = db.add.call_args.args[0]
+    assert entry.source_keys == ["research"]
+    db.flush.assert_awaited_once()
+
+
+def test_placement_history_tracks_only_changed_items_including_undo():
+    unrelated = {"source_type": "prompt", "source_id": "other", "mode": "include"}
+    placement = {"source_type": "memory", "source_id": "memory-id", "mode": "exclude"}
+    assert changed_placement_source_ids([unrelated], [unrelated, placement]) == ["memory-id"]
+    assert changed_placement_source_ids([unrelated, placement], [unrelated]) == ["memory-id"]
 
 
 def test_semantic_cache_ignores_counters_titles_revision_labels_and_display_weights():
