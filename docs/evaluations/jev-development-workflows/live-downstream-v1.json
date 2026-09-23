@@ -1,0 +1,53 @@
+{
+  "claim_evidence": {
+    "action": "Corrected the handoff: the Neri dispatcher reserves its pilot budget; context_screening.screen_pairs calls the provider transport directly without that reservation. Six frozen answers matched registered anchors, which is narrower than general correctness. Live UI behavior was not demonstrated by the fixture.",
+    "basis": ["live-receipts-v2/claim_corrected.json", "backend/app/services/context_screening.py:103", "backend/app/services/typesafe_jev.py:446", "backend/app/services/typesafe_jev.py:509"],
+    "decision_changed": "The first Jev packet's partial verdict required source retrieval; complete evidence changed Jev's verdict to contradicted. The corrected handoff matches the prior independent baseline rather than improving on it.",
+    "extra_source_reads": 1,
+    "completed_work_gain": "not demonstrated"
+  },
+  "skill_discovery": {
+    "action": "A gpt-6-sol/medium worker read codebase-design and inspected the provider-transport versus durable-ledger seam; it found the existing interface sufficient and made no change.",
+    "basis": ["live-receipts-v1/skill_initial.json", "backend/app/services/typesafe_jev.py:437", "backend/app/services/typesafe_jev.py:481"],
+    "observed_worker_shell_calls": 4,
+    "observed_worker_search_calls": 1,
+    "worker_elapsed_seconds": null,
+    "worker_token_usage": null,
+    "decision_changed": "The selected skill was used, but the prior no-Jev baseline had already found it; no saved discovery call or completed-work gain was measured.",
+    "completed_work_gain": "not demonstrated"
+  },
+  "search_reranking": {
+    "action": "Moved Jev-selected r19 (ProjectSelector) to first in the deliberately reversed natural-language candidate list, then read frontend/components/layout/ProjectSelector.tsx. Read selected r00 (scan_all_projects) for the mixed query and left the missing-helper claim unresolved. No source was read for the absent-answer query.",
+    "basis": ["live-receipts-v2/search_corrected.json", "/srv/workspaces/projects/summitflow/frontend/components/layout/ProjectSelector.tsx:23", "/srv/workspaces/projects/summitflow/backend/app/tasks/explorer_tasks.py:132"],
+    "selected_source_reads": 2,
+    "irrelevant_source_reads": 0,
+    "decision_changed": "The corrected ID-level judgment made the reversed-list reorder executable. The unperturbed st search baseline already ranked ProjectSelector first, so no production search saving was observed.",
+    "completed_work_gain": "only on a controlled reversed-order perturbation"
+  },
+  "repeated_issues": {
+    "action": "Two gpt-6-luna/low read-only workers handled the same new heartbeat complaint. The baseline worker found open feedback 91a82f4c-a12e-4d8e-a08d-bc4ff7dda130 through ordinary ST lookup; the Jev-lead worker verified the same record. Both distinguished other heartbeat/session issues and found no documented failed fix for this specific complaint. No feedback record was merged, suppressed or marked resolved.",
+    "basis": ["live-receipts-v1/repeat_initial.json", "repeat-feedback-snapshot.txt", "repeat-failed-task-snapshot.txt", "repeat-paused-task-snapshot.txt"],
+    "post_judgment_status_reads": 1,
+    "controlled_baseline": {"worker_profile": "gpt-6-luna low", "found_correct_feedback": true, "shell_invocations": 10, "st_commands": 24, "reported_command_seconds_approx": 8.7, "model_usage": null},
+    "controlled_jev_lead": {"worker_profile": "gpt-6-luna low", "found_correct_feedback": true, "reported_shell_or_tool_calls": 29, "elapsed_seconds": null, "model_usage": null},
+    "decision_changed": "The built-in duplicate candidate lookup missed the paraphrase, but the ordinary agent search found the same history. Jev did not improve the completed handoff or demonstrate lower reading, latency, usage, or intervention.",
+    "completed_work_gain": "not demonstrated"
+  },
+  "workflow_variant": {
+    "action": "Kept both blinded scope-task answers acceptable on the exact frozen context-policy and applicability source excerpts. No variant was promoted or prompt changed.",
+    "basis": ["live-receipts-v1/workflow_initial.json", "live-receipts-v1/workflow_swapped.json", "docs/evaluations/context-review/native-runtime-frozen-v1.json"],
+    "decision_changed": "None. Independent source inspection and prior anchor checks already accepted both answers; exact runtime and test citations were not all available.",
+    "completed_work_gain": "not demonstrated"
+  },
+  "model_effort_routing": {
+    "action": "Executed Jev-selected gpt-6-sol/medium on the full read-only source-inspection task with shell tools and codebase-design. It correctly identified the unbounded default transport and the direct context-screening path in four shell calls. The deterministic row count stayed in code; the underspecified repair task required context retrieval.",
+    "basis": ["live-receipts-v1/route_initial.json", "live-receipts-v1/route_leading.json", "backend/app/services/typesafe_jev.py:446"],
+    "requested_worker_profile": "gpt-6-sol medium",
+    "effective_provider_receipt": null,
+    "worker_shell_calls": 4,
+    "worker_elapsed_seconds": null,
+    "worker_token_usage": null,
+    "decision_changed": "The chosen eligible worker completed the task; no quality improvement over the earlier gpt-6-luna/low scout or total-usage saving can be established.",
+    "completed_work_gain": "not demonstrated"
+  }
+}
