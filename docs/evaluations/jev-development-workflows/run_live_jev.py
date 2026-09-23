@@ -58,6 +58,16 @@ def validate(packet: dict) -> tuple[SystemOneRequest, int]:
         if content is not None and sha(content) != source["sha256"]:
             raise ValueError(f"source hash changed: {source['source_id']}")
     request = SystemOneRequest.model_validate(packet["request"])
+    if packet["id"] == "history_pool":
+        snapshot = json.loads(Path(packet["source_coverage"][0]["source_id"]).read_text())
+        if request.state["incoming"] != snapshot["incoming"] or request.state["candidates"] != snapshot["candidates"]:
+            raise ValueError("history request differs from authoritative candidate snapshot")
+        if len(snapshot["candidates"]) != snapshot["pool"]["candidate_count"]:
+            raise ValueError("history candidate pool coverage changed")
+        for candidate in snapshot["candidates"]:
+            record = {key: value for key, value in candidate.items() if key != "record_sha256"}
+            if canonical_hash(record) != candidate["record_sha256"]:
+                raise ValueError(f"history candidate content hash mismatch: {candidate['id']}")
     if request.model != JEV_MODEL_ID:
         raise ValueError("model changed from verified pinned Jev version")
     state = json.dumps(request.state, sort_keys=True)
@@ -121,7 +131,7 @@ async def run_one(packet: dict, manifest_hash: str, api_key: str, receipts: Path
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", action="append", required=True, help="Frozen packet ID; repeat only for distinct IDs")
-    parser.add_argument("--version", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--version", choices=("v1", "v2", "v3"), default="v1")
     parser.add_argument("--validate-only", action="store_true", help="Check source hashes, schemas and model windows without a provider call")
     args = parser.parse_args()
     manifest_path = HERE / f"live-packets-{args.version}.json"

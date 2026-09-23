@@ -1,0 +1,35 @@
+{
+  "schema": "history-pool-reference-v1",
+  "frozen_before_jev_call": true,
+  "reviewer": "independent Astra read-only source review",
+  "snapshot": "history-pool-snapshot-v1.json",
+  "known_case_extension_not_fresh_holdout": true,
+  "labels": {
+    "b4ff039f-cd7d-455e-9c46-07a5ab27409c": "unrelated",
+    "d85f509c-dfae-44d5-baf7-1722f4b6fc09": "unrelated",
+    "8ba1dd33-cdff-475b-8a30-0373aeb2638e": "related_distinct",
+    "7d0f6697-d758-408c-8385-f58f40208a7d": "related_distinct",
+    "b43194c9-8a55-46cd-85ff-4e2cd8b5e82c": "unrelated",
+    "5f616831-b9cf-41b2-bb22-06ecf175de56": "unrelated",
+    "d4f5cdc0-c362-4753-8f84-93c66cfaea8c": "unrelated",
+    "bb32c103-8919-4a75-89de-f2b1e9ea0d08": "unrelated",
+    "37e76404-781f-433a-8e6a-9aa1cf1eaf38": "related_distinct",
+    "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130": "same_concern",
+    "364ec3f8-2c5b-4a9d-8dc0-0c7f7ee61baf": "unrelated",
+    "0b838b76-e1ad-4017-9684-e93510877e41": "unrelated",
+    "917acb86-a2e0-4a35-ad1b-19fd85ffab7f": "related_distinct",
+    "b8c57470-d317-46dd-baa8-77bd4872ef53": "unrelated",
+    "57d1e349-be29-4b67-b3bc-cf7799ffa803": "unrelated",
+    "c63256d6-cb43-4c72-9bf1-212cf0a15a9f": "unrelated",
+    "d3758f0e-4b85-43dd-b259-e7a0ec7cb1a0": "related_distinct"
+  },
+  "acceptable_alternatives": {
+    "8ba1dd33-cdff-475b-8a30-0373aeb2638e": ["unrelated"],
+    "7d0f6697-d758-408c-8385-f58f40208a7d": ["unrelated"],
+    "5f616831-b9cf-41b2-bb22-06ecf175de56": ["related_distinct"],
+    "d4f5cdc0-c362-4753-8f84-93c66cfaea8c": ["related_distinct"],
+    "917acb86-a2e0-4a35-ad1b-19fd85ffab7f": ["unrelated"]
+  },
+  "same_concern_rationale": "Only 91a82f4c explicitly reports repeatedly checking the same task during heartbeat. This matches observable behavior, not necessarily incident or root cause. Other records concern different repetitive activity, provider failures, or session state.",
+  "reference_limit": "One known paraphrase and one live candidate pool; no unseen-case generalization."
+}
