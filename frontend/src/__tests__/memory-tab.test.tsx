@@ -219,7 +219,7 @@ describe('MemoryTab', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Context selection · agent_coding/),
+        screen.getByRole('heading', { name: 'Optional memories' }),
       ).toBeInTheDocument()
     })
 
@@ -229,7 +229,9 @@ describe('MemoryTab', () => {
       })
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const save = screen.getByRole('button', { name: 'Save' })
+    await waitFor(() => expect(save).toBeEnabled())
+    fireEvent.click(save)
 
     await waitFor(() => {
       expect(updateRuntimePolicy).toHaveBeenCalledWith(
@@ -269,8 +271,11 @@ describe('MemoryTab', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Context selection · agent_runtime/),
+        screen.getByRole('heading', { name: 'Optional memories' }),
       ).toBeInTheDocument()
+    })
+    expect(fetchRuntimePolicy).toHaveBeenCalledWith({
+      consumerProfile: 'agent_runtime',
     })
   })
 
