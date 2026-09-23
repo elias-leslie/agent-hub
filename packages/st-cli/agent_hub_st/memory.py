@@ -312,9 +312,9 @@ def delete(uuids: UUIDsDeleteArg, change_reason: ChangeReasonOpt = None) -> None
 @app.command()
 @usage(
     surface="st.memory.update",
-    cmd="st memory update <uuid> [--scope project --scope-id <id>]",
+    cmd="st memory update <uuid> [--scope project --scope-id <id> --preview]",
     when="correcting memory content or targeting",
-    precautions=("recheck scope when content changes; omitted scope preserves it", "scope edits retain canonical before/after revisions and undo; inspect the saved result"),
+    precautions=("scope changes are separate from content edits; --preview does not save", "scope edits require service and project authority, preserve revisions and undo"),
     tier="mandate",
 )
 def update(
@@ -340,6 +340,7 @@ def update(
     render_mode: RenderModeUpdateOpt = None,
     scope: WriteScopeOpt = None,
     scope_id: ScopeIdOpt = None,
+    preview: Annotated[bool, typer.Option("--preview", help="Preview a scope change without saving")] = False,
 ) -> None:
     """Update an episode in place (content/tier and properties)."""
     resolved_content = _resolve_content(content, content_file, require_value=False)
@@ -350,6 +351,7 @@ def update(
         clear_applicability, tags, clear_tags, change_reason,
         render_mode=render_mode,
         scope=scope, scope_id=scope_id,
+        preview_only=preview,
     )
 
 

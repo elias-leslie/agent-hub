@@ -25,18 +25,39 @@ def test_save_rejects_ambiguous_scope_before_write(options):
     request.assert_not_called()
 
 
-def test_update_scope_uses_revision_checked_canonical_policy():
-    policy = {"scope": "global", "targets": [], "workflows": [], "activation": "always", "required": True, "format": "full", "task_types": [], "phases": [], "applicability": {}}
-    source = {"source_type": "memory", "source_id": "abc12345-full", "revision": "sha256:before", "policy": policy}
-    with patch("agent_hub_st.memory_crud.agent_hub_request", side_effect=[{"sources": [source]}, {"change_id": "change-1"}]) as request:
+def test_update_scope_previews_then_applies_exact_revision_through_service_api():
+    preview = {"memory_id": "abc12345-full", "expected_revision": "sha256:before", "before": {"scope": "global", "scope_id": None}, "after": {"scope": "project", "scope_id": "neri"}, "content_unchanged": True, "token_delta": 0}
+    applied = {"memory_id": "abc12345-full", "change_id": "change-1", "revision": "sha256:after", "before": preview["before"], "after": preview["after"], "content_unchanged": True}
+    with patch("agent_hub_st.memory_crud.agent_hub_request", side_effect=[preview, applied]) as request:
         result = runner.invoke(app, ["update", "abc12345", "--scope", "project", "--scope-id", "neri", "--change-reason", "Correct project scope"])
     assert result.exit_code == 0, result.output
-    draft = request.call_args.kwargs["json"]
-    edit = draft["edits"][0]
-    assert edit["expected_revision"] == "sha256:before"
-    assert edit["policy"] == {**policy, "scope": "project", "targets": ["neri"]}
-    assert draft["reason"] == "Correct project scope"
+    assert request.call_count == 2
+    before, after = request.call_args_list
+    assert before.args == ("POST", "/api/runtime-context/memory-scope/preview")
+    assert before.kwargs["internal"] is True
+    assert before.kwargs["json"] == {"memory_id": "abc12345", "scope": "project", "scope_id": "neri", "reason": "Correct project scope"}
+    assert after.args == ("POST", "/api/runtime-context/memory-scope/apply")
+    assert after.kwargs["internal"] is True
+    assert after.kwargs["json"]["expected_revision"] == "sha256:before"
+    assert "content=unchanged" in result.output
     assert "change-1" in result.output
+
+
+def test_update_scope_preview_does_not_save():
+    preview = {"memory_id": "abc12345-full", "expected_revision": "sha256:before", "before": {"scope": "global", "scope_id": None}, "after": {"scope": "project", "scope_id": "neri"}, "content_unchanged": True, "token_delta": 0}
+    with patch("agent_hub_st.memory_crud.agent_hub_request", return_value=preview) as request:
+        result = runner.invoke(app, ["update", "abc12345", "--scope", "project", "--scope-id", "neri", "--preview"])
+    assert result.exit_code == 0, result.output
+    assert request.call_count == 1
+    assert request.call_args.args[1].endswith("/preview")
+
+
+def test_update_scope_rejects_mixed_content_before_any_write():
+    with patch("agent_hub_st.memory_crud.agent_hub_request") as request:
+        result = runner.invoke(app, ["update", "abc12345", "--scope", "project", "--scope-id", "neri", "--content", "new content"])
+    assert result.exit_code != 0
+    assert "scope" in result.output.lower() and "separate" in result.output.lower()
+    request.assert_not_called()
 
 
 class TestMemoryUpdateContentInput:

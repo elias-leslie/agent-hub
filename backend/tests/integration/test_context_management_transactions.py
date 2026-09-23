@@ -6,6 +6,7 @@ outer transaction that is always rolled back; existing test data is preserved.
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -32,6 +33,62 @@ from app.services.context_governance import (
 )
 from app.services.context_policy import ContextPolicy, source_revision
 from app.services.runtime_context import CanonicalContextDeliveryRequest
+
+
+@pytest.mark.integration
+async def test_service_scope_move_preserves_content_and_undo_receipt(maintenance_db, monkeypatch):
+    from app.services.context_memory_scope import (
+        MemoryScopeApplyRequest,
+        MemoryScopePreviewRequest,
+        apply_memory_scope,
+        preview_memory_scope,
+    )
+
+    db = maintenance_db
+    monkeypatch.setattr(
+        "app.core.project_roots.get_registered_project_roots",
+        AsyncMock(return_value={"agent-hub": "/tmp/agent-hub"}),
+    )
+    row = Memory(
+        content="Keep the exact procedure text and prior revisions.",
+        name="Scope move fixture", memory_type="reference", scope="global",
+        tier=3, status="active", metadata_={},
+    )
+    db.add(row)
+    await db.flush()
+    initial_revision = source_revision(row)
+    request = MemoryScopePreviewRequest(
+        memory_id=str(row.id)[:8], scope="project", scope_id="agent-hub", reason="Correct project targeting",
+    )
+    client = {"id": "internal-test", "client_type": "internal", "allowed_projects": '["agent-hub"]'}
+    preview = await preview_memory_scope(db, request, client)
+    await db.refresh(row)
+    assert preview["expected_revision"] == initial_revision
+    assert preview["content_unchanged"] is True
+    assert row.scope == "global" and source_revision(row) == initial_revision
+
+    applied = await apply_memory_scope(db, MemoryScopeApplyRequest(
+        **request.model_dump(), expected_revision=initial_revision,
+    ), client)
+    await db.flush()
+    assert applied["revision"] == source_revision(row)
+    assert applied["change_id"]
+    assert row.scope == "project" and row.scope_id == "agent-hub"
+    assert row.content == "Keep the exact procedure text and prior revisions."
+    from app.models.memory_unified import MemoryRevision
+
+    revisions = list((await db.execute(select(MemoryRevision).where(MemoryRevision.memory_id == row.id))).scalars())
+    assert any(revision.scope == "project" and revision.content == row.content and
+               revision.changed_by == "service:internal-test" for revision in revisions)
+    with pytest.raises(HTTPException) as stale:
+        await apply_memory_scope(db, MemoryScopeApplyRequest(
+            **request.model_dump(), expected_revision=initial_revision,
+        ), client)
+    assert stale.value.status_code == 409
+    await undo_change(db, applied["change_id"], "test:undo")
+    await db.flush()
+    assert row.scope == "global" and row.scope_id is None
+    assert row.content == "Keep the exact procedure text and prior revisions."
 
 
 @pytest_asyncio.fixture

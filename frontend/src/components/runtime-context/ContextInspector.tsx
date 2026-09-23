@@ -10,11 +10,13 @@ import type {
   PlacementEdit,
   SourceEdit,
 } from '@/lib/api/context-management'
+import type { ProjectCatalogItem } from '@/lib/api/project-permissions'
 import styles from './context-manager.module.css'
 
 interface Props {
   source: ContextSource
   edit?: SourceEdit
+  projects: ProjectCatalogItem[]
   context: ContextSelection
   history: ContextRecord[]
   findings: ContextFinding[]
@@ -34,6 +36,7 @@ const asList = (value: string) =>
 export function ContextInspector({
   source,
   edit,
+  projects,
   context,
   history,
   findings,
@@ -44,7 +47,8 @@ export function ContextInspector({
   onFeedback,
   onRetrieve,
 }: Props) {
-  const [tab, setTab] = useState('rules')
+  const [tab, setTab] = useState('edit')
+  const [projectSearch, setProjectSearch] = useState('')
   const [turnId, setTurnId] = useState('')
   const [assessment, setAssessment] = useState('useful')
   const [evidence, setEvidence] = useState('')
@@ -57,6 +61,27 @@ export function ContextInspector({
   const matchingFindings = findings.filter((finding) =>
     finding.source_ids.includes(source.source_id),
   )
+  const advancedSummary = policy
+    ? [
+        policy.activation !== 'always' &&
+          {
+            triggered: 'Task or phase matches',
+            on_demand: 'On request',
+            relevant: 'When relevant',
+          }[policy.activation],
+        policy.required && 'Required rule',
+        policy.format !== 'full' &&
+          `${policy.format === 'compact' ? 'Compact text' : 'Summary'}`,
+        policy.workflows.length > 0 && 'Workflow rules',
+        (policy.task_types.length > 0 || policy.phases.length > 0) &&
+          'Task and phase rules',
+        Object.values(policy.applicability).some(
+          (values) => values.length > 0,
+        ) && 'Consumer targeting',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
   return (
     <aside className={styles.inspector} aria-label={`Inspect ${source.name}`}>
       <h2>{source.name}</h2>
@@ -64,7 +89,7 @@ export function ContextInspector({
         {source.source_type} · {source.authority}
       </p>
       <nav aria-label="Inspector sections" className={styles.tabs}>
-        {['rules', 'content', 'why', 'history', 'feedback'].map((value) => (
+        {['edit', 'preview', 'history', 'feedback'].map((value) => (
           <button
             type="button"
             key={value}
@@ -84,200 +109,7 @@ export function ContextInspector({
           . Its content is visible here for comparison.
         </p>
       )}
-      {tab === 'rules' && policy && (
-        <fieldset disabled={readOnly}>
-          <label>
-            Applies to
-            <select
-              value={policy.scope}
-              onChange={(event) => {
-                const scope = event.target.value as ContextPolicy['scope']
-                const target =
-                  scope === 'agent' ? context.agent_slug : context.project_id
-                updatePolicy({
-                  scope,
-                  targets:
-                    scope === 'global' || scope === 'unassigned' || !target
-                      ? []
-                      : [target],
-                })
-              }}
-            >
-              <option value="global">Every project</option>
-              <option value="project">Specific project</option>
-              <option value="agent">Specific agent</option>
-              {source.source_type === 'prompt' && (
-                <option value="unassigned">Unassigned</option>
-              )}
-            </select>
-          </label>
-          {['project', 'agent'].includes(policy.scope) && (
-            <label>
-              {policy.scope === 'project' ? 'Project' : 'Agent'} target
-              <input
-                list={
-                  policy.scope === 'project'
-                    ? 'context-projects'
-                    : 'context-agents'
-                }
-                value={policy.targets.join(', ')}
-                placeholder="Choose a target"
-                onChange={(event) =>
-                  updatePolicy({ targets: asList(event.target.value) })
-                }
-              />
-            </label>
-          )}
-          <label>
-            Also applies when workflow is explicitly active
-            <input
-              value={policy.workflows.join(', ')}
-              placeholder="None"
-              onChange={(event) =>
-                updatePolicy({ workflows: asList(event.target.value) })
-              }
-            />
-          </label>
-          <label>
-            Loads when
-            <select
-              value={policy.activation}
-              onChange={(event) =>
-                updatePolicy({
-                  activation: event.target.value as ContextPolicy['activation'],
-                })
-              }
-            >
-              <option value="always">Upfront when applicable</option>
-              <option value="triggered">Task or phase matches</option>
-              <option value="on_demand">Explicitly requested</option>
-              {source.source_type === 'memory' && (
-                <option value="relevant">When relevant to the query</option>
-              )}
-            </select>
-          </label>
-          {policy.activation === 'triggered' && (
-            <>
-              <label>
-                Task types
-                <input
-                  value={policy.task_types.join(', ')}
-                  onChange={(event) =>
-                    updatePolicy({ task_types: asList(event.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                Phases
-                <input
-                  value={policy.phases.join(', ')}
-                  onChange={(event) =>
-                    updatePolicy({ phases: asList(event.target.value) })
-                  }
-                />
-              </label>
-            </>
-          )}
-          <label>
-            Authority
-            <select
-              value={policy.required ? 'required' : 'advisory'}
-              onChange={(event) =>
-                updatePolicy({
-                  required: event.target.value === 'required',
-                  format:
-                    event.target.value === 'required' ? 'full' : policy.format,
-                })
-              }
-            >
-              <option value="required">Required rule</option>
-              <option value="advisory">Advisory context</option>
-            </select>
-          </label>
-          <label>
-            Delivered format
-            <select
-              value={policy.format}
-              disabled={policy.required}
-              onChange={(event) =>
-                updatePolicy({
-                  format: event.target.value as ContextPolicy['format'],
-                })
-              }
-            >
-              <option value="full">Full text</option>
-              <option value="compact">Approved compact text</option>
-              <option value="summary">Approved summary</option>
-            </select>
-          </label>
-          <details>
-            <summary>Consumer targeting</summary>
-            {[
-              ['consumer_surfaces', 'Include consumers'],
-              ['exclude_consumer_surfaces', 'Exclude consumers'],
-              ['agent_slugs', 'Include agents'],
-              ['exclude_agent_slugs', 'Exclude agents'],
-              ['audience_tags', 'Include audience tags'],
-            ].map(([key, label]) => (
-              <label key={key}>
-                {label}
-                <input
-                  value={(policy.applicability[key] ?? []).join(', ')}
-                  placeholder="Any"
-                  onChange={(event) =>
-                    updatePolicy({
-                      applicability: {
-                        ...policy.applicability,
-                        [key]: asList(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </label>
-            ))}
-            <p>Exclusions take precedence. Each filled dimension must match.</p>
-          </details>
-          <div className={styles.actions}>
-            <button type="button" onClick={() => onPlace('exclude')}>
-              Exclude in this preview project
-            </button>
-            <button type="button" onClick={() => onPlace('include')}>
-              Request here
-            </button>
-            <button type="button" onClick={() => onPlace('inherit')}>
-              Restore inherited selection
-            </button>
-          </div>
-          <p>
-            Placement never bypasses source scope. Default rule edits above
-            affect all matching future deliveries.
-          </p>
-          <div className={styles.actions}>
-            <button
-              type="button"
-              onClick={() =>
-                onStage({ enabled: !(edit?.enabled ?? source.enabled) })
-              }
-            >
-              {(edit?.enabled ?? source.enabled)
-                ? 'Disable source everywhere'
-                : 'Enable source'}
-            </button>
-            {source.source_type === 'memory' && (
-              <button type="button" onClick={() => onStage({ archive: true })}>
-                Archive memory
-              </button>
-            )}
-          </div>
-          {edit?.archive && (
-            <p>
-              Archive is staged. The source and its history will remain
-              available.
-            </p>
-          )}
-        </fieldset>
-      )}
-      {tab === 'content' && (
+      {tab === 'edit' && (
         <fieldset disabled={readOnly}>
           <label>
             Name
@@ -287,31 +119,323 @@ export function ContextInspector({
             />
           </label>
           <label>
-            Canonical content
+            Content
             <textarea
-              rows={18}
+              rows={8}
               value={edit?.content ?? source.content}
               onChange={(event) => onStage({ content: event.target.value })}
             />
           </label>
-          {!readOnly && (
-            <label>
-              Approved short form
-              <textarea
-                rows={5}
-                value={edit?.summary ?? source.summary}
-                onChange={(event) => onStage({ summary: event.target.value })}
-              />
-            </label>
+          {policy && (
+            <>
+              <label>
+                Applies to
+                <select
+                  value={policy.scope}
+                  onChange={(event) => {
+                    const scope = event.target.value as ContextPolicy['scope']
+                    const target =
+                      scope === 'agent'
+                        ? context.agent_slug
+                        : context.project_id
+                    updatePolicy({
+                      scope,
+                      targets:
+                        scope === 'global' || scope === 'unassigned' || !target
+                          ? []
+                          : [target],
+                    })
+                  }}
+                >
+                  <option value="global">Every project</option>
+                  <option value="project">Specific project</option>
+                  <option value="agent">Specific agent</option>
+                  {source.source_type === 'prompt' && (
+                    <option value="unassigned">Unassigned</option>
+                  )}
+                </select>
+              </label>
+              {policy.scope === 'project' && (
+                <div>
+                  <label>
+                    Find a project
+                    <input
+                      type="search"
+                      list="context-projects"
+                      value={projectSearch}
+                      placeholder="Search by name or ID"
+                      onChange={(event) => {
+                        const value = event.target.value
+                        const project = projects.find(
+                          (item) =>
+                            item.project_id === value || item.label === value,
+                        )
+                        if (project) {
+                          updatePolicy({
+                            targets: [
+                              ...new Set([
+                                ...policy.targets,
+                                project.project_id,
+                              ]),
+                            ],
+                          })
+                          setProjectSearch('')
+                        } else {
+                          setProjectSearch(value)
+                        }
+                      }}
+                    />
+                  </label>
+                  {policy.targets.length > 0 ? (
+                    <ul
+                      className={styles.targetList}
+                      aria-label="Selected projects"
+                    >
+                      {policy.targets.map((target) => (
+                        <li key={target}>
+                          <span>
+                            {projects.find(
+                              (project) => project.project_id === target,
+                            )?.label || target}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove project ${target}`}
+                            onClick={() =>
+                              updatePolicy({
+                                targets: policy.targets.filter(
+                                  (item) => item !== target,
+                                ),
+                              })
+                            }
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Choose a project before saving.</p>
+                  )}
+                  {projectSearch &&
+                    !projects.some((project) =>
+                      `${project.label} ${project.project_id}`
+                        .toLowerCase()
+                        .includes(projectSearch.toLowerCase()),
+                    ) && <p>No matching projects.</p>}
+                </div>
+              )}
+              {policy.scope === 'agent' && (
+                <label>
+                  Agent target
+                  <input
+                    list="context-agents"
+                    value={policy.targets.join(', ')}
+                    placeholder="Choose an agent"
+                    onChange={(event) =>
+                      updatePolicy({ targets: asList(event.target.value) })
+                    }
+                  />
+                </label>
+              )}
+              <details>
+                <summary>
+                  Advanced rules
+                  {advancedSummary && <small>{advancedSummary}</small>}
+                </summary>
+                <label>
+                  Also applies when workflow is explicitly active
+                  <input
+                    value={policy.workflows.join(', ')}
+                    placeholder="None"
+                    onChange={(event) =>
+                      updatePolicy({ workflows: asList(event.target.value) })
+                    }
+                  />
+                </label>
+                <label>
+                  Loads when
+                  <select
+                    value={policy.activation}
+                    onChange={(event) =>
+                      updatePolicy({
+                        activation: event.target
+                          .value as ContextPolicy['activation'],
+                      })
+                    }
+                  >
+                    <option value="always">Upfront when applicable</option>
+                    <option value="triggered">Task or phase matches</option>
+                    <option value="on_demand">Explicitly requested</option>
+                    {source.source_type === 'memory' && (
+                      <option value="relevant">
+                        When relevant to the query
+                      </option>
+                    )}
+                  </select>
+                </label>
+                {policy.activation === 'triggered' && (
+                  <>
+                    <label>
+                      Task types
+                      <input
+                        value={policy.task_types.join(', ')}
+                        onChange={(event) =>
+                          updatePolicy({
+                            task_types: asList(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Phases
+                      <input
+                        value={policy.phases.join(', ')}
+                        onChange={(event) =>
+                          updatePolicy({ phases: asList(event.target.value) })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+                <label>
+                  Authority
+                  <select
+                    value={policy.required ? 'required' : 'advisory'}
+                    onChange={(event) =>
+                      updatePolicy({
+                        required: event.target.value === 'required',
+                        format:
+                          event.target.value === 'required'
+                            ? 'full'
+                            : policy.format,
+                      })
+                    }
+                  >
+                    <option value="required">Required rule</option>
+                    <option value="advisory">Advisory context</option>
+                  </select>
+                </label>
+                <label>
+                  Delivered format
+                  <select
+                    value={policy.format}
+                    disabled={policy.required}
+                    onChange={(event) =>
+                      updatePolicy({
+                        format: event.target.value as ContextPolicy['format'],
+                      })
+                    }
+                  >
+                    <option value="full">Full text</option>
+                    <option value="compact">Approved compact text</option>
+                    <option value="summary">Approved summary</option>
+                  </select>
+                </label>
+                <details>
+                  <summary>Consumer targeting</summary>
+                  {[
+                    ['consumer_surfaces', 'Include consumers'],
+                    ['exclude_consumer_surfaces', 'Exclude consumers'],
+                    ['agent_slugs', 'Include agents'],
+                    ['exclude_agent_slugs', 'Exclude agents'],
+                    ['audience_tags', 'Include audience tags'],
+                  ].map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        value={(policy.applicability[key] ?? []).join(', ')}
+                        placeholder="Any"
+                        onChange={(event) =>
+                          updatePolicy({
+                            applicability: {
+                              ...policy.applicability,
+                              [key]: asList(event.target.value),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                  <p>
+                    Exclusions take precedence. Each filled dimension must
+                    match.
+                  </p>
+                </details>
+
+                {!readOnly && (
+                  <label>
+                    Approved short form
+                    <textarea
+                      rows={5}
+                      value={edit?.summary ?? source.summary}
+                      onChange={(event) =>
+                        onStage({ summary: event.target.value })
+                      }
+                    />
+                  </label>
+                )}
+              </details>
+            </>
           )}
-          <p>
-            Required rules always use full text. Memory edits preserve the UUID,
-            targeting and usage history.
-          </p>
+          {!readOnly && (
+            <details>
+              <summary>Actions</summary>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onStage({ enabled: !(edit?.enabled ?? source.enabled) })
+                  }
+                >
+                  {(edit?.enabled ?? source.enabled)
+                    ? 'Disable source everywhere'
+                    : 'Enable source'}
+                </button>
+                {source.source_type === 'memory' && (
+                  <button
+                    type="button"
+                    onClick={() => onStage({ archive: true })}
+                  >
+                    Archive memory
+                  </button>
+                )}
+              </div>
+              {edit?.archive && (
+                <p>
+                  Archive is staged. The source and its history will remain
+                  available.
+                </p>
+              )}
+            </details>
+          )}
         </fieldset>
       )}
-      {tab === 'why' && (
+      {tab === 'preview' && (
         <>
+          {!readOnly && policy && (
+            <fieldset disabled={!context.project_id}>
+              <legend>Placement in this preview project</legend>
+              <div className={styles.actions}>
+                <button type="button" onClick={() => onPlace('exclude')}>
+                  Exclude in this preview project
+                </button>
+                <button type="button" onClick={() => onPlace('include')}>
+                  Request here
+                </button>
+                <button type="button" onClick={() => onPlace('inherit')}>
+                  Restore inherited selection
+                </button>
+              </div>
+              <p>
+                Placement must match the source scope. Source rules apply to all
+                matching future deliveries.
+              </p>
+              {!context.project_id && (
+                <p>Select a preview project to change placement.</p>
+              )}
+            </fieldset>
+          )}
           <p>
             <strong>{source.state}</strong> · {source.reason}
           </p>

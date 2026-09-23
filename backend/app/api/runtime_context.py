@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.context_management import router as management_router
 from app.db import get_db
+from app.middleware.access_control_auth import require_service_client
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
+from app.services.context_memory_scope import (
+    MemoryScopeApplyRequest,
+    MemoryScopePreviewRequest,
+    apply_memory_scope,
+    preview_memory_scope,
+)
 from app.services.runtime_context import (
     KNOWN_RUNTIME_PROFILES,
     CanonicalContextDeliveryRequest,
@@ -30,6 +37,32 @@ from app.services.runtime_context import (
 
 router = APIRouter(prefix="/runtime-context", tags=["runtime-context"])
 router.include_router(management_router)
+
+
+@router.post("/memory-scope/preview")
+async def preview_memory_scope_endpoint(
+    payload: MemoryScopePreviewRequest,
+    http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    client = await require_service_client(http_request)
+    return await preview_memory_scope(db, payload, client)
+
+
+@router.post("/memory-scope/apply")
+async def apply_memory_scope_endpoint(
+    payload: MemoryScopeApplyRequest,
+    http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    client = await require_service_client(http_request)
+    try:
+        result = await apply_memory_scope(db, payload, client)
+        await db.commit()
+        return result
+    except Exception:
+        await db.rollback()
+        raise
 
 
 class RuntimeContextProfileResponse(BaseModel):

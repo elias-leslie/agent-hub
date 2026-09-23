@@ -9,8 +9,8 @@ from st_sdk.context import OutputContext
 from st_sdk.output import output_error, output_json
 
 from ._api_paths import (
-    CONTEXT_INVENTORY_PATH,
-    CONTEXT_SAVE_PATH,
+    MEMORY_SCOPE_APPLY_PATH,
+    MEMORY_SCOPE_PREVIEW_PATH,
     MEMORY_BATCH_GET_PATH,
     MEMORY_BULK_DELETE_PATH,
     MEMORY_BULK_TAG_PATH,
@@ -154,20 +154,39 @@ def validate_write_scope(scope: str | None, scope_id: str | None) -> tuple[str, 
     return scope, target
 
 
-def retarget_memory(uuid: str, scope: str, scope_id: str | None, reason: str | None) -> None:
-    """Use the existing audited context editor, preserving all other policy fields."""
-    context = {"consumer_surface": "st", "consumer_profile": "agent_startup"}
-    view = agent_hub_request("POST", CONTEXT_INVENTORY_PATH, json=context, tool_name="st memory update")
-    matches = [source for source in view["sources"] if source["source_type"] == "memory" and source["source_id"].startswith(uuid)]
-    if len(matches) != 1:
-        raise typer.BadParameter("Memory UUID must identify exactly one source; use its full UUID.")
-    source = matches[0]
-    policy = {**source["policy"], "scope": scope, "targets": [scope_id] if scope_id else []}
-    result = agent_hub_request("POST", CONTEXT_SAVE_PATH, tool_name="st memory update", json={
-        "context": context, "reason": reason or "Correct memory scope through ST",
-        "edits": [{"source_type": "memory", "source_id": source["source_id"], "expected_revision": source["revision"], "policy": policy}],
-    })
-    typer.echo(f"Scope: {scope}:{scope_id or '-'} change={result['change_id']}")
+def retarget_memory(
+    uuid: str, scope: str, scope_id: str | None, reason: str | None,
+    *, preview_only: bool = False,
+) -> None:
+    """Preview and apply one authenticated, revision-checked scope change."""
+    payload = {
+        "memory_id": uuid, "scope": scope, "scope_id": scope_id,
+        "reason": reason or "Correct memory scope through ST",
+    }
+    preview = agent_hub_request(
+        "POST", MEMORY_SCOPE_PREVIEW_PATH, json=payload,
+        tool_name="st memory update", internal=True,
+    )
+    revision = preview.get("expected_revision")
+    if not isinstance(revision, str) or not revision:
+        output_error("Scope preview did not return an expected revision.")
+        raise typer.Exit(1)
+    before = preview.get("before") or {}
+    after = preview.get("after") or {}
+    typer.echo(
+        f"Scope preview: memory={preview.get('memory_id', uuid)}"
+        f" {before.get('scope', '?')}:{before.get('scope_id') or '-'}"
+        f" -> {after.get('scope', scope)}:{after.get('scope_id') or '-'}"
+        f" revision={revision} content=unchanged"
+    )
+    if preview_only:
+        return
+    result = agent_hub_request(
+        "POST", MEMORY_SCOPE_APPLY_PATH,
+        json={**payload, "memory_id": preview.get("memory_id", uuid), "expected_revision": revision},
+        tool_name="st memory update", internal=True,
+    )
+    typer.echo(f"Scope: {scope}:{scope_id or '-'} change={result['change_id']} revision={result.get('revision', 'unknown')}")
 
 
 def save_impl(
@@ -319,10 +338,22 @@ def update_impl(
     agent_slugs: str | None, exclude_agent_slugs: str | None, audience_tags: str | None,
     exclude_audience_tags: str | None, clear_applicability: bool, tags: str | None,
     clear_tags: bool, change_reason: str | None = None, render_mode: str | None = None,
-    *, scope: str | None = None, scope_id: str | None = None,
+    *, scope: str | None = None, scope_id: str | None = None, preview_only: bool = False,
 ) -> None:
+    if preview_only and scope is None:
+        raise typer.BadParameter("--preview requires --scope.")
     if scope is not None or scope_id is not None:
         scope, scope_id = validate_write_scope(scope, scope_id)
+    if scope is not None:
+        if any(value is not None for value in (
+            content, tier, summary, trigger_types, trigger_phases, pinned,
+            context_kind, consumer_profiles, exclude_consumer_profiles,
+            agent_slugs, exclude_agent_slugs, audience_tags, exclude_audience_tags,
+            tags, render_mode,
+        )) or clear_applicability or clear_tags:
+            raise typer.BadParameter("Scope edits must be separate from content or other memory changes.")
+        retarget_memory(uuid, scope, scope_id, change_reason, preview_only=preview_only)
+        return
     normalized_summary, normalized_tier, replacement_tags, normalized_render_mode = _validate_update_and_normalize(
         content, tier, summary, tags, clear_tags, clear_applicability, trigger_types, trigger_phases,
         pinned, context_kind, consumer_profiles, exclude_consumer_profiles, agent_slugs,
@@ -334,8 +365,6 @@ def update_impl(
     if content is not None:
         existing_summary = str(existing.get("summary", "")) if existing is not None else ""
         validate_content_format(content, normalized_summary or existing_summary, effective_tier or "reference")
-    if scope is not None:
-        retarget_memory(uuid, scope, scope_id, change_reason)
     content_or_tier_changed = content is not None or normalized_tier is not None
     tags_changed = replacement_tags is not None or clear_tags
     if content_or_tier_changed:

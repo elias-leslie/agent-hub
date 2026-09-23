@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RuntimeContextPage from '@/app/runtime-context/page'
 import {
@@ -151,6 +157,12 @@ describe('Canonical context management', () => {
         screen.getByRole('button', { name: 'Save reviewed changes' }),
       ).toBeEnabled(),
     )
+    expect(
+      screen.getByText('Scope only. Content unchanged.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Staged change summary' }),
+    ).toHaveTextContent('Security Research project → Every project')
     expect(contextRequest).toHaveBeenCalledWith(
       '/preview',
       expect.objectContaining({
@@ -174,6 +186,7 @@ describe('Canonical context management', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Security Research' }),
     )
+    fireEvent.click(screen.getByText('Actions'))
     fireEvent.click(
       screen.getByRole('button', { name: 'Disable source everywhere' }),
     )
@@ -194,5 +207,206 @@ describe('Canonical context management', () => {
     )
     expect(await screen.findByRole('alert')).toHaveTextContent('Source changed')
     expect(screen.getByText('1 staged changes')).toBeInTheDocument()
+  })
+  it('opens with the basic editor and keeps policy and destructive controls in disclosures', async () => {
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Security Research' }),
+    )
+    const inspector = screen.getByRole('complementary', {
+      name: 'Inspect Security Research',
+    })
+    expect(within(inspector).getByLabelText('Name')).toHaveValue(
+      'Security Research',
+    )
+    expect(within(inspector).getByLabelText('Content')).toHaveValue(
+      'Project-specific research policy.',
+    )
+    expect(within(inspector).getByLabelText('Applies to')).toHaveValue(
+      'project',
+    )
+    expect(within(inspector).getByLabelText('Loads when')).not.toBeVisible()
+    expect(
+      within(inspector).getByRole('button', {
+        name: 'Disable source everywhere',
+      }),
+    ).not.toBeVisible()
+    expect(
+      within(inspector).getByText('Required rule · Workflow rules'),
+    ).toBeVisible()
+    fireEvent.click(within(inspector).getByText('Advanced rules'))
+    expect(within(inspector).getByLabelText('Loads when')).toBeVisible()
+    expect(within(inspector).getByLabelText('Delivered format')).toBeDisabled()
+    fireEvent.click(within(inspector).getByRole('button', { name: 'history' }))
+    expect(
+      within(inspector).getByText(/No context-management history yet/),
+    ).toBeVisible()
+  })
+
+  it('selects projects by name and removes targets while preserving every advanced rule', async () => {
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Security Research' }),
+    )
+    fireEvent.change(screen.getByLabelText('Find a project'), {
+      target: { value: 'Agent Hub' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove project security-research' }),
+    )
+    expect(screen.getByLabelText('Find a project')).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }))
+    await waitFor(() =>
+      expect(contextRequest).toHaveBeenCalledWith(
+        '/preview',
+        expect.objectContaining({
+          edits: [
+            expect.objectContaining({
+              expected_revision: 'sha256:original',
+              policy: {
+                ...inventory.sources[0].policy,
+                targets: ['agent-hub'],
+              },
+            }),
+          ],
+        }),
+      ),
+    )
+    expect(screen.getByLabelText('Content')).toHaveValue(
+      'Project-specific research policy.',
+    )
+    expect(
+      screen.getByText('Scope only. Content unchanged.'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps project placement beside the source preview and disables it without a project', async () => {
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Security Research' }),
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Request here' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'preview' }))
+    expect(screen.getByRole('button', { name: 'Request here' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Preview project'), {
+      target: { value: 'agent-hub' },
+    })
+    expect(screen.getByRole('button', { name: 'Request here' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Request here' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Preview changes' }),
+      ).toBeEnabled(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }))
+    await waitFor(() =>
+      expect(contextRequest).toHaveBeenCalledWith(
+        '/preview',
+        expect.objectContaining({
+          edits: [],
+          placements: [
+            { source_type: 'prompt', source_id: 'research', mode: 'include' },
+          ],
+        }),
+      ),
+    )
+  })
+
+  it('does not describe a content edit as scope only', async () => {
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Security Research' }),
+    )
+    fireEvent.change(screen.getByLabelText('Applies to'), {
+      target: { value: 'global' },
+    })
+    fireEvent.change(screen.getByLabelText('Content'), {
+      target: { value: 'Updated research policy.' },
+    })
+    expect(
+      screen.queryByText('Scope only. Content unchanged.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Staged change summary' }),
+    ).toHaveTextContent('Content, Applies to')
+  })
+  it('preserves advanced memory settings and exposes archive only through Actions', async () => {
+    const memory = {
+      ...inventory.sources[0],
+      source_type: 'memory' as const,
+      name: 'Project learning',
+      policy: {
+        ...inventory.sources[0].policy!,
+        activation: 'relevant' as const,
+        required: false,
+        format: 'summary' as const,
+        applicability: {
+          consumer_surfaces: ['codex'],
+          exclude_agent_slugs: ['curator'],
+        },
+      },
+    }
+    vi.mocked(contextRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/history')) return []
+      return { ...inventory, sources: [memory] }
+    })
+    renderPage()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Project learning' }),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Archive memory' }),
+    ).not.toBeVisible()
+    expect(
+      screen.getByText(
+        /When relevant · Summary · Workflow rules · Consumer targeting/,
+      ),
+    ).toBeVisible()
+    fireEvent.change(screen.getByLabelText('Applies to'), {
+      target: { value: 'global' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview changes' }))
+    await waitFor(() =>
+      expect(contextRequest).toHaveBeenCalledWith(
+        '/preview',
+        expect.objectContaining({
+          edits: [
+            expect.objectContaining({
+              source_type: 'memory',
+              policy: { ...memory.policy, scope: 'global', targets: [] },
+            }),
+          ],
+        }),
+      ),
+    )
+    fireEvent.click(screen.getByText('Actions'))
+    expect(screen.getByRole('button', { name: 'Archive memory' })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Save reviewed changes' }),
+    ).toBeEnabled()
+  })
+
+  it('keeps computed sources read only in the basic editor', async () => {
+    vi.mocked(contextRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/history')) return []
+      return {
+        ...inventory,
+        sources: [
+          {
+            ...inventory.sources[0],
+            source_type: 'computed',
+            name: 'Capabilities',
+            policy: null,
+          },
+        ],
+      }
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Capabilities' }))
+    expect(screen.getByLabelText('Name')).toBeDisabled()
+    expect(screen.getByLabelText('Content')).toBeDisabled()
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument()
   })
 })

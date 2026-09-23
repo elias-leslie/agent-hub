@@ -76,6 +76,9 @@ class TestAccessControlMiddleware:
         response = await async_client.get("/api/admin/clients")
         assert response.status_code == 403
         assert response.json()["error"] == "internal_only"
+        guidance = response.json()["agent_instructions"]["guidance"]
+        assert "registered service interface" in guidance
+        assert "human user" not in guidance
 
         # With internal header, should succeed
         response = await async_client.get(

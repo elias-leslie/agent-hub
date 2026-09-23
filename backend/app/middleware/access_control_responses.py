@@ -92,7 +92,7 @@ def internal_only_response() -> JSONResponse:
             "agent_instructions": {
                 "severity": "MANDATORY",
                 "action": "STOP - This is an admin-only endpoint. Do not attempt to access it.",
-                "guidance": "Admin operations must be performed through the Agent Hub dashboard by a human user. If you need something done, ask the user to perform the action in the dashboard.",
+                "guidance": "This endpoint requires an authorized Agent Hub dashboard session. For supported agent operations, use the registered service interface; do not retry this dashboard endpoint with API credentials.",
                 "reason": "Admin endpoints are restricted to prevent unauthorized system modifications.",
             },
         },

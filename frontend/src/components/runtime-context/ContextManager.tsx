@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { fetchAgents } from '@/lib/api/agents'
 import {
@@ -71,6 +71,7 @@ export function ContextManager() {
   })
   const query = useQuery({
     queryKey: ['context-manager', context],
+    placeholderData: keepPreviousData,
     queryFn: () => contextRequest<ContextInventory>('/inventory', context),
   })
   const sources = [...(preview?.sources ?? query.data?.sources ?? [])].sort(
@@ -141,6 +142,60 @@ export function ContextManager() {
         `${edit.source_id}: this text duplicates another source. Review its scope before saving.`,
       )
     return warnings
+  })
+  const changeSummaries = Object.values(edits).map((edit) => {
+    const original = originalSources.find(
+      (source) => sourceKey(source) === sourceKey(edit),
+    )
+    const fields: string[] = []
+    if (edit.name !== undefined && edit.name !== original?.name)
+      fields.push('Name')
+    if (edit.content !== undefined && edit.content !== original?.content)
+      fields.push('Content')
+    if (edit.summary !== undefined && edit.summary !== original?.summary)
+      fields.push('Short form')
+    if (edit.enabled !== undefined && edit.enabled !== original?.enabled)
+      fields.push(edit.enabled ? 'Enable' : 'Disable')
+    if (edit.archive) fields.push('Archive')
+    const scopeChanged =
+      edit.policy &&
+      original?.policy &&
+      (edit.policy.scope !== original.policy.scope ||
+        JSON.stringify(edit.policy.targets) !==
+          JSON.stringify(original.policy.targets))
+    if (scopeChanged) fields.push('Applies to')
+    if (
+      edit.policy &&
+      original?.policy &&
+      Object.keys(edit.policy).some(
+        (key) =>
+          key !== 'scope' &&
+          key !== 'targets' &&
+          JSON.stringify(edit.policy?.[key as keyof ContextPolicy]) !==
+            JSON.stringify(original.policy?.[key as keyof ContextPolicy]),
+      )
+    )
+      fields.push('Advanced rules')
+    const describeScope = (policy: ContextPolicy) =>
+      policy.scope === 'global'
+        ? 'Every project'
+        : policy.targets
+            .map(
+              (target) =>
+                projects.data?.find((project) => project.project_id === target)
+                  ?.label || target,
+            )
+            .join(', ') || policy.scope
+    return {
+      key: sourceKey(edit),
+      name: edit.name ?? original?.name ?? edit.source_id,
+      fields,
+      scope:
+        scopeChanged && original?.policy && edit.policy
+          ? `${describeScope(original.policy)} → ${describeScope(edit.policy)}`
+          : null,
+      scopeOnly: fields.length === 1 && fields[0] === 'Applies to',
+    }
   })
   const dirtyPlacement = Object.keys(placements).length > 0
   const draft: ContextDraft = {
@@ -635,7 +690,9 @@ export function ContextManager() {
       )}
       <datalist id="context-projects">
         {projects.data?.map((project) => (
-          <option key={project.project_id} value={project.project_id} />
+          <option key={project.project_id} value={project.project_id}>
+            {project.label}
+          </option>
         ))}
       </datalist>
       <datalist id="context-agents">
@@ -730,7 +787,9 @@ export function ContextManager() {
         </div>
         {active ? (
           <ContextInspector
+            key={sourceKey(active)}
             source={active}
+            projects={projects.data ?? []}
             edit={draftActive}
             context={context}
             history={history.data ?? []}
@@ -940,6 +999,34 @@ export function ContextManager() {
           {check.explanation} {check.remedy}
         </p>
       ))}
+      {changes > 0 && (
+        <section
+          className={styles.changeSummary}
+          aria-label="Staged change summary"
+        >
+          <h2>{preview ? 'Previewed changes' : 'Staged changes'}</h2>
+          <ul>
+            {changeSummaries.map((change) => (
+              <li key={change.key}>
+                <strong>{change.name}</strong>:{' '}
+                {change.fields.join(', ') || 'No field changes'}
+                {change.scope && <span> · {change.scope}</span>}
+                {change.scopeOnly && (
+                  <small>Scope only. Content unchanged.</small>
+                )}
+              </li>
+            ))}
+            {Object.values(placements).map((placement) => (
+              <li key={`placement:${sourceKey(placement)}`}>
+                {originalSources.find(
+                  (source) => sourceKey(source) === sourceKey(placement),
+                )?.name ?? placement.source_id}
+                : placement in {context.project_id} ({placement.mode})
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <footer className={styles.saveBar}>
         <strong>{changes} staged changes</strong>
         <label>
@@ -951,7 +1038,7 @@ export function ContextManager() {
         </label>
         <button
           type="button"
-          disabled={busy || !changes}
+          disabled={busy || query.isFetching || !changes}
           onClick={() => void previewChanges()}
         >
           Preview changes
@@ -960,7 +1047,11 @@ export function ContextManager() {
           type="button"
           className={styles.primary}
           disabled={
-            busy || !changes || !preview || preview.delivery.status !== 'ok'
+            busy ||
+            query.isFetching ||
+            !changes ||
+            !preview ||
+            preview.delivery.status !== 'ok'
           }
           onClick={() => void saveChanges()}
         >
