@@ -108,6 +108,27 @@
 .previewFields input {
   width: 100%;
 }
+.previewSummary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #293748;
+}
+.previewSummary strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.previewSummary > span,
+.previewSummary small {
+  color: #aab5c5;
+}
+.previewSummary small {
+  flex-basis: 100%;
+  line-height: 1.4;
+}
 .previewControls details .previewFields {
   margin-top: 14px;
 }
@@ -241,6 +262,12 @@
   font-size: 12px;
   color: #aab5c5;
   overflow-wrap: anywhere;
+}
+.previewState small {
+  display: block;
+  margin-top: 3px;
+  color: #8fa3b9;
+  font-size: 12px;
 }
 .page .rowButton:hover {
   background: #172326;

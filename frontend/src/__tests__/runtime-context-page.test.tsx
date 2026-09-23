@@ -72,6 +72,7 @@ const inventory: ContextInventory = {
     status: 'ok',
     rendered: 'Required global rules and ST essentials.',
     estimated_tokens: 400,
+    blocks: [],
     delivery_id: 'generated-1',
   },
   placements: [],
@@ -136,6 +137,74 @@ describe('Agent context', () => {
     expect(screen.queryByText('Context maintenance')).not.toBeInTheDocument()
     expect(callsTo('/review')).toHaveLength(0)
     expect(callsTo('/maintenance')).toHaveLength(0)
+  })
+
+  it('separates preview totals from search results and counts only delivered row text', async () => {
+    const previewInventory: ContextInventory = {
+      ...inventory,
+      sources: [
+        {
+          ...research,
+          state: 'included',
+          rendered: 'Project-specific research policy.',
+          tokens: 120,
+        },
+        {
+          ...operations,
+          state: 'indexed',
+          rendered: 'Operations Guide is available on request.',
+          tokens: 8,
+        },
+        computed,
+      ],
+      delivery: {
+        ...inventory.delivery,
+        estimated_tokens: 4021,
+        blocks: [{ block_id: 'research' }, { block_id: 'operations' }],
+      },
+    }
+    vi.mocked(contextRequest).mockImplementation(async (path) => {
+      if (path.startsWith('/history')) return []
+      return previewInventory
+    })
+    renderPage()
+    expect(await screen.findByText('About 4,021 tokens added')).toBeVisible()
+    expect(screen.getByText('2 items in this preview')).toBeVisible()
+    expect(screen.getByText('3 results')).toBeVisible()
+    const researchRow = screen
+      .getByRole('button', { name: 'Security Research' })
+      .closest('[role="listitem"]') as HTMLElement
+    const operationsRow = screen
+      .getByRole('button', { name: 'Operations Guide' })
+      .closest('[role="listitem"]') as HTMLElement
+    const computedRow = screen
+      .getByRole('button', { name: 'Capabilities' })
+      .closest('[role="listitem"]') as HTMLElement
+    expect(
+      within(researchRow).getByText('About 120 tokens in preview'),
+    ).toBeVisible()
+    expect(
+      within(operationsRow).getByText('About 8 tokens in preview'),
+    ).toBeVisible()
+    expect(within(computedRow).queryByText(/tokens in preview/)).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Included in preview' }),
+    )
+    expect(screen.getByText('2 results')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Capabilities' })).toBeNull()
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Included in preview' }),
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Search instructions and memories'),
+      {
+        target: { value: 'Operations Guide' },
+      },
+    )
+    expect(screen.getByText('1 result')).toBeVisible()
+    expect(screen.getByText('2 items in this preview')).toBeVisible()
   })
 
   it('keeps multiple source rows open and preserves each unfinished edit', async () => {
@@ -302,6 +371,7 @@ describe('Agent context', () => {
       target: { value: 'agent-hub' },
     })
     expect(await screen.findAllByText('Updating preview…')).not.toHaveLength(0)
+    expect(screen.queryByText('About 400 tokens added')).not.toBeInTheDocument()
     expect(
       screen.queryByText('Required global rules and ST essentials.'),
     ).not.toBeInTheDocument()

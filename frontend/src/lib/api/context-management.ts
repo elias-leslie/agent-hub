@@ -46,6 +46,7 @@ export interface ContextDelivery {
   status: 'ok' | 'failed'
   rendered: string
   estimated_tokens: number
+  blocks: { block_id: string }[]
   delivery_id: string
   failure?: { error_message: string } | null
 }

@@ -85,7 +85,9 @@ function previewStatus(source: ContextSource) {
     case 'disabled':
       return source.memory_status === 'archived' ? 'Archived' : 'Turned off'
     case 'agent owned':
-      return 'Managed in agent settings'
+      return source.rendered !== null
+        ? 'Included in this preview'
+        : 'Managed in agent settings'
     default:
       return 'Does not apply here'
   }
@@ -294,7 +296,7 @@ export function ContextManager() {
     return (
       matchesText &&
       (typeFilter === 'all' || typeFilter === source.source_type) &&
-      (!showIncluded || source.state === 'included')
+      (!showIncluded || source.rendered !== null)
     )
   })
   const selectedSources = sources.filter(
@@ -614,6 +616,26 @@ export function ContextManager() {
             </select>
           </label>
         </div>
+        {!inventory.isFetching &&
+          !inventory.error &&
+          inventory.data?.delivery.status === 'ok' && (
+            <div className={styles.previewSummary} aria-live="polite">
+              <strong>
+                About{' '}
+                {inventory.data.delivery.estimated_tokens.toLocaleString()}{' '}
+                tokens added
+              </strong>
+              <span>
+                {inventory.data.delivery.blocks.length}{' '}
+                {inventory.data.delivery.blocks.length === 1 ? 'item' : 'items'}{' '}
+                in this preview
+              </span>
+              <small>
+                Your app’s own instructions and the full conversation are not
+                counted.
+              </small>
+            </div>
+          )}
         <details>
           <summary>Preview options</summary>
           <div className={styles.previewFields}>
@@ -723,7 +745,7 @@ export function ContextManager() {
           Included in preview
         </label>
         <span>
-          {rows.length} {rows.length === 1 ? 'item' : 'items'}
+          {rows.length} {rows.length === 1 ? 'result' : 'results'}
         </span>
       </div>
       {(error || inventory.error) && (
@@ -906,7 +928,14 @@ export function ContextManager() {
                         : 'Other'}
                   </span>
                   <span>{usedBy(source, projects.data ?? [])}</span>
-                  <span>{previewStatus(source)}</span>
+                  <span className={styles.previewState}>
+                    {previewStatus(source)}
+                    {source.rendered !== null && (
+                      <small>
+                        About {source.tokens.toLocaleString()} tokens in preview
+                      </small>
+                    )}
+                  </span>
                 </button>
                 <span id={'summary-' + key} className={styles.srOnly}>
                   {source.source_type === 'prompt'
@@ -916,6 +945,12 @@ export function ContextManager() {
                       : 'Other'}
                   . Used by {usedBy(source, projects.data ?? [])}.
                   {previewStatus(source)}.
+                  {source.rendered !== null && (
+                    <>
+                      {' '}
+                      About {source.tokens.toLocaleString()} tokens in preview.
+                    </>
+                  )}
                 </span>
               </div>
               {open && (
