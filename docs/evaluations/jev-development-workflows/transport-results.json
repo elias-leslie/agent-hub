@@ -1,0 +1,23 @@
+{
+  "kind": "mocked_transport",
+  "cases": [
+    {
+      "condition": "timeout",
+      "calls": 1,
+      "error_kind": "transport_timeout",
+      "result": "not_evaluated"
+    },
+    {
+      "condition": "unavailable_model",
+      "calls": 1,
+      "error_kind": "provider_http_error",
+      "result": "not_evaluated"
+    },
+    {
+      "condition": "malformed_response",
+      "calls": 1,
+      "error_kind": "unsupported_output",
+      "result": "not_evaluated"
+    }
+  ]
+}
