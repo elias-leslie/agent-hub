@@ -1,0 +1,42 @@
+TASK:task-9d33b7bf|paused|P2|task|STANDARD
+TITLE:Clear stranded duplicate session records for task-a2178df4 so maintenance lane can progress
+DESCRIPTION:Heartbeat verification found two active refactor sessions recorded against the same agent-hub task/worktree (task-a2178df4 on task-a2178df4/main) 35+ minutes after launch, while recent evidence already shows completion/reconcile plumbing is broken and producing bogus step-999 auto-defects. This leaves the maintenance lane blocked and prevents execution-ready follow-through on the actual fix task. Create an operational bug to repair/clear the stranded active-session state and restore accurate lane ownership.
+FRESHNESS:verify-system-project-state|task-text=historical|reshape-or-abandon-if-stale
+WORKFLOW:plan:approved|ready:yes|issues:0|decisions:3
+RUNTIME:phase=plan
+HARNESS:code_only
+OBJECTIVE:Clear stranded duplicate session records for task-a2178df4 to restore accurate lane ownership and unblock the maintenance lane.
+CURRENT_SLICE:1.1 Locate session storage for task-a2178df4 active records
+BLOCKERS:none explicit
+RECENT_PROGRESS[1]
+  [2026-05-22 16:37:55] Paused: Reviewed orphan branch; preserving branch work as paused task checkpoint for later follow-up
+NEXT_ACTION:1.1.1 Search for task-a2178df4 session references in codebase
+KEY_FILES[2]:backend/app/services/ownership_inventory.py,backend/app/services/maintenance_lane.py
+SPIRIT_ANTI:Do not modify production data without verification, do not alter unrelated session records, do not change ownership verification logic.
+CONSTRAINTS[3]:Do not modify other session records | Do not alter ownership verification logic | Only clear the stranded duplicate entries for task-a2178df4
+DONE_WHEN[7]:Duplicate stale active session records on the same task/worktree can be identified and cleared safely | Task lane ownership no longer remains blocked by reconcile-stranded ghost sessions | Relevant verification proves active session reporting/lane state is trustworthy again | Quality gates for touched code pass | Duplicate/stranded active session records for task-a2178df4 cleared from storage | Maintenance lane can progress without blockage from spurious active-session state | Ownership inventory accurately reflects single canonical session for task-a2178df4
+COMPLETE_READY:no|gates:subtasks
+SYNC_SKIPS:1.1:plan-context | 1.2:plan-context | 1.3:plan-context
+CONTEXT:modify:backend/app/services/ownership_inventory.py,backend/app/services/maintenance_lane.py | risks:2
+SNAPSHOT:active|claimed_by:Elias Leslie|since:2026-05-22T16:37:55
+BASE_BRANCH:main
+TASK_BRANCH:task-9d33b7bf/main
+DECISIONS[3]
+d1:Where duplicate session state lives→Check both task-ownership inventory and maintenance lane session tracking
+d2:Repair strategy→Delete/clear the duplicate active-session entry while preserving legitimate completion records
+d3:Verification approach→Query ownership inventory and lane state before/after to confirm single active session remains
+SUBTASKS[3]:0/3:0%
+1.1   ____ [investigation] Locate session storage for task-a2178df4 active records [0/3]
+  1. ____ Search for task-a2178df4 session references in codebase
+  2. ____ Examine ownership inventory service and how active sessions are tracked
+  3. ____ Check maintenance lane session tracking mechanism
+1.2   ____ [implementation] Clear duplicate/stranded session records for task-a2178df4 [0/3]
+  1. ____ Identify the exact records to delete (duplicate active sessions on task-a2178df4/main)
+  2. ____ Create operational fix to clear stranded session state
+  3. ____ Execute cleanup while preserving legitimate completion records
+1.3   ____ [verification] Verify maintenance lane unblocked and ownership accurate [0/2]
+  1. ____ Query ownership inventory to confirm single active session for task-a2178df4
+  2. ____ Verify maintenance lane can progress
+
+CHECKPOINT: task-9d33b7bf/main
+  active on current checkout
