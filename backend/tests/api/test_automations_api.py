@@ -170,3 +170,30 @@ async def test_jobinator_cutover_waits_for_shared_quota_policy_sync():
         assert row.clock_owner == "legacy"
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_policy_write_refreshes_server_timestamp_before_serializing():
+    row = AutomationProjectPolicy(
+        project_id="summitflow", enabled=True, config={}, revision=2,
+        sync_revision=0,
+    )
+    db = AsyncMock()
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with patch("app.api.automations.service.update_policy", new_callable=AsyncMock, return_value=row):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test",
+                headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+            ) as client:
+                response = await client.put("/api/automations/projects/summitflow/policy", json={
+                    "expected_revision": 1, "enabled": True, "config": {},
+                })
+        assert response.status_code == 200
+        db.refresh.assert_awaited_once_with(row)
+    finally:
+        app.dependency_overrides.clear()

@@ -214,6 +214,7 @@ async def get_project_policy(
 ) -> dict[str, Any]:
     row = await service.get_policy(db, project_id)
     await db.commit()
+    await db.refresh(row)
     return _policy(row)
 
 
@@ -234,7 +235,7 @@ async def put_project_policy(
         from app.services.automation_dispatch import sync_jobinator_policy
 
         await sync_jobinator_policy()
-        await db.refresh(row)
+    await db.refresh(row)
     return _policy(row)
 
 
