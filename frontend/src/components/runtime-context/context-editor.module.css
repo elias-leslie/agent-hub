@@ -105,7 +105,7 @@
   padding: 5px;
   margin-top: 8px;
 }
-.target {
+.editor .target {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -113,10 +113,10 @@
   cursor: pointer;
   flex-wrap: wrap;
 }
-.target:hover {
+.editor .target:hover {
   background: #1b302c;
 }
-.target small {
+.editor .target small {
   color: #9dacbf;
   overflow-wrap: anywhere;
 }
@@ -127,8 +127,8 @@
   display: grid;
   gap: 8px;
 }
-.choices label,
-.checkbox {
+.editor .choices label,
+.editor .checkbox {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -162,7 +162,7 @@
   .actions button {
     flex: 1 1 140px;
   }
-  .target {
+  .editor .target {
     align-items: flex-start;
   }
 }
