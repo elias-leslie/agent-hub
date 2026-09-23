@@ -6,6 +6,15 @@
   "new_jev_provider_calls": 0,
   "new_jev_api_spend_usd": 0,
   "paid_test_limitation": "The only bounded live dispatcher uses the Neri security-research pilot ledger. This development evaluation did not repurpose it. The other live context-screening caller lacks a cumulative spend cap and has no default HTTP timeout.",
+  "local_acceptance": {
+    "checkpoint_commit": "7ab1b5514908cfb4bbcf4664ad342ad0ed8015ec",
+    "receipt": ".git/st/acceptance/12e9367541d666d285f8b93ffb95fa4e1e75b66d1b3ed093fbf6e5f7f2a9de8e.json",
+    "passed": ["ruff", "types", "pytest: 3686 passed; 50 skipped", "biome", "tsc", "vitest: 217 passed", "gitleaks"],
+    "failed": "OSV: 15 affected packages and 28 vulnerability records across existing backend/uv.lock and pnpm-lock.yaml",
+    "lockfiles_changed_by_evaluation": false,
+    "task_closed": false,
+    "gate_bypassed": false
+  },
   "historical_usage": {
     "related_development_dispatches": 8,
     "related_development_input_tokens": 8545,
