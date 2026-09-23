@@ -574,10 +574,14 @@ export default function AutomationsPage() {
     setCreating(false)
   }, [projectId])
   useEffect(() => {
-    if (creating)
-      document.getElementById('new-automation-profile')?.scrollIntoView({
-        block: 'start',
-      })
+    if (!creating) return
+    const form = document.getElementById('new-automation-profile')
+    if (!form) return
+    const headerBottom =
+      document.querySelector('.page-header')?.getBoundingClientRect().bottom ??
+      0
+    form.style.scrollMarginTop = `${headerBottom + 16}px`
+    form.scrollIntoView({ block: 'start' })
   }, [creating])
   const profiles = profilesQuery.data?.items ?? []
   const displayProfiles = [...profiles].sort((a, b) =>
@@ -850,7 +854,7 @@ export default function AutomationsPage() {
             {creating && (
               <section
                 id="new-automation-profile"
-                className="section-card scroll-mt-28"
+                className="section-card"
                 aria-label="New automation profile"
               >
                 <div className="max-w-4xl">
