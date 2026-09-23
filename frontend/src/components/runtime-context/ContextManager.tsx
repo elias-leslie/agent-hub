@@ -101,10 +101,6 @@ export function ContextManager() {
           (filter === 'all' ||
             source.source_type === filter ||
             source.state === filter ||
-            (filter === 'review available' &&
-              source.review_status?.includes('available')) ||
-            (filter === 'stale review' &&
-              source.review_status === 'stale review') ||
             (filter === 'changed' &&
               Boolean(
                 edits[sourceKey(source)] || placements[sourceKey(source)],
@@ -488,8 +484,6 @@ export function ContextManager() {
             'memory',
             'computed',
             'changed',
-            'review available',
-            'stale review',
           ].map((value) => (
             <option key={value}>{value}</option>
           ))}
@@ -663,7 +657,6 @@ export function ContextManager() {
                 <th>Format</th>
                 <th>State and reason</th>
                 <th>Tokens</th>
-                <th>Review</th>
               </tr>
             </thead>
             <tbody>
@@ -726,7 +719,6 @@ export function ContextManager() {
                       <small>{source.reason}</small>
                     </td>
                     <td>{source.tokens.toLocaleString()}</td>
-                    <td>{source.review_status ?? 'Not reviewed'}</td>
                   </tr>
                 )
               })}
