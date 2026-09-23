@@ -122,7 +122,11 @@ async def dispatch_run(run_id: str) -> None:
         profile = await db.get(AutomationProfile, run.profile_id)
         if definition is None or profile is None:
             raise RuntimeError("Automation definition or profile missing")
-        if run.status == "accepted" and definition.dispatch_kind != "callback":
+        dispatch_kind = definition.dispatch_kind
+        dispatch_target = definition.dispatch_target
+        owner_project_id = definition.owner_project_id
+        manual = run.trigger == "manual"
+        if run.status == "accepted" and dispatch_kind != "callback":
             return
         if run.status != "accepted":
             run.status = "dispatching"
@@ -136,20 +140,20 @@ async def dispatch_run(run_id: str) -> None:
             "config": run.config_snapshot or {},
             "policy_config": run.policy_snapshot or {},
         }
-        if definition.owner_project_id == "summitflow":
+        if owner_project_id == "summitflow":
             payload["project_id"] = profile.project_id
         await db.commit()
 
     try:
-        if definition.dispatch_kind == "hatchet":
-            if definition.dispatch_target == "persona_job":
+        if dispatch_kind == "hatchet":
+            if dispatch_target == "persona_job":
                 from app.workflows.automation_persona import automation_persona_job_task
                 task = automation_persona_job_task
             else:
-                task = _hatchet_task(definition.dispatch_target)
+                task = _hatchet_task(dispatch_target)
             try:
                 ref = await task.aio_run_no_wait(
-                    input={"automation_run_id": run_id, "manual": run.trigger == "manual"},
+                    input={"automation_run_id": run_id, "manual": manual},
                     options=TriggerWorkflowOptions(
                         key=run_id,
                         additional_metadata={"automation_run_id": run_id},
@@ -171,10 +175,10 @@ async def dispatch_run(run_id: str) -> None:
                 if not owner_run_id:
                     raise RuntimeError("Hatchet deduplicated run but its receipt is not visible yet") from None
             receipt = {"hatchet_run_id": owner_run_id}
-        elif definition.dispatch_kind == "callback":
+        elif dispatch_kind == "callback":
             if not settings.internal_service_secret:
                 raise RuntimeError("Internal service secret is not configured")
-            url = _owner_api_base(definition.owner_project_id) + definition.dispatch_target
+            url = _owner_api_base(owner_project_id) + dispatch_target
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     url, json=payload,
@@ -189,7 +193,7 @@ async def dispatch_run(run_id: str) -> None:
                 raise RuntimeError("Owner callback returned no durable owner_run_id")
             owner_run_id = str(receipt["owner_run_id"])
         else:
-            raise RuntimeError(f"Unsupported dispatch kind {definition.dispatch_kind}")
+            raise RuntimeError(f"Unsupported dispatch kind {dispatch_kind}")
     except Exception as exc:
         logger.exception("Automation dispatch failed for %s", run_id)
         async with async_session() as db:
@@ -215,7 +219,7 @@ async def dispatch_run(run_id: str) -> None:
             row.owner_run_id = owner_run_id
             row.owner_receipt = receipt
             row.accepted_at = datetime.now(UTC)
-            terminal = receipt.get("status") if definition.dispatch_kind == "callback" else None
+            terminal = receipt.get("status") if dispatch_kind == "callback" else None
             row.status = terminal if terminal in {"succeeded", "failed", "skipped", "cancelled"} else "accepted"
             if row.status != "accepted":
                 row.completed_at = datetime.now(UTC)
@@ -250,7 +254,8 @@ async def dispatch_due() -> int:
             if run.status != "admitted":
                 continue
             admitted += 1
-        await dispatch_run(run.id)
+            run_id = run.id
+        await dispatch_run(run_id)
     return admitted
 
 
@@ -272,8 +277,9 @@ async def reconcile_runs() -> int:
             continue
         async with async_session() as db:
             definition = await db.get(AutomationDefinition, (workflow_key, version))
-        if definition is None or definition.dispatch_kind != "hatchet":
-            if definition is not None and definition.dispatch_kind == "callback":
+            dispatch_kind = definition.dispatch_kind if definition is not None else None
+        if dispatch_kind != "hatchet":
+            if dispatch_kind == "callback":
                 await dispatch_run(run_id)
             continue
         try:

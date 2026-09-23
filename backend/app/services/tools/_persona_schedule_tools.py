@@ -9,7 +9,7 @@ from app.services.tools.base import Tool
 SCHEDULE_JOB_TOOL = Tool(
     name="schedule_job",
     description=(
-        "Create a scheduled job — set reminders, daily summaries, or recurring tasks. "
+        "Create a centrally managed automation profile for persona reminders, summaries, or recurring tasks. "
         "Supports one-shot (at), interval (every), and cron expressions. "
         "Can also schedule the persona's autonomous self-honing loop. "
         "Can also schedule rolling memory review."
@@ -68,7 +68,7 @@ SCHEDULE_JOB_TOOL = Tool(
 
 LIST_SCHEDULED_JOBS_TOOL = Tool(
     name="list_scheduled_jobs",
-    description="List scheduled jobs. Shows name, schedule, next run, and run count.",
+    description="List centrally managed persona jobs with profile IDs, schedules, next runs, and run counts.",
     input_schema={
         "type": "object",
         "properties": {
@@ -87,18 +87,13 @@ LIST_SCHEDULED_JOBS_TOOL = Tool(
 
 CANCEL_SCHEDULED_JOB_TOOL = Tool(
     name="cancel_scheduled_job",
-    description="Disable or permanently delete a scheduled job.",
+    description="Disable a persona automation profile. Permanent deletion is unavailable.",
     input_schema={
         "type": "object",
         "properties": {
             "job_id": {
                 "type": "string",
-                "description": "UUID of the job to cancel",
-            },
-            "hard_delete": {
-                "type": "boolean",
-                "description": "Permanently delete instead of just disabling (default: false)",
-                "default": False,
+                "description": "Automation profile ID or legacy job UUID to disable",
             },
         },
         "required": ["job_id"],

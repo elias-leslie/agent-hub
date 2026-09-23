@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import type {
@@ -11,7 +12,6 @@ import type { Session, SessionListItem } from '@/lib/api/sessions'
 import type { Persona } from '@/types/persona'
 import { usePersonaOperatorData } from '../hooks/usePersonaOperatorData'
 import type { PersonaRuntimeState } from '../hooks/usePersonaRuntime'
-import { PersonaAutomationPanel } from './PersonaAutomationPanel'
 import { PersonaBackgroundInbox } from './PersonaBackgroundInbox'
 import { PersonaBlockerPanel } from './PersonaBlockerPanel'
 import {
@@ -71,7 +71,7 @@ const TAB_META: Array<{
   {
     id: 'automations',
     label: 'Automations',
-    detail: 'Recurring checks and run-now.',
+    detail: 'Open scheduled work in Automations.',
   },
 ]
 
@@ -134,7 +134,7 @@ function buildCommands(
     {
       id: 'open-automations',
       label: 'Open Automations',
-      description: 'Focus scheduled automations.',
+      description: 'Open the route to scheduled automations.',
       run: () => onTabChange('automations'),
     },
   ]
@@ -165,30 +165,18 @@ export function PersonaOperatorDeck({
 
   const {
     projectOptions,
-    selectedProject,
     selectedProjectPermission,
     executionPermission,
     workflowParentSessionId,
     preview,
     previewLoading,
     previewError,
-    jobs,
-    jobsLoading,
-    jobsError,
-    savingAutomation,
-    triggeringJobId,
     refreshEverything,
-    saveAutomation,
-    toggleAutomation,
-    removeAutomation,
-    runAutomationNow,
   } = usePersonaOperatorData(
     selectedProjectId,
     onProjectChange,
     focusSession,
     runtime,
-    onSelectSession,
-    onTabChange,
   )
 
   const commands = useMemo(
@@ -267,7 +255,6 @@ export function PersonaOperatorDeck({
             <>
               <PersonaBlockerPanel
                 executionState={persona.execution_state}
-                heartbeatIntervalMinutes={persona.heartbeat_interval_minutes}
                 selectedProject={selectedProjectPermission}
                 executionPermission={executionPermission}
                 runtime={runtime}
@@ -322,18 +309,20 @@ export function PersonaOperatorDeck({
           ) : null}
 
           {showAllSections || activeTab === 'automations' ? (
-            <PersonaAutomationPanel
-              selectedProject={selectedProject}
-              jobs={jobs}
-              loading={jobsLoading}
-              error={jobsError}
-              saving={savingAutomation}
-              triggeringJobId={triggeringJobId}
-              onSave={saveAutomation}
-              onToggle={toggleAutomation}
-              onDelete={removeAutomation}
-              onTrigger={runAutomationNow}
-            />
+            <section className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4">
+              <h3 className="text-base font-semibold text-slate-100">
+                Scheduled persona work
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Manage persona jobs and check-ins in Automations.
+              </p>
+              <Link
+                href="/automations?project_id=agent-hub"
+                className="button-secondary mt-4"
+              >
+                Open Automations
+              </Link>
+            </section>
           ) : null}
         </div>
       </div>

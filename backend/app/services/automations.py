@@ -36,6 +36,7 @@ EXTERNAL_WORKFLOWS: tuple[tuple[str, str, str, str, dict], ...] = (
     ("summitflow/task_generation", "summitflow", "Task generation", "cancel_in_progress", {"type": "every", "value": "3600000", "timezone": "UTC"}),
     ("portfolio-ai/jenny_daily_household_maintenance", "portfolio-ai", "Daily household maintenance", "cancel_in_progress", {"type": "cron", "value": "15 13 * * *", "timezone": "UTC"}),
     ("portfolio-ai/jenny_daily_operator", "portfolio-ai", "Daily operator", "cancel_in_progress", {"type": "cron", "value": "15 22 * * 1-5", "timezone": "UTC"}),
+    ("portfolio-ai/jenny_weekly_learning", "portfolio-ai", "Weekly learning", "cancel_in_progress", {"type": "cron", "value": "0 14 * * 6", "timezone": "UTC"}),
     ("portfolio-ai/retrain_ml", "portfolio-ai", "Retrain ML", "cancel_in_progress", {"type": "cron", "value": "0 5 * * *", "timezone": "UTC"}),
     ("portfolio-ai/jenny_weekly_price_check", "portfolio-ai", "Weekly price check", "cancel_in_progress", {"type": "cron", "value": "30 13 * * 6", "timezone": "UTC"}),
     ("jobinator-4000/nightly_screen", "jobinator-4000", "Nightly screen", "group_round_robin", {}),

@@ -18,6 +18,7 @@ from app.models import (
     AutomationProfile,
     AutomationProfileRevision,
     AutomationRun,
+    PersonaScheduledJob,
 )
 from app.models.client import check_project_access
 from app.services import automations as service
@@ -463,6 +464,11 @@ async def cutover_profile(
         if service.policy_sync_pending(policy):
             raise HTTPException(status_code=409, detail="Jobinator shared quota policy awaits owner sync")
     row.clock_owner = "central"
+    if row.project_id == "agent-hub" and row.source_ref and row.source_ref.startswith("persona:"):
+        job = await db.get(PersonaScheduledJob, row.source_ref.split(":", 1)[1])
+        if job is not None:
+            job.enabled = False
+            job.next_run_at = None
     if payload.next_run_at is not None:
         row.next_run_at = payload.next_run_at
     elif row.project_id == "agent-hub" and row.source_ref and row.source_ref.startswith("static:"):

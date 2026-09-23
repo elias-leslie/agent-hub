@@ -7,7 +7,6 @@ import type { PersonaRuntimeState } from '@/app/persona/hooks/usePersonaRuntime'
 const mockFetchProjectPermissions = vi.fn()
 const mockFetchExecutionPermission = vi.fn()
 const mockFetchPersonaPreview = vi.fn()
-const mockFetchPersonaAutomations = vi.fn()
 const mockRunPersonaWorkflow = vi.fn()
 
 vi.mock('@/components/error/toast', () => ({
@@ -34,12 +33,6 @@ vi.mock('@/lib/api/persona-operator', async () => {
     runPersonaWorkflow: (...args: unknown[]) => mockRunPersonaWorkflow(...args),
     fetchPersonaOperatorPreview: (...args: unknown[]) =>
       mockFetchPersonaPreview(...args),
-    fetchPersonaAutomations: (...args: unknown[]) =>
-      mockFetchPersonaAutomations(...args),
-    createPersonaAutomation: vi.fn(),
-    updatePersonaAutomation: vi.fn(),
-    deletePersonaAutomation: vi.fn(),
-    triggerPersonaAutomation: vi.fn(),
   }
 })
 
@@ -216,25 +209,6 @@ describe('PersonaOperatorDeck', () => {
       task_prompt: 'status',
       sections: [],
     })
-    mockFetchPersonaAutomations.mockResolvedValue([
-      {
-        id: 'job-1',
-        name: 'Daily operator check',
-        schedule_type: 'every',
-        schedule_value: '3600000',
-        schedule_timezone: 'UTC',
-        payload_type: 'agent_turn',
-        payload_message: 'Check blockers and report back.',
-        payload_title: null,
-        delivery: 'none',
-        enabled: true,
-        last_run_at: null,
-        next_run_at: '2026-04-15T15:00:00Z',
-        run_count: 2,
-        max_runs: null,
-        created_at: '2026-04-15T12:00:00Z',
-      },
-    ])
     mockRunPersonaWorkflow.mockResolvedValue({
       status: 'completed',
       stages: [],
@@ -426,5 +400,14 @@ describe('PersonaOperatorDeck', () => {
     const request = mockRunPersonaWorkflow.mock.calls[0][0]
     expect(request.parent_session_id).toBe('sess-root')
     expect(request.project_id).toBe('agent-hub')
+  })
+
+  it('routes scheduled persona work to central Automations', () => {
+    renderDeck({ activeTab: 'automations' })
+
+    expect(
+      screen.getByRole('link', { name: 'Open Automations' }),
+    ).toHaveAttribute('href', '/automations?project_id=agent-hub')
+    expect(screen.queryByText('New automation')).not.toBeInTheDocument()
   })
 })

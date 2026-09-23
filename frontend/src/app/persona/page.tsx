@@ -29,7 +29,6 @@ type RuntimeLabel =
   | 'Waiting'
   | 'Finalizing'
   | 'Working'
-  | 'Auto-run off'
   | 'Ready'
 
 type SummaryDescriptor = {
@@ -40,10 +39,8 @@ type SummaryDescriptor = {
 function formatRuntimeLabel(
   phase: string | undefined,
   executionState: 'active' | 'paused',
-  autoRunDisabled: boolean,
 ): RuntimeLabel {
   if (executionState === 'paused') return 'Paused'
-  if (autoRunDisabled) return 'Auto-run off'
   if (!phase) return 'Ready'
   if (phase === 'error') return 'Blocked'
   if (phase === 'waiting_for_model') return 'Waiting'
@@ -125,7 +122,6 @@ const STATUS_DOT: Record<RuntimeLabel, string> = {
   Finalizing: 'bg-emerald-400',
   Paused: 'bg-amber-400',
   Blocked: 'bg-rose-400',
-  'Auto-run off': 'bg-slate-500',
   Ready: 'bg-slate-500',
 }
 
@@ -159,11 +155,9 @@ function PersonaContent() {
   const executionState = persona?.execution_state ?? 'active'
   const personaName = getPersonaDisplayName(persona?.name)
   const personaPaused = executionState === 'paused'
-  const autoRunDisabled = (persona?.heartbeat_interval_minutes ?? 0) === 0
   const runtimeLabel = formatRuntimeLabel(
     runtime.primarySession?.live_activity?.phase,
     executionState,
-    autoRunDisabled,
   )
   const isActive =
     runtimeLabel === 'Working' ||

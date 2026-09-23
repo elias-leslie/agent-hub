@@ -1,23 +1,17 @@
 import { useVoicePreferences, type VoiceOption } from '@agent-hub/chat-ui'
 import { Check, Play, Search } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useMemo, useState } from 'react'
 import { useHeartbeat } from '@/app/persona/hooks/useHeartbeat'
 import type { PersonaAutosaveState } from '@/app/persona/hooks/usePersona'
 import { buildApiUrl, fetchApi, getApiBaseUrl } from '@/lib/api-config'
 import { cn } from '@/lib/utils'
-import type { Persona, PersonaUpdate } from '@/types/persona'
 
 interface VoiceHeartbeatTabProps {
-  persona: Persona
-  onUpdate: (fields: PersonaUpdate) => void
   autosave: PersonaAutosaveState
 }
 
-export function VoiceHeartbeatTab({
-  persona,
-  onUpdate,
-  autosave,
-}: VoiceHeartbeatTabProps) {
+export function VoiceHeartbeatTab({ autosave }: VoiceHeartbeatTabProps) {
   const [search, setSearch] = useState('')
   const { status: heartbeatStatus } = useHeartbeat()
 
@@ -56,15 +50,8 @@ export function VoiceHeartbeatTab({
     return groups
   }, [filteredVoices])
 
-  const handleHeartbeatChange = useCallback(
-    (minutes: number) => {
-      onUpdate({ heartbeat_interval_minutes: minutes })
-    },
-    [onUpdate],
-  )
   const runtime = heartbeatStatus?.runtime
   const heartbeatWarning = runtime?.warnings?.[0] ?? null
-  const heartbeatDisabled = persona.heartbeat_interval_minutes === 0
 
   return (
     <div className="space-y-8">
@@ -72,8 +59,7 @@ export function VoiceHeartbeatTab({
         <p className="section-kicker">Voice & Heartbeat</p>
         <h2 className="section-heading mt-2">Realtime Presence</h2>
         <p className="section-copy mt-2 max-w-3xl">
-          Configure speech output, review heartbeat readiness, and tune how
-          often this persona checks in autonomously.
+          Configure speech output and review heartbeat runtime readiness.
         </p>
       </div>
 
@@ -183,34 +169,20 @@ export function VoiceHeartbeatTab({
         </div>
       </div>
 
-      {/* Heartbeat Section */}
+      {/* Heartbeat runtime remains here; its schedule is managed centrally. */}
       <div className="space-y-4 section-card">
         <div>
-          <h2 className="section-heading">Heartbeat</h2>
+          <h2 className="section-heading">Heartbeat runtime</h2>
           <p className="section-copy mt-2">
-            Autonomous check-in schedule and runtime readiness.
+            Review runtime support for scheduled check-ins.
           </p>
         </div>
-
-        <div className="detail-card max-w-md flex items-center justify-between">
-          <span className="text-sm text-slate-300">Check-in interval</span>
-          <select
-            aria-label="Heartbeat interval"
-            value={persona.heartbeat_interval_minutes}
-            onChange={(e) => handleHeartbeatChange(Number(e.target.value))}
-            className="control-select cursor-pointer"
-          >
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={60}>1 hour</option>
-            <option value={120}>2 hours</option>
-            <option value={240}>4 hours</option>
-            <option value={0}>Off</option>
-          </select>
-        </div>
-        <p className="text-[10px] text-slate-400 max-w-md">
-          How often {persona.name} runs autonomous system checks
-        </p>
+        <Link
+          href="/automations?project_id=agent-hub"
+          className="button-secondary w-fit"
+        >
+          Manage check-in schedule
+        </Link>
 
         <div className="section-card max-w-md space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -230,18 +202,12 @@ export function VoiceHeartbeatTab({
             <span
               className={cn(
                 'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
-                heartbeatDisabled
-                  ? 'bg-slate-800 text-slate-300'
-                  : runtime?.heartbeat_supported
-                    ? 'bg-emerald-900/30 text-emerald-400'
-                    : 'bg-rose-900/30 text-rose-400',
+                runtime?.heartbeat_supported
+                  ? 'bg-emerald-900/30 text-emerald-400'
+                  : 'bg-rose-900/30 text-rose-400',
               )}
             >
-              {heartbeatDisabled
-                ? 'Disabled'
-                : runtime?.heartbeat_supported
-                  ? 'Ready'
-                  : 'Attention'}
+              {runtime?.heartbeat_supported ? 'Ready' : 'Attention'}
             </span>
           </div>
 
@@ -254,13 +220,6 @@ export function VoiceHeartbeatTab({
               {runtime?.supports_session_cache ? 'supported' : 'not supported'}
             </div>
           </div>
-
-          {heartbeatDisabled && (
-            <div className="rounded-lg border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
-              Heartbeat is currently off, so {persona.name} is not autonomously
-              driving work.
-            </div>
-          )}
 
           {heartbeatWarning && (
             <div className="rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">

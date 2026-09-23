@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
   AlertTriangle,
@@ -11,8 +11,9 @@ import {
   ShieldCheck,
   TimerReset,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type {
   AgentBenchmarkAttemptDetail,
@@ -22,7 +23,6 @@ import { ChartCard } from '@/components/charts/ChartCard'
 import {
   fetchAgentBenchmarkRunDetail,
   fetchPersonaImprovementDashboard,
-  updatePersonaImprovementSchedule,
 } from '@/lib/api'
 import {
   formatPercent,
@@ -38,15 +38,6 @@ import type {
 import { PersonaImprovementTrendSection } from './PersonaImprovementTrendSection'
 
 type DashboardWindow = 7 | 30 | 90
-
-const CADENCE_OPTIONS = [
-  { value: 15, label: '15m' },
-  { value: 30, label: '30m' },
-  { value: 60, label: '1h' },
-  { value: 240, label: '4h' },
-  { value: 720, label: '12h' },
-  { value: 1440, label: '24h' },
-]
 
 function formatMetricTokens(value: number | null | undefined) {
   if (value === null || value === undefined) {
@@ -392,19 +383,15 @@ function RiskSection({
   dashboard: PersonaImprovementDashboardData
   personaName: string
 }) {
-  const hasScheduleRisks = dashboard.schedule_risks.length > 0
   const hasFieldRisks = dashboard.field_risks.length > 0
   const hasLabRisks = dashboard.open_regressions.length > 0
   const hasFieldReviewGate = dashboard.field_review_gate.needs_review
 
   return (
     <ChartCard title="Current Risks">
-      {!hasScheduleRisks &&
-      !hasFieldRisks &&
-      !hasLabRisks &&
-      !hasFieldReviewGate ? (
+      {!hasFieldRisks && !hasLabRisks && !hasFieldReviewGate ? (
         <p className="text-sm text-slate-400">
-          No open {personaName} schedule, field, or lab risks.
+          No open {personaName} field or lab risks.
         </p>
       ) : (
         <div className="space-y-3">
@@ -429,33 +416,6 @@ function RiskSection({
               </p>
             </div>
           ) : null}
-          {dashboard.schedule_risks.map((item) => (
-            <div
-              key={`${item.kind}:${item.detail ?? item.summary}`}
-              className={`rounded-2xl border px-4 py-3 ${
-                item.critical
-                  ? 'border-amber-900/40 bg-amber-950/15'
-                  : 'border-slate-800 bg-slate-950/50'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-100">
-                  Scheduler
-                </p>
-                <span
-                  className={`text-xs font-medium ${
-                    item.critical ? 'text-amber-300' : 'text-slate-400'
-                  }`}
-                >
-                  {item.kind}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-slate-300">{item.summary}</p>
-              <p className="mt-2 text-xs text-slate-500">
-                {item.detail ? summarizeIssue(item.detail, 140) : 'No detail'}
-              </p>
-            </div>
-          ))}
           {dashboard.field_risks.map((item) => (
             <div
               key={item.session_id}
@@ -582,7 +542,6 @@ function FieldRealitySection({
 
 export function PersonaImprovementDashboard() {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const { personaName, personaPossessive } = usePersonaDisplayName()
   const [windowDays, setWindowDays] = useState<DashboardWindow>(30)
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
@@ -590,8 +549,6 @@ export function PersonaImprovementDashboard() {
     null,
   )
   const [runDetailLoading, setRunDetailLoading] = useState(false)
-  const [enabled, setEnabled] = useState(false)
-  const [cadenceMinutes, setCadenceMinutes] = useState(1440)
 
   const {
     data: dashboard,
@@ -602,21 +559,6 @@ export function PersonaImprovementDashboard() {
   } = useQuery({
     queryKey: ['persona-improvement', windowDays],
     queryFn: () => fetchPersonaImprovementDashboard(windowDays, 8),
-  })
-
-  useEffect(() => {
-    if (!dashboard) {
-      return
-    }
-    setEnabled(dashboard.schedule.enabled)
-    setCadenceMinutes(dashboard.schedule.cadence_minutes)
-  }, [dashboard])
-
-  const scheduleMutation = useMutation({
-    mutationFn: updatePersonaImprovementSchedule,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['persona-improvement'] })
-    },
   })
 
   const handleRunClick = useCallback(
@@ -640,46 +582,6 @@ export function PersonaImprovementDashboard() {
     },
     [expandedRunId],
   )
-
-  const hasScheduleChanges = useMemo(() => {
-    if (!dashboard) {
-      return false
-    }
-    return (
-      enabled !== dashboard.schedule.enabled ||
-      cadenceMinutes !== dashboard.schedule.cadence_minutes
-    )
-  }, [cadenceMinutes, dashboard, enabled])
-
-  const cadenceLabel = useMemo(() => {
-    const option = CADENCE_OPTIONS.find(
-      (candidate) => candidate.value === cadenceMinutes,
-    )
-    if (option) {
-      return option.label
-    }
-    if (cadenceMinutes < 60) {
-      return `${cadenceMinutes}m`
-    }
-    return `${Math.round(cadenceMinutes / 60)}h`
-  }, [cadenceMinutes])
-
-  const statusTone = useMemo(() => {
-    if (!dashboard) {
-      return 'bg-slate-800 text-slate-300 ring-1 ring-slate-700'
-    }
-    if (
-      dashboard.schedule_risks.some((item) => item.critical) ||
-      (dashboard.overview.open_regressions ?? 0) > 0 ||
-      dashboard.field_risks.some((item) => item.critical)
-    ) {
-      return 'bg-rose-950/30 text-rose-300 ring-1 ring-rose-800'
-    }
-    if (!dashboard.schedule.enabled) {
-      return 'bg-amber-950/30 text-amber-300 ring-1 ring-amber-800'
-    }
-    return 'bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800'
-  }, [dashboard])
 
   if (isLoading) {
     return <LoadingState />
@@ -744,11 +646,6 @@ export function PersonaImprovementDashboard() {
         dashboard.field_overview.total_heartbeats
       : null
 
-  const saveErrorMessage =
-    scheduleMutation.error instanceof Error
-      ? scheduleMutation.error.message
-      : null
-
   return (
     <div className="page-shell">
       <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
@@ -769,11 +666,6 @@ export function PersonaImprovementDashboard() {
                 <h1 className="text-lg font-bold tracking-tight text-slate-100">
                   {personaName} Improvement
                 </h1>
-                <span
-                  className={`rounded px-2 py-0.5 text-xs font-semibold ${statusTone}`}
-                >
-                  {dashboard.schedule.enabled ? 'Scheduled' : 'Paused'}
-                </span>
               </div>
               <p className="text-sm text-slate-400">
                 Focused on protected lab wins and recent real-heartbeat field
@@ -821,14 +713,11 @@ export function PersonaImprovementDashboard() {
               Improvement Loop
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50">
-              One place to manage {personaPossessive} honing loop.
+              Review {personaPossessive} improvement loop.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              This view keeps the fast protected evaluator and the outer-loop
-              real heartbeat signal in one place. It answers whether{' '}
-              {personaName} is reliable, whether {personaName} is moving the
-              right work, and what token/context cost it takes to get there in
-              the lab and in the field.
+              Compare protected lab results with real heartbeat performance:
+              reliability, work selected, and token and context cost.
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300 ring-1 ring-slate-700">
@@ -856,101 +745,17 @@ export function PersonaImprovementDashboard() {
             </div>
           </section>
 
-          <ChartCard title="Honing Controls">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">
-                    Scheduled self-improvement
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    Turn the recurring {personaName} improvement loop on or off.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled}
-                  onClick={() => setEnabled((current) => !current)}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                    enabled ? 'bg-emerald-500' : 'bg-slate-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                      enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <label className="block text-sm">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  Frequency
-                </span>
-                <select
-                  value={cadenceMinutes}
-                  onChange={(event) =>
-                    setCadenceMinutes(Number(event.target.value))
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-amber-500"
-                >
-                  {CADENCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      Every {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl bg-slate-950/70 px-3 py-3">
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">
-                    Next run
-                  </dt>
-                  <dd className="mt-1 font-medium text-slate-100">
-                    {dashboard.schedule.enabled
-                      ? formatRelativeAge(dashboard.schedule.next_run_at)
-                      : 'Paused'}
-                  </dd>
-                </div>
-                <div className="rounded-xl bg-slate-950/70 px-3 py-3">
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">
-                    Cadence
-                  </dt>
-                  <dd className="mt-1 font-medium text-slate-100">
-                    {cadenceLabel}
-                  </dd>
-                </div>
-              </dl>
-
-              <p className="text-xs text-slate-500">
-                Last run {formatRelativeAge(dashboard.schedule.last_run_at)} ·
-                total runs {dashboard.schedule.run_count} · overlap skips
-                instead of stacking
-              </p>
-
-              {saveErrorMessage ? (
-                <p className="text-sm text-rose-400">{saveErrorMessage}</p>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() =>
-                  scheduleMutation.mutate({
-                    enabled,
-                    cadence_minutes: cadenceMinutes,
-                  })
-                }
-                disabled={!hasScheduleChanges || scheduleMutation.isPending}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {scheduleMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                Save controls
-              </button>
-            </div>
+          <ChartCard title="Scheduled improvement">
+            <p className="text-sm leading-6 text-slate-300">
+              Manage the recurring improvement loop in Automations. Results and
+              field signals remain here.
+            </p>
+            <Link
+              href="/automations?project_id=agent-hub"
+              className="button-secondary mt-4"
+            >
+              Open Automations
+            </Link>
           </ChartCard>
         </div>
 

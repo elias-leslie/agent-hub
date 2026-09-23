@@ -20,23 +20,6 @@ export interface BlockedRequest {
   endpoint: string
 }
 
-export interface WorkflowSchedule {
-  schedule_id: string
-  label: string
-  description: string
-  cron: string
-  category: string
-  default_enabled: boolean
-  enabled: boolean
-  notes: string | null
-  updated_by: string | null
-}
-
-export interface WorkflowScheduleUpdate {
-  enabled: boolean
-  updated_by?: string | null
-}
-
 export interface HotspotTotals {
   sessions: number
   input_tokens: number
@@ -112,25 +95,6 @@ export async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
   const res = await fetchApi('/api/admin/blocked-requests?limit=1000')
   const data = await res.json()
   return data.requests || []
-}
-
-export async function fetchWorkflowSchedules(): Promise<WorkflowSchedule[]> {
-  const res = await fetchApi('/api/admin/schedules')
-  if (!res.ok) throw new Error('Failed to fetch workflow schedules')
-  return res.json()
-}
-
-export async function updateWorkflowSchedule(
-  scheduleId: string,
-  payload: WorkflowScheduleUpdate,
-): Promise<WorkflowSchedule> {
-  const res = await fetchApi(`/api/admin/schedules/${scheduleId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error(`Failed to update schedule ${scheduleId}`)
-  return res.json()
 }
 
 export async function fetchSessionHotspots(

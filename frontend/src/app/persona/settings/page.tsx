@@ -243,11 +243,7 @@ export default function PersonaSettingsPage() {
                       />
                     )}
                     {activeTab === 'voice' && (
-                      <VoiceHeartbeatTab
-                        persona={persona}
-                        onUpdate={updatePersonaField}
-                        autosave={personaAutosave}
-                      />
+                      <VoiceHeartbeatTab autosave={personaAutosave} />
                     )}
                     {activeTab === 'session' && (
                       <SessionLimitsTab

@@ -136,6 +136,46 @@ async def test_cutover_requires_owner_fence_and_preserves_imported_cursor():
 
 
 @pytest.mark.asyncio
+async def test_persona_cutover_disables_the_old_job_clock():
+    row = AutomationProfile(
+        id="profile-1", project_id="agent-hub", workflow_key="agent-hub.persona_job",
+        definition_version=1, label="Daily review", schedule_type="cron",
+        schedule_value="17 4 * * *", schedule_timezone="UTC", config={},
+        enabled=True, clock_owner="legacy", owner_gate_reasons=[],
+        source_ref="persona:job-1", revision=1,
+    )
+    old_job = SimpleNamespace(enabled=True, next_run_at=datetime(2026, 9, 24, 4, 17, tzinfo=UTC))
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=row))
+    db.get.return_value = old_job
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with (
+            patch("app.api.automations._require_project_owner", new_callable=AsyncMock),
+            patch("app.api.automations._profile", new_callable=AsyncMock, return_value={"clock_owner": "central"}),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test",
+                headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+            ) as client:
+                response = await client.post("/api/automations/profiles/profile-1/cutover", json={
+                    "expected_revision": 1, "fence_receipt": "agent-hub:profile-row-fence:profile-1",
+                })
+        assert response.status_code == 200
+        assert row.clock_owner == "central"
+        assert old_job.enabled is False
+        assert old_job.next_run_at is None
+        db.get.assert_awaited_once()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_jobinator_cutover_waits_for_shared_quota_policy_sync():
     row = AutomationProfile(
         id="profile-1", project_id="jobinator-4000",

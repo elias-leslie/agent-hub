@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.automation_guidance import automation_moved
 from app.db import get_db
 from app.models import ClientControl
 
@@ -34,7 +35,6 @@ from .admin_schemas import (
     SessionHotspotsResponse,
     UnknownCallersResponse,
     WorkflowScheduleResponse,
-    WorkflowScheduleUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -150,27 +150,10 @@ async def list_workflow_schedules(
     return [WorkflowScheduleResponse(**state) for state in states]
 
 
-@router.patch("/schedules/{schedule_id}", response_model=WorkflowScheduleResponse)
-async def update_workflow_schedule(
-    schedule_id: str,
-    payload: WorkflowScheduleUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> WorkflowScheduleResponse:
-    """Enable or disable one static Hatchet cron workflow."""
-    from app.services.workflow_schedule_registry import set_workflow_schedule_enabled
-
-    try:
-        state = await set_workflow_schedule_enabled(
-            schedule_id,
-            enabled=payload.enabled,
-            updated_by=payload.updated_by or "admin-api",
-            db=db,
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Unknown schedule '{schedule_id}'") from exc
-
-    await db.commit()
-    return WorkflowScheduleResponse(**state)
+@router.patch("/schedules/{schedule_id}")
+async def update_workflow_schedule(schedule_id: str) -> None:
+    """Retired writer; central Automations owns static Hatchet schedules."""
+    raise automation_moved()
 
 
 # Blocked requests log endpoint

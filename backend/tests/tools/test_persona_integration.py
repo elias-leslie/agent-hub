@@ -348,6 +348,13 @@ class TestAllPersonaToolsDispatch:
                 new_callable=AsyncMock,
                 return_value=persona,
             ),
+            patch("app.services.automations.import_agent_hub_legacy", new=AsyncMock()),
+            patch(
+                "app.services.automations.create_profile",
+                new=AsyncMock(return_value=MagicMock(
+                    id="profile-1", next_run_at=datetime.fromisoformat(future),
+                )),
+            ),
         ):
             result = await executor.dispatch(
                 "schedule_job",

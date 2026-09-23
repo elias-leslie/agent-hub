@@ -15,8 +15,6 @@ export type {
   LowYieldSessionRow,
   RepeatedWorkloadRow,
   SessionHotspots,
-  WorkflowSchedule,
-  WorkflowScheduleUpdate,
   ZeroEventActiveSessionRow,
 } from './api/admin'
 export {
@@ -25,8 +23,6 @@ export {
   fetchBlockedRequests,
   fetchClients,
   fetchSessionHotspots,
-  fetchWorkflowSchedules,
-  updateWorkflowSchedule,
 } from './api/admin'
 // Re-export all agent-detail-related exports
 export {
@@ -91,10 +87,7 @@ export { fetchDashboardStats } from './api/dashboard'
 // Re-export all monitoring-related exports
 export { fetchMonitoringMetrics, fetchRequestLog } from './api/monitoring'
 export { fetchPersona, PERSONA_QUERY_KEY } from './api/persona'
-export {
-  fetchPersonaImprovementDashboard,
-  updatePersonaImprovementSchedule,
-} from './api/persona-improvement'
+export { fetchPersonaImprovementDashboard } from './api/persona-improvement'
 // Re-export all preferences-related exports
 export type { UserPreferences } from './api/preferences'
 export {

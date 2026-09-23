@@ -63,42 +63,26 @@ class TestWorkflowSchedules:
         assert data[0]["enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_updates_workflow_schedule(self, client):
+    async def test_schedule_writer_is_retired(self, client):
         ac, mock_db = client
-        payload = {
-            "schedule_id": "session_cleanup",
-            "label": "Session cleanup",
-            "description": "Marks dead sessions complete.",
-            "cron": "*/15 * * * *",
-            "category": "maintenance",
-            "default_enabled": True,
-            "enabled": False,
-            "notes": None,
-            "updated_by": "admin-ui",
-        }
         with patch(
             "app.services.workflow_schedule_registry.set_workflow_schedule_enabled",
             new_callable=AsyncMock,
-            return_value=payload,
-        ):
+        ) as mock_set:
             resp = await ac.patch(
                 "/api/admin/schedules/session_cleanup",
                 json={"enabled": False, "updated_by": "admin-ui"},
             )
-        assert resp.status_code == 200
-        assert resp.json()["enabled"] is False
-        mock_db.commit.assert_awaited_once()
+        assert resp.status_code == 409
+        assert "/automations?project_id=agent-hub" in resp.json()["hint"]
+        mock_set.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_update_returns_404_for_unknown_schedule(self, client):
+    async def test_retired_writer_does_not_probe_schedule_id(self, client):
         ac, _ = client
-        with patch(
-            "app.services.workflow_schedule_registry.set_workflow_schedule_enabled",
-            new_callable=AsyncMock,
-            side_effect=KeyError("unknown"),
-        ):
-            resp = await ac.patch("/api/admin/schedules/nope", json={"enabled": False})
-        assert resp.status_code == 404
+        resp = await ac.patch("/api/admin/schedules/nope", json={"enabled": False})
+        assert resp.status_code == 409
 
 
 class TestSessionHotspots:

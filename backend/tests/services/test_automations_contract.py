@@ -8,6 +8,7 @@ import pytest
 
 from app.api.automations import ProfileCreate, ProfileImport
 from app.services.automations import (
+    EXTERNAL_WORKFLOWS,
     AutomationValidationError,
     create_profile,
     effective_gate_reasons,
@@ -18,6 +19,13 @@ from app.services.automations import (
     validate_policy_config,
     validate_profile_payload,
 )
+
+
+def test_portfolio_weekly_learning_has_a_canonical_schedule_definition():
+    matches = [row for row in EXTERNAL_WORKFLOWS if row[0] == "portfolio-ai/jenny_weekly_learning"]
+    assert len(matches) == 1
+    assert matches[0][1] == "portfolio-ai"
+    assert matches[0][4] == {"type": "cron", "value": "0 14 * * 6", "timezone": "UTC"}
 
 
 @pytest.mark.asyncio

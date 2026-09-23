@@ -13,7 +13,6 @@ import { EvidencePanel, SectionEyebrow } from './persona-operator-chrome'
 
 interface PersonaBlockerPanelProps {
   executionState: 'active' | 'paused'
-  heartbeatIntervalMinutes: number
   selectedProject: ProjectPermission | null
   executionPermission: ExecutionPermission | null
   runtime: PersonaRuntimeState
@@ -31,7 +30,6 @@ function lineTone(tone: 'danger' | 'warning' | 'default') {
 }
 
 export function PersonaBlockerPanel({
-  heartbeatIntervalMinutes,
   selectedProject,
   executionPermission,
   runtime,
@@ -75,14 +73,6 @@ export function PersonaBlockerPanel({
         : executionPermission
           ? 'danger'
           : 'default',
-    },
-    {
-      label: 'Auto-run',
-      value:
-        heartbeatIntervalMinutes > 0
-          ? `Every ${heartbeatIntervalMinutes}m`
-          : 'Off',
-      tone: heartbeatIntervalMinutes > 0 ? 'default' : 'warning',
     },
   ] as const
 

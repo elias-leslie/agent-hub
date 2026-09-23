@@ -61,55 +61,6 @@ export interface WorkflowResult {
   total_output_tokens: number
 }
 
-export interface PersonaAutomation {
-  id: string
-  name: string
-  schedule_type: 'at' | 'every' | 'cron'
-  schedule_value: string
-  schedule_timezone: string
-  payload_type: 'agent_turn' | 'push' | 'self_honing'
-  payload_message: string
-  payload_title?: string | null
-  delivery: 'none' | 'push'
-  enabled: boolean
-  last_run_at?: string | null
-  next_run_at?: string | null
-  run_count: number
-  max_runs?: number | null
-  created_at?: string | null
-}
-
-export interface PersonaAutomationTriggerResponse {
-  job: PersonaAutomation
-  output: string
-  session_id?: string | null
-  triggered_at: string
-}
-
-export interface PersonaAutomationCreateRequest {
-  name: string
-  schedule_type: 'at' | 'every' | 'cron'
-  schedule_value: string
-  schedule_timezone?: string
-  payload_type?: 'agent_turn' | 'push' | 'self_honing'
-  payload_message: string
-  payload_title?: string | null
-  delivery?: 'none' | 'push'
-  enabled?: boolean
-}
-
-export interface PersonaAutomationUpdateRequest {
-  name?: string
-  schedule_type?: 'at' | 'every' | 'cron'
-  schedule_value?: string
-  schedule_timezone?: string
-  payload_type?: 'agent_turn' | 'push' | 'self_honing'
-  payload_message?: string
-  payload_title?: string | null
-  delivery?: 'none' | 'push'
-  enabled?: boolean
-}
-
 export async function runPersonaWorkflow(
   request: WorkflowRequest,
 ): Promise<WorkflowResult> {
@@ -142,64 +93,6 @@ export async function fetchPersonaOperatorPreview(options: {
   )
   if (!response.ok) {
     throw new Error(`Persona preview failed: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function fetchPersonaAutomations(): Promise<PersonaAutomation[]> {
-  const response = await fetchApi('/api/persona/automations')
-  if (!response.ok) {
-    throw new Error(`Persona automations fetch failed: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function createPersonaAutomation(
-  payload: PersonaAutomationCreateRequest,
-): Promise<PersonaAutomation> {
-  const response = await fetchApi('/api/persona/automations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    throw new Error(`Persona automation create failed: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function updatePersonaAutomation(
-  jobId: string,
-  payload: PersonaAutomationUpdateRequest,
-): Promise<PersonaAutomation> {
-  const response = await fetchApi(`/api/persona/automations/${jobId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!response.ok) {
-    throw new Error(`Persona automation update failed: ${response.status}`)
-  }
-  return response.json()
-}
-
-export async function deletePersonaAutomation(jobId: string): Promise<void> {
-  const response = await fetchApi(`/api/persona/automations/${jobId}`, {
-    method: 'DELETE',
-  })
-  if (!response.ok) {
-    throw new Error(`Persona automation delete failed: ${response.status}`)
-  }
-}
-
-export async function triggerPersonaAutomation(
-  jobId: string,
-): Promise<PersonaAutomationTriggerResponse> {
-  const response = await fetchApi(`/api/persona/automations/${jobId}/trigger`, {
-    method: 'POST',
-  })
-  if (!response.ok) {
-    throw new Error(`Persona automation trigger failed: ${response.status}`)
   }
   return response.json()
 }

@@ -166,21 +166,13 @@ describe('persona settings tabs', () => {
     )
   })
 
-  it('updates heartbeat interval and voice selection', async () => {
-    const onUpdate = vi.fn()
+  it('routes heartbeat scheduling to Automations and keeps voice selection', async () => {
+    render(<VoiceHeartbeatTab autosave={idleAutosave} />)
 
-    render(
-      <VoiceHeartbeatTab
-        persona={basePersona}
-        onUpdate={onUpdate}
-        autosave={idleAutosave}
-      />,
-    )
-
-    fireEvent.change(screen.getByLabelText('Heartbeat interval'), {
-      target: { value: '120' },
-    })
-    expect(onUpdate).toHaveBeenCalledWith({ heartbeat_interval_minutes: 120 })
+    expect(
+      screen.getByRole('link', { name: 'Manage check-in schedule' }),
+    ).toHaveAttribute('href', '/automations?project_id=agent-hub')
+    expect(screen.queryByLabelText('Heartbeat interval')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Select voice Guy' }))
     expect(mockSetSelectedVoice).toHaveBeenCalledWith('voice-2')
@@ -205,13 +197,7 @@ describe('persona settings tabs', () => {
   })
 
   it('filters voices and previews the selected sample', () => {
-    render(
-      <VoiceHeartbeatTab
-        persona={basePersona}
-        onUpdate={vi.fn()}
-        autosave={idleAutosave}
-      />,
-    )
+    render(<VoiceHeartbeatTab autosave={idleAutosave} />)
 
     fireEvent.change(screen.getByPlaceholderText('Search voices...'), {
       target: { value: 'guy' },
@@ -304,7 +290,7 @@ describe('persona settings tabs', () => {
     expect(screen.getByText('Reset failed with status 500')).toBeInTheDocument()
   })
 
-  it('shows heartbeat warnings when runtime is incompatible or disabled', () => {
+  it('shows heartbeat runtime warnings', () => {
     mockHeartbeatStatus.mockReturnValue({
       running: false,
       last_run: null,
@@ -326,19 +312,7 @@ describe('persona settings tabs', () => {
       },
     })
 
-    render(
-      <VoiceHeartbeatTab
-        persona={{ ...basePersona, heartbeat_interval_minutes: 0 }}
-        onUpdate={vi.fn()}
-        autosave={idleAutosave}
-      />,
-    )
-
-    expect(
-      screen.getByText(
-        'Heartbeat is currently off, so Persona is not autonomously driving work.',
-      ),
-    ).toBeInTheDocument()
+    render(<VoiceHeartbeatTab autosave={idleAutosave} />)
     expect(
       screen.getByText(
         'Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools.',

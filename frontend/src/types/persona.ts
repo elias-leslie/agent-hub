@@ -53,7 +53,6 @@ export interface PersonaUpdate {
   user_context?: string
   voice_id?: string
   voice_enabled?: boolean
-  heartbeat_interval_minutes?: number
   execution_state?: 'active' | 'paused'
   avatar_url?: string
   greeting?: string

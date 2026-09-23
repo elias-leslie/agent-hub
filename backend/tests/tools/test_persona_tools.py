@@ -613,219 +613,138 @@ class TestSendPush:
 
 
 class TestScheduleJob:
-    """Tests for schedule_job tool."""
+    """Persona scheduling writes go through central automation profiles."""
 
     @pytest.mark.asyncio
-    async def test_creates_at_job(self):
+    async def test_creates_central_profile_with_persona_subject(self):
         from app.services.tools._executor_scheduling import schedule_job
 
-        persona = _make_persona()
+        persona = _make_persona(id=7)
         session_fn, mock_db = _mock_async_session(persona)
-
-        mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 0
-        mock_db.execute.return_value = mock_count_result
-
         future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-
+        profile = MagicMock(id="profile-1", label="Test reminder", source_ref="persona:job-1")
+        profile.next_run_at = datetime.fromisoformat(future)
         with (
             patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=persona)),
+            patch("app.services.automations.import_agent_hub_legacy", new=AsyncMock()),
+            patch("app.services.automations.create_profile", new=AsyncMock(return_value=profile)) as create,
         ):
             result = await schedule_job(
-                name="Test reminder",
-                schedule_type="at",
-                schedule_value=future,
+                name="Test reminder", schedule_type="at", schedule_value=future,
                 payload_message="Check status",
             )
 
         assert "scheduled" in result
-        assert "Test reminder" in result
+        assert "profile-1" in result
+        assert create.await_args is not None
+        payload = create.await_args.args[1]
+        assert payload["project_id"] == "agent-hub"
+        assert payload["subject_id"] == "persona:7"
+        assert payload["workflow_key"] == "agent-hub.persona_job"
+        assert payload["enabled"] is True
+        assert payload["config"] == {
+            "payload_type": "agent_turn", "payload_message": "Check status", "delivery": "none",
+        }
+        assert create.await_args.kwargs["changed_by"] == "agent:persona"
+        mock_db.commit.assert_awaited_once()
+        mock_db.add.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_schedule_type(self):
         from app.services.tools._executor_scheduling import schedule_job
 
-        result = await schedule_job(
-            name="Bad job",
-            schedule_type="invalid",
-            schedule_value="foo",
-            payload_message="test",
-        )
-        assert "Error" in result
+        result = await schedule_job("Bad job", "invalid", "foo", "test")
         assert "Invalid schedule_type" in result
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_payload_type(self):
         from app.services.tools._executor_scheduling import schedule_job
 
-        result = await schedule_job(
-            name="Bad payload",
-            schedule_type="every",
-            schedule_value="60000",
-            payload_message="test",
-            payload_type="invalid",
-        )
-
-        assert "Error" in result
+        result = await schedule_job("Bad payload", "every", "60000", "test", payload_type="invalid")
         assert "Invalid payload_type" in result
 
     @pytest.mark.asyncio
-    async def test_rejects_past_at_time(self):
+    async def test_rejects_past_at_time_without_creating_profile(self):
         from app.services.tools._executor_scheduling import schedule_job
-
-        persona = _make_persona()
-        session_fn, mock_db = _mock_async_session(persona)
-
-        mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 0
-        mock_db.execute.return_value = mock_count_result
 
         past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await schedule_job(
-                name="Past job",
-                schedule_type="at",
-                schedule_value=past,
-                payload_message="test",
-            )
-
+        with patch("app.services.automations.create_profile", new=AsyncMock()) as create:
+            result = await schedule_job("Past job", "at", past, "test")
         assert "past" in result.lower()
+        create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_creates_self_honing_job(self):
+    @pytest.mark.parametrize("payload_type", ["self_honing", "memory_review"])
+    async def test_preserves_special_payload_type_in_profile(self, payload_type):
         from app.services.tools._executor_scheduling import schedule_job
 
         persona = _make_persona()
-        session_fn, mock_db = _mock_async_session(persona)
-
+        session_fn, _ = _mock_async_session(persona)
+        profile = MagicMock(id="profile-2", label="Special job", source_ref="persona:job-2")
+        profile.next_run_at = datetime.now(UTC) + timedelta(hours=1)
         with (
             patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=persona)),
+            patch("app.services.automations.import_agent_hub_legacy", new=AsyncMock()),
+            patch("app.services.automations.create_profile", new=AsyncMock(return_value=profile)) as create,
         ):
-            result = await schedule_job(
-                name="Nightly self-honing",
-                schedule_type="cron",
-                schedule_value="0 4 * * *",
-                payload_message="Nightly persona self-honing",
-                payload_type="self_honing",
-            )
-
+            result = await schedule_job("Special job", "cron", "0 4 * * *", "payload", payload_type=payload_type)
         assert "scheduled" in result
-        added_job = mock_db.add.call_args.args[0]
-        assert added_job.payload_type == "self_honing"
-
-    @pytest.mark.asyncio
-    async def test_creates_memory_review_job(self):
-        from app.services.tools._executor_scheduling import schedule_job
-
-        persona = _make_persona()
-        session_fn, mock_db = _mock_async_session(persona)
-
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await schedule_job(
-                name="Memory review",
-                schedule_type="cron",
-                schedule_value="0 */6 * * *",
-                payload_message='{"batch_limit": 25}',
-                payload_type="memory_review",
-            )
-
-        assert "scheduled" in result
-        added_job = mock_db.add.call_args.args[0]
-        assert added_job.payload_type == "memory_review"
+        assert create.await_args is not None
+        assert create.await_args.args[1]["config"]["payload_type"] == payload_type
 
 
 class TestListScheduledJobs:
-    """Tests for list_scheduled_jobs tool."""
-
     @pytest.mark.asyncio
     async def test_empty_list(self):
         from app.services.tools._executor_scheduling import list_scheduled_jobs
 
         persona = _make_persona()
         session_fn, mock_db = _mock_async_session(persona)
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-
         with (
             patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=persona)),
         ):
             result = await list_scheduled_jobs()
-
         assert "No scheduled jobs" in result
+        mock_db.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_lists_payload_type(self):
+    async def test_lists_central_profile_state(self):
         from app.services.tools._executor_scheduling import list_scheduled_jobs
 
-        persona = _make_persona()
+        persona = _make_persona(id=7)
         session_fn, mock_db = _mock_async_session(persona)
-        mock_job = MagicMock()
-        mock_job.name = "Nightly self-honing"
-        mock_job.id = "job-1"
-        mock_job.schedule_type = "cron"
-        mock_job.schedule_value = "0 4 * * *"
-        mock_job.payload_type = "self_honing"
-        mock_job.next_run_at = datetime.now(UTC)
-        mock_job.run_count = 0
-        mock_job.max_runs = None
-        mock_job.enabled = True
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_job]
-        mock_db.execute.return_value = mock_result
-
+        profile = MagicMock()
+        profile.id = "profile-1"
+        profile.source_ref = "persona:job-1"
+        profile.label = "Nightly self-honing"
+        profile.schedule_type = "cron"
+        profile.schedule_value = "0 4 * * *"
+        profile.config = {"payload_type": "self_honing"}
+        profile.next_run_at = datetime.now(UTC)
+        profile.run_count = 0
+        profile.max_runs = None
+        profile.enabled = True
+        mock_db.execute.return_value.scalars.return_value.all.return_value = [profile]
         with (
             patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=persona)),
         ):
             result = await list_scheduled_jobs()
-
         assert "type=self_honing" in result
+        assert "profile-1" in result
+        assert "job-1" in result
 
 
 class TestCancelScheduledJob:
-    """Tests for cancel_scheduled_job tool."""
-
     @pytest.mark.asyncio
     async def test_not_found(self):
         from app.services.tools._executor_scheduling import cancel_scheduled_job
 
         mock_db = AsyncMock()
+        mock_db.get.return_value = None
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
@@ -834,34 +753,79 @@ class TestCancelScheduledJob:
         async def _session():
             yield mock_db
 
-        with patch("app.db.async_session", _session):
+        with (
+            patch("app.db.async_session", _session),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=_make_persona())),
+        ):
             result = await cancel_scheduled_job("nonexistent-id")
-
         assert "not found" in result.lower()
+        mock_db.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_disable_job(self):
+    async def test_disables_central_profile_by_profile_id(self):
         from app.services.tools._executor_scheduling import cancel_scheduled_job
 
         mock_db = AsyncMock()
-        mock_job = MagicMock()
-        mock_job.name = "Test job"
-        mock_job.enabled = True
+        profile = MagicMock(id="profile-1", label="Test job", revision=4)
+        profile.project_id = "agent-hub"
+        profile.workflow_key = "agent-hub.persona_job"
+        profile.subject_id = "persona:1"
+        profile.enabled = True
+        mock_db.get.return_value = profile
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with (
+            patch("app.db.async_session", _session),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=_make_persona())),
+            patch("app.services.automations.update_profile", new=AsyncMock(return_value=profile)) as update,
+        ):
+            result = await cancel_scheduled_job("profile-1")
+        assert "disabled" in result.lower()
+        update.assert_awaited_once_with(
+            mock_db, "profile-1", {"enabled": False, "expected_revision": 4}, changed_by="agent:persona"
+        )
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_accepts_legacy_job_id_for_canonical_disable(self):
+        from app.services.tools._executor_scheduling import cancel_scheduled_job
+
+        mock_db = AsyncMock()
+        mock_db.get.return_value = None
+        profile = MagicMock(id="profile-2", label="Legacy job", revision=2)
+        profile.project_id = "agent-hub"
+        profile.workflow_key = "agent-hub.persona_job"
+        profile.subject_id = "persona:1"
+        profile.enabled = True
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_result.scalar_one_or_none.return_value = profile
         mock_db.execute.return_value = mock_result
 
         @asynccontextmanager
         async def _session():
             yield mock_db
 
-        with patch("app.db.async_session", _session):
-            result = await cancel_scheduled_job("some-id")
-
+        with (
+            patch("app.db.async_session", _session),
+            patch("app.services.persona_service.get_or_create_persona", new=AsyncMock(return_value=_make_persona())),
+            patch("app.services.automations.update_profile", new=AsyncMock(return_value=profile)) as update,
+        ):
+            result = await cancel_scheduled_job("job-2")
         assert "disabled" in result.lower()
-        assert mock_job.enabled is False
+        assert update.await_args is not None
+        assert update.await_args.args[1] == "profile-2"
+        mock_db.delete.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_rejects_hard_delete(self):
+        from app.services.tools._executor_scheduling import cancel_scheduled_job
 
+        result = await cancel_scheduled_job("profile-1", hard_delete=True)
+        assert "automations?project_id=agent-hub" in result
+        assert "Error" in result
 class TestSteerConsultation:
     """Tests for steer_consultation tool."""
 

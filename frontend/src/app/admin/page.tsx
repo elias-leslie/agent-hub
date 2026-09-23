@@ -8,6 +8,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useToastActions } from '@/components/error/toast'
 import {
@@ -18,41 +19,31 @@ import {
   fetchBlockedRequests,
   fetchClients,
   fetchSessionHotspots,
-  fetchWorkflowSchedules,
   type SessionHotspots,
-  updateWorkflowSchedule,
-  type WorkflowSchedule,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { BlockedRequestsTable } from './components/BlockedRequestsTable'
 import { KillSwitchToggle } from './components/KillSwitchToggle'
 import { SessionHotspotsPanel } from './components/SessionHotspotsPanel'
-import { WorkflowSchedulesSection } from './components/WorkflowSchedulesSection'
 
 export default function AdminPage() {
   const [clients, setClients] = useState<ClientControl[]>([])
   const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([])
-  const [schedules, setSchedules] = useState<WorkflowSchedule[]>([])
   const [hotspots, setHotspots] = useState<SessionHotspots | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [updatingScheduleId, setUpdatingScheduleId] = useState<string | null>(
-    null,
-  )
   const toast = useToastActions()
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      const [c, b, s, h] = await Promise.all([
+      const [c, b, h] = await Promise.all([
         fetchClients(),
         fetchBlockedRequests(),
-        fetchWorkflowSchedules(),
         fetchSessionHotspots(),
       ])
       setClients(c)
       setBlockedRequests(b)
-      setSchedules(s)
       setHotspots(h)
     } catch {
       toast.error(
@@ -87,27 +78,6 @@ export default function AdminPage() {
     [refresh],
   )
 
-  const handleToggleSchedule = useCallback(
-    async (schedule: WorkflowSchedule) => {
-      setUpdatingScheduleId(schedule.schedule_id)
-      try {
-        await updateWorkflowSchedule(schedule.schedule_id, {
-          enabled: !schedule.enabled,
-          updated_by: 'admin-ui',
-        })
-        await refresh()
-      } catch {
-        toast.error(
-          'Failed to toggle schedule',
-          `Could not update ${schedule.label}`,
-        )
-      } finally {
-        setUpdatingScheduleId(null)
-      }
-    },
-    [refresh, toast],
-  )
-
   const todayBlocked = useMemo(() => {
     const today = new Date().toDateString()
     return blockedRequests.filter(
@@ -129,7 +99,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-slate-400" />
             <h1 className="text-base font-semibold text-slate-100">
-              Automation Control Plane
+              Client Access Control
             </h1>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800/50">
               <span className="relative flex h-1.5 w-1.5">
@@ -239,11 +209,17 @@ export default function AdminPage() {
 
         <SessionHotspotsPanel hotspots={hotspots} isLoading={isLoading} />
 
-        <WorkflowSchedulesSection
-          schedules={schedules}
-          updatingScheduleId={updatingScheduleId}
-          onToggle={handleToggleSchedule}
-        />
+        <section className="section-card flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="section-heading">Automations</h2>
+            <p className="section-copy mt-1">
+              Manage schedules and project policy in Automations.
+            </p>
+          </div>
+          <Link href="/automations" className="button-secondary">
+            Open Automations
+          </Link>
+        </section>
 
         {/* Client Kill Switches Section */}
         <section>

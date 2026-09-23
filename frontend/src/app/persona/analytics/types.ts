@@ -177,8 +177,3 @@ export interface PersonaImprovementDashboard {
   field_risks: PersonaHeartbeatFieldRisk[]
   schedule_risks: PersonaImprovementScheduleRisk[]
 }
-
-export interface PersonaImprovementScheduleUpdate {
-  enabled: boolean
-  cadence_minutes: number
-}

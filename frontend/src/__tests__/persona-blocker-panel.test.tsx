@@ -4,11 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { PersonaBlockerPanel } from '@/app/persona/components/PersonaBlockerPanel'
 
 describe('PersonaBlockerPanel', () => {
-  it('keeps blocker, permission, and auto-run truth compact', () => {
+  it('keeps blocker and permission truth compact', () => {
     render(
       <PersonaBlockerPanel
         executionState="active"
-        heartbeatIntervalMinutes={30}
         selectedProject={{
           project_id: 'agent-hub',
           permission_tier: 'full',
@@ -82,6 +81,6 @@ describe('PersonaBlockerPanel', () => {
     expect(
       screen.getAllByText(/^Execution permission denied$/i).length,
     ).toBeGreaterThan(0)
-    expect(screen.getByText(/Every 30m/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Auto-run/i)).not.toBeInTheDocument()
   })
 })
