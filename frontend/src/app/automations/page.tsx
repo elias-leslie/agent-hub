@@ -19,6 +19,7 @@ import {
   type AutomationProfileInput,
   type AutomationRun,
   type Config,
+  type ConfigSchema,
   createAutomationProfile,
   fetchAutomationPolicy,
   fetchAutomationProfiles,
@@ -108,7 +109,9 @@ function ProfileForm({
   onCancel: () => void
 }) {
   const availableDefinitions = definitions.filter(
-    (item) => item.owner_project_id === projectId,
+    (item) =>
+      item.owner_project_id === projectId ||
+      item.owner_project_id === 'summitflow',
   )
   const [workflowKey, setWorkflowKey] = useState(
     profile?.workflow_key ?? availableDefinitions[0]?.workflow_key ?? '',
@@ -587,6 +590,27 @@ export default function AutomationsPage() {
   const selectedDefinition = definitions.find(
     (item) => item.workflow_key === selected?.workflow_key,
   )
+  const policySchema = useMemo<ConfigSchema | undefined>(() => {
+    if (!projectId) return undefined
+    const applicable = definitions.filter(
+      (item) =>
+        item.owner_project_id === projectId ||
+        (item.owner_project_id === 'summitflow' &&
+          (projectId === 'summitflow' ||
+            profiles.some(
+              (profile) => profile.workflow_key === item.workflow_key,
+            ))),
+    )
+    const base = applicable[0]?.policy_schema
+    if (!base) return undefined
+    return {
+      ...base,
+      properties: Object.assign(
+        {},
+        ...applicable.map((item) => item.policy_schema?.properties ?? {}),
+      ),
+    }
+  }, [definitions, profiles, projectId])
   const projectOptions = useMemo(() => {
     const entries = new Map<string, string>()
     for (const item of catalogQuery.data ?? [])
@@ -728,7 +752,11 @@ export default function AutomationsPage() {
               }}
               disabled={
                 !projectId ||
-                !definitions.some((item) => item.owner_project_id === projectId)
+                !definitions.some(
+                  (item) =>
+                    item.owner_project_id === projectId ||
+                    item.owner_project_id === 'summitflow',
+                )
               }
               className="button-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1064,10 +1092,7 @@ export default function AutomationsPage() {
             <PolicyEditor
               key={`${projectId}-${policyQuery.data.revision}`}
               policy={policyQuery.data}
-              schema={
-                definitions.find((item) => item.owner_project_id === projectId)
-                  ?.policy_schema
-              }
+              schema={policySchema}
               saving={policyMutation.isPending}
               onSave={async (enabled, config) => {
                 await policyMutation.mutateAsync({ enabled, config })

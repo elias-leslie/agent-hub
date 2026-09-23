@@ -12,6 +12,7 @@ from app.services.automations import (
     create_profile,
     effective_gate_reasons,
     occurrence_key,
+    policy_profile_gate_reasons,
     policy_schema_for,
     update_policy,
     validate_policy_config,
@@ -84,6 +85,25 @@ def test_invalid_schedule_is_rejected_before_write():
             "schedule_value": "bad cron",
             "schedule_timezone": "UTC",
         })
+
+
+def test_summitflow_owned_profile_can_target_another_project():
+    definition = SimpleNamespace(
+        owner_project_id="summitflow", workflow_key="summitflow/work_pickup",
+        config_schema={"type": "object", "properties": {"batch_limit": {"type": "integer"}}},
+    )
+    value = validate_profile_payload({
+        "project_id": "agent-hub", "workflow_key": "summitflow/work_pickup",
+        "schedule_type": "every", "schedule_value": "1800000", "config": {"batch_limit": 5},
+    }, definition)
+    assert value["project_id"] == "agent-hub"
+
+
+def test_summitflow_workflow_gates_do_not_disable_unrelated_project_routines():
+    policy = SimpleNamespace(config={"autonomous_enabled": False, "routine_upkeep_enabled": True})
+    assert policy_profile_gate_reasons("summitflow/work_pickup", policy) == ["autonomous_disabled"]
+    assert policy_profile_gate_reasons("summitflow/task_generation", policy) == []
+    assert policy_profile_gate_reasons("neri/notification_maintenance", policy) == []
 
 
 def test_existing_summitflow_policy_values_keep_their_types():

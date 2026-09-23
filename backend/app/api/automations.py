@@ -130,6 +130,7 @@ async def _profile(db: AsyncSession, row: AutomationProfile) -> dict[str, Any]:
         owner_gate_reasons=owner_reasons,
         manual=False, manual_when_disabled=definition.manual_when_disabled,
     )
+    gates.extend(service.policy_profile_gate_reasons(row.workflow_key, policy))
     if row.clock_owner == "legacy":
         gates.append("legacy_clock_owner")
     unreviewed = await db.scalar(select(func.count()).select_from(AutomationRun).where(

@@ -136,6 +136,8 @@ async def dispatch_run(run_id: str) -> None:
             "config": run.config_snapshot or {},
             "policy_config": run.policy_snapshot or {},
         }
+        if definition.owner_project_id == "summitflow":
+            payload["project_id"] = profile.project_id
         await db.commit()
 
     try:

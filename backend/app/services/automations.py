@@ -79,6 +79,8 @@ class PolicyConfig(BaseModel):
     quality_gate_mode: str | None = None
     quality_gate_fix_enabled: bool | None = None
     autonomous_task_types: list[str] | None = None
+    autonomous_enabled: bool | None = None
+    routine_upkeep_enabled: bool | None = None
     screening_cap: int | None = Field(default=None, ge=0)
     classification_cap: int | None = Field(default=None, ge=0)
 
@@ -88,11 +90,43 @@ def policy_schema_for(project_id: str) -> dict:
     schema["properties"] = {
         key: value for key, value in schema.get("properties", {}).items()
         if (
-            (project_id == "summitflow" or not key.startswith(("autonomous_", "quality_gate_")))
+            (
+                project_id == "summitflow"
+                or (not key.startswith(("autonomous_", "quality_gate_"))
+                    and key != "routine_upkeep_enabled")
+            )
             and (project_id == "jobinator-4000" or key not in {"screening_cap", "classification_cap"})
         )
     }
     return schema
+
+
+def external_config_schema(workflow_key: str) -> dict:
+    if workflow_key == "summitflow/task_generation":
+        return {"type": "object", "properties": {"upkeep_batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
+    if workflow_key == "summitflow/work_pickup":
+        return {"type": "object", "properties": {"batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
+    if workflow_key == "neri/notification_maintenance":
+        return {
+            "type": "object",
+            "properties": {
+                "push_enabled": {"type": "boolean"},
+                "timezone": {"type": "string", "maxLength": 80},
+                "digest_time": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+                "quiet_start": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+                "quiet_end": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+            },
+            "required": ["push_enabled"],
+            "additionalProperties": False,
+        }
+    if workflow_key.startswith("jobinator-4000/"):
+        properties: dict = {"limit": {"type": ["integer", "null"], "minimum": 1}}
+        if workflow_key == "jobinator-4000/nightly_screen":
+            properties["notify"] = {"type": "boolean"}
+        if workflow_key == "jobinator-4000/deferred_ab_sweep":
+            properties["limit"] = {"type": "integer", "minimum": 1}
+        return {"type": "object", "properties": properties, "additionalProperties": False}
+    return {"type": "object", "additionalProperties": False}
 
 
 def policy_sync_pending(policy: AutomationProjectPolicy) -> bool:
@@ -101,6 +135,17 @@ def policy_sync_pending(policy: AutomationProjectPolicy) -> bool:
         and {"screening_cap", "classification_cap"}.issubset(policy.config or {})
         and policy.sync_revision < policy.revision
     )
+
+
+def policy_profile_gate_reasons(
+    workflow_key: str, policy: AutomationProjectPolicy,
+) -> list[str]:
+    config = policy.config or {}
+    if workflow_key == "summitflow/work_pickup" and config.get("autonomous_enabled") is False:
+        return ["autonomous_disabled"]
+    if workflow_key == "summitflow/task_generation" and config.get("routine_upkeep_enabled") is False:
+        return ["routine_upkeep_disabled"]
+    return []
 
 
 def effective_gate_reasons(
@@ -201,7 +246,10 @@ def validate_profile_payload(payload: dict, definition: AutomationDefinition | N
     if not isinstance(data["config"], dict):
         raise AutomationValidationError("config must be an object")
     if definition is not None:
-        if data.get("project_id") != definition.owner_project_id:
+        if (
+            data.get("project_id") != definition.owner_project_id
+            and definition.owner_project_id != "summitflow"
+        ):
             raise AutomationValidationError("project_id does not own workflow_key")
         try:
             validate_json(data["config"], definition.config_schema or {"type": "object"})
@@ -468,6 +516,7 @@ async def admit_run(
         if profile.workflow_key == "agent-hub.persona_heartbeat" else (),
     )
     reasons.extend(await _policy_gate_reasons(db, policy, now))
+    reasons.extend(policy_profile_gate_reasons(profile.workflow_key, policy))
     if policy_sync_pending(policy):
         reasons.append("owner_policy_sync_pending")
     if trigger == "scheduled" and profile.clock_owner != "central":
@@ -524,33 +573,7 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 workflow_key=key, version=1, owner_project_id=project_id,
                 label=label, description=f"{label} owned by {project_id}.",
                 dispatch_kind="callback", dispatch_target=f"/automations/dispatch/{key.split('/', 1)[1]}",
-                config_schema=(
-                    {
-                        "type": "object",
-                        "properties": {"upkeep_batch_limit": {"type": "integer", "minimum": 1}},
-                    }
-                    if key == "summitflow/task_generation" else (
-                        {
-                            "type": "object",
-                            "properties": {"batch_limit": {"type": "integer", "minimum": 1}},
-                        }
-                        if key == "summitflow/work_pickup" else (
-                        {
-                            "type": "object",
-                            "properties": {
-                                "push_enabled": {"type": "boolean"},
-                                "timezone": {"type": "string", "maxLength": 80},
-                                "digest_time": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-                                "quiet_start": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-                                "quiet_end": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-                            },
-                            "required": ["push_enabled"],
-                            "additionalProperties": False,
-                        }
-                        if key == "neri/notification_maintenance" else {"type": "object"}
-                        )
-                    )
-                ),
+                config_schema=external_config_schema(key),
                 policy_schema=policy_schema_for(project_id),
                 default_schedule=default_schedule, default_enabled=True,
                 manual_when_disabled=key in {
