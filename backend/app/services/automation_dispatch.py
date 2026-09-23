@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from urllib.parse import urlparse
@@ -9,7 +10,7 @@ from urllib.parse import urlparse
 import httpx
 import yaml
 from hatchet_sdk.clients.admin import TriggerWorkflowOptions
-from hatchet_sdk.exceptions import DedupeViolationError
+from hatchet_sdk.exceptions import DedupeViolationError, FailedTaskRunExceptionGroup
 from sqlalchemy import select
 
 from app.config import settings
@@ -283,17 +284,25 @@ async def reconcile_runs() -> int:
                 await dispatch_run(run_id)
             continue
         try:
-            hatchet_status = str((await get_hatchet().runs.aio_get_status(owner_run_id)).value)
+            # The Hatchet REST status route is unavailable on this deployment;
+            # its workflow listener returns completed results through gRPC.
+            await asyncio.wait_for(
+                get_hatchet().runs.workflow_run_listener.aio_result(owner_run_id),
+                timeout=2.0,
+            )
+            terminal = "succeeded"
+        except TimeoutError:
+            continue
+        except FailedTaskRunExceptionGroup:
+            terminal = "failed"
         except Exception:
             logger.warning("Could not reconcile Hatchet run %s", owner_run_id, exc_info=True)
             continue
-        terminal = {"COMPLETED": "succeeded", "FAILED": "failed", "CANCELLED": "cancelled"}.get(hatchet_status)
-        if terminal:
-            async with async_session() as db:
-                row = await db.get(AutomationRun, run_id)
-                if row and row.status == "accepted":
-                    row.status = terminal
-                    row.completed_at = datetime.now(UTC)
-                    await db.commit()
-                    settled += 1
+        async with async_session() as db:
+            row = await db.get(AutomationRun, run_id)
+            if row and row.status == "accepted":
+                row.status = terminal
+                row.completed_at = datetime.now(UTC)
+                await db.commit()
+                settled += 1
     return settled

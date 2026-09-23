@@ -1,10 +1,12 @@
 """The clock settles owner receipts after its short database sessions close."""
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from hatchet_sdk.exceptions import FailedTaskRunExceptionGroup
 
 from app.models import AutomationDefinition, AutomationProfile
 from app.services.automation_dispatch import dispatch_run, reconcile_runs
@@ -83,7 +85,8 @@ async def test_reconcile_snapshots_definition_before_session_closes():
     )
     run = SimpleNamespace(status="accepted", completed_at=None)
     sessions = [Session(pending=[pending]), Session(item=BoundDefinition()), Session(item=run)]
-    hatchet = SimpleNamespace(runs=SimpleNamespace(aio_get_status=AsyncMock(return_value=SimpleNamespace(value="COMPLETED"))))
+    result = AsyncMock(return_value={"session-cleanup": {}})
+    hatchet = SimpleNamespace(runs=SimpleNamespace(workflow_run_listener=SimpleNamespace(aio_result=result)))
 
     with (
         patch("app.services.automation_dispatch.async_session", side_effect=sessions),
@@ -95,6 +98,50 @@ async def test_reconcile_snapshots_definition_before_session_closes():
     assert run.status == "succeeded"
     assert run.completed_at is not None
     sessions[2].commit.assert_awaited_once()
+    result.assert_awaited_once_with("hatchet-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_failed_hatchet_run():
+    pending = SimpleNamespace(
+        id="run-1", status="accepted", owner_run_id="hatchet-1",
+        workflow_key="agent-hub.session_cleanup", definition_version=1,
+    )
+    run = SimpleNamespace(status="accepted", completed_at=None)
+    sessions = [Session(pending=[pending]), Session(item=BoundDefinition()), Session(item=run)]
+    result = AsyncMock(side_effect=FailedTaskRunExceptionGroup("workflow failed", []))
+    hatchet = SimpleNamespace(runs=SimpleNamespace(workflow_run_listener=SimpleNamespace(aio_result=result)))
+
+    with (
+        patch("app.services.automation_dispatch.async_session", side_effect=sessions),
+        patch("app.hatchet_app.get_hatchet", return_value=hatchet),
+    ):
+        settled = await reconcile_runs()
+
+    assert settled == 1
+    assert run.status == "failed"
+    assert run.completed_at is not None
+    sessions[2].commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_keeps_running_hatchet_run_pending():
+    pending = SimpleNamespace(
+        id="run-1", status="accepted", owner_run_id="hatchet-1",
+        workflow_key="agent-hub.session_cleanup", definition_version=1,
+    )
+    sessions = [Session(pending=[pending]), Session(item=BoundDefinition())]
+    result = AsyncMock(side_effect=asyncio.TimeoutError)
+    hatchet = SimpleNamespace(runs=SimpleNamespace(workflow_run_listener=SimpleNamespace(aio_result=result)))
+
+    with (
+        patch("app.services.automation_dispatch.async_session", side_effect=sessions),
+        patch("app.hatchet_app.get_hatchet", return_value=hatchet),
+    ):
+        settled = await reconcile_runs()
+
+    assert settled == 0
+    result.assert_awaited_once_with("hatchet-1")
 
 
 @pytest.mark.asyncio
