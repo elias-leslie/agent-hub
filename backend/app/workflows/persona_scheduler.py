@@ -346,6 +346,16 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     if result is None:
         return JobExecutionResult(output=f"Context maintenance {maintenance['status']}: reviewed={maintenance['reviewed_count']}; rolling memory review continues next scheduled batch.")
 
+    if result.status == "failed":
+        reason = "; ".join(result.errors) or f"{result.failed_count} item(s) failed"
+        raise RuntimeError(f"Memory review {result.run_id or 'n/a'} failed: {reason}")
+    if result.status == "blocked":
+        reason = "; ".join(result.errors) or "review batch blocked"
+        return JobExecutionResult(
+            output=f"Skipped: memory review blocked (run={result.run_id or 'n/a'}): {reason}",
+            session_id=result.session_id,
+        )
+
     return JobExecutionResult(
         output=(
             "Memory review "
