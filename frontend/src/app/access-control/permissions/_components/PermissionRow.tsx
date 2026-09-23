@@ -4,10 +4,8 @@ import { useCallback, useState } from 'react'
 import type { ProjectPermission, ProjectPermissionUpdate } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
-import { HourSelect } from './HourSelect'
 import { SaveFlash } from './SaveFlash'
 import { TierSelect } from './TierSelect'
-import { Toggle } from './Toggle'
 import { normalizeTier, TIER_CONFIG } from './tier-config'
 
 export function PermissionRow({
@@ -69,50 +67,15 @@ export function PermissionRow({
         </div>
       </td>
 
-      {/* Auto Exec */}
+      {/* Automations */}
       <td className="px-4 py-3.5">
-        <div className="flex items-center gap-2">
-          <Toggle
-            checked={permission.auto_exec_enabled}
-            onChange={(v) => handleUpdate('exec', { auto_exec_enabled: v })}
-            disabled={tier === 'off'}
-            label={`Auto-exec for ${permission.project_id}`}
-          />
-          {tier === 'off' && (
-            <span className="text-[10px] text-slate-600">N/A</span>
-          )}
-          <SaveFlash
-            saving={savingField === 'exec'}
-            error={errorField === 'exec'}
-          />
-        </div>
-      </td>
-
-      {/* Execution Window */}
-      <td className="px-4 py-3.5">
-        {permission.auto_exec_enabled && tier !== 'off' ? (
-          <div className="flex items-center gap-1.5">
-            <HourSelect
-              value={permission.execution_start_hour}
-              onChange={(v) =>
-                handleUpdate('hours', { execution_start_hour: v })
-              }
-            />
-            <span className="text-slate-600 text-xs">&ndash;</span>
-            <HourSelect
-              value={permission.execution_end_hour}
-              onChange={(v) => handleUpdate('hours', { execution_end_hour: v })}
-            />
-            <SaveFlash
-              saving={savingField === 'hours'}
-              error={errorField === 'hours'}
-            />
-          </div>
-        ) : (
-          <span className="text-xs text-slate-600">
-            {tier === 'off' ? 'Disabled' : 'Exec off'}
-          </span>
-        )}
+        <a
+          href={`/automations?project_id=${encodeURIComponent(permission.project_id)}`}
+          aria-label={`Manage ${permission.project_id} automations`}
+          className="text-sm text-amber-300 hover:underline"
+        >
+          Manage
+        </a>
       </td>
 
       {/* Updated */}

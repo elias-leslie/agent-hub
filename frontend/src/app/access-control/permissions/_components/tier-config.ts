@@ -38,9 +38,3 @@ export function normalizeTier(tier: string): Tier {
   if (tier === 'off' || tier === 'read' || tier === 'full') return tier
   return 'off'
 }
-
-export function formatHour(hour: number): string {
-  if (hour === 0 || hour === 24) return '12:00 AM'
-  if (hour === 12) return '12:00 PM'
-  return hour < 12 ? `${hour}:00 AM` : `${hour - 12}:00 PM`
-}

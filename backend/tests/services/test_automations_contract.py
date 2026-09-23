@@ -15,6 +15,7 @@ from app.services.automations import (
     occurrence_key,
     policy_profile_gate_reasons,
     policy_schema_for,
+    reject_persona_runtime_config_write,
     update_policy,
     validate_policy_config,
     validate_profile_payload,
@@ -134,6 +135,19 @@ def test_policy_catalog_only_shows_owner_specific_fields_for_its_project():
     assert "screening_cap" in policy_schema_for("jobinator-4000")["properties"]
     assert "classification_cap" in policy_schema_for("jobinator-4000")["properties"]
     assert "screening_cap" not in policy_schema_for("neri")["properties"]
+
+
+def test_persona_pause_cannot_be_written_through_heartbeat_profile():
+    with pytest.raises(AutomationValidationError, match="Persona pause"):
+        reject_persona_runtime_config_write(
+            "agent-hub.persona_heartbeat", {"config": {"execution_state": "active"}}
+        )
+    reject_persona_runtime_config_write(
+        "agent-hub.persona_heartbeat", {"config": {"heartbeat_interval_minutes": 30}}
+    )
+    reject_persona_runtime_config_write(
+        "agent-hub.persona_heartbeat", {"label": "Heartbeat"}
+    )
 
 
 @pytest.mark.asyncio

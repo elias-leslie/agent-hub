@@ -7,9 +7,43 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.api.automations import _definition, _profile
 from app.db import get_db
 from app.main import app
 from app.models import AutomationProfile, AutomationProjectPolicy
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_api_hides_legacy_pause_config_but_keeps_read_only_gate():
+    profile = AutomationProfile(
+        id="profile-1", project_id="agent-hub", workflow_key="agent-hub.persona_heartbeat",
+        definition_version=1, label="Persona heartbeat", schedule_type="cron",
+        schedule_value="0 * * * *", schedule_timezone="UTC",
+        config={"heartbeat_interval_minutes": 30, "execution_state": "paused"},
+        enabled=True, clock_owner="central", owner_gate_reasons=[], revision=1,
+    )
+    definition = SimpleNamespace(
+        workflow_key="agent-hub.persona_heartbeat", version=1, owner_project_id="agent-hub",
+        label="Persona heartbeat", description="", dispatch_kind="hatchet",
+        dispatch_target="persona_heartbeat", config_schema={"type": "object", "properties": {
+            "heartbeat_interval_minutes": {"type": "integer"},
+            "execution_state": {"type": "string"},
+        }}, policy_schema={}, default_schedule={}, default_enabled=True,
+        manual_when_disabled=True, manual_advances_cursor=False, overlap_strategy="cancel_newest",
+    )
+    db = AsyncMock()
+    db.get.return_value = definition
+    db.scalar.return_value = 0
+    with (
+        patch("app.api.automations.service.get_policy", new_callable=AsyncMock,
+              return_value=SimpleNamespace(enabled=True, config={})),
+        patch("app.api.automations.service.live_owner_gate_reasons", new_callable=AsyncMock,
+              return_value=["persona_paused"]),
+    ):
+        result = await _profile(db, profile)
+    assert result["config"] == {"heartbeat_interval_minutes": 30}
+    assert "persona_paused" in result["gate_reasons"]
+    assert "execution_state" not in _definition(definition)["config_schema"]["properties"]
 
 
 @pytest.mark.asyncio

@@ -31,9 +31,15 @@ import {
   updateAutomationPolicy,
   updateAutomationProfile,
 } from '@/lib/api/automations'
-import { fetchProjectCatalog } from '@/lib/api/project-permissions'
+import {
+  fetchProjectCatalog,
+  fetchProjectPermission,
+  type ProjectPermissionUpdate,
+  updateProjectPermission,
+} from '@/lib/api/project-permissions'
 import { cn } from '@/lib/utils'
 import { ConfigFields } from './ConfigFields'
+import { ExecutionPermissionEditor } from './ExecutionPermissionEditor'
 
 type Tab = 'profiles' | 'policy' | 'runs' | 'catalog'
 const PAGE_SIZE = 50
@@ -565,6 +571,11 @@ export default function AutomationsPage() {
     queryFn: () => fetchAutomationPolicy(projectId),
     enabled: Boolean(projectId) && tab === 'policy',
   })
+  const executionPermissionQuery = useQuery({
+    queryKey: ['automation-execution-permission', projectId],
+    queryFn: () => fetchProjectPermission(projectId),
+    enabled: Boolean(projectId) && tab === 'policy',
+  })
 
   useEffect(() => {
     setProfileOffset(0)
@@ -638,6 +649,9 @@ export default function AutomationsPage() {
       queryClient.invalidateQueries({ queryKey: ['automation-profiles'] }),
       queryClient.invalidateQueries({ queryKey: ['automation-runs'] }),
       queryClient.invalidateQueries({ queryKey: ['automation-policy'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['automation-execution-permission'],
+      }),
     ])
   }
   const notify = (message: string) => {
@@ -679,6 +693,12 @@ export default function AutomationsPage() {
         expected_revision: policyQuery.data?.revision ?? 0,
       }),
     onSuccess: () => notify('Project policy saved'),
+    onError: fail,
+  })
+  const executionPermissionMutation = useMutation({
+    mutationFn: (update: ProjectPermissionUpdate) =>
+      updateProjectPermission(projectId, update),
+    onSuccess: () => notify('Execution permission saved'),
     onError: fail,
   })
   const runMutation = useMutation({
@@ -1151,15 +1171,57 @@ export default function AutomationsPage() {
               </button>
             </div>
           ) : policyQuery.data ? (
-            <PolicyEditor
-              key={`${projectId}-${policyQuery.data.revision}`}
-              policy={policyQuery.data}
-              schema={policySchema}
-              saving={policyMutation.isPending}
-              onSave={async (enabled, config) => {
-                await policyMutation.mutateAsync({ enabled, config })
-              }}
-            />
+            <div className="space-y-5">
+              <PolicyEditor
+                key={`${projectId}-${policyQuery.data.revision}`}
+                policy={policyQuery.data}
+                schema={policySchema}
+                saving={policyMutation.isPending}
+                onSave={async (enabled, config) => {
+                  await policyMutation.mutateAsync({ enabled, config })
+                }}
+              />
+              {executionPermissionQuery.isLoading ? (
+                <div className="section-card text-sm text-slate-400">
+                  Loading execution permission…
+                </div>
+              ) : executionPermissionQuery.error ? (
+                <div
+                  className="section-card text-sm text-rose-300"
+                  role="alert"
+                >
+                  {errorText(executionPermissionQuery.error)}{' '}
+                  <button
+                    type="button"
+                    onClick={() => void executionPermissionQuery.refetch()}
+                    className="underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : executionPermissionQuery.data ? (
+                <ExecutionPermissionEditor
+                  key={`${projectId}-${executionPermissionQuery.data.updated_at}`}
+                  permission={executionPermissionQuery.data}
+                  saving={executionPermissionMutation.isPending}
+                  onSave={(update) =>
+                    executionPermissionMutation.mutate(update)
+                  }
+                />
+              ) : (
+                <div className="section-card text-sm text-slate-400">
+                  No execution permission record exists for this project. Add
+                  its access tier in{' '}
+                  <a
+                    href="/access-control/permissions"
+                    className="text-amber-300 hover:underline"
+                  >
+                    Access Control
+                  </a>
+                  .
+                </div>
+              )}
+            </div>
           ) : (
             <div className="empty-surface">
               No policy found for this project.

@@ -332,6 +332,15 @@ def profile_snapshot(profile: AutomationProfile) -> dict:
     )}
 
 
+def reject_persona_runtime_config_write(workflow_key: str, payload: dict) -> None:
+    """Keep the Persona runtime pause control separate from the heartbeat schedule."""
+    config = payload.get("config")
+    if workflow_key == "agent-hub.persona_heartbeat" and isinstance(config, dict) and "execution_state" in config:
+        raise AutomationValidationError(
+            "Persona pause is managed on the Persona page; remove execution_state from this automation config"
+        )
+
+
 async def _record_revision(db: AsyncSession, profile: AutomationProfile, changed_by: str | None) -> None:
     db.add(AutomationProfileRevision(
         id=str(uuid4()), profile_id=profile.id, revision=profile.revision,
@@ -342,6 +351,7 @@ async def _record_revision(db: AsyncSession, profile: AutomationProfile, changed
 
 async def create_profile(db: AsyncSession, payload: dict, *, changed_by: str | None) -> AutomationProfile:
     definition = await get_definition(db, payload["workflow_key"])
+    reject_persona_runtime_config_write(definition.workflow_key, payload)
     data = validate_profile_payload(payload, definition)
     if definition.workflow_key.startswith("agent-hub.") and definition.dispatch_target != "persona_job":
         existing = (await db.execute(select(AutomationProfile.id).where(
@@ -402,6 +412,7 @@ async def update_profile(
     if expected != profile.revision:
         raise RevisionConflict("profile revision has changed")
     definition = await get_definition(db, profile.workflow_key)
+    reject_persona_runtime_config_write(definition.workflow_key, payload)
     full = {**profile_snapshot(profile), **payload}
     data = validate_profile_payload(full, definition)
     for key in ("subject_id", "label", "schedule_type", "schedule_value", "schedule_timezone", "config", "enabled"):
@@ -427,11 +438,8 @@ async def update_profile(
             job.next_run_at = profile.next_run_at if profile.clock_owner == "legacy" else None
     elif profile.workflow_key == "agent-hub.persona_heartbeat" and "config" in payload:
         persona = (await db.execute(select(Persona).limit(1))).scalar_one_or_none()
-        if persona is not None:
-            if "heartbeat_interval_minutes" in profile.config:
-                persona.heartbeat_interval_minutes = int(profile.config["heartbeat_interval_minutes"])
-            if "execution_state" in profile.config:
-                persona.execution_state = str(profile.config["execution_state"])
+        if persona is not None and "heartbeat_interval_minutes" in profile.config:
+            persona.heartbeat_interval_minutes = int(profile.config["heartbeat_interval_minutes"])
     elif profile.clock_owner == "legacy" and profile.source_ref and profile.source_ref.startswith("static:"):
         control = await db.get(WorkflowScheduleControl, profile.source_ref.split(":", 1)[1])
         if control is None:
@@ -594,7 +602,6 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 config_schema=(
                     {"type": "object", "properties": {
                         "heartbeat_interval_minutes": {"type": "integer", "minimum": 0},
-                        "execution_state": {"type": "string", "enum": ["active", "paused"]},
                     }, "additionalProperties": False}
                     if schedule.schedule_id == "persona_heartbeat"
                     else {"type": "object", "additionalProperties": False}
@@ -615,8 +622,8 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 id=str(uuid4()), project_id="agent-hub", workflow_key=key,
                 definition_version=1, label=schedule.label, schedule_type="cron",
                 schedule_value=schedule.cron, schedule_timezone="UTC", config=(
-                    {"heartbeat_interval_minutes": persona.heartbeat_interval_minutes,
-                     "execution_state": persona.execution_state} if persona and schedule.schedule_id == "persona_heartbeat" else {}
+                    {"heartbeat_interval_minutes": persona.heartbeat_interval_minutes}
+                    if persona and schedule.schedule_id == "persona_heartbeat" else {}
                 ),
                 enabled=enabled, clock_owner="legacy", owner_gate_reasons=[], source_ref=source,
                 next_run_at=next_due("cron", schedule.cron, "UTC", now),
@@ -631,7 +638,6 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
             if persona and schedule.schedule_id == "persona_heartbeat":
                 profile.config = {
                     "heartbeat_interval_minutes": persona.heartbeat_interval_minutes,
-                    "execution_state": persona.execution_state,
                 }
                 if heartbeat_last_run is not None:
                     profile.last_run_at = heartbeat_last_run

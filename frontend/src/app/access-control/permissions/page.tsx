@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderLock, Plus, Zap } from 'lucide-react'
+import { FolderLock, Plus } from 'lucide-react'
 import { type FormEvent, useCallback, useState } from 'react'
 import {
   createProjectPermission,
@@ -22,13 +22,7 @@ import {
 
 // ─── Header summary pills ─────────────────────────────────────────────────────
 
-function TierSummary({
-  tierCounts,
-  autoExecCount,
-}: {
-  tierCounts: Record<Tier, number>
-  autoExecCount: number
-}) {
+function TierSummary({ tierCounts }: { tierCounts: Record<Tier, number> }) {
   return (
     <div className="flex items-center gap-2">
       {TIERS.map((t) => {
@@ -49,18 +43,6 @@ function TierSummary({
           </span>
         )
       })}
-      <span className="text-slate-600 text-[11px] mx-1">|</span>
-      <span
-        className={cn(
-          'flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium',
-          autoExecCount > 0
-            ? 'bg-emerald-500/10 text-emerald-400'
-            : 'bg-slate-500/10 text-slate-400',
-        )}
-      >
-        <Zap className="h-3 w-3" />
-        {autoExecCount} auto-exec
-      </span>
     </div>
   )
 }
@@ -79,13 +61,7 @@ function PermissionsTable({
       <table className="w-full">
         <thead className="bg-slate-800/50">
           <tr>
-            {[
-              'Project',
-              'Tier',
-              'Auto Exec',
-              'Execution Window',
-              'Updated',
-            ].map((col) => (
+            {['Project', 'Tier', 'Automations', 'Updated'].map((col) => (
               <th
                 key={col}
                 className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
@@ -118,7 +94,6 @@ function AddProjectPermissionForm({
 }) {
   const [projectId, setProjectId] = useState('')
   const [tier, setTier] = useState<Tier>('read')
-  const [autoExec, setAutoExec] = useState(false)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -127,11 +102,10 @@ function AddProjectPermissionForm({
     onCreate({
       project_id: normalized,
       permission_tier: tier,
-      auto_exec_enabled: autoExec,
+      auto_exec_enabled: false,
     })
     setProjectId('')
     setTier('read')
-    setAutoExec(false)
   }
 
   return (
@@ -162,15 +136,6 @@ function AddProjectPermissionForm({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex h-10 items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-200">
-          <input
-            type="checkbox"
-            checked={autoExec}
-            onChange={(event) => setAutoExec(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-          />
-          Auto Exec
         </label>
         <button
           type="submit"
@@ -268,9 +233,6 @@ export default function ProjectPermissionsPage() {
     {} as Record<Tier, number>,
   )
 
-  const autoExecCount =
-    permissions?.filter((p) => p.auto_exec_enabled).length ?? 0
-
   return (
     <div className="page-shell">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
@@ -288,12 +250,7 @@ export default function ProjectPermissionsPage() {
               </span>
             )}
           </div>
-          {tierCounts && (
-            <TierSummary
-              tierCounts={tierCounts}
-              autoExecCount={autoExecCount}
-            />
-          )}
+          {tierCounts && <TierSummary tierCounts={tierCounts} />}
         </div>
       </header>
 

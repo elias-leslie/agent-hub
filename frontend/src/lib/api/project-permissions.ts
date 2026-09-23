@@ -60,6 +60,17 @@ export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
   return res.json()
 }
 
+export async function fetchProjectPermission(
+  projectId: string,
+): Promise<ProjectPermission | null> {
+  const res = await fetchApi(
+    buildApiUrl(`/api/projects/${encodeURIComponent(projectId)}/permissions`),
+  )
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Failed to fetch permission for ${projectId}`)
+  return res.json()
+}
+
 export async function fetchProjectRoots(): Promise<ProjectRoots> {
   const res = await fetchApi(buildApiUrl('/api/projects/roots'))
   if (!res.ok) throw new Error('Failed to fetch project roots')

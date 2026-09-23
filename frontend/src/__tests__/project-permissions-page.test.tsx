@@ -67,7 +67,6 @@ describe('ProjectPermissionsPage', () => {
     fireEvent.change(screen.getByDisplayValue('Read'), {
       target: { value: 'full' },
     })
-    fireEvent.click(screen.getByLabelText('Auto Exec'))
     fireEvent.click(screen.getByRole('button', { name: 'Add Project' }))
 
     await waitFor(() => {
@@ -77,7 +76,14 @@ describe('ProjectPermissionsPage', () => {
     expect(vi.mocked(createProjectPermission).mock.calls[0]?.[0]).toEqual({
       project_id: 'test2',
       permission_tier: 'full',
-      auto_exec_enabled: true,
+      auto_exec_enabled: false,
     })
+    expect(screen.queryByLabelText('Auto Exec')).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Auto-exec for agent-hub'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Manage agent-hub automations' }),
+    ).toHaveAttribute('href', '/automations?project_id=agent-hub')
   })
 })

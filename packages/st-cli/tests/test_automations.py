@@ -126,3 +126,30 @@ def test_cutover_requires_owner_fence_receipt() -> None:
         "/api/automations/profiles/profile-1/cutover",
         payload={"expected_revision": 1, "fence_receipt": "owner-fenced"},
     )
+
+
+def test_execution_permission_inspection_uses_canonical_api() -> None:
+    permission = {"project_id": "agent-hub", "auto_exec_enabled": True,
+                  "execution_start_hour": 0, "execution_end_hour": 24}
+    with patch("agent_hub_st.automations._api", return_value=permission) as api:
+        result = runner.invoke(app, ["execution", "agent-hub", "--json"])
+    assert result.exit_code == 0
+    assert json.loads(result.output) == permission
+    api.assert_called_once_with("GET", "/api/projects/agent-hub/permissions")
+
+
+def test_execution_permission_update_preserves_existing_api_checks() -> None:
+    with patch("agent_hub_st.automations._api", return_value={"project_id": "agent-hub"}) as api:
+        result = runner.invoke(app, ["execution-set", "agent-hub", "--auto-exec", "off",
+                                     "--start-hour", "9", "--end-hour", "17"])
+    assert result.exit_code == 0
+    api.assert_called_once_with("PATCH", "/api/projects/agent-hub/permissions", payload={
+        "auto_exec_enabled": False, "execution_start_hour": 9, "execution_end_hour": 17,
+    })
+
+
+def test_execution_permission_update_rejects_incomplete_window() -> None:
+    with patch("agent_hub_st.automations._api") as api:
+        result = runner.invoke(app, ["execution-set", "agent-hub", "--start-hour", "9"])
+    assert result.exit_code == 2
+    api.assert_not_called()
