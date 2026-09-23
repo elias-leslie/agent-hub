@@ -217,6 +217,8 @@ async def validate_profile(
         definition = await service.get_definition(db, full["workflow_key"])
         service.reject_persona_runtime_config_write(definition.workflow_key, payload)
         normalized = service.validate_profile_payload(full, definition)
+        if not payload.get("id"):
+            service.ensure_future_one_time(normalized, datetime.now(UTC))
         return {"valid": True, "normalized": normalized, "errors": []}
     except (KeyError, service.AutomationValidationError) as exc:
         return {"valid": False, "normalized": None, "errors": [str(exc)]}

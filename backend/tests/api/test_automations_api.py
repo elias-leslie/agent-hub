@@ -7,10 +7,45 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.api.automations import _definition, _profile
+from app.api.automations import _definition, _profile, validate_profile
 from app.db import get_db
 from app.main import app
 from app.models import AutomationProfile, AutomationProjectPolicy
+
+
+@pytest.mark.asyncio
+async def test_new_profile_preview_rejects_past_one_time_schedule():
+    definition = SimpleNamespace(
+        workflow_key="agent-hub.persona_job", owner_project_id="agent-hub",
+        config_schema={"type": "object"},
+    )
+    with patch("app.api.automations.service.get_definition", new_callable=AsyncMock, return_value=definition):
+        result = await validate_profile({
+            "project_id": "agent-hub", "workflow_key": "agent-hub.persona_job",
+            "schedule_type": "at", "schedule_value": "2026-03-05T12:00:00Z",
+        }, AsyncMock())
+    assert result["valid"] is False
+    assert "future" in result["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_existing_historical_one_time_profile_preview_remains_valid():
+    profile = AutomationProfile(
+        id="historical", project_id="agent-hub", workflow_key="agent-hub.persona_job",
+        definition_version=1, label="Historical reminder", subject_id="persona:1",
+        schedule_type="at", schedule_value="2026-03-05T12:00:00Z",
+        schedule_timezone="UTC", config={}, enabled=False, clock_owner="central",
+        owner_gate_reasons=[], revision=2,
+    )
+    db = AsyncMock()
+    db.get.return_value = profile
+    definition = SimpleNamespace(
+        workflow_key="agent-hub.persona_job", owner_project_id="agent-hub",
+        config_schema={"type": "object"},
+    )
+    with patch("app.api.automations.service.get_definition", new_callable=AsyncMock, return_value=definition):
+        result = await validate_profile({"id": "historical"}, db)
+    assert result["valid"] is True
 
 
 @pytest.mark.asyncio

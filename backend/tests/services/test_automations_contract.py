@@ -12,6 +12,7 @@ from app.services.automations import (
     AutomationValidationError,
     create_profile,
     effective_gate_reasons,
+    ensure_future_one_time,
     occurrence_key,
     policy_profile_gate_reasons,
     policy_schema_for,
@@ -94,6 +95,44 @@ def test_invalid_schedule_is_rejected_before_write():
             "schedule_value": "bad cron",
             "schedule_timezone": "UTC",
         })
+
+
+def test_new_one_time_schedule_must_be_in_future_with_named_timezone():
+    now = datetime(2026, 9, 23, 18, 0, tzinfo=UTC)
+    with pytest.raises(AutomationValidationError, match="future"):
+        ensure_future_one_time({
+            "schedule_type": "at", "schedule_value": "2026-09-23T14:00:00",
+            "schedule_timezone": "America/New_York",
+        }, now)
+    ensure_future_one_time({
+        "schedule_type": "at", "schedule_value": "2026-09-23T14:01:00",
+        "schedule_timezone": "America/New_York",
+    }, now)
+    ensure_future_one_time({
+        "schedule_type": "at", "schedule_value": "2026-09-23T19:00:00+00:00",
+        "schedule_timezone": "UTC",
+    }, now)
+
+
+@pytest.mark.asyncio
+async def test_create_profile_rejects_past_one_time_before_adding_owner_or_profile():
+    db = AsyncMock()
+    db.add = MagicMock()
+    definition = SimpleNamespace(
+        workflow_key="agent-hub.persona_job", owner_project_id="agent-hub",
+        version=1, label="Persona scheduled job", dispatch_target="persona_job",
+        config_schema={"type": "object"},
+    )
+    payload = {
+        "project_id": "agent-hub", "workflow_key": "agent-hub.persona_job",
+        "schedule_type": "at", "schedule_value": "2026-03-05T12:00:00Z",
+    }
+    with (
+        patch("app.services.automations.get_definition", new_callable=AsyncMock, return_value=definition),
+        pytest.raises(AutomationValidationError, match="future"),
+    ):
+        await create_profile(db, payload, changed_by="test")
+    db.add.assert_not_called()
 
 
 def test_summitflow_owned_profile_can_target_another_project():

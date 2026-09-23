@@ -219,6 +219,14 @@ def next_due(
     return croniter(schedule_value, after.astimezone(zone)).get_next(datetime).astimezone(UTC)
 
 
+def ensure_future_one_time(data: dict, now: datetime) -> None:
+    """Prevent new one-time profiles that can never become due."""
+    if data["schedule_type"] == "at" and next_due(
+        data["schedule_type"], data["schedule_value"], data["schedule_timezone"], now
+    ) is None:
+        raise AutomationValidationError("One-time schedule must be in the future")
+
+
 def validate_profile_payload(payload: dict, definition: AutomationDefinition | None = None) -> dict:
     """Normalize a profile command before any mutation."""
     data = dict(payload)
@@ -353,13 +361,14 @@ async def create_profile(db: AsyncSession, payload: dict, *, changed_by: str | N
     definition = await get_definition(db, payload["workflow_key"])
     reject_persona_runtime_config_write(definition.workflow_key, payload)
     data = validate_profile_payload(payload, definition)
+    now = datetime.now(UTC)
+    ensure_future_one_time(data, now)
     if definition.workflow_key.startswith("agent-hub.") and definition.dispatch_target != "persona_job":
         existing = (await db.execute(select(AutomationProfile.id).where(
             AutomationProfile.workflow_key == definition.workflow_key
         ).limit(1))).scalar_one_or_none()
         if existing is not None:
             raise AutomationValidationError("Static Agent Hub schedule already has a profile")
-    now = datetime.now(UTC)
     profile = AutomationProfile(
         id=str(uuid4()), project_id=data["project_id"], subject_id=data.get("subject_id"),
         workflow_key=definition.workflow_key, definition_version=definition.version,
