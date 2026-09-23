@@ -2,16 +2,25 @@ import { Activity, Clock, Cpu, Layers } from 'lucide-react'
 import type { Session } from '@/lib/api'
 import type { SessionMemoryObservability } from '@/lib/session-memory-observability'
 import { cn } from '@/lib/utils'
+import type { TimelineEvent } from '@/types/events'
 import { ContextUsageBar } from './ContextUsageBar'
+import { NativeUsage } from './NativeUsage'
 import { StatCard } from './StatCard'
 import { formatDate, formatTokens } from './utils'
 
 interface SessionInfoProps {
   session: Session
+  events: TimelineEvent[]
+  eventsTotal: number
   memorySummary?: SessionMemoryObservability | null
 }
 
-export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
+export function SessionInfo({
+  session,
+  events,
+  eventsTotal,
+  memorySummary,
+}: SessionInfoProps) {
   const requestedModel = session.requested_model || session.model
   const effectiveModel = session.effective_model || session.model
   const requestedProvider = session.requested_provider || session.provider
@@ -29,11 +38,13 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           <p className="section-kicker">Session Intel</p>
           <h2 className="section-heading mt-2">Execution Summary</h2>
           <p className="section-copy mt-2 max-w-3xl">
-            Review the provider fallback path, context pressure, token totals,
+            Review the provider fallback path, context pressure, recorded usage,
             and any live health signals captured for this session.
           </p>
         </div>
       </div>
+
+      <NativeUsage events={events} totalEvents={eventsTotal} />
 
       {/* Context Usage */}
       {session.context_usage && (
@@ -178,30 +189,39 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           </div>
         )}
 
-      {/* Totals */}
+      {/* Stored session counters may not include all native transcript usage. */}
       {(session.total_input_tokens || session.total_output_tokens) && (
-        <div className="grid grid-cols-2 gap-3">
-          <div
-            className={cn(
-              'section-card text-center',
-              'bg-sky-950/30 border border-sky-800/40',
-            )}
-          >
-            <p className="text-2xl font-mono font-semibold text-sky-400">
-              {formatTokens(session.total_input_tokens || 0)}
-            </p>
-            <p className="text-xs text-sky-500 mt-1">Input Tokens</p>
-          </div>
-          <div
-            className={cn(
-              'section-card text-center',
-              'bg-violet-950/30 border border-violet-800/40',
-            )}
-          >
-            <p className="text-2xl font-mono font-semibold text-violet-400">
-              {formatTokens(session.total_output_tokens || 0)}
-            </p>
-            <p className="text-xs text-violet-500 mt-1">Output Tokens</p>
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-slate-300">
+            Stored session counters
+          </h3>
+          <p className="mb-3 text-xs text-slate-500">
+            These counters may omit native transcript usage and are not added to
+            the records above.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div
+              className={cn(
+                'section-card text-center',
+                'bg-sky-950/30 border border-sky-800/40',
+              )}
+            >
+              <p className="text-2xl font-mono font-semibold text-sky-400">
+                {formatTokens(session.total_input_tokens || 0)}
+              </p>
+              <p className="text-xs text-sky-500 mt-1">Input Tokens</p>
+            </div>
+            <div
+              className={cn(
+                'section-card text-center',
+                'bg-violet-950/30 border border-violet-800/40',
+              )}
+            >
+              <p className="text-2xl font-mono font-semibold text-violet-400">
+                {formatTokens(session.total_output_tokens || 0)}
+              </p>
+              <p className="text-xs text-violet-500 mt-1">Output Tokens</p>
+            </div>
           </div>
         </div>
       )}

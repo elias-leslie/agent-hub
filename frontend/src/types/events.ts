@@ -10,6 +10,8 @@ export type SessionEventType =
   | 'thinking'
   | 'tool_use'
   | 'tool_result'
+  | 'usage'
+  | 'usage_counter'
   | 'memory_inject'
   | 'memory_cite'
   | 'error'
@@ -29,6 +31,7 @@ export interface TimelineEvent {
   role: string | null
   content: string | null
   tool_name: string | null
+  call_id?: string | null
   tool_input: Record<string, unknown> | null
   tool_output: Record<string, unknown> | null
   tokens: number | null
@@ -42,6 +45,9 @@ export interface TimelineEvent {
   message_id?: string | null
   pane_id?: string | null
   source_client?: string | null
+  source_event_id?: string | null
+  source_timestamp?: string | null
+  usage?: Record<string, unknown> | null
   created_at: string
 }
 

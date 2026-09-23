@@ -425,48 +425,18 @@ async def test_changed_review_keeps_competing_claim_and_rejected_dismissal(maint
 
 
 @pytest.mark.integration
-async def test_regular_review_failure_reservation_and_changed_input_recovery(maintenance_db):
-    from unittest.mock import AsyncMock, patch
+async def test_regular_review_entry_point_is_unavailable_without_database_io():
+    from unittest.mock import AsyncMock
 
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.models.memory_unified import MemoryReviewRun
-    from app.services.memory import _review_agent_runner as runner
-    from app.services.memory._review_agent_decisions import MemoryReviewDecision
+    from fastapi import HTTPException
 
-    db = maintenance_db
-    memory = Memory(content='A dated fixture records an observed successful delivery.', name='Recovery fixture',
-        memory_type='reference', scope='global', tier=3, status='active', token_count=10, metadata_={})
-    db.add(memory)
-    await db.commit()
-    sources = runner._memory_review_sources([memory])
-    prepared = runner._ReviewInputs(prompt='Frozen evidence', sources=sources, evidence={}, reviewer_identity='before-fix', attempt_key='frozen-failure')
-    provider = AsyncMock(side_effect=RuntimeError('Provider unavailable'))
-    with (patch.object(runner, '_load_batch_memories', AsyncMock(return_value=[memory])),
-          patch.object(runner, '_prepare_review_inputs', AsyncMock(return_value=prepared)),
-          patch.object(runner, '_call_review_for_memories', provider)):
-        first = await runner.run_memory_review_batch(db=db, batch_limit=1)
-        await db.commit()
-        second = await runner.run_memory_review_batch(db=db, batch_limit=1, force_all=True)
-        await db.commit()
-    assert first.status == 'failed' and second.status == 'blocked'
-    provider.assert_awaited_once()
-    runs = list((await db.execute(select(MemoryReviewRun))).scalars())
-    assert len(runs) == 1 and runs[0].metadata_['attempt']['status'] == 'failed'
-    failures = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalars())
-    assert len(failures) == 1
-    decision = MemoryReviewDecision(uuid=str(memory.id), decision='keep', review_status='clean', confidence=1,
-        reason='Exact fixture retained.', checks={key: 'pass' for key in ('currency', 'correctness', 'appropriateness',
-            'scope_applicability', 'conflict', 'redundancy', 'lifecycle', 'authority', 'token_efficiency')})
-    prepared = runner._ReviewInputs(prompt='Frozen evidence', sources=sources, evidence={}, reviewer_identity='after-fix', attempt_key='corrected-reviewer')
-    with (patch.object(runner, '_load_batch_memories', AsyncMock(return_value=[memory])),
-          patch.object(runner, '_prepare_review_inputs', AsyncMock(return_value=prepared)),
-          patch.object(runner, '_call_review_for_memories', AsyncMock(return_value=('{}', 'catalog-model', 'fixed-session'))),
-          patch('app.services.memory.review_agent.parse_memory_review_content', return_value=[decision])):
-        recovered = await runner.run_memory_review_batch(db=db, batch_limit=1)
-        await db.commit()
-    assert recovered.status == 'completed'
-    assert failures[0].state == 'resolved'
-    assert memory.content == sources[0]['content']
+    from app.services.memory._review_agent_runner import run_memory_review_batch
+
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as raised:
+        await run_memory_review_batch(db=db, batch_limit=1)
+    assert raised.value.status_code == 410
+    db.execute.assert_not_awaited()
 
 
 def apply_test_migrations(connection):

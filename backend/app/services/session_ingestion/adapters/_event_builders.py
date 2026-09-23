@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from datetime import datetime
 from typing import Any
 
 from app.services.session_ingestion.models import NormalizedEvent
@@ -13,11 +15,36 @@ JsonObject = dict[str, object]
 class _ParseState:
     """Mutable transcript parsing state."""
 
-    def __init__(self, *, turn: int = 1, sequence: int = 0, saw_content: bool = False) -> None:
+    def __init__(
+        self, *, turn: int = 1, sequence: int = 0, saw_content: bool = False,
+        history_start_ordinal: int | None = None, parent_thread_id: str | None = None,
+    ) -> None:
         self.turn = turn
         self.sequence = sequence
         self.events: list[NormalizedEvent] = []
         self._saw_content = saw_content
+        self._source_id: str | None = None
+        self._source_timestamp: datetime | None = None
+        self._source_index = 0
+        self.history_start_ordinal = history_start_ordinal
+        self.parent_thread_id = parent_thread_id
+
+    def set_source(self, obj: JsonObject, fallback_id: str | None = None) -> None:
+        payload = obj.get("payload")
+        native_id = payload.get("id") if isinstance(payload, dict) else None
+        if not isinstance(native_id, str) or not native_id:
+            native_id = fallback_id
+        self._source_id = f"{obj.get('type')}:{native_id}" if native_id else None
+        timestamp = obj.get("timestamp")
+        try:
+            self._source_timestamp = (
+                datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if isinstance(timestamp, str)
+                else None
+            )
+        except ValueError:
+            self._source_timestamp = None
+        self._source_index = 0
 
     def begin_user_turn(self) -> None:
         if self._saw_content:
@@ -27,6 +54,13 @@ class _ParseState:
     def append(self, event_type: str, **kwargs: Any) -> None:
         self.sequence += 1
         self._saw_content = True
+        self._source_index += 1
+        if self._source_id:
+            source_id = f"{self._source_id}:{self._source_index}"
+            if len(source_id) > 255:
+                source_id = f"{source_id[:190]}:{hashlib.sha256(source_id.encode()).hexdigest()}"
+            kwargs.setdefault("source_event_id", source_id)
+        kwargs.setdefault("source_timestamp", self._source_timestamp)
         self.events.append(
             NormalizedEvent(
                 event_type=event_type,
@@ -39,6 +73,31 @@ class _ParseState:
 
 def append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
     entry_type = obj.get("type")
+    if entry_type == "session_meta":
+        payload = obj.get("payload")
+        if isinstance(payload, dict):
+            start = payload.get("subagent_history_start_ordinal")
+            if isinstance(start, int) and not isinstance(start, bool) and start >= 0:
+                state.history_start_ordinal = start
+            parent = payload.get("parent_thread_id")
+            if isinstance(parent, str) and parent:
+                state.parent_thread_id = parent
+        return
+    ordinal = obj.get("ordinal")
+    if (
+        state.history_start_ordinal is not None
+        and isinstance(ordinal, int)
+        and ordinal < state.history_start_ordinal
+    ):
+        return  # Child transcripts can include inherited parent history.
+    if entry_type == "token_usage_record":
+        _append_codex_usage_record(obj.get("payload"), state)
+        return
+    if entry_type == "event_msg":
+        payload = obj.get("payload")
+        if isinstance(payload, dict) and payload.get("type") == "token_count":
+            _append_codex_token_counter(payload, state)
+        return
     if entry_type == "progress":
         _append_claude_progress_events(obj, state)
         return
@@ -185,29 +244,110 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
     if payload_type == "message":
         _append_codex_message_payload(payload, state)
         return
-    if payload_type == "function_call":
-        raw_args = payload.get("arguments")
+    if payload_type in {"function_call", "custom_tool_call"}:
+        raw_args = payload.get("arguments") if payload_type == "function_call" else payload.get("input")
         if isinstance(raw_args, dict):
             arguments: dict[str, Any] = {str(k): v for k, v in raw_args.items()}
         elif isinstance(raw_args, str) and raw_args.strip():
             try:
                 parsed_args = json.loads(raw_args)
             except json.JSONDecodeError:
-                parsed_args = {}
-            arguments = parsed_args if isinstance(parsed_args, dict) else {}
+                parsed_args = None
+            arguments = parsed_args if isinstance(parsed_args, dict) else {"raw": raw_args, "format": "opaque"}
         else:
             arguments = {}
         tool_name = payload.get("name")
+        call_id = payload.get("call_id")
+        if isinstance(call_id, str) and call_id:
+            arguments = {**arguments, "call_id": call_id}
         state.append(
             "tool_use",
             tool_name=tool_name if isinstance(tool_name, str) else "unknown",
+            call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_input=arguments,
         )
         return
-    if payload_type == "function_call_output":
+    if payload_type in {"function_call_output", "custom_tool_call_output"}:
         output = payload.get("output")
-        tool_output = {"output": output} if isinstance(output, str) else {}
-        state.append("tool_result", tool_output=tool_output, content=tool_output.get("output"))
+        text_parts: list[str] = []
+        opaque_blocks = 0
+        if isinstance(output, str):
+            text_parts.append(output)
+        elif isinstance(output, list):
+            for block in output:
+                if isinstance(block, dict) and isinstance(block.get("text"), str):
+                    text_parts.append(block["text"])
+                else:
+                    opaque_blocks += 1
+        rendered = "\n".join(text_parts) if text_parts else None
+        tool_output: dict[str, Any] = {}
+        if rendered is not None:
+            tool_output["output"] = rendered
+        if opaque_blocks:
+            tool_output["opaque_blocks"] = opaque_blocks
+        call_id = payload.get("call_id")
+        if isinstance(call_id, str) and call_id:
+            tool_output["call_id"] = call_id
+        state.append(
+            "tool_result", call_id=call_id if isinstance(call_id, str) and call_id else None,
+            tool_output=tool_output, content=rendered,
+        )
+
+
+_USAGE_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cached_input_tokens",
+    "cache_write_input_tokens",
+    "reasoning_output_tokens",
+)
+
+
+def _usage_counts(raw: object) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        field: value
+        for field in _USAGE_FIELDS
+        if isinstance((value := raw.get(field)), int) and not isinstance(value, bool) and value >= 0
+    }
+
+
+def _append_codex_usage_record(payload: object, state: _ParseState) -> None:
+    if not isinstance(payload, dict):
+        return
+    response_id = payload.get("response_id")
+    counts = _usage_counts(payload.get("usage"))
+    if counts:
+        usage: dict[str, Any] = {"scope": "response", "source": "codex.token_usage_record.usage", **counts}
+        for key in ("response_id", "turn_id", "root_turn_id", "thread_id", "session_id"):
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                usage[key] = value
+        if state.parent_thread_id:
+            usage["parent_thread_id"] = state.parent_thread_id
+        if isinstance(response_id, str) and response_id:
+            state._source_id = f"response_usage:{response_id}"
+        state.append("usage", usage=usage)
+    for scope, key in (("turn", "turn_token_usage"), ("thread", "thread_token_usage")):
+        counts = _usage_counts(payload.get(key))
+        if counts:
+            state.append(
+                "usage_counter",
+                usage={"scope": scope, "source": f"codex.token_usage_record.{key}", **counts},
+            )
+
+
+def _append_codex_token_counter(payload: JsonObject, state: _ParseState) -> None:
+    info = payload.get("info")
+    if not isinstance(info, dict):
+        return
+    counts = _usage_counts(info.get("total_token_usage"))
+    if counts:
+        state.append(
+            "usage_counter",
+            usage={"scope": "thread", "source": "codex.event_msg.token_count.total_token_usage", **counts},
+        )
 
 
 def _append_codex_message_payload(payload: JsonObject, state: _ParseState) -> None:

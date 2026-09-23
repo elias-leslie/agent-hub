@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -296,6 +297,7 @@ class SessionEvent(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tool_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tool_input: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     tool_output: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
@@ -312,6 +314,9 @@ class SessionEvent(Base):
     message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pane_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_client: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -321,6 +326,11 @@ class SessionEvent(Base):
         UniqueConstraint("session_id", "turn", "sequence", name="uq_session_turn_sequence"),
         Index("ix_session_events_type", "event_type"),
         Index("ix_session_events_tool", "tool_name"),
+        Index("ix_session_events_call_id", "session_id", "call_id"),
+        Index(
+            "uq_session_events_source_event", "session_id", "source_event_id",
+            unique=True, postgresql_where=text("source_event_id IS NOT NULL"),
+        ),
     )
 
     def __repr__(self) -> str:

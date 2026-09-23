@@ -510,30 +510,25 @@ class TestTokenEstimationAccuracy:
 
         assert estimate.estimated_cost_usd == cost.total_cost_usd
 
-    def test_context_limit_warnings(self):
-        """Test context limit warnings are accurate."""
-        model = CLAUDE_SONNET  # 1M context
+    @pytest.mark.parametrize(
+        ("input_tokens", "expected_warning"),
+        [(490_000, None), (550_000, "Note"), (800_000, "WARNING"), (950_000, "CRITICAL")],
+    )
+    def test_context_limit_warnings(self, input_tokens, expected_warning):
+        """Exercise each warning band without tokenizing a huge fixture."""
+        with patch("app.services.token_counter.count_message_tokens", return_value=input_tokens):
+            estimate = estimate_request(
+                messages=[{"role": "user", "content": "context"}],
+                model=CLAUDE_SONNET,
+                max_tokens=1000,
+            )
 
-        # Create a large message
-        large_content = "x" * 200000  # Will be ~50k tokens
-        messages = [{"role": "user", "content": large_content}]
-
-        estimate = estimate_request(messages=messages, model=model, max_tokens=1000)
-
-        # Should have context usage calculated against 1M limit
-        expected_usage = (estimate.input_tokens / 1000000) * 100
-        assert abs(estimate.context_usage_percent - expected_usage) < 0.1
-
-        # Check warning thresholds
-        if estimate.context_usage_percent > 90:
+        assert estimate.context_usage_percent == input_tokens / 1_000_000 * 100
+        if expected_warning is None:
+            assert estimate.context_warning is None
+        else:
             assert estimate.context_warning is not None
-            assert "CRITICAL" in estimate.context_warning
-        elif estimate.context_usage_percent > 75:
-            assert estimate.context_warning is not None
-            assert "WARNING" in estimate.context_warning
-        elif estimate.context_usage_percent > 50:
-            assert estimate.context_warning is not None
-            assert "Note" in estimate.context_warning
+            assert estimate.context_warning.startswith(expected_warning)
 
 
 # ============================================================================

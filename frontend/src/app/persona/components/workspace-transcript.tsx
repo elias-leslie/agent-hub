@@ -15,6 +15,7 @@ import { pulseTagLabel } from './pulse-helpers'
 import {
   buildSessionDetailBlocks,
   describeValue,
+  pairToolEvents,
 } from './workspace-event-details'
 import type { DetailField } from './workspace-types'
 import {
@@ -117,6 +118,7 @@ function extractToolResult(toolOutput: unknown): string {
     return prettifyDisplayText(toolOutput) || ''
   if (!isRecord(toolOutput)) return ''
   const keys = [
+    'output',
     'content',
     'summary',
     'stdout',
@@ -185,16 +187,23 @@ interface TranscriptItem {
   tagContent?: string
 }
 
-function buildTranscriptItems(
+export function buildTranscriptItems(
   events: TimelineEvent[],
   narrationTags?: NarrationTag[],
 ): TranscriptItem[] {
   const items: TranscriptItem[] = []
   const processedIds = new Set<string>()
+  const pairs = pairToolEvents(events)
+  const pairedResults = new Set(pairs.values())
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i]
-    if (processedIds.has(event.id) || isNoiseEvent(event)) continue
+    if (
+      processedIds.has(event.id) ||
+      pairedResults.has(i) ||
+      isNoiseEvent(event)
+    )
+      continue
 
     if (event.event_type === 'tool_use') {
       processedIds.add(event.id)
@@ -203,12 +212,9 @@ function buildTranscriptItems(
         resultFull = '',
         hasError = false
       let toolFields: DetailField[] = []
-      const next = events[i + 1]
-      if (
-        next?.event_type === 'tool_result' &&
-        next.turn === event.turn &&
-        next.tool_name === event.tool_name
-      ) {
+      const resultIndex = pairs.get(i)
+      const next = resultIndex === undefined ? undefined : events[resultIndex]
+      if (next?.event_type === 'tool_result') {
         processedIds.add(next.id)
         const raw = extractToolResult(next.tool_output)
         resultFull = raw
@@ -223,7 +229,6 @@ function buildTranscriptItems(
           raw.toLowerCase().startsWith('error')
         toolFields =
           buildSessionDetailBlocks([event, next])[0]?.fields.slice(0, 6) ?? []
-        i++
       } else {
         toolFields =
           buildSessionDetailBlocks([event])[0]?.fields.slice(0, 6) ?? []

@@ -419,6 +419,7 @@ class SessionEventResponse(BaseModel):
     role: str | None = Field(default=None, description="Message role (user/assistant/system)")
     content: str | None = Field(default=None, description="Text content")
     tool_name: str | None = Field(default=None, description="Tool name for tool_use/tool_result")
+    call_id: str | None = Field(default=None, description="Native tool call/result correlation ID")
     tool_input: dict[str, object] | None = Field(default=None, description="Tool input parameters")
     tool_output: dict[str, object] | None = Field(default=None, description="Tool execution result")
     tokens: int | None = Field(default=None, description="Token count")
@@ -432,6 +433,9 @@ class SessionEventResponse(BaseModel):
     message_id: str | None = Field(default=None, description="External message id")
     pane_id: str | None = Field(default=None, description="Work Chats pane id")
     source_client: str | None = Field(default=None, description="Logical caller identifier")
+    source_event_id: str | None = Field(default=None, description="Native transcript event identity")
+    source_timestamp: datetime | None = Field(default=None, description="Original transcript timestamp")
+    usage: dict[str, object] | None = Field(default=None, description="Native usage with scope and provenance")
     created_at: datetime = Field(..., description="Event timestamp")
 
 

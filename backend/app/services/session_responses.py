@@ -158,6 +158,7 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
             role=e.role,
             content=e.content,
             tool_name=e.tool_name,
+            call_id=e.call_id,
             tool_input=e.tool_input,
             tool_output=e.tool_output,
             tokens=e.tokens,
@@ -171,6 +172,9 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
             message_id=e.message_id,
             pane_id=e.pane_id,
             source_client=e.source_client,
+            source_event_id=e.source_event_id,
+            source_timestamp=e.source_timestamp,
+            usage=e.usage,
             created_at=e.created_at,
         )
         for e in events

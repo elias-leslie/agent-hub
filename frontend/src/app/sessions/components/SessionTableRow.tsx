@@ -30,7 +30,7 @@ function getUsageCopy(session: SessionListItem, cost: number) {
   ) {
     return {
       primary: 'collecting',
-      secondary: formatCost(cost),
+      secondary: 'Estimate unavailable',
     }
   }
   const tokenPair = formatTokenPair(
@@ -40,12 +40,18 @@ function getUsageCopy(session: SessionListItem, cost: number) {
   if (isActive) {
     return {
       primary: `live · ${tokenPair}`,
-      secondary: formatCost(cost),
+      secondary: `Estimated ${formatCost(cost)}`,
     }
   }
   return {
-    primary: tokenPair,
-    secondary: formatCost(cost),
+    primary:
+      session.total_input_tokens === 0 && session.total_output_tokens === 0
+        ? 'usage unavailable'
+        : tokenPair,
+    secondary:
+      session.total_input_tokens === 0 && session.total_output_tokens === 0
+        ? 'Estimate unavailable'
+        : `Estimated ${formatCost(cost)}`,
   }
 }
 
@@ -91,9 +97,9 @@ export function SessionTableRow({
     (session.total_output_tokens * modelCost.output_per_m) / 1_000_000
   const identity = getExecutionIdentity(session)
   const usageCopy = getUsageCopy(session, cost)
-  const hasKnownZeroUsage =
+  const hasZeroStoredCounters =
     session.total_input_tokens === 0 && session.total_output_tokens === 0
-  const hasSettledZeroUsage = hasKnownZeroUsage && !isActiveSession
+  const hasSettledZeroUsage = hasZeroStoredCounters && !isActiveSession
   const description = getSessionDescription(session)
   const descriptionTitle = getSessionDescriptionTitle(session)
   const expandLabel = `${isExpanded ? 'Collapse' : 'Expand'} session ${session.id}`
@@ -179,18 +185,23 @@ export function SessionTableRow({
             <Tooltip
               content={
                 <div className="space-y-0.5 text-[11px]">
-                  <div>
-                    Input: {formatTokens(session.total_input_tokens)} (
-                    {formatCost(inputCost)})
-                  </div>
-                  <div>
-                    Output: {formatTokens(session.total_output_tokens)} (
-                    {formatCost(outputCost)})
-                  </div>
-                  <div>Total: {usageCopy.secondary}</div>
-                  {hasSettledZeroUsage ? (
-                    <div className="text-slate-400">Recorded zero usage</div>
-                  ) : null}
+                  {hasZeroStoredCounters ? (
+                    <div className="text-slate-400">
+                      Usage not available in session summary
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        Input: {formatTokens(session.total_input_tokens)}
+                        (estimated {formatCost(inputCost)})
+                      </div>
+                      <div>
+                        Output: {formatTokens(session.total_output_tokens)}
+                        (estimated {formatCost(outputCost)})
+                      </div>
+                      <div>Total: {usageCopy.secondary}</div>
+                    </>
+                  )}
                 </div>
               }
               position="top"

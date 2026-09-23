@@ -2,12 +2,37 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.session_responses import _resolve_agent_display_names
+from app.models.session import SessionEvent
+from app.services.session_responses import _resolve_agent_display_names, build_event_responses
+
+
+def test_native_event_response_exposes_source_and_usage() -> None:
+    timestamp = datetime(2026, 9, 23, 15, 0, tzinfo=UTC)
+    event = SessionEvent(
+        id="e2f26650-4e67-4302-905f-c17e7071f337",
+        session_id="session-1",
+        turn=1,
+        sequence=1,
+        event_type="usage",
+        call_id="call-1",
+        source_event_id="response_usage:resp-1:1",
+        source_timestamp=timestamp,
+        usage={"scope": "response", "source": "codex.token_usage_record.usage", "input_tokens": 10},
+        created_at=timestamp,
+    )
+
+    response = build_event_responses([event])[0]
+
+    assert response.source_event_id == "response_usage:resp-1:1"
+    assert response.call_id == "call-1"
+    assert response.source_timestamp == timestamp
+    assert response.usage == event.usage
 
 
 class TestResolveAgentDisplayNames:

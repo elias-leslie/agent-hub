@@ -198,6 +198,7 @@ export function buildEventDetails(event: TimelineEvent): {
   } else if (event.event_type === 'tool_result') {
     const toolOutput = isRecord(event.tool_output) ? event.tool_output : null
     recordTextFields(toolOutput, [
+      'output',
       'content',
       'summary',
       'stdout',
@@ -222,6 +223,7 @@ export function buildEventDetails(event: TimelineEvent): {
       'info',
     )
     filterFields(toolOutput, [
+      'output',
       'content',
       'summary',
       'stdout',
@@ -338,15 +340,18 @@ export function buildSessionDetailBlocks(
   events: TimelineEvent[],
 ): SessionDetailBlock[] {
   const blocks: SessionDetailBlock[] = []
+  const pairs = pairToolEvents(events)
+  const pairedResults = new Set(pairs.values())
   for (let index = 0; index < events.length; index += 1) {
+    if (pairedResults.has(index)) continue
     const event = events[index]
-    const nextEvent = events[index + 1]
+    const resultIndex = pairs.get(index)
+    const nextEvent =
+      resultIndex === undefined ? undefined : events[resultIndex]
 
     if (
       event.event_type === 'tool_use' &&
-      nextEvent?.event_type === 'tool_result' &&
-      nextEvent.turn === event.turn &&
-      nextEvent.tool_name === event.tool_name
+      nextEvent?.event_type === 'tool_result'
     ) {
       const useDetails = buildEventDetails(event)
       const resultDetails = buildEventDetails(nextEvent)
@@ -378,7 +383,6 @@ export function buildSessionDetailBlocks(
         score: Math.max(resultScore, 48),
         defaultVisible: resultScore >= 60,
       })
-      index += 1
       continue
     }
 
@@ -400,6 +404,42 @@ export function buildSessionDetailBlocks(
     })
   }
   return blocks
+}
+
+/** Match native calls by identity across batches; retain adjacent matching for older events. */
+export function pairToolEvents(events: TimelineEvent[]): Map<number, number> {
+  const pairs = new Map<number, number>()
+  const usedResults = new Set<number>()
+  const resultsByCallId = new Map<string, number[]>()
+  events.forEach((event, index) => {
+    if (event.event_type !== 'tool_result' || !event.call_id) return
+    const indexes = resultsByCallId.get(event.call_id) || []
+    indexes.push(index)
+    resultsByCallId.set(event.call_id, indexes)
+  })
+  for (let index = 0; index < events.length; index += 1) {
+    const call = events[index]
+    if (call.event_type !== 'tool_use') continue
+    let resultIndex = -1
+    if (call.call_id) {
+      resultIndex = resultsByCallId.get(call.call_id)?.shift() ?? -1
+    } else {
+      const next = events[index + 1]
+      if (
+        next?.event_type === 'tool_result' &&
+        !next.call_id &&
+        next.turn === call.turn &&
+        next.tool_name === call.tool_name &&
+        !usedResults.has(index + 1)
+      ) {
+        resultIndex = index + 1
+      }
+    }
+    if (resultIndex < 0) continue
+    pairs.set(index, resultIndex)
+    usedResults.add(resultIndex)
+  }
+  return pairs
 }
 
 export function blockMatchesIssueMarker(

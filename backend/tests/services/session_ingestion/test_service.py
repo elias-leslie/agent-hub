@@ -141,6 +141,39 @@ async def test_append_normalized_events_skips_existing_turn_sequence_pair() -> N
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_append_normalized_events_skips_replayed_native_source_identity() -> None:
+    db = AsyncMock()
+    pairs = MagicMock()
+    pairs.all.return_value = []
+    source_ids = MagicMock()
+    source_ids.all.return_value = [("response_usage:resp-1:1",)]
+    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_ids])
+
+    with (
+        patch(
+            "app.services.session_ingestion._events.get_max_turn",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch("app.services.session_ingestion._events.store_event", new_callable=AsyncMock) as store,
+    ):
+        result = await append_normalized_events(
+            db=db,
+            session_id="session-native",
+            request=AppendNormalizedEventsRequest(events=[NormalizedEvent(
+                event_type="usage", turn=1, sequence=8,
+                source_event_id="response_usage:resp-1:1",
+                usage={"scope": "response", "input_tokens": 10},
+            )]),
+        )
+
+    assert result.events_appended == 0
+    assert result.events_skipped == 1
+    store.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_append_normalized_events_skips_duplicate_turn_sequence_within_same_batch() -> None:
     db = AsyncMock()
 

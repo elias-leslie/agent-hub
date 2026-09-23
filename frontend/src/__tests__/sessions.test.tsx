@@ -372,7 +372,7 @@ describe('SessionsPage', () => {
     })
   })
 
-  it('shows explicit zero usage for completed zero-token rows', async () => {
+  it('does not mistake empty stored counters for measured zero usage', async () => {
     vi.mocked(fetchSessions).mockResolvedValue({
       ...mockSessions,
       sessions: [
@@ -389,7 +389,8 @@ describe('SessionsPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText(/^in 0 · out 0$/i)).toBeInTheDocument()
+      expect(screen.getByText(/^usage unavailable$/i)).toBeInTheDocument()
+      expect(screen.queryByText(/^in 0 · out 0$/i)).not.toBeInTheDocument()
     })
   })
 

@@ -105,6 +105,7 @@ def _build_session_event(
     role: str | None = None,
     content: str | None = None,
     tool_name: str | None = None,
+    call_id: str | None = None,
     tool_input: dict[str, Any] | None = None,
     tool_output: dict[str, Any] | None = None,
     tokens: int | None = None,
@@ -118,17 +119,21 @@ def _build_session_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    source_event_id: str | None = None,
+    source_timestamp: datetime | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> SessionEvent:
     """Sanitize fields and construct a SessionEvent (no DB I/O)."""
     s = _sanitize_event_value
     return SessionEvent(
         session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
-        role=s(role), content=s(content), tool_name=s(tool_name),
+        role=s(role), content=s(content), tool_name=s(tool_name), call_id=s(call_id),
         tool_input=s(tool_input), tool_output=s(tool_output),
         tokens=tokens, duration_ms=duration_ms,
         model_used=s(model_used), agent_id=s(agent_id), agent_name=s(agent_name),
         transport=s(transport), surface=s(surface), chat_id=s(chat_id),
         message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
+        source_event_id=s(source_event_id), source_timestamp=source_timestamp, usage=s(usage),
     )
 
 
@@ -333,6 +338,7 @@ async def store_event(
     role: str | None = None,
     content: str | None = None,
     tool_name: str | None = None,
+    call_id: str | None = None,
     tool_input: dict[str, Any] | None = None,
     tool_output: dict[str, Any] | None = None,
     tokens: int | None = None,
@@ -346,6 +352,9 @@ async def store_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    source_event_id: str | None = None,
+    source_timestamp: datetime | None = None,
+    usage: dict[str, Any] | None = None,
     session: Session | None = None,
 ) -> SessionEvent:
     """Store a single event to the database.
@@ -357,12 +366,13 @@ async def store_event(
 
     event = _build_session_event(
         session_id, turn, sequence, event_type,
-        role=role, content=content, tool_name=tool_name,
+        role=role, content=content, tool_name=tool_name, call_id=call_id,
         tool_input=tool_input, tool_output=tool_output,
         tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,
+        source_event_id=source_event_id, source_timestamp=source_timestamp, usage=usage,
     )
     db.add(event)
 

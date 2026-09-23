@@ -47,6 +47,20 @@ async def _load_existing_pairs(
     return {(turn, sequence) for turn, sequence in result.all()}
 
 
+async def _load_existing_source_ids(
+    db: AsyncSession, session_id: str, source_ids: set[str]
+) -> set[str]:
+    if not source_ids:
+        return set()
+    result = await db.execute(
+        select(SessionEvent.source_event_id).where(
+            SessionEvent.session_id == session_id,
+            SessionEvent.source_event_id.in_(source_ids),
+        )
+    )
+    return {source_id for (source_id,) in result.all() if source_id}
+
+
 async def _lock_session_event_ingestion(db: AsyncSession, session_id: str) -> None:
     """Serialize explicit event batches per session before sequence inspection."""
     await db.execute(
@@ -80,6 +94,7 @@ async def _store_single_implicit_event(
             role=event.role,
             content=event.content,
             tool_name=event.tool_name,
+            call_id=event.call_id,
             tool_input=event.tool_input,
             tool_output=event.tool_output,
             tokens=event.tokens,
@@ -93,6 +108,9 @@ async def _store_single_implicit_event(
             message_id=event.message_id,
             pane_id=event.pane_id,
             source_client=event.source_client,
+            source_event_id=event.source_event_id,
+            source_timestamp=event.source_timestamp,
+            usage=event.usage,
             session=session,
         )
         await db.flush()
@@ -125,6 +143,7 @@ async def _process_event(
     current_turn: int,
     sequence_cache: dict[int, int],
     existing_pairs: set[tuple[int, int]],
+    existing_source_ids: set[str],
     session: Session | None,
 ) -> tuple[int, int, str | None, bool]:
     """Process one event in a batch; returns (turn, sequence, event_id, skipped)."""
@@ -132,6 +151,8 @@ async def _process_event(
     turn = normalized.turn
     if turn is None:
         raise ValueError("Normalized event turn resolution failed")
+    if normalized.source_event_id and normalized.source_event_id in existing_source_ids:
+        return turn, normalized.sequence or sequence_cache.get(turn, 0), None, True
     if normalized.sequence is not None:
         sequence_cache[turn] = max(sequence_cache.get(turn, 0), normalized.sequence)
         if (turn, normalized.sequence) in existing_pairs:
@@ -153,6 +174,7 @@ async def _process_event(
         role=normalized.role,
         content=normalized.content,
         tool_name=normalized.tool_name,
+        call_id=normalized.call_id,
         tool_input=normalized.tool_input,
         tool_output=normalized.tool_output,
         tokens=normalized.tokens,
@@ -166,6 +188,9 @@ async def _process_event(
         message_id=normalized.message_id,
         pane_id=normalized.pane_id,
         source_client=normalized.source_client,
+        source_event_id=normalized.source_event_id,
+        source_timestamp=normalized.source_timestamp,
+        usage=normalized.usage,
         session=session,
     )
     await db.flush()
@@ -187,13 +212,17 @@ async def _store_events_general(
         session_id,
         {e.turn for e in events if e.turn is not None and e.sequence is not None},
     )
+    existing_source_ids = await _load_existing_source_ids(
+        db, session_id, {e.source_event_id for e in events if e.source_event_id}
+    )
     last_turn = current_turn
     last_sequence = 0
     event_ids: list[str] = []
     events_skipped = 0
     for event in events:
         turn, sequence, event_id, skipped = await _process_event(
-            db, session_id, event, current_turn, sequence_cache, existing_pairs, session
+            db, session_id, event, current_turn, sequence_cache, existing_pairs,
+            existing_source_ids, session
         )
         current_turn = max(current_turn, turn)
         if skipped:
@@ -201,6 +230,8 @@ async def _store_events_general(
         elif event_id is not None:
             event_ids.append(event_id)
             existing_pairs.add((turn, sequence))
+            if event.source_event_id:
+                existing_source_ids.add(event.source_event_id)
         last_turn = turn
         last_sequence = sequence
     await db.commit()

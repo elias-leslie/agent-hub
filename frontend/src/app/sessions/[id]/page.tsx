@@ -118,7 +118,12 @@ export default function SessionDetailPage({
             )}
             {activeTab === 'info' && (
               <section className="panel-surface animate-fade-up">
-                <SessionInfo session={session} memorySummary={memorySummary} />
+                <SessionInfo
+                  session={session}
+                  events={eventsData?.events || []}
+                  eventsTotal={eventsData?.total || 0}
+                  memorySummary={memorySummary}
+                />
               </section>
             )}
           </>

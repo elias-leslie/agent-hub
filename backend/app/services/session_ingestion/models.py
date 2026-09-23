@@ -98,6 +98,7 @@ class NormalizedEvent(BaseModel):
     role: str | None = Field(default=None, description="Message role")
     content: str | None = Field(default=None, description="Text content")
     tool_name: str | None = Field(default=None, description="Tool name")
+    call_id: str | None = Field(default=None, description="Native tool call/result correlation ID")
     tool_input: dict[str, Any] | None = Field(default=None, description="Tool input payload")
     tool_output: dict[str, Any] | None = Field(default=None, description="Tool output payload")
     tokens: int | None = Field(default=None, description="Token count")
@@ -111,6 +112,9 @@ class NormalizedEvent(BaseModel):
     message_id: str | None = Field(default=None, description="External message id for transport correlation")
     pane_id: str | None = Field(default=None, description="Work Chats pane id")
     source_client: str | None = Field(default=None, description="Logical caller identifier")
+    source_event_id: str | None = Field(default=None, max_length=255, description="Stable provider event identity")
+    source_timestamp: datetime | None = Field(default=None, description="Original provider timestamp")
+    usage: dict[str, Any] | None = Field(default=None, description="Native usage with scope and provenance")
 
 
 class AppendNormalizedEventsRequest(BaseModel):

@@ -146,18 +146,16 @@ def test_read_incremental_transcript_events_preserves_turns_and_sequences(tmp_pa
         ("user_message", 2, 1),
         ("assistant_message", 2, 2),
     ]
-    assert json.loads(first_checkpoint or "{}") == {
-        "line_offset": 2,
-        "saw_content": True,
-        "sequence": 2,
-        "turn": 1,
+    first_state = json.loads(first_checkpoint or "{}")
+    second_state = json.loads(second_checkpoint or "{}")
+    assert {key: first_state[key] for key in ("line_offset", "saw_content", "sequence", "turn")} == {
+        "line_offset": 2, "saw_content": True, "sequence": 2, "turn": 1,
     }
-    assert json.loads(second_checkpoint or "{}") == {
-        "line_offset": 6,
-        "saw_content": True,
-        "sequence": 2,
-        "turn": 2,
+    assert {key: second_state[key] for key in ("line_offset", "saw_content", "sequence", "turn")} == {
+        "line_offset": 6, "saw_content": True, "sequence": 2, "turn": 2,
     }
+    assert first_state["byte_offset"] < second_state["byte_offset"]
+    assert first_state["inode"] == second_state["inode"]
 
 
 @pytest.mark.unit
@@ -183,9 +181,175 @@ def test_read_incremental_transcript_events_replays_legacy_checkpoint_from_start
         ("tool_use", 1, 3),
         ("tool_result", 1, 4),
     ]
-    assert json.loads(checkpoint or "{}") == {
-        "line_offset": 4,
-        "saw_content": True,
-        "sequence": 4,
-        "turn": 1,
+    state = json.loads(checkpoint or "{}")
+    assert {key: state[key] for key in ("line_offset", "saw_content", "sequence", "turn")} == {
+        "line_offset": 4, "saw_content": True, "sequence": 4, "turn": 1,
     }
+
+
+@pytest.mark.unit
+def test_codex_custom_call_result_and_response_usage_keep_source_evidence(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    records = [
+        {"type": "response_item", "timestamp": "2026-09-23T15:00:00Z", "ordinal": 1,
+         "payload": {"type": "custom_tool_call", "id": "item-call", "call_id": "call-7",
+                     "name": "functions.exec", "input": "{\"cmd\":\"pwd\"}"}},
+        {"type": "response_item", "timestamp": "2026-09-23T15:00:01Z", "ordinal": 2,
+         "payload": {"type": "custom_tool_call_output", "id": "item-result", "call_id": "call-7",
+                     "output": [{"type": "input_text", "text": "done"}, {"type": "image", "data": "opaque"}]}},
+        {"type": "token_usage_record", "timestamp": "2026-09-23T15:00:02Z", "ordinal": 3,
+         "payload": {"response_id": "resp-7", "turn_id": "turn-1", "root_turn_id": "root-1",
+                     "usage": {"input_tokens": 100, "cached_input_tokens": 60,
+                               "cache_write_input_tokens": 0, "output_tokens": 20},
+                     "turn_token_usage": {"input_tokens": 100, "output_tokens": 20},
+                     "thread_token_usage": {"input_tokens": 100, "output_tokens": 20}}},
+        {"type": "event_msg", "timestamp": "2026-09-23T15:00:03Z", "ordinal": 4,
+         "payload": {"type": "token_count", "info": {
+             "last_token_usage": {"input_tokens": 100, "output_tokens": 20},
+             "total_token_usage": {"input_tokens": 100, "output_tokens": 20}}}},
+    ]
+    transcript.write_text("\n".join(json.dumps(record) for record in records[:1]) + "\n")
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    with transcript.open("a") as output:
+        output.write("\n".join(json.dumps(record) for record in records[1:]) + "\n")
+    second, next_checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+    replay, replay_checkpoint = read_incremental_transcript_events(str(transcript), next_checkpoint)
+
+    assert [event.event_type for event in first + second] == [
+        "tool_use", "tool_result", "usage", "usage_counter", "usage_counter", "usage_counter"
+    ]
+    assert first[0].tool_input == {"cmd": "pwd", "call_id": "call-7"}
+    assert first[0].call_id == second[0].call_id == "call-7"
+    assert second[0].tool_output == {"output": "done", "opaque_blocks": 1, "call_id": "call-7"}
+    assert first[0].source_event_id == "response_item:item-call:1"
+    assert second[0].source_event_id == "response_item:item-result:1"
+    assert second[1].source_event_id == "response_usage:resp-7:1"
+    assert second[1].source_timestamp is not None
+    assert second[1].source_timestamp.isoformat() == "2026-09-23T15:00:02+00:00"
+    assert second[1].usage == {
+        "scope": "response", "source": "codex.token_usage_record.usage",
+        "input_tokens": 100, "cached_input_tokens": 60, "cache_write_input_tokens": 0,
+        "output_tokens": 20, "response_id": "resp-7", "turn_id": "turn-1", "root_turn_id": "root-1",
+    }
+    assert all(event.usage and event.usage["scope"] != "response" for event in second[2:])
+    assert replay == []
+    assert replay_checkpoint == next_checkpoint
+
+
+@pytest.mark.unit
+def test_incremental_reader_waits_for_complete_line_and_survives_rotation(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    first_line = json.dumps({"type": "response_item", "ordinal": 1, "payload": {
+        "type": "message", "role": "user", "content": [{"type": "input_text", "text": "first"}]}})
+    second_line = json.dumps({"type": "response_item", "ordinal": 2, "payload": {
+        "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "second"}]}})
+    transcript.write_text(first_line + "\n" + second_line[:35])
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    assert [event.content for event in first] == ["first"]
+    with transcript.open("a") as output:
+        output.write(second_line[35:] + "\n")
+    second, checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+    assert [event.content for event in second] == ["second"]
+    assert second[0].sequence == 2
+
+    transcript.rename(tmp_path / "native.old.jsonl")
+    transcript.write_text(first_line.replace("first", "new turn") + "\n")
+    rotated, checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+    assert [event.content for event in rotated] == ["new turn"]
+    assert rotated[0].turn == 2
+    assert rotated[0].source_event_id != first[0].source_event_id
+
+    transcript.write_text(second_line + "\n")  # in-place truncation
+    truncated, _ = read_incremental_transcript_events(str(transcript), checkpoint)
+    assert [event.content for event in truncated] == ["second"]
+
+
+@pytest.mark.unit
+def test_rewritten_same_inode_and_ordinal_has_distinct_source_identity(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    def record(content: str) -> str:
+        return json.dumps({"type": "response_item", "ordinal": 1, "payload": {
+            "type": "message", "role": "assistant",
+            "content": [{"type": "output_text", "text": content}],
+        }}) + "\n"
+
+    transcript.write_text(record("original long content"))
+    original, checkpoint = read_incremental_transcript_events(str(transcript))
+    transcript.write_text(record("replacement"))
+    replacement, _ = read_incremental_transcript_events(str(transcript), checkpoint)
+
+    assert [event.content for event in replacement] == ["replacement"]
+    assert original[0].source_event_id != replacement[0].source_event_id
+
+
+@pytest.mark.unit
+def test_legacy_json_checkpoint_keeps_existing_sequence_when_usage_precedes_it(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    records = [
+        {"type": "response_item", "payload": {"type": "message", "role": "user",
+         "content": [{"type": "input_text", "text": "before"}]}},
+        {"type": "token_usage_record", "payload": {"response_id": "old",
+         "usage": {"input_tokens": 10, "output_tokens": 2}}},
+        {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+         "content": [{"type": "output_text", "text": "after"}]}},
+    ]
+    transcript.write_text("\n".join(json.dumps(record) for record in records) + "\n")
+    old_checkpoint = json.dumps({"line_offset": 2, "turn": 1, "sequence": 1, "saw_content": True})
+
+    events, checkpoint = read_incremental_transcript_events(str(transcript), old_checkpoint)
+
+    assert [(event.content, event.sequence) for event in events] == [("after", 2)]
+    assert json.loads(checkpoint or "{}")["byte_offset"] > 0
+
+
+@pytest.mark.unit
+def test_legacy_json_checkpoint_resets_state_after_truncation(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "response_item", "ordinal": 1,
+        "payload": {"type": "message", "role": "user",
+                    "content": [{"type": "input_text", "text": "replacement file"}]},
+    }) + "\n")
+    old_checkpoint = json.dumps({
+        "line_offset": 8, "turn": 5, "sequence": 9, "saw_content": True,
+        "history_start_ordinal": 100, "parent_thread_id": "old-parent",
+    })
+
+    events, checkpoint = read_incremental_transcript_events(str(transcript), old_checkpoint)
+
+    assert [(event.content, event.turn, event.sequence) for event in events] == [
+        ("replacement file", 1, 1)
+    ]
+    state = json.loads(checkpoint or "{}")
+    assert state["line_offset"] == 1
+    assert state["history_start_ordinal"] is None
+    assert state["parent_thread_id"] is None
+
+
+@pytest.mark.unit
+def test_child_transcript_excludes_inherited_usage_and_keeps_parent_provenance(tmp_path: Path) -> None:
+    transcript = tmp_path / "child.jsonl"
+    records = [
+        {"type": "session_meta", "ordinal": 0, "payload": {
+            "parent_thread_id": "parent-thread", "subagent_history_start_ordinal": 3}},
+        {"type": "token_usage_record", "ordinal": 1, "payload": {
+            "response_id": "inherited", "usage": {"input_tokens": 500}}},
+        {"type": "response_item", "ordinal": 2, "payload": {"type": "message", "role": "assistant",
+            "content": [{"type": "output_text", "text": "inherited answer"}]}},
+        {"type": "token_usage_record", "ordinal": 3, "payload": {
+            "response_id": "own", "usage": {"input_tokens": 100, "output_tokens": 5}}},
+    ]
+    transcript.write_text("\n".join(json.dumps(record) for record in records[:3]) + "\n")
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    with transcript.open("a") as output:
+        output.write(json.dumps(records[3]) + "\n")
+    second, checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+
+    assert first == []
+    assert [event.event_type for event in second] == ["usage"]
+    assert second[0].usage == {
+        "scope": "response", "source": "codex.token_usage_record.usage",
+        "input_tokens": 100, "output_tokens": 5,
+        "response_id": "own", "parent_thread_id": "parent-thread",
+    }
+    assert json.loads(checkpoint or "{}")["history_start_ordinal"] == 3
