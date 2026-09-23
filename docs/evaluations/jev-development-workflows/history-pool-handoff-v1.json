@@ -1,0 +1,21 @@
+{
+  "kind": "isolated_advisory_related_history",
+  "incoming": "The same task is polled again and again during each heartbeat",
+  "component_id": "ah.sessions",
+  "feedback_type": "friction",
+  "suggestions": [
+    {
+      "feedback_id": "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130",
+      "title": "Same task checked 15+ times in heartbeat loop — no dedup/cooldown on repeated status checks",
+      "observed_status": "open",
+      "verified_with": "st feedback get 91a82f4c-a12e-4d8e-a08d-bc4ff7dda130",
+      "why_relevant": "Both records report repeated status checks of the same task during heartbeat.",
+      "uncertainty": "The records do not establish a shared incident, root cause, fix attempt, or resolution."
+    }
+  ],
+  "source_snapshot": "history-pool-snapshot-v1.json",
+  "jev_receipt": "live-receipts-v3/history_pool.json",
+  "applied_to_feedback_database": false,
+  "existing_duplicate_candidates_modified": false,
+  "votes_or_status_changed": false
+}

@@ -1,13 +1,13 @@
 {
   "schema": "jev-development-live-results-v1",
-  "kind": "14 live Jev requests plus isolated downstream actions",
+  "kind": "15 live Jev requests plus isolated downstream actions",
   "model": "jev-1.13.0",
-  "provider_calls": 14,
+  "provider_calls": 15,
   "provider_usage": {
-    "input_tokens": 44423,
-    "output_tokens": 2108,
-    "accounted_api_cost_usd": "0.001865766",
-    "sum_http_elapsed_seconds": 4.195,
+    "input_tokens": 54246,
+    "output_tokens": 3097,
+    "accounted_api_cost_usd": "0.002278332",
+    "sum_http_elapsed_seconds": 4.628,
     "subscription_usage": null,
     "account_balance": null
   },
@@ -18,7 +18,8 @@
       "observed": "partial",
       "registered_reference": [
         "contradicted"
-      ]
+      ],
+      "adjudication": "reference_invalid_incomplete_packet_and_overlapping_criteria"
     },
     {
       "packet": "claim_narration",
@@ -26,10 +27,19 @@
       "observed": "partial",
       "registered_reference": [
         "contradicted"
-      ]
+      ],
+      "adjudication": "reference_invalid_incomplete_packet_and_overlapping_criteria"
     }
   ],
   "adjudication": "Both v1 budget disagreements arose from omitted transport evidence and overlapping criteria; not proven Jev false negatives. V2 was a corrected repeat, not fresh holdout.",
+  "opportunity_classification": {
+    "claim_evidence": "promising advisory judgment; completed-work benefit unmeasured",
+    "skill_discovery": "correct curated-shortlist selection; full-catalog benefit unmeasured",
+    "search_reranking": "correct controlled candidate selection; natural ranking-miss benefit unmeasured",
+    "repeated_issues": "complete 17-record pool recovered one independently labeled concern with no false same-concern links; known-case extension, handoff savings unmeasured",
+    "workflow_variant": "source-grounded core agreement; discrimination and substitute-evaluator benefit unmeasured",
+    "model_effort_routing": "chosen eligible worker completed task; efficiency unmeasured"
+  },
   "cases": {
     "claim_evidence": {
       "claim_initial": {
@@ -43,7 +53,8 @@
         "choices": {
           "budget": {
             "choice": "partial",
-            "accepted": false,
+            "registered_match": false,
+            "adjudication": "reference_invalid_incomplete_packet_and_overlapping_criteria",
             "confidence": 0.35,
             "probabilities": {
               "not_demonstrated": 0.41,
@@ -54,7 +65,8 @@
           },
           "runs": {
             "choice": "supported",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.76,
             "probabilities": {
               "not_demonstrated": 0.14,
@@ -65,7 +77,8 @@
           },
           "general": {
             "choice": "partial",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.75,
             "probabilities": {
               "not_demonstrated": 0.17,
@@ -76,7 +89,8 @@
           },
           "ui": {
             "choice": "not_demonstrated",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.6,
             "probabilities": {
               "not_demonstrated": 0.7,
@@ -98,7 +112,8 @@
         "choices": {
           "budget": {
             "choice": "partial",
-            "accepted": false,
+            "registered_match": false,
+            "adjudication": "reference_invalid_incomplete_packet_and_overlapping_criteria",
             "confidence": 0.38,
             "probabilities": {
               "partial": 0.54,
@@ -109,7 +124,8 @@
           },
           "runs": {
             "choice": "supported",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.85,
             "probabilities": {
               "partial": 0.03,
@@ -120,7 +136,8 @@
           },
           "general": {
             "choice": "partial",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.77,
             "probabilities": {
               "partial": 0.83,
@@ -131,7 +148,8 @@
           },
           "ui": {
             "choice": "not_demonstrated",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.66,
             "probabilities": {
               "partial": 0.1,
@@ -153,7 +171,8 @@
         "choices": {
           "budget": {
             "choice": "contradicted",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.71,
             "probabilities": {
               "contradicted": 0.79,
@@ -177,7 +196,8 @@
         "choices": {
           "seam": {
             "choice": "codebase_design",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "st_tools": 0.0,
@@ -189,7 +209,8 @@
           },
           "svg": {
             "choice": "none_fits",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "product_copy": 0.0,
@@ -201,7 +222,8 @@
           },
           "purchase": {
             "choice": "none_fits",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "codebase_design": 0.0,
@@ -224,7 +246,8 @@
         "choices": {
           "seam": {
             "choice": "codebase_design",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "codebase_design": 1.0,
@@ -236,7 +259,8 @@
           },
           "svg": {
             "choice": "none_fits",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.99,
             "probabilities": {
               "codebase_design": 0.0,
@@ -248,7 +272,8 @@
           },
           "purchase": {
             "choice": "none_fits",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "product_copy": 0.0,
@@ -273,7 +298,8 @@
         "choices": {
           "natural": {
             "choice": "first_result",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "answer_absent": 0.0,
@@ -283,7 +309,8 @@
           },
           "mixed": {
             "choice": "answer_absent",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.35,
             "probabilities": {
               "answer_absent": 0.5599999999999999,
@@ -293,7 +320,8 @@
           },
           "absent": {
             "choice": "answer_absent",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.99,
             "probabilities": {
               "answer_absent": 1.0,
@@ -314,7 +342,8 @@
         "choices": {
           "natural": {
             "choice": "other_result",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.88,
             "probabilities": {
               "other_result": 0.93,
@@ -324,7 +353,8 @@
           },
           "mixed": {
             "choice": "answer_absent",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.34,
             "probabilities": {
               "other_result": 0.02,
@@ -334,7 +364,8 @@
           },
           "absent": {
             "choice": "answer_absent",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.98,
             "probabilities": {
               "other_result": 0.0,
@@ -355,7 +386,8 @@
         "choices": {
           "natural": {
             "choice": "r19",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.94,
             "probabilities": {
               "r10": 0.0,
@@ -383,7 +415,8 @@
           },
           "mixed": {
             "choice": "r00",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.98,
             "probabilities": {
               "r07": 0.0,
@@ -400,7 +433,8 @@
           },
           "absent": {
             "choice": "none",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.88,
             "probabilities": {
               "r00": 0.06,
@@ -409,7 +443,8 @@
           },
           "mixed_coverage": {
             "choice": "partial",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.97,
             "probabilities": {
               "partial": 0.98,
@@ -432,7 +467,8 @@
         "choices": {
           "paraphrase": {
             "choice": "same_concern",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.86,
             "probabilities": {
               "same_concern": 0.9,
@@ -442,7 +478,8 @@
           },
           "provider_outage": {
             "choice": "related_distinct",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.77,
             "probabilities": {
               "same_concern": 0.01,
@@ -463,7 +500,8 @@
         "choices": {
           "identical_error": {
             "choice": "related_distinct",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.78,
             "probabilities": {
               "insufficient_evidence": 0.13,
@@ -486,7 +524,8 @@
         "choices": {
           "core": {
             "choice": "both_adequate",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.68,
             "probabilities": {
               "first_only": 0.14,
@@ -509,7 +548,8 @@
         "choices": {
           "core": {
             "choice": "both_adequate",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.59,
             "probabilities": {
               "both_adequate": 0.67,
@@ -534,7 +574,8 @@
         "choices": {
           "count": {
             "choice": "deterministic_code",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.64,
             "probabilities": {
               "deterministic_code": 0.71,
@@ -546,7 +587,8 @@
           },
           "inspect": {
             "choice": "sol_medium",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.4,
             "probabilities": {
               "luna_low": 0.07,
@@ -558,7 +600,8 @@
           },
           "missing": {
             "choice": "retrieve_context",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "luna_low": 0.0,
@@ -581,7 +624,8 @@
         "choices": {
           "count": {
             "choice": "deterministic_code",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.45,
             "probabilities": {
               "retrieve_context": 0.17,
@@ -593,7 +637,8 @@
           },
           "inspect": {
             "choice": "sol_medium",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 0.44,
             "probabilities": {
               "astra_high": 0.2,
@@ -605,7 +650,8 @@
           },
           "missing": {
             "choice": "retrieve_context",
-            "accepted": true,
+            "registered_match": true,
+            "adjudication": "registered_agreement",
             "confidence": 1.0,
             "probabilities": {
               "astra_high": 0.0,
@@ -618,6 +664,55 @@
         }
       }
     }
+  },
+  "history_pool_extension": {
+    "kind": "known-case complete-candidate-pool extension; not fresh validation",
+    "candidate_count": 17,
+    "snapshot_captured_at_utc": "2026-09-23T14:17:46.651968+00:00",
+    "lexical_duplicate_ids": [],
+    "independent_same_concern_ids": [
+      "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130"
+    ],
+    "jev_same_concern_ids": [
+      "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130"
+    ],
+    "missed_same_concern_ids": [],
+    "false_same_concern_ids": [],
+    "related_distinct_overcalls_against_reference": [
+      "b4ff039f-cd7d-455e-9c46-07a5ab27409c",
+      "d85f509c-dfae-44d5-baf7-1722f4b6fc09",
+      "b43194c9-8a55-46cd-85ff-4e2cd8b5e82c",
+      "bb32c103-8919-4a75-89de-f2b1e9ea0d08",
+      "364ec3f8-2c5b-4a9d-8dc0-0c7f7ee61baf",
+      "0b838b76-e1ad-4017-9684-e93510877e41",
+      "b8c57470-d317-46dd-baa8-77bd4872ef53",
+      "57d1e349-be29-4b67-b3bc-cf7799ffa803",
+      "c63256d6-cb43-4c72-9bf1-212cf0a15a9f"
+    ],
+    "all_choices": {
+      "b4ff039f-cd7d-455e-9c46-07a5ab27409c": "related_distinct",
+      "d85f509c-dfae-44d5-baf7-1722f4b6fc09": "related_distinct",
+      "8ba1dd33-cdff-475b-8a30-0373aeb2638e": "related_distinct",
+      "7d0f6697-d758-408c-8385-f58f40208a7d": "related_distinct",
+      "b43194c9-8a55-46cd-85ff-4e2cd8b5e82c": "related_distinct",
+      "5f616831-b9cf-41b2-bb22-06ecf175de56": "related_distinct",
+      "d4f5cdc0-c362-4753-8f84-93c66cfaea8c": "related_distinct",
+      "bb32c103-8919-4a75-89de-f2b1e9ea0d08": "related_distinct",
+      "37e76404-781f-433a-8e6a-9aa1cf1eaf38": "related_distinct",
+      "91a82f4c-a12e-4d8e-a08d-bc4ff7dda130": "same_concern",
+      "364ec3f8-2c5b-4a9d-8dc0-0c7f7ee61baf": "related_distinct",
+      "0b838b76-e1ad-4017-9684-e93510877e41": "related_distinct",
+      "917acb86-a2e0-4a35-ad1b-19fd85ffab7f": "related_distinct",
+      "b8c57470-d317-46dd-baa8-77bd4872ef53": "related_distinct",
+      "57d1e349-be29-4b67-b3bc-cf7799ffa803": "related_distinct",
+      "c63256d6-cb43-4c72-9bf1-212cf0a15a9f": "related_distinct",
+      "d3758f0e-4b85-43dd-b259-e7a0ec7cb1a0": "related_distinct"
+    },
+    "input_tokens": 9823,
+    "output_tokens": 989,
+    "cost_usd": "0.000412566",
+    "provider_elapsed_seconds": 0.43289273000118556,
+    "verified_advisory_handoff": "history-pool-handoff-v1.json"
   },
   "downstream": {
     "claim_evidence": {
@@ -714,6 +809,7 @@
   "deduplication": {
     "v1_claim_replay": "reused local receipt; zero new provider calls",
     "v2_search_replay": "reused local receipt; zero new provider calls",
+    "v3_history_pool_replay": "reused local receipt; zero new provider calls",
     "changed_evidence_or_rubric": "new v2 IDs and manifest; two fresh calls"
   },
   "neri_ledger_after_direct_calls": {
