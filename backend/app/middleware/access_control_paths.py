@@ -49,6 +49,7 @@ AUTH_BYPASS_PREFIXES = (
 # Path prefixes that require INTERNAL header (dashboard-only, not public)
 # These bypass full auth but require X-Agent-Hub-Internal header
 INTERNAL_ONLY_PREFIXES = (
+    "/api/automations",  # Canonical automation administration and owner receipts
     "/api/admin",  # Admin dashboard endpoints
     "/api/access-control",  # Access control management
     "/api/runtime-context",  # Runtime prompt/memory injection controls

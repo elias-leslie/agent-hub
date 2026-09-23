@@ -19,6 +19,7 @@ from st_sdk.runtime import describe_app
 
 EXPECTED_NAMESPACES = {
     "agents",
+    "automations",
     "complete",
     "feedback",
     "mandates",

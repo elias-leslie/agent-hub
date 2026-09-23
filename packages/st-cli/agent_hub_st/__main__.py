@@ -10,6 +10,7 @@ import typer
 from st_sdk.runtime import run_app
 
 from .agents import app as agents_app
+from .automations import app as automations_app
 from .complete import app as complete_app
 from .feedback import app as feedback_app
 from .mandates import mandates
@@ -29,6 +30,7 @@ def _leaf_app(name: str, callback: Any) -> typer.Typer:
 
 OWNED_APPS: dict[str, typer.Typer] = {
     "agents": agents_app,
+    "automations": automations_app,
     "complete": complete_app,
     "feedback": feedback_app,
     "mandates": _leaf_app("mandates", mandates),
@@ -57,4 +59,3 @@ def main(args: Sequence[str] | None = None) -> Any:
 
 if __name__ == "__main__":
     main()
-

@@ -23,7 +23,10 @@ from app.services.agent_model_reconciliation_service import (
 from app.services.credential_manager import get_credential_manager
 from app.services.env_credential_service import load_env_credentials_into_cache
 from app.services.events import stop_all_stream_bridges
-from app.services.first_party_client_service import reconcile_first_party_clients
+from app.services.first_party_client_service import (
+    reconcile_first_party_clients,
+    seed_automation_owner_clients,
+)
 from app.services.memory.scope_normalization import normalize_legacy_scope_rows
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.model_catalog_service import refresh_runtime_model_catalog
@@ -131,6 +134,19 @@ async def _startup() -> None:
             logger.info("First-party client registrations already aligned")
     except Exception as e:
         logger.warning("Failed first-party client reconciliation at startup: %s", e)
+
+    try:
+        from app.services.automations import import_agent_hub_legacy
+
+        async with async_session() as db:
+            owners = await seed_automation_owner_clients(db)
+            await import_agent_hub_legacy(db)
+            await db.commit()
+        if owners:
+            logger.info("Seeded %d automation owner client(s)", len(owners))
+        logger.info("Automation registry and legacy settings imported")
+    except Exception as e:
+        logger.warning("Failed automation registry import at startup: %s", e)
 
     try:
         async with async_session() as db:

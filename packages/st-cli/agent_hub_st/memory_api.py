@@ -9,7 +9,7 @@ from typing import Any, cast
 import httpx
 import typer
 from st_sdk.config import get_agent_hub_url
-from st_sdk.credentials import load_credentials
+from st_sdk.credentials import load_credentials, load_internal_service_secret
 from st_sdk.output import output_error
 
 from ._http_errors import raise_connect_error, raise_timeout_error
@@ -92,6 +92,7 @@ def agent_hub_request(
     scope: str = "global",
     scope_id: str | None = None,
     tool_name: str = "st memory",
+    internal: bool = False,
     retries: int = 1,
     read_timeout_seconds: float = _HTTP_TIMEOUT_READ,
 ) -> dict[str, Any]:
@@ -103,6 +104,8 @@ def agent_hub_request(
         "X-Source-Client": "st-cli",
         "X-Tool-Name": tool_name,
     }
+    if internal:
+        headers["X-Agent-Hub-Internal"] = load_internal_service_secret()
     if scope != "global":
         headers["X-Memory-Scope"] = scope
     if scope_id:

@@ -13,6 +13,7 @@ from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
+from app.workflows.scheduled import EmptyInput
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class ModelSyncResult(BaseModel):
 
 @hatchet.task(
     name="model-enrichment-sync",
-    input_validator=BaseModel,
+    input_validator=EmptyInput,
     on_crons=["0 6 * * *"],
     execution_timeout="120s",
     retries=1,
@@ -36,7 +37,7 @@ class ModelSyncResult(BaseModel):
         limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
     ),
 )
-async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+async def model_enrichment_sync_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     """Daily model enrichment sync.
 
     Fetches external benchmark and pricing data, enriches catalog models,
@@ -44,7 +45,7 @@ async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str
     """
     from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
-    if not await is_workflow_schedule_enabled("model_enrichment_sync"):
+    if not await is_workflow_schedule_enabled("model_enrichment_sync", automation_run_id=input.automation_run_id):
         ctx.log("Model enrichment sync skipped (schedule disabled)")
         return ModelSyncResult(status="disabled").model_dump()
 

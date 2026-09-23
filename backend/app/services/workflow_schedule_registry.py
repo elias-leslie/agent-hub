@@ -185,8 +185,30 @@ async def describe_workflow_schedule(
 async def is_workflow_schedule_enabled(
     schedule_id: str,
     db: AsyncSession | None = None,
+    *,
+    automation_run_id: str | None = None,
 ) -> bool:
     """Return whether a static cron workflow is enabled."""
+    if db is None:
+        async with async_session() as session:
+            return await is_workflow_schedule_enabled(
+                schedule_id, session, automation_run_id=automation_run_id
+            )
+    # The profile row is the durable one-clock fence. Old Hatchet cron ticks
+    # carry no run ID, while central dispatches carry an admitted run ID.
+    from app.models import AutomationProfile, AutomationRun
+
+    profile = (await db.execute(select(AutomationProfile).where(
+        AutomationProfile.source_ref == f"static:{schedule_id}"
+    ))).scalar_one_or_none()
+    if automation_run_id and profile is not None:
+        run = await db.get(AutomationRun, automation_run_id)
+        if run and run.profile_id == profile.id and run.status in {
+            "admitted", "dispatching", "accepted", "running"
+        } and (profile.clock_owner == "central" or run.trigger == "manual"):
+            return True
+    if profile is not None and profile.clock_owner == "central":
+        return False
     return bool((await describe_workflow_schedule(schedule_id, db))["enabled"])
 
 
@@ -217,6 +239,13 @@ async def set_workflow_schedule_enabled(
 
     control.enabled = enabled
     control.updated_by = updated_by
+    from app.models import AutomationProfile
+
+    profile = (await db.execute(select(AutomationProfile).where(
+        AutomationProfile.source_ref == f"static:{schedule_id}"
+    ))).scalar_one_or_none()
+    if profile is not None and profile.clock_owner == "legacy":
+        profile.enabled = enabled
     await db.flush()
     await db.refresh(control)
     return _to_state(definition, control)

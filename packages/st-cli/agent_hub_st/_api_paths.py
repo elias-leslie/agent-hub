@@ -54,3 +54,10 @@ COMPLETE_PATH = "/api/complete"
 
 # ── Admin ────────────────────────────────────────────────────────────
 ACCESS_CONTROL_METRICS_PATH = "/api/access-control/metrics"
+
+# ── Automations ──────────────────────────────────────────────────────
+AUTOMATIONS_BASE_PATH = "/api/automations"
+AUTOMATIONS_REGISTRY_PATH = f"{AUTOMATIONS_BASE_PATH}/registry"
+AUTOMATIONS_PROFILES_PATH = f"{AUTOMATIONS_BASE_PATH}/profiles"
+AUTOMATIONS_RUNS_PATH = f"{AUTOMATIONS_BASE_PATH}/runs"
+AUTOMATIONS_POLICY_PATH = f"{AUTOMATIONS_BASE_PATH}/projects/{{project_id}}/policy"

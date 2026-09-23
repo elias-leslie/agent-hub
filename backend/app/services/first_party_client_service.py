@@ -181,3 +181,29 @@ async def reconcile_first_party_clients(db: AsyncSession) -> list[str]:
             invalidate_client_cache(client_id)
 
     return changed_client_ids
+
+
+async def seed_automation_owner_clients(db: AsyncSession) -> list[str]:
+    """Insert missing owner identities without changing existing registrations."""
+    specs = (
+        (settings.portfolio_client_id, "portfolio-ai"),
+        (settings.jobinator_client_id, "jobinator-4000"),
+        (settings.neri_client_id, "neri"),
+    )
+    inserted: list[str] = []
+    for client_id, project_id in specs:
+        if not client_id or await db.get(Client, client_id) is not None:
+            continue
+        db.add(Client(
+            id=client_id,
+            display_name=project_id,
+            client_type="service",
+            status="active",
+            allowed_projects=json.dumps([project_id]),
+            rate_limit_rpm=60,
+            rate_limit_tpm=100000,
+        ))
+        inserted.append(project_id)
+    if inserted:
+        await db.commit()
+    return inserted

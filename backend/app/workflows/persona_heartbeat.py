@@ -65,6 +65,7 @@ __all__ = [
 
 
 class HeartbeatInput(BaseModel):
+    automation_run_id: str | None = None
     manual: bool = False
     target_project_id: str | None = None
     heartbeat_session_id: str | None = None
@@ -104,7 +105,7 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
     target_project_id = input.target_project_id
     execution_project = target_project_id or HEARTBEAT_PROJECT
 
-    if not manual and not await is_workflow_schedule_enabled("persona_heartbeat"):
+    if not manual and not await is_workflow_schedule_enabled("persona_heartbeat", automation_run_id=input.automation_run_id):
         await record_heartbeat_skip("schedule_disabled")
         ctx.log("Heartbeat skipped (schedule disabled)")
         return HeartbeatResult(status="skipped", error="schedule_disabled").model_dump()

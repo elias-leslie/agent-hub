@@ -19,6 +19,13 @@ from .agent_benchmark import (
     AgentRegressionCluster,
 )
 from .agent_performance_log import AgentPerformanceLog
+from .automation import (
+    AutomationDefinition,
+    AutomationProfile,
+    AutomationProfileRevision,
+    AutomationProjectPolicy,
+    AutomationRun,
+)
 from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
@@ -67,6 +74,11 @@ __all__ = [
     "AgentPrompt",
     "AgentRegressionCluster",
     "AgentVersion",
+    "AutomationDefinition",
+    "AutomationProfile",
+    "AutomationProfileRevision",
+    "AutomationProjectPolicy",
+    "AutomationRun",
     "Base",
     "Client",
     "ClientControl",

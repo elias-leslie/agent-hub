@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     agent_hub_telegram_client_id: str = "agent-hub-telegram-bot"
     summitflow_client_id: str = ""
     portfolio_client_id: str = ""
+    jobinator_client_id: str = "ea338be9-55b1-4aa6-921e-6493014f6f8e"
+    neri_client_id: str = "5de295c8-c426-447f-a6f9-7cb522df5fbc"
     monkey_fight_client_id: str = ""
     hermes_client_id: str = "hermes"
     hermes_request_source: str = "hermes-cli"

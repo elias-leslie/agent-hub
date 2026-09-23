@@ -464,6 +464,7 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
     from sqlalchemy import select
 
     from app.db import async_session
+    from app.models import AutomationProfile
     from app.models.persona_scheduled_job import PersonaScheduledJob
     from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
@@ -483,6 +484,13 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
             )
         )
         jobs = result.scalars().all()
+        central_refs = set((await db.execute(
+            select(AutomationProfile.source_ref).where(
+                AutomationProfile.clock_owner == "central",
+                AutomationProfile.source_ref.like("persona:%"),
+            )
+        )).scalars().all())
+        jobs = [job for job in jobs if f"persona:{job.id}" not in central_refs]
 
         if not jobs:
             return SchedulerResult(status="idle").model_dump()

@@ -40,6 +40,7 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
             "id": str(client.id),
             "status": client.status,
             "display_name": client.display_name,
+            "client_type": client.client_type,
             "rate_limit_rpm": client.rate_limit_rpm,
             "rate_limit_tpm": client.rate_limit_tpm,
             "allowed_projects": client.allowed_projects,

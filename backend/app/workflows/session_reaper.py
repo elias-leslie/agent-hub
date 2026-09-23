@@ -13,6 +13,7 @@ from hatchet_sdk import Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
+from app.workflows.scheduled import EmptyInput
 
 logger = logging.getLogger(__name__)
 
@@ -118,18 +119,18 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
 
 @hatchet.task(
     name="session-reaper",
-    input_validator=BaseModel,
+    input_validator=EmptyInput,
     on_crons=["*/30 * * * *"],
     execution_timeout="30s",
 )
-async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+async def session_reaper_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     """Close sessions stuck in 'active' state."""
     from datetime import UTC, datetime
 
     from app.db import async_session
     from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
-    if not await is_workflow_schedule_enabled("session_reaper"):
+    if not await is_workflow_schedule_enabled("session_reaper", automation_run_id=input.automation_run_id):
         ctx.log("Session reaper skipped (schedule disabled)")
         return ReaperResult(status="disabled").model_dump()
 

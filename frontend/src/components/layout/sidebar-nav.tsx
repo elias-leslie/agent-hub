@@ -3,6 +3,7 @@ import {
   Bot,
   Brain,
   BrainCircuit,
+  CalendarClock,
   Cpu,
   History,
   LayoutDashboard,
@@ -39,6 +40,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     description: 'Overview & status',
+  },
+  {
+    href: '/automations',
+    label: 'Automations',
+    icon: CalendarClock,
+    description: 'Schedules, policy & runs',
   },
   {
     href: '/monitoring/requests',
