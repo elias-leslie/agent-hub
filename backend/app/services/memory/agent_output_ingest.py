@@ -119,6 +119,9 @@ async def extract_agent_output_candidates(
     extractor_agent_slug: str = DEFAULT_EXTRACTOR_AGENT,
 ) -> list[AgentOutputMemoryCandidate]:
     """Use the dedicated memory-curator agent to extract atomic candidates."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     from app.api.complete.core import complete_internal
     from app.db import async_session
     from app.services.agent_routing import get_provider_for_model

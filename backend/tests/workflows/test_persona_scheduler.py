@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -155,129 +154,10 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_execute_memory_review_clamps_scheduled_batch_limit_and_repairs_findings():
-    from app.services.memory.review_agent import DEFAULT_BATCH_LIMIT
-    from app.workflows.persona_scheduler import _execute_memory_review
+async def test_memory_review_payload_is_unavailable_without_provider_call():
+    from app.workflows.persona_scheduler import execute_job
 
-    class FakeAsyncSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def commit(self):
-            return None
-
-    job = SimpleNamespace(
-        payload_message=json.dumps(
-            {
-                "batch_limit": DEFAULT_BATCH_LIMIT + 10,
-                "cadence_days": 45,
-                "reviewer_agent_slug": "memory-curator",
-            }
-        )
-    )
-    review_result = SimpleNamespace(
-        status="completed",
-        reviewed_count=1,
-        needs_action_count=1,
-        reviewed_uuids=["memory-1"],
-        failed_count=0,
-        reviewer_agent_slug="memory-curator",
-        reviewer_model_id="codex/gpt-5.4",
-        run_id="run-1",
-        session_id="sess-1",
-    )
-
-    with (
-        patch("app.db.async_session", return_value=FakeAsyncSession()),
-        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(return_value={"reviewed_count": 0, "status": "completed"})) as maintenance,
-        patch(
-            "app.services.memory.review_agent.run_memory_review_batch",
-            new=AsyncMock(return_value=review_result),
-        ) as mock_review,
-    ):
-        result = await _execute_memory_review(job)
-
-    assert "Memory review completed" in result.output
-    mock_review.assert_awaited_once()
-    await_args = mock_review.await_args
-    assert await_args is not None
-    assert await_args.kwargs["batch_limit"] == DEFAULT_BATCH_LIMIT
-    assert maintenance.await_count == 2
-    assert maintenance.await_args is not None
-    assert maintenance.await_args.kwargs["followup_source_ids"] == ["memory-1"]
-
-
-@pytest.mark.asyncio
-async def test_execute_memory_review_exposes_persisted_batch_failure():
-    from app.workflows.persona_scheduler import _execute_memory_review
-
-    commits = []
-
-    class FakeAsyncSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def commit(self):
-            commits.append("committed")
-
-    review_result = SimpleNamespace(
-        status="failed", reviewed_count=0, needs_action_count=0,
-        reviewed_uuids=[], failed_count=7, reviewer_agent_slug="memory-curator",
-        reviewer_model_id=None, run_id="review-run-1", session_id=None,
-        errors=["Rate limit exceeded for codex"],
-    )
-    with (
-        patch("app.db.async_session", return_value=FakeAsyncSession()),
-        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(
-            return_value={"reviewed_count": 0, "status": "completed"},
-        )),
-        patch("app.services.memory.review_agent.run_memory_review_batch", new=AsyncMock(
-            return_value=review_result,
-        )),
-        pytest.raises(RuntimeError, match=r"review-run-1.*Rate limit exceeded"),
-    ):
-        await _execute_memory_review(SimpleNamespace(payload_message="{}"))
-
-    assert commits == ["committed"]
-
-
-@pytest.mark.asyncio
-async def test_execute_memory_review_marks_blocked_batch_skipped():
-    from app.workflows.persona_scheduler import _execute_memory_review
-
-    class FakeAsyncSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def commit(self):
-            return None
-
-    review_result = SimpleNamespace(
-        status="blocked", reviewed_count=0, needs_action_count=0,
-        reviewed_uuids=[], failed_count=0, reviewer_agent_slug="memory-curator",
-        reviewer_model_id=None, run_id="review-run-2", session_id=None,
-        errors=["Earlier batch is still in progress"],
-    )
-    with (
-        patch("app.db.async_session", return_value=FakeAsyncSession()),
-        patch("app.services.context_maintenance_worker.run_context_maintenance", new=AsyncMock(
-            return_value={"reviewed_count": 0, "status": "completed"},
-        )),
-        patch("app.services.memory.review_agent.run_memory_review_batch", new=AsyncMock(
-            return_value=review_result,
-        )),
-    ):
-        result = await _execute_memory_review(SimpleNamespace(payload_message="{}"))
-
-    assert result.output.startswith("Skipped: memory review blocked")
-    assert "review-run-2" in result.output
-    assert "Earlier batch is still in progress" in result.output
+    with patch("app.services.memory.review_agent.run_memory_review_batch", new=AsyncMock()) as review:
+        result = await execute_job(SimpleNamespace(payload_type="memory_review"))
+    assert result.output == "Unavailable: Memory Curator execution is retired."
+    review.assert_not_awaited()

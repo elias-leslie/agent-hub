@@ -34,7 +34,7 @@ AGENT_EXPORT_FIELDS = [
     "is_coding_agent", "memory_config", "max_concurrency",
 ]
 
-DEACTIVATE_SLUGS = ["auditor"]
+DEACTIVATE_SLUGS = ["auditor", "memory-curator"]
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 
 PROMPT_EXPORT_FIELDS = [

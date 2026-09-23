@@ -10,7 +10,7 @@ from app.models import AutomationProfile
 
 logger = logging.getLogger(__name__)
 
-_VALID_PAYLOAD_TYPES = frozenset({"agent_turn", "push", "self_honing", "memory_review"})
+_VALID_PAYLOAD_TYPES = frozenset({"agent_turn", "push", "self_honing"})
 _PERSONA_WORKFLOW_KEY = "agent-hub.persona_job"
 _AUTOMATIONS_URL = "/automations?project_id=agent-hub"
 
@@ -30,7 +30,7 @@ async def schedule_job(
     if payload_type not in _VALID_PAYLOAD_TYPES:
         return (
             f"Error: Invalid payload_type '{payload_type}'. "
-            "Must be agent_turn/push/self_honing/memory_review."
+            "Must be agent_turn/push/self_honing. Memory Curator schedules are retired."
         )
 
     try:

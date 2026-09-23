@@ -143,48 +143,13 @@ async def prepare_review(db: AsyncSession, request: ContextReviewRequest) -> dic
 
 async def run_review(db: AsyncSession, request: ContextReviewRequest, actor: str, *,
                      claims: dict[str, tuple[str | None, int]] | None = None) -> dict[str, Any]:
+    if request.mode != "deterministic":
+        from app.services.curator_retirement import curator_unavailable
+
+        curator_unavailable()
     prepared = await prepare_review(db, request)
-    if request.mode == "jev":
-        from app.services.context_screening import screen_pairs
-        return await screen_pairs(db, prepared, request, actor)
     if request.dry_run:
         return prepared
-    if request.mode == "curator" and prepared["sources"]:
-        from app.services.memory._review_agent_call import _call_reviewer_agent
-        prepared["reviewer_identity"] = await context_review_identity(db)
-        prompt = REVIEW_INSTRUCTION + "\nSchema: " + json.dumps(ReviewResponse.model_json_schema()) + "\nEvidence: " + json.dumps(prepared)
-        try:
-            content, model, session_id = await _call_reviewer_agent(db, reviewer_agent_slug="memory-curator", prompt=prompt,
-                response_schema=ReviewResponse.model_json_schema())
-            prepared["reviewer"] = {"agent_slug": "memory-curator", "model": model, "session_id": session_id}
-        except Exception as exc:
-            await db.rollback()
-            prepared["failure"] = f"Curator unavailable ({type(exc).__name__}). No source changes were made; inspect the provider status before requesting another review."
-            prepared["evidence_hash"] = semantic_hash(prepared["sources"])
-            prepared["review_id"] = await record(db, "context_review", actor, prepared)
-            await db.commit()
-            return prepared
-        try:
-            body = content.strip()
-            if body.startswith("```"):
-                body = "\n".join(body.splitlines()[1:-1])
-            findings = [ReviewFinding.model_validate(f) for f in json.loads(body)["findings"]]
-            sources = {s["source_id"]: s for s in prepared["sources"]}
-            for finding in findings:
-                if set(finding.source_ids) - sources.keys():
-                    raise ValueError("Reviewer cited a source outside supplied evidence")
-                if set(finding.passages) != set(finding.source_ids):
-                    raise ValueError("Reviewer must quote each cited source")
-                for edit in finding.proposed_edits:
-                    if edit.source_id not in finding.source_ids or edit.expected_revision != sources[edit.source_id]["revision"]:
-                        raise ValueError("Proposed edit must name the exact reviewed source revision")
-                for key, passage in finding.passages.items():
-                    if not passage or not any(passage in (sources[key].get(field) or "") for field in ("content", "summary", "compact_content")):
-                        raise ValueError("Reviewer passage does not match immutable evidence")
-            prepared["findings"].extend(f.model_dump() for f in findings)
-        except (ValueError, KeyError, TypeError) as exc:
-            prepared["failure"] = str(exc)
-            prepared["unvalidated_response"] = content
     if claims:
         from app.models.context_governance import ContextMaintenanceItem
         owned = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.id.in_(claims))

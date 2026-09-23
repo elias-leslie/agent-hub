@@ -352,6 +352,9 @@ async def dispatch_technical_work(
     reason: str,
 ) -> dict[str, Any]:
     """Create or replay one idempotent SummitFlow technical recovery task."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     detail = dict(item.detail or {})
     work = dict(detail.get("technical_work") or {})
     existing_status = str(work.get("status") or "")
@@ -473,6 +476,9 @@ async def dispatch_technical_work(
 
 async def reconcile_technical_work(db: AsyncSession) -> dict[str, Any]:
     """Replay lost acknowledgements and observe SummitFlow task lifecycle."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     rows = list((await db.execute(select(ContextMaintenanceItem).where(
         ContextMaintenanceItem.state.in_((*ACTIVE_STATES, "resolved", "dismissed"))
     ))).scalars())

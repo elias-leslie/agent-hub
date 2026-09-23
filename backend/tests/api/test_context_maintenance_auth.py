@@ -106,5 +106,5 @@ async def test_verify_work_route_rejects_service_without_agent_hub_project_acces
     ):
         await maintenance(_payload(), _request("secret"), db)
 
-    assert raised.value.status_code == 404
+    assert raised.value.status_code == 410
     db.rollback.assert_awaited_once()

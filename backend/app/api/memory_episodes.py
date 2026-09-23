@@ -213,25 +213,10 @@ async def memory_health(
 async def run_memory_review(
     request: MemoryReviewRunRequest,
 ) -> MemoryReviewRunResponse:
-    """Run one dedicated-agent memory review batch."""
-    from app.db import async_session
-    from app.services.memory.review_agent import run_memory_review_batch
+    """Retained route with an explicit retirement response."""
+    from app.services.curator_retirement import curator_unavailable
 
-    async with async_session() as db:
-        result = await run_memory_review_batch(
-            db=db,
-            batch_limit=request.batch_limit,
-            cadence_days=request.cadence_days,
-            reviewer_agent_slug=request.reviewer_agent_slug,
-            reviewer_model_id=request.reviewer_model_id,
-            dry_run=request.dry_run,
-            force_all=request.force_all,
-            include_archived=request.include_archived,
-            only_missing_compact=request.only_missing_compact,
-            only_incomplete_audit=request.only_incomplete_audit,
-        )
-        await db.commit()
-    return MemoryReviewRunResponse(**result.__dict__)
+    curator_unavailable()
 
 
 @router.get("/review/inventory", response_model=MemoryReviewInventoryResponse)

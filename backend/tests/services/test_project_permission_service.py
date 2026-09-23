@@ -728,7 +728,6 @@ class TestPersonaToolSets:
             "write_personality",
             "read_user_context",
             "write_user_context",
-            "review_memory_system",
         ):
             assert tool in _PERSONA_INTERNAL
 
@@ -780,15 +779,14 @@ class TestPersonaToolTierExemption:
             assert "persona-internal" in reason
 
     @pytest.mark.asyncio
-    async def test_memory_review_tool_allowed_at_read_tier(self):
+    async def test_memory_review_tool_is_not_tier_exempt(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "review_memory_system")
-            assert allowed is True
-            assert "persona-internal" in reason
+            allowed, _ = await check_tool_allowed("proj", "review_memory_system")
+            assert allowed is False
 
     @pytest.mark.asyncio
     async def test_safe_operational_tool_allowed_at_read_tier(self):

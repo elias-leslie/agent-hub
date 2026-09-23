@@ -732,105 +732,14 @@ def test_apply_decision_applies_high_confidence_summary_and_tags() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_memory_review_batch_records_proposal_without_mutating_source() -> None:
-    memory = _memory(
-        content=(
-            "Use st search before repo spelunking so agents start from canonical "
-            "repo evidence instead of broad manual file browsing."
-        )
-    )
-    execute_result = MagicMock()
-    execute_result.scalars.return_value.all.return_value = [memory]
+async def test_run_memory_review_batch_is_retired_without_database_io() -> None:
+    from fastapi import HTTPException
+
     mock_db = AsyncMock()
-    mock_db.add = MagicMock()
-    empty = MagicMock()
-    empty.scalars.return_value.all.return_value = []
-    empty.scalar_one_or_none.return_value = None
-    source_result = MagicMock()
-    source_result.scalars.return_value.all.return_value = [memory]
-    mock_db.execute.side_effect = [
-        execute_result,
-        execute_result,
-        empty,
-        empty,
-        empty,
-        empty,
-        source_result,
-    ]
-    lock_db = AsyncMock()
-    lock_result = MagicMock()
-    lock_result.scalar_one.return_value = True
-    lock_db.execute.return_value = lock_result
-    lock_context = MagicMock()
-    lock_context.__aenter__ = AsyncMock(return_value=lock_db)
-    lock_context.__aexit__ = AsyncMock(return_value=None)
-
-    with (
-        patch(
-            "app.services.memory.review_agent.collect_memory_governance_snapshot",
-            new_callable=AsyncMock,
-            return_value={"health_status": "healthy"},
-        ),
-        patch(
-            "app.services.memory.review_agent._call_reviewer_agent",
-            new_callable=AsyncMock,
-            return_value=(
-                """
-                {"reviews": [{
-                  "uuid": "11111111-1111-1111-1111-111111111111",
-                  "decision": "keep",
-                  "review_status": "clean",
-                  "confidence": 0.9,
-                  "reason": "Still useful.",
-                  "checks": {
-                    "currency": "pass",
-                    "correctness": "pass",
-                    "appropriateness": "pass",
-                    "scope_applicability": "pass",
-                    "conflict": "pass",
-                    "redundancy": "pass",
-                    "lifecycle": "pass",
-                    "authority": "pass",
-                    "token_efficiency": "pass"
-                  },
-                  "suggested_summary": "use st search",
-                  "compact_content": "Use st search before repo spelunking.",
-                  "suggested_tags": ["tooling"],
-                  "suggested_applicability": {},
-                  "sensitivity_tier": "normal"
-                }]}
-                """,
-                "codex/gpt-5.5",
-                "session-1",
-            ),
-        ),
-        patch(
-            "app.services.context_reviewer_identity.reviewer_identity",
-            new=AsyncMock(return_value="reviewer-identity"),
-        ),
-        patch(
-            "app.db.async_session",
-            return_value=lock_context,
-        ),
-        patch(
-            "app.services.context_governance.record",
-            new=AsyncMock(return_value="receipt-1"),
-        ) as recorded,
-    ):
-        result = await run_memory_review_batch(db=mock_db, batch_limit=1)
-
-    assert result.status == "completed"
-    assert result.reviewed_count == 1
-    assert memory.review_status == "pending"
-    assert memory.last_reviewed_at is None
-    assert "last_review" not in memory.metadata_
-    assert "compact_content" not in memory.metadata_
-    proposals = [call.args[3] for call in recorded.call_args_list if call.args[1] == "curator_proposal"]
-    assert len(proposals) == 1
-    assert proposals[0]["automatic_application"] is False
-    assert proposals[0]["decision"]["compact_content"] == "Use st search before repo spelunking."
-
-
+    with pytest.raises(HTTPException) as raised:
+        await run_memory_review_batch(db=mock_db, batch_limit=1)
+    assert raised.value.status_code == 410
+    mock_db.execute.assert_not_awaited()
 
 @pytest.mark.asyncio
 async def test_select_memories_due_for_review_respects_source_compact_validation() -> None:

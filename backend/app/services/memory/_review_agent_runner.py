@@ -586,6 +586,9 @@ async def _run_memory_review_batch(
     only_incomplete_audit: bool = False,
 ) -> MemoryReviewBatchResult:
     """Run one review-agent batch while the caller owns the worker lock."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     from app.services.memory import review_agent as facade
 
     memories = await _load_batch_memories(
@@ -814,6 +817,9 @@ async def run_memory_review_batch(
     only_missing_compact: bool = False,
     only_incomplete_audit: bool = False,
 ) -> MemoryReviewBatchResult:
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     """Run one review-agent batch under an isolated non-blocking DB lock."""
     from app.db import async_session
 

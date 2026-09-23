@@ -50,6 +50,9 @@ def review_context(item: ContextMaintenanceItem, assigned_slug: str | None = Non
 async def _recover_pending(db: AsyncSession, *, batch_limit: int | None = None,
                            source_ids: list[str] | None = None, review_ids: list[str] | None = None) -> list[dict[str, Any]]:
     """Apply one finite set of findings directly; revision changes retire stale siblings."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     from app.services.context_maintenance_reconcile import reconcile_maintenance
     from app.services.context_maintenance_recovery import recover_item
     from app.services.context_maintenance_tasks import dispatch_technical_work
@@ -86,6 +89,9 @@ async def _recover_pending(db: AsyncSession, *, batch_limit: int | None = None,
 
 async def run_context_maintenance(db: AsyncSession, *, batch_limit: int,
                                   followup_source_ids: list[str] | None = None) -> dict[str, Any]:
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     from app.db import async_session
     from app.services.context_maintenance_reconcile import reconcile_maintenance
     from app.services.context_review import ContextReviewRequest, prepare_review, run_review

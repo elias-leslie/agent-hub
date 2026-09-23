@@ -283,12 +283,8 @@ def test_verify_work_request_is_strict_and_requires_work_fields_at_runtime() -> 
 
 
 @pytest.mark.asyncio
-async def test_authenticated_task_project_can_verify_against_recorded_delivery_context() -> None:
+async def test_verify_work_endpoint_is_retired_for_authenticated_project() -> None:
     db = AsyncMock()
-    row = SimpleNamespace(id="item-1")
-    query_result = MagicMock()
-    query_result.scalar_one_or_none.return_value = row
-    db.execute.return_value = query_result
     request = MaintenanceRequest(
         action="verify_work",
         context=_context(),
@@ -298,19 +294,8 @@ async def test_authenticated_task_project_can_verify_against_recorded_delivery_c
         external_payload_digest="sha256:payload",
         generation=2,
     )
-    expected = {"verified": True, "verification": "canonical_generation"}
-
-    with (
-        patch(
-            "app.services.context_maintenance_actions.relevant_items",
-            new=AsyncMock(return_value=[]),
-        ),
-        patch(
-            "app.services.context_maintenance_work_product.verify_work_product",
-            new=AsyncMock(return_value=expected),
-        ) as verify,
-    ):
-        result = await handle_maintenance(
+    with pytest.raises(HTTPException) as raised:
+        await handle_maintenance(
             db,
             request,
             actor="api:sf-key",
@@ -320,15 +305,8 @@ async def test_authenticated_task_project_can_verify_against_recorded_delivery_c
             },
         )
 
-    assert result == expected
-    verify.assert_awaited_once_with(
-        db,
-        row,
-        task_id="task-1",
-        external_request_key="maintenance-1:generation-2",
-        external_payload_digest="sha256:payload",
-        generation=2,
-    )
+    assert raised.value.status_code == 410
+    db.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -356,6 +334,6 @@ async def test_unscoped_caller_cannot_cross_context_verify_work() -> None:
             caller_service_client={"id": "other", "allowed_projects": '["other"]'},
         )
 
-    assert raised.value.status_code == 404
+    assert raised.value.status_code == 410
     relevant.assert_not_awaited()
     db.execute.assert_not_awaited()

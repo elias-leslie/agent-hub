@@ -22,6 +22,10 @@ async def resolve_agent(
     routing_context: RoutingContext | None = None,
 ) -> ResolvedAgent:
     """Resolve agent slug to agent config, model, and provider. Raises 404 if not found."""
+    if slug == "memory-curator":
+        from app.services.curator_retirement import curator_unavailable
+
+        curator_unavailable()
     service = get_agent_service()
     agent = await service.get_by_slug(db, slug)
     if not agent:

@@ -19,7 +19,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render runtime context for external agentic CLIs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    maintenance = subparsers.add_parser("maintenance", help="Inspect or handle canonical context maintenance. Routine work belongs to the scheduled curator.")
+    maintenance = subparsers.add_parser("maintenance", help="Inspect retained historical context maintenance records.")
     maintenance.add_argument("--request-file", help="JSON MaintenanceRequest file; use - for stdin. Omit to list relevant items.")
     maintenance.add_argument("--project")
     maintenance.add_argument("--surface", default="codex")

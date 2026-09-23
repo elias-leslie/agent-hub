@@ -29,7 +29,6 @@ from app.services.tools._persona_tools import (
     READ_PERSONALITY_TOOL,
     READ_USER_CONTEXT_TOOL,
     REVIEW_AGENT_PERFORMANCE_TOOL,
-    REVIEW_MEMORY_SYSTEM_TOOL,
     SCHEDULE_JOB_TOOL,
     SEARCH_PERSONA_HISTORY_TOOL,
     STEER_CONSULTATION_TOOL,
@@ -86,7 +85,6 @@ __all__ = [
     "READ_PERSONALITY_TOOL",
     "READ_USER_CONTEXT_TOOL",
     "REVIEW_AGENT_PERFORMANCE_TOOL",
-    "REVIEW_MEMORY_SYSTEM_TOOL",
     "SCHEDULE_JOB_TOOL",
     "SEARCH_PERSONA_HISTORY_TOOL",
     "SEARCH_SCRATCH_CONTEXT_TOOL",
@@ -116,10 +114,6 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     ],
     "governance-auditor": [
         *STANDARD_TOOLS,
-    ],
-    "memory-curator": [
-        *STANDARD_TOOLS,
-        REVIEW_MEMORY_SYSTEM_TOOL,
     ],
     # Vantage's research studio agent: read-only web research surface plus
     # three mode-recommendation tools. Excludes bash/edit/write — see

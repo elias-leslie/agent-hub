@@ -195,6 +195,8 @@ async def live_owner_gate_reasons(db: AsyncSession, profile: AutomationProfile) 
         if permission and permission.permission_tier == "off":
             reasons.append("project_permission_off")
     elif profile.workflow_key == "agent-hub.persona_job":
+        if (profile.config or {}).get("payload_type") == "memory_review":
+            reasons.append("memory_curator_retired")
         if (profile.config or {}).get("payload_type") == "agent_turn" and permission and permission.permission_tier == "off":
             reasons.append("project_permission_off")
     return reasons
@@ -254,6 +256,8 @@ def validate_profile_payload(payload: dict, definition: AutomationDefinition | N
     data["config"] = data.get("config") or {}
     if not isinstance(data["config"], dict):
         raise AutomationValidationError("config must be an object")
+    if data.get("workflow_key") == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review" and data.get("enabled"):
+        raise AutomationValidationError("Memory Curator schedules are retired")
     if definition is not None:
         if (
             data.get("project_id") != definition.owner_project_id
@@ -361,6 +365,8 @@ async def create_profile(db: AsyncSession, payload: dict, *, changed_by: str | N
     definition = await get_definition(db, payload["workflow_key"])
     reject_persona_runtime_config_write(definition.workflow_key, payload)
     data = validate_profile_payload(payload, definition)
+    if definition.workflow_key == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review":
+        raise AutomationValidationError("Memory Curator schedules are retired")
     now = datetime.now(UTC)
     ensure_future_one_time(data, now)
     if definition.workflow_key.startswith("agent-hub.") and definition.dispatch_target != "persona_job":
@@ -424,6 +430,8 @@ async def update_profile(
     reject_persona_runtime_config_write(definition.workflow_key, payload)
     full = {**profile_snapshot(profile), **payload}
     data = validate_profile_payload(full, definition)
+    if definition.workflow_key == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review" and data.get("enabled"):
+        raise AutomationValidationError("Memory Curator schedules are retired")
     for key in ("subject_id", "label", "schedule_type", "schedule_value", "schedule_timezone", "config", "enabled"):
         if key in payload:
             setattr(profile, key, (data[key] or definition.label) if key == "label" else data[key])
@@ -675,6 +683,9 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
     for job in jobs:
         source = f"persona:{job.id}"
         profile = existing.get(source)
+        retired_review = job.payload_type == "memory_review" or (
+            profile is not None and (profile.config or {}).get("payload_type") == "memory_review"
+        )
         if profile is None:
             profile = AutomationProfile(
                 id=str(uuid4()), project_id="agent-hub", subject_id=f"persona:{job.persona_id}",
@@ -683,16 +694,16 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 schedule_timezone=job.schedule_timezone, config={
                     "payload_type": job.payload_type, "payload_message": job.payload_message,
                     "payload_title": job.payload_title, "delivery": job.delivery,
-                }, enabled=job.enabled, clock_owner="legacy", owner_gate_reasons=[],
-                source_ref=source, next_run_at=job.next_run_at, last_run_at=job.last_run_at,
+                }, enabled=job.enabled and not retired_review, clock_owner="legacy", owner_gate_reasons=[],
+                source_ref=source, next_run_at=None if retired_review else job.next_run_at, last_run_at=job.last_run_at,
                 run_count=job.run_count, max_runs=job.max_runs, revision=1,
             )
             db.add(profile)
             await db.flush()
             await _record_revision(db, profile, "legacy-import")
         elif profile.clock_owner == "legacy":
-            profile.enabled = job.enabled
-            profile.next_run_at = job.next_run_at
+            profile.enabled = job.enabled and not retired_review
+            profile.next_run_at = None if retired_review else job.next_run_at
             profile.last_run_at = job.last_run_at
             profile.run_count = job.run_count
             profile.max_runs = job.max_runs

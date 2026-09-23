@@ -39,11 +39,11 @@ SCHEDULE_JOB_TOOL = Tool(
             },
             "payload_type": {
                 "type": "string",
-                "enum": ["agent_turn", "push", "self_honing", "memory_review"],
+                "enum": ["agent_turn", "push", "self_honing"],
                 "description": (
                     "agent_turn=run as agent, push=send notification, "
                     "self_honing=run the persona's scheduled self-honing loop, "
-                    "memory_review=run one dedicated memory-curator review batch"
+                    "Memory review scheduling is retired"
                 ),
                 "default": "agent_turn",
             },

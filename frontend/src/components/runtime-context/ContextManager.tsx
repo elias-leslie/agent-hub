@@ -16,7 +16,6 @@ import {
   type SourceEdit,
 } from '@/lib/api/context-management'
 import { fetchProjectCatalog } from '@/lib/api/project-permissions'
-import { getModels } from '@/lib/models'
 import { ContextInspector } from './ContextInspector'
 import styles from './context-manager.module.css'
 import { MaintenancePanel } from './MaintenancePanel'
@@ -55,10 +54,6 @@ export function ContextManager() {
   const [showRendered, setShowRendered] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
   const [review, setReview] = useState<ContextReview | null>(null)
-  const [reviewMode, setReviewMode] = useState<
-    'deterministic' | 'curator' | 'jev'
-  >('deterministic')
-  const [reviewModel, setReviewModel] = useState('')
   const [reason, setReason] = useState('Operator context edit')
   const [nativeText, setNativeText] = useState('')
   const [proposalId, setProposalId] = useState<string | undefined>()
@@ -66,14 +61,6 @@ export function ContextManager() {
   const [bulkTarget, setBulkTarget] = useState('')
   const [bulkActivation, setBulkActivation] =
     useState<ContextPolicy['activation']>('always')
-  const models = useQuery({
-    queryKey: ['context-typed-models'],
-    queryFn: getModels,
-  })
-  const typedModels = (models.data ?? []).filter(
-    (model) => model.capabilities.supports_typed_judgment,
-  )
-  const effectiveReviewModel = reviewModel || typedModels[0]?.id || ''
   const projects = useQuery({
     queryKey: ['context-projects'],
     queryFn: fetchProjectCatalog,
@@ -245,7 +232,7 @@ export function ContextManager() {
                 sources.find((source) => sourceKey(source) === key)?.source_id,
             )
             .filter(Boolean),
-          mode: reviewMode,
+          mode: 'deterministic',
           dry_run: dryRun,
           native_snapshots: nativeText
             ? [
@@ -257,7 +244,6 @@ export function ContextManager() {
                 },
               ]
             : [],
-          model_id: effectiveReviewModel || null,
         }),
       )
     })
@@ -837,39 +823,6 @@ export function ContextManager() {
           Lexical candidate selection can miss indirect conflicts.
         </p>
         <div className={styles.toolbar}>
-          <label>
-            Method
-            <select
-              value={reviewMode}
-              onChange={(event) => {
-                setReviewMode(event.target.value as typeof reviewMode)
-                setReview(null)
-              }}
-            >
-              <option value="deterministic">Deterministic checks</option>
-              <option value="curator">Curator semantic review</option>
-              <option value="jev">Experimental Jev screening</option>
-            </select>
-          </label>
-          {reviewMode === 'jev' && (
-            <label>
-              Catalog model
-              <select
-                value={effectiveReviewModel}
-                onChange={(event) => {
-                  setReviewModel(event.target.value)
-                  setReview(null)
-                }}
-              >
-                <option value="">Select a typed model</option>
-                {typedModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <button
             type="button"
             disabled={busy || changes > 0}
@@ -877,15 +830,6 @@ export function ContextManager() {
           >
             Check and estimate
           </button>
-          {reviewMode !== 'deterministic' && (
-            <button
-              type="button"
-              disabled={busy || changes > 0 || !review}
-              onClick={() => void reviewContext(false)}
-            >
-              Run requested review
-            </button>
-          )}
         </div>
         {changes > 0 && (
           <p>

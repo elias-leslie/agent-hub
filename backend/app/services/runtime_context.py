@@ -759,46 +759,6 @@ async def build_canonical_context_delivery(
         blocks = _build_canonical_blocks(selection, continuity)
         maintenance_text = ""
         maintenance_attention = {}
-        try:
-            from app.services.context_maintenance import attention_summary
-            maintenance_transaction = await db.begin_nested()
-            try:
-                maintenance_attention = await attention_summary(db, effective_request)
-                await maintenance_transaction.commit()
-            except Exception:
-                await maintenance_transaction.rollback()
-                raise
-            if maintenance_attention["new_relevant"]:
-                from shlex import quote
-                command = "agent-hub-context maintenance --surface " + quote(effective_request.consumer_surface)
-                if effective_request.project_id:
-                    command += " --project " + quote(effective_request.project_id)
-                if effective_request.session_id:
-                    command += " --session " + quote(effective_request.session_id)
-                for flag, value in (("--profile", effective_request.consumer_profile), ("--agent-slug", effective_request.agent_slug), ("--task-type", effective_request.task_type), ("--phase", effective_request.phase)):
-                    if value:
-                        command += " " + flag + " " + quote(value)
-                for workflow in effective_request.workflow_ids:
-                    command += " --workflow " + quote(workflow)
-                for tag in effective_request.consumer_tags:
-                    command += " --consumer-tag " + quote(tag)
-                entrypoint = (f"Shell: `{command}`; actions: `agent-hub-context maintenance --schema`. "
-                    if "bash" in effective_request.capabilities else
-                    "Use the available canonical maintenance capability: internal `review_memory_system` action `maintenance`, or registered MCP `context_maintenance`. ")
-                maintenance_text = (
-                    f"## Context maintenance handoff\n{maintenance_attention['new_relevant']} relevant handoff(s) or owner decision(s) need attention. "
-                    "Routine maintenance is handled by the background Memory Curator. "
-                    + entrypoint + "\n"
-                )
-                blocks.append(CanonicalContextBlock(order=len(blocks), block_id="context-maintenance", kind="context_maintenance",
-                    authority="computed_context_status", required=False, title="Context maintenance handoff", content=maintenance_text,
-                    estimated_tokens=count_tokens(maintenance_text), provenance=CanonicalContextProvenance(source_type="computed",
-                        source_id="context-maintenance", source_revision="sha256:" + _sha256_text(maintenance_text), origin="canonical_maintenance_queue",
-                        reason="scoped handoff or unreported owner decision; previews do not acknowledge")))
-            selection.component_diagnostics.append(CanonicalComponentDiagnostic(component="context_maintenance",
-                state="included" if maintenance_text else "inapplicable", reason="actionable_handoff" if maintenance_text else "background_owned_or_acknowledged"))
-        except Exception:
-            selection.component_diagnostics.append(CanonicalComponentDiagnostic(component="context_maintenance", state="unavailable", reason="maintenance_status_unavailable"))
         core_rendered = _render_blocks(ordered_runtime_blocks)
         rendered = "\n".join(
             chunk

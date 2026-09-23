@@ -239,6 +239,10 @@ async def create_agent(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentResponse:
     """Create a new agent."""
+    if request.slug == "memory-curator":
+        from app.services.curator_retirement import curator_unavailable
+
+        curator_unavailable()
     service = get_agent_service()
 
     existing = await service.get_by_slug(db, request.slug)
@@ -269,6 +273,10 @@ async def update_agent(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentResponse:
     """Update an existing agent."""
+    if slug == "memory-curator" and request.is_active:
+        from app.services.curator_retirement import curator_unavailable
+
+        curator_unavailable()
     service = get_agent_service()
 
     agent = await _require_agent(db, slug, active_only=False)

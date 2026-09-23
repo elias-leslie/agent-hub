@@ -159,6 +159,7 @@ export interface ContextMaintenanceHealth {
     | 'needs_attention'
     | 'awaiting_owner'
     | 'unverified'
+    | 'retired'
   scope: 'system'
   active_counts: Record<string, number>
   unresolved_failures: number

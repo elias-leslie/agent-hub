@@ -53,6 +53,9 @@ def screening_identity(a: dict[str, Any], b: dict[str, Any], context: dict[str, 
 
 
 async def screen_pairs(db: AsyncSession, prepared: dict[str, Any], request: ContextReviewRequest, actor: str) -> dict[str, Any]:
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     model = await db.get(ModelCatalogEntry, request.model_id) if request.model_id else None
     if model is None or not model.is_active or (model.provider != "typesafe" or not model.supports_typed_judgment):
         return {**prepared, "screening_status": "unavailable", "reason": "Select an active TypeSafe model from the canonical catalog. Deterministic and curator review remain available.", "qualified_for_default": False}

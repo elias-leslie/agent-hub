@@ -22,7 +22,6 @@ from app.services.context_governance import (
 )
 from app.services.context_maintenance import (
     ACTIVE_STATES,
-    acknowledge,
     attention_summary,
     claimant,
     item_snapshot,
@@ -118,15 +117,10 @@ async def handle_maintenance(
     operator: bool = False,
     caller_service_client: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if request.action == "reconcile":
-        from app.services.context_maintenance_reconcile import reconcile_maintenance
-        result = await reconcile_maintenance(db, actor=actor)
-        await db.commit()
-        return result
-    if request.action == "acknowledge":
-        result = await acknowledge(db, request.context, request.versions)
-        await db.commit()
-        return result
+    if request.action not in {"list", "inspect"}:
+        from app.services.curator_retirement import curator_unavailable
+
+        curator_unavailable()
     if request.action == "verify_work":
         authorized = (
             caller_service_client is not None
@@ -154,15 +148,13 @@ async def handle_maintenance(
 
     visible = await relevant_items(db, request.context, include_closed=request.include_closed or request.action == "inspect")
     if request.action == "list":
-        from app.models.prompt import Prompt
         from app.services.context_maintenance_health import maintenance_health
-        guidance = (await db.execute(select(Prompt.content).where(Prompt.slug == "context-maintenance-workflow", Prompt.enabled.is_(True)))).scalar_one_or_none()
         listed = [row for row in visible if request.include_background or request.include_closed or request.context.agent_slug == "memory-curator"
             or row.detail.get("handoff_needed") or row.state == "waiting_owner" or (row.claim_session and row.claim_session == request.context.session_id)]
         return {"items": [item_snapshot(row, details=False) for row in listed], "background_items": len(visible) - len(listed),
                 "attention": await attention_summary(db, request.context),
                 "health": await maintenance_health(db),
-                "guidance": guidance, "guidance_source": "prompt:context-maintenance-workflow" if guidance else None}
+                "guidance": None, "guidance_source": None}
     visible_ids = {row.id for row in visible}
     if request.item_id not in visible_ids:
         raise HTTPException(404, "Maintenance item is not applicable to this context")

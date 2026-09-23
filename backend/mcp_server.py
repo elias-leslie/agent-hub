@@ -90,15 +90,11 @@ async def get_memory_context() -> str:
 
 @mcp.tool()
 async def context_maintenance(request: dict | None = None) -> dict:
-    """Inspect or act on the canonical maintenance queue using MaintenanceRequest.
+    """Inspect retained historical maintenance items using MaintenanceRequest.
 
 Omit request to retrieve the exact action schema on demand.
 Use action=list with context={consumer_surface:'mcp', project_id, session_id}.
-Inspect exact evidence and claim before work. Routine work is handled by the
-scheduled curator; raise only necessary decisions with a recommendation.
-Reported owner answers must quote a real conversation, never an inference.
-Use action=inspect for evidence, acknowledge with exact item versions after
-reading, and release claims at handoff. No source changes follow from a label.
+Only list and inspect remain available. Context edits use manual management.
 """
     from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
     if request is None:

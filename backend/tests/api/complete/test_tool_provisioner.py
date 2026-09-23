@@ -111,7 +111,7 @@ def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
     ]
 
 
-def test_memory_curator_full_tier_exposes_workspace_tools_and_memory_review() -> None:
+def test_memory_curator_full_tier_has_no_review_launch_tool() -> None:
     result = provision_standard_tools(
         True,
         None,
@@ -125,5 +125,4 @@ def test_memory_curator_full_tier_exposes_workspace_tools_and_memory_review() ->
         "read_file",
         "edit_file",
         "write_file",
-        "review_memory_system",
     ]

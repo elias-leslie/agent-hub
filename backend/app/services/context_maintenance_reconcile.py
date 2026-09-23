@@ -28,7 +28,10 @@ from app.services.memory.budget import count_tokens
 
 
 async def reconcile_maintenance(db: AsyncSession, *, actor: str = "system:context-maintenance", repair: bool = True) -> dict[str, Any]:
-    """No model calls, source rewrites, arbitrary age limits, or repeated paid retries."""
+    """Retained historical entry point; automatic maintenance is retired."""
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     records = (await db.execute(select(ContextRecord).where(ContextRecord.kind.in_(REVIEW_KINDS),
         ~select(ContextMaintenanceIngest.record_id).where(ContextMaintenanceIngest.record_id == ContextRecord.id).exists())
         .order_by(ContextRecord.created_at, ContextRecord.id))).scalars()

@@ -20,176 +20,66 @@ export function MaintenancePanel({
   sources: ContextSource[]
   onSelect: (source: ContextSource) => void
 }) {
-  const [sessionId] = useState(() => `context-ui-${crypto.randomUUID()}`)
   const [selected, setSelected] = useState<string | null>(null)
-  const [reason, setReason] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const selection = { ...context, session_id: sessionId }
   const queue = useQuery({
-    queryKey: ['context-maintenance', context],
+    queryKey: ['context-maintenance-history', context],
     queryFn: () =>
       contextRequest<ContextMaintenanceView>('/maintenance', {
         action: 'list',
-        context: selection,
+        context,
         include_closed: true,
+        include_background: true,
       }),
   })
   const inspection = useQuery({
-    queryKey: ['context-maintenance-item', context, selected, queue.data],
+    queryKey: ['context-maintenance-history-item', context, selected],
     enabled: Boolean(selected),
     queryFn: () =>
       contextRequest<{ item: ContextMaintenanceItem }>('/maintenance', {
         action: 'inspect',
         item_id: selected,
-        context: selection,
+        context,
       }),
   })
   const items = queue.data?.items ?? []
-  const health = queue.data?.health
-  const decisions = items.filter((item) => item.state === 'waiting_owner')
-  const handoffs = items.filter(
-    (item) => item.state === 'pending' && item.handoff_needed,
-  )
   const active = inspection.data?.item
-  async function act(action: 'answer' | 'dismiss' | 'recover' | 'resume') {
-    if (!active || !reason.trim()) return
-    setBusy(true)
-    setError(null)
-    try {
-      await contextRequest('/maintenance', {
-        action,
-        item_id: active.id,
-        expected_version: active.version,
-        context: selection,
-        reason,
-        evidence: `Operator entered this ${action} in Runtime Context at ${new Date().toISOString()}`,
-      })
-      setReason('')
-      await queue.refetch()
-      await inspection.refetch()
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Maintenance update failed',
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
-  function select(item: ContextMaintenanceItem) {
-    setSelected(item.id)
-    setReason('')
-    setError(null)
-  }
-  const healthLabel = {
-    healthy: 'Maintenance is healthy.',
-    working: 'Maintenance is working in the background.',
-    needs_attention: 'Maintenance has unresolved issues.',
-    awaiting_owner: 'Maintenance is waiting for your decision.',
-    unverified: 'Maintenance status is unverified.',
-  } as const
-  const formatTime = (value: string | null) =>
-    value
-      ? new Intl.DateTimeFormat(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }).format(new Date(value))
-      : 'Not recorded'
   return (
-    <section
-      className={styles.review}
-      aria-label="Background context maintenance"
-    >
+    <section className={styles.review} aria-label="Context review history">
       <div className={styles.actions}>
-        <h2>Background maintenance</h2>
+        <h2>Review history</h2>
         <button
           type="button"
           disabled={queue.isFetching}
           onClick={() => void queue.refetch()}
         >
-          Refresh activity
+          Refresh history
         </button>
       </div>
       <p>
-        The Memory Curator reviews changed context and handles routine upkeep.
-        Relevant agents receive work that needs investigation. Only questions
-        that need your judgment appear as decisions.
+        Automatic context maintenance is retired. Historical findings remain
+        available for inspection.
       </p>
-      {health && (
-        <div aria-label="Maintenance health">
-          <p>
-            <strong>{healthLabel[health.state]}</strong>
-          </p>
-          <p>
-            Last successful review:{' '}
-            {formatTime(health.last_successful_review_at)}
-            {' · '}
-            {health.schedule_enabled
-              ? `Next scheduled run: ${formatTime(health.next_run_at)}`
-              : 'Automatic maintenance is not scheduled.'}
-          </p>
-          <p>
-            {health.unresolved_failures} unresolved failures ·{' '}
-            {health.technical_work} agent repair tasks (
-            {health.technical_blocked} blocked) ·{' '}
-            {health.active_counts.waiting_owner ?? decisions.length} owner
-            decisions
-          </p>
-        </div>
-      )}
       {queue.isPending ? (
-        <p>Loading maintenance activity…</p>
+        <p>Loading review history…</p>
       ) : queue.error ? (
         <p role="alert" className={styles.error}>
-          Maintenance activity is unavailable: {queue.error.message}
+          {queue.error.message}
         </p>
       ) : (
-        <p>
-          {decisions.length} owner decisions · {handoffs.length} curator
-          follow-ups ·{' '}
-          {
-            items.filter(
-              (item) =>
-                ['pending', 'claimed'].includes(item.state) &&
-                !item.handoff_needed,
-            ).length
-          }{' '}
-          background items
-        </p>
+        <details>
+          <summary>Historical findings ({items.length})</summary>
+          {items.length === 0 && <p>No recorded findings in this context.</p>}
+          {items.map((item) => (
+            <article key={item.id} className={styles.finding}>
+              <small>{item.state.replaceAll('_', ' ')}</small>
+              <p>{item.summary}</p>
+              <button type="button" onClick={() => setSelected(item.id)}>
+                Inspect evidence
+              </button>
+            </article>
+          ))}
+        </details>
       )}
-      {decisions.map((item) => (
-        <article key={item.id} className={styles.finding}>
-          <h3>{item.decision.question}</h3>
-          <p>{item.decision.recommendation}</p>
-          <button type="button" onClick={() => select(item)}>
-            Respond
-          </button>
-        </article>
-      ))}
-      <details>
-        <summary>Activity and review history ({items.length})</summary>
-        {items.length === 0 && <p>No maintenance findings in this context.</p>}
-        {items.map((item) => (
-          <article key={item.id} className={styles.finding}>
-            <small>
-              {item.state.replaceAll('_', ' ')} ·{' '}
-              {item.technical_work
-                ? `Agent repair task${item.technical_work.status ? ` · ${item.technical_work.status.replaceAll('_', ' ')}` : ''}`
-                : item.claim_owner
-                  ? 'Claimed by an agent'
-                  : item.handoff_needed
-                    ? 'Queued for curator follow-up'
-                    : item.state === 'pending'
-                      ? 'Background review'
-                      : 'Recorded activity'}
-            </small>
-            <p>{item.summary}</p>
-            <button type="button" onClick={() => select(item)}>
-              Inspect evidence
-            </button>
-          </article>
-        ))}
-      </details>
       {selected && inspection.isPending && <p>Loading evidence…</p>}
       {inspection.error && (
         <p role="alert" className={styles.error}>
@@ -204,9 +94,6 @@ export function MaintenancePanel({
             <p>Uncertainty: {active.detail.finding.uncertainty}</p>
           )}
           {active.detail?.failure && <p>{active.detail.failure}</p>}
-          {active.detail?.background_reason && (
-            <p>{active.detail.background_reason}</p>
-          )}
           {Object.entries(active.detail?.finding?.passages ?? {}).map(
             ([key, passage]) => (
               <blockquote key={key}>{passage}</blockquote>
@@ -225,79 +112,6 @@ export function MaintenancePanel({
                 </button>
               ))}
           </div>
-          {active.decision.answer && (
-            <p>Your recorded answer: {active.decision.answer}</p>
-          )}
-          {['pending', 'claimed', 'waiting_owner', 'deferred'].includes(
-            active.state,
-          ) && (
-            <>
-              <label>
-                {active.state === 'waiting_owner'
-                  ? 'Your answer'
-                  : 'Reason for changing this item'}
-                <textarea
-                  rows={3}
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                />
-              </label>
-              {active.state === 'waiting_owner' && (
-                <div className={styles.actions}>
-                  {active.decision.options?.map((option) => (
-                    <button
-                      type="button"
-                      key={option}
-                      onClick={() => setReason(option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className={styles.actions}>
-                {active.state === 'waiting_owner' && (
-                  <button
-                    type="button"
-                    disabled={busy || !reason.trim()}
-                    onClick={() => void act('answer')}
-                  >
-                    Save answer for the agent
-                  </button>
-                )}
-                {active.claim_owner && (
-                  <button
-                    type="button"
-                    disabled={busy || !reason.trim()}
-                    onClick={() => void act('recover')}
-                  >
-                    Release an abandoned claim
-                  </button>
-                )}
-                {active.state === 'deferred' && (
-                  <button
-                    type="button"
-                    disabled={busy || !reason.trim()}
-                    onClick={() => void act('resume')}
-                  >
-                    Resume review
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={busy || !reason.trim()}
-                  onClick={() => void act('dismiss')}
-                >
-                  Dismiss after assessment
-                </button>
-              </div>
-            </>
-          )}
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
           <button type="button" onClick={() => setSelected(null)}>
             Close evidence
           </button>

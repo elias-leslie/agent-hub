@@ -81,6 +81,9 @@ RECOVERY_INSTRUCTION = (
 
 async def recover_item(db: AsyncSession, item: ContextMaintenanceItem,
                        context: CanonicalContextDeliveryRequest) -> dict[str, Any]:
+    from app.services.curator_retirement import curator_unavailable
+
+    curator_unavailable()
     from app.services.context_maintenance_tasks import dispatch_technical_work
     from app.services.context_reviewer_identity import reviewer_identity
     from app.services.memory._review_agent_call import _call_reviewer_agent

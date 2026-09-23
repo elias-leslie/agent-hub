@@ -296,87 +296,19 @@ def _parse_memory_review_payload(payload_message: str) -> dict[str, Any]:
 
 
 async def _execute_memory_review(job: Any) -> JobExecutionResult:
-    """Execute one rolling memory-review batch."""
-    from app.db import async_session
-    from app.services.memory.review_agent import (
-        DEFAULT_BATCH_LIMIT,
-        DEFAULT_REVIEW_CADENCE_DAYS,
-        DEFAULT_REVIEWER_AGENT,
-        run_memory_review_batch,
-    )
+    """Retained private entry point for a retired payload type."""
+    from app.services.curator_retirement import curator_unavailable
 
-    payload = _parse_memory_review_payload(job.payload_message or "")
-    batch_limit = max(1, min(int(payload.get("batch_limit") or DEFAULT_BATCH_LIMIT), DEFAULT_BATCH_LIMIT))
-    cadence_days = int(payload.get("cadence_days") or DEFAULT_REVIEW_CADENCE_DAYS)
-    reviewer_agent_slug = str(payload.get("reviewer_agent_slug") or DEFAULT_REVIEWER_AGENT)
-    reviewer_model_id = payload.get("reviewer_model_id")
-    reviewer_model_id = str(reviewer_model_id) if reviewer_model_id else None
-    dry_run = bool(payload.get("dry_run") or False)
-    force_all = bool(payload.get("force_all") or False)
-    include_archived = bool(payload.get("include_archived") or False)
-    only_missing_compact = bool(payload.get("only_missing_compact") or False)
-    only_incomplete_audit = bool(payload.get("only_incomplete_audit") or False)
-
-    async with async_session() as db:
-        from app.services.context_maintenance_worker import run_context_maintenance
-        maintenance: dict[str, Any] = await run_context_maintenance(db, batch_limit=batch_limit) if not dry_run else {"reviewed_count": 0, "status": "dry_run"}
-        remaining = batch_limit - maintenance.get("processed_count", maintenance["reviewed_count"])
-        result = await run_memory_review_batch(
-            db=db,
-            batch_limit=remaining,
-            cadence_days=cadence_days,
-            reviewer_agent_slug=reviewer_agent_slug,
-            reviewer_model_id=reviewer_model_id,
-            dry_run=dry_run,
-            force_all=force_all,
-            include_archived=include_archived,
-            only_missing_compact=only_missing_compact,
-            only_incomplete_audit=only_incomplete_audit,
-        ) if remaining > 0 else None
-        await db.commit()
-        if not dry_run and result and result.needs_action_count and result.reviewed_uuids:
-            # Finish the selected batch's corrections in this run, using the
-            # existing source revisions/change history. Do not defer proposals
-            # until the next scheduled review or create routine repair tasks.
-            maintenance = await run_context_maintenance(
-                db, batch_limit=batch_limit, followup_source_ids=result.reviewed_uuids,
-            )
-            await db.commit()
-
-    if result is None:
-        return JobExecutionResult(output=f"Context maintenance {maintenance['status']}: reviewed={maintenance['reviewed_count']}; rolling memory review continues next scheduled batch.")
-
-    if result.status == "failed":
-        reason = "; ".join(result.errors) or f"{result.failed_count} item(s) failed"
-        raise RuntimeError(f"Memory review {result.run_id or 'n/a'} failed: {reason}")
-    if result.status == "blocked":
-        reason = "; ".join(result.errors) or "review batch blocked"
-        return JobExecutionResult(
-            output=f"Skipped: memory review blocked (run={result.run_id or 'n/a'}): {reason}",
-            session_id=result.session_id,
-        )
-
-    return JobExecutionResult(
-        output=(
-            "Memory review "
-            f"{result.status}: reviewed={result.reviewed_count} "
-            f"needs_action={result.needs_action_count} failed={result.failed_count} "
-            f"reviewer={result.reviewer_agent_slug} model={result.reviewer_model_id or 'n/a'} "
-            f"run={result.run_id or 'n/a'}"
-            f"; context_maintenance={maintenance['status']} reviewed={maintenance['reviewed_count']}"
-        ),
-        session_id=result.session_id,
-    )
-
+    curator_unavailable()
 
 async def execute_job(job: Any) -> JobExecutionResult:
     """Dispatch to the correct executor based on payload type."""
+    if job.payload_type == PAYLOAD_TYPE_MEMORY_REVIEW:
+        return JobExecutionResult(output="Unavailable: Memory Curator execution is retired.")
     if job.payload_type == PAYLOAD_TYPE_PUSH:
         return await _execute_push(job)
     if job.payload_type == PAYLOAD_TYPE_SELF_HONING:
         return await _execute_self_honing(job)
-    if job.payload_type == PAYLOAD_TYPE_MEMORY_REVIEW:
-        return await _execute_memory_review(job)
     return await _execute_agent_turn(job)
 
 

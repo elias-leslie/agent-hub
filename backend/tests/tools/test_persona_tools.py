@@ -675,7 +675,7 @@ class TestScheduleJob:
         create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("payload_type", ["self_honing", "memory_review"])
+    @pytest.mark.parametrize("payload_type", ["self_honing"])
     async def test_preserves_special_payload_type_in_profile(self, payload_type):
         from app.services.tools._executor_scheduling import schedule_job
 
@@ -693,6 +693,13 @@ class TestScheduleJob:
         assert "scheduled" in result
         assert create.await_args is not None
         assert create.await_args.args[1]["config"]["payload_type"] == payload_type
+
+    @pytest.mark.asyncio
+    async def test_memory_review_schedule_is_retired(self):
+        from app.services.tools._executor_scheduling import schedule_job
+
+        result = await schedule_job("Old review", "cron", "0 4 * * *", "payload", payload_type="memory_review")
+        assert "retired" in result.lower()
 
 
 class TestListScheduledJobs:
