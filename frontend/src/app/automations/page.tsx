@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarClock,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ListChecks,
@@ -572,6 +573,12 @@ export default function AutomationsPage() {
     setEditing(false)
     setCreating(false)
   }, [projectId])
+  useEffect(() => {
+    if (creating)
+      document.getElementById('new-automation-profile')?.scrollIntoView({
+        block: 'start',
+      })
+  }, [creating])
   const profiles = profilesQuery.data?.items ?? []
   const displayProfiles = [...profiles].sort((a, b) =>
     `${a.project_id}:${a.subject_id ?? ''}:${a.label}`.localeCompare(
@@ -707,8 +714,15 @@ export default function AutomationsPage() {
       ? (runsQuery.data?.total ?? 0)
       : (profilesQuery.data?.total ?? 0)
   const pageOffset = tab === 'runs' ? runOffset : profileOffset
-  const changePage = (next: number) =>
-    tab === 'runs' ? setRunOffset(next) : setProfileOffset(next)
+  const changePage = (next: number) => {
+    if (tab === 'runs') {
+      setRunOffset(next)
+      return
+    }
+    setProfileOffset(next)
+    setSelectedId(null)
+    setEditing(false)
+  }
   const setActiveTab = (next: Tab) => {
     setTab(next)
     setRunOffset(0)
@@ -832,7 +846,28 @@ export default function AutomationsPage() {
           </div>
         )}
         {tab === 'profiles' && (
-          <div className="grid items-start gap-5 xl:grid-cols-[minmax(17rem,0.85fr)_minmax(0,1.35fr)]">
+          <div className="space-y-4">
+            {creating && (
+              <section
+                id="new-automation-profile"
+                className="section-card scroll-mt-28"
+                aria-label="New automation profile"
+              >
+                <div className="max-w-4xl">
+                  <ProfileForm
+                    key="new"
+                    profile={null}
+                    definitions={definitions}
+                    projectId={projectId}
+                    busy={saveMutation.isPending}
+                    onSave={async (input) => {
+                      await saveMutation.mutateAsync(input)
+                    }}
+                    onCancel={() => setCreating(false)}
+                  />
+                </div>
+              </section>
+            )}
             <section
               className="panel-surface min-w-0 overflow-hidden"
               aria-label="Automation profiles"
@@ -859,208 +894,231 @@ export default function AutomationsPage() {
                 </p>
               ) : (
                 <div className="divide-y divide-slate-800/80">
-                  {displayProfiles.map((profile, index) => (
-                    <div key={profile.id}>
-                      {(index === 0 ||
-                        displayProfiles[index - 1].project_id !==
-                          profile.project_id ||
-                        displayProfiles[index - 1].subject_id !==
-                          profile.subject_id) && (
-                        <h3 className="border-b border-slate-800/80 bg-slate-950/50 px-4 py-2 text-xs font-semibold text-slate-400">
-                          {profile.project_id}
-                          {profile.subject_id
-                            ? ` / ${profile.subject_id}`
-                            : ' / project-wide'}
-                        </h3>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(profile.id)
-                          setEditing(false)
-                          setCreating(false)
-                          setActionError(null)
-                        }}
-                        aria-pressed={selectedId === profile.id}
-                        className={cn(
-                          'w-full p-4 text-left transition focus-visible:outline-2 focus-visible:outline-amber-500 hover:bg-slate-800/50',
-                          selectedId === profile.id && 'bg-amber-950/20',
+                  {displayProfiles.map((profile, index) => {
+                    const expanded = selectedId === profile.id
+                    return (
+                      <div key={profile.id}>
+                        {(index === 0 ||
+                          displayProfiles[index - 1].project_id !==
+                            profile.project_id ||
+                          displayProfiles[index - 1].subject_id !==
+                            profile.subject_id) && (
+                          <h3 className="border-b border-slate-800/80 bg-slate-950/50 px-4 py-2 text-xs font-semibold text-slate-400">
+                            {profile.project_id}
+                            {profile.subject_id
+                              ? ` / ${profile.subject_id}`
+                              : ' / project-wide'}
+                          </h3>
                         )}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="min-w-0 truncate text-sm font-semibold text-slate-100">
-                            {profile.label}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(expanded ? null : profile.id)
+                            setEditing(false)
+                            setCreating(false)
+                            setActionError(null)
+                          }}
+                          aria-expanded={expanded}
+                          aria-controls={
+                            expanded
+                              ? `profile-details-${profile.id}`
+                              : undefined
+                          }
+                          className={cn(
+                            'w-full px-4 py-3 text-left transition hover:bg-slate-800/50 focus-visible:outline-2 focus-visible:outline-amber-500 sm:px-5',
+                            expanded && 'bg-amber-950/20',
+                          )}
+                        >
+                          <span className="flex min-w-0 items-start justify-between gap-3">
+                            <span className="min-w-0">
+                              <span className="block break-words text-sm font-semibold text-slate-100">
+                                {profile.label}
+                              </span>
+                              <span className="mt-1 block break-all text-xs text-slate-400">
+                                {profile.workflow_key}
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-500">
+                                {scheduleText(profile)}
+                              </span>
+                              {profile.unreviewed_count > 0 && (
+                                <span className="mt-2 block text-xs font-medium text-amber-300">
+                                  {profile.unreviewed_count} unreviewed runs
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span
+                                className={badge(profileStatus(profile).tone)}
+                              >
+                                {profileStatus(profile).label}
+                              </span>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className={cn(
+                                  'h-4 w-4 text-slate-400 transition-transform',
+                                  expanded && 'rotate-180',
+                                )}
+                              />
+                            </span>
                           </span>
-                          <span className={badge(profileStatus(profile).tone)}>
-                            {profileStatus(profile).label}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {profile.project_id}
-                          {profile.subject_id ? ` · ${profile.subject_id}` : ''}{' '}
-                          · {profile.workflow_key}
-                        </p>
-                        <p className="mt-2 text-xs text-slate-500">
-                          {scheduleText(profile)}
-                        </p>
-                        {profile.unreviewed_count > 0 && (
-                          <span className="mt-2 inline-block text-xs font-medium text-amber-300">
-                            {profile.unreviewed_count} unreviewed runs
-                          </span>
+                        </button>
+                        {expanded && selected && (
+                          <section
+                            id={`profile-details-${profile.id}`}
+                            aria-label={`${profile.label} details`}
+                            className="border-t border-amber-900/40 bg-slate-950/40 px-4 py-5 sm:px-6"
+                          >
+                            <div className="max-w-4xl">
+                              {editing ? (
+                                <ProfileForm
+                                  key={selected.id}
+                                  profile={selected}
+                                  definitions={definitions}
+                                  projectId={selected.project_id}
+                                  busy={saveMutation.isPending}
+                                  onSave={async (input) => {
+                                    await saveMutation.mutateAsync(input)
+                                  }}
+                                  onCancel={() => setEditing(false)}
+                                />
+                              ) : (
+                                <div className="space-y-5">
+                                  {selectedDefinition?.description && (
+                                    <p className="text-sm leading-6 text-slate-300">
+                                      {selectedDefinition.description}
+                                    </p>
+                                  )}
+                                  {selected.gate_reasons.length > 0 && (
+                                    <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
+                                      <p className="text-xs font-semibold text-amber-300">
+                                        Schedule gates
+                                      </p>
+                                      <ul className="mt-1 list-inside list-disc text-sm text-amber-200">
+                                        {selected.gate_reasons.map((reason) => (
+                                          <li key={reason}>
+                                            {reason.replaceAll('_', ' ')}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {selected.clock_owner === 'legacy' && (
+                                    <p className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                                      This schedule still runs under its
+                                      original owner. Changes to its profile
+                                      here do not change that live clock.
+                                    </p>
+                                  )}
+                                  <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                                    <div>
+                                      <dt className="text-xs text-slate-500">
+                                        Schedule
+                                      </dt>
+                                      <dd className="mt-1 text-slate-200">
+                                        {scheduleText(selected)}
+                                      </dd>
+                                    </div>
+                                    <div>
+                                      <dt className="text-xs text-slate-500">
+                                        Next run
+                                      </dt>
+                                      <dd className="mt-1 text-slate-200">
+                                        {timestamp(selected.next_run_at)}
+                                      </dd>
+                                    </div>
+                                    <div>
+                                      <dt className="text-xs text-slate-500">
+                                        Last run
+                                      </dt>
+                                      <dd className="mt-1 text-slate-200">
+                                        {timestamp(selected.last_run_at)}
+                                      </dd>
+                                    </div>
+                                    <div>
+                                      <dt className="text-xs text-slate-500">
+                                        Revision
+                                      </dt>
+                                      <dd className="mt-1 text-slate-200">
+                                        {selected.revision}
+                                      </dd>
+                                    </div>
+                                  </dl>
+                                  <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditing(true)}
+                                      disabled={
+                                        selected.clock_owner === 'legacy'
+                                      }
+                                      className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        toggleMutation.mutate(selected)
+                                      }
+                                      disabled={
+                                        toggleMutation.isPending ||
+                                        selected.clock_owner === 'legacy'
+                                      }
+                                      className="button-secondary disabled:opacity-50"
+                                    >
+                                      {selected.enabled ? 'Pause' : 'Enable'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        runMutation.mutate(selected.id)
+                                      }
+                                      disabled={
+                                        runMutation.isPending ||
+                                        (!selected.enabled &&
+                                          !selectedDefinition?.manual_when_disabled)
+                                      }
+                                      className="button-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <Play className="h-4 w-4" />
+                                      Run now
+                                    </button>
+                                    {selected.unreviewed_count > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          reviewMutation.mutate(selected.id)
+                                        }
+                                        disabled={reviewMutation.isPending}
+                                        className="button-secondary disabled:opacity-50"
+                                      >
+                                        <ListChecks className="h-4 w-4" />
+                                        Mark reviewed
+                                      </button>
+                                    )}
+                                  </div>
+                                  {!selected.enabled &&
+                                  !selectedDefinition?.manual_when_disabled ? (
+                                    <p className="text-xs text-slate-500">
+                                      Manual runs are unavailable for this
+                                      workflow.
+                                    </p>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTab('runs')}
+                                    className="text-sm text-amber-300 hover:underline"
+                                  >
+                                    View run history
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </section>
                         )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-            <section
-              className="section-card min-w-0"
-              aria-label="Selected automation"
-            >
-              {creating || (editing && selected) ? (
-                <ProfileForm
-                  key={selected?.id ?? 'new'}
-                  profile={editing ? selected : null}
-                  definitions={definitions}
-                  projectId={projectId || selected?.project_id || ''}
-                  busy={saveMutation.isPending}
-                  onSave={async (input) => {
-                    await saveMutation.mutateAsync(input)
-                  }}
-                  onCancel={() => {
-                    setCreating(false)
-                    setEditing(false)
-                  }}
-                />
-              ) : selected ? (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className="section-heading">{selected.label}</h2>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {selected.workflow_key} · {selected.project_id}
-                        {selected.subject_id ? ` · ${selected.subject_id}` : ''}
-                      </p>
-                    </div>
-                    <span className={badge(profileStatus(selected).tone)}>
-                      {profileStatus(selected).label}
-                    </span>
-                  </div>
-                  {selectedDefinition?.description && (
-                    <p className="text-sm leading-6 text-slate-300">
-                      {selectedDefinition.description}
-                    </p>
-                  )}
-                  {selected.gate_reasons.length > 0 && (
-                    <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3">
-                      <p className="text-xs font-semibold text-amber-300">
-                        Schedule gates
-                      </p>
-                      <ul className="mt-1 list-inside list-disc text-sm text-amber-200">
-                        {selected.gate_reasons.map((reason) => (
-                          <li key={reason}>{reason.replaceAll('_', ' ')}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {selected.clock_owner === 'legacy' && (
-                    <p className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-3 text-sm text-amber-200">
-                      This schedule still runs under its original owner. Changes
-                      to its profile here do not change that live clock.
-                    </p>
-                  )}
-                  <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                    <div>
-                      <dt className="text-xs text-slate-500">Schedule</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {scheduleText(selected)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Next run</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {timestamp(selected.next_run_at)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Last run</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {timestamp(selected.last_run_at)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">Revision</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {selected.revision}
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      disabled={selected.clock_owner === 'legacy'}
-                      className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Settings2 className="h-4 w-4" />
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleMutation.mutate(selected)}
-                      disabled={
-                        toggleMutation.isPending ||
-                        selected.clock_owner === 'legacy'
-                      }
-                      className="button-secondary disabled:opacity-50"
-                    >
-                      {selected.enabled ? 'Pause' : 'Enable'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runMutation.mutate(selected.id)}
-                      disabled={
-                        runMutation.isPending ||
-                        (!selected.enabled &&
-                          !selectedDefinition?.manual_when_disabled)
-                      }
-                      className="button-primary disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Play className="h-4 w-4" />
-                      Run now
-                    </button>
-                    {selected.unreviewed_count > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => reviewMutation.mutate(selected.id)}
-                        disabled={reviewMutation.isPending}
-                        className="button-secondary disabled:opacity-50"
-                      >
-                        <ListChecks className="h-4 w-4" />
-                        Mark reviewed
-                      </button>
-                    )}
-                  </div>
-                  {!selected.enabled &&
-                  !selectedDefinition?.manual_when_disabled ? (
-                    <p className="text-xs text-slate-500">
-                      Manual runs are unavailable for this workflow.
-                    </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('runs')}
-                    className="text-sm text-amber-300 hover:underline"
-                  >
-                    View run history
-                  </button>
-                </div>
-              ) : (
-                <div className="empty-surface">
-                  <p className="text-sm text-slate-400">
-                    Select a profile to inspect its schedule, gates, and runs.
-                  </p>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </section>
