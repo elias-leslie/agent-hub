@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { ContextUsageBar } from '@/app/sessions/[id]/components/ContextUsageBar'
 import {
   NativeUsage,
   summarizeNativeUsage,
@@ -127,5 +128,26 @@ describe('native session usage', () => {
     expect(
       screen.getByText(/child sessions are not included/i),
     ).toBeInTheDocument()
+  })
+})
+
+describe('context window measurement', () => {
+  const usage = {
+    used_tokens: 0,
+    limit_tokens: 100000,
+    percent_used: 0,
+    remaining_tokens: 100000,
+    warning: null,
+  }
+
+  it('shows missing context measurements as unavailable', () => {
+    render(<ContextUsageBar usage={{ ...usage, measured: false }} />)
+    expect(screen.getByText('Context usage unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('0 / 100.0K')).not.toBeInTheDocument()
+  })
+
+  it('preserves a recorded zero context measurement', () => {
+    render(<ContextUsageBar usage={{ ...usage, measured: true }} />)
+    expect(screen.getByText('0 / 100.0K')).toBeInTheDocument()
   })
 })

@@ -95,6 +95,7 @@ class ContextUsageResponse(BaseModel):
     percent_used: float = Field(..., description="Percentage of context used")
     remaining_tokens: int = Field(..., description="Tokens available")
     warning: str | None = Field(default=None, description="Warning if approaching limit")
+    measured: bool = Field(default=True, description="Whether a per-request context measurement exists")
 
 
 class LiveActivityResponse(BaseModel):

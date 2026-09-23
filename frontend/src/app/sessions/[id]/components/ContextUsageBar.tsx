@@ -4,6 +4,16 @@ import { cn } from '@/lib/utils'
 import { formatTokens } from './utils'
 
 export function ContextUsageBar({ usage }: { usage: ContextUsage }) {
+  if (usage.measured === false) {
+    return (
+      <div className="section-card text-sm text-slate-400">
+        <span className="font-medium text-slate-300">
+          Context usage unavailable
+        </span>
+        <p className="mt-1">No per-request context measurement was recorded.</p>
+      </div>
+    )
+  }
   const percent = Math.min(100, usage.percent_used)
   const isWarning = percent > 70
   const isDanger = percent > 90

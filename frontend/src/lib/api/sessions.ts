@@ -36,6 +36,7 @@ export interface ContextUsage {
   percent_used: number
   remaining_tokens: number
   warning: string | null
+  measured?: boolean
 }
 
 export interface LiveActivity {

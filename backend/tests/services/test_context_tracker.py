@@ -118,6 +118,7 @@ class TestCalculateContextUsage:
         usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 50.0
+        assert usage.warning is not None
         assert "50.0%" in usage.warning
         assert "Note:" in usage.warning
 
@@ -137,6 +138,7 @@ class TestCalculateContextUsage:
         usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 75.0
+        assert usage.warning is not None
         assert "WARNING:" in usage.warning
 
     @pytest.mark.asyncio
@@ -155,6 +157,7 @@ class TestCalculateContextUsage:
         usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 90.0
+        assert usage.warning is not None
         assert "CRITICAL:" in usage.warning
 
     @pytest.mark.asyncio
@@ -175,6 +178,21 @@ class TestCalculateContextUsage:
         assert usage.used_tokens == 0
         assert usage.percent_used == 0.0
         assert usage.remaining_tokens == 200000
+        assert usage.measured is False
+
+    @pytest.mark.asyncio
+    async def test_recorded_zero_context_is_measured(self):
+        mock_db = AsyncMock()
+        mock_totals = MagicMock()
+        mock_totals.one.return_value = (0, 0)
+        mock_latest = MagicMock()
+        mock_latest.scalar_one_or_none.return_value = 0
+        mock_db.execute.side_effect = [mock_totals, mock_latest]
+
+        usage = await calculate_context_usage(mock_db, "zero-session", CLAUDE_HAIKU)
+
+        assert usage.used_tokens == 0
+        assert usage.measured is True
 
 
 class TestCheckContextBeforeRequest:
@@ -203,6 +221,7 @@ class TestCheckContextBeforeRequest:
         )
 
         assert can_proceed is False
+        assert usage.warning is not None
         assert "BLOCKED:" in usage.warning
 
     @pytest.mark.asyncio
@@ -216,6 +235,7 @@ class TestCheckContextBeforeRequest:
 
         assert can_proceed is True
         assert usage.percent_used == 90.0
+        assert usage.warning is not None
         assert "CRITICAL:" in usage.warning
 
     @pytest.mark.asyncio

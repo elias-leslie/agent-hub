@@ -110,6 +110,7 @@ async def build_full_session_response(
         percent_used=ctx_usage.percent_used,
         remaining_tokens=ctx_usage.remaining_tokens,
         warning=ctx_usage.warning,
+        measured=ctx_usage.measured,
     )
 
     agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(

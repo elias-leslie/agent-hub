@@ -31,6 +31,7 @@ class ContextUsage:
     percent_used: float
     remaining_tokens: int
     warning: str | None = None
+    measured: bool = True
 
 
 async def log_token_usage(
@@ -131,7 +132,7 @@ async def calculate_context_usage(
         .limit(1)
     )
     latest_row = result.scalar_one_or_none()
-    current_context = latest_row if latest_row else 0
+    current_context = latest_row if latest_row is not None else 0
 
     limit = get_context_limit(model)
     percent = (current_context / limit * 100) if limit > 0 else 0.0
@@ -151,6 +152,7 @@ async def calculate_context_usage(
         percent_used=round(percent, 2),
         remaining_tokens=remaining,
         warning=warning,
+        measured=latest_row is not None,
     )
 
 
