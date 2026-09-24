@@ -98,7 +98,7 @@ def _structured_article_markdown(html: str) -> str:
 
     try:
         root = lxml_html.fromstring(html)
-        candidates = root.xpath("//article | //main")
+        candidates = root.xpath("//article | //main") or root.xpath('//*[@role="main"]')
         if not candidates:
             return ""
         article = max(candidates, key=lambda node: len(node.text_content().strip()))
@@ -115,7 +115,10 @@ def _structured_article_markdown(html: str) -> str:
         if not value:
             return
         if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
-            blocks.append(f"{'#' * int(tag[1])} {value}")
+            blocks.append(f"{'#' * int(tag[1])} {value.removesuffix('¶').rstrip()}")
+            return
+        if tag == "pre":
+            blocks.append(f"```\n{node.text_content().strip()}\n```")
             return
         if tag == "table":
             rows = []

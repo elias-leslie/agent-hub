@@ -152,6 +152,31 @@ class TestSearchWeb:
 
 class TestFetchWebPage:
     @pytest.mark.asyncio
+    async def test_role_main_keeps_linked_qualifications_together_when_focused(self) -> None:
+        html = """<html><body><div role="main"><section>
+        <h2>Free-threaded CPython<a href="#free-threaded">¶</a></h2>
+        <p>Free-threaded CPython is experimental and has limitations. It can enable the GIL
+        using the environment variable <a href="/env"><code>PYTHON_GIL</code></a> or the
+        command-line option <a href="/option"><code>-X gil=1</code></a>.
+        Check <a href="/version"><code>sys.version</code></a> for the build marker.</p>
+        </section><section><h2>Other changes</h2><p>""" + ("Unrelated release notes. " * 50) + """</p></section></div></body></html>"""
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(_FakeResponse(text=html)),
+        ):
+            payload = json.loads(await fetch_web_page(
+                "https://example.com", backend="direct", max_chars=500,
+                focus_query="free-threaded CPython limitations GIL",
+            ))
+        content = payload["content"]
+        assert "## Free-threaded CPython" in content
+        assert "¶" not in content
+        assert "environment variable PYTHON_GIL or the command-line option -X gil=1" in content
+        assert "Check sys.version for the build marker" in content
+        assert "[.]" not in content
+        assert payload["focused"] is True
+
+    @pytest.mark.asyncio
     async def test_preserves_conditions_headings_lists_and_tables(self) -> None:
         html = """<html><body><article><h2>Eligibility</h2>
         <p>Discount applies only if the account is active.</p>
