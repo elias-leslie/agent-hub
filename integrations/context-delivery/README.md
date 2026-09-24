@@ -84,6 +84,15 @@ Aico's independent probe reports availability, never current-session injection.
 Antigravity tool execution establishes retrieved context. Codex resume/fork uses
 saved native context and makes no fresh-delivery claim.
 
+To check a shared UI policy change, render a fresh `agent-hub-context deliver`
+contract for each supported surface with the same product UI task and verify the
+selected prompt revision in its blocks. Also run the installer with `--check` to
+verify each native adapter is present. These checks establish generation and
+adapter installation only; record binding, retrieval, provider delivery and
+actual agent behavior separately. The Agent Hub DB owns the activation prompt,
+the central skill owns the review procedure, and SlopMiner's scoped guides own
+approved design direction. This adapter does not duplicate those instructions.
+
 Optional project index, tool guide, and continuity diagnostics distinguish
 included, inapplicable, and unavailable components. Optional failures do not
 silently discard required shared policy. A failed required assembly remains a
