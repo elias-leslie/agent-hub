@@ -152,6 +152,100 @@ class TestSearchWeb:
 
 class TestFetchWebPage:
     @pytest.mark.asyncio
+    async def test_preserves_conditions_headings_lists_and_tables(self) -> None:
+        html = """<html><body><article><h2>Eligibility</h2>
+        <p>Discount applies only if the account is active.</p>
+        <ul><li>Annual plan</li><li>US customers only</li></ul>
+        <table><tr><th>Plan</th><th>Price</th></tr>
+        <tr><td>Annual</td><td>$20</td></tr></table></article></body></html>"""
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(_FakeResponse(text=html)),
+        ):
+            payload = json.loads(await fetch_web_page("https://example.com", backend="direct"))
+
+        assert "## Eligibility" in payload["content"]
+        assert "only if the account is active" in payload["content"]
+        assert "- US customers only" in payload["content"]
+        assert "| Annual | $20 |" in payload["content"]
+        assert payload["content_complete"] is True
+
+    @pytest.mark.asyncio
+    async def test_direct_backend_never_renders_in_browser(self) -> None:
+        shell = "<html><body><main id='app'></main><script>load()</script></body></html>"
+        with (
+            patch("app.services.tools._executor_web.httpx.AsyncClient", return_value=_FakeAsyncClient(_FakeResponse(text=shell))),
+            patch.object(_executor_web.settings, "web_fetch_browser_cdp_url", "http://vm100:9222"),
+            patch("app.services.tools._executor_web._render_html_via_browser", new_callable=AsyncMock) as render,
+        ):
+            payload = json.loads(await fetch_web_page("https://example.com", backend="direct"))
+        render.assert_not_awaited()
+        assert payload["fetch_backend"] == "direct"
+        assert payload["content_complete"] is False
+        assert payload["incomplete_reason"] == "sparse_dynamic_shell"
+
+    @pytest.mark.asyncio
+    async def test_private_or_credential_url_never_reaches_public_reader(self) -> None:
+        for url in (
+            "http://127.0.0.1/private", "http://192.168.8.1/", "http://localhost/",
+            "https://user:pass@example.com/", "https://example.com/?token=secret",
+        ):
+            with patch("app.services.tools._executor_web.httpx.AsyncClient") as client:
+                payload = json.loads(await fetch_web_page(url, backend="jina"))
+            assert "public reader rejects" in payload["error"]
+            assert "secret" not in json.dumps(payload)
+            client.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_failure_does_not_forward_private_url(self) -> None:
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(_FailingResponse(text="", status_code=503), expected_url="http://127.0.0.1/"),
+        ) as client:
+            payload = json.loads(await fetch_web_page("http://127.0.0.1/", backend="auto"))
+        assert "public reader rejects" in payload["error"]
+        client.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_auto_sparse_redirect_does_not_forward_private_destination(self) -> None:
+        shell = "<html><body><main id='app'></main><script>load()</script></body></html>"
+        with (
+            patch("app.services.tools._executor_web.httpx.AsyncClient", return_value=_FakeAsyncClient(_FakeResponse(text=shell, url="http://192.168.8.10/internal"))) as client,
+            patch.object(_executor_web.settings, "web_fetch_browser_cdp_url", ""),
+            patch.object(_executor_web.settings, "st_browser_host", ""),
+        ):
+            payload = json.loads(await fetch_web_page("https://example.com", backend="auto"))
+        assert payload["fetch_backend"] == "direct"
+        assert payload["content_complete"] is False
+        client.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_truncation_and_inferred_date_are_explicit(self) -> None:
+        html = "<html><body><article><h1>Report</h1><p>" + ("Evidence and qualification. " * 30) + "</p></article></body></html>"
+        with (
+            patch("app.services.tools._executor_web.httpx.AsyncClient", return_value=_FakeAsyncClient(_FakeResponse(text=html))),
+            patch("app.services.tools._executor_web._extract_markdown_payload", return_value=({"date": "2026-09-01"}, "# Report\n\n" + ("Evidence and qualification. " * 30))),
+        ):
+            payload = json.loads(await fetch_web_page("https://example.com", max_chars=120, backend="direct"))
+        assert payload["published_date_inferred"] is True
+        assert payload["truncated"] is True
+        assert payload["content_complete"] is False
+        assert payload["incomplete_reason"] == "character_limit"
+
+    @pytest.mark.asyncio
+    async def test_focus_keeps_section_heading_with_selected_qualification(self) -> None:
+        markdown = "# Offer\n\nUnrelated introduction.\n\n## Eligibility\n\nDiscount applies only if the account is active.\n\nEligibility excludes trial accounts.\n\nUnrelated ending."
+        with patch(
+            "app.services.tools._executor_web.httpx.AsyncClient",
+            return_value=_FakeAsyncClient(_FakeResponse(text=markdown, content_type="text/markdown")),
+        ):
+            payload = json.loads(await fetch_web_page("https://example.com", max_chars=110, focus_query="eligibility trial accounts", backend="direct"))
+        assert "## Eligibility" in payload["content"]
+        assert "excludes trial accounts" in payload["content"]
+        assert payload["content_complete"] is False
+        assert payload["incomplete_reason"] == "focus_selection"
+
+    @pytest.mark.asyncio
     async def test_returns_extracted_payload(self) -> None:
         response = _FakeResponse(
             text="<html><head><title>Ignored</title></head><body>hello</body></html>"
@@ -356,7 +450,7 @@ class TestFetchWebPage:
                 url="https://r.jina.ai/https://example.com",
                 content_type="text/plain; charset=utf-8",
             ),
-            expected_url="https://r.jina.ai/https://example.com",
+            expected_url="https://r.jina.ai/https://example.com/final",
         )
 
         with (

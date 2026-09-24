@@ -17,6 +17,7 @@ dependencies = [
     "httpx>=0.28.0",
     "ddgs>=9.9.0",
     "trafilatura>=2.0.0",
+    "lxml>=6.0.0", # Preserve article headings, lists and tables in web extraction
     # Background tasks
     "hatchet-sdk>=1.22.0",
     "redis>=5.0.0",

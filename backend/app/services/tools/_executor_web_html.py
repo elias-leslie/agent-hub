@@ -42,6 +42,7 @@ class _PageExtraction:
     site_name: str | None = None
     author: str | None = None
     published: str | None = None
+    published_date_inferred: bool = False
     markdown_tokens_estimate: int | None = None
 
 
@@ -91,35 +92,80 @@ def _extract_title_from_html(html: str) -> str | None:
     return title or None
 
 
+def _structured_article_markdown(html: str) -> str:
+    """Keep the relationships between headings, conditions, lists and table cells."""
+    from lxml import html as lxml_html
+
+    try:
+        root = lxml_html.fromstring(html)
+        candidates = root.xpath("//article | //main")
+        if not candidates:
+            return ""
+        article = max(candidates, key=lambda node: len(node.text_content().strip()))
+        for node in article.xpath(".//script | .//style | .//nav | .//footer | .//aside | .//form"):
+            node.drop_tree()
+    except (ValueError, TypeError):
+        return ""
+
+    blocks: list[str] = []
+
+    def visit(node: Any) -> None:
+        tag = str(node.tag).lower()
+        value = _normalize_whitespace(node.text_content())
+        if not value:
+            return
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            blocks.append(f"{'#' * int(tag[1])} {value}")
+            return
+        if tag == "table":
+            rows = []
+            for row in node.xpath(".//tr"):
+                cells = [_normalize_whitespace(cell.text_content()) for cell in row.xpath("./th | ./td")]
+                if cells:
+                    rows.append("| " + " | ".join(cells) + " |")
+            if rows:
+                blocks.append("\n".join(rows))
+            return
+        if tag in {"ul", "ol"}:
+            items = [_normalize_whitespace(item.text_content()) for item in node.xpath("./li")]
+            if items:
+                blocks.append("\n".join(f"- {item}" for item in items if item))
+            return
+        if tag in {"p", "blockquote"}:
+            blocks.append(value)
+            return
+        for child in node:
+            visit(child)
+
+    visit(article)
+    return "\n\n".join(blocks).strip()
+
+
 def _extract_markdown_payload(html: str, url: str) -> tuple[dict[str, Any], str]:
     import trafilatura
+    from trafilatura.core import determine_returnstring
+    from trafilatura.settings import Extractor
 
-    metadata_obj = trafilatura.bare_extraction(
+    options = Extractor(
+        output_format="markdown", recall=True, links=True, tables=True,
+        formatting=True, url=url, with_metadata=True,
+    )
+    document = trafilatura.bare_extraction(
         html,
-        url=url,
-        favor_recall=True,
-        include_links=True,
-        include_tables=True,
-        include_formatting=True,
-        with_metadata=True,
+        options=options,
     )
     metadata: dict[str, Any] = {}
-    if metadata_obj is not None:
-        as_dict = getattr(metadata_obj, "as_dict", None)
+    if document is not None:
+        as_dict = getattr(document, "as_dict", None)
         if callable(as_dict):
             metadata = as_dict()
-        elif isinstance(metadata_obj, dict):
-            metadata = cast(dict[str, Any], metadata_obj)
-
-    markdown = trafilatura.extract(
-        html,
-        url=url,
-        favor_recall=True,
-        include_links=True,
-        include_tables=True,
-        include_formatting=True,
-        output_format="markdown",
-    ) or ""
+        elif isinstance(document, dict):
+            metadata = cast(dict[str, Any], document)
+    markdown = determine_returnstring(document, options) if document is not None and not isinstance(document, dict) else ""
+    markdown = re.sub(r"^---\n.*?\n---\n", "", markdown, count=1, flags=re.DOTALL)
+    structured = _structured_article_markdown(html)
+    if structured and len(structured) >= len(markdown.strip()) * 0.6:
+        markdown = structured
     return metadata, markdown.strip()
 
 
@@ -215,6 +261,7 @@ def _build_fetch_payload(
         payload["author"] = page.author
     if page.published:
         payload["published"] = page.published
+        payload["published_date_inferred"] = page.published_date_inferred
     if excerpt:
         payload["excerpt"] = excerpt
     if page.markdown_tokens_estimate is not None:
@@ -228,4 +275,10 @@ def _build_fetch_payload(
         payload["candidate_chunk_count"] = focus_metadata["candidate_chunk_count"]
     elif focus_query:
         payload["focused"] = False
+    payload["content_complete"] = bool(truncated_content) and not truncated and not focus_metadata.get("focused")
+    if not payload["content_complete"]:
+        payload["incomplete_reason"] = (
+            "focus_selection" if focus_metadata.get("focused") else
+            "character_limit" if truncated else "empty_extraction"
+        )
     return payload

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 from typing import Any
+from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 
@@ -44,6 +46,7 @@ JINA_READER_BASE_URL = "https://r.jina.ai"
 _SEARCH_TYPES = frozenset({"text", "news"})
 _TIMELIMITS = frozenset({"d", "w", "m", "y"})
 _FETCH_BACKENDS = frozenset({"auto", "direct", "jina"})
+_SENSITIVE_QUERY_MARKERS = ("token", "credential", "api_key", "apikey", "password", "secret", "signature", "sig", "auth", "key", "code")
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,40 @@ def _truncate_text(text: str, max_chars: int) -> tuple[str, bool]:
     if len(cleaned) <= max_chars:
         return cleaned, False
     return cleaned[: max_chars - 1].rstrip() + "…", True
+
+
+def _public_fallback_allowed(url: str) -> bool:
+    """A public reader must not receive local addresses or URL credentials."""
+    try:
+        parsed = urlsplit(url)
+        host = (parsed.hostname or "").rstrip(".").lower()
+        if parsed.scheme not in {"http", "https"} or not host or parsed.username or parsed.password:
+            return False
+        if "." not in host or host == "localhost" or host.endswith((
+            ".localhost", ".local", ".internal", ".test", ".lan", ".home", ".corp", ".intranet", ".invalid",
+        )):
+            return False
+        try:
+            if not ipaddress.ip_address(host).is_global:
+                return False
+        except ValueError:
+            pass
+        if any(
+            any(marker in key.lower() for marker in _SENSITIVE_QUERY_MARKERS)
+            for key, _ in parse_qsl(parsed.query, keep_blank_values=True)
+        ):
+            return False
+        return not parsed.fragment
+    except ValueError:
+        return False
+
+
+def _explicit_published_date(html: str) -> bool:
+    import re
+    return bool(re.search(
+        r'<meta\b(?=[^>]*(?:article:published_time|datePublished|pubdate))(?=[^>]*\bcontent\s*=)[^>]*>|<time\s+[^>]*datetime\s*=',
+        html, re.IGNORECASE,
+    ))
 
 
 def _extract_page_content(
@@ -120,6 +157,7 @@ def _extract_page_content(
         site_name=site_name,
         author=author,
         published=published,
+        published_date_inferred=bool(published) and not _explicit_published_date(raw_text),
         markdown_tokens_estimate=parsed_markdown_tokens,
     )
 
@@ -232,6 +270,8 @@ async def _fetch_with_jina_reader(
     focus_query: str | None,
     fallback_reason: str | None = None,
 ) -> str:
+    if not _public_fallback_allowed(normalized_url):
+        return _error_payload("fetch_web_page public reader rejects private or credential-bearing URL")
     reader_url = f"{JINA_READER_BASE_URL}/{normalized_url}"
     try:
         async with httpx.AsyncClient(
@@ -326,6 +366,7 @@ async def search_web(
     }
     if provider_errors:
         payload["provider_errors"] = provider_errors
+    payload["status"] = "results" if results else "no_results"
     if timelimit:
         payload["timelimit"] = timelimit
     return _json_payload(payload)
@@ -372,7 +413,7 @@ async def fetch_web_page(
                 normalized_url,
                 max_chars=bounded_max_chars,
                 focus_query=focus_query,
-                fallback_reason=f"direct request failed: {exc}",
+                fallback_reason="direct request failed: provider returned an error",
             )
         return _error_payload("fetch_web_page request failed", detail=str(exc), url=normalized_url)
 
@@ -392,7 +433,7 @@ async def fetch_web_page(
             )
         return _error_payload("fetch_web_page only supports text-like responses", content_type=content_type, url=normalized_url)
 
-    browser_cdp_url = _get_browser_cdp_url()
+    browser_cdp_url = _get_browser_cdp_url() if backend == "auto" else None
     if browser_cdp_url:
         page, final_url, fetch_backend = await _try_browser_fallback(
             normalized_url, browser_cdp_url, content_type, raw_text, page, final_url,
@@ -405,7 +446,7 @@ async def fetch_web_page(
         and _should_try_browser_fallback(content_type, raw_text, page.content)
     ):
         jina_raw = await _fetch_with_jina_reader(
-            normalized_url,
+            final_url if _public_fallback_allowed(normalized_url) else normalized_url,
             max_chars=bounded_max_chars,
             focus_query=focus_query,
             fallback_reason="direct extraction looked like a sparse dynamic shell",
@@ -419,10 +460,14 @@ async def fetch_web_page(
         focus_query=focus_query,
     )
 
-    return _json_payload(_build_fetch_payload(
+    payload = _build_fetch_payload(
         page, response.status_code, fetch_backend, normalized_url, final_url,
         content_type, nfocus, focus_meta, trunc_content, truncated, excerpt,
-    ))
+    )
+    if fetch_backend == "direct" and _should_try_browser_fallback(content_type, raw_text, page.content):
+        payload["content_complete"] = False
+        payload["incomplete_reason"] = "sparse_dynamic_shell"
+    return _json_payload(payload)
 
 
 async def research_web(

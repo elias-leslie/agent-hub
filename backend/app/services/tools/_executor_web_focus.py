@@ -44,16 +44,19 @@ def _build_focus_chunks(content: str) -> list[tuple[int, str]]:
         return [(0, normalized)] if normalized else []
 
     chunks: list[str] = []
+    heading: str | None = None
     index = 0
     while index < len(raw_blocks):
         block = raw_blocks[index]
-        if index + 1 < len(raw_blocks) and len(block) <= 120 and (
-            block.startswith("#") or "\n" not in block
-        ):
+        if block.startswith("#") and "\n" not in block:
+            heading = block
+        if index + 1 < len(raw_blocks) and len(block) <= 120 and block.startswith("#"):
             block = f"{block}\n\n{raw_blocks[index + 1]}"
             index += 2
         else:
             index += 1
+            if heading and not block.startswith("#"):
+                block = f"{heading}\n\n{block}"
         chunks.extend(_split_long_block(block, max_chars=1200))
 
     return [(i, chunk) for i, chunk in enumerate(chunks) if chunk.strip()]
@@ -148,7 +151,7 @@ def _select_focused_content(
 ) -> tuple[str, dict[str, object]]:
     stripped_content = content.strip()
     normalized_query = _normalize_whitespace(focus_query or "")
-    if not normalized_query or not stripped_content:
+    if not normalized_query or not stripped_content or len(stripped_content) <= max_chars:
         return content, {"focused": False}
 
     chunks = _build_focus_chunks(stripped_content)
@@ -173,7 +176,19 @@ def _select_focused_content(
             "candidate_chunk_count": len(chunks),
         }
 
-    focused = "\n\n".join(chunks[i][1] for i in selected).strip()
+    chosen: list[str] = []
+    last_heading: str | None = None
+    for i in selected:
+        chunk = chunks[i][1]
+        first_line = chunk.split("\n", 1)[0]
+        if first_line.startswith("#"):
+            if first_line == last_heading:
+                chunk = chunk[len(first_line):].strip()
+            else:
+                last_heading = first_line
+        if chunk:
+            chosen.append(chunk)
+    focused = "\n\n".join(chosen).strip()
     if not focused:
         return content, {"focused": False}
 
