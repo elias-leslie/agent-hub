@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime
 from typing import Any
 
 from app.services.session_ingestion.models import NormalizedEvent
 
 JsonObject = dict[str, object]
+_WEB_CALL_RE = re.compile(r"\btools\.web__run\s*\(")
+_CUA_CALL_RE = re.compile(r"\b(?:cua|tab|nodeRepl)\.[A-Za-z_][\w.]*\s*\(")
+
+
+def _native_tool_hints(tool_name: object, arguments: dict[str, Any]) -> list[str]:
+    """Label visible native call syntax without asserting a permission decision."""
+    if tool_name == "exec":
+        code = arguments.get("raw")
+        return ["web__run"] if isinstance(code, str) and _WEB_CALL_RE.search(code) else []
+    if tool_name == "js":
+        code = arguments.get("code")
+        return ["mcp__cua_repl.js"] if isinstance(code, str) and _CUA_CALL_RE.search(code) else []
+    return []
 
 
 class _ParseState:
@@ -257,6 +271,9 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
         else:
             arguments = {}
         tool_name = payload.get("name")
+        native_tool_hints = _native_tool_hints(tool_name, arguments)
+        if native_tool_hints:
+            arguments["native_tool_hints"] = native_tool_hints
         call_id = payload.get("call_id")
         if isinstance(call_id, str) and call_id:
             arguments = {**arguments, "call_id": call_id}

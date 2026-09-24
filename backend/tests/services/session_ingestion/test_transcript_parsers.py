@@ -55,6 +55,38 @@ class TestParseTranscriptEvents:
         assert events[2].tool_name == "exec_command"
         assert events[3].content == "M backend/app.py"
 
+    def test_native_web_and_browser_calls_get_informational_hints(self) -> None:
+        calls = [
+            {"type": "custom_tool_call", "name": "exec", "call_id": "web-1",
+             "input": "const result = await tools.web__run({search_query: [{q: 'docs'}]});"},
+            {"type": "function_call", "name": "js", "call_id": "browser-1",
+             "arguments": json.dumps({"code": "let state = await cua.getState();", "title": "Inspect tab"})},
+            {"type": "function_call", "name": "js", "call_id": "browser-2",
+             "arguments": json.dumps({"code": "let state = await tab.playwright.domSnapshot();", "title": "Inspect DOM"})},
+            {"type": "custom_tool_call", "name": "exec", "call_id": "other-1",
+             "input": "The user mentioned web__run in prose."},
+        ]
+        events = parse_transcript_events([
+            json.dumps({"type": "response_item", "payload": call}) for call in calls
+        ])
+
+        assert [event.tool_name for event in events] == ["exec", "js", "js", "exec"]
+        assert events[0].tool_input == {
+            "raw": calls[0]["input"], "format": "opaque", "call_id": "web-1",
+            "native_tool_hints": ["web__run"],
+        }
+        assert events[1].tool_input == {
+            "code": "let state = await cua.getState();", "title": "Inspect tab",
+            "call_id": "browser-1", "native_tool_hints": ["mcp__cua_repl.js"],
+        }
+        assert events[2].tool_input == {
+            "code": "let state = await tab.playwright.domSnapshot();", "title": "Inspect DOM",
+            "call_id": "browser-2", "native_tool_hints": ["mcp__cua_repl.js"],
+        }
+        assert events[3].tool_input == {
+            "raw": calls[3]["input"], "format": "opaque", "call_id": "other-1",
+        }
+
     def test_parses_claude_progress_subagent_events_with_models_and_tool_results(self) -> None:
         lines = [
             '{"type":"user","message":{"role":"user","content":"Inspect adapters"}}',
