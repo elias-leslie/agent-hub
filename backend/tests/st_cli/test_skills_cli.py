@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from agent_hub_st import skills
 from typer.testing import CliRunner
 
@@ -64,6 +65,55 @@ exclude = []
     assert gemini.skills_dir == Path("~/.gemini/config/skills").expanduser()
     assert gemini.commands_dir is None
     assert gemini.exclude == []
+
+
+def test_skill_inclusion_and_exclusion_match_manifest_scope(tmp_path: Path) -> None:
+    for name in ("_shared", "design", "copy", "other"):
+        (tmp_path / "skills" / name).mkdir(parents=True)
+    (tmp_path / "commands").mkdir()
+    (tmp_path / "manifest.toml").write_text(f"""
+[harness.all]
+skills_dir = "{tmp_path / 'all'}"
+exclude = []
+
+[harness.narrow]
+skills_dir = "{tmp_path / 'narrow'}"
+include = ["design", "copy"]
+exclude = ["copy"]
+
+[harness.empty]
+skills_dir = "{tmp_path / 'empty'}"
+include = []
+exclude = []
+
+[profile.backend]
+exclude = ["design"]
+""")
+
+    def names(profile: str | None = None) -> dict[str, set[str]]:
+        selected: dict[str, set[str]] = {}
+        for harness, destination, _ in skills._expected(tmp_path, profile_name=profile):
+            selected.setdefault(harness, set()).add(destination.name)
+        return selected
+
+    assert names() == {
+        "all": {"_shared", "design", "copy", "other"},
+        "narrow": {"_shared", "design"},
+        "empty": {"_shared"},
+    }
+    assert names("backend") == {
+        "all": {"_shared", "copy", "other"},
+        "narrow": {"_shared"},
+        "empty": {"_shared"},
+    }
+
+    (tmp_path / "manifest.toml").write_text(f"""
+[harness.narrow]
+skills_dir = "{tmp_path / 'narrow'}"
+include = ["missing"]
+""")
+    with pytest.raises(ValueError, match="Unknown skills"):
+        skills._load_harnesses(tmp_path)
 
 
 def test_load_harnesses_fallback(tmp_path: Path) -> None:

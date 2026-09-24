@@ -50,6 +50,7 @@ class Harness:
     skills_dir: Path
     commands_dir: Path | None
     exclude: list[str] = field(default_factory=list)
+    include: list[str] | None = None
 
 
 def _load_harnesses(canon: Path, profile_name: str | None = None) -> list[Harness]:
@@ -65,6 +66,7 @@ def _load_harnesses(canon: Path, profile_name: str | None = None) -> list[Harnes
             profile_excludes = list(profiles[effective_profile].get("exclude") or [])
 
         out: list[Harness] = []
+        available_skills = set(_canonical_items(canon)[0])
         for name, cfg in (data.get("harness") or {}).items():
             sd = cfg.get("skills_dir", "").strip()
             cd = cfg.get("commands_dir", "").strip()
@@ -72,12 +74,20 @@ def _load_harnesses(canon: Path, profile_name: str | None = None) -> list[Harnes
                 continue
             h_excludes = list(cfg.get("exclude") or [])
             combined_excludes = list(set(h_excludes + profile_excludes))
+            include = cfg.get("include")
+            if include is not None:
+                if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
+                    raise ValueError(f"Invalid includes for harness {name}")
+                unknown = set(include) - available_skills
+                if unknown:
+                    raise ValueError(f"Unknown skills in {name} include list: {', '.join(sorted(unknown))}")
             out.append(
                 Harness(
                     name=name,
                     skills_dir=Path(sd).expanduser(),
                     commands_dir=Path(cd).expanduser() if cd else None,
                     exclude=combined_excludes,
+                    include=include,
                 )
             )
         if out:
@@ -134,7 +144,7 @@ def _expected(canon: Path, profile_name: str | None = None) -> list[tuple[str, P
     for h in _load_harnesses(canon, profile_name=profile_name):
         rows.append((h.name, h.skills_dir / "_shared", canon / "skills" / "_shared"))
         for s in skills:
-            if s in h.exclude:
+            if s in h.exclude or (h.include is not None and s not in h.include):
                 continue
             rows.append((h.name, h.skills_dir / s, canon / "skills" / s))
         if h.commands_dir is not None:
