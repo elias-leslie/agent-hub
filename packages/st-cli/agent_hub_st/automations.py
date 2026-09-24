@@ -78,6 +78,7 @@ def catalog(
     project: Annotated[str | None, typer.Option("--project")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """List registered background workflow types, optionally by owner project."""
     payload = _api("GET", AUTOMATIONS_REGISTRY_PATH)
     definitions = _items(payload, "definitions")
     if project:
@@ -103,6 +104,7 @@ def list_profiles(
     offset: Annotated[int, typer.Option("--offset", min=0)] = 0,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """List automation profiles and effective state with pagination."""
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if project:
         params["project_id"] = project
@@ -131,6 +133,7 @@ def show(
     profile_id: str,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Show one automation profile, revision, gates, and schedule."""
     payload = _api("GET", f"{AUTOMATIONS_PROFILES_PATH}/{profile_id}")
     if as_json:
         output_json(payload)
@@ -156,6 +159,7 @@ def validate(
     file: Annotated[str, typer.Option("--file", help="JSON/YAML path or - for stdin")],
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Validate a profile against its registered workflow contract without saving."""
     result = _api("POST", f"{AUTOMATIONS_PROFILES_PATH}/validate", payload=_input(file))
     if as_json:
         output_json(result)
@@ -179,6 +183,7 @@ def apply(
     file: Annotated[str, typer.Option("--file", help="JSON/YAML path or - for stdin")],
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Create or revise an automation profile with revision protection."""
     payload = _input(file)
     profile_id = payload.pop("id", None)
     if profile_id is not None and (not isinstance(profile_id, str) or "expected_revision" not in payload):
@@ -204,6 +209,7 @@ def import_owner_state(
     file: Annotated[str, typer.Option("--file", help="JSON/YAML path or - for stdin")],
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Register an owner's schedule and cursor without transferring its clock."""
     payload = _input(file)
     if not isinstance(payload.get("source_ref"), str) or not payload["source_ref"]:
         output_error("Owner import requires a stable source_ref")
@@ -227,6 +233,7 @@ def cutover(
     next_run_at: Annotated[str | None, typer.Option("--next-run-at")] = None,
     as_json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Transfer an imported schedule after its owner durably fences the old clock."""
     if not fence_receipt.strip():
         output_error("Cutover requires a non-empty owner fence receipt")
         raise typer.Exit(2)

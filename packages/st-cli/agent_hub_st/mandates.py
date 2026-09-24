@@ -14,9 +14,9 @@ form a model consumes). No `{ok, data}` envelope.
 from __future__ import annotations
 
 import typer
-from st_sdk.usage import usage
 from st_sdk.context import OutputContext
 from st_sdk.output import output_json
+from st_sdk.usage import usage
 
 from .memory_api import agent_hub_request
 
@@ -28,7 +28,11 @@ _PROGRESSIVE_CONTEXT_PATH = "/api/memory/progressive-context"
 def mandates(ctx: typer.Context) -> None:
     """Print the active mandate union (same set SessionStart hooks inject).
 
-    Examples: st mandates | st mandates --human | st mandates --no-compact
+    \b
+    Examples:
+      st mandates
+      st --no-compact mandates
+      st --no-compact --human mandates
     """
     out = ctx.obj if isinstance(ctx.obj, OutputContext) else OutputContext()
     data = agent_hub_request(
