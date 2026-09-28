@@ -87,6 +87,119 @@ class TestParseTranscriptEvents:
             "raw": calls[3]["input"], "format": "opaque", "call_id": "other-1",
         }
 
+    def test_native_command_execution_keeps_exact_span_and_wrapper(self) -> None:
+        lines = [
+            json.dumps({
+                "type": "response_item", "timestamp": "2026-09-28T16:48:15Z",
+                "payload": {"type": "custom_tool_call", "id": "outer-start",
+                            "name": "exec", "call_id": "call-outer", "input": "run"},
+            }),
+            json.dumps({
+                "type": "event_msg", "timestamp": "2026-09-28T16:48:17Z",
+                "payload": {
+                    "type": "item_completed", "started_at_ms": 1_790_614_095_812,
+                    "completed_at_ms": 1_790_614_096_886,
+                    "item": {
+                        "type": "CommandExecution", "id": "exec-native", "status": "completed",
+                        "command": ["/bin/bash", "-lc", "printf done"],
+                        "cwd": "file:///workspace", "source": "unified_exec_startup",
+                        "stdout": "done", "stderr": "", "exit_code": 0,
+                    },
+                },
+            }),
+            json.dumps({
+                "type": "response_item", "timestamp": "2026-09-28T16:48:19Z",
+                "payload": {"type": "custom_tool_call_output", "id": "outer-result",
+                            "call_id": "call-outer", "output": "done"},
+            }),
+        ]
+
+        events = parse_transcript_events(lines)
+
+        assert [event.event_type for event in events] == [
+            "tool_use", "tool_use", "tool_result", "tool_result"
+        ]
+        native_start, native_result = events[1:3]
+        assert native_start.call_id == native_result.call_id == "exec-native"
+        assert native_start.tool_name == "Bash"
+        assert native_start.tool_input == {
+            "command": ["/bin/bash", "-lc", "printf done"],
+            "cwd": "file:///workspace",
+            "source": "unified_exec_startup",
+            "wrapper_candidate_call_id": "call-outer",
+            "wrapper_correlation": "single_open_exec",
+        }
+        assert native_result.tool_output == {
+            "stdout": "done", "stderr": "", "status": "completed",
+            "exit_code": 0, "is_error": False,
+        }
+        assert native_result.duration_ms == 1074
+        assert native_start.source_timestamp is not None
+        assert native_result.source_timestamp is not None
+        assert native_start.source_timestamp.isoformat() == "2026-09-28T16:48:15.812000+00:00"
+        assert native_result.source_timestamp.isoformat() == "2026-09-28T16:48:16.886000+00:00"
+        assert native_start.source_event_id is not None
+        assert native_result.source_event_id is not None
+        assert native_start.source_event_id.startswith("event_msg:exec-native:")
+        assert native_start.source_event_id.endswith(":1")
+        assert native_result.source_event_id.endswith(":2")
+
+    def test_native_command_conflict_and_incomplete_record_remain_visible(self) -> None:
+        def command(stdout: str) -> str:
+            return json.dumps({
+                "type": "event_msg", "timestamp": "2026-09-28T16:48:17Z",
+                "payload": {
+                    "type": "item_completed", "started_at_ms": 1_790_614_095_812,
+                    "completed_at_ms": 1_790_614_096_886,
+                    "item": {
+                        "type": "CommandExecution", "id": "exec-conflict",
+                        "command": "true", "status": "completed", "exit_code": 0,
+                        "stdout": stdout, "stderr": "",
+                    },
+                },
+            })
+        malformed = json.dumps({
+            "type": "event_msg", "timestamp": "2026-09-28T16:48:20Z",
+            "payload": {"type": "item_completed", "item": {
+                "type": "CommandExecution", "id": "exec-incomplete",
+                "command": "true", "status": "completed", "exit_code": 0,
+            }},
+        })
+        null_output = json.dumps({
+            "type": "event_msg", "timestamp": "2026-09-28T16:48:21Z",
+            "payload": {"type": "item_completed", "started_at_ms": 1_790_614_095_812,
+                        "completed_at_ms": 1_790_614_096_886, "item": {
+                "type": "CommandExecution", "id": "exec-null-output",
+                "command": "true", "status": "completed", "exit_code": 0,
+                "stdout": None, "stderr": None,
+            }},
+        })
+        non_finite_time = json.dumps({
+            "type": "event_msg", "timestamp": "2026-09-28T16:48:22Z",
+            "payload": {"type": "item_completed", "started_at_ms": float("inf"),
+                        "completed_at_ms": float("inf"), "item": {
+                "type": "CommandExecution", "id": "exec-bad-time",
+                "command": "true", "status": "completed", "exit_code": 0,
+                "stdout": "", "stderr": "",
+            }},
+        })
+
+        events = parse_transcript_events([
+            command("one"), command("two"), malformed, null_output, non_finite_time
+        ])
+
+        conflict_starts = [event for event in events if event.call_id == "exec-conflict"
+                           and event.event_type == "tool_use"]
+        assert len(conflict_starts) == 2
+        assert conflict_starts[0].source_event_id != conflict_starts[1].source_event_id
+        errors = [event.content for event in events if event.event_type == "error"]
+        assert errors == [
+            "Native command execution exec-incomplete has invalid timestamps.",
+            "Native command execution exec-incomplete is missing its output.",
+            "Native command execution exec-null-output is missing its output.",
+            "Native command execution exec-bad-time has invalid timestamps.",
+        ]
+
     def test_parses_claude_progress_subagent_events_with_models_and_tool_results(self) -> None:
         lines = [
             '{"type":"user","message":{"role":"user","content":"Inspect adapters"}}',
@@ -188,6 +301,49 @@ def test_read_incremental_transcript_events_preserves_turns_and_sequences(tmp_pa
     }
     assert first_state["byte_offset"] < second_state["byte_offset"]
     assert first_state["inode"] == second_state["inode"]
+
+
+@pytest.mark.unit
+def test_incremental_native_execution_keeps_exact_wrapper_across_reads(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    wrapper = {
+        "type": "response_item", "ordinal": 1,
+        "payload": {"type": "custom_tool_call", "id": "outer-start",
+                    "name": "exec", "call_id": "call-outer", "input": "run"},
+    }
+    command = {
+        "type": "event_msg", "ordinal": 2,
+        "payload": {
+            "type": "item_completed", "started_at_ms": 1_790_614_095_812,
+            "completed_at_ms": 1_790_614_096_886,
+            "item": {"type": "CommandExecution", "id": "exec-native",
+                     "command": "true", "status": "completed", "exit_code": 0,
+                     "stdout": "", "stderr": ""},
+        },
+    }
+    result = {
+        "type": "response_item", "ordinal": 3,
+        "payload": {"type": "custom_tool_call_output", "id": "outer-result",
+                    "call_id": "call-outer", "output": "done"},
+    }
+    transcript.write_text(json.dumps(wrapper) + "\n")
+
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    with transcript.open("a") as output:
+        output.write(json.dumps(command) + "\n" + json.dumps(result) + "\n")
+    second, next_checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+    replay, replay_checkpoint = read_incremental_transcript_events(
+        str(transcript), next_checkpoint
+    )
+
+    assert first[0].call_id == "call-outer"
+    assert json.loads(checkpoint or "{}")["active_exec_call_ids"] == ["call-outer"]
+    assert second[0].tool_input is not None
+    assert second[0].tool_input["wrapper_candidate_call_id"] == "call-outer"
+    assert second[0].call_id == second[1].call_id == "exec-native"
+    assert json.loads(next_checkpoint or "{}")["active_exec_call_ids"] == []
+    assert replay == []
+    assert replay_checkpoint == next_checkpoint
 
 
 @pytest.mark.unit

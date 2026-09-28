@@ -61,6 +61,7 @@ def read_incremental_transcript_events(
         saw_content=parser_checkpoint.saw_content,
         history_start_ordinal=parser_checkpoint.history_start_ordinal,
         parent_thread_id=parser_checkpoint.parent_thread_id,
+        active_exec_call_ids=parser_checkpoint.active_exec_call_ids,
     )
     try:
         with path.open("rb") as transcript:
@@ -133,6 +134,7 @@ class _TranscriptParseCheckpoint:
     saw_content: bool = False
     history_start_ordinal: int | None = None
     parent_thread_id: str | None = None
+    active_exec_call_ids: tuple[str, ...] = ()
 
 
 def _load_parse_checkpoint(
@@ -157,6 +159,7 @@ def _load_parse_checkpoint(
     device = parsed.get("device")
     inode = parsed.get("inode")
     tail_digest = parsed.get("tail_digest")
+    active_exec_call_ids = parsed.get("active_exec_call_ids", [])
     if not isinstance(line_offset, int) or line_offset < 0:
         return _TranscriptParseCheckpoint()
     if not isinstance(turn, int) or turn < 1:
@@ -171,6 +174,11 @@ def _load_parse_checkpoint(
         return _TranscriptParseCheckpoint()
     if parent_thread_id is not None and not isinstance(parent_thread_id, str):
         return _TranscriptParseCheckpoint()
+    if not isinstance(active_exec_call_ids, list) or not all(
+        isinstance(call_id, str) and call_id for call_id in active_exec_call_ids
+    ):
+        return _TranscriptParseCheckpoint()
+    active_exec_calls = tuple(active_exec_call_ids)
     # Existing JSON checkpoints carry valid parser state but no byte position.
     # Scan their completed prefix once; never reinterpret old rows using new event kinds.
     if byte_offset is None:
@@ -179,6 +187,7 @@ def _load_parse_checkpoint(
             saw_content=saw_content, legacy=True,
             history_start_ordinal=history_start_ordinal,
             parent_thread_id=parent_thread_id,
+            active_exec_call_ids=active_exec_calls,
         )
     if not isinstance(byte_offset, int) or byte_offset < 0:
         return _TranscriptParseCheckpoint()
@@ -195,6 +204,7 @@ def _load_parse_checkpoint(
         saw_content=saw_content,
         history_start_ordinal=history_start_ordinal,
         parent_thread_id=parent_thread_id,
+        active_exec_call_ids=active_exec_calls,
     )
 
 
@@ -239,6 +249,7 @@ def _dump_parse_checkpoint(
             "saw_content": state._saw_content,
             "history_start_ordinal": state.history_start_ordinal,
             "parent_thread_id": state.parent_thread_id,
+            "active_exec_call_ids": state.active_exec_call_ids,
         },
         separators=(",", ":"),
         sort_keys=True,

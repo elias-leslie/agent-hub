@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.services.session_ingestion.models import NormalizedEvent
@@ -32,6 +32,7 @@ class _ParseState:
     def __init__(
         self, *, turn: int = 1, sequence: int = 0, saw_content: bool = False,
         history_start_ordinal: int | None = None, parent_thread_id: str | None = None,
+        active_exec_call_ids: tuple[str, ...] = (),
     ) -> None:
         self.turn = turn
         self.sequence = sequence
@@ -42,10 +43,23 @@ class _ParseState:
         self._source_index = 0
         self.history_start_ordinal = history_start_ordinal
         self.parent_thread_id = parent_thread_id
+        self.active_exec_call_ids = list(active_exec_call_ids)
 
     def set_source(self, obj: JsonObject, fallback_id: str | None = None) -> None:
         payload = obj.get("payload")
         native_id = payload.get("id") if isinstance(payload, dict) else None
+        item = payload.get("item") if isinstance(payload, dict) else None
+        if (
+            (not isinstance(native_id, str) or not native_id)
+            and isinstance(item, dict)
+            and item.get("type") == "CommandExecution"
+            and isinstance(item.get("id"), str)
+            and item["id"]
+        ):
+            digest = hashlib.sha256(
+                json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+            ).hexdigest()[:16]
+            native_id = f"{item['id']}:{digest}"
         if not isinstance(native_id, str) or not native_id:
             native_id = fallback_id
         self._source_id = f"{obj.get('type')}:{native_id}" if native_id else None
@@ -64,6 +78,7 @@ class _ParseState:
         if self._saw_content:
             self.turn += 1
         self.sequence = 0
+        self.active_exec_call_ids.clear()
 
     def append(self, event_type: str, **kwargs: Any) -> None:
         self.sequence += 1
@@ -109,8 +124,8 @@ def append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
         return
     if entry_type == "event_msg":
         payload = obj.get("payload")
-        if isinstance(payload, dict) and payload.get("type") == "token_count":
-            _append_codex_token_counter(payload, state)
+        if isinstance(payload, dict):
+            _append_codex_event_message(payload, state)
         return
     if entry_type == "progress":
         _append_claude_progress_events(obj, state)
@@ -283,6 +298,12 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_input=arguments,
         )
+        if (
+            tool_name in {"exec", "functions.exec"}
+            and isinstance(call_id, str)
+            and call_id
+        ):
+            state.active_exec_call_ids.append(call_id)
         return
     if payload_type in {"function_call_output", "custom_tool_call_output"}:
         output = payload.get("output")
@@ -309,6 +330,135 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             "tool_result", call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_output=tool_output, content=rendered,
         )
+        if isinstance(call_id, str) and call_id in state.active_exec_call_ids:
+            state.active_exec_call_ids.remove(call_id)
+
+
+def _timestamp_from_milliseconds(value: object) -> datetime | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+        return None
+    try:
+        return datetime.fromtimestamp(value / 1000, tz=UTC)
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def _command_duration_ms(
+    item: JsonObject,
+    started_at: datetime | None,
+    completed_at: datetime | None,
+) -> int | None:
+    if started_at is not None and completed_at is not None:
+        return max(0, round((completed_at - started_at).total_seconds() * 1000))
+    duration = item.get("duration")
+    if not isinstance(duration, dict):
+        return None
+    seconds = duration.get("secs")
+    nanos = duration.get("nanos")
+    if (
+        not isinstance(seconds, int)
+        or isinstance(seconds, bool)
+        or seconds < 0
+        or not isinstance(nanos, int)
+        or isinstance(nanos, bool)
+        or not 0 <= nanos < 1_000_000_000
+    ):
+        return None
+    return seconds * 1000 + round(nanos / 1_000_000)
+
+
+def _append_codex_command_execution(payload: JsonObject, state: _ParseState) -> None:
+    item = payload.get("item")
+    if not isinstance(item, dict) or item.get("type") != "CommandExecution":
+        return
+    call_id = item.get("id")
+    command = item.get("command")
+    valid_command = isinstance(command, str) or (
+        isinstance(command, list)
+        and all(isinstance(part, str) for part in command)
+    )
+    if not isinstance(call_id, str) or not call_id:
+        state.append("error", content="Native command execution is missing its identity.")
+        return
+    if not valid_command:
+        state.append("error", content=f"Native command execution {call_id} is missing its command.")
+        return
+
+    started_at = _timestamp_from_milliseconds(payload.get("started_at_ms"))
+    completed_at = _timestamp_from_milliseconds(payload.get("completed_at_ms"))
+    if started_at is None or completed_at is None or completed_at < started_at:
+        state.append("error", content=f"Native command execution {call_id} has invalid timestamps.")
+        started_at = completed_at = None
+
+    status = item.get("status")
+    exit_code = item.get("exit_code")
+    if not isinstance(status, str) or not status:
+        state.append("error", content=f"Native command execution {call_id} is missing its status.")
+    if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+        state.append("error", content=f"Native command execution {call_id} is missing its exit code.")
+    output_present = any(
+        isinstance(item.get(key), str)
+        for key in ("stdout", "stderr", "aggregated_output", "formatted_output")
+    )
+    if not output_present:
+        state.append("error", content=f"Native command execution {call_id} is missing its output.")
+
+    tool_input: dict[str, Any] = {"command": command}
+    for key in ("cwd", "source"):
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            tool_input[key] = value
+    if len(state.active_exec_call_ids) == 1:
+        tool_input["wrapper_candidate_call_id"] = state.active_exec_call_ids[0]
+        tool_input["wrapper_correlation"] = "single_open_exec"
+
+    tool_output: dict[str, Any] = {}
+    for key in ("stdout", "stderr"):
+        value = item.get(key)
+        if isinstance(value, str):
+            tool_output[key] = value
+    if not tool_output:
+        fallback = item.get("aggregated_output")
+        if not isinstance(fallback, str):
+            fallback = item.get("formatted_output")
+        if isinstance(fallback, str):
+            tool_output["output"] = fallback
+    if isinstance(status, str):
+        tool_output["status"] = status
+    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+        tool_output["exit_code"] = exit_code
+    for key in ("truncated", "output_truncated"):
+        if item.get(key) is True:
+            tool_output[key] = True
+    tool_output["is_error"] = (
+        not isinstance(status, str)
+        or status not in {"completed", "success", "succeeded"}
+        or not isinstance(exit_code, int)
+        or isinstance(exit_code, bool)
+        or exit_code != 0
+    )
+    duration_ms = _command_duration_ms(item, started_at, completed_at)
+    state.append(
+        "tool_use",
+        tool_name="Bash",
+        call_id=call_id,
+        tool_input=tool_input,
+        source_timestamp=started_at,
+    )
+    state.append(
+        "tool_result",
+        call_id=call_id,
+        tool_output=tool_output,
+        duration_ms=duration_ms,
+        source_timestamp=completed_at,
+    )
+
+
+def _append_codex_event_message(payload: JsonObject, state: _ParseState) -> None:
+    if payload.get("type") == "token_count":
+        _append_codex_token_counter(payload, state)
+    elif payload.get("type") == "item_completed":
+        _append_codex_command_execution(payload, state)
 
 
 _USAGE_FIELDS = (
