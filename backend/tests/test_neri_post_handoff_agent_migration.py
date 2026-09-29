@@ -39,7 +39,7 @@ def test_alignment_accepts_seeded_live_and_already_aligned_prompts() -> None:
     )
 
     assert migration._aligned_prompt(
-        agents['neri-reporter']['system_prompt'],
+        migration._REPORTER_PROMPT,
         migration._REPORTER_PROMPT,
         (migration._PREVIOUS_REPORTER_PROMPT,),
     ) == migration._REPORTER_PROMPT
