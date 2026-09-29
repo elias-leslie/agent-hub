@@ -761,6 +761,7 @@ async def test_ingest_transcript_events_retains_native_source_health_for_refresh
 ) -> None:
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
+        '{"type":"session_meta","payload":{"id":"session-health"}}\n'
         '{"type":"response_item","payload":{"type":"message","role":"assistant",'
         '"content":[{"type":"output_text","text":"ready"}]}}\n'
     )
@@ -815,6 +816,43 @@ async def test_ingest_transcript_events_retains_native_source_health_for_refresh
     assert retained["checkpoint"] == result.next_checkpoint
     assert retained["source_health"]["state"] == "ready"
     assert db.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ingest_rejects_codex_transcript_from_another_native_session(
+    tmp_path: Path,
+) -> None:
+    transcript = tmp_path / "wrong-session.jsonl"
+    transcript.write_text(
+        '{"type":"session_meta","payload":{"id":"different-session"}}\n'
+    )
+    session = Session(
+        id="expected-session",
+        project_id="neri",
+        provider="codex",
+        model="codex/gpt-5.4",
+        status="active",
+        session_type="agent",
+        provider_metadata={"transcript_path": str(transcript)},
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+
+    with pytest.raises(SessionIngestionConflict) as denied:
+        await ingest_transcript_events(
+            db=AsyncMock(),
+            session_id=session.id,
+            request=TranscriptIngestRequest(
+                provider="codex",
+                transcript_path=str(transcript),
+            ),
+            session=session,
+        )
+
+    assert denied.value.code == "transcript_session_identity_mismatch"
 
 
 @pytest.mark.unit
@@ -964,6 +1002,10 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
 
     with (
         patch(
+            "app.services.session_ingestion.service.transcript_session_identity",
+            return_value="session-scope",
+        ),
+        patch(
             "app.services.session_ingestion.service._adapter_for_provider",
             return_value=adapter,
         ),
@@ -1031,6 +1073,10 @@ async def test_ingest_transcript_events_upgrades_unknown_scope_confidence_from_s
     )
 
     with (
+        patch(
+            "app.services.session_ingestion.service.transcript_session_identity",
+            return_value="session-scope-upgrade",
+        ),
         patch(
             "app.services.session_ingestion.service._adapter_for_provider",
             return_value=adapter,

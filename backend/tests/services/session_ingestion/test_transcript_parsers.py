@@ -12,6 +12,7 @@ from app.services.session_ingestion.adapters.transcript_parsers import (
     parse_transcript_events,
     read_incremental_transcript_events,
     read_jsonl_lines,
+    transcript_session_identity,
 )
 
 
@@ -667,3 +668,34 @@ def test_child_transcript_excludes_inherited_usage_and_keeps_parent_provenance(t
         "response_id": "own", "parent_thread_id": "parent-thread",
     }
     assert json.loads(checkpoint or "{}")["history_start_ordinal"] == 3
+
+
+@pytest.mark.unit
+def test_native_session_identity_comes_from_session_meta(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text("\n".join((
+        json.dumps({"type": "turn_context", "payload": {}}),
+        json.dumps({"type": "session_meta", "payload": {"id": "session-123"}}),
+    )) + "\n")
+
+    assert transcript_session_identity(str(transcript)) == "session-123"
+
+
+@pytest.mark.unit
+def test_unknown_material_record_is_a_blocking_source_issue(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text("\n".join((
+        json.dumps({"type": "session_meta", "payload": {"id": "session-123"}}),
+        json.dumps({
+            "type": "response_item",
+            "payload": {"type": "future_tool_boundary", "call_id": "call-1"},
+        }),
+    )) + "\n")
+
+    _events, checkpoint = read_incremental_transcript_events(str(transcript))
+    health = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert health.state == "incomplete"
+    assert [(issue.code, issue.count) for issue in health.issues] == [
+        ("unsupported_response_item", 1),
+    ]

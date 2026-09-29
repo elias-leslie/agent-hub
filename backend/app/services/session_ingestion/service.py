@@ -24,7 +24,7 @@ from ._service_helpers import (
     _validate_external_id,
 )
 from .adapters.base import ProviderSessionRef
-from .adapters.transcript_parsers import inspect_transcript_source
+from .adapters.transcript_parsers import inspect_transcript_source, transcript_session_identity
 from .models import (
     AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
@@ -212,6 +212,13 @@ async def ingest_transcript_events(
             raise SessionIngestionConflict(
                 "transcript_source_mismatch",
                 "The transcript path does not match the source registered for this session.",
+            )
+    if request.provider.lower() == "codex":
+        native_session_id = transcript_session_identity(request.transcript_path)
+        if native_session_id != session_id:
+            raise SessionIngestionConflict(
+                "transcript_session_identity_mismatch",
+                "The native transcript does not belong to the registered session.",
             )
     adapter = _adapter_for_provider(request.provider)
     session_ref = ProviderSessionRef(

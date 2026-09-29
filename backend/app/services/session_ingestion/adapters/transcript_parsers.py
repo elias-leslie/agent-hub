@@ -20,6 +20,89 @@ from ._event_builders import _ParseState, append_normalized_events
 
 JsonObject = dict[str, object]
 PARSER_VERSION = "agent-hub.transcript-jsonl.v2"
+_KNOWN_TOP_LEVEL_TYPES = {
+    "assistant",
+    "compacted",
+    "event_msg",
+    "inter_agent_communication_metadata",
+    "progress",
+    "response_item",
+    "retained_context",
+    "session_meta",
+    "token_usage_record",
+    "turn_context",
+    "user",
+    "world_state",
+}
+_KNOWN_CODEX_RESPONSE_TYPES = {
+    "custom_tool_call",
+    "custom_tool_call_output",
+    "function_call",
+    "function_call_output",
+    "message",
+    "reasoning",
+}
+_KNOWN_CODEX_EVENT_TYPES = {
+    "agent_message",
+    "item_completed",
+    "task_complete",
+    "task_started",
+    "thread_settings_applied",
+    "token_count",
+    "turn_aborted",
+}
+
+
+def transcript_session_identity(transcript_path: str) -> str | None:
+    """Read the native Codex session identity without ingesting transcript content."""
+    path = Path(transcript_path)
+    try:
+        with path.open("rb") as transcript:
+            for _ in range(32):
+                raw_line = transcript.readline()
+                if not raw_line:
+                    break
+                if not raw_line.endswith(b"\n"):
+                    return None
+                try:
+                    obj = json.loads(raw_line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(obj, dict) or obj.get("type") != "session_meta":
+                    continue
+                payload = obj.get("payload")
+                session_id = payload.get("id") if isinstance(payload, dict) else None
+                return session_id if isinstance(session_id, str) and session_id else None
+    except OSError:
+        return None
+    return None
+
+
+def _unsupported_record_issue(obj: JsonObject) -> str | None:
+    entry_type = obj.get("type")
+    if not isinstance(entry_type, str) or entry_type not in _KNOWN_TOP_LEVEL_TYPES:
+        return "unsupported_record_type"
+    if entry_type == "response_item":
+        payload = obj.get("payload")
+        if not isinstance(payload, dict):
+            return "unsupported_record_shape"
+        payload_type = payload.get("type")
+        if not isinstance(payload_type, str) or payload_type not in _KNOWN_CODEX_RESPONSE_TYPES:
+            return "unsupported_response_item"
+    elif entry_type == "event_msg":
+        payload = obj.get("payload")
+        if not isinstance(payload, dict):
+            return "unsupported_record_shape"
+        payload_type = payload.get("type")
+        if not isinstance(payload_type, str) or payload_type not in _KNOWN_CODEX_EVENT_TYPES:
+            return "unsupported_event_message"
+    elif entry_type in {"session_meta", "token_usage_record"}:
+        if not isinstance(obj.get("payload"), dict):
+            return "unsupported_record_shape"
+    elif entry_type in {"user", "assistant"}:
+        if not isinstance(obj.get("message"), dict):
+            return "unsupported_record_shape"
+    return None
 
 
 def read_jsonl_lines(transcript_path: str, checkpoint: str | None = None) -> tuple[list[str], str | None]:
@@ -109,6 +192,9 @@ def read_incremental_transcript_events(
                     )
                     continue
                 if isinstance(obj, dict):
+                    issue = _unsupported_record_issue(obj)
+                    if issue is not None:
+                        parse_issue_counts[issue] = parse_issue_counts.get(issue, 0) + 1
                     ordinal = obj.get("ordinal")
                     # A transcript can be truncated and rewritten on the same inode.
                     # Include the line content so reused ordinals and offsets do not
