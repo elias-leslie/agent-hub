@@ -24,6 +24,7 @@ from ._service_helpers import (
     _validate_external_id,
 )
 from .adapters.base import ProviderSessionRef
+from .adapters.transcript_parsers import inspect_transcript_source
 from .models import (
     AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
@@ -196,14 +197,29 @@ async def ingest_transcript_events(
     db: AsyncSession,
     session_id: str,
     request: TranscriptIngestRequest,
+    session: Session | None = None,
 ) -> TranscriptIngestResult:
     """Parse a provider transcript and append normalized events idempotently."""
+    if session is not None and session.id != session_id:
+        raise SessionIngestionConflict(
+            "session_identity_mismatch",
+            "The supplied session does not match the transcript target.",
+        )
+    if session is not None:
+        metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+        registered_path = metadata.get("transcript_path")
+        if isinstance(registered_path, str) and registered_path != request.transcript_path:
+            raise SessionIngestionConflict(
+                "transcript_source_mismatch",
+                "The transcript path does not match the source registered for this session.",
+            )
     adapter = _adapter_for_provider(request.provider)
     session_ref = ProviderSessionRef(
         provider_session_id=session_id,
         source_id=request.transcript_path,
     )
     events, next_checkpoint = await adapter.read_new_events(session_ref, request.checkpoint)
+    source_health = inspect_transcript_source(request.transcript_path, next_checkpoint)
     boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
     append_result = await append_normalized_events(
         db=db,
@@ -213,7 +229,7 @@ async def ingest_transcript_events(
     await _reconcile_transcript_session_models(db, session_id)
     if append_result.events_appended == 0:
         await _reconcile_transcript_session_scope(db, session_id)
-    return TranscriptIngestResult(
+    result = TranscriptIngestResult(
         session_id=session_id,
         provider=request.provider,
         transcript_path=request.transcript_path,
@@ -224,4 +240,17 @@ async def ingest_transcript_events(
         event_ids=append_result.event_ids,
         next_checkpoint=next_checkpoint,
         boundaries=[boundary.boundary_type for boundary in boundaries],
+        source_health=source_health,
     )
+    if session is not None:
+        metadata = dict(session.provider_metadata or {})
+        metadata.setdefault("transcript_path", request.transcript_path)
+        metadata["transcript_ingestion"] = {
+            "provider": request.provider,
+            "transcript_path": request.transcript_path,
+            "checkpoint": next_checkpoint,
+            "source_health": source_health.model_dump(mode="json"),
+        }
+        session.provider_metadata = metadata
+        await db.commit()
+    return result

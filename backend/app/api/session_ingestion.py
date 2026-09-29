@@ -190,7 +190,61 @@ async def ingest_transcript_events_endpoint(
     try:
         session = await get_session_or_404(db, session_id)
         require_project_access(http_request, session.project_id)
-        return await ingest_transcript_events(db, session_id, request)
+        return await ingest_transcript_events(db, session_id, request, session=session)
+    except ValueError as exc:
+        status = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+@router.post(
+    "/sessions/{session_id}/transcript-refresh",
+    response_model=TranscriptIngestResult,
+)
+async def refresh_transcript_events_endpoint(
+    session_id: str,
+    http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TranscriptIngestResult:
+    """Catch up the exact transcript source already registered for a session."""
+    try:
+        session = await get_session_or_404(db, session_id)
+        require_project_access(http_request, session.project_id)
+        metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+        retained = metadata.get("transcript_ingestion")
+        retained = retained if isinstance(retained, dict) else {}
+        transcript_path = metadata.get("transcript_path")
+        if not isinstance(transcript_path, str) or not transcript_path:
+            raise SessionIngestionConflict(
+                "transcript_source_unregistered",
+                "This session has no registered native transcript source.",
+            )
+        provider = retained.get("provider") or session.provider
+        if not isinstance(provider, str) or not provider:
+            raise SessionIngestionConflict(
+                "transcript_provider_unregistered",
+                "This session has no registered transcript provider.",
+            )
+        checkpoint = retained.get("checkpoint")
+        if checkpoint is not None and not isinstance(checkpoint, str):
+            raise SessionIngestionConflict(
+                "transcript_checkpoint_invalid",
+                "The retained transcript checkpoint is invalid.",
+            )
+        return await ingest_transcript_events(
+            db,
+            session_id,
+            TranscriptIngestRequest(
+                provider=provider,
+                transcript_path=transcript_path,
+                checkpoint=checkpoint,
+            ),
+            session=session,
+        )
+    except SessionIngestionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status, detail=str(exc)) from exc

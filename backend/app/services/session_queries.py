@@ -1,11 +1,37 @@
 """Session query filters and statistics."""
 
-from sqlalchemy import Select, func, select
+import base64
+from datetime import datetime
+
+from sqlalchemy import Select, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.session_live_activity import is_session_actionably_active
+
+_EMPTY_EVENT_SNAPSHOT = "empty"
+
+
+def encode_session_event_snapshot(created_at: datetime, event_id: str) -> str:
+    """Encode the inclusive insert boundary for a stable event-page snapshot."""
+    value = f"{created_at.isoformat()}\n{event_id}".encode()
+    return base64.urlsafe_b64encode(value).decode().rstrip("=")
+
+
+def _decode_session_event_snapshot(snapshot: str) -> tuple[datetime, str] | None:
+    if snapshot == _EMPTY_EVENT_SNAPSHOT:
+        return None
+    try:
+        padding = "=" * (-len(snapshot) % 4)
+        decoded = base64.urlsafe_b64decode(snapshot + padding).decode()
+        timestamp_text, event_id = decoded.split("\n", 1)
+        created_at = datetime.fromisoformat(timestamp_text)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("Invalid session event snapshot") from exc
+    if created_at.tzinfo is None or not event_id:
+        raise ValueError("Invalid session event snapshot")
+    return created_at, event_id
 
 
 def apply_session_filters(
@@ -187,7 +213,8 @@ async def query_session_events(
     turn: int | None = None,
     page: int = 1,
     page_size: int = 100,
-) -> tuple[list[SessionEvent], int, int]:
+    snapshot: str | None = None,
+) -> tuple[list[SessionEvent], int, int, str]:
     """Query session events with filtering and pagination.
 
     Args:
@@ -199,10 +226,38 @@ async def query_session_events(
         page_size: Results per page
 
     Returns:
-        Tuple of (events, total_count, max_turn)
+        Tuple of (events, total_count, max_turn, stable snapshot)
     """
+    if snapshot is None:
+        snapshot_result = await db.execute(
+            select(SessionEvent.created_at, SessionEvent.id)
+            .where(SessionEvent.session_id == session_id)
+            .order_by(SessionEvent.created_at.desc(), SessionEvent.id.desc())
+            .limit(1)
+        )
+        snapshot_row = snapshot_result.one_or_none()
+        snapshot = (
+            encode_session_event_snapshot(snapshot_row[0], snapshot_row[1])
+            if snapshot_row is not None
+            else _EMPTY_EVENT_SNAPSHOT
+        )
+
+    boundary = _decode_session_event_snapshot(snapshot)
+    snapshot_predicate = (
+        false()
+        if boundary is None
+        else or_(
+            SessionEvent.created_at < boundary[0],
+            and_(
+                SessionEvent.created_at == boundary[0],
+                SessionEvent.id <= boundary[1],
+            ),
+        )
+    )
     query = select(SessionEvent).where(SessionEvent.session_id == session_id)
     count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
+    query = query.where(snapshot_predicate)
+    count_query = count_query.where(snapshot_predicate)
 
     if event_type:
         query = query.where(SessionEvent.event_type == event_type)
@@ -215,13 +270,21 @@ async def query_session_events(
     total = total_result.scalar() or 0
 
     max_turn_result = await db.execute(
-        select(func.max(SessionEvent.turn)).where(SessionEvent.session_id == session_id)
+        select(func.max(SessionEvent.turn)).where(
+            SessionEvent.session_id == session_id,
+            snapshot_predicate,
+        )
     )
     max_turn = max_turn_result.scalar() or 0
     offset = (page - 1) * page_size
 
     query = (
-        query.order_by(SessionEvent.turn.asc(), SessionEvent.sequence.asc())
+        query.order_by(
+            SessionEvent.turn.asc(),
+            SessionEvent.sequence.asc(),
+            SessionEvent.created_at.asc(),
+            SessionEvent.id.asc(),
+        )
         .offset(offset)
         .limit(page_size)
     )
@@ -229,4 +292,4 @@ async def query_session_events(
     result = await db.execute(query)
     events = list(result.scalars().all())
 
-    return events, total, max_turn
+    return events, total, max_turn, snapshot

@@ -228,20 +228,28 @@ async def get_session_events(
     turn: Annotated[int | None, Query(description="Filter by turn number")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
+    snapshot: Annotated[
+        str | None,
+        Query(description="Stable boundary returned by the first page"),
+    ] = None,
 ) -> SessionEventsResponse:
     """Get session events with filtering and pagination."""
     try:
         await get_session_or_404(db, session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    events, total, max_turn = await query_session_events(
-        db, session_id, event_type, turn, page, page_size
-    )
+    try:
+        events, total, max_turn, event_snapshot = await query_session_events(
+            db, session_id, event_type, turn, page, page_size, snapshot
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SessionEventsResponse(
         session_id=session_id,
         events=build_event_responses(events),
         total=total,
         max_turn=max_turn,
+        snapshot=event_snapshot,
     )
 
 

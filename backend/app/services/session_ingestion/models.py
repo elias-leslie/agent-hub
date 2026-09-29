@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -163,6 +163,31 @@ class TranscriptIngestRequest(BaseModel):
     checkpoint: str | None = None
 
 
+class TranscriptSourceIssue(BaseModel):
+    """Typed source condition that affects transcript completeness."""
+
+    code: str
+    count: int = Field(default=1, ge=1)
+    blocking: bool = True
+    detail: str | None = None
+
+
+class TranscriptSourceHealth(BaseModel):
+    """Observed native transcript extent and committed parser cursor."""
+
+    state: Literal["ready", "incomplete", "blocked"]
+    observed_at: datetime
+    parser_version: str
+    source_generation: str | None = None
+    committed_line_count: int = 0
+    committed_byte_offset: int = 0
+    observed_extent: int | None = None
+    pending_bytes: int | None = None
+    caught_up: bool = False
+    active_call_ids: list[str] = Field(default_factory=list)
+    issues: list[TranscriptSourceIssue] = Field(default_factory=list)
+
+
 class TranscriptIngestResult(BaseModel):
     """Outcome of ingesting transcript-backed events."""
 
@@ -176,3 +201,4 @@ class TranscriptIngestResult(BaseModel):
     event_ids: list[str] = Field(default_factory=list)
     next_checkpoint: str | None = None
     boundaries: list[str] = Field(default_factory=list)
+    source_health: TranscriptSourceHealth

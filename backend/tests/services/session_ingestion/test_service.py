@@ -756,6 +756,69 @@ async def test_ingest_transcript_events_reconciles_direct_session_models_from_ev
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_ingest_transcript_events_retains_native_source_health_for_refresh(
+    tmp_path: Path,
+) -> None:
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        '{"type":"response_item","payload":{"type":"message","role":"assistant",'
+        '"content":[{"type":"output_text","text":"ready"}]}}\n'
+    )
+    session = Session(
+        id="session-health",
+        project_id="neri",
+        provider="codex",
+        model="codex/gpt-5.4",
+        status="active",
+        session_type="agent",
+        provider_metadata={"transcript_path": str(transcript)},
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db = AsyncMock()
+    append_result = MagicMock(
+        events_appended=1,
+        events_skipped=0,
+        last_turn=1,
+        last_sequence=1,
+        event_ids=["event-1"],
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service.append_normalized_events",
+            new_callable=AsyncMock,
+            return_value=append_result,
+        ),
+        patch(
+            "app.services.session_ingestion.service._reconcile_transcript_session_models",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await ingest_transcript_events(
+            db=db,
+            session_id=session.id,
+            request=TranscriptIngestRequest(
+                provider="codex",
+                transcript_path=str(transcript),
+            ),
+            session=session,
+        )
+
+    assert result.source_health.state == "ready"
+    assert session.provider_metadata is not None
+    retained = session.provider_metadata["transcript_ingestion"]
+    assert retained["provider"] == "codex"
+    assert retained["transcript_path"] == str(transcript)
+    assert retained["checkpoint"] == result.next_checkpoint
+    assert retained["source_health"]["state"] == "ready"
+    assert db.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_ingest_transcript_events_preserves_delegated_model_history_from_event_evidence() -> None:
     db = AsyncMock()
     session = Session(

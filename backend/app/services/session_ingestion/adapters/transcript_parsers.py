@@ -5,15 +5,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from io import BufferedReader
 from pathlib import Path
 
-from app.services.session_ingestion.models import NormalizedEvent
+from app.services.session_ingestion.models import (
+    NormalizedEvent,
+    TranscriptSourceHealth,
+    TranscriptSourceIssue,
+)
 
 from ._event_builders import _ParseState, append_normalized_events
 
 JsonObject = dict[str, object]
+PARSER_VERSION = "agent-hub.transcript-jsonl.v2"
 
 
 def read_jsonl_lines(transcript_path: str, checkpoint: str | None = None) -> tuple[list[str], str | None]:
@@ -63,6 +69,7 @@ def read_incremental_transcript_events(
         parent_thread_id=parser_checkpoint.parent_thread_id,
         active_exec_call_ids=parser_checkpoint.active_exec_call_ids,
     )
+    parse_issue_counts = dict(parser_checkpoint.parse_issue_counts)
     try:
         with path.open("rb") as transcript:
             stat = os.fstat(transcript.fileno())
@@ -91,7 +98,15 @@ def read_incremental_transcript_events(
                 line_count += 1
                 try:
                     obj = json.loads(raw_line)
-                except (json.JSONDecodeError, UnicodeDecodeError):
+                except json.JSONDecodeError:
+                    parse_issue_counts["malformed_json"] = (
+                        parse_issue_counts.get("malformed_json", 0) + 1
+                    )
+                    continue
+                except UnicodeDecodeError:
+                    parse_issue_counts["invalid_utf8"] = (
+                        parse_issue_counts.get("invalid_utf8", 0) + 1
+                    )
                     continue
                 if isinstance(obj, dict):
                     ordinal = obj.get("ordinal")
@@ -106,6 +121,10 @@ def read_incremental_transcript_events(
                     )
                     state.set_source(obj, identity)
                     append_normalized_events(obj, state)
+                else:
+                    parse_issue_counts["non_object_json"] = (
+                        parse_issue_counts.get("non_object_json", 0) + 1
+                    )
             tail_digest = _tail_digest(transcript, offset)
     except OSError:
         return [], checkpoint
@@ -116,6 +135,87 @@ def read_incremental_transcript_events(
         inode=stat.st_ino,
         tail_digest=tail_digest,
         state=state,
+        parse_issue_counts=parse_issue_counts,
+    )
+
+
+def inspect_transcript_source(
+    transcript_path: str,
+    checkpoint: str | None,
+) -> TranscriptSourceHealth:
+    """Compare one committed parser cursor with the source currently on disk."""
+    observed_at = datetime.now(UTC)
+    path = Path(transcript_path)
+    if path.suffix != ".jsonl" or not path.exists():
+        return TranscriptSourceHealth(
+            state="blocked",
+            observed_at=observed_at,
+            parser_version=PARSER_VERSION,
+            issues=[TranscriptSourceIssue(
+                code="source_missing",
+                detail="The native JSONL transcript is unavailable.",
+            )],
+        )
+    try:
+        stat = path.stat()
+    except OSError:
+        return TranscriptSourceHealth(
+            state="blocked",
+            observed_at=observed_at,
+            parser_version=PARSER_VERSION,
+            issues=[TranscriptSourceIssue(
+                code="source_unreadable",
+                detail="The native JSONL transcript could not be observed.",
+            )],
+        )
+
+    parsed = _load_parse_checkpoint(checkpoint)
+    generation = hashlib.sha256(
+        f"{stat.st_dev}:{stat.st_ino}".encode()
+    ).hexdigest()
+    identity_matches = (
+        parsed.device == stat.st_dev
+        and parsed.inode == stat.st_ino
+        and parsed.byte_offset <= stat.st_size
+    )
+    issues: list[TranscriptSourceIssue] = []
+    if not identity_matches:
+        issues.append(TranscriptSourceIssue(
+            code="source_generation_unverified",
+            detail="The committed parser cursor does not match the observed source generation.",
+        ))
+    committed = parsed.byte_offset if identity_matches else 0
+    pending = stat.st_size - committed
+    if identity_matches and pending:
+        issues.append(TranscriptSourceIssue(
+            code="source_not_caught_up",
+            detail="The source contains bytes beyond the committed parser cursor.",
+        ))
+    for code, count in sorted(parsed.parse_issue_counts.items()):
+        issues.append(TranscriptSourceIssue(
+            code=code,
+            count=count,
+            detail="The parser skipped one or more complete native transcript records.",
+        ))
+    if parsed.active_exec_call_ids:
+        issues.append(TranscriptSourceIssue(
+            code="unresolved_tool_calls",
+            count=len(parsed.active_exec_call_ids),
+            detail="One or more native tool starts have no committed result.",
+        ))
+    caught_up = identity_matches and pending == 0
+    return TranscriptSourceHealth(
+        state="ready" if caught_up and not issues else "incomplete",
+        observed_at=observed_at,
+        parser_version=PARSER_VERSION,
+        source_generation=generation,
+        committed_line_count=parsed.line_offset if identity_matches else 0,
+        committed_byte_offset=committed,
+        observed_extent=stat.st_size,
+        pending_bytes=pending,
+        caught_up=caught_up,
+        active_call_ids=list(parsed.active_exec_call_ids),
+        issues=issues,
     )
 
 
@@ -135,6 +235,7 @@ class _TranscriptParseCheckpoint:
     history_start_ordinal: int | None = None
     parent_thread_id: str | None = None
     active_exec_call_ids: tuple[str, ...] = ()
+    parse_issue_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _load_parse_checkpoint(
@@ -160,6 +261,7 @@ def _load_parse_checkpoint(
     inode = parsed.get("inode")
     tail_digest = parsed.get("tail_digest")
     active_exec_call_ids = parsed.get("active_exec_call_ids", [])
+    parse_issue_counts = parsed.get("parse_issue_counts", {})
     if not isinstance(line_offset, int) or line_offset < 0:
         return _TranscriptParseCheckpoint()
     if not isinstance(turn, int) or turn < 1:
@@ -178,6 +280,15 @@ def _load_parse_checkpoint(
         isinstance(call_id, str) and call_id for call_id in active_exec_call_ids
     ):
         return _TranscriptParseCheckpoint()
+    if not isinstance(parse_issue_counts, dict) or not all(
+        isinstance(code, str)
+        and code
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and count >= 1
+        for code, count in parse_issue_counts.items()
+    ):
+        return _TranscriptParseCheckpoint()
     active_exec_calls = tuple(active_exec_call_ids)
     # Existing JSON checkpoints carry valid parser state but no byte position.
     # Scan their completed prefix once; never reinterpret old rows using new event kinds.
@@ -188,6 +299,7 @@ def _load_parse_checkpoint(
             history_start_ordinal=history_start_ordinal,
             parent_thread_id=parent_thread_id,
             active_exec_call_ids=active_exec_calls,
+            parse_issue_counts=dict(parse_issue_counts),
         )
     if not isinstance(byte_offset, int) or byte_offset < 0:
         return _TranscriptParseCheckpoint()
@@ -205,6 +317,7 @@ def _load_parse_checkpoint(
         history_start_ordinal=history_start_ordinal,
         parent_thread_id=parent_thread_id,
         active_exec_call_ids=active_exec_calls,
+        parse_issue_counts=dict(parse_issue_counts),
     )
 
 
@@ -235,6 +348,7 @@ def _dump_parse_checkpoint(
     inode: int,
     tail_digest: str,
     state: _ParseState,
+    parse_issue_counts: dict[str, int],
 ) -> str:
     """Serialize the parser state into the opaque checkpoint string."""
     return json.dumps(
@@ -250,6 +364,7 @@ def _dump_parse_checkpoint(
             "history_start_ordinal": state.history_start_ordinal,
             "parent_thread_id": state.parent_thread_id,
             "active_exec_call_ids": state.active_exec_call_ids,
+            "parse_issue_counts": parse_issue_counts,
         },
         separators=(",", ":"),
         sort_keys=True,

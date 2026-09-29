@@ -21,12 +21,15 @@ async function fetchAllSessionEvents(
   const allEvents: TimelineEvent[] = []
   let pageNumber = 1
   let totalEvents = 0
+  let snapshot: string | undefined
   do {
     const response = await fetchSessionEvents(sessionId, {
       page: pageNumber,
       page_size: 500,
+      snapshot,
     })
     totalEvents = response.total
+    snapshot = response.snapshot
     allEvents.push(...response.events)
     pageNumber += 1
   } while (allEvents.length < totalEvents)

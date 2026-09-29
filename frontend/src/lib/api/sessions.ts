@@ -257,6 +257,7 @@ export async function fetchSessionEvents(
     turn?: number
     page?: number
     page_size?: number
+    snapshot?: string
   },
 ): Promise<SessionEventsResponse> {
   const searchParams = new URLSearchParams()
@@ -266,6 +267,7 @@ export async function fetchSessionEvents(
   if (params?.page) searchParams.set('page', params.page.toString())
   if (params?.page_size)
     searchParams.set('page_size', params.page_size.toString())
+  if (params?.snapshot) searchParams.set('snapshot', params.snapshot)
 
   const url = searchParams.toString()
     ? `${API_BASE}/sessions/${sessionId}/events?${searchParams}`
@@ -319,6 +321,7 @@ export async function fetchAllSessionEvents(
       turn: params?.turn,
       page,
       page_size: pageSize,
+      snapshot: firstPage.snapshot,
     })
     if (nextPage.events.length === 0) {
       break
@@ -332,5 +335,6 @@ export async function fetchAllSessionEvents(
     events: allEvents,
     total: firstPage.total,
     max_turn: maxTurn,
+    snapshot: firstPage.snapshot,
   }
 }

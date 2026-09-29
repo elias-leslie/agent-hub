@@ -581,6 +581,19 @@ class TestSessionIngestionAPI:
                     "event_ids": ["evt-1", "evt-2"],
                     "next_checkpoint": "4",
                     "boundaries": ["opened"],
+                    "source_health": {
+                        "state": "ready",
+                        "observed_at": "2026-09-29T18:00:00Z",
+                        "parser_version": "agent-hub.transcript-jsonl.v2",
+                        "source_generation": "generation-1",
+                        "committed_line_count": 4,
+                        "committed_byte_offset": 512,
+                        "observed_extent": 512,
+                        "pending_bytes": 0,
+                        "caught_up": True,
+                        "active_call_ids": [],
+                        "issues": [],
+                    },
                 },
             ),
         ):
@@ -597,3 +610,72 @@ class TestSessionIngestionAPI:
         assert data["events_appended"] == 4
         assert data["next_checkpoint"] == "4"
         assert data["boundaries"] == ["opened"]
+        assert data["source_health"]["state"] == "ready"
+        assert data["source_health"]["caught_up"] is True
+
+    @pytest.mark.asyncio
+    async def test_transcript_refresh_uses_retained_source_and_checkpoint(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = MagicMock()
+        session.id = "session-123"
+        session.project_id = "neri"
+        session.provider_metadata = {
+            "transcript_path": "/tmp/session.jsonl",
+            "transcript_ingestion": {
+                "provider": "codex",
+                "checkpoint": "checkpoint-4",
+            },
+        }
+        result = {
+            "session_id": "session-123",
+            "provider": "codex",
+            "transcript_path": "/tmp/session.jsonl",
+            "events_appended": 0,
+            "events_skipped": 0,
+            "last_turn": 1,
+            "last_sequence": 4,
+            "event_ids": [],
+            "next_checkpoint": "checkpoint-4",
+            "boundaries": [],
+            "source_health": {
+                "state": "ready",
+                "observed_at": "2026-09-29T18:00:00Z",
+                "parser_version": "agent-hub.transcript-jsonl.v2",
+                "source_generation": "generation-1",
+                "committed_line_count": 4,
+                "committed_byte_offset": 512,
+                "observed_extent": 512,
+                "pending_bytes": 0,
+                "caught_up": True,
+                "active_call_ids": [],
+                "issues": [],
+            },
+        }
+
+        with (
+            patch(
+                "app.api.session_ingestion.get_session_or_404",
+                new_callable=AsyncMock,
+                return_value=session,
+            ),
+            patch(
+                "app.api.session_ingestion.ingest_transcript_events",
+                new_callable=AsyncMock,
+                return_value=result,
+            ) as ingest,
+        ):
+            response = await client.post(
+                "/api/session-ingestion/sessions/session-123/transcript-refresh"
+            )
+
+        assert response.status_code == 200
+        assert ingest.await_args is not None
+        request = ingest.await_args.args[2]
+        assert request == TranscriptIngestRequest(
+            provider="codex",
+            transcript_path="/tmp/session.jsonl",
+            checkpoint="checkpoint-4",
+        )
+        assert ingest.await_args.kwargs["session"] is session

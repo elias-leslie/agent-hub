@@ -78,9 +78,23 @@ class _ParseState:
         if self._saw_content:
             self.turn += 1
         self.sequence = 0
-        self.active_exec_call_ids.clear()
 
     def append(self, event_type: str, **kwargs: Any) -> None:
+        call_id = kwargs.get("call_id")
+        if (
+            event_type == "tool_use"
+            and isinstance(call_id, str)
+            and call_id
+            and call_id not in self.active_exec_call_ids
+        ):
+            self.active_exec_call_ids.append(call_id)
+        elif (
+            event_type == "tool_result"
+            and isinstance(call_id, str)
+            and call_id
+            and call_id in self.active_exec_call_ids
+        ):
+            self.active_exec_call_ids.remove(call_id)
         self.sequence += 1
         self._saw_content = True
         self._source_index += 1
@@ -190,6 +204,7 @@ def append_claude_user_message(
     for tool_result in _extract_tool_result_blocks(content):
         state.append(
             "tool_result",
+            call_id=tool_result["call_id"],
             content=tool_result["content"],
             tool_output=tool_result["tool_output"],
             agent_id=agent_id,
@@ -230,9 +245,11 @@ def _append_assistant_content_block(
     elif block_type == "tool_use":
         tool_name = block.get("name")
         tool_input = block.get("input")
+        call_id = block.get("id")
         state.append(
             "tool_use",
             tool_name=tool_name if isinstance(tool_name, str) else "unknown",
+            call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_input=tool_input if isinstance(tool_input, dict) else {},
             model_used=model_used,
             agent_id=agent_id,
@@ -298,12 +315,6 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_input=arguments,
         )
-        if (
-            tool_name in {"exec", "functions.exec"}
-            and isinstance(call_id, str)
-            and call_id
-        ):
-            state.active_exec_call_ids.append(call_id)
         return
     if payload_type in {"function_call_output", "custom_tool_call_output"}:
         output = payload.get("output")
@@ -330,8 +341,6 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             "tool_result", call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_output=tool_output, content=rendered,
         )
-        if isinstance(call_id, str) and call_id in state.active_exec_call_ids:
-            state.active_exec_call_ids.remove(call_id)
 
 
 def _timestamp_from_milliseconds(value: object) -> datetime | None:
@@ -588,7 +597,11 @@ def _extract_tool_result_blocks(content: object) -> list[dict[str, Any]]:
             tool_output["is_error"] = is_error
         if rendered is not None:
             tool_output["content"] = rendered
-        results.append({"content": rendered, "tool_output": tool_output})
+        results.append({
+            "call_id": tool_use_id if isinstance(tool_use_id, str) and tool_use_id else None,
+            "content": rendered,
+            "tool_output": tool_output,
+        })
     return results
 
 

@@ -59,6 +59,7 @@ export interface SessionEventsResponse {
   events: TimelineEvent[]
   total: number
   max_turn: number
+  snapshot?: string
 }
 
 /**

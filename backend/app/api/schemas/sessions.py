@@ -447,6 +447,7 @@ class SessionEventsResponse(BaseModel):
     events: list[SessionEventResponse] = Field(default_factory=list)
     total: int = Field(..., description="Total number of events")
     max_turn: int = Field(..., description="Highest turn number in session")
+    snapshot: str = Field(..., description="Stable inclusive boundary for paginated reads")
 
 
 class CreateSessionEventRequest(BaseModel):

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.services.session_ingestion.adapters.transcript_parsers import (
+    inspect_transcript_source,
     parse_transcript_events,
     read_incremental_transcript_events,
     read_jsonl_lines,
@@ -35,6 +36,42 @@ class TestParseTranscriptEvents:
             ("user_message", 2, 1),
             ("assistant_message", 2, 2),
         ]
+
+    def test_claude_tool_pair_keeps_native_call_identity(self) -> None:
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_123",
+                        "name": "Bash",
+                        "input": {"command": "pwd"},
+                    }],
+                },
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_123",
+                        "content": "/workspace",
+                    }],
+                },
+            }),
+        ]
+
+        events = parse_transcript_events(lines)
+
+        assert [event.event_type for event in events] == ["tool_use", "tool_result"]
+        assert events[0].call_id == events[1].call_id == "toolu_123"
+        assert events[1].tool_output == {
+            "tool_use_id": "toolu_123",
+            "content": "/workspace",
+        }
 
     def test_parses_codex_transcript_into_normalized_events(self) -> None:
         lines = [
@@ -450,6 +487,95 @@ def test_incremental_reader_waits_for_complete_line_and_survives_rotation(tmp_pa
     transcript.write_text(second_line + "\n")  # in-place truncation
     truncated, _ = read_incremental_transcript_events(str(transcript), checkpoint)
     assert [event.content for event in truncated] == ["second"]
+
+
+@pytest.mark.unit
+def test_incremental_source_health_proves_current_complete_extent(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "response_item",
+        "ordinal": 1,
+        "payload": {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "ready"}],
+        },
+    }) + "\n")
+
+    _, checkpoint = read_incremental_transcript_events(str(transcript))
+    health = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert health.state == "ready"
+    assert health.caught_up is True
+    assert health.committed_byte_offset == health.observed_extent == transcript.stat().st_size
+    assert health.source_generation
+    assert health.parser_version == "agent-hub.transcript-jsonl.v2"
+    assert health.issues == []
+
+
+@pytest.mark.unit
+def test_incremental_source_health_exposes_malformed_and_partial_records(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    complete = json.dumps({
+        "type": "response_item",
+        "ordinal": 1,
+        "payload": {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "captured"}],
+        },
+    })
+    transcript.write_text(complete + "\n{malformed}\n" + '{"type":"response_item"')
+
+    events, checkpoint = read_incremental_transcript_events(str(transcript))
+    health = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert [event.content for event in events] == ["captured"]
+    assert health.state == "incomplete"
+    assert health.caught_up is False
+    assert health.pending_bytes == len(b'{"type":"response_item"')
+    assert {issue.code for issue in health.issues} == {
+        "malformed_json",
+        "source_not_caught_up",
+    }
+
+
+@pytest.mark.unit
+def test_incremental_source_health_requires_every_tool_result(tmp_path: Path) -> None:
+    transcript = tmp_path / "claude.jsonl"
+    tool_use = json.dumps({
+        "type": "assistant",
+        "message": {"role": "assistant", "content": [{
+            "type": "tool_use",
+            "id": "toolu_pending",
+            "name": "Bash",
+            "input": {"command": "pwd"},
+        }]},
+    })
+    tool_result = json.dumps({
+        "type": "user",
+        "message": {"role": "user", "content": [{
+            "type": "tool_result",
+            "tool_use_id": "toolu_pending",
+            "content": "/workspace",
+        }]},
+    })
+    transcript.write_text(tool_use + "\n")
+
+    _, checkpoint = read_incremental_transcript_events(str(transcript))
+    pending = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert pending.state == "incomplete"
+    assert pending.active_call_ids == ["toolu_pending"]
+    assert {issue.code for issue in pending.issues} == {"unresolved_tool_calls"}
+
+    with transcript.open("a") as output:
+        output.write(tool_result + "\n")
+    _, checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+    settled = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert settled.state == "ready"
+    assert settled.active_call_ids == []
 
 
 @pytest.mark.unit
