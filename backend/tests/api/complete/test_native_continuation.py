@@ -11,7 +11,7 @@ from app.api.complete.complete_orchestrator import _validate_and_resolve, orches
 from app.api.complete.native_continuation import _payload_hash
 from app.api.complete.schemas import CompletionRequest
 
-NERI_PAYLOAD_CONTRACT_HASH = "598d2de8cedd383ee462db3cf0a571b2658aea8ac68d1df42e3fde82d2bbf340"
+NERI_PAYLOAD_CONTRACT_HASH = "2c6ad1d8636d7653b26d0d1783868eafdebfff37106b83e9032b4bbe2ef88a0f"
 
 
 def _request(**changes: object) -> CompletionRequest:
@@ -144,7 +144,7 @@ def test_neri_reporter_payload_contract_vector() -> None:
         },
     )
 
-    assert _payload_hash(request, "codex/gpt-daybreak-blue-latest") == (
+    assert _payload_hash(request, "codex/gpt-6-astra") == (
         NERI_PAYLOAD_CONTRACT_HASH
     )
 
