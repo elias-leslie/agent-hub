@@ -101,7 +101,7 @@ class NativeContinuationRequest(BaseModel):
     request_id: str = Field(..., min_length=1, max_length=100)
     expected_turn: int = Field(..., ge=0)
     context_version: str = Field(..., min_length=1, max_length=100)
-    role: Literal["hunter", "reviewer"]
+    role: Literal["hunter", "reporter", "reviewer"]
     controller_generation: str = Field(..., min_length=1, max_length=100)
     instruction_hash: str | None = Field(
         default=None,
@@ -131,10 +131,12 @@ class NativeContinuationRequest(BaseModel):
             raise ValueError("Delta continuation requires expected_turn greater than zero.")
         if self.mode == "delta" and (not self.instruction_hash or not self.tool_policy_hash):
             raise ValueError("Delta continuation requires instruction_hash and tool_policy_hash.")
-        if self.role == "reviewer" and (
+        if self.role in {"reporter", "reviewer"} and (
             self.mode != "snapshot" or self.expected_turn != 0 or not self.close_after
         ):
-            raise ValueError("Reviewer native turns must be fresh snapshots with close_after=true.")
+            raise ValueError(
+                "Reporter and reviewer native turns must be fresh snapshots with close_after=true."
+            )
         return self
 
 

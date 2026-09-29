@@ -509,8 +509,7 @@ async def execute_native_continuation(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Native continuation is currently limited to the registered Neri hunter and "
-                "reviewer roles."
+                "Native continuation is limited to registered Neri inference roles."
             ),
         )
     if request.model is not None or not request.disable_agent_fallbacks:

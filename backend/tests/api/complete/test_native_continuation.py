@@ -57,7 +57,7 @@ def test_native_contract_requires_caller_session_id() -> None:
 
 
 def test_native_contract_requires_fresh_reviewer() -> None:
-    with pytest.raises(ValidationError, match="Reviewer native turns"):
+    with pytest.raises(ValidationError, match="Reporter and reviewer native turns"):
         _request(
             native_continuation={
                 "mode": "snapshot",
@@ -69,6 +69,45 @@ def test_native_contract_requires_fresh_reviewer() -> None:
                 "controller_generation": "reviewer-1",
                 "close_after": False,
             }
+        )
+
+
+def test_native_contract_accepts_fresh_reporter_snapshot() -> None:
+    request = _request(
+        agent_slug="neri-reporter",
+        native_continuation={
+            "mode": "snapshot",
+            "generation": 1,
+            "request_id": "report-1",
+            "expected_turn": 0,
+            "context_version": "source-unit-1",
+            "role": "reporter",
+            "controller_generation": "reporter-1",
+            "close_after": True,
+        },
+    )
+
+    assert request.native_continuation is not None
+    assert request.native_continuation.role == "reporter"
+
+
+def test_native_contract_rejects_retained_reporter_delta() -> None:
+    with pytest.raises(ValidationError, match="Reporter and reviewer native turns"):
+        _request(
+            agent_slug="neri-reporter",
+            system_prompt=None,
+            native_continuation={
+                "mode": "delta",
+                "generation": 1,
+                "request_id": "report-2",
+                "expected_turn": 1,
+                "context_version": "source-unit-2",
+                "role": "reporter",
+                "controller_generation": "reporter-1",
+                "instruction_hash": "a" * 64,
+                "tool_policy_hash": "b" * 64,
+                "close_after": True,
+            },
         )
 
 

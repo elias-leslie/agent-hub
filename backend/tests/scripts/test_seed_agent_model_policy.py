@@ -25,6 +25,7 @@ EXCLUDED_SLUGS = {
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
     "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
+    "neri-reporter",
     "neri-reviewer",
     "neri-local-candidate",  # passive local qualification must fail visibly, never fall back
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
@@ -110,12 +111,33 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
 
 def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
     data = json.loads(SEED_FILE.read_text())
-    roles = {agent["slug"]: agent for agent in data["agents"] if agent["slug"] in {"neri-hunter", "neri-reviewer"}}
-    assert set(roles) == {"neri-hunter", "neri-reviewer"}
+    roles = {
+        agent["slug"]: agent
+        for agent in data["agents"]
+        if agent["slug"] in {"neri-hunter", "neri-reporter", "neri-reviewer"}
+    }
+    assert set(roles) == {"neri-hunter", "neri-reporter", "neri-reviewer"}
     for agent in roles.values():
         assert agent["primary_model_id"].startswith("codex/")
         assert not agent.get("fallback_models")
         assert not agent.get("escalation_model_id")
+
+    reporter = roles["neri-reporter"]
+    memory = reporter["memory_config"]
+    assert reporter["max_concurrency"] == 1
+    assert not any(
+        memory[key]
+        for key in (
+            "injection_enabled",
+            "project_index_enabled",
+            "tool_capabilities_enabled",
+            "include_mandates",
+            "include_guardrails",
+            "include_references",
+            "reference_index_enabled",
+            "continuity_enabled",
+        )
+    )
 
 
 def test_neri_local_candidate_is_exact_fallback_free_and_memory_free() -> None:
