@@ -145,9 +145,34 @@ async def test_append_normalized_events_skips_replayed_native_source_identity() 
     db = AsyncMock()
     pairs = MagicMock()
     pairs.all.return_value = []
-    source_ids = MagicMock()
-    source_ids.all.return_value = [("response_usage:resp-1:1",)]
-    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_ids])
+    stored = MagicMock(
+        turn=1,
+        sequence=8,
+        event_type="usage",
+        role=None,
+        content=None,
+        tool_name=None,
+        call_id=None,
+        tool_input=None,
+        tool_output=None,
+        tokens=None,
+        duration_ms=None,
+        model_used=None,
+        agent_id=None,
+        agent_name=None,
+        transport=None,
+        surface=None,
+        chat_id=None,
+        message_id=None,
+        pane_id=None,
+        source_client=None,
+        source_event_id="response_usage:resp-1:1",
+        source_timestamp=None,
+        usage={"scope": "response", "input_tokens": 10},
+    )
+    source_events = MagicMock()
+    source_events.scalars.return_value.all.return_value = [stored]
+    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_events])
 
     with (
         patch(
@@ -169,6 +194,66 @@ async def test_append_normalized_events_skips_replayed_native_source_identity() 
 
     assert result.events_appended == 0
     assert result.events_skipped == 1
+    store.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_append_normalized_events_rejects_changed_native_source_identity() -> None:
+    db = AsyncMock()
+    pairs = MagicMock()
+    pairs.all.return_value = []
+    stored = MagicMock(
+        turn=1,
+        sequence=8,
+        event_type="assistant_message",
+        role="assistant",
+        content="first content",
+        tool_name=None,
+        call_id=None,
+        tool_input=None,
+        tool_output=None,
+        tokens=None,
+        duration_ms=None,
+        model_used=None,
+        agent_id=None,
+        agent_name=None,
+        transport=None,
+        surface=None,
+        chat_id=None,
+        message_id=None,
+        pane_id=None,
+        source_client=None,
+        source_event_id="event_msg:item-1:1",
+        source_timestamp=None,
+        usage=None,
+    )
+    source_events = MagicMock()
+    source_events.scalars.return_value.all.return_value = [stored]
+    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_events])
+
+    with (
+        patch(
+            "app.services.session_ingestion._events.get_max_turn",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch("app.services.session_ingestion._events.store_event", new_callable=AsyncMock) as store,
+        pytest.raises(ValueError, match="replayed with different content"),
+    ):
+        await append_normalized_events(
+            db=db,
+            session_id="session-native",
+            request=AppendNormalizedEventsRequest(events=[NormalizedEvent(
+                event_type="assistant_message",
+                turn=1,
+                sequence=8,
+                role="assistant",
+                content="changed content",
+                source_event_id="event_msg:item-1:1",
+            )]),
+        )
+
     store.assert_not_awaited()
 
 

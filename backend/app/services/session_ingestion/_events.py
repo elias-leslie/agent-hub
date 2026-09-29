@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import hashlib
+import json
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -52,18 +54,48 @@ async def _load_existing_pairs(
     return {(turn, sequence) for turn, sequence in result.all()}
 
 
-async def _load_existing_source_ids(
+async def _load_existing_source_events(
     db: AsyncSession, session_id: str, source_ids: set[str]
-) -> set[str]:
+) -> dict[str, SessionEvent]:
     if not source_ids:
-        return set()
+        return {}
     result = await db.execute(
-        select(SessionEvent.source_event_id).where(
+        select(SessionEvent).where(
             SessionEvent.session_id == session_id,
             SessionEvent.source_event_id.in_(source_ids),
         )
     )
-    return {source_id for (source_id,) in result.all() if source_id}
+    return {
+        event.source_event_id: event
+        for event in result.scalars().all()
+        if event.source_event_id
+    }
+
+
+def _source_event_fingerprint(
+    event: NormalizedEvent | SessionEvent,
+    *,
+    turn: int,
+    sequence: int,
+) -> str:
+    """Compare replayed native identities without trusting the identity alone."""
+    fields: dict[str, Any] = {
+        key: getattr(event, key, None)
+        for key in (
+            "event_type", "role", "content", "tool_name", "call_id",
+            "tool_input", "tool_output", "tokens", "duration_ms", "model_used",
+            "agent_id", "agent_name", "transport", "surface", "chat_id",
+            "message_id", "pane_id", "source_client", "source_event_id",
+            "source_timestamp", "usage",
+        )
+    }
+    fields.update({"turn": turn, "sequence": sequence})
+    return hashlib.sha256(json.dumps(
+        fields,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode()).hexdigest()
 
 
 def _adapter_for_provider(provider: str) -> ClaudeCodeTranscriptAdapter | CodexTranscriptAdapter:
@@ -140,7 +172,7 @@ async def _process_event(
     current_turn: int,
     sequence_cache: dict[int, int],
     existing_pairs: set[tuple[int, int]],
-    existing_source_ids: set[str],
+    existing_source_events: dict[str, NormalizedEvent | SessionEvent],
     session: Session | None,
 ) -> tuple[int, int, str | None, bool]:
     """Process one event in a batch; returns (turn, sequence, event_id, skipped)."""
@@ -148,8 +180,24 @@ async def _process_event(
     turn = normalized.turn
     if turn is None:
         raise ValueError("Normalized event turn resolution failed")
-    if normalized.source_event_id and normalized.source_event_id in existing_source_ids:
-        return turn, normalized.sequence or sequence_cache.get(turn, 0), None, True
+    if normalized.source_event_id and normalized.source_event_id in existing_source_events:
+        existing = existing_source_events[normalized.source_event_id]
+        existing_turn = getattr(existing, "turn", None) or turn
+        existing_sequence = getattr(existing, "sequence", None)
+        sequence = normalized.sequence or existing_sequence or sequence_cache.get(turn, 0)
+        if _source_event_fingerprint(
+            normalized,
+            turn=normalized.turn or existing_turn,
+            sequence=sequence,
+        ) != _source_event_fingerprint(
+            existing,
+            turn=existing_turn,
+            sequence=existing_sequence or sequence,
+        ):
+            raise ValueError(
+                "Native source event identity was replayed with different content"
+            )
+        return turn, sequence, None, True
     if normalized.sequence is not None:
         sequence_cache[turn] = max(sequence_cache.get(turn, 0), normalized.sequence)
         if (turn, normalized.sequence) in existing_pairs:
@@ -209,9 +257,12 @@ async def _store_events_general(
         session_id,
         {e.turn for e in events if e.turn is not None and e.sequence is not None},
     )
-    existing_source_ids = await _load_existing_source_ids(
+    stored_source_events = await _load_existing_source_events(
         db, session_id, {e.source_event_id for e in events if e.source_event_id}
     )
+    existing_source_events: dict[str, NormalizedEvent | SessionEvent] = {
+        key: value for key, value in stored_source_events.items()
+    }
     last_turn = current_turn
     last_sequence = 0
     event_ids: list[str] = []
@@ -219,7 +270,7 @@ async def _store_events_general(
     for event in events:
         turn, sequence, event_id, skipped = await _process_event(
             db, session_id, event, current_turn, sequence_cache, existing_pairs,
-            existing_source_ids, session
+            existing_source_events, session
         )
         current_turn = max(current_turn, turn)
         if skipped:
@@ -228,7 +279,9 @@ async def _store_events_general(
             event_ids.append(event_id)
             existing_pairs.add((turn, sequence))
             if event.source_event_id:
-                existing_source_ids.add(event.source_event_id)
+                existing_source_events[event.source_event_id] = event.model_copy(
+                    update={"turn": turn, "sequence": sequence}
+                )
         last_turn = turn
         last_sequence = sequence
     await db.commit()
