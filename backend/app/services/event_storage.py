@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent, SessionEventType
@@ -213,11 +213,17 @@ async def store_child_session_lifecycle_event(
         return None
     if event_type not in _CHILD_SESSION_EVENT_TYPES:
         return None
+    await lock_session_event_ingestion(db, parent_session_id)
+    turn = await get_max_turn(db, parent_session_id) or 1
+    sequence = await get_max_sequence(db, parent_session_id, turn) + 1
+    get_sequencer().set_turn(parent_session_id, turn, sequence)
     source_metadata = _source_metadata_from_session(child_session)
     return await store_event(
         db=db,
         session_id=parent_session_id,
         event_type=event_type,
+        turn=turn,
+        sequence=sequence,
         content=summary or _child_session_summary(child_session, event_type, child_event),
         tool_output=_child_session_payload(child_session, child_event=child_event, status=status),
         agent_id=child_session.agent_slug,
@@ -273,6 +279,14 @@ async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int
         if current_turn:
             sequencer.set_turn(session_id, current_turn, current_sequence)
     return sequencer.get_turn_sequence(session_id)
+
+
+async def lock_session_event_ingestion(db: AsyncSession, session_id: str) -> None:
+    """Serialize explicit batches and derived child events for one session."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        {"lock_key": f"session-events:{session_id}"},
+    )
 
 
 def _touch_session(parent_session: Session, event: SessionEvent) -> None:

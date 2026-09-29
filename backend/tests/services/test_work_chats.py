@@ -38,7 +38,15 @@ async def test_child_session_lifecycle_event_is_stored_on_parent_with_source_met
         },
     )
 
-    with patch("app.services.event_storage.store_event", new_callable=AsyncMock) as mock_store:
+    with (
+        patch("app.services.event_storage.get_max_turn", new_callable=AsyncMock) as max_turn,
+        patch(
+            "app.services.event_storage.get_max_sequence", new_callable=AsyncMock
+        ) as max_sequence,
+        patch("app.services.event_storage.store_event", new_callable=AsyncMock) as mock_store,
+    ):
+        max_turn.return_value = 19
+        max_sequence.return_value = 2603
         await store_child_session_lifecycle_event(
             AsyncMock(),
             child,
@@ -51,6 +59,8 @@ async def test_child_session_lifecycle_event_is_stored_on_parent_with_source_met
     kwargs = store_args.kwargs
     assert kwargs["session_id"] == "parent-session"
     assert kwargs["event_type"] == SessionEventType.CHILD_SESSION_STARTED
+    assert kwargs["turn"] == 19
+    assert kwargs["sequence"] == 2604
     assert kwargs["pane_id"] == "pane-1"
     assert kwargs["surface"] == "work_chats"
     assert kwargs["source_client"] == "agent-hub/work-chats"
