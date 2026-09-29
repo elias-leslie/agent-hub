@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -7,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.complete.complete_orchestrator import _validate_and_resolve, orchestrate_completion
+from app.api.complete.native_continuation import _payload_hash
 from app.api.complete.schemas import CompletionRequest
+
+NERI_PAYLOAD_CONTRACT_HASH = "598d2de8cedd383ee462db3cf0a571b2658aea8ac68d1df42e3fde82d2bbf340"
 
 
 def _request(**changes: object) -> CompletionRequest:
@@ -109,6 +113,40 @@ def test_native_contract_rejects_retained_reporter_delta() -> None:
                 "close_after": True,
             },
         )
+
+
+def test_neri_reporter_payload_contract_vector() -> None:
+    packet = {"source_unit": {"digest": "a" * 64}}
+    output_schema = {
+        "type": "object",
+        "properties": {"status": {"type": "string"}},
+        "required": ["status"],
+        "additionalProperties": False,
+    }
+    request = _request(
+        agent_slug="neri-reporter",
+        messages=[{
+            "role": "user",
+            "content": json.dumps(packet, sort_keys=True, separators=(",", ":")),
+        }],
+        system_prompt="Apply the Neri vector contract.",
+        response_format={"type": "json_object", "schema": output_schema},
+        native_continuation={
+            "mode": "snapshot",
+            "generation": 1,
+            "request_id": "report-vector-1",
+            "expected_turn": 0,
+            "context_version": "source-vector-1",
+            "role": "reporter",
+            "controller_generation": "reporter-vector-1",
+            "reasoning_effort": "high",
+            "close_after": True,
+        },
+    )
+
+    assert _payload_hash(request, "codex/gpt-daybreak-blue-latest") == (
+        NERI_PAYLOAD_CONTRACT_HASH
+    )
 
 
 @pytest.mark.asyncio
