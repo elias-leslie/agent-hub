@@ -19,7 +19,7 @@ from app.services.session_ingestion.models import (
 from ._event_builders import _ParseState, append_normalized_events
 
 JsonObject = dict[str, object]
-PARSER_VERSION = "agent-hub.transcript-jsonl.v2"
+PARSER_VERSION = "agent-hub.transcript-jsonl.v3"
 _KNOWN_TOP_LEVEL_TYPES = {
     "assistant",
     "compacted",
@@ -151,6 +151,8 @@ def read_incremental_transcript_events(
         history_start_ordinal=parser_checkpoint.history_start_ordinal,
         parent_thread_id=parser_checkpoint.parent_thread_id,
         active_exec_call_ids=parser_checkpoint.active_exec_call_ids,
+        pending_exec_wrappers=parser_checkpoint.pending_exec_wrappers,
+        yielded_exec_wrapper_call_ids=parser_checkpoint.yielded_exec_wrapper_call_ids,
     )
     parse_issue_counts = dict(parser_checkpoint.parse_issue_counts)
     try:
@@ -301,6 +303,11 @@ def inspect_transcript_source(
         pending_bytes=pending,
         caught_up=caught_up,
         active_call_ids=list(parsed.active_exec_call_ids),
+        pending_wrapper_call_ids=list(dict.fromkeys(
+            str(wrapper['call_id'])
+            for wrapper in parsed.pending_exec_wrappers
+        )),
+        yielded_wrapper_call_ids=list(parsed.yielded_exec_wrapper_call_ids),
         issues=issues,
     )
 
@@ -321,6 +328,8 @@ class _TranscriptParseCheckpoint:
     history_start_ordinal: int | None = None
     parent_thread_id: str | None = None
     active_exec_call_ids: tuple[str, ...] = ()
+    pending_exec_wrappers: tuple[dict[str, object], ...] = ()
+    yielded_exec_wrapper_call_ids: tuple[str, ...] = ()
     parse_issue_counts: dict[str, int] = field(default_factory=dict)
 
 
@@ -347,6 +356,8 @@ def _load_parse_checkpoint(
     inode = parsed.get("inode")
     tail_digest = parsed.get("tail_digest")
     active_exec_call_ids = parsed.get("active_exec_call_ids", [])
+    pending_exec_wrappers = parsed.get("pending_exec_wrappers", [])
+    yielded_exec_wrapper_call_ids = parsed.get("yielded_exec_wrapper_call_ids", [])
     parse_issue_counts = parsed.get("parse_issue_counts", {})
     if not isinstance(line_offset, int) or line_offset < 0:
         return _TranscriptParseCheckpoint()
@@ -366,6 +377,26 @@ def _load_parse_checkpoint(
         isinstance(call_id, str) and call_id for call_id in active_exec_call_ids
     ):
         return _TranscriptParseCheckpoint()
+    if not isinstance(pending_exec_wrappers, list) or not all(
+        isinstance(wrapper, dict)
+        and isinstance(wrapper.get("call_id"), str)
+        and bool(wrapper["call_id"])
+        and isinstance(wrapper.get("tool_input_digests"), list)
+        and bool(wrapper["tool_input_digests"])
+        and all(
+            isinstance(digest, str)
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in wrapper["tool_input_digests"]
+        )
+        for wrapper in pending_exec_wrappers
+    ):
+        return _TranscriptParseCheckpoint()
+    if not isinstance(yielded_exec_wrapper_call_ids, list) or not all(
+        isinstance(call_id, str) and call_id
+        for call_id in yielded_exec_wrapper_call_ids
+    ):
+        return _TranscriptParseCheckpoint()
     if not isinstance(parse_issue_counts, dict) or not all(
         isinstance(code, str)
         and code
@@ -376,6 +407,8 @@ def _load_parse_checkpoint(
     ):
         return _TranscriptParseCheckpoint()
     active_exec_calls = tuple(active_exec_call_ids)
+    pending_wrappers = tuple(dict(wrapper) for wrapper in pending_exec_wrappers)
+    yielded_wrappers = tuple(yielded_exec_wrapper_call_ids)
     # Existing JSON checkpoints carry valid parser state but no byte position.
     # Scan their completed prefix once; never reinterpret old rows using new event kinds.
     if byte_offset is None:
@@ -385,6 +418,8 @@ def _load_parse_checkpoint(
             history_start_ordinal=history_start_ordinal,
             parent_thread_id=parent_thread_id,
             active_exec_call_ids=active_exec_calls,
+            pending_exec_wrappers=pending_wrappers,
+            yielded_exec_wrapper_call_ids=yielded_wrappers,
             parse_issue_counts=dict(parse_issue_counts),
         )
     if not isinstance(byte_offset, int) or byte_offset < 0:
@@ -403,6 +438,8 @@ def _load_parse_checkpoint(
         history_start_ordinal=history_start_ordinal,
         parent_thread_id=parent_thread_id,
         active_exec_call_ids=active_exec_calls,
+        pending_exec_wrappers=pending_wrappers,
+        yielded_exec_wrapper_call_ids=yielded_wrappers,
         parse_issue_counts=dict(parse_issue_counts),
     )
 
@@ -450,6 +487,8 @@ def _dump_parse_checkpoint(
             "history_start_ordinal": state.history_start_ordinal,
             "parent_thread_id": state.parent_thread_id,
             "active_exec_call_ids": state.active_exec_call_ids,
+            "pending_exec_wrappers": state.pending_exec_wrappers,
+            "yielded_exec_wrapper_call_ids": state.yielded_exec_wrapper_call_ids,
             "parse_issue_counts": parse_issue_counts,
         },
         separators=(",", ":"),

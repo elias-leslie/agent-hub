@@ -185,6 +185,8 @@ class TranscriptSourceHealth(BaseModel):
     pending_bytes: int | None = None
     caught_up: bool = False
     active_call_ids: list[str] = Field(default_factory=list)
+    pending_wrapper_call_ids: list[str] = Field(default_factory=list)
+    yielded_wrapper_call_ids: list[str] = Field(default_factory=list)
     issues: list[TranscriptSourceIssue] = Field(default_factory=list)
 
 

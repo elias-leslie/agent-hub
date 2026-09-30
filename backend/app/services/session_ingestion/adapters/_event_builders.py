@@ -13,6 +13,14 @@ from app.services.session_ingestion.models import NormalizedEvent
 JsonObject = dict[str, object]
 _WEB_CALL_RE = re.compile(r"\btools\.web__run\s*\(")
 _CUA_CALL_RE = re.compile(r"\b(?:cua|tab|nodeRepl)\.[A-Za-z_][\w.]*\s*\(")
+_EXEC_COMMAND_LITERAL_RE = re.compile(
+    r'(?m)^[ \t]*(?:const\s+[A-Za-z_$][\w$]*\s*=\s*)?await\s+'
+    r'tools\.exec_command\s*\(\s*\{\s*cmd\s*:\s*'
+    r'(?P<command>"(?:\\.|[^"\\])*")',
+)
+_YIELDED_EXEC_RECEIPT_RE = re.compile(
+    r"\AScript running with cell ID [A-Za-z0-9][A-Za-z0-9._:-]*(?:\r?\n|\Z)"
+)
 
 
 def _native_tool_hints(tool_name: object, arguments: dict[str, Any]) -> list[str]:
@@ -26,6 +34,103 @@ def _native_tool_hints(tool_name: object, arguments: dict[str, Any]) -> list[str
     return []
 
 
+def _command_input_digest(command: str) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            {"command": command},
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode()
+    ).hexdigest()
+
+
+def _strip_js_comments(source: str) -> str:
+    """Remove JavaScript comments while preserving strings and line positions."""
+    output: list[str] = []
+    index = 0
+    quote: str | None = None
+    while index < len(source):
+        character = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ''
+        if quote is not None:
+            output.append(
+                character
+                if quote != '`'
+                else character if character in {'\n', '\r'} else ' '
+            )
+            if character == '\\' and index + 1 < len(source):
+                index += 1
+                escaped = source[index]
+                output.append(
+                    escaped
+                    if quote != '`'
+                    else escaped if escaped in {'\n', '\r'} else ' '
+                )
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {'"', "'", '`'}:
+            quote = character
+            output.append(' ' if character == '`' else character)
+            index += 1
+            continue
+        if character == '/' and following == '/':
+            output.extend('  ')
+            index += 2
+            while index < len(source) and source[index] not in {'\n', '\r'}:
+                output.append(' ')
+                index += 1
+            continue
+        if character == '/' and following == '*':
+            output.extend('  ')
+            index += 2
+            while index < len(source):
+                if source[index] == '*' and index + 1 < len(source) and source[index + 1] == '/':
+                    output.extend('  ')
+                    index += 2
+                    break
+                output.append(source[index] if source[index] in {'\n', '\r'} else ' ')
+                index += 1
+            continue
+        output.append(character)
+        index += 1
+    return ''.join(output)
+
+
+def _nested_exec_commands(tool_name: object, arguments: dict[str, Any]) -> list[dict[str, str]]:
+    """Extract literal unified-exec commands without evaluating wrapper source."""
+    raw = arguments.get("raw")
+    if tool_name != "exec" or not isinstance(raw, str):
+        return []
+    nested: list[dict[str, str]] = []
+    for match in _EXEC_COMMAND_LITERAL_RE.finditer(_strip_js_comments(raw)):
+        try:
+            command = json.loads(match.group("command"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(command, str) and command:
+            nested.append({"tool_input_digest": _command_input_digest(command)})
+    return nested
+
+
+def _native_shell_command(command: object) -> str | None:
+    if isinstance(command, str) and command:
+        return command
+    if isinstance(command, list) and len(command) >= 3:
+        shell_flag = command[-2]
+        shell_command = command[-1]
+        if (
+            isinstance(shell_flag, str)
+            and shell_flag in {"-c", "-lc"}
+            and isinstance(shell_command, str)
+            and shell_command
+        ):
+            return shell_command
+    return None
+
+
 class _ParseState:
     """Mutable transcript parsing state."""
 
@@ -33,6 +138,8 @@ class _ParseState:
         self, *, turn: int = 1, sequence: int = 0, saw_content: bool = False,
         history_start_ordinal: int | None = None, parent_thread_id: str | None = None,
         active_exec_call_ids: tuple[str, ...] = (),
+        pending_exec_wrappers: tuple[dict[str, object], ...] = (),
+        yielded_exec_wrapper_call_ids: tuple[str, ...] = (),
     ) -> None:
         self.turn = turn
         self.sequence = sequence
@@ -44,6 +151,74 @@ class _ParseState:
         self.history_start_ordinal = history_start_ordinal
         self.parent_thread_id = parent_thread_id
         self.active_exec_call_ids = list(active_exec_call_ids)
+        self.pending_exec_wrappers = [dict(wrapper) for wrapper in pending_exec_wrappers]
+        self.yielded_exec_wrapper_call_ids = list(yielded_exec_wrapper_call_ids)
+
+    def retain_exec_wrapper(
+        self,
+        call_id: str,
+        nested_commands: list[dict[str, str]],
+    ) -> None:
+        digests = [command["tool_input_digest"] for command in nested_commands]
+        if digests:
+            self.pending_exec_wrappers.append({
+                "call_id": call_id,
+                "tool_input_digests": digests,
+            })
+
+    def resolve_exec_wrapper_result(self, call_id: str, rendered: str | None) -> None:
+        matching = [
+            wrapper
+            for wrapper in self.pending_exec_wrappers
+            if wrapper.get("call_id") == call_id
+        ]
+        if not matching:
+            return
+        if isinstance(rendered, str) and _YIELDED_EXEC_RECEIPT_RE.search(rendered):
+            if call_id not in self.yielded_exec_wrapper_call_ids:
+                self.yielded_exec_wrapper_call_ids.append(call_id)
+            return
+        self.pending_exec_wrappers = [
+            wrapper
+            for wrapper in self.pending_exec_wrappers
+            if wrapper.get("call_id") != call_id
+        ]
+        if call_id in self.yielded_exec_wrapper_call_ids:
+            self.yielded_exec_wrapper_call_ids.remove(call_id)
+
+    def correlate_exec_wrapper(self, command: object) -> tuple[str | None, bool]:
+        shell_command = _native_shell_command(command)
+        if shell_command is None:
+            return None, False
+        digest = _command_input_digest(shell_command)
+        candidates: list[dict[str, object]] = []
+        call_ids: set[str] = set()
+        matching_occurrences = 0
+        for wrapper in self.pending_exec_wrappers:
+            digests = wrapper.get("tool_input_digests")
+            call_id = wrapper.get("call_id")
+            if not isinstance(digests, list) or digest not in digests:
+                continue
+            candidates.append(wrapper)
+            matching_occurrences += digests.count(digest)
+            if isinstance(call_id, str):
+                call_ids.add(call_id)
+        if len(call_ids) != 1 or matching_occurrences != 1:
+            return None, bool(candidates)
+        call_id = next(iter(call_ids))
+        for wrapper in candidates:
+            if wrapper.get("call_id") != call_id:
+                continue
+            digests = wrapper.get("tool_input_digests")
+            if not isinstance(digests, list):
+                continue
+            digests.remove(digest)
+            if not digests:
+                self.pending_exec_wrappers.remove(wrapper)
+                if call_id in self.yielded_exec_wrapper_call_ids:
+                    self.yielded_exec_wrapper_call_ids.remove(call_id)
+            break
+        return call_id, True
 
     def set_source(self, obj: JsonObject, fallback_id: str | None = None) -> None:
         payload = obj.get("payload")
@@ -306,6 +481,9 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
         native_tool_hints = _native_tool_hints(tool_name, arguments)
         if native_tool_hints:
             arguments["native_tool_hints"] = native_tool_hints
+        nested_exec_commands = _nested_exec_commands(tool_name, arguments)
+        if nested_exec_commands:
+            arguments["nested_exec_commands"] = nested_exec_commands
         call_id = payload.get("call_id")
         if isinstance(call_id, str) and call_id:
             arguments = {**arguments, "call_id": call_id}
@@ -315,6 +493,8 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_input=arguments,
         )
+        if isinstance(call_id, str) and call_id and nested_exec_commands:
+            state.retain_exec_wrapper(call_id, nested_exec_commands)
         return
     if payload_type in {"function_call_output", "custom_tool_call_output"}:
         output = payload.get("output")
@@ -341,6 +521,8 @@ def _append_codex_response_item(payload: object, state: _ParseState) -> None:
             "tool_result", call_id=call_id if isinstance(call_id, str) and call_id else None,
             tool_output=tool_output, content=rendered,
         )
+        if isinstance(call_id, str) and call_id:
+            state.resolve_exec_wrapper_result(call_id, rendered)
 
 
 def _timestamp_from_milliseconds(value: object) -> datetime | None:
@@ -417,7 +599,11 @@ def _append_codex_command_execution(payload: JsonObject, state: _ParseState) -> 
         value = item.get(key)
         if isinstance(value, str) and value:
             tool_input[key] = value
-    if len(state.active_exec_call_ids) == 1:
+    wrapper_call_id, exact_wrapper_candidate = state.correlate_exec_wrapper(command)
+    if wrapper_call_id is not None:
+        tool_input["wrapper_candidate_call_id"] = wrapper_call_id
+        tool_input["wrapper_correlation"] = "nested_command_digest"
+    elif not exact_wrapper_candidate and len(state.active_exec_call_ids) == 1:
         tool_input["wrapper_candidate_call_id"] = state.active_exec_call_ids[0]
         tool_input["wrapper_correlation"] = "single_open_exec"
 

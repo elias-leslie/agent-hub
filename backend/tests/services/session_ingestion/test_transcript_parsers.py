@@ -385,6 +385,268 @@ def test_incremental_native_execution_keeps_exact_wrapper_across_reads(tmp_path:
 
 
 @pytest.mark.unit
+def test_yielded_unified_exec_keeps_exact_wrapper_until_native_completion(
+    tmp_path: Path,
+) -> None:
+    transcript = tmp_path / "native.jsonl"
+    command = (
+        'st neri hunt begin juice-shop-local '
+        '--question "Can redirects cross origins?"'
+    )
+    wrapper = {
+        "type": "response_item",
+        "ordinal": 1,
+        "payload": {
+            "type": "custom_tool_call",
+            "id": "outer-start",
+            "name": "exec",
+            "call_id": "call-outer",
+            "input": (
+                "const result = await tools.exec_command({\n"
+                f"  cmd: {json.dumps(command)},\n"
+                '  workdir: "/workspace",\n'
+                "  yield_time_ms: 30000\n"
+                "});\n"
+                "text(result.output);"
+            ),
+        },
+    }
+    yielded = {
+        "type": "response_item",
+        "ordinal": 2,
+        "payload": {
+            "type": "custom_tool_call_output",
+            "id": "outer-result",
+            "call_id": "call-outer",
+            "output": (
+                "Script running with cell ID 106\n"
+                "Wall time 0.3 seconds\n"
+                "Output:\n"
+            ),
+        },
+    }
+    native = {
+        "type": "event_msg",
+        "ordinal": 3,
+        "payload": {
+            "type": "item_completed",
+            "started_at_ms": 1_790_614_095_812,
+            "completed_at_ms": 1_790_614_096_886,
+            "item": {
+                "type": "CommandExecution",
+                "id": "exec-native",
+                "command": ["/bin/bash", "-lc", command],
+                "source": "unified_exec_startup",
+                "status": "failed",
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": "begin rejected",
+            },
+        },
+    }
+    transcript.write_text(json.dumps(wrapper) + "\n" + json.dumps(yielded) + "\n")
+
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    with transcript.open("a") as output:
+        output.write(json.dumps(native) + "\n")
+    second, next_checkpoint = read_incremental_transcript_events(str(transcript), checkpoint)
+
+    outer = first[0]
+    native_start = second[0]
+    assert outer.tool_input is not None
+    assert len(outer.tool_input["nested_exec_commands"]) == 1
+    assert native_start.call_id == "exec-native"
+    assert native_start.tool_input is not None
+    assert native_start.tool_input["wrapper_candidate_call_id"] == "call-outer"
+    assert native_start.tool_input["wrapper_correlation"] == "nested_command_digest"
+    assert json.loads(next_checkpoint or "{}")["pending_exec_wrappers"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('duplicate_location', ['wrapper', 'command'])
+def test_ambiguous_unified_exec_digest_never_falls_back_to_open_wrapper(
+    tmp_path: Path,
+    duplicate_location: str,
+) -> None:
+    transcript = tmp_path / "ambiguous.jsonl"
+    command = 'st neri hunt begin juice-shop-local --question "Can redirects cross origins?"'
+
+    def wrapper(call_id: str, ordinal: int, *, duplicate: bool = False) -> dict:
+        invocation = (
+            "const result = await tools.exec_command({\n"
+            f"  cmd: {json.dumps(command)}\n"
+            "});"
+        )
+        if duplicate:
+            invocation += "\n" + invocation.replace('result', 'second')
+        return {
+            "type": "response_item",
+            "ordinal": ordinal,
+            "payload": {
+                "type": "custom_tool_call",
+                "name": "exec",
+                "call_id": call_id,
+                "input": invocation,
+            },
+        }
+
+    lines = [wrapper('first-wrapper', 1, duplicate=duplicate_location == 'command')]
+    if duplicate_location == 'wrapper':
+        lines.extend([
+            {
+                "type": "response_item",
+                "ordinal": 2,
+                "payload": {
+                    "type": "custom_tool_call_output",
+                    "call_id": "first-wrapper",
+                    "output": (
+                        "Script running with cell ID 106\n"
+                        "Wall time 0.3 seconds\n"
+                        "Output:\n"
+                    ),
+                },
+            },
+            wrapper('second-wrapper', 3),
+        ])
+    lines.append({
+        "type": "event_msg",
+        "ordinal": 4,
+        "payload": {
+            "type": "item_completed",
+            "started_at_ms": 1_790_614_095_812,
+            "completed_at_ms": 1_790_614_096_886,
+            "item": {
+                "type": "CommandExecution",
+                "id": "exec-native",
+                "command": ["/bin/bash", "-lc", command],
+                "status": "completed",
+                "exit_code": 0,
+                "stdout": "",
+                "stderr": "",
+            },
+        },
+    })
+    transcript.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+    events, _checkpoint = read_incremental_transcript_events(str(transcript))
+
+    native = next(
+        event for event in events
+        if event.event_type == 'tool_use' and event.call_id == 'exec-native'
+    )
+    assert native.tool_input is not None
+    assert 'wrapper_candidate_call_id' not in native.tool_input
+    assert 'wrapper_correlation' not in native.tool_input
+
+
+@pytest.mark.unit
+def test_commented_exec_command_is_not_a_wrapper_candidate() -> None:
+    command = 'st neri hunt begin juice-shop-local --question "Can redirects cross origins?"'
+    events = parse_transcript_events([json.dumps({
+        "type": "response_item",
+        "payload": {
+            "type": "custom_tool_call",
+            "name": "exec",
+            "call_id": "comment-wrapper",
+            "input": (
+                "/*\n"
+                "const ignored = await tools.exec_command({\n"
+                f"  cmd: {json.dumps(command)}\n"
+                "});\n"
+                "*/\n"
+                f"// await tools.exec_command({{ cmd: {json.dumps(command)} }});"
+            ),
+        },
+    })])
+
+    assert events[0].tool_input is not None
+    assert 'nested_exec_commands' not in events[0].tool_input
+
+
+@pytest.mark.unit
+def test_template_string_exec_command_is_not_a_wrapper_candidate() -> None:
+    command = 'printf review-fixture'
+    events = parse_transcript_events([json.dumps({
+        "type": "response_item",
+        "payload": {
+            "type": "custom_tool_call",
+            "name": "exec",
+            "call_id": "template-wrapper",
+            "input": (
+                "const example = `\n"
+                "await tools.exec_command({\n"
+                f"  cmd: {json.dumps(command)}\n"
+                "});\n"
+                "`;\n"
+                "text(example);"
+            ),
+        },
+    })])
+
+    assert events[0].tool_input is not None
+    assert 'nested_exec_commands' not in events[0].tool_input
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('output', 'pending', 'yielded'),
+    [
+        ('Script failed before native execution', [], []),
+        (
+            'Script completed\nOutput:\nScript running with cell ID 106\n',
+            [],
+            [],
+        ),
+        (
+            'Script running with cell ID 106\nWall time 0.3 seconds\nOutput:\n',
+            ['wrapper-call'],
+            ['wrapper-call'],
+        ),
+    ],
+)
+def test_wrapper_result_retains_only_explicit_yield_receipts(
+    tmp_path: Path,
+    output: str,
+    pending: list[str],
+    yielded: list[str],
+) -> None:
+    transcript = tmp_path / 'wrapper-result.jsonl'
+    command = 'printf review-fixture'
+    records = [
+        {
+            'type': 'response_item',
+            'payload': {
+                'type': 'custom_tool_call',
+                'name': 'exec',
+                'call_id': 'wrapper-call',
+                'input': (
+                    'const result = await tools.exec_command({\n'
+                    f'  cmd: {json.dumps(command)}\n'
+                    '});'
+                ),
+            },
+        },
+        {
+            'type': 'response_item',
+            'payload': {
+                'type': 'custom_tool_call_output',
+                'call_id': 'wrapper-call',
+                'output': output,
+            },
+        },
+    ]
+    transcript.write_text('\n'.join(json.dumps(record) for record in records) + '\n')
+
+    _events, checkpoint = read_incremental_transcript_events(str(transcript))
+    state = json.loads(checkpoint or '{}')
+
+    assert [
+        wrapper['call_id'] for wrapper in state['pending_exec_wrappers']
+    ] == pending
+    assert state['yielded_exec_wrapper_call_ids'] == yielded
+
+
+@pytest.mark.unit
 def test_read_incremental_transcript_events_replays_legacy_checkpoint_from_start(tmp_path: Path) -> None:
     transcript = tmp_path / "session.jsonl"
     transcript.write_text(
@@ -510,7 +772,9 @@ def test_incremental_source_health_proves_current_complete_extent(tmp_path: Path
     assert health.caught_up is True
     assert health.committed_byte_offset == health.observed_extent == transcript.stat().st_size
     assert health.source_generation
-    assert health.parser_version == "agent-hub.transcript-jsonl.v2"
+    assert health.parser_version == "agent-hub.transcript-jsonl.v3"
+    assert health.pending_wrapper_call_ids == []
+    assert health.yielded_wrapper_call_ids == []
     assert health.issues == []
 
 
