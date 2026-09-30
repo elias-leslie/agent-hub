@@ -35,6 +35,7 @@ _KNOWN_TOP_LEVEL_TYPES = {
     "world_state",
 }
 _KNOWN_CODEX_RESPONSE_TYPES = {
+    "agent_message",
     "custom_tool_call",
     "custom_tool_call_output",
     "function_call",
@@ -89,6 +90,31 @@ def _unsupported_record_issue(obj: JsonObject) -> str | None:
         payload_type = payload.get("type")
         if not isinstance(payload_type, str) or payload_type not in _KNOWN_CODEX_RESPONSE_TYPES:
             return "unsupported_response_item"
+        if payload_type == "agent_message":
+            content = payload.get("content")
+            if (
+                not isinstance(payload.get("id"), str)
+                or not payload["id"]
+                or not isinstance(payload.get("author"), str)
+                or not payload["author"]
+                or not isinstance(payload.get("recipient"), str)
+                or not payload["recipient"]
+                or not isinstance(content, list)
+                or not all(
+                    isinstance(block, dict)
+                    and block.get("type") in {"input_text", "encrypted_content"}
+                    and isinstance(
+                        block.get(
+                            "text"
+                            if block.get("type") == "input_text"
+                            else "encrypted_content"
+                        ),
+                        str,
+                    )
+                    for block in content
+                )
+            ):
+                return "unsupported_record_shape"
     elif entry_type == "event_msg":
         payload = obj.get("payload")
         if not isinstance(payload, dict):

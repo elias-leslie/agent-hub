@@ -946,6 +946,95 @@ def test_native_session_identity_comes_from_session_meta(tmp_path: Path) -> None
 
 
 @pytest.mark.unit
+def test_native_agent_messages_are_owned_by_the_receiving_session(tmp_path: Path) -> None:
+    child = tmp_path / "child.jsonl"
+    child.write_text("\n".join((
+        json.dumps({
+            "type": "session_meta",
+            "ordinal": 0,
+            "payload": {"parent_thread_id": "parent-thread"},
+        }),
+        json.dumps({
+            "type": "response_item",
+            "ordinal": 1,
+            "payload": {
+                "type": "agent_message",
+                "id": "amsg-assignment",
+                "author": "/root",
+                "recipient": "/root/hunter",
+                "content": [
+                    {"type": "input_text", "text": "Investigate the bounded question."},
+                    {"type": "encrypted_content", "encrypted_content": "opaque"},
+                ],
+            },
+        }),
+    )) + "\n")
+
+    child_events, child_checkpoint = read_incremental_transcript_events(str(child))
+    child_health = inspect_transcript_source(str(child), child_checkpoint)
+
+    assert [
+        (event.event_type, event.role, event.content, event.agent_id)
+        for event in child_events
+    ] == [(
+        "user_message",
+        "user",
+        "Investigate the bounded question.",
+        "/root",
+    )]
+    assert child_health.issues == []
+
+    root = tmp_path / "root.jsonl"
+    root.write_text(json.dumps({
+        "type": "response_item",
+        "ordinal": 1,
+        "payload": {
+            "type": "agent_message",
+            "id": "amsg-result",
+            "author": "/root/hunter",
+            "recipient": "/root",
+            "content": [{"type": "input_text", "text": "Bounded work complete."}],
+        },
+    }) + "\n")
+
+    root_events, root_checkpoint = read_incremental_transcript_events(str(root))
+    root_health = inspect_transcript_source(str(root), root_checkpoint)
+
+    assert [
+        (event.event_type, event.role, event.content, event.agent_id)
+        for event in root_events
+    ] == [(
+        "subagent_result",
+        "assistant",
+        "Bounded work complete.",
+        "/root/hunter",
+    )]
+    assert root_health.issues == []
+
+
+@pytest.mark.unit
+def test_unknown_native_agent_message_shape_stays_blocking(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+    transcript.write_text(json.dumps({
+        "type": "response_item",
+        "payload": {
+            "type": "agent_message",
+            "id": "amsg-future",
+            "author": "/root",
+            "recipient": "/root/hunter",
+            "content": [{"type": "future_material", "value": "unparsed"}],
+        },
+    }) + "\n")
+
+    _events, checkpoint = read_incremental_transcript_events(str(transcript))
+    health = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert [(issue.code, issue.count) for issue in health.issues] == [
+        ("unsupported_record_shape", 1),
+    ]
+
+
+@pytest.mark.unit
 def test_unknown_material_record_is_a_blocking_source_issue(tmp_path: Path) -> None:
     transcript = tmp_path / "native.jsonl"
     transcript.write_text("\n".join((

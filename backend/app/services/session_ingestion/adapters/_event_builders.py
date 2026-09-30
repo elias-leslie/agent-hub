@@ -458,10 +458,45 @@ def append_claude_assistant_message(
             _append_assistant_content_block(block, state, model_used, agent_id, agent_name)
 
 
+def _append_codex_agent_message(payload: JsonObject, state: _ParseState) -> None:
+    """Retain native parent/child messages in the session that received them."""
+    author = payload.get("author")
+    content = payload.get("content")
+    if not isinstance(author, str) or not author or not isinstance(content, list):
+        return
+    texts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "input_text":
+            continue
+        text = block.get("text")
+        if isinstance(text, str) and text.strip():
+            texts.append(text.strip())
+    if not texts:
+        return
+    if state.parent_thread_id:
+        state.begin_user_turn()
+        state.append(
+            "user_message",
+            role="user",
+            content="\n".join(texts),
+            agent_id=author,
+        )
+        return
+    state.append(
+        "subagent_result",
+        role="assistant",
+        content="\n".join(texts),
+        agent_id=author,
+    )
+
+
 def _append_codex_response_item(payload: object, state: _ParseState) -> None:
     if not isinstance(payload, dict):
         return
     payload_type = payload.get("type")
+    if payload_type == "agent_message":
+        _append_codex_agent_message(payload, state)
+        return
     if payload_type == "message":
         _append_codex_message_payload(payload, state)
         return
