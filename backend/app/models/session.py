@@ -15,10 +15,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -299,7 +301,53 @@ class SessionEvent(Base):
     tool_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tool_input: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    tool_output: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    _tool_output: Mapped[dict[str, Any] | None] = mapped_column("tool_output", JSON, nullable=True)
+    tool_output_from_content: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+
+    @hybrid_property
+    def tool_output(self) -> dict[str, Any] | None:
+        """Expose the original payload while duplicate output lives only in content.
+
+        The explicit flag distinguishes an omitted output from an output backed by
+        content without reserving or overwriting a key in native tool metadata.
+        Class-level expressions continue to address the stored JSON column;
+        full-text queries must include content, as the persona stream already does.
+        """
+        if self.tool_output_from_content and isinstance(self.content, str):
+            return {**(self._tool_output or {}), "output": self.content}
+        return self._tool_output
+
+    @tool_output.inplace.setter
+    def _set_tool_output(self, value: dict[str, Any] | None) -> None:
+        self._tool_output = value
+        self.tool_output_from_content = False
+
+    @tool_output.inplace.expression
+    @classmethod
+    def _tool_output_expression(cls):
+        # A label retains the public hybrid identity for bulk ORM assignment;
+        # returning the mapped attribute directly bypasses update_expression.
+        return cls._tool_output.label("tool_output")
+
+    @tool_output.inplace.update_expression
+    @classmethod
+    def _tool_output_update_expression(cls, value):
+        # Bulk ORM replacement must not resurrect the previous canonical output.
+        return [(cls._tool_output, value), (cls.tool_output_from_content, False)]
+
+    def compact_tool_output(self) -> None:
+        """Keep exact duplicate tool-result text once, without mutating callers."""
+        if (
+            self.event_type == SessionEventType.TOOL_RESULT
+            and isinstance(self.content, str)
+            and isinstance(self._tool_output, dict)
+            and isinstance(self._tool_output.get("output"), str)
+            and self._tool_output["output"] == self.content
+        ):
+            self._tool_output = {key: value for key, value in self._tool_output.items() if key != "output"}
+            self.tool_output_from_content = True
 
     tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -335,6 +383,13 @@ class SessionEvent(Base):
 
     def __repr__(self) -> str:
         return f"<SessionEvent id={self.id!r} type={self.event_type!r} turn={self.turn}>"
+
+
+@event.listens_for(SessionEvent, "before_insert")
+@event.listens_for(SessionEvent, "before_update")
+def _compact_session_event_tool_output(_mapper, _connection, target: SessionEvent) -> None:
+    # Covers direct ORM writes such as branching as well as shared event storage.
+    target.compact_tool_output()
 
 
 class SessionSummarySegment(Base):

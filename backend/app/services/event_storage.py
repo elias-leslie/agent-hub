@@ -125,7 +125,7 @@ def _build_session_event(
 ) -> SessionEvent:
     """Sanitize fields and construct a SessionEvent (no DB I/O)."""
     s = _sanitize_event_value
-    return SessionEvent(
+    event = SessionEvent(
         session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
         role=s(role), content=s(content), tool_name=s(tool_name), call_id=s(call_id),
         tool_input=s(tool_input), tool_output=s(tool_output),
@@ -135,6 +135,8 @@ def _build_session_event(
         message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
         source_event_id=s(source_event_id), source_timestamp=source_timestamp, usage=s(usage),
     )
+    event.compact_tool_output()
+    return event
 
 
 _CHILD_SESSION_EVENT_TYPES = {
