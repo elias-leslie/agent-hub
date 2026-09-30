@@ -18,6 +18,7 @@ from app.services.native_continuation_runtime import (
     NativeTurnUsage,
     _login_with_agent_hub_auth,
     _Protocol,
+    _safe_provider_error,
     _turn_usage,
 )
 
@@ -269,6 +270,24 @@ def test_cumulative_updates_keep_one_turn_baseline() -> None:
 
     assert interim.input_tokens == 30
     assert final.input_tokens == 50
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_code"),
+    [
+        ({"codexErrorInfo": "badRequest"}, "native_bad_request"),
+        ({"codexErrorInfo": "cyberPolicy"}, "native_provider_refusal"),
+        (
+            {"codexErrorInfo": {"responseStreamDisconnected": {"httpStatusCode": 503}}},
+            "native_provider_unavailable",
+        ),
+    ],
+)
+def test_provider_errors_retain_safe_actionable_classification(
+    error: object,
+    expected_code: str,
+) -> None:
+    assert _safe_provider_error(error).code == expected_code
 
 
 @pytest.mark.asyncio

@@ -368,6 +368,14 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
             "native_provider_refusal",
             "The native provider declined this request.",
         ),
+        "tooManyDenials": (
+            "native_provider_refusal",
+            "The native provider declined this request.",
+        ),
+        "badRequest": (
+            "native_bad_request",
+            "The native provider rejected the request contract.",
+        ),
         "usageLimitExceeded": (
             "native_quota_exceeded",
             "The native provider reported a usage limit.",
@@ -376,6 +384,10 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
             "native_quota_exceeded",
             "The native provider reported a rate limit.",
         ),
+        "sessionBudgetExceeded": (
+            "native_quota_exceeded",
+            "The native provider reported a session budget limit.",
+        ),
         "unauthorized": (
             "native_auth_unavailable",
             "The native provider reported an authentication failure.",
@@ -383,6 +395,34 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
         "contextWindowExceeded": (
             "native_context_limit",
             "The retained native context window was exceeded.",
+        ),
+        "flexUnavailable": (
+            "native_provider_unavailable",
+            "The native provider route is unavailable.",
+        ),
+        "serverOverloaded": (
+            "native_provider_unavailable",
+            "The native provider is overloaded.",
+        ),
+        "internalServerError": (
+            "native_provider_unavailable",
+            "The native provider reported an internal error.",
+        ),
+        "httpConnectionFailed": (
+            "native_provider_unavailable",
+            "The native provider connection failed.",
+        ),
+        "responseStreamConnectionFailed": (
+            "native_provider_unavailable",
+            "The native provider response stream could not connect.",
+        ),
+        "responseStreamDisconnected": (
+            "native_provider_unavailable",
+            "The native provider response stream disconnected.",
+        ),
+        "responseTooManyFailedAttempts": (
+            "native_provider_unavailable",
+            "The native provider exhausted its response attempts.",
         ),
     }
     safe_code, message = known.get(
