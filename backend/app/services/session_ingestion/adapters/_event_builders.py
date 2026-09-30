@@ -140,6 +140,7 @@ class _ParseState:
         active_exec_call_ids: tuple[str, ...] = (),
         pending_exec_wrappers: tuple[dict[str, object], ...] = (),
         yielded_exec_wrapper_call_ids: tuple[str, ...] = (),
+        codex_model_state: dict[str, Any] | None = None,
     ) -> None:
         self.turn = turn
         self.sequence = sequence
@@ -153,6 +154,7 @@ class _ParseState:
         self.active_exec_call_ids = list(active_exec_call_ids)
         self.pending_exec_wrappers = [dict(wrapper) for wrapper in pending_exec_wrappers]
         self.yielded_exec_wrapper_call_ids = list(yielded_exec_wrapper_call_ids)
+        self.codex_model_state = dict(codex_model_state or {})
 
     def retain_exec_wrapper(
         self,

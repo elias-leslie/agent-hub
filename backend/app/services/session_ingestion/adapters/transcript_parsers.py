@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from io import BufferedReader
 from pathlib import Path
+from typing import Any
 
 from app.services.session_ingestion.models import (
     NormalizedEvent,
@@ -17,9 +18,10 @@ from app.services.session_ingestion.models import (
 )
 
 from ._event_builders import _ParseState, append_normalized_events
+from .codex_model_evidence import observe_model_record
 
 JsonObject = dict[str, object]
-PARSER_VERSION = "agent-hub.transcript-jsonl.v3"
+PARSER_VERSION = "agent-hub.transcript-jsonl.v4"
 _KNOWN_TOP_LEVEL_TYPES = {
     "assistant",
     "compacted",
@@ -56,6 +58,13 @@ _KNOWN_CODEX_EVENT_TYPES = {
 
 def transcript_session_identity(transcript_path: str) -> str | None:
     """Read the native Codex session identity without ingesting transcript content."""
+    payload = transcript_session_metadata(transcript_path)
+    session_id = payload.get("id") if payload else None
+    return session_id if isinstance(session_id, str) and session_id else None
+
+
+def transcript_session_metadata(transcript_path: str) -> dict[str, Any] | None:
+    """Read the first own native header, never a copied parent header."""
     path = Path(transcript_path)
     try:
         with path.open("rb") as transcript:
@@ -72,8 +81,7 @@ def transcript_session_identity(transcript_path: str) -> str | None:
                 if not isinstance(obj, dict) or obj.get("type") != "session_meta":
                     continue
                 payload = obj.get("payload")
-                session_id = payload.get("id") if isinstance(payload, dict) else None
-                return session_id if isinstance(session_id, str) and session_id else None
+                return payload if isinstance(payload, dict) else None
     except OSError:
         return None
     return None
@@ -179,6 +187,7 @@ def read_incremental_transcript_events(
         active_exec_call_ids=parser_checkpoint.active_exec_call_ids,
         pending_exec_wrappers=parser_checkpoint.pending_exec_wrappers,
         yielded_exec_wrapper_call_ids=parser_checkpoint.yielded_exec_wrapper_call_ids,
+        codex_model_state=parser_checkpoint.codex_model_state,
     )
     parse_issue_counts = dict(parser_checkpoint.parse_issue_counts)
     try:
@@ -201,6 +210,19 @@ def read_incremental_transcript_events(
                 offset = 0
             transcript.seek(offset)
             line_count = parser_checkpoint.line_offset if offset else 0
+            # Upgrade existing cursors' evidence without replaying stored events.
+            if offset and not state.codex_model_state:
+                transcript.seek(0)
+                for prefix_line in range(1, line_count + 1):
+                    try:
+                        prefix = json.loads(transcript.readline())
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                    if isinstance(prefix, dict):
+                        observe_model_record(state.codex_model_state, prefix, prefix_line)
+                transcript.seek(offset)
+            elif not offset:
+                state.codex_model_state = {}
             while raw_line := transcript.readline():
                 if not raw_line.endswith(b"\n"):
                     break  # The writer has not completed this JSONL entry yet.
@@ -234,6 +256,7 @@ def read_incremental_transcript_events(
                         else f"{stat.st_dev}:{stat.st_ino}:byte:{line_start}:{line_digest}"
                     )
                     state.set_source(obj, identity)
+                    observe_model_record(state.codex_model_state, obj, line_count)
                     append_normalized_events(obj, state)
                 else:
                     parse_issue_counts["non_object_json"] = (
@@ -357,6 +380,7 @@ class _TranscriptParseCheckpoint:
     pending_exec_wrappers: tuple[dict[str, object], ...] = ()
     yielded_exec_wrapper_call_ids: tuple[str, ...] = ()
     parse_issue_counts: dict[str, int] = field(default_factory=dict)
+    codex_model_state: dict[str, Any] = field(default_factory=dict)
 
 
 def _load_parse_checkpoint(
@@ -385,6 +409,9 @@ def _load_parse_checkpoint(
     pending_exec_wrappers = parsed.get("pending_exec_wrappers", [])
     yielded_exec_wrapper_call_ids = parsed.get("yielded_exec_wrapper_call_ids", [])
     parse_issue_counts = parsed.get("parse_issue_counts", {})
+    codex_model_state = parsed.get("codex_model_state", {})
+    if not isinstance(codex_model_state, dict):
+        return _TranscriptParseCheckpoint()
     if not isinstance(line_offset, int) or line_offset < 0:
         return _TranscriptParseCheckpoint()
     if not isinstance(turn, int) or turn < 1:
@@ -447,6 +474,7 @@ def _load_parse_checkpoint(
             pending_exec_wrappers=pending_wrappers,
             yielded_exec_wrapper_call_ids=yielded_wrappers,
             parse_issue_counts=dict(parse_issue_counts),
+            codex_model_state=codex_model_state,
         )
     if not isinstance(byte_offset, int) or byte_offset < 0:
         return _TranscriptParseCheckpoint()
@@ -467,6 +495,7 @@ def _load_parse_checkpoint(
         pending_exec_wrappers=pending_wrappers,
         yielded_exec_wrapper_call_ids=yielded_wrappers,
         parse_issue_counts=dict(parse_issue_counts),
+        codex_model_state=codex_model_state,
     )
 
 
@@ -516,6 +545,7 @@ def _dump_parse_checkpoint(
             "pending_exec_wrappers": state.pending_exec_wrappers,
             "yielded_exec_wrapper_call_ids": state.yielded_exec_wrapper_call_ids,
             "parse_issue_counts": parse_issue_counts,
+            "codex_model_state": state.codex_model_state,
         },
         separators=(",", ":"),
         sort_keys=True,

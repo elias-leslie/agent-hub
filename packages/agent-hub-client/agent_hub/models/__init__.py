@@ -21,6 +21,7 @@ from agent_hub.models.session import (
     SessionCreate,
     SessionListItem,
     SessionListResponse,
+    SessionModelEvidence,
     SessionResponse,
 )
 from agent_hub.models.tools import ToolCall, ToolDefinition, ToolResultMessage
@@ -53,6 +54,7 @@ __all__ = [
     "SessionResponse",
     "SessionListItem",
     "SessionListResponse",
+    "SessionModelEvidence",
     # Image models
     "ImageGenerationResponse",
     # Agent models

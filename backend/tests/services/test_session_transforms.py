@@ -125,6 +125,50 @@ def test_external_identity_prefers_nested_and_supports_bounded_legacy_keys() -> 
     }
 
 
+def test_native_model_response_uses_current_evidence_instead_of_stale_routing() -> None:
+    evidence = {
+        "session_id": "sess-1", "native_session_id": "root", "turn_id": "current",
+        "source": "codex_transcript", "source_path": "/tmp/native.jsonl",
+        "source_generation": "generation", "source_line": 17,
+        "source_timestamp": "2026-09-30T15:00:00Z",
+        "requested_model": "gpt-6.1-sol", "requested_reasoning_effort": "high",
+        "observed_model": None,
+    }
+    session = _session(provider_metadata={
+        "transcript_path": "/tmp/native.jsonl", "model_evidence": evidence,
+        "requested_model": "codex/stale", "effective_model": "codex/stale",
+        "transcript_ingestion": {"source_health": {"source_generation": "generation"}},
+    })
+    for response in (build_session_response(session), build_session_list_items([session], {}, {})[0]):
+        assert response.requested_model == "codex/gpt-6.1-sol"
+        assert response.model == response.effective_model == "codex/unknown"
+        assert response.model_evidence is not None
+        assert response.model_evidence.turn_id == "current"
+        assert response.model_evidence.requested_reasoning_effort == "high"
+        assert response.model_evidence.observed_model is None
+        assert response.fallback_used is False
+    assert session.provider_metadata is not None
+    session.provider_metadata["model_evidence"]["observed_model"] = "served-alias"
+    session.provider_metadata["model_evidence"]["observed_source"] = "codex.response_item.model"
+    session.provider_metadata["model_evidence"]["observed_source_line"] = 19
+    session.provider_metadata["model_evidence"]["observed_source_timestamp"] = "2026-09-30T15:01:00Z"
+    response = build_session_response(session)
+    assert response.model == "codex/served-alias"
+    assert response.fallback_used is False
+    # A copied child or another source generation cannot supply delivery evidence.
+    session.provider_metadata["model_evidence"]["session_id"] = "other"
+    response = build_session_response(session)
+    assert response.model == "codex/unknown"
+    assert response.model_evidence is None
+
+
+def test_native_model_without_provenance_is_unknown() -> None:
+    session = _session(provider_metadata={"transcript_path": "/tmp/native.jsonl", "effective_model": "codex/stale"})
+    response = build_session_response(session)
+    assert response.model == response.requested_model == "codex/unknown"
+    assert response.model_evidence is None
+
+
 def test_build_session_list_items_exposes_batch_task_ids() -> None:
     session = _session(
         provider_metadata={

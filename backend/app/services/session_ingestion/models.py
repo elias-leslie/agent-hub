@@ -5,9 +5,62 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+
+
+class SessionModelEvidence(BaseModel):
+    """Current native turn routing and independently observed delivery evidence."""
+
+    session_id: str = Field(max_length=512)
+    native_session_id: str | None = Field(default=None, max_length=512)
+    turn_id: str | None = Field(default=None, max_length=512)
+    source: Literal["codex_transcript"] = "codex_transcript"
+    source_path: str | None = Field(default=None, max_length=4096)
+    source_generation: str | None = Field(default=None, max_length=512)
+    source_line: int | None = Field(default=None, ge=1)
+    source_timestamp: datetime | None = None
+    requested_model: str | None = Field(default=None, max_length=512)
+    requested_reasoning_effort: str | None = Field(default=None, max_length=64)
+    observed_model: str | None = Field(default=None, max_length=512)
+    observed_source: Literal["codex.response_item.model", "codex.token_usage_record.model"] | None = None
+    observed_source_line: int | None = Field(default=None, ge=1)
+    observed_source_timestamp: datetime | None = None
+
+
+def validated_native_model_evidence(
+    session_id: str, metadata: dict[str, Any] | None,
+) -> SessionModelEvidence | None:
+    """Read evidence only when it names this session's committed native source."""
+    metadata = metadata or {}
+    raw = metadata.get("model_evidence")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        evidence = SessionModelEvidence.model_validate(raw)
+    except ValidationError:
+        return None
+    retained = metadata.get("transcript_ingestion")
+    retained = retained if isinstance(retained, dict) else {}
+    health = retained.get("source_health")
+    health = health if isinstance(health, dict) else {}
+    if (
+        evidence.session_id != session_id
+        or evidence.source_path != metadata.get("transcript_path")
+        or not evidence.source_generation
+        or evidence.source_generation != health.get("source_generation")
+    ):
+        return None
+    if evidence.observed_model and not (
+        evidence.turn_id and evidence.observed_source and evidence.observed_source_line
+        and evidence.observed_source_timestamp and evidence.source_timestamp
+    ):
+        return evidence.model_copy(update={
+            "observed_model": None, "observed_source": None,
+            "observed_source_line": None, "observed_source_timestamp": None,
+        })
+    return evidence
 
 
 class SessionUpsertRequest(BaseModel):
@@ -204,3 +257,4 @@ class TranscriptIngestResult(BaseModel):
     next_checkpoint: str | None = None
     boundaries: list[str] = Field(default_factory=list)
     source_health: TranscriptSourceHealth
+    model_evidence: SessionModelEvidence | None = None

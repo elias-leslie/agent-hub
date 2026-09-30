@@ -5,6 +5,10 @@ from typing import Any
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.services.agent_routing import get_provider_for_model
+from app.services.session_ingestion.models import (
+    SessionModelEvidence,
+    validated_native_model_evidence,
+)
 
 _EXTERNAL_IDENTITY_KEYS = (
     "harness",
@@ -199,6 +203,17 @@ def fallback_used(session: Session, req_model: str, eff_model: str) -> bool:
 
 
 def session_model_info(session: Session) -> dict[str, str | bool | None]:
+    if session.provider == "codex" and metadata_value(session, "transcript_path"):
+        evidence = native_model_evidence(session)
+        requested = evidence.requested_model if evidence else None
+        observed = evidence.observed_model if evidence else None
+        return {
+            "requested_model": f"codex/{requested}" if requested else "codex/unknown",
+            "effective_model": f"codex/{observed}" if observed else "codex/unknown",
+            "requested_provider": "codex", "effective_provider": "codex",
+            "fallback_used": False,
+            "fallback_reason": None,
+        }
     req_model = requested_model(session)
     eff_model = effective_model(session)
     return {
@@ -209,3 +224,10 @@ def session_model_info(session: Session) -> dict[str, str | bool | None]:
         "fallback_used": fallback_used(session, req_model, eff_model),
         "fallback_reason": metadata_value(session, "fallback_reason"),
     }
+
+
+def native_model_evidence(session: Session) -> SessionModelEvidence | None:
+    """Expose bounded native evidence only for this exact registered source."""
+    if session.provider != "codex":
+        return None
+    return validated_native_model_evidence(session.id, session_metadata(session))

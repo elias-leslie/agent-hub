@@ -772,7 +772,7 @@ def test_incremental_source_health_proves_current_complete_extent(tmp_path: Path
     assert health.caught_up is True
     assert health.committed_byte_offset == health.observed_extent == transcript.stat().st_size
     assert health.source_generation
-    assert health.parser_version == "agent-hub.transcript-jsonl.v3"
+    assert health.parser_version == "agent-hub.transcript-jsonl.v4"
     assert health.pending_wrapper_call_ids == []
     assert health.yielded_wrapper_call_ids == []
     assert health.issues == []

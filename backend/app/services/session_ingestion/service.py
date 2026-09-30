@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
 from app.services.agent_routing import resolve_agent
-from app.services.event_storage import get_max_sequence, get_max_turn
+from app.services.event_storage import get_max_sequence, get_max_turn, lock_session_event_ingestion
 from app.services.memory.session_analysis import analyze_session
 from app.services.session_operations import _validate_project_id, get_or_create_session
 from app.services.session_scope import resolve_scope_base_path
 
 from ._events import _adapter_for_provider, _store_events_general, _store_single_implicit_event
+from ._native_provenance import validate_native_provenance
 from ._service_helpers import (
     _apply_heartbeat_update,
     _build_new_session,
@@ -24,7 +28,7 @@ from ._service_helpers import (
     _validate_external_id,
 )
 from .adapters.base import ProviderSessionRef
-from .adapters.transcript_parsers import inspect_transcript_source, transcript_session_identity
+from .adapters.transcript_parsers import _load_parse_checkpoint, inspect_transcript_source
 from .models import (
     AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
@@ -32,10 +36,12 @@ from .models import (
     FinalizeSessionResult,
     SessionHeartbeatRequest,
     SessionHeartbeatResult,
+    SessionModelEvidence,
     SessionUpsertRequest,
     SessionUpsertResult,
     TranscriptIngestRequest,
     TranscriptIngestResult,
+    validated_native_model_evidence,
 )
 
 
@@ -74,6 +80,17 @@ async def _validate_parent_link(
         )
 
 
+async def _validate_native_parent_project(db: AsyncSession, session: Session) -> None:
+    """Do not refresh legacy native parent links across project boundaries."""
+    if session.parent_session_id is None:
+        return
+    parent = await db.get(Session, session.parent_session_id)
+    if parent is None:
+        raise SessionIngestionConflict("session_parent_not_found", "The native parent is not registered.")
+    if parent.project_id != session.project_id:
+        raise SessionIngestionConflict("session_parent_project_mismatch", "Native parent and child must belong to the same project.")
+
+
 async def upsert_session(
     db: AsyncSession,
     request: SessionUpsertRequest,
@@ -88,11 +105,33 @@ async def upsert_session(
             "session_project_immutable",
             "An existing session cannot be moved to another project.",
         )
+    if existing is not None and existing.provider == "codex" and (
+        (existing.provider_metadata or {}).get("transcript_path") and request.provider.lower() != "codex"
+    ):
+        raise SessionIngestionConflict("session_provider_immutable", "A native Codex session cannot change provider.")
+    if request.provider.lower() == "codex" and existing is not None:
+        await lock_session_event_ingestion(db, existing.id)
+        await db.refresh(existing)
     await _validate_parent_link(db, request)
+
+    if request.provider.lower() == "codex" and existing is not None and request.parent_session_id is not None and (
+        existing.parent_session_id is not None and existing.parent_session_id != request.parent_session_id
+    ):
+        raise SessionIngestionConflict("session_parent_immutable", "The registered parent cannot be replaced.")
+    if request.provider.lower() == "codex":
+        await asyncio.to_thread(validate_native_provenance,
+            request.session_id, request.project_id,
+            request.parent_session_id or (existing.parent_session_id if existing is not None else None),
+            _merge_metadata(existing.provider_metadata if existing is not None else None, request.provider_metadata),
+            previous=existing.provider_metadata if existing is not None else None,
+        )
 
     provider = request.provider
     model = request.model
-    if request.agent_slug:
+    native_source = request.provider_metadata.get("transcript_path") or (
+        (existing.provider_metadata or {}).get("transcript_path") if existing is not None else None
+    )
+    if request.agent_slug and not (request.provider.lower() == "codex" and native_source):
         resolved = await resolve_agent(request.agent_slug, db)
         provider = resolved.provider
         model = resolved.model
@@ -101,15 +140,30 @@ async def upsert_session(
         request.provider_metadata,
         {"cwd": request.cwd} if request.cwd else None,
     )
+    if request.provider.lower() == "codex":
+        # Native evidence and ingestion cursors are written only by transcript ingestion.
+        merged_metadata.pop("model_evidence", None)
+        merged_metadata.pop("transcript_ingestion", None)
+        if native_source:
+            evidence = validated_native_model_evidence(existing.id, existing.provider_metadata) if existing is not None else None
+            observed = evidence.observed_model if evidence else None
+            model = f"codex/{observed}" if observed else "codex/unknown"
     base_path = resolve_scope_base_path(merged_metadata, request.cwd)
 
     if not is_existing or existing is None:
         session = _build_new_session(request, provider, model, merged_metadata, base_path)
+        if request.provider.lower() == "codex" and native_source:
+            session.models_used = []
         db.add(session)
         await db.commit()
         return session, SessionUpsertResult(session_id=session.id, created=True)
 
     _update_existing_session(existing, request, provider, model, merged_metadata, base_path)
+    if request.provider.lower() == "codex" and native_source:
+        existing.models_used = (
+            [used for used in existing.models_used or [] if used != "codex/unknown"]
+            if evidence is not None else []
+        )
     await db.commit()
     return existing, SessionUpsertResult(session_id=existing.id, created=False)
 
@@ -132,6 +186,20 @@ async def heartbeat_session(
         ).scalar_one_or_none()
     if session is None:
         raise ValueError(f"Session not found: {session_id}")
+    if session.provider == "codex":
+        await lock_session_event_ingestion(db, session_id)
+        await db.refresh(session)
+        await _validate_project_id(session.project_id)
+        await _validate_native_parent_project(db, session)
+        await asyncio.to_thread(validate_native_provenance,
+            session.id, session.project_id, session.parent_session_id,
+            _merge_metadata(session.provider_metadata, request.provider_metadata),
+            previous=session.provider_metadata,
+        )
+        request = request.model_copy(update={"provider_metadata": {
+            key: value for key, value in request.provider_metadata.items()
+            if key not in {"model_evidence", "transcript_ingestion"}
+        }})
     _apply_heartbeat_update(session, request)
     await db.commit()
     return session, SessionHeartbeatResult(session_id=session.id, updated=True)
@@ -142,6 +210,8 @@ async def append_normalized_events(
     session_id: str,
     request: AppendNormalizedEventsRequest,
     session: Session | None = None,
+    *,
+    commit: bool = True,
 ) -> AppendNormalizedEventsResult:
     """Append normalized events to a session with forward-only sequencing."""
     if not request.events:
@@ -158,11 +228,15 @@ async def append_normalized_events(
     if len(request.events) == 1:
         event = request.events[0]
         if event.turn is None and event.sequence is None:
-            result = await _store_single_implicit_event(db, session_id, event, session)
+            result = await _store_single_implicit_event(
+                db, session_id, event, session, commit=commit,
+            )
         else:
-            result = await _store_events_general(db, session_id, request.events, session)
+            result = await _store_events_general(
+                db, session_id, request.events, session, commit=commit,
+            )
     else:
-        result = await _store_events_general(db, session_id, request.events, session)
+        result = await _store_events_general(db, session_id, request.events, session, commit=commit)
 
     if _is_transcript_backed_session(session):
         await _reconcile_transcript_session_models(db, session_id, session=session)
@@ -214,28 +288,67 @@ async def ingest_transcript_events(
                 "The transcript path does not match the source registered for this session.",
             )
     if request.provider.lower() == "codex":
-        native_session_id = transcript_session_identity(request.transcript_path)
-        if native_session_id != session_id:
-            raise SessionIngestionConflict(
-                "transcript_session_identity_mismatch",
-                "The native transcript does not belong to the registered session.",
-            )
+        if session is None:
+            session = (await db.execute(select(Session).where(Session.id == session_id).limit(1))).scalar_one_or_none()
+        if session is None:
+            raise ValueError(f"Session not found: {session_id}")
+        if session.provider != "codex":
+            raise SessionIngestionConflict("transcript_provider_mismatch", "The registered provider is not Codex.")
+        await lock_session_event_ingestion(db, session_id)
+        # The caller's ORM row/cursor may predate a concurrent native refresh.
+        await db.refresh(session)
+        await _validate_project_id(session.project_id)
+        await _validate_native_parent_project(db, session)
+        metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+        await asyncio.to_thread(validate_native_provenance,
+            session.id, session.project_id, session.parent_session_id, metadata,
+            previous=metadata, transcript_path=request.transcript_path,
+        )
+        retained = metadata.get("transcript_ingestion")
+        retained = retained if isinstance(retained, dict) else {}
+        # Two consumers may refresh the same source. Ignore client cursor state;
+        # use only the server-owned cursor, including when the client lags behind.
+        canonical_checkpoint = retained.get("checkpoint")
+        request = request.model_copy(update={
+            "checkpoint": canonical_checkpoint if isinstance(canonical_checkpoint, str) else None,
+        })
     adapter = _adapter_for_provider(request.provider)
     session_ref = ProviderSessionRef(
         provider_session_id=session_id,
         source_id=request.transcript_path,
     )
     events, next_checkpoint = await adapter.read_new_events(session_ref, request.checkpoint)
-    source_health = inspect_transcript_source(request.transcript_path, next_checkpoint)
+    source_health = await asyncio.to_thread(inspect_transcript_source, request.transcript_path, next_checkpoint)
+    model_evidence = None
+    native_model_state = {}
+    if request.provider.lower() == "codex":
+        native_model_state = _load_parse_checkpoint(next_checkpoint).codex_model_state
+        parsed = native_model_state.get("evidence")
+        if isinstance(parsed, dict):
+            try:
+                model_evidence = SessionModelEvidence.model_validate({
+                    **parsed, "source_path": request.transcript_path,
+                    "source_generation": source_health.source_generation,
+                })
+            except ValidationError as exc:
+                raise SessionIngestionConflict("transcript_model_evidence_invalid", "Invalid native model evidence.") from exc
+            if model_evidence.session_id != session_id:
+                raise SessionIngestionConflict("transcript_model_evidence_identity_mismatch", "Native evidence belongs to another thread.")
     boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
     append_result = await append_normalized_events(
         db=db,
         session_id=session_id,
         request=AppendNormalizedEventsRequest(events=events),
+        **({"session": session, "commit": False} if request.provider.lower() == "codex" else {}),
     )
-    await _reconcile_transcript_session_models(db, session_id)
+    await _reconcile_transcript_session_models(
+        db, session_id, session=session if request.provider.lower() == "codex" else None,
+    )
     if append_result.events_appended == 0:
-        await _reconcile_transcript_session_scope(db, session_id)
+        await _reconcile_transcript_session_scope(
+            db, session_id, session=session if request.provider.lower() == "codex" else None,
+            commit=request.provider.lower() != "codex",
+        )
     result = TranscriptIngestResult(
         session_id=session_id,
         provider=request.provider,
@@ -248,6 +361,7 @@ async def ingest_transcript_events(
         next_checkpoint=next_checkpoint,
         boundaries=[boundary.boundary_type for boundary in boundaries],
         source_health=source_health,
+        model_evidence=model_evidence,
     )
     if session is not None:
         metadata = dict(session.provider_metadata or {})
@@ -258,6 +372,11 @@ async def ingest_transcript_events(
             "checkpoint": next_checkpoint,
             "source_health": source_health.model_dump(mode="json"),
         }
+        if request.provider.lower() == "codex":
+            metadata["model_evidence"] = model_evidence.model_dump(mode="json") if model_evidence else None
+            observed = model_evidence.observed_model if model_evidence else None
+            session.model = f"codex/{observed}" if observed else "codex/unknown"
+            session.models_used = [f"codex/{model}" for model in native_model_state.get("observed_models", [])]
         session.provider_metadata = metadata
         await db.commit()
     return result

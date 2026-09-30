@@ -191,6 +191,11 @@ async def ingest_transcript_events_endpoint(
         session = await get_session_or_404(db, session_id)
         require_project_access(http_request, session.project_id)
         return await ingest_transcript_events(db, session_id, request, session=session)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status, detail=str(exc)) from exc

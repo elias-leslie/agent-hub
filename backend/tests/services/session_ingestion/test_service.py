@@ -1029,13 +1029,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
     session.updated_at = datetime.now(UTC)
     db.execute = AsyncMock(
         side_effect=[
-            MagicMock(scalar_one_or_none=lambda: session),
-            MagicMock(
-                all=lambda: [
-                    ("codex/gpt-5.4", None),
-                ]
-            ),
-            MagicMock(scalar_one_or_none=lambda: session),
+            MagicMock(),  # Session ingestion advisory lock.
             MagicMock(
                 all=lambda: [
                     (
@@ -1087,8 +1081,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
 
     with (
         patch(
-            "app.services.session_ingestion.service.transcript_session_identity",
-            return_value="session-scope",
+            "app.services.session_ingestion.service.validate_native_provenance",
         ),
         patch(
             "app.services.session_ingestion.service._adapter_for_provider",
@@ -1107,6 +1100,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
                 provider="codex",
                 transcript_path="/tmp/session-scope.jsonl",
             ),
+            session=session,
         )
 
     assert result.next_checkpoint == "12"
@@ -1159,8 +1153,7 @@ async def test_ingest_transcript_events_upgrades_unknown_scope_confidence_from_s
 
     with (
         patch(
-            "app.services.session_ingestion.service.transcript_session_identity",
-            return_value="session-scope-upgrade",
+            "app.services.session_ingestion.service.validate_native_provenance",
         ),
         patch(
             "app.services.session_ingestion.service._adapter_for_provider",
@@ -1179,6 +1172,7 @@ async def test_ingest_transcript_events_upgrades_unknown_scope_confidence_from_s
                 provider="codex",
                 transcript_path="/tmp/session-scope-upgrade.jsonl",
             ),
+            session=session,
         )
 
     assert result.next_checkpoint == "13"

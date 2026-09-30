@@ -240,6 +240,9 @@ async def _reconcile_transcript_session_models(
     if session is None:
         return
 
+    if session.provider == "codex":
+        return  # Native delivery is reconciled from the current parser evidence only.
+
     event_rows = (
         await db.execute(
             select(SessionEvent.model_used, SessionEvent.agent_id)
@@ -275,6 +278,8 @@ async def _reconcile_transcript_session_scope(
     db: AsyncSession,
     session_id: str,
     session: Session | None = None,
+    *,
+    commit: bool = True,
 ) -> None:
     """Backfill transcript-backed scope from persisted tool events when the row is still unscoped."""
     if session is None:
@@ -333,4 +338,5 @@ async def _reconcile_transcript_session_scope(
         or session.scope_confidence != previous_confidence
     ):
         session.updated_at = datetime.now(UTC)
-        await db.commit()
+        if commit:
+            await db.commit()

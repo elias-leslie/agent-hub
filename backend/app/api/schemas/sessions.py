@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.services.session_ingestion.models import SessionModelEvidence
+
 
 class SessionCreate(BaseModel):
     """Request body for creating a session."""
@@ -196,6 +198,7 @@ class SessionResponse(BaseModel):
     project_id: str
     provider: str
     model: str
+    model_evidence: SessionModelEvidence | None = None
     requested_provider: str | None = Field(default=None, description="Originally requested provider")
     requested_model: str | None = Field(default=None, description="Originally requested model")
     effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")
@@ -280,6 +283,7 @@ class SessionListItem(BaseModel):
     project_id: str
     provider: str
     model: str
+    model_evidence: SessionModelEvidence | None = None
     requested_provider: str | None = Field(default=None, description="Originally requested provider")
     requested_model: str | None = Field(default=None, description="Originally requested model")
     effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")

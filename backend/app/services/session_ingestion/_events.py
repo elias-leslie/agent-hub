@@ -113,6 +113,8 @@ async def _store_single_implicit_event(
     session_id: str,
     event: NormalizedEvent,
     session: Session | None = None,
+    *,
+    commit: bool = True,
 ) -> AppendNormalizedEventsResult:
     """Fast path: store a single event with auto-assigned turn and sequence."""
     try:
@@ -143,7 +145,8 @@ async def _store_single_implicit_event(
             session=session,
         )
         await db.flush()
-        await db.commit()
+        if commit:
+            await db.commit()
         return AppendNormalizedEventsResult(
             session_id=session_id,
             events_appended=1,
@@ -153,6 +156,8 @@ async def _store_single_implicit_event(
             event_ids=[str(stored_event.id)],
         )
     except IntegrityError:
+        if not commit:
+            raise
         await db.rollback()
         current_turn = await get_max_turn(db, session_id) or 1
         current_seq = await get_max_sequence(db, session_id, current_turn)
@@ -247,6 +252,8 @@ async def _store_events_general(
     session_id: str,
     events: list[NormalizedEvent],
     session: Session | None = None,
+    *,
+    commit: bool = True,
 ) -> AppendNormalizedEventsResult:
     """Store a batch of normalized events with idempotent dedup."""
     await lock_session_event_ingestion(db, session_id)
@@ -284,7 +291,8 @@ async def _store_events_general(
                 )
         last_turn = turn
         last_sequence = sequence
-    await db.commit()
+    if commit:
+        await db.commit()
     return AppendNormalizedEventsResult(
         session_id=session_id,
         events_appended=len(events) - events_skipped,
