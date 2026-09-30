@@ -12,19 +12,19 @@ from agent_hub.models import SessionCreate, SessionListResponse, SessionResponse
 class SessionOperationsMixin:
     """Mixin providing session management methods."""
 
-    def register_native_source(self, session_id: str, request: NativeSourceRegistration) -> NativeSourceReceipt:
+    def register_native_source(self, session_id: str, request: NativeSourceRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
         response = self._get_client().post(
             f"/api/session-ingestion/sessions/{session_id}/native-sources",
-            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_source"),
+            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_source", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None),
         )
         if not response.is_success:
             handle_error(response)
         return NativeSourceReceipt.model_validate(response.json())
 
-    def ingest_native_observations(self, session_id: str, source_id: str, request: NativeObservationBatch) -> NativeObservationResult:
+    def ingest_native_observations(self, session_id: str, source_id: str, request: NativeObservationBatch, *, execution_owner_secret: str | None = None) -> NativeObservationResult:
         response = self._get_client().post(
             f"/api/session-ingestion/sessions/{session_id}/native-sources/{source_id}/observations",
-            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_observations"),
+            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_observations", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None),
         )
         if not response.is_success:
             handle_error(response)
@@ -141,21 +141,21 @@ class SessionOperationsMixin:
 class AsyncSessionOperationsMixin:
     """Mixin providing async session management methods."""
 
-    async def register_native_source(self, session_id: str, request: NativeSourceRegistration) -> NativeSourceReceipt:
+    async def register_native_source(self, session_id: str, request: NativeSourceRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
         client = await self._get_client()
         response = await client.post(
             f"/api/session-ingestion/sessions/{session_id}/native-sources",
-            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_source"),
+            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_source", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None),
         )
         if not response.is_success:
             handle_error(response)
         return NativeSourceReceipt.model_validate(response.json())
 
-    async def ingest_native_observations(self, session_id: str, source_id: str, request: NativeObservationBatch) -> NativeObservationResult:
+    async def ingest_native_observations(self, session_id: str, source_id: str, request: NativeObservationBatch, *, execution_owner_secret: str | None = None) -> NativeObservationResult:
         client = await self._get_client()
         response = await client.post(
             f"/api/session-ingestion/sessions/{session_id}/native-sources/{source_id}/observations",
-            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_observations"),
+            json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_observations", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None),
         )
         if not response.is_success:
             handle_error(response)

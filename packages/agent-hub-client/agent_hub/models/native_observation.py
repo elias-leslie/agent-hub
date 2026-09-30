@@ -18,6 +18,7 @@ class NativeSourceRegistration(BaseModel):
     schema_fingerprint: str = Field(min_length=1, max_length=256)
     thread_id: str = Field(min_length=1, max_length=512)
     transcript_path: str | None = Field(default=None, max_length=4096)
+    reconcile_existing_rollout: bool = False
 
 
 class NativeSourceReceipt(BaseModel):

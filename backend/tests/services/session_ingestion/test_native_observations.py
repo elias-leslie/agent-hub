@@ -3,6 +3,8 @@
 import asyncio
 import importlib.util
 import json
+import os
+import sqlite3
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +24,10 @@ from app.models import (
     Session,
     SessionEvent,
 )
+from app.services.session_ingestion.app_server_observations import (
+    SUPPORTED_VERSION,
+    protocol_contract,
+)
 from app.services.session_ingestion.models import TranscriptIngestRequest
 from app.services.session_ingestion.native_models import (
     NativeObservation,
@@ -30,6 +36,7 @@ from app.services.session_ingestion.native_models import (
 )
 from app.services.session_ingestion.native_observations import (
     ingest_native_observations,
+    native_capture_status,
     register_native_source,
 )
 from app.services.session_ingestion.service import (
@@ -209,3 +216,158 @@ async def test_concurrent_receipts_have_one_entity_and_contiguous_server_positio
         assert result.committed_position == 2
         assert len((await db.execute(sa.select(NativeCommandEntity))).scalars().all()) == 1
         assert len((await db.execute(sa.select(NativeObservationReceipt))).scalars().all()) == 2
+
+
+def _wire(thread, position, method, params, request_id=None):
+    wire = {"method": method, "params": params}
+    if request_id is not None:
+        wire["id"] = request_id
+    return NativeObservation(position=position, thread_id=thread, origin="live", kind="app_server_event", payload=wire)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_managed_wire_commands_approvals_usage_and_gaps_are_durable(isolated_native_db, tmp_path):
+    factory = isolated_native_db
+    thread = str(uuid4())
+    path = tmp_path / "managed.jsonl"
+    path.write_text(_record("session_meta", {"id": thread}))
+    async with factory() as db:
+        session = Session(id=thread, project_id="agent-hub", provider="codex", model="codex/unknown", status="active", session_type="agent", provider_metadata={"transcript_path": str(path)})
+        db.add(session)
+        await db.commit()
+        reg = NativeSourceRegistration(namespace="managed-fixture", source_kind="app_server", producer_id="owner", epoch="epoch", collector_id="summitflow", provider_version=SUPPORTED_VERSION, schema_fingerprint=protocol_contract()[0], thread_id=thread)
+        source = await register_native_source(db, session, reg)
+        await register_native_source(db, session, reg.model_copy(update={"source_kind": "rollout", "transcript_path": str(path)}))
+        command = {"type": "commandExecution", "id": "durable-command", "command": "printf proof", "cwd": str(tmp_path), "commandActions": [], "status": "inProgress"}
+        started = _wire(thread, 1, "item/started", {"threadId": thread, "turnId": "turn-proof", "item": command, "startedAtMs": 1})
+        request = _wire(thread, 2, "item/commandExecution/requestApproval", {"threadId": thread, "turnId": "turn-proof", "itemId": "durable-command", "startedAtMs": 2, "command": "printf proof"}, 99)
+        response = NativeObservation(position=3, thread_id=thread, origin="live", kind="approval_response", payload={"request_id": 99, "response": {"decision": "accept"}}, source_reference={"turn_id": "turn-proof", "item_id": "durable-command"})
+        resolved = _wire(thread, 4, "serverRequest/resolved", {"threadId": thread, "requestId": 99})
+        completed = _wire(thread, 5, "item/completed", {"threadId": thread, "turnId": "turn-proof", "item": {**command, "status": "completed", "exitCode": 0}, "completedAtMs": 5})
+        counts = {"inputTokens": 10, "cachedInputTokens": 2, "outputTokens": 3, "reasoningOutputTokens": 0, "totalTokens": 13}
+        usage = _wire(thread, 6, "thread/tokenUsage/updated", {"threadId": thread, "turnId": "turn-proof", "tokenUsage": {"total": counts, "last": counts}})
+        interrupted = _wire(thread, 7, "turn/completed", {"threadId": thread, "turn": {"id": "interrupted-turn", "items": [], "status": "interrupted"}})
+        compacted = _wire(thread, 8, "item/completed", {"threadId": thread, "turnId": "turn-proof", "item": {"id": "compaction-1", "type": "contextCompaction"}, "completedAtMs": 8})
+        # Out-of-order final receipts are durable but cannot acknowledge a gap.
+        gap = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[completed, usage, interrupted, compacted], acknowledged_position=999))
+        assert gap.committed_position == 0
+        health = await native_capture_status(db, session)
+        assert next(s for s in health["sources"] if s["source_id"] == source.source_id)["first_missing_position"] == 1
+        result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[started, request, response, resolved]))
+        assert result.committed_position == 8
+        assert [d.disposition for d in result.dispositions] == ["reconciled", "retained", "retained", "retained"]
+        # A lost acknowledgement replays all receipts without token or command work.
+        replay = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[started, request, response, resolved, completed, usage, interrupted, compacted]))
+        assert all(d.disposition == "replayed" for d in replay.dispositions)
+        assert len((await db.execute(sa.select(SessionEvent))).scalars().all()) == 0
+        receipts = (await db.execute(sa.select(NativeObservationReceipt))).scalars().all()
+        assert next(r for r in receipts if r.position == 2).observation == request.model_dump(mode="json")
+        assert next(r for r in receipts if r.position == 4).observation == resolved.model_dump(mode="json")
+        # Rollout owns the projection. Both sources link to precisely one command.
+        path.write_text(path.read_text() + _record("event_msg", {"type": "task_started", "turn_id": "turn-proof"}) + _record("event_msg", {"type": "item_completed", "turn_id": "turn-proof", "started_at_ms": 1, "completed_at_ms": 5, "item": {"type": "CommandExecution", "id": "durable-command", "command": ["/bin/bash", "-lc", "printf proof"], "cwd": str(tmp_path), "status": "completed", "exit_code": 0, "stdout": "proof", "stderr": ""}}))
+        await ingest_transcript_events(db, thread, TranscriptIngestRequest(provider="codex", transcript_path=str(path)), session=session)
+        entity = (await db.execute(sa.select(NativeCommandEntity))).scalars().one()
+        assert entity.status == "completed" and entity.observed_model is None
+        assert len(entity.projection_event_ids) == 2
+        assert len((await db.execute(sa.select(SessionEvent))).scalars().all()) == 2
+        # Unsupported shapes retain their exact raw payload and an explicit issue.
+        invalid = _wire(thread, 9, "item/completed", {"threadId": thread, "turnId": "turn-proof", "item": {"type": "future", "id": "future"}})
+        invalid_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[invalid]))
+        assert invalid_result.dispositions[0].issue_code == "unsupported_app_server_shape"
+        row = await db.get(NativeObservationReceipt, (source.source_id, 9))
+        assert row.observation == invalid.model_dump(mode="json")
+        # Envelope identity cannot move a sibling/parent wire subject to this child.
+        foreign = _wire(thread, 10, "turn/completed", {"threadId": "sibling", "turn": {"id": "foreign", "items": [], "status": "completed"}})
+        foreign_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[foreign]))
+        assert foreign_result.dispositions[0].issue_code == "app_server_thread_mismatch"
+        bad_approval = response.model_copy(update={"position": 11, "source_reference": {"turn_id": "sibling-turn", "item_id": "durable-command"}})
+        bad_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[bad_approval]))
+        assert bad_result.dispositions[0].issue_code == "approval_subject_mismatch"
+        assert session.model == "codex/unknown"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_unsupported_version_is_visible_without_corrupting_entity(isolated_native_db):
+    factory = isolated_native_db
+    thread = str(uuid4())
+    async with factory() as db:
+        session = Session(id=thread, project_id="agent-hub", provider="codex", model="codex/unknown", status="active", session_type="agent", provider_metadata={})
+        db.add(session)
+        await db.commit()
+        reg = NativeSourceRegistration(namespace="fixture", source_kind="app_server", producer_id="owner", epoch="epoch", collector_id="fixture", provider_version="unsupported", schema_fingerprint="unknown", thread_id=thread)
+        source = await register_native_source(db, session, reg)
+        raw = _wire(thread, 1, "turn/completed", {"threadId": thread, "turn": {"id": "turn", "items": [], "status": "completed"}})
+        result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[raw]))
+        assert result.committed_position == 1
+        assert result.dispositions[0].issue_code == "unsupported_app_server_contract"
+        assert not (await db.execute(sa.select(NativeCommandEntity))).scalars().all()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("registration_order", ["before_ingestion", "after_ingestion"])
+async def test_installed_app_server_canary_reconciles_real_rollouts(isolated_native_db, registration_order):
+    """Optional runtime-to-PostgreSQL proof using the private toy-only canary export."""
+    evidence_path = os.environ.get("ARCHITECTURE_D_CANARY_EVIDENCE")
+    if not evidence_path:
+        pytest.skip("Run the isolated installed App Server canary and supply its private evidence directory")
+    evidence = Path(evidence_path).resolve()
+    assert evidence.is_relative_to(Path("/tmp")) and evidence.stat().st_uid == os.getuid()
+    assert evidence.stat().st_mode & 0o077 == 0
+    from app.services.session_ingestion.adapters.transcript_parsers import (
+        transcript_session_metadata,
+    )
+
+    with sqlite3.connect(f"file:{evidence / 'outbox.sqlite'}?mode=ro", uri=True) as capture:
+        capture.row_factory = sqlite3.Row
+        threads = [dict(row) for row in capture.execute("SELECT * FROM threads ORDER BY id")]
+        observations = {thread["id"]: [NativeObservation.model_validate(json.loads(row[0])) for row in capture.execute("SELECT observation FROM events WHERE thread=? ORDER BY position", (thread["id"],))] for thread in threads}
+    paths = {}
+    headers = {}
+    for path in (evidence / "sessions").rglob("*.jsonl"):
+        header = transcript_session_metadata(str(path))
+        if header:
+            paths[header["id"]] = path
+            headers[header["id"]] = header
+    assert len(threads) >= 3, "Canary must include own thread, fork and native child"
+    source_ids = {}
+    async with isolated_native_db() as db:
+        for thread in threads:
+            header = headers[thread["id"]]
+            source = header.get("source", {})
+            subagent = source.get("subagent", {}) if isinstance(source, dict) else {}
+            parent = header.get("parent_thread_id") or subagent.get("thread_spawn", {}).get("parent_thread_id")
+            session = Session(id=thread["id"], project_id="agent-hub", provider="codex", model="codex/unknown", status="active", session_type="agent", parent_session_id=parent, provider_metadata={"transcript_path": str(paths[thread["id"]])})
+            db.add(session)
+        await db.commit()
+        for thread in threads:
+            session = await db.get(Session, thread["id"])
+            if registration_order == "after_ingestion":
+                await ingest_transcript_events(db, thread["id"], TranscriptIngestRequest(provider="codex", transcript_path=str(paths[thread["id"]])), session=session)
+            registration = NativeSourceRegistration.model_validate(json.loads(thread["registration"]))
+            app_source = await register_native_source(db, session, registration)
+            rollout_source = await register_native_source(db, session, registration.model_copy(update={"source_kind": "rollout", "producer_id": "canary-rollout", "epoch": "rollout", "transcript_path": str(paths[thread["id"]]), "reconcile_existing_rollout": True}))
+            source_ids[thread["id"]] = (app_source.source_id, rollout_source.source_id)
+            result = await ingest_native_observations(db, session, app_source.source_id, NativeObservationBatch(observations=observations[thread["id"]]))
+            assert result.committed_position == len(observations[thread["id"]])
+            assert not [d.issue_code for d in result.dispositions if d.disposition == "unsupported"], "Pinned installed notifications must normalize or be explicit retained evidence"
+            await ingest_transcript_events(db, thread["id"], TranscriptIngestRequest(provider="codex", transcript_path=str(paths[thread["id"]])), session=session)
+            replay = await ingest_native_observations(db, session, app_source.source_id, NativeObservationBatch(observations=observations[thread["id"]], acknowledged_position=0))
+            assert all(d.disposition == "replayed" for d in replay.dispositions)
+            assert session.model == "codex/unknown"
+        entities = (await db.execute(sa.select(NativeCommandEntity))).scalars().all()
+        completed = [entity for entity in entities if entity.status == "completed"]
+        assert len(completed) == 1, "Exactly one command completed in the canary; fork copies cannot create child work"
+        command = completed[0]
+        linked = (await db.execute(sa.select(NativeObservationReceipt).where(NativeObservationReceipt.entity_id == command.id))).scalars().all()
+        assert {r.source_id for r in linked} == set(source_ids[command.thread_id])
+        assert len(command.projection_event_ids) == 2, [(row.event_type, row.call_id) for row in (await db.execute(sa.select(SessionEvent).where(SessionEvent.session_id == command.thread_id))).scalars().all()]
+        assert all(entity.observed_model is None for entity in entities)
+        issues = (await db.execute(sa.select(NativeObservationIssue))).scalars().all()
+        assert not [i.code for i in issues if "conflict" in i.code]
+        before = (await db.execute(sa.select(sa.func.count()).select_from(SessionEvent))).scalar_one()
+        for thread in threads:
+            await ingest_transcript_events(db, thread["id"], TranscriptIngestRequest(provider="codex", transcript_path=str(paths[thread["id"]]), checkpoint="stale"), session=await db.get(Session, thread["id"]))
+        assert (await db.execute(sa.select(sa.func.count()).select_from(SessionEvent))).scalar_one() == before

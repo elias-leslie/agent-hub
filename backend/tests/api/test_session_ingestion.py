@@ -15,7 +15,11 @@ from app.api.session_ingestion import (
     append_events_endpoint,
     finalize_session_endpoint,
     heartbeat_session_endpoint,
+    ingest_native_observations_endpoint,
     ingest_transcript_events_endpoint,
+    native_capture_status_endpoint,
+    native_receipts_endpoint,
+    register_native_source_endpoint,
     upsert_session_endpoint,
 )
 from app.main import app
@@ -30,7 +34,32 @@ from app.services.session_ingestion import (
     SessionUpsertResult,
     TranscriptIngestRequest,
 )
+from app.services.session_ingestion.native_models import (
+    NativeObservationBatch,
+    NativeSourceRegistration,
+)
 from tests.conftest import TEST_HEADERS
+
+
+@pytest.mark.asyncio
+async def test_native_execution_owner_auth_is_required_before_ledger_access():
+    request = _identified_request('["agent-hub"]')
+    registration = NativeSourceRegistration(namespace="fixture", source_kind="app_server", producer_id="owner", epoch="epoch", collector_id="fixture", provider_version="fixture", schema_fingerprint="fixture", thread_id="thread")
+    db = AsyncMock()
+    for endpoint, kwargs in [(register_native_source_endpoint, {"request": registration}), (ingest_native_observations_endpoint, {"source_id": "source", "request": NativeObservationBatch()}), (native_receipts_endpoint, {"source_id": "source"})]:
+        with pytest.raises(HTTPException) as denied:
+            await endpoint(session_id="thread", http_request=request, db=db, **kwargs)
+        assert denied.value.status_code == 403
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_native_health_query_requires_project_access_without_runtime_dependency():
+    request = _identified_request('["other"]')
+    with patch("app.api.session_ingestion.get_session_or_404", new_callable=AsyncMock, return_value=MagicMock(project_id="agent-hub")), patch("app.api.session_ingestion.native_capture_status", new_callable=AsyncMock) as query, pytest.raises(HTTPException) as denied:
+        await native_capture_status_endpoint("thread", request, AsyncMock())
+    assert denied.value.status_code == 403
+    query.assert_not_awaited()
 
 
 @pytest.fixture

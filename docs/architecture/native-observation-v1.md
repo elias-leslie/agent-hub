@@ -68,16 +68,100 @@ child aliases, inherited receipts, unknown delivery, unsupported payload retenti
 retry conflicts, stale acknowledgments, missing prefixes, lifecycle replay,
 transaction rollback and concurrent duplicate receipts. No live provider is called.
 
-## Remaining Architecture D stages
+## Managed transport and retained evidence
 
-Managed App Server supervision and durable spool are deferred. Existing supervision
-has not demonstrated the required crash recovery, capture gap, approval intent and
-single-owner fencing semantics; this ledger does not imply those guarantees.
-Next is an isolated opted-in managed capture that durably spools before forwarding,
-retains rollout reconciliation and measures end-to-end commit latency and gaps.
-Before promotion, prove process/epoch fencing, lost acknowledgments and collector
-restart, fork/root lineage and usage-scope conformance, partial transient approval
-history, provider version/schema negotiation, and explicit health/completeness.
-Remote forwarding, live-only approval capture, provisional-ID correlation,
-non-command projections, rollout ledger rotation and managed push promotion remain
-separate bounded stages. External discovery/backfill and rollout polling stay active.
+SummitFlow now provides an explicitly launched, default-off stdio supervisor through
+`st sessions managed-codex`. It starts its own App Server process; a second process
+cannot observe another client's live connection. External sessions remain rollout-only.
+The installed contract is `codex-cli 0.159.2`, stdio JSON-RPC, with combined generated
+ServerNotification/ServerRequest schema SHA-256
+`6f7a929fad56ae9fc103a8364f0a7f51bd520c007b826d8e3edf5fe167c253e2`.
+Both owner and authority validate this pinned contract. Upgrade requires regenerated
+protocol assets, review, and a passing local conformance canary.
+
+SummitFlow commits the original wire event to a private FULL-synchronous SQLite
+outbox before forwarding it to the controlling client. Its producer, epoch, owned
+thread registry and per-thread positions survive restart. A lifetime owner lease and
+separate delivery lease fence competing local processes. Configuration sets an
+explicit payload/catalog quota and acknowledged raw-retention duration; pending and
+unbound evidence is never evicted to make room. Quota exhaustion stops capture,
+records a gap where storage allows, and preserves the native connection. SQLite
+page/index/journal overhead is additional to the logical payload/catalog quota.
+Expired acknowledged local rows are securely deleted on capture, delivery or status;
+canonical receipts and issues remain in Agent Hub. The supervisor does not decide,
+decline, retry or replay approvals. Raw evidence can contain sensitive session data;
+logs and status expose only counts, identifiers and fixed health classifications.
+
+The envelope remains `native-observation.v1`: registration binds provider,
+namespace, source kind, producer, epoch, collector, version, fingerprint and own
+thread; each batch contains observations and an optional nonauthoritative caller
+acknowledgement. Each observation contains source position, own thread, origin,
+kind, original payload, source reference and optional explicit native identities,
+aliases and configuration evidence. `app_server_event` stores the untouched wire
+notification or request. Agent Hub derives command/lifecycle/approval/usage views;
+the collector never normalizes these into canonical events. `approval_response`
+stores a response supplied by the existing controlling client. A per-connection
+UUID prevents reused RPC request IDs from joining approval evidence across restarts.
+
+Agent Hub acknowledgements return schema version, source ID, authenticity,
+contiguous committed position and an exact disposition for each submitted position.
+SummitFlow clears a pending receipt only after a recognized non-conflict durable
+disposition names that position and the committed position covers it without
+rewinding its last accepted acknowledgement. Lost responses replay the same envelope;
+registration alone cannot clear pending evidence. Conflicts retain the original
+local payload and block delivery of later positions for that source. Receipt replay,
+unsupported shapes, unresolved identity and inherited history remain explicit.
+The local acknowledged value is a delivery copy, never a canonical cursor.
+
+Managed rollout registration sets `reconcile_existing_rollout=true` so Agent Hub
+can reread and associate history even after delayed registration. It uses existing
+rollout parsing and verification, does not change the byte checkpoint and does not
+replay timeline events. The default false preserves deployed baseline semantics.
+Exactly matched durable App Server and rollout identities share one command entity
+and one rollout projection pair. Native argv versus shell display text and local
+file-URI cwd representations are normalized only inside Agent Hub. Equivalent
+rollout native and tool wrappers do not append duplicate command pairs.
+
+Approvals resolve against an earlier validated request from the same source,
+connection, exact JSON-typed request ID and managed thread. Responses additionally
+bind the original turn/item. `serverRequest/resolved` proves the request was cleared;
+it does not prove approval. Usage notifications remain cumulative snapshots and do
+not add a second token delta or billing source. Requested/configured model receipts
+retain their evidence category; none proves delivered model. `observed_model` stays
+null. Read/resume/fork responses remain snapshots, with no inherited command replay.
+Native child ownership comes from verified spawn evidence; child live subscription
+is not automatic and the missing subscription is an explicit health gap.
+
+`GET /api/session-ingestion/sessions/{thread}/native-capture` exposes content-free
+DB health under existing project authorization, without contacting App Server.
+Internal execution-owner queries at `.../native-sources/{source}/observations` and
+`.../issues` retrieve original receipts, conflicts and derived approval subjects
+with bounded pagination and project/source authorization. All downstream queries,
+rollout ingestion, backfill and checkpoints continue without App Server availability.
+
+## Verification and promotion limits
+
+The installed binary passed a controlled canary in a user/network namespace with
+no external interfaces, no credentials and a scripted loopback Responses provider.
+It exercised commands, approval request/client response/request clearance,
+interruption, owned restart/resume, compaction, fork snapshots, native children,
+usage and disabling capture while keeping the native connection alive. The actual
+toy outbox and rollouts then passed isolated PostgreSQL reconciliation with source
+registration both before and after ingestion. Tests also cover atomic rollback,
+concurrent duplicate receipts, replay conflicts, missing positions, stale/future
+acknowledgements, downtime/lost responses, leases, quota and unsupported contracts.
+
+**Promotion remains shadow-only and default-off.** Rollout remains canonical for
+timeline ordering and usage. Live ledger command identity is implemented, but live
+timeline projection has not been promoted: its numeric turn/sequence allocation
+must be reconciled with existing rollout user/lifecycle positions before it can
+precede rollout safely. Provisional `item-*` receipts remain explicit unresolved
+evidence and cannot be joined to UUIDs from content, ordinal position or ID spelling.
+No attributable alias mapping was established by this pinned runtime canary.
+This avoids duplicates but does not claim a proven provisional-to-durable join.
+Full non-command canonical projections, source rotation, physical power-loss/disk
+fault recovery, real deployed outage recovery and production shadow rates/latency
+remain unproven. Promotion requires these identity/ordering acceptance gaps to close;
+there is intentionally no configuration switch that bypasses them. Rollout remains
+permanently available. See SummitFlow's `docs/architecture/managed-codex-sessions.md`
+for configuration, delivery, rollback and the retained content-free canary receipt.

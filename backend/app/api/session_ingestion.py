@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,13 +32,16 @@ from app.services.session_ingestion import (
     upsert_session,
 )
 from app.services.session_ingestion.native_models import (
+    NativeObservation,
     NativeObservationBatch,
     NativeObservationResult,
     NativeSourceReceipt,
     NativeSourceRegistration,
 )
 from app.services.session_ingestion.native_observations import (
+    approval_subject,
     ingest_native_observations,
+    native_capture_status,
     register_native_source,
 )
 from app.services.session_ingestion.service import SessionIngestionConflict
@@ -46,6 +49,66 @@ from app.services.session_operations import get_or_create_session
 from app.services.session_queries import get_session_or_404
 
 router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
+
+
+@router.get("/sessions/{session_id}/native-sources/{source_id}/issues")
+async def native_issues_endpoint(
+    session_id: str, source_id: str, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    after_position: int = Query(default=0, ge=0),
+    after_id: str = Query(default="", max_length=64),
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Conflict payloads remain retrievable through the durable evidence authority."""
+    from sqlalchemy import and_, or_, select
+
+    from app.models import NativeObservationIssue, NativeObservationSource
+
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native payloads require the internal evidence owner.")
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    source = await db.get(NativeObservationSource, source_id)
+    if source is None or source.session_id != session.id:
+        raise HTTPException(status_code=404, detail="Native source not found.")
+    rows = (await db.execute(select(NativeObservationIssue).where(NativeObservationIssue.source_id == source.id, or_(NativeObservationIssue.position > after_position, and_(NativeObservationIssue.position == after_position, NativeObservationIssue.id > after_id))).order_by(NativeObservationIssue.position, NativeObservationIssue.id).limit(limit))).scalars().all()
+    return {"source_id": source.id, "issues": [{"id": row.id, "position": row.position, "code": row.code, "observation": row.observation} for row in rows], "next_position": rows[-1].position if rows else after_position, "next_id": rows[-1].id if rows else after_id}
+
+
+@router.get("/sessions/{session_id}/native-capture")
+async def native_capture_status_endpoint(
+    session_id: str, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    return await native_capture_status(db, session)
+
+
+@router.get("/sessions/{session_id}/native-sources/{source_id}/observations")
+async def native_receipts_endpoint(
+    session_id: str, source_id: str, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    after_position: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Internal evidence access, paginated; no native-runtime dependency."""
+    from sqlalchemy import select
+
+    from app.models import NativeObservationReceipt, NativeObservationSource
+
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native payloads require the internal evidence owner.")
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    source = await db.get(NativeObservationSource, source_id)
+    if source is None or source.session_id != session.id:
+        raise HTTPException(status_code=404, detail="Native source not found.")
+    rows = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.source_id == source.id, NativeObservationReceipt.position > after_position).order_by(NativeObservationReceipt.position).limit(limit))).scalars().all()
+    receipts = []
+    for row in rows:
+        receipts.append({"position": row.position, "payload_hash": row.payload_hash, "observation": row.observation, "disposition": row.disposition, "issue_code": row.issue_code, "entity_id": row.entity_id, "approval_subject": await approval_subject(db, source.id, NativeObservation.model_validate(row.observation))})
+    return {"source_id": source.id, "committed_position": source.committed_position, "receipts": receipts, "next_position": rows[-1].position if rows else after_position}
 
 
 class SessionUpsertResponse(SessionUpsertResult):
