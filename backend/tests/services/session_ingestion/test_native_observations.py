@@ -37,7 +37,7 @@ from app.services.session_ingestion.service import (
     ingest_transcript_events,
 )
 
-MIGRATION = Path(__file__).resolve().parents[3] / "alembic/versions/f1a2b3c4d5e6_native_observation_ledger.py"
+MIGRATION = Path(__file__).resolve().parents[3] / "alembic/versions/b46d91c2e7a8_native_observation_ledger.py"
 
 
 def _migration():
