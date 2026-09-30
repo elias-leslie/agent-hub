@@ -62,7 +62,10 @@ def test_review_prompt_identity_changes_without_other_semantic_changes():
     migration = _migration()
     seeds = json.loads((_BACKEND / "scripts/seed_agents_data/seed_data.json").read_text())
     reviewer = next(agent for agent in seeds["agents"] if agent["slug"] == "neri-reviewer")
-    previous = migration._reviewer_prompt(reviewer["system_prompt"], reverse=True)
+    prior_seed = reviewer["system_prompt"].replace(
+        "record gpt-daybreak-blue-latest as the executing model.", migration._NEW_IDENTITY,
+    )
+    previous = migration._reviewer_prompt(prior_seed, reverse=True)
     desired = migration._reviewer_prompt(previous)
     assert desired == previous.replace(migration._OLD_IDENTITY, migration._NEW_IDENTITY)
     assert migration._reviewer_prompt(desired) == desired
