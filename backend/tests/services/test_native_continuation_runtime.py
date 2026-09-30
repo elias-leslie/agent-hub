@@ -290,6 +290,11 @@ def test_cumulative_updates_keep_one_turn_baseline() -> None:
             {"message": "Invalid schema for response_format"},
             "native_bad_request",
         ),
+        ("Invalid schema for response_format", "native_bad_request"),
+        (
+            {"data": {"error": "request blocked by cyber policy"}},
+            "native_provider_refusal",
+        ),
     ],
 )
 def test_provider_errors_retain_safe_actionable_classification(

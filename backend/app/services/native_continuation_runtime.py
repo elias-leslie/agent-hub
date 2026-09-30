@@ -372,7 +372,14 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
     if code is None:
         safe_text = " ".join(
             candidate.lower()
-            for candidate in (value.get("message"), value.get("additionalDetails"))
+            for candidate in (
+                error if isinstance(error, str) else None,
+                value.get("message"),
+                value.get("additionalDetails"),
+                value.get("error"),
+                data.get("message"),
+                data.get("error"),
+            )
             if isinstance(candidate, str)
         )
         if any(term in safe_text for term in ("schema", "response_format", "invalid request")):
