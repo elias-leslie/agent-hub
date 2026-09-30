@@ -149,6 +149,7 @@ class _ParseState:
         self._source_id: str | None = None
         self._source_timestamp: datetime | None = None
         self._source_index = 0
+        self.native_record_reference: dict[str, Any] = {}
         self.history_start_ordinal = history_start_ordinal
         self.parent_thread_id = parent_thread_id
         self.active_exec_call_ids = list(active_exec_call_ids)
@@ -296,6 +297,10 @@ def append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
     if entry_type == "session_meta":
         payload = obj.get("payload")
         if isinstance(payload, dict):
+            own_thread = state.codex_model_state.get("session_id")
+            if own_thread and payload.get("id") != own_thread:
+                state.codex_model_state["history_owner_thread_id"] = payload.get("id")
+                return  # Copied headers cannot replace own lineage/boundaries.
             start = payload.get("subagent_history_start_ordinal")
             if isinstance(start, int) and not isinstance(start, bool) and start >= 0:
                 state.history_start_ordinal = start
@@ -310,6 +315,12 @@ def append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
         and ordinal < state.history_start_ordinal
     ):
         return  # Child transcripts can include inherited parent history.
+    payload = obj.get("payload")
+    if isinstance(payload, dict) and (
+        payload.get("thread_id") == state.codex_model_state.get("session_id")
+        or (state.history_start_ordinal is not None and isinstance(ordinal, int) and ordinal >= state.history_start_ordinal)
+    ):
+        state.codex_model_state.pop("history_owner_thread_id", None)
     if entry_type == "token_usage_record":
         _append_codex_usage_record(obj.get("payload"), state)
         return
@@ -669,6 +680,22 @@ def _append_codex_command_execution(payload: JsonObject, state: _ParseState) -> 
         or isinstance(exit_code, bool)
         or exit_code != 0
     )
+    evidence = state.codex_model_state.get("evidence") or {}
+    state.codex_model_state["command_position"] = state.codex_model_state.get("command_position", 0) + 1
+    native_observation = {
+        "position": state.codex_model_state["command_position"],
+        "thread_id": state.codex_model_state.get("session_id") or "unknown",
+        "turn_id": payload.get("turn_id") or evidence.get("turn_id"),
+        "item_id": call_id,
+        "identity_quality": "durable",
+        "origin": "rollout_record",
+        "kind": "command_execution",
+        "history_owner_thread_id": state.codex_model_state.get("history_owner_thread_id"),
+        "payload": dict(payload),
+        "source_reference": dict(state.native_record_reference),
+        "aliases": [{"kind": "transcript_runtime_session_id", "value": state.codex_model_state["native_session_id"]}]
+        if state.codex_model_state.get("native_session_id") else [],
+    }
     duration_ms = _command_duration_ms(item, started_at, completed_at)
     state.append(
         "tool_use",
@@ -681,6 +708,7 @@ def _append_codex_command_execution(payload: JsonObject, state: _ParseState) -> 
         "tool_result",
         call_id=call_id,
         tool_output=tool_output,
+        native_observation=native_observation,
         duration_ms=duration_ms,
         source_timestamp=completed_at,
     )

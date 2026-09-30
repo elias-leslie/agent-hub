@@ -31,6 +31,16 @@ from app.services.session_ingestion import (
     ingest_transcript_events,
     upsert_session,
 )
+from app.services.session_ingestion.native_models import (
+    NativeObservationBatch,
+    NativeObservationResult,
+    NativeSourceReceipt,
+    NativeSourceRegistration,
+)
+from app.services.session_ingestion.native_observations import (
+    ingest_native_observations,
+    register_native_source,
+)
 from app.services.session_ingestion.service import SessionIngestionConflict
 from app.services.session_operations import get_or_create_session
 from app.services.session_queries import get_session_or_404
@@ -253,3 +263,35 @@ async def refresh_transcript_events_endpoint(
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+@router.post("/sessions/{session_id}/native-sources")
+async def register_native_source_endpoint(
+    session_id: str, request: NativeSourceRegistration, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NativeSourceReceipt:
+    """Register an execution-owner attested source without granting execution control."""
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native sources require the internal execution owner.")
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    try:
+        return await register_native_source(db, session, request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@router.post("/sessions/{session_id}/native-sources/{source_id}/observations")
+async def ingest_native_observations_endpoint(
+    session_id: str, source_id: str, request: NativeObservationBatch, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NativeObservationResult:
+    """Commit shadow receipts; App Server observations never append timeline commands."""
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native observations require the internal execution owner.")
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    try:
+        return await ingest_native_observations(db, session, source_id, request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc

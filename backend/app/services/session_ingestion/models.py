@@ -14,7 +14,9 @@ class SessionModelEvidence(BaseModel):
     """Current native turn routing and independently observed delivery evidence."""
 
     session_id: str = Field(max_length=512)
-    native_session_id: str | None = Field(default=None, max_length=512)
+    native_thread_id: str | None = Field(default=None, max_length=512)
+    transcript_runtime_session_id: str | None = Field(default=None, max_length=512)
+    native_session_id: str | None = Field(default=None, max_length=512, description="Legacy transcript runtime alias; never the canonical thread subject")
     turn_id: str | None = Field(default=None, max_length=512)
     source: Literal["codex_transcript"] = "codex_transcript"
     source_path: str | None = Field(default=None, max_length=4096)
@@ -38,7 +40,10 @@ def validated_native_model_evidence(
     if not isinstance(raw, dict):
         return None
     try:
-        evidence = SessionModelEvidence.model_validate(raw)
+        evidence = SessionModelEvidence.model_validate({
+            **raw, "native_thread_id": raw.get("native_thread_id") or raw.get("session_id"),
+            "transcript_runtime_session_id": raw.get("transcript_runtime_session_id") or raw.get("native_session_id"),
+        })
     except ValidationError:
         return None
     retained = metadata.get("transcript_ingestion")
@@ -47,6 +52,8 @@ def validated_native_model_evidence(
     health = health if isinstance(health, dict) else {}
     if (
         evidence.session_id != session_id
+        or evidence.native_thread_id != session_id
+        or (evidence.native_session_id is not None and evidence.transcript_runtime_session_id != evidence.native_session_id)
         or evidence.source_path != metadata.get("transcript_path")
         or not evidence.source_generation
         or evidence.source_generation != health.get("source_generation")
@@ -145,6 +152,7 @@ class SessionHeartbeatResult(BaseModel):
 class NormalizedEvent(BaseModel):
     """Canonical event shape accepted by ingestion."""
 
+    native_observation: dict[str, Any] | None = Field(default=None, exclude=True)
     event_type: str = Field(..., description="Canonical event type")
     turn: int | None = Field(default=None, description="Conversation turn")
     sequence: int | None = Field(default=None, description="Sequence inside turn")

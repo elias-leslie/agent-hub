@@ -255,6 +255,11 @@ def read_incremental_transcript_events(
                         if isinstance(ordinal, int) and not isinstance(ordinal, bool)
                         else f"{stat.st_dev}:{stat.st_ino}:byte:{line_start}:{line_digest}"
                     )
+                    state.native_record_reference = {
+                        "line": line_count, "byte_start": line_start, "byte_end": offset,
+                        "record_sha256": hashlib.sha256(raw_line).hexdigest(),
+                        "device": stat.st_dev, "inode": stat.st_ino,
+                    }
                     state.set_source(obj, identity)
                     observe_model_record(state.codex_model_state, obj, line_count)
                     append_normalized_events(obj, state)

@@ -144,6 +144,7 @@ async def upsert_session(
         # Native evidence and ingestion cursors are written only by transcript ingestion.
         merged_metadata.pop("model_evidence", None)
         merged_metadata.pop("transcript_ingestion", None)
+        merged_metadata.pop("native_observation_namespace", None)
         if native_source:
             evidence = validated_native_model_evidence(existing.id, existing.provider_metadata) if existing is not None else None
             observed = evidence.observed_model if evidence else None
@@ -198,7 +199,7 @@ async def heartbeat_session(
         )
         request = request.model_copy(update={"provider_metadata": {
             key: value for key, value in request.provider_metadata.items()
-            if key not in {"model_evidence", "transcript_ingestion"}
+            if key not in {"model_evidence", "transcript_ingestion", "native_observation_namespace"}
         }})
     _apply_heartbeat_update(session, request)
     await db.commit()
@@ -335,12 +336,23 @@ async def ingest_transcript_events(
             if model_evidence.session_id != session_id:
                 raise SessionIngestionConflict("transcript_model_evidence_identity_mismatch", "Native evidence belongs to another thread.")
     boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
+    suppressed_commands = 0
+    if request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
+        from .native_observations import exclude_projected_rollout_commands
+
+        original_count = len(events)
+        events = await exclude_projected_rollout_commands(db, session, events)
+        suppressed_commands = original_count - len(events)
     append_result = await append_normalized_events(
         db=db,
         session_id=session_id,
         request=AppendNormalizedEventsRequest(events=events),
         **({"session": session, "commit": False} if request.provider.lower() == "codex" else {}),
     )
+    if request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
+        from .native_observations import retain_rollout_commands
+
+        await retain_rollout_commands(db, session, events)
     await _reconcile_transcript_session_models(
         db, session_id, session=session if request.provider.lower() == "codex" else None,
     )
@@ -354,7 +366,7 @@ async def ingest_transcript_events(
         provider=request.provider,
         transcript_path=request.transcript_path,
         events_appended=append_result.events_appended,
-        events_skipped=append_result.events_skipped,
+        events_skipped=append_result.events_skipped + suppressed_commands,
         last_turn=append_result.last_turn,
         last_sequence=append_result.last_sequence,
         event_ids=append_result.event_ids,

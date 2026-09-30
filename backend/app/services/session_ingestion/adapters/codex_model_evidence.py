@@ -41,13 +41,13 @@ def observe_model_record(
         spawn = spawn if isinstance(spawn, dict) else {}
         native_session_id = _text(payload.get("session_id")) or session_id
         state.update(
-            session_id=session_id, native_session_id=native_session_id,
+            session_id=session_id, native_thread_id=session_id, transcript_runtime_session_id=native_session_id, native_session_id=native_session_id,
             parent_thread_id=_text(payload.get("parent_thread_id")) or _text(spawn.get("parent_thread_id")),
             started_at=timestamp.isoformat() if timestamp else None,
             history_start_ordinal=payload.get("subagent_history_start_ordinal"),
             local_started=False,
             evidence=SessionModelEvidence(
-                session_id=session_id, native_session_id=native_session_id,
+                session_id=session_id, native_thread_id=session_id, transcript_runtime_session_id=native_session_id, native_session_id=native_session_id,
             ).model_dump(mode="json"),
         )
         return
@@ -76,7 +76,7 @@ def observe_model_record(
         state["local_started"] = True
         state["task_turn_id"] = _text(payload.get("turn_id"))
         state["evidence"] = SessionModelEvidence(
-            session_id=session_id, native_session_id=state.get("native_session_id"),
+            session_id=session_id, native_thread_id=session_id, transcript_runtime_session_id=state.get("native_session_id"), native_session_id=state.get("native_session_id"),
             turn_id=state["task_turn_id"], source_line=line, source_timestamp=timestamp,
         ).model_dump(mode="json")
         return
@@ -90,7 +90,7 @@ def observe_model_record(
         if active_turn and turn_id != active_turn:
             return
         state["evidence"] = SessionModelEvidence(
-            session_id=session_id, native_session_id=state.get("native_session_id"),
+            session_id=session_id, native_thread_id=session_id, transcript_runtime_session_id=state.get("native_session_id"), native_session_id=state.get("native_session_id"),
             turn_id=turn_id, source_line=line, source_timestamp=timestamp,
             requested_model=_text(payload.get("model")),
             requested_reasoning_effort=_text(payload.get("effort"), 64),

@@ -43,6 +43,12 @@ from .model_catalog import ModelAlias, ModelCatalogEntry
 from .model_catalog_sync_state import ModelCatalogSyncState
 from .model_enrichment import ModelEnrichment
 from .narration_tag import NarrationTag
+from .native_observation import (
+    NativeCommandEntity,
+    NativeObservationIssue,
+    NativeObservationReceipt,
+    NativeObservationSource,
+)
 from .persona import Persona
 from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
@@ -102,7 +108,11 @@ __all__ = [
     "ModelCatalogSyncState",
     "ModelEnrichment",
     "NarrationTag",
+    "NativeCommandEntity",
     "NativeContinuationTurn",
+    "NativeObservationIssue",
+    "NativeObservationReceipt",
+    "NativeObservationSource",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",

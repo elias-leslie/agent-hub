@@ -13,6 +13,8 @@ class SessionModelEvidence(BaseModel):
     """Native current-turn request and independently observed response model."""
 
     session_id: str
+    native_thread_id: str | None = None
+    transcript_runtime_session_id: str | None = None
     native_session_id: str | None = None
     turn_id: str | None = None
     source: Literal["codex_transcript"] = "codex_transcript"
