@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.adapters.codex_auth import CodexCredentials
+from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers import openai_codex_responses
 from app.llm.providers.openai_codex_responses import (
     _authenticated_response,
@@ -251,3 +254,41 @@ async def test_pre_stream_403_does_not_attempt_refresh(
 
     store.recover_after_auth_failure.assert_not_awaited()
     assert context.exit_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reported_model", ["gpt-6.1-sol", None])
+async def test_completion_preserves_observed_model_and_separates_cached_input(
+    monkeypatch: pytest.MonkeyPatch, reported_model: str | None,
+) -> None:
+    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
+    model = replace(model, cost=replace(model.cost, input=2.0, output=10.0, cache_read=0.1))
+
+    @asynccontextmanager
+    async def authenticated_response(*_args):
+        yield SimpleNamespace(status_code=200)
+
+    async def sse_lines(_response):
+        yield {
+            "type": "response.completed",
+            "response": {
+                "id": "resp-observed", "model": reported_model,
+                "usage": {"input_tokens": 100, "output_tokens": 20,
+                          "input_tokens_details": {"cached_tokens": 60}},
+            },
+        }
+
+    monkeypatch.setattr(openai_codex_responses, "_authenticated_response", authenticated_response)
+    monkeypatch.setattr(openai_codex_responses, "_parse_sse_lines", sse_lines)
+    result = await openai_codex_responses.openai_codex_responses_provider.stream_simple(
+        model, Context(messages=[]),
+    ).result()
+
+    assert result.model == "gpt-6.1-sol"
+    assert result.response_model == reported_model
+    assert result.response_id == "resp-observed"
+    assert result.usage.input == 40
+    assert result.usage.cache_read == 60
+    assert result.usage.output == 20
+    assert result.usage.total_tokens == 120
+    assert result.usage.cost.total == pytest.approx((40 * 2 + 60 * 0.1 + 20 * 10) / 1_000_000)

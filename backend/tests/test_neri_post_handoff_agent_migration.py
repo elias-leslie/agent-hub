@@ -44,7 +44,10 @@ def test_alignment_accepts_seeded_live_and_already_aligned_prompts() -> None:
         (migration._PREVIOUS_REPORTER_PROMPT,),
     ) == migration._REPORTER_PROMPT
     assert migration._aligned_prompt(
-        agents['neri-reviewer']['system_prompt'],
+        agents['neri-reviewer']['system_prompt'].replace(
+            'record gpt-6.1-sol as the executing model.',
+            'record gpt-6-astra as the executing model.',
+        ),
         migration._REVIEWER_PROMPT,
         (
             migration._SEEDED_REVIEWER_PROMPT,

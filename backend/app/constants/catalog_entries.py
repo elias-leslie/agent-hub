@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.constants.catalog_types import (
     ModelCapabilities,
     ModelCost,
@@ -38,6 +40,7 @@ from app.constants.models import (
     CODEX_GPT_5_4,
     CODEX_GPT_5_4_MINI,
     CODEX_GPT_5_5,
+    CODEX_GPT_6_1_SOL,
     DEEPSEEK_V4_FLASH,
     DEEPSEEK_V4_PRO,
     GEMINI_2_5_FLASH,
@@ -89,6 +92,7 @@ from app.constants.models import (
     OPENAI_GPT_5_4_NANO,
     OPENAI_GPT_5_4_PRO,
     OPENAI_GPT_5_5,
+    OPENAI_GPT_6_1_SOL,
     OR_FREE_GLM,
     OR_FREE_TRINITY,
     OR_KIMI_K2_6,
@@ -1028,6 +1032,33 @@ MODEL_CATALOG: list[ModelEntry] = [
         release_date="2025-01-01", family="leonardo",
     ),
 ]
+
+# Official contract checked 2026-09-30; existing house weights are inherited,
+# not new benchmark claims. The metered adapter uses Chat Completions; tool
+# execution is available on the qualified Codex Responses route.
+for _provider, _model_id, _alias in (
+    ("openai", OPENAI_GPT_6_1_SOL, "gpt-6.1-sol"),
+    ("codex", CODEX_GPT_6_1_SOL, "codex-gpt-6.1-sol"),
+):
+    _previous_sol = next(entry for entry in MODEL_CATALOG if entry.id == f"{_provider}/gpt-5.5")
+    MODEL_CATALOG.append(replace(
+        _previous_sol,
+        id=_model_id, alias=_alias, name="GPT-6.1 Sol", hint="General complex work",
+        context_window=1_050_000, release_date=None, knowledge_cutoff="2026-04-30", family="gpt",
+        cost=(ModelCost(0.0, 0.0) if _provider == "codex" else ModelCost(
+            2.0, 10.0, cache_read_per_million=0.1, cache_write_per_million=2.5,
+            service_tiers={"default": 1.0, "flex": 0.5, "priority": 2.0},
+        )),
+        capabilities=ModelCapabilities(
+            has_vision=True, has_thinking=True, supports_tool_execution=_provider == "codex",
+            supports_xhigh=True, supports_session_cache=_provider == "codex", max_output_tokens=128_000,
+        ),
+        availability=(
+            "codex_oauth_subscription; verified_2026-09-30; reasoning_low_medium_high_xhigh_max"
+            if _provider == "codex" else
+            "chat_completions_without_tools; input_over_272k_bills_2x_input_1.5x_output; fast_unavailable_with_eu_residency"
+        ),
+    ))
 
 
 # Fallback used only when a model id is not registered in MODEL_CATALOG. Picked

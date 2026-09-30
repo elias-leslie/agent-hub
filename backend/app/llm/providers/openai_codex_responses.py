@@ -261,7 +261,12 @@ def _body(
         body["tool_choice"] = "auto"
         body["parallel_tool_calls"] = True
     if options and options.reasoning:
-        effort = "high" if options.reasoning == "xhigh" else options.reasoning
+        if model.id == "gpt-6.1-sol" and options.reasoning == "minimal":
+            raise ValueError("GPT-6.1 Sol does not support minimal reasoning; use low or higher")
+        effort = (
+            "high" if options.reasoning == "xhigh" and model.id != "gpt-6.1-sol"
+            else options.reasoning
+        )
         body["reasoning"] = {"effort": effort, "summary": "auto"}
     return body
 
@@ -273,14 +278,18 @@ def _as_dict(value: Any) -> dict[str, Any]:
 def _usage(event: dict[str, Any], model: Model[Any]) -> Usage:
     response = _as_dict(event.get("response"))
     raw = _as_dict(response.get("usage"))
+    total_input = int(raw.get("input_tokens") or 0)
+    cached_input = int(_as_dict(raw.get("input_tokens_details")).get("cached_tokens") or 0)
     usage = Usage(
-        input=int(raw.get("input_tokens") or 0),
+        input=max(0, total_input - cached_input),
         output=int(raw.get("output_tokens") or 0),
+        cache_read=cached_input,
     )
-    usage.total_tokens = usage.input + usage.output
+    usage.total_tokens = total_input + usage.output
     usage.cost.input = usage.input * model.cost.input / 1_000_000
     usage.cost.output = usage.output * model.cost.output / 1_000_000
-    usage.cost.total = usage.cost.input + usage.cost.output
+    usage.cost.cache_read = usage.cache_read * model.cost.cache_read / 1_000_000
+    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cache_read
     return usage
 
 
@@ -480,6 +489,9 @@ async def _run(
                     elif event_type in {"response.completed", "response.done"}:
                         output.usage = _usage(event, model)
                         response_payload = _as_dict(event.get("response"))
+                        reported_model = response_payload.get("model")
+                        if isinstance(reported_model, str) and reported_model.strip():
+                            output.response_model = reported_model.strip()
                         if isinstance(response_payload.get("id"), str):
                             output.response_id = response_payload["id"]
                         if started_text:

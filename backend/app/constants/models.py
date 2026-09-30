@@ -39,6 +39,7 @@ OR_FREE_TRINITY = "openrouter/arcee-ai/trinity-large-preview:free"
 OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 
 # OpenAI models (Direct)
+OPENAI_GPT_6_1_SOL = "openai/gpt-6.1-sol"
 OPENAI_GPT_5_5 = "openai/gpt-5.5"
 OPENAI_GPT_5_4 = "openai/gpt-5.4"
 OPENAI_GPT_5_4_MINI = "openai/gpt-5.4-mini"
@@ -49,6 +50,7 @@ OPENAI_GPT_5_2_PRO = "openai/gpt-5.2-pro"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
 # Codex models (ChatGPT subscription via OAuth)
+CODEX_GPT_6_1_SOL = "codex/gpt-6.1-sol"
 CODEX_GPT_5_5 = "codex/gpt-5.5"
 CODEX_GPT_5_4 = "codex/gpt-5.4"
 CODEX_GPT_5_4_MINI = "codex/gpt-5.4-mini"
