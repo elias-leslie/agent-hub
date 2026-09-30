@@ -284,6 +284,12 @@ async def test_managed_wire_commands_approvals_usage_and_gaps_are_durable(isolat
         bad_approval = response.model_copy(update={"position": 11, "source_reference": {"turn_id": "sibling-turn", "item_id": "durable-command"}})
         bad_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[bad_approval]))
         assert bad_result.dispositions[0].issue_code == "approval_subject_mismatch"
+        different_connection = response.model_copy(update={"position": 12, "source_reference": {"connection_id": "restarted", "turn_id": "turn-proof", "item_id": "durable-command"}})
+        missing_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[different_connection]))
+        assert missing_result.dispositions[0].issue_code == "approval_request_unavailable"
+        different_id_type = _wire(thread, 13, "serverRequest/resolved", {"threadId": thread, "requestId": "99"})
+        missing_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[different_id_type]))
+        assert missing_result.dispositions[0].issue_code == "approval_request_unavailable"
         assert session.model == "codex/unknown"
 
 

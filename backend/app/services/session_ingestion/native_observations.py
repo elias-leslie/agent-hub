@@ -180,11 +180,11 @@ async def _retain(
         return NativeObservationDisposition(position=observation.position, disposition="replayed", entity_id=existing.entity_id, issue_code=existing.issue_code)
     original_observation = observation
     observation, wire_issue = await asyncio.to_thread(interpret_wire, observation, source.registration)
-    if observation.kind == "approval_response":
-        subject = await approval_subject(db, source.id, observation)
+    if observation.kind in {"approval_response", "approval_resolution"}:
+        subject = await approval_subject(db, source.id, original_observation)
         if subject is None:
             wire_issue = "approval_request_unavailable"
-        elif observation.source_reference.get("turn_id") != subject["turn_id"] or observation.source_reference.get("item_id") != subject["item_id"] or subject["thread_id"] != observation.thread_id:
+        elif subject["thread_id"] != observation.thread_id or (observation.kind == "approval_response" and (observation.source_reference.get("turn_id") != subject["turn_id"] or observation.source_reference.get("item_id") != subject["item_id"])):
             wire_issue = "approval_subject_mismatch"
     disposition, code, entity_id = "unresolved", None, None
     if observation.history_owner_thread_id not in (None, observation.thread_id):
