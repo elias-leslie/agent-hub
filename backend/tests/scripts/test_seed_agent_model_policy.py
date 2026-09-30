@@ -12,6 +12,24 @@ SUBSCRIPTION_ONLY_SLUGS = {
     "learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator",
 }
 
+# Exact owner-promoted routes supersede the older provider-diversity policy.
+# Other text agents continue to require their provider-diverse model chains.
+GPT61_PROMOTED_EFFORTS = {
+    "coder": "medium",
+    "debugger": "high",
+    "designer": "medium",
+    "fixer": "medium",
+    "optimizer": "high",
+    "refactor": "medium",
+    "test-writer": "medium",
+    "verifier": "high",
+    "ui-mockup-designer": "medium",
+    "ux-polisher": "medium",
+    "researcher": "medium",
+    "neri-orchestrator": "medium",
+    "neri-reporter": "medium",
+}
+
 EXCLUDED_SLUGS = {
     "designer",
     "graphify-semantic-extractor",
@@ -51,6 +69,12 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
 
     for agent in agents:
         slug = agent["slug"]
+        if slug in GPT61_PROMOTED_EFFORTS:
+            assert agent["primary_model_id"] == "codex/gpt-6.1-sol", slug
+            assert agent["thinking_level"] == GPT61_PROMOTED_EFFORTS[slug], slug
+            assert agent["fallback_models"] == [], slug
+            assert agent.get("escalation_model_id") is None, slug
+            continue
         if slug in SUBSCRIPTION_ONLY_SLUGS:
             assert agent["primary_model_id"].startswith("codex/")
             assert all(model.startswith("codex/") for model in agent.get("fallback_models", []))
