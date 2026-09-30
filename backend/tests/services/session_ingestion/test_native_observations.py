@@ -290,6 +290,11 @@ async def test_managed_wire_commands_approvals_usage_and_gaps_are_durable(isolat
         different_id_type = _wire(thread, 13, "serverRequest/resolved", {"threadId": thread, "requestId": "99"})
         missing_result = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[different_id_type]))
         assert missing_result.dispositions[0].issue_code == "approval_request_unavailable"
+        private_health = NativeObservation(position=14, thread_id=thread, origin="live", kind="capture_health", payload={"state": "capture_gap", "capture_gaps": 1, "transport": "stdio", "approval_contents": "private-health-fixture"})
+        await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[private_health]))
+        public_health = await native_capture_status(db, session)
+        assert "private-health-fixture" not in json.dumps(public_health)
+        assert next(s for s in public_health["sources"] if s["source_id"] == source.source_id)["capture_health"] == {"state": "capture_gap", "capture_gaps": 1, "transport": "stdio"}
         assert session.model == "codex/unknown"
 
 

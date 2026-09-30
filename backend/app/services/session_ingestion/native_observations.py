@@ -260,8 +260,19 @@ async def native_capture_status(db: AsyncSession, session: Session) -> dict[str,
         count, maximum = (await db.execute(select(func.count(), func.max(NativeObservationReceipt.position)).where(NativeObservationReceipt.source_id == source.id))).one()
         issues = (await db.execute(select(NativeObservationIssue.code, func.count()).where(NativeObservationIssue.source_id == source.id).group_by(NativeObservationIssue.code))).all()
         latest_health = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.source_id == source.id, NativeObservationReceipt.observation["kind"].as_string() == "capture_health").order_by(NativeObservationReceipt.position.desc()).limit(1))).scalar_one_or_none()
-        health.append({"source_id": source.id, "kind": source.registration["source_kind"], "provider_version": source.registration["provider_version"], "schema_fingerprint": source.registration["schema_fingerprint"], "authenticity": source.authenticity, "committed_position": source.committed_position, "receipt_count": count, "max_position": maximum or 0, "first_missing_position": source.committed_position + 1 if (maximum or 0) > source.committed_position else None, "issues": {code: n for code, n in issues}, "capture_health": latest_health.observation["payload"] if latest_health else None})
-    return {"schema_version": "native-observation.v1", "session_id": session.id, "projection_authority": "rollout", "promotion_state": "shadow", "observed_model": None, "sources": health}
+        # Health is project-visible; arbitrary retained payload fields belong only
+        # in the internal raw-evidence queries, even for trusted collectors.
+        public_health = None
+        if latest_health:
+            raw_health = latest_health.observation["payload"]
+            public_health = {"state": raw_health["state"]} if latest_health.disposition == "retained" else {"state": "unsupported"}
+            gaps = raw_health.get("capture_gaps")
+            if isinstance(gaps, int) and not isinstance(gaps, bool) and gaps >= 0:
+                public_health["capture_gaps"] = gaps
+            if raw_health.get("transport") == "stdio":
+                public_health["transport"] = "stdio"
+        health.append({"source_id": source.id, "kind": source.registration["source_kind"], "provider_version": source.registration["provider_version"], "schema_fingerprint": source.registration["schema_fingerprint"], "authenticity": source.authenticity, "committed_position": source.committed_position, "receipt_count": count, "max_position": maximum or 0, "first_missing_position": source.committed_position + 1 if (maximum or 0) > source.committed_position else None, "issues": {code: n for code, n in issues}, "capture_health": public_health})
+    return {"schema_version": "native-observation.v1", "session_id": session.id, "capture_mode": "app_server_registered" if any(row.registration["source_kind"] == "app_server" for row in sources) else "rollout_only", "projection_authority": "rollout", "promotion_state": "shadow", "observed_model": None, "sources": health}
 
 
 async def _advance(db: AsyncSession, source: NativeObservationSource) -> None:
