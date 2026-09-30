@@ -362,6 +362,29 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
     fallback_info = data.get("codexErrorInfo", value.get("code"))
     info = value.get("codexErrorInfo", fallback_info)
     code = next(iter(info), None) if isinstance(info, dict) else info
+    if value.get("misalignment") is not None:
+        code = "misalignmentPolicyViolation"
+    elif code in {-32600, -32602}:
+        code = "badRequest"
+    elif isinstance(code, int) and code <= -32000:
+        code = "internalServerError"
+
+    if code is None:
+        safe_text = " ".join(
+            candidate.lower()
+            for candidate in (value.get("message"), value.get("additionalDetails"))
+            if isinstance(candidate, str)
+        )
+        if any(term in safe_text for term in ("schema", "response_format", "invalid request")):
+            code = "badRequest"
+        elif any(term in safe_text for term in ("misalignment", "cyber policy", "safety policy")):
+            code = "misalignmentPolicyViolation"
+        elif any(term in safe_text for term in ("context window", "maximum context")):
+            code = "contextWindowExceeded"
+        elif any(term in safe_text for term in ("rate limit", "usage limit", "quota")):
+            code = "rateLimitExceeded"
+        elif any(term in safe_text for term in ("overloaded", "unavailable", "disconnected")):
+            code = "serverOverloaded"
     known = {
         "cyberPolicy": ("native_provider_refusal", "The native provider declined this request."),
         "misalignmentPolicyViolation": (
@@ -423,6 +446,10 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
         "responseTooManyFailedAttempts": (
             "native_provider_unavailable",
             "The native provider exhausted its response attempts.",
+        ),
+        "sandboxError": (
+            "native_isolation_unavailable",
+            "The native provider reported a sandbox error.",
         ),
     }
     safe_code, message = known.get(

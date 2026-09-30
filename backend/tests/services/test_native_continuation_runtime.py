@@ -281,6 +281,15 @@ def test_cumulative_updates_keep_one_turn_baseline() -> None:
             {"codexErrorInfo": {"responseStreamDisconnected": {"httpStatusCode": 503}}},
             "native_provider_unavailable",
         ),
+        (
+            {"message": "blocked", "misalignment": {"kind": "policy"}},
+            "native_provider_refusal",
+        ),
+        ({"code": -32602, "message": "Invalid params"}, "native_bad_request"),
+        (
+            {"message": "Invalid schema for response_format"},
+            "native_bad_request",
+        ),
     ],
 )
 def test_provider_errors_retain_safe_actionable_classification(
