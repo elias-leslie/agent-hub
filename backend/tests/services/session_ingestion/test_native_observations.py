@@ -807,7 +807,7 @@ def test_owner_gate_uses_public_st_and_removes_extension_context(monkeypatch, tm
     monkeypatch.setenv("ST_EXTENSION_CONTEXT", "recursive-untrusted-context")
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 0, stdout='{"state":"success"}', stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout='ACCEPTANCE:{"state":"success"}', stderr="")
     monkeypatch.setattr("app.services.session_ingestion.native_operator.run_process", run)
     assert _canonical_gate(tmp_path / "backend") == {"state": "success"}
     command, arguments = calls[0]

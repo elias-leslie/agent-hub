@@ -48,7 +48,8 @@ def _canonical_gate(owner_root: Path) -> dict[str, Any]:
     result = run_process(["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"], cwd=owner_root.parent, env=environment, check=False, capture_output=True, text=True)
     if result.returncode:
         raise ValueError("The current canonical ST acceptance gate failed")
-    receipt = json.loads(result.stdout)
+    # The public ST acceptance wire uses a fixed label even with --json.
+    receipt = json.loads(result.stdout.removeprefix("ACCEPTANCE:"))
     if not isinstance(receipt, dict):
         raise ValueError("The canonical ST acceptance gate did not return a receipt")
     return receipt
