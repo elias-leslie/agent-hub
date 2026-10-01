@@ -50,6 +50,7 @@ def report_impl(
     model_used: str | None = None,
     session_type: str | None = None,
     vote_if_duplicate: bool = False,
+    occurrence: dict[str, Any] | None = None,
 ) -> None:
     """Create a new feedback item."""
     validate_component_id(component_id)
@@ -61,6 +62,7 @@ def report_impl(
         agent_slug=agent_slug, model_used=model_used, session_type=session_type,
         vote_if_duplicate=vote_if_duplicate,
     )
+    body.update({key: value for key, value in (occurrence or {}).items() if value is not None})
     result = feedback_request("POST", FEEDBACK_API_PATH, json=body)
     candidates = result.get("duplicate_candidates", [])
     if candidates:
@@ -133,12 +135,14 @@ def vote_impl(
     comment: str | None = None,
     agent_slug: str | None = None,
     model_used: str | None = None,
+    occurrence: dict[str, Any] | None = None,
 ) -> None:
     """Vote on a feedback item."""
-    if not session_id:
-        output_error("--session-id is required for voting")
+    if not session_id and not (occurrence or {}).get("occurrence_id"):
+        output_error("--session or --occurrence is required for voting")
         raise typer.Exit(1)
     body = build_vote_body(session_id, comment=comment, agent_slug=agent_slug, model_used=model_used)
+    body.update({key: value for key, value in (occurrence or {}).items() if value is not None})
     result = feedback_request("POST", f"{FEEDBACK_API_PATH}/{item_id}/vote", json=body)
     if result.get("message") == ALREADY_VOTED_MSG:
         print(f"VOTE:ALREADY_VOTED:{item_id[:8]}|{session_id[:8]}")
@@ -185,3 +189,9 @@ def summary_impl(*, project_id: str | None = None, days: int = 30) -> None:
     """Get feedback summary."""
     params = build_summary_params(days, project_id=project_id)
     output_summary(feedback_request("GET", FEEDBACK_SUMMARY_PATH, params=params))
+
+
+def link_impl(item_id: str, task_id: str) -> None:
+    """Explicitly link reviewed feedback; task creation is a separate decision."""
+    result = feedback_request("PATCH", f"{FEEDBACK_API_PATH}/{item_id}", json={"linked_task_id": task_id})
+    print(f"FEEDBACK:LINKED:{result.get('id', item_id)[:8]}|{task_id}")

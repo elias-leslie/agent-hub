@@ -19,7 +19,10 @@ def format_item_line(item: dict[str, Any]) -> str:
     title = item.get("title", "")
     severity = item.get("severity")
     severity_tag = f"[{severity}] " if severity else ""
-    return f"{id_short}|{status}|{ftype}|{component}|{votes} votes|{severity_tag}{title}"
+    count = item.get("occurrence_count", votes)
+    seen = item.get("last_seen_at", item.get("created_at", "unknown"))
+    scope = ",".join(item.get("affected_projects", [])) or item.get("project_id", "unknown")
+    return f"{id_short}|{status}|{ftype}|{component}|{count} occurrences|last_seen={seen}|projects={scope}|{severity_tag}{title}"
 
 
 def output_feedback_list(items: list[dict[str, Any]], total: int) -> None:
@@ -88,14 +91,14 @@ def output_feedback_detail(item: dict[str, Any]) -> None:
         print(f"Resolution: {item['resolution_note']}")
     print(f"Created: {item.get('created_at', '?')}")
 
-    votes = item.get("votes", [])
+    votes = item.get("occurrences", item.get("votes", []))
     if votes:
-        print(f"\nVotes ({len(votes)}):")
+        print(f"\nOccurrences ({len(votes)}):")
         for vote in votes:
             agent = vote.get("agent_slug", "unknown")
             comment = vote.get("comment", "")
             comment_str = f" — {comment}" if comment else ""
-            print(f"  {vote.get('session_id', '?')[:8]} ({agent}){comment_str}")
+            print(f"  {(vote.get('occurrence_id') or vote.get('session_id') or 'unknown')} ({agent}){comment_str}")
 
 
 def output_duplicate_candidates(candidates: list[dict[str, Any]]) -> None:
@@ -112,7 +115,7 @@ def output_duplicate_candidates(candidates: list[dict[str, Any]]) -> None:
             file=sys.stderr,
         )
     print(
-        "  Use: st feedback report ... --session <session-id> --vote-if-match",
+        "  Use: st feedback vote <item-id> --occurrence <stable-observation-id>",
         file=sys.stderr,
     )
 

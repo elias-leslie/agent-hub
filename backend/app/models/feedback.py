@@ -10,10 +10,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -57,6 +56,19 @@ class FeedbackItem(Base):
     # Denormalized for fast sorting
     vote_count: Mapped[int] = mapped_column(Integer, server_default="1", nullable=False)
 
+    # Recurrence is decision intelligence, never permission to create work.
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    independent_run_count: Mapped[int] = mapped_column(Integer, server_default="0")
+    affected_roles: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    affected_projects: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    merged_into_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("feedback_items.id", ondelete="CASCADE"), nullable=True
+    )
+
+    @property
+    def occurrence_count(self) -> int:
+        return self.vote_count
+
     # Linked SummitFlow task
     linked_task_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -71,7 +83,7 @@ class FeedbackItem(Base):
     )
 
     # Relationships
-    session = relationship("Session", lazy="raise")
+    session = relationship("Session", foreign_keys=[created_by_session_id], lazy="raise")
     votes = relationship(
         "FeedbackVote", back_populates="feedback_item", cascade="all, delete-orphan", lazy="raise"
     )
@@ -98,10 +110,10 @@ class FeedbackItem(Base):
 
 
 class FeedbackVote(Base):
-    """Vote on an existing feedback item — one vote per session.
+    """An occurrence of feedback. Stable identity survives retries, relays and merges.
 
-    Agents vote when they encounter the same issue/idea. Optional comment
-    provides additional "me too" context.
+    The historical table/API name remains for compatibility. Session identity is
+    optional attribution; it is never required to capture native worker feedback.
     """
 
     __tablename__ = "feedback_votes"
@@ -115,6 +127,15 @@ class FeedbackVote(Base):
     session_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
     )
+    occurrence_id: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    source_project_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    run_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    consequence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workaround: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_refs: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    source_kind: Mapped[str] = mapped_column(String(30), server_default="report")
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     agent_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
     model_used: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -127,7 +148,6 @@ class FeedbackVote(Base):
     session = relationship("Session", lazy="raise")
 
     __table_args__ = (
-        UniqueConstraint("feedback_item_id", "session_id", name="uq_feedback_votes_item_session"),
         Index("idx_feedback_votes_item", "feedback_item_id"),
         Index("idx_feedback_votes_session", "session_id"),
     )

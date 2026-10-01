@@ -5,7 +5,44 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 
-class FeedbackItemCreate(BaseModel):
+class FeedbackOccurrenceFields(BaseModel):
+    """Caller supplies one stable identity per observation, reused for retries/relays.
+
+    References must point to sanitized evidence; raw logs and secrets do not belong here.
+    Distinct run references expose breadth, rather than attesting independence.
+    """
+    occurrence_id: str | None = Field(default=None, min_length=1, max_length=160)
+    source_project_id: str | None = Field(default=None, max_length=50)
+    run_ref: str | None = Field(default=None, max_length=200)
+    role: str | None = Field(default=None, max_length=100)
+    occurred_at: datetime | None = None
+    consequence: str | None = Field(default=None, max_length=4000)
+    workaround: str | None = Field(default=None, max_length=4000)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("occurrence_id", "source_project_id", "run_ref", "role")
+    @classmethod
+    def nonblank_identity(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Identity fields cannot be blank")
+        return value
+
+    @field_validator("occurred_at")
+    @classmethod
+    def aware_timestamp(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("occurred_at must include a timezone")
+        return value
+
+    @field_validator("evidence_refs")
+    @classmethod
+    def bounded_references(cls, value: list[str]) -> list[str]:
+        if any(not ref.strip() or len(ref) > 500 for ref in value):
+            raise ValueError("Evidence references must be nonblank and at most 500 characters")
+        return value
+
+
+class FeedbackItemCreate(FeedbackOccurrenceFields):
     """Request body for creating a feedback item."""
 
     component_id: str = Field(..., description="Component ID (e.g. 'sf.cli', 'ah.memory')")
@@ -40,10 +77,10 @@ class FeedbackItemCreate(BaseModel):
     )
 
 
-class FeedbackVoteCreate(BaseModel):
+class FeedbackVoteCreate(FeedbackOccurrenceFields):
     """Request body for voting on a feedback item."""
 
-    session_id: str = Field(..., description="Session casting the vote")
+    session_id: str | None = Field(default=None, description="Optional session attribution")
     comment: str | None = Field(
         default=None, description="Optional 'me too' context"
     )
@@ -70,7 +107,16 @@ class FeedbackVoteResponse(BaseModel):
 
     id: str
     feedback_item_id: str
-    session_id: str
+    occurrence_id: str
+    source_project_id: str | None
+    run_ref: str | None
+    role: str | None
+    occurred_at: datetime
+    consequence: str | None
+    workaround: str | None
+    evidence_refs: list[str]
+    source_kind: str
+    session_id: str | None
     comment: str | None
     agent_slug: str | None
     model_used: str | None
@@ -97,6 +143,11 @@ class FeedbackItemResponse(BaseModel):
     resolved_at: datetime | None
     resolution_note: str | None
     vote_count: int
+    occurrence_count: int
+    independent_run_count: int
+    affected_roles: list[str]
+    affected_projects: list[str]
+    last_seen_at: datetime
     linked_task_id: str | None
     created_at: datetime
     updated_at: datetime
@@ -107,13 +158,15 @@ class FeedbackItemResponse(BaseModel):
 class FeedbackItemWithVotes(FeedbackItemResponse):
     """Feedback item with its votes included."""
 
-    votes: list[FeedbackVoteResponse] = []
+    votes: list[FeedbackVoteResponse] = Field(default_factory=list)
+    occurrences: list[FeedbackVoteResponse] = Field(default_factory=list)
 
 
 class FeedbackCreateResponse(BaseModel):
     """Response for creating a feedback item, includes dedup candidates."""
 
     item: FeedbackItemResponse
+    occurrence_id: str | None = None
     created: bool = Field(description="True if new item created")
     duplicate_candidates: list[FeedbackItemResponse] = Field(
         default_factory=list,

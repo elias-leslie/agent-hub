@@ -79,14 +79,14 @@ def build_filter_params(
 
 
 def build_vote_body(
-    session_id: str,
+    session_id: str | None,
     *,
     comment: str | None,
     agent_slug: str | None,
     model_used: str | None,
 ) -> dict[str, Any]:
     """Build the request body for voting on a feedback item."""
-    body: dict[str, Any] = {"session_id": session_id}
+    body: dict[str, Any] = {"session_id": session_id} if session_id else {}
     if comment:
         body["comment"] = comment
     if agent_slug:

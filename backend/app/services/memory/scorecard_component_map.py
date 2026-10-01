@@ -192,6 +192,11 @@ COMPONENTS: dict[str, ComponentInfo] = {
         project="agent-hub",
         description="SessionStart, PreToolUse, PostToolUse, Stop",
     ),
+    # Domain feedback uses the affected project, without a per-project registry.
+    "xc.product": ComponentInfo(
+        id="xc.product", name="Product", project="cross-cutting",
+        description="Domain product behavior and workflow feedback; source project identifies the consumer",
+    ),
     # Cross-cutting components
     "xc.tool_registry": ComponentInfo(
         id="xc.tool_registry",

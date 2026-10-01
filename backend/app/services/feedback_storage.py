@@ -6,9 +6,10 @@ import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import String, cast, delete, func, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import String, cast, delete, exists, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.feedback import FeedbackItem, FeedbackVote
@@ -33,9 +34,27 @@ async def create_feedback_item(
     agent_slug: str | None = None,
     model_used: str | None = None,
     session_type: str | None = None,
+    occurrence_id: str | None = None,
+    source_project_id: str | None = None,
+    run_ref: str | None = None,
+    role: str | None = None,
+    occurred_at: datetime | None = None,
+    consequence: str | None = None,
+    workaround: str | None = None,
+    evidence_refs: list[str] | None = None,
 ) -> FeedbackItem:
-    """Create a new feedback item."""
+    """Create feedback and its first occurrence; reconcile stable replay first."""
+    if occurrence_id:
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                         {"key": f"feedback-occurrence:{occurrence_id}"})
+        existing = await get_feedback_occurrence(db, occurrence_id)
+        if existing is not None:
+            retained = await get_feedback_item(db, existing.feedback_item_id)
+            if retained is not None:
+                return retained
     item = FeedbackItem(
+        id=str(uuid4()), vote_count=0, independent_run_count=0,
+        affected_roles=[], affected_projects=[], last_seen_at=occurred_at or datetime.now(UTC),
         component_id=component_id,
         feedback_type=feedback_type,
         title=title,
@@ -49,6 +68,13 @@ async def create_feedback_item(
     )
     db.add(item)
     await db.flush()
+    await vote_on_item(
+        db, item_id=item.id, session_id=session_id, comment=description,
+        agent_slug=agent_slug, model_used=model_used, occurrence_id=occurrence_id,
+        source_project_id=source_project_id or project_id, run_ref=run_ref,
+        role=role, occurred_at=occurred_at, consequence=consequence,
+        workaround=workaround, evidence_refs=evidence_refs,
+    )
     return item
 
 
@@ -60,7 +86,7 @@ def _build_search_filters(
     project_id: str | None = None,
 ) -> list:
     """Build shared filter conditions for search queries."""
-    conditions = []
+    conditions = [FeedbackItem.merged_into_id.is_(None)]
     if query:
         conditions.append(text("search_vector @@ plainto_tsquery('english', :query)"))
     if component_id:
@@ -70,7 +96,13 @@ def _build_search_filters(
     if status:
         conditions.append(_status_condition(status))
     if project_id:
-        conditions.append(FeedbackItem.project_id == project_id)
+        conditions.append(or_(
+            FeedbackItem.project_id == project_id,
+            exists(select(FeedbackVote.id).where(
+                FeedbackVote.feedback_item_id == FeedbackItem.id,
+                FeedbackVote.source_project_id == project_id,
+            )),
+        ))
     return conditions
 
 
@@ -90,7 +122,7 @@ def _apply_feedback_item_filters(stmt, conditions: Iterable, *, query: str | Non
 
 def _build_feedback_list_order(sort: str):
     sort_order = {
-        "votes": (FeedbackItem.vote_count.desc(), FeedbackItem.created_at.desc()),
+        "votes": (FeedbackItem.vote_count.desc(), FeedbackItem.last_seen_at.desc()),
         "newest": (FeedbackItem.created_at.desc(),),
         "oldest": (FeedbackItem.created_at.asc(),),
     }
@@ -147,6 +179,7 @@ _DUPLICATE_CANDIDATES_SQL = text("""
     WHERE fi.component_id = :component_id
       AND fi.feedback_type = :feedback_type
       AND fi.status IN ('open', 'acknowledged')
+      AND fi.merged_into_id IS NULL
       AND (
           lower(fi.title) = lower(:title)
           OR fi.search_vector @@ plainto_tsquery('english', :title)
@@ -216,7 +249,7 @@ async def find_duplicate_candidates(
         title=title,
         limit=limit,
     )
-    ids = [row["id"] for row in rows]
+    ids = [str(row["id"]) for row in rows]
     return await _load_items_ordered(db, ids)
 
 
@@ -235,10 +268,10 @@ async def resolve_feedback_id(
     if len(item_id) == 36:
         # Full UUID — check existence
         result = await db.execute(
-            select(FeedbackItem.id).where(FeedbackItem.id == item_id)
+            select(FeedbackItem).where(FeedbackItem.id == item_id)
         )
         row = result.scalar_one_or_none()
-        return row if row else None
+        return await resolve_feedback_id(db, row.merged_into_id) if row and row.merged_into_id else (row.id if row else None)
 
     # Prefix match
     result = await db.execute(
@@ -254,7 +287,7 @@ async def resolve_feedback_id(
         raise ValueError(
             f"Ambiguous prefix '{item_id}' matches multiple items: {', '.join(short_ids)}..."
         )
-    return matches[0]
+    return await resolve_feedback_id(db, matches[0])
 
 
 async def get_feedback_item(
@@ -285,55 +318,89 @@ async def get_feedback_votes(
     return list(result.scalars().all())
 
 
+async def get_feedback_occurrence(db: AsyncSession, occurrence_id: str) -> FeedbackVote | None:
+    result = await db.execute(select(FeedbackVote).where(FeedbackVote.occurrence_id == occurrence_id))
+    return result.scalar_one_or_none()
+
+
+async def refresh_occurrence_rollup(db: AsyncSession, item_id: str) -> None:
+    """Rebuild explainable aggregates from retained occurrence rows."""
+    result = await db.execute(text("""
+        SELECT COUNT(*) AS occurrence_count,
+               COUNT(DISTINCT run_ref) FILTER (WHERE run_ref IS NOT NULL) AS run_count,
+               COALESCE(jsonb_agg(DISTINCT role ORDER BY role) FILTER (WHERE role IS NOT NULL), '[]') AS roles,
+               COALESCE(jsonb_agg(DISTINCT source_project_id ORDER BY source_project_id)
+                        FILTER (WHERE source_project_id IS NOT NULL), '[]') AS projects,
+               MAX(occurred_at) AS last_seen
+        FROM feedback_votes WHERE feedback_item_id = :item_id
+    """), {"item_id": item_id})
+    row = result.mappings().one()
+    await db.execute(update(FeedbackItem).where(FeedbackItem.id == item_id).values(
+        vote_count=row["occurrence_count"], independent_run_count=row["run_count"],
+        affected_roles=row["roles"], affected_projects=row["projects"],
+        last_seen_at=row["last_seen"] or datetime.now(UTC),
+    ))
+
+
 async def vote_on_item(
     db: AsyncSession,
     *,
     item_id: str,
-    session_id: str,
+    session_id: str | None = None,
     comment: str | None = None,
     agent_slug: str | None = None,
     model_used: str | None = None,
+    occurrence_id: str | None = None,
+    source_project_id: str | None = None,
+    run_ref: str | None = None,
+    role: str | None = None,
+    occurred_at: datetime | None = None,
+    consequence: str | None = None,
+    workaround: str | None = None,
+    evidence_refs: list[str] | None = None,
 ) -> FeedbackVote | None:
-    """Vote on a feedback item. Returns None if already voted (idempotent).
+    """Capture one occurrence. Replay/relay of its stable ID changes nothing.
 
-    Increments the denormalized vote_count on the parent item.
-    Handles concurrent duplicate votes via IntegrityError catch.
+    Legacy session callers retain one contribution per item/session. Explicit
+    occurrence IDs allow independent observations without requiring a session.
     """
-    # Check for existing vote (unique constraint: feedback_item_id + session_id)
-    existing = await db.execute(
-        select(FeedbackVote).where(
-            FeedbackVote.feedback_item_id == item_id,
-            FeedbackVote.session_id == session_id,
+    # Serialize rollup changes, and coordinate with merge, on the owning item.
+    locked = await db.execute(select(FeedbackItem).where(FeedbackItem.id == item_id).with_for_update())
+    owner = locked.scalar_one_or_none()
+    if owner is not None and owner.merged_into_id:
+        return await vote_on_item(
+            db, item_id=owner.merged_into_id, session_id=session_id, comment=comment,
+            agent_slug=agent_slug, model_used=model_used, occurrence_id=occurrence_id,
+            source_project_id=source_project_id, run_ref=run_ref, role=role,
+            occurred_at=occurred_at, consequence=consequence, workaround=workaround,
+            evidence_refs=evidence_refs,
         )
-    )
-    if existing.scalar_one_or_none():
-        return None  # Already voted
-
-    vote = FeedbackVote(
-        feedback_item_id=item_id,
-        session_id=session_id,
-        comment=comment,
-        agent_slug=agent_slug,
-        model_used=model_used,
-    )
-    db.add(vote)
-
-    # Flush the vote INSERT first — autoflush during the UPDATE below would
-    # bypass the IntegrityError handler (the UPDATE triggers autoflush which
-    # tries to insert the pending vote, hitting FK/unique constraints outside
-    # the try/except).  Flushing here keeps the error path correct.
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        return None  # Duplicate vote or invalid session_id FK
-
-    # Increment denormalized vote count only after vote is persisted
-    await db.execute(
-        update(FeedbackItem)
-        .where(FeedbackItem.id == item_id)
-        .values(vote_count=FeedbackItem.vote_count + 1)
-    )
+    if occurrence_id is None and session_id:
+        existing = await db.execute(select(FeedbackVote).where(
+            FeedbackVote.feedback_item_id == item_id, FeedbackVote.session_id == session_id,
+        ).limit(1))
+        if existing.scalar_one_or_none():
+            return None
+    stable_id = occurrence_id or str(uuid4())
+    existing = await get_feedback_occurrence(db, stable_id)
+    if existing is not None:
+        if existing.feedback_item_id != item_id:
+            raise ValueError("Occurrence already belongs to another feedback item")
+        return None
+    result = await db.execute(insert(FeedbackVote).values(
+        occurrence_id=stable_id, feedback_item_id=item_id, session_id=session_id,
+        comment=comment, agent_slug=agent_slug, model_used=model_used,
+        source_project_id=source_project_id, run_ref=run_ref, role=role,
+        occurred_at=occurred_at or datetime.now(UTC), consequence=consequence,
+        workaround=workaround, evidence_refs=evidence_refs or [], source_kind="report",
+    ).on_conflict_do_nothing(index_elements=[FeedbackVote.occurrence_id]).returning(FeedbackVote))
+    vote = result.scalar_one_or_none()
+    if vote is None:
+        existing = await get_feedback_occurrence(db, stable_id)
+        if existing is not None and existing.feedback_item_id != item_id:
+            raise ValueError("Occurrence already belongs to another feedback item")
+        return None
+    await refresh_occurrence_rollup(db, item_id)
     return vote
 
 
@@ -384,20 +451,6 @@ def _append_merged_text(existing: str | None, incoming: str | None) -> str | Non
     return f"{cleaned_existing}\n\nMerged duplicate note:\n{cleaned_incoming}"
 
 
-async def _apply_vote_migration(
-    db: AsyncSession,
-    source_votes: list[FeedbackVote],
-    target_item_id: str,
-    target_votes_by_session: dict[str, FeedbackVote],
-) -> None:
-    """Migrate votes from source to target, merging comments for duplicate sessions."""
-    for source_vote in source_votes:
-        if source_vote.session_id and source_vote.session_id in target_votes_by_session:
-            target_vote = target_votes_by_session[source_vote.session_id]
-            target_vote.comment = _append_merged_text(target_vote.comment, source_vote.comment)
-            await db.delete(source_vote)
-        else:
-            source_vote.feedback_item_id = target_item_id
 
 
 async def merge_feedback_items(
@@ -411,7 +464,7 @@ async def merge_feedback_items(
         raise ValueError("Cannot merge a feedback item into itself")
 
     result = await db.execute(
-        select(FeedbackItem).where(FeedbackItem.id.in_([source_item_id, target_item_id]))
+        select(FeedbackItem).where(FeedbackItem.id.in_([source_item_id, target_item_id])).order_by(FeedbackItem.id).with_for_update()
     )
     items = {item.id: item for item in result.scalars().all()}
     source = items.get(source_item_id)
@@ -419,12 +472,10 @@ async def merge_feedback_items(
     if source is None or target is None:
         return None
 
-    source_votes = await get_feedback_votes(db, source_item_id)
-    target_votes = await get_feedback_votes(db, target_item_id)
-    target_votes_by_session = {
-        vote.session_id: vote for vote in target_votes if vote.session_id is not None
-    }
-    await _apply_vote_migration(db, source_votes, target_item_id, target_votes_by_session)
+    # IDs are globally unique: preserve every retained occurrence, even when
+    # several independent reports happen to share a session.
+    await db.execute(update(FeedbackVote).where(FeedbackVote.feedback_item_id == source_item_id)
+                     .values(feedback_item_id=target_item_id))
 
     target.description = _append_merged_text(target.description, source.description)
     target.resolution_note = _append_merged_text(target.resolution_note, source.resolution_note)
@@ -439,14 +490,13 @@ async def merge_feedback_items(
 
     await db.flush()
 
-    vote_count_result = await db.execute(
-        select(func.count()).select_from(FeedbackVote).where(FeedbackVote.feedback_item_id == target_item_id)
-    )
-    target.vote_count = vote_count_result.scalar_one()
-
-    await db.execute(delete(FeedbackVote).where(FeedbackVote.feedback_item_id == source_item_id))
-    await db.delete(source)
+    await refresh_occurrence_rollup(db, target_item_id)
+    # Retain a redirect so old references and retries still reach the canonical item.
+    source.merged_into_id = target_item_id
+    source.status = ARCHIVED_FEEDBACK_STATUS
+    source.vote_count = 0
     await db.flush()
+
     return target
 
 
@@ -481,6 +531,8 @@ async def purge_old_archived_feedback_items(
         select(FeedbackItem.id).where(
             FeedbackItem.status == ARCHIVED_FEEDBACK_STATUS,
             FeedbackItem.updated_at < cutoff,
+            FeedbackItem.last_seen_at < cutoff,
+            FeedbackItem.merged_into_id.is_(None),
             FeedbackItem.vote_count <= max_vote_count,
             FeedbackItem.linked_task_id.is_(None),
         )
@@ -520,10 +572,10 @@ async def delete_feedback_item(
 
 def _build_summary_filter(project_id: str | None, days: int) -> tuple[str, dict[str, Any]]:
     """Build the WHERE clause fragment and params dict for summary queries."""
-    base = "WHERE created_at >= NOW() - make_interval(days => :days)"
+    base = "WHERE last_seen_at >= NOW() - make_interval(days => :days) AND merged_into_id IS NULL"
     params: dict[str, Any] = {"days": days}
     if project_id:
-        base += " AND project_id = :project_id"
+        base += " AND (project_id = :project_id OR EXISTS (SELECT 1 FROM feedback_votes fv WHERE fv.feedback_item_id = feedback_items.id AND fv.source_project_id = :project_id))"
         params["project_id"] = project_id
     return base, params
 
@@ -542,10 +594,11 @@ async def _run_feedback_summary_queries(
     counts = [dict(row) for row in counts_result.mappings().all()]
 
     top_result = await db.execute(text(f"""
-        SELECT id, component_id, feedback_type, title, vote_count, status, created_at
+        SELECT id, component_id, feedback_type, title, vote_count, vote_count AS occurrence_count,
+               independent_run_count, affected_roles, affected_projects, severity, last_seen_at, status, created_at
         FROM feedback_items
         {base_filter} AND status IN ('open', 'acknowledged')
-        ORDER BY vote_count DESC
+        ORDER BY vote_count DESC, last_seen_at DESC
         LIMIT 10
     """), params)
     top_items = [dict(row) for row in top_result.mappings().all()]
@@ -600,7 +653,8 @@ async def get_component_feedback(
     cutoff = datetime.now(UTC) - timedelta(days=days)
     items_stmt = select(FeedbackItem).where(
         FeedbackItem.component_id == component_id,
-        FeedbackItem.created_at >= cutoff,
+        FeedbackItem.last_seen_at >= cutoff,
+        FeedbackItem.merged_into_id.is_(None),
     ).order_by(FeedbackItem.vote_count.desc()).limit(limit)
     items_result = await db.execute(items_stmt)
     items = list(items_result.scalars().all())
@@ -617,7 +671,8 @@ async def get_component_feedback(
             COUNT(*) FILTER (WHERE feedback_type = 'praise') AS praise_count
         FROM feedback_items
         WHERE component_id = :component_id
-        AND created_at >= NOW() - make_interval(days => :days)
+        AND last_seen_at >= NOW() - make_interval(days => :days)
+        AND merged_into_id IS NULL
     """)
     result = await db.execute(stats_query, {"component_id": component_id, "days": days})
     stats = dict(result.mappings().one())

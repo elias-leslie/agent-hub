@@ -73,11 +73,17 @@ def make_feedback_vote(
     return vote
 
 
+@pytest.fixture
+def mock_first_occurrence():
+    with patch("app.services.feedback_storage.vote_on_item", new_callable=AsyncMock) as capture:
+        yield capture
+
+
 class TestCreateFeedbackItem:
     """Tests for create_feedback_item."""
 
     @pytest.mark.asyncio
-    async def test_creates_item_with_required_fields(self) -> None:
+    async def test_creates_item_with_required_fields(self, mock_first_occurrence) -> None:
         db = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
@@ -96,9 +102,11 @@ class TestCreateFeedbackItem:
         assert item.project_id == "summitflow"
         db.add.assert_called_once_with(item)
         db.flush.assert_awaited_once()
+        mock_first_occurrence.assert_awaited_once()
+        assert mock_first_occurrence.await_args.kwargs["item_id"] == item.id
 
     @pytest.mark.asyncio
-    async def test_creates_item_with_all_optional_fields(self) -> None:
+    async def test_creates_item_with_all_optional_fields(self, mock_first_occurrence) -> None:
         db = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
@@ -124,7 +132,7 @@ class TestCreateFeedbackItem:
         assert item.session_type == "claude_code"
 
     @pytest.mark.asyncio
-    async def test_friction_includes_severity(self) -> None:
+    async def test_friction_includes_severity(self, mock_first_occurrence) -> None:
         db = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
@@ -295,51 +303,28 @@ class TestGetFeedbackVotes:
 
 
 class TestVoteOnItem:
-    """Tests for vote_on_item."""
+    @pytest.mark.asyncio
+    async def test_sessionless_replay_has_no_mutations(self) -> None:
+        db = AsyncMock()
+        db.execute.return_value = MagicMock()
+        db.execute.return_value.scalar_one_or_none.return_value = None
+        existing = make_feedback_vote()
+        existing.feedback_item_id = "item-1"
+        with patch("app.services.feedback_storage.get_feedback_occurrence", new=AsyncMock(return_value=existing)), \
+             patch("app.services.feedback_storage.refresh_occurrence_rollup", new_callable=AsyncMock) as rollup:
+            assert await vote_on_item(db, item_id="item-1", occurrence_id="observation") is None
+        rollup.assert_not_awaited()
+        assert db.execute.await_count == 1  # A read lock, no INSERT/UPDATE.
 
     @pytest.mark.asyncio
-    async def test_creates_vote_and_increments_count(self) -> None:
+    async def test_occurrence_cannot_be_reassigned(self) -> None:
         db = AsyncMock()
-        db.add = MagicMock()
-        db.flush = AsyncMock()
-        # First execute: check existing vote (none found)
-        check_result = MagicMock()
-        check_result.scalar_one_or_none.return_value = None
-        # Second execute: update vote_count
-        update_result = MagicMock()
-        db.execute.side_effect = [check_result, update_result]
-
-        vote = await vote_on_item(
-            db,
-            item_id="item-1",
-            session_id="sess-1",
-            comment="Hit this too",
-            agent_slug="coder",
-        )
-
-        assert vote is not None
-        assert vote.feedback_item_id == "item-1"
-        assert vote.session_id == "sess-1"
-        assert vote.comment == "Hit this too"
-        db.add.assert_called_once()
-        db.flush.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_returns_none_for_duplicate_vote(self) -> None:
-        db = AsyncMock()
-        # Existing vote found
-        check_result = MagicMock()
-        check_result.scalar_one_or_none.return_value = make_feedback_vote()
-        db.execute.return_value = check_result
-
-        vote = await vote_on_item(
-            db,
-            item_id="item-1",
-            session_id="sess-1",
-        )
-
-        assert vote is None
-        db.add.assert_not_called()
+        db.execute.return_value = MagicMock()
+        db.execute.return_value.scalar_one_or_none.return_value = None
+        existing = make_feedback_vote(feedback_item_id="other")
+        with (patch("app.services.feedback_storage.get_feedback_occurrence", new=AsyncMock(return_value=existing)),
+              pytest.raises(ValueError, match="another feedback item")):
+            await vote_on_item(db, item_id="item-1", occurrence_id="observation")
 
 
 class TestUpdateFeedbackStatus:
@@ -494,60 +479,21 @@ class TestMergeFeedbackItems:
     """Tests for merge_feedback_items."""
 
     @pytest.mark.asyncio
-    async def test_merges_votes_and_metadata_into_canonical_item(self) -> None:
+    async def test_merge_preserves_source_redirect_and_occurrences(self) -> None:
         db = AsyncMock()
-        db.flush = AsyncMock()
-        db.delete = AsyncMock()
-
-        source = make_feedback_item(id="source-id", status="open", vote_count=1)
-        target = make_feedback_item(id="target-id", status="archived", vote_count=2)
-        source.description = "Source description"
-        source.resolution_note = "Source resolution"
-        source.linked_task_id = "task-123"
-        source.created_by_session_id = "sess-1"
-
-        target.description = "Target description"
-        target.resolution_note = None
-        target.linked_task_id = None
-        target.created_by_session_id = None
-
-        select_result = MagicMock()
-        select_result.scalars.return_value.all.return_value = [source, target]
-        count_result = MagicMock()
-        count_result.scalar_one.return_value = 3
-        db.execute.side_effect = [select_result, count_result, MagicMock()]
-
-        source_votes = [
-            make_feedback_vote(id="source-vote", feedback_item_id="source-id", session_id="sess-1", comment="new context"),
-            make_feedback_vote(id="dup-vote", feedback_item_id="source-id", session_id="sess-2", comment="duplicate context"),
-        ]
-        target_votes = [
-            make_feedback_vote(id="target-vote", feedback_item_id="target-id", session_id="sess-2", comment="existing context"),
-            make_feedback_vote(id="target-vote-2", feedback_item_id="target-id", session_id="sess-3"),
-        ]
-
-        with patch(
-            "app.services.feedback_storage.get_feedback_votes",
-            new_callable=AsyncMock,
-            side_effect=[source_votes, target_votes],
-        ):
-            merged = await merge_feedback_items(
-                db,
-                source_item_id="source-id",
-                target_item_id="target-id",
-            )
-
+        source = make_feedback_item(id="source-id")
+        target = make_feedback_item(id="target-id")
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [source, target]
+        db.execute.return_value = result
+        with patch("app.services.feedback_storage.refresh_occurrence_rollup", new_callable=AsyncMock) as rollup:
+            merged = await merge_feedback_items(db, source_item_id="source-id", target_item_id="target-id")
         assert merged is target
-        assert target.vote_count == 3
-        assert target.status == "open"
-        assert target.linked_task_id == "task-123"
-        assert target.created_by_session_id == "sess-1"
-        assert "Source description" in (target.description or "")
-        assert "Source resolution" in (target.resolution_note or "")
-        assert source_votes[0].feedback_item_id == "target-id"
-        assert "duplicate context" in (target_votes[0].comment or "")
-        db.delete.assert_any_await(source_votes[1])
-        db.delete.assert_any_await(source)
+        assert source.merged_into_id == "target-id"
+        assert source.status == "archived"
+        assert "UPDATE feedback_votes" in str(db.execute.await_args_list[1].args[0])
+        rollup.assert_awaited_once_with(db, "target-id")
+        db.delete.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_merging_item_into_itself(self) -> None:

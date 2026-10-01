@@ -17,7 +17,7 @@ def _feedback_item() -> FeedbackItem:
         title="Tool governance: missing quality gate",
         project_id="summitflow",
         status="open",
-        vote_count=1,
+        vote_count=1, independent_run_count=0, affected_roles=[], affected_projects=["summitflow"], last_seen_at=datetime.now(UTC),
     )
     object.__setattr__(item, "id", "1640ec32-0000-4000-8000-000000000000")
     object.__setattr__(item, "created_at", datetime.now(UTC))
@@ -26,7 +26,7 @@ def _feedback_item() -> FeedbackItem:
 
 
 @pytest.mark.asyncio
-async def test_create_feedback_vote_if_duplicate_without_session_returns_existing() -> None:
+async def test_create_feedback_vote_if_duplicate_without_session_captures_occurrence() -> None:
     db = AsyncMock()
     existing = _feedback_item()
     body = FeedbackItemCreate(
@@ -42,14 +42,16 @@ async def test_create_feedback_vote_if_duplicate_without_session_returns_existin
             "app.api.feedback.feedback_storage.find_duplicate_candidates",
             new=AsyncMock(return_value=[existing]),
         ),
-        patch("app.api.feedback.feedback_storage.vote_on_item", new=AsyncMock()) as vote,
+        patch("app.api.feedback.feedback_storage.vote_on_item", new=AsyncMock(return_value=type("Occurrence", (), {"occurrence_id": "native-observation", "feedback_item_id": str(existing.id)})())) as vote,
         patch("app.api.feedback.feedback_storage.create_feedback_item", new=AsyncMock()) as create,
     ):
         result = await create_feedback(body, db)
 
     assert result.created is False
-    assert result.voted is False
+    assert result.voted is True
     assert result.item.id == str(existing.id)
-    vote.assert_not_awaited()
+    vote.assert_awaited_once()
+    assert vote.await_args is not None
+    assert vote.await_args.kwargs["session_id"] is None
     create.assert_not_awaited()
-    db.commit.assert_not_awaited()
+    db.commit.assert_awaited_once()

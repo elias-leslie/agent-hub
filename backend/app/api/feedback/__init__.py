@@ -1,14 +1,13 @@
 """Feedback API endpoints for agent-sourced issues, ideas, and voting."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.feedback._validators import (
-    HIGH_VOTE_THRESHOLD,
     VALID_STATUSES,
-    log_vote_threshold,
     resolve_item,
     validate_component_id,
     validate_feedback_type,
@@ -23,6 +22,7 @@ from app.api.schemas.feedback import (
     FeedbackItemWithVotes,
     FeedbackListResponse,
     FeedbackMergeRequest,
+    FeedbackOccurrenceFields,
     FeedbackStatusUpdate,
     FeedbackSummaryResponse,
     FeedbackVoteCreate,
@@ -30,6 +30,11 @@ from app.api.schemas.feedback import (
 )
 from app.db import get_db
 from app.services import feedback_storage
+
+
+def _occurrence_fields(body: FeedbackOccurrenceFields) -> dict[str, Any]:
+    return body.model_dump(include={"occurrence_id", "source_project_id", "run_ref", "role",
+                                    "occurred_at", "consequence", "workaround", "evidence_refs"})
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -43,6 +48,17 @@ async def create_feedback(
     validate_feedback_type(body.feedback_type)
     validate_component_id(body.component_id)
     validate_severity(body.severity)
+    # Stable replay is reconciled before any item or count mutation.
+    if body.occurrence_id:
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                         {"key": f"feedback-occurrence:{body.occurrence_id}"})
+        existing = await feedback_storage.get_feedback_occurrence(db, body.occurrence_id)
+        if existing is not None:
+            item = await feedback_storage.get_feedback_item(db, existing.feedback_item_id)
+            return FeedbackCreateResponse(item=FeedbackItemResponse.model_validate(item),
+                                          created=False, voted=False, occurrence_id=existing.occurrence_id)
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                     {"key": f"feedback-item:{body.component_id}:{body.feedback_type}:{body.title.strip().casefold()}"})
     candidates = await feedback_storage.find_duplicate_candidates(
         db,
         component_id=body.component_id,
@@ -50,25 +66,25 @@ async def create_feedback(
         project_id=body.project_id,
         title=body.title,
     )
-    if body.vote_if_duplicate and candidates:
-        canonical = candidates[0]
-        vote = None
-        if body.session_id:
-            vote = await feedback_storage.vote_on_item(
-                db,
-                item_id=str(canonical.id),
-                session_id=body.session_id,
-                comment=body.description,
-                agent_slug=body.agent_slug,
-                model_used=body.model_used,
-            )
-            await db.commit()
-            await db.refresh(canonical)
+    exact = next((candidate for candidate in candidates
+                  if candidate.title.strip().casefold() == body.title.strip().casefold()), None)
+    canonical = candidates[0] if body.vote_if_duplicate and candidates else exact if body.occurrence_id else None
+    if canonical is not None:
+        fields = _occurrence_fields(body)
+        fields["source_project_id"] = body.source_project_id or body.project_id
+        vote = await feedback_storage.vote_on_item(
+            db, item_id=str(canonical.id), session_id=body.session_id,
+            comment=body.description, agent_slug=body.agent_slug,
+            model_used=body.model_used, **fields,
+        )
+        if vote is not None and vote.feedback_item_id != canonical.id:
+            canonical = await feedback_storage.get_feedback_item(db, vote.feedback_item_id)
+        await db.commit()
+        await db.refresh(canonical)
         return FeedbackCreateResponse(
-            item=FeedbackItemResponse.model_validate(canonical),
-            created=False,
+            item=FeedbackItemResponse.model_validate(canonical), created=False,
             duplicate_candidates=[FeedbackItemResponse.model_validate(c) for c in candidates],
-            voted=vote is not None,
+            voted=vote is not None, occurrence_id=vote.occurrence_id if vote else body.occurrence_id,
         )
     item = await feedback_storage.create_feedback_item(
         db,
@@ -82,12 +98,14 @@ async def create_feedback(
         agent_slug=body.agent_slug,
         model_used=body.model_used,
         session_type=body.session_type,
+        **_occurrence_fields(body),
     )
     await db.commit()
     await db.refresh(item)
     return FeedbackCreateResponse(
         item=FeedbackItemResponse.model_validate(item),
         created=True,
+        occurrence_id=body.occurrence_id or (await feedback_storage.get_feedback_votes(db, item.id))[0].occurrence_id,
         duplicate_candidates=[FeedbackItemResponse.model_validate(c) for c in candidates],
         voted=False,
     )
@@ -159,6 +177,7 @@ async def get_feedback_item(
     votes = await feedback_storage.get_feedback_votes(db, item_id)
     item_data = FeedbackItemResponse.model_validate(item).model_dump()
     item_data["votes"] = [FeedbackVoteResponse.model_validate(v) for v in votes]
+    item_data["occurrences"] = item_data["votes"]
     return FeedbackItemWithVotes(**item_data)
 
 
@@ -168,22 +187,24 @@ async def vote_on_feedback(
     body: FeedbackVoteCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FeedbackVoteResponse | dict:
-    """Vote on a feedback item. Idempotent per session."""
+    """Retain a passive occurrence; stable-ID replay changes nothing."""
     item_id = await resolve_item(db, item_id)
     item = await feedback_storage.get_feedback_item(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Feedback item not found")
-    vote = await feedback_storage.vote_on_item(
-        db, item_id=item_id, session_id=body.session_id,
-        comment=body.comment, agent_slug=body.agent_slug, model_used=body.model_used,
-    )
+    try:
+        vote = await feedback_storage.vote_on_item(
+            db, item_id=item_id, session_id=body.session_id,
+            comment=body.comment, agent_slug=body.agent_slug, model_used=body.model_used,
+            **_occurrence_fields(body),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if vote is None:
         return {"message": "Already voted", "item_id": item_id, "session_id": body.session_id}
     await db.commit()
     await db.refresh(vote)
     await db.refresh(item)
-    if item.vote_count >= HIGH_VOTE_THRESHOLD and item.linked_task_id is None:
-        log_vote_threshold(item_id, item)
     return FeedbackVoteResponse.model_validate(vote)
 
 

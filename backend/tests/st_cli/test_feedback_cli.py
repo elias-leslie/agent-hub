@@ -122,3 +122,19 @@ class TestFeedbackCommandRouting:
 
         assert result.exit_code == 0
         mock_get_impl.assert_called_once_with("deadbeef", json_output=True)
+
+
+def test_native_occurrence_metadata_and_explicit_link():
+    from agent_hub_st.feedback_commands import link_impl, report_impl, vote_impl
+
+    metadata = {"occurrence_id": "origin-a", "source_project_id": "domain-a", "run_ref": "run-a",
+                "role": "reporter", "evidence_refs": ["sanitized:artifact"], "consequence": "Delayed output"}
+    with patch("agent_hub_st.feedback_commands.feedback_request", return_value={"created": True, "item": {}}) as request:
+        report_impl("xc.product", "Native feedback", project_id="domain-a", occurrence=metadata)
+        assert request.call_args.kwargs["json"]["occurrence_id"] == "origin-a"
+        vote_impl("item-id", occurrence=metadata)
+        assert request.call_args_list[-2].kwargs["json"]["run_ref"] == "run-a"
+        assert "session_id" not in request.call_args_list[-2].kwargs["json"]
+        link_impl("item-id", "task-explicit")
+        assert request.call_args.args[:2] == ("PATCH", "/api/feedback/item-id")
+        assert request.call_args.kwargs["json"] == {"linked_task_id": "task-explicit"}

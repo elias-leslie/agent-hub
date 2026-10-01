@@ -11,6 +11,7 @@ from .feedback_commands import (
     archive_impl,
     delete_impl,
     get_impl,
+    link_impl,
     list_impl,
     merge_impl,
     report_impl,
@@ -72,6 +73,14 @@ def report(
             help="Vote on the strongest duplicate candidate instead of creating a new item",
         ),
     ] = False,
+    occurrence_id: Annotated[str | None, typer.Option("--occurrence", help="Stable observation ID; reuse for retries and relays")] = None,
+    source_project_id: Annotated[str | None, typer.Option("--source-project", help="Affected/source project")] = None,
+    run_ref: Annotated[str | None, typer.Option("--run", help="Run or activity reference, independent of session")] = None,
+    role: Annotated[str | None, typer.Option("--role", help="Reporting role")] = None,
+    occurred_at: Annotated[str | None, typer.Option("--at", help="Observation time in ISO 8601 with timezone")] = None,
+    consequence: Annotated[str | None, typer.Option("--consequence", help="Observed consequence")] = None,
+    workaround: Annotated[str | None, typer.Option("--workaround", help="Workaround used")] = None,
+    evidence_refs: Annotated[list[str] | None, typer.Option("--evidence-ref", help="Sanitized evidence reference; repeatable")] = None,
 ) -> None:
     """Report new feedback on a component.
 
@@ -95,6 +104,9 @@ def report(
         model_used=model_used,
         session_type=session_type,
         vote_if_duplicate=vote_if_match,
+        occurrence={"occurrence_id": occurrence_id, "source_project_id": source_project_id,
+                    "run_ref": run_ref, "role": role, "occurred_at": occurred_at,
+                    "consequence": consequence, "workaround": workaround, "evidence_refs": evidence_refs},
     )
 
 
@@ -212,6 +224,14 @@ def vote(
     model_used: Annotated[
         str | None, typer.Option("--model", help="Model used")
     ] = None,
+    occurrence_id: Annotated[str | None, typer.Option("--occurrence", help="Stable observation ID; reuse for retries and relays")] = None,
+    source_project_id: Annotated[str | None, typer.Option("--source-project", help="Affected/source project")] = None,
+    run_ref: Annotated[str | None, typer.Option("--run", help="Run or activity reference, independent of session")] = None,
+    role: Annotated[str | None, typer.Option("--role", help="Reporting role")] = None,
+    occurred_at: Annotated[str | None, typer.Option("--at", help="Observation time in ISO 8601 with timezone")] = None,
+    consequence: Annotated[str | None, typer.Option("--consequence", help="Observed consequence")] = None,
+    workaround: Annotated[str | None, typer.Option("--workaround", help="Workaround used")] = None,
+    evidence_refs: Annotated[list[str] | None, typer.Option("--evidence-ref", help="Sanitized evidence reference; repeatable")] = None,
 ) -> None:
     """Vote on an existing feedback item.
 
@@ -226,6 +246,9 @@ def vote(
         comment=comment,
         agent_slug=agent_slug,
         model_used=model_used,
+        occurrence={"occurrence_id": occurrence_id, "source_project_id": source_project_id,
+                    "run_ref": run_ref, "role": role, "occurred_at": occurred_at,
+                    "consequence": consequence, "workaround": workaround, "evidence_refs": evidence_refs},
     )
 
 
@@ -294,3 +317,12 @@ def summary(
       st feedback summary --project summitflow --days 7
     """
     summary_impl(project_id=project_id, days=days)
+
+
+@app.command("link")
+def link(
+    item_id: Annotated[str, typer.Argument(help="Reviewed feedback item")],
+    task_id: Annotated[str, typer.Argument(help="Existing task chosen by the orchestrator")],
+) -> None:
+    """Link reviewed feedback to an existing ordinary task; never create or approve it."""
+    link_impl(item_id, task_id)
