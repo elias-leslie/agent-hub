@@ -811,5 +811,5 @@ def test_owner_gate_uses_public_st_and_removes_extension_context(monkeypatch, tm
     monkeypatch.setattr("app.services.session_ingestion.native_operator.run_process", run)
     assert _canonical_gate(tmp_path / "backend") == {"state": "success"}
     command, arguments = calls[0]
-    assert command == ["st", "check", "--acceptance", "--sha", "HEAD", "--json"]
+    assert command == ["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"]
     assert arguments["cwd"] == tmp_path and "ST_EXTENSION_CONTEXT" not in arguments["env"]

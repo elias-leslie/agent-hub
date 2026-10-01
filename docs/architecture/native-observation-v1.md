@@ -248,7 +248,7 @@ st native-sessions projection THREAD --mode shadow
 ```
 
 Acceptance reads bounded owner-owned files and invokes the canonical public
-`st check --acceptance --sha HEAD --json` from Agent Hub's fixed root. It compares
+`st --no-compact check --acceptance --sha HEAD --json` from Agent Hub's fixed root. It compares
 the current acceptance ID and source commit/tree, verifies isolated runtime and
 identity receipts, binds the session's managed/verified rollout sources, and checks
 reconciled terminal pairs and retained user aliases. It records acceptance without

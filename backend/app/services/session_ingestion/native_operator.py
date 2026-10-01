@@ -45,7 +45,7 @@ def _read_receipt(path: Path) -> dict[str, Any]:
 
 def _canonical_gate(owner_root: Path) -> dict[str, Any]:
     environment = {key: value for key, value in os.environ.items() if key != "ST_EXTENSION_CONTEXT"}
-    result = run_process(["st", "check", "--acceptance", "--sha", "HEAD", "--json"], cwd=owner_root.parent, env=environment, check=False, capture_output=True, text=True)
+    result = run_process(["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"], cwd=owner_root.parent, env=environment, check=False, capture_output=True, text=True)
     if result.returncode:
         raise ValueError("The current canonical ST acceptance gate failed")
     receipt = json.loads(result.stdout)
