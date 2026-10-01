@@ -1,12 +1,13 @@
 """Exercise the public feedback interface against isolated PostgreSQL temp tables."""
 
+import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
@@ -114,6 +115,68 @@ async def test_merge_preserves_every_occurrence_and_old_references(occurrence_db
     assert (await get_feedback_item(first.item.id, db)).occurrence_count == 3
 
 
+async def test_concurrent_opposite_merges_preserve_one_canonical_item():
+    configured = os.environ.get("TEST_AGENT_HUB_DB_URL")
+    if not configured:
+        pytest.skip("TEST_AGENT_HUB_DB_URL is required")
+    url = make_url(configured).set(drivername="postgresql+asyncpg")
+    assert url.database and url.database.endswith("_test")
+    engine = create_async_engine(url)
+    schema = f"feedback_merge_{uuid4().hex}"
+    source_id, target_id = str(uuid4()), str(uuid4())
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text(f"CREATE SCHEMA {schema}"))
+            await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
+            await connection.execute(text("CREATE TABLE sessions (id varchar(36) PRIMARY KEY)"))
+            for model in (FeedbackItem, FeedbackVote):
+                await connection.execute(text(str(CreateTable(model.__table__).compile(dialect=connection.dialect))))
+            for item_id, identity in ((source_id, "origin-a"), (target_id, "origin-b")):
+                await connection.execute(text("""INSERT INTO feedback_items
+                    (id, component_id, feedback_type, title, project_id, vote_count)
+                    VALUES (:id, 'xc.product', 'friction', :title, 'project-a', 1)"""),
+                    {"id": item_id, "title": identity})
+                await connection.execute(text("""INSERT INTO feedback_votes (feedback_item_id, occurrence_id)
+                    VALUES (:id, :identity)"""), {"id": item_id, "identity": identity})
+        async with AsyncSession(engine, expire_on_commit=False) as first, AsyncSession(engine) as second:
+            await first.execute(text(f"SET LOCAL search_path TO {schema}"))
+            await second.execute(text(f"SET LOCAL search_path TO {schema}"))
+            # Hold the actual ordered row locks while the opposite request starts.
+            await first.execute(select(FeedbackItem).order_by(FeedbackItem.id).with_for_update())
+            second_pid = (await second.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+            opposite = asyncio.create_task(feedback_storage.merge_feedback_items(
+                second, source_item_id=target_id, target_item_id=source_id))
+            try:
+                async with engine.connect() as observer, asyncio.timeout(5):
+                    while True:
+                        waiting = (await observer.execute(text("SELECT wait_event_type FROM pg_stat_activity WHERE pid = :pid"),
+                            {"pid": second_pid})).scalar_one()
+                        await observer.commit()
+                        if waiting == "Lock":
+                            break
+                        await asyncio.sleep(0.01)
+                await feedback_storage.merge_feedback_items(first, source_item_id=source_id, target_item_id=target_id)
+                await first.commit()
+                with pytest.raises(ValueError, match="changed during merge"):
+                    await opposite
+                await second.rollback()
+                await first.execute(text(f"SET LOCAL search_path TO {schema}"))
+                assert await feedback_storage.resolve_feedback_id(first, source_id) == target_id
+                assert await feedback_storage.resolve_feedback_id(first, target_id) == target_id
+                canonical = await feedback_storage.get_feedback_item(first, target_id)
+                assert canonical is not None and canonical.occurrence_count == 2
+                identities = (await first.execute(text("SELECT occurrence_id FROM feedback_votes"))).scalars().all()
+                assert set(identities) == {"origin-a", "origin-b"}
+            finally:
+                if not opposite.done():
+                    opposite.cancel()
+                    await asyncio.gather(opposite, return_exceptions=True)
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+        await engine.dispose()
+
+
 async def test_fresh_recurrence_on_old_item_is_in_summary_and_retained(occurrence_db):
     db = occurrence_db
     old = datetime.now(UTC) - timedelta(days=200)
@@ -185,3 +248,6 @@ async def test_legacy_backfill_keeps_only_attributable_occurrences(occurrence_db
     await db.execute(text("DELETE FROM sessions WHERE id = :id"), {"id": session_id})
     retained_sessions = (await db.execute(text("SELECT session_id FROM feedback_votes"))).scalars().all()
     assert len(retained_sessions) == 2 and all(value is None for value in retained_sessions)
+    with pytest.raises(RuntimeError, match="sessionless occurrences"):
+        await connection.run_sync(lambda _: migration.downgrade())
+    assert (await db.execute(text("SELECT count(occurrence_id) FROM feedback_votes"))).scalar_one() == 2

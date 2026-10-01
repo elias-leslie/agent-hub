@@ -145,7 +145,8 @@ def vote_impl(
     body.update({key: value for key, value in (occurrence or {}).items() if value is not None})
     result = feedback_request("POST", f"{FEEDBACK_API_PATH}/{item_id}/vote", json=body)
     if result.get("message") == ALREADY_VOTED_MSG:
-        print(f"VOTE:ALREADY_VOTED:{item_id[:8]}|{session_id[:8]}")
+        identity = (occurrence or {}).get("occurrence_id") or session_id or "unknown"
+        print(f"VOTE:ALREADY_VOTED:{item_id[:8]}|{identity[:8]}")
         return
     output_feedback_voted(feedback_request("GET", f"{FEEDBACK_API_PATH}/{item_id}"))
 

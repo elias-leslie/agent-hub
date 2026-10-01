@@ -138,3 +138,12 @@ def test_native_occurrence_metadata_and_explicit_link():
         link_impl("item-id", "task-explicit")
         assert request.call_args.args[:2] == ("PATCH", "/api/feedback/item-id")
         assert request.call_args.kwargs["json"] == {"linked_task_id": "task-explicit"}
+
+
+def test_sessionless_occurrence_vote_replay_has_safe_output(capsys):
+    from agent_hub_st.feedback_commands import vote_impl
+
+    with patch("agent_hub_st.feedback_commands.feedback_request", return_value={"message": "Already voted"}) as request:
+        vote_impl("item-id", occurrence={"occurrence_id": "origin-a"})
+    request.assert_called_once()
+    assert "VOTE:ALREADY_VOTED:item-id|origin-a" in capsys.readouterr().out

@@ -464,13 +464,18 @@ async def merge_feedback_items(
         raise ValueError("Cannot merge a feedback item into itself")
 
     result = await db.execute(
-        select(FeedbackItem).where(FeedbackItem.id.in_([source_item_id, target_item_id])).order_by(FeedbackItem.id).with_for_update()
+        select(FeedbackItem).where(FeedbackItem.id.in_([source_item_id, target_item_id]))
+        .order_by(FeedbackItem.id).with_for_update().execution_options(populate_existing=True)
     )
     items = {item.id: item for item in result.scalars().all()}
     source = items.get(source_item_id)
     target = items.get(target_item_id)
     if source is None or target is None:
         return None
+    # A waiting merge may have resolved these IDs before another merge committed.
+    # Reject stale canonical inputs under the locks, before moving any evidence.
+    if source.merged_into_id is not None or target.merged_into_id is not None:
+        raise ValueError("Feedback item changed during merge; retry with its canonical item")
 
     # IDs are globally unique: preserve every retained occurrence, even when
     # several independent reports happen to share a session.

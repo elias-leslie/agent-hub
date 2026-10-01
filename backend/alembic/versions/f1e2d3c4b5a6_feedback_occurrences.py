@@ -82,6 +82,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Never silently discard independent observations to satisfy the old constraint.
+    sessionless = op.get_bind().execute(sa.text("SELECT 1 FROM feedback_votes WHERE session_id IS NULL LIMIT 1")).first()
+    if sessionless:
+        raise RuntimeError("Cannot downgrade feedback: sessionless occurrences require the current schema")
     duplicates = op.get_bind().execute(sa.text("""
         SELECT 1 FROM feedback_votes WHERE session_id IS NOT NULL
         GROUP BY feedback_item_id, session_id HAVING COUNT(*) > 1 LIMIT 1
