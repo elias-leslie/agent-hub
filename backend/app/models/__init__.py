@@ -48,6 +48,9 @@ from .native_observation import (
     NativeObservationIssue,
     NativeObservationReceipt,
     NativeObservationSource,
+    NativeProjectionState,
+    NativeProtocolProfile,
+    NativeUserIdentity,
 )
 from .persona import Persona
 from .persona_scheduled_job import PersonaScheduledJob
@@ -113,6 +116,9 @@ __all__ = [
     "NativeObservationIssue",
     "NativeObservationReceipt",
     "NativeObservationSource",
+    "NativeProjectionState",
+    "NativeProtocolProfile",
+    "NativeUserIdentity",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",

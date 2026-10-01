@@ -25,6 +25,7 @@ EXPECTED_NAMESPACES = {
     "mandates",
     "memory",
     "models",
+    "native-sessions",
     "note",
     "persona",
     "prompt",
@@ -73,6 +74,12 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
             if isinstance(node, ast.Import):
                 imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                if path.name == "native_sessions.py" and node.module == "app.services.session_ingestion.native_operator":
+                    # The local owner command binds the fixed Agent Hub backend
+                    # before loading its own authority. This is not an import of
+                    # SummitFlow's private `app` package.
+                    assert [alias.name for alias in node.names] == ["run_native_operator"]
+                    continue
                 imported_roots.add(node.module.split(".", 1)[0])
 
     assert imported_roots.isdisjoint({"app", "cli"})

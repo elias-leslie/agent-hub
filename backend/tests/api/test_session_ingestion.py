@@ -708,3 +708,32 @@ class TestSessionIngestionAPI:
             checkpoint="checkpoint-4",
         )
         assert ingest.await_args.kwargs["session"] is session
+
+
+@pytest.mark.asyncio
+async def test_quarantine_owner_auth_and_bound_project_authorization():
+    from app.api.session_ingestion import (
+        ingest_native_quarantine_endpoint,
+        native_quarantine_health_endpoint,
+        register_native_quarantine_endpoint,
+    )
+    from app.services.session_ingestion.native_models import (
+        NativeQuarantineBatch,
+        NativeQuarantineRegistration,
+    )
+
+    request = _identified_request('["other"]')
+    db = AsyncMock()
+    registration = NativeQuarantineRegistration(project_id="agent-hub", namespace="fixture", producer_id="owner", epoch="epoch", collector_id="fixture", provider_version="fixture", schema_fingerprint="fixture")
+    with pytest.raises(HTTPException) as owner_denied:
+        await register_native_quarantine_endpoint(registration, request, db)
+    assert owner_denied.value.status_code == 403
+    with pytest.raises(HTTPException) as project_denied:
+        await native_quarantine_health_endpoint("agent-hub", request, db)
+    assert project_denied.value.status_code == 403
+    db.execute.assert_not_awaited()
+    request.state.is_internal = True
+    db.get.return_value = MagicMock(session_id="already-bound", project_id="agent-hub")
+    with pytest.raises(HTTPException) as bound_denied:
+        await ingest_native_quarantine_endpoint("source", NativeQuarantineBatch(), request, db)
+    assert bound_denied.value.status_code == 404

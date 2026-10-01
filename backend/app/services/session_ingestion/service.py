@@ -338,8 +338,12 @@ async def ingest_transcript_events(
     boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
     suppressed_commands = 0
     if request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
-        from .native_observations import exclude_projected_rollout_commands
+        from .native_observations import (
+            exclude_projected_rollout_commands,
+            prepare_rollout_source_generation,
+        )
 
+        await prepare_rollout_source_generation(db, session, events)
         original_count = len(events)
         events = await exclude_projected_rollout_commands(db, session, events)
         suppressed_commands = original_count - len(events)

@@ -135,7 +135,7 @@ export function NativeUsage({
   totalEvents,
 }: {
   events: TimelineEvent[]
-  totalEvents: number
+  totalEvents: number | null
 }) {
   const summary = summarizeNativeUsage(events)
 
@@ -154,11 +154,15 @@ export function NativeUsage({
         <p className="mt-1 text-xs text-slate-400">
           {summary.responseCount > 0
             ? `${summary.responseCount} response record${summary.responseCount === 1 ? '' : 's'} in loaded events. Coverage of all model responses is unknown.`
-            : 'No per-response native usage in loaded events.'}{' '}
+            : totalEvents === null
+              ? 'Native usage is unavailable until session history loads.'
+              : 'No per-response native usage in loaded events.'}{' '}
           Child sessions are not included.
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Inspected {events.length} of {totalEvents} session events.
+          {totalEvents === null
+            ? 'Session event coverage is unavailable.'
+            : `Inspected ${events.length} of ${totalEvents} session events.`}
         </p>
       </div>
       <CountGrid

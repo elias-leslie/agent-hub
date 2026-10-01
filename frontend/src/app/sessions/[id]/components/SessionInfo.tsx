@@ -11,7 +11,7 @@ import { formatDate, formatTokens } from './utils'
 interface SessionInfoProps {
   session: Session
   events: TimelineEvent[]
-  eventsTotal: number
+  eventsTotal: number | null
   memorySummary?: SessionMemoryObservability | null
 }
 
@@ -64,9 +64,17 @@ export function SessionInfo({
         )}
         <StatCard
           icon={Cpu}
-          label="Provider"
+          label={
+            session.provider === 'codex'
+              ? 'Native provider'
+              : 'Configured provider'
+          }
           value={effectiveProvider}
-          subValue={fallbackDetail}
+          subValue={
+            session.provider === 'codex'
+              ? `Observed model ${effectiveModel === 'codex/unknown' ? 'unknown' : effectiveModel}`
+              : fallbackDetail
+          }
         />
         <StatCard icon={Activity} label="Type" value={session.session_type} />
         <StatCard
@@ -190,7 +198,8 @@ export function SessionInfo({
         )}
 
       {/* Stored session counters may not include all native transcript usage. */}
-      {(session.total_input_tokens || session.total_output_tokens) && (
+      {(session.total_input_tokens !== undefined ||
+        session.total_output_tokens !== undefined) && (
         <div>
           <h3 className="mb-2 text-sm font-medium text-slate-300">
             Stored session counters
@@ -207,7 +216,9 @@ export function SessionInfo({
               )}
             >
               <p className="text-2xl font-mono font-semibold text-sky-400">
-                {formatTokens(session.total_input_tokens || 0)}
+                {session.total_input_tokens === undefined
+                  ? 'Unavailable'
+                  : formatTokens(session.total_input_tokens)}
               </p>
               <p className="text-xs text-sky-500 mt-1">Input Tokens</p>
             </div>
@@ -218,7 +229,9 @@ export function SessionInfo({
               )}
             >
               <p className="text-2xl font-mono font-semibold text-violet-400">
-                {formatTokens(session.total_output_tokens || 0)}
+                {session.total_output_tokens === undefined
+                  ? 'Unavailable'
+                  : formatTokens(session.total_output_tokens)}
               </p>
               <p className="text-xs text-violet-500 mt-1">Output Tokens</p>
             </div>

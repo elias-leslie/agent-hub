@@ -19,6 +19,8 @@ class NativeSourceRegistration(BaseModel):
     thread_id: str = Field(min_length=1, max_length=512)
     transcript_path: str | None = Field(default=None, max_length=4096)
     reconcile_existing_rollout: bool = False
+    generation: int = Field(default=0, ge=0)
+    predecessor_source_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class NativeSourceReceipt(BaseModel):
@@ -68,3 +70,39 @@ class NativeObservationDisposition(BaseModel):
 
 class NativeObservationResult(NativeSourceReceipt):
     dispositions: list[NativeObservationDisposition] = Field(default_factory=list)
+
+
+class NativeQuarantineRegistration(BaseModel):
+    """An authenticated collector stream with no claimed session subject."""
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["native-observation.v1"] = "native-observation.v1"
+    project_id: str = Field(min_length=1, max_length=100)
+    namespace: str = Field(min_length=1, max_length=512)
+    producer_id: str = Field(min_length=1, max_length=256)
+    epoch: str = Field(min_length=1, max_length=256)
+    collector_id: str = Field(min_length=1, max_length=256)
+    provider_version: str = Field(min_length=1, max_length=256)
+    schema_fingerprint: str = Field(min_length=1, max_length=256)
+    generation: int = Field(default=0, ge=0)
+
+
+class NativeQuarantineObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    position: int = Field(ge=1)
+    payload: dict[str, Any]
+    source_reference: dict[str, Any] = Field(default_factory=dict)
+    thread_id: str | None = Field(default=None, max_length=512)
+
+
+class NativeQuarantineBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["native-observation.v1"] = "native-observation.v1"
+    observations: list[NativeQuarantineObservation] = Field(default_factory=list)
+    acknowledged_position: int | None = Field(default=None, ge=0)
+
+
+class NativeProtocolProfileRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_version: str = Field(min_length=1, max_length=256)
+    schema_fingerprint: str = Field(min_length=64, max_length=64)
+    canary_receipt: dict[str, Any]

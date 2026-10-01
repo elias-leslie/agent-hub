@@ -1,16 +1,54 @@
 """Session management operations."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from agent_hub.models.native_observation import (
-    NativeObservationBatch, NativeObservationResult, NativeSourceReceipt, NativeSourceRegistration,
-)
+if TYPE_CHECKING:
+    import httpx
+
 from agent_hub._utils import handle_error
 from agent_hub.models import SessionCreate, SessionListResponse, SessionResponse
+from agent_hub.models.native_observation import (
+    NativeObservationBatch,
+    NativeObservationResult,
+    NativeProtocolProfileRegistration,
+    NativeQuarantineBatch,
+    NativeQuarantineRegistration,
+    NativeSourceReceipt,
+    NativeSourceRegistration,
+)
 
 
 class SessionOperationsMixin:
     """Mixin providing session management methods."""
+
+    if TYPE_CHECKING:
+        # Supplied by the composing client; these declarations have no runtime body.
+        def _get_client(self) -> httpx.Client: ...
+        def _inject_tracking_headers(self, source: str, extra_headers: dict[str, str] | None = None) -> dict[str, str]: ...
+
+    def register_native_protocol_profile(self, request: NativeProtocolProfileRegistration, *, execution_owner_secret: str | None = None) -> dict[str, Any]:
+        response = self._get_client().post("/api/session-ingestion/native-protocol-profiles", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_protocol_profile", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    def list_native_protocol_profiles(self, *, execution_owner_secret: str | None = None) -> dict[str, Any]:
+        response = self._get_client().get("/api/session-ingestion/native-protocol-profiles", headers=self._inject_tracking_headers("sdk.list_native_protocol_profiles", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    def register_native_quarantine(self, request: NativeQuarantineRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
+        response = self._get_client().post("/api/session-ingestion/native-quarantine", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_quarantine", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return NativeSourceReceipt.model_validate(response.json())
+
+    def ingest_native_quarantine(self, source_id: str, request: NativeQuarantineBatch, *, execution_owner_secret: str | None = None) -> NativeObservationResult:
+        response = self._get_client().post(f"/api/session-ingestion/native-quarantine/{source_id}/observations", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_quarantine", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return NativeObservationResult.model_validate(response.json())
 
     def register_native_source(self, session_id: str, request: NativeSourceRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
         response = self._get_client().post(
@@ -140,6 +178,34 @@ class SessionOperationsMixin:
 
 class AsyncSessionOperationsMixin:
     """Mixin providing async session management methods."""
+
+    if TYPE_CHECKING:
+        async def _get_client(self) -> httpx.AsyncClient: ...
+        def _inject_tracking_headers(self, source: str, extra_headers: dict[str, str] | None = None) -> dict[str, str]: ...
+
+    async def register_native_protocol_profile(self, request: NativeProtocolProfileRegistration, *, execution_owner_secret: str | None = None) -> dict[str, Any]:
+        response = await (await self._get_client()).post("/api/session-ingestion/native-protocol-profiles", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_protocol_profile", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    async def list_native_protocol_profiles(self, *, execution_owner_secret: str | None = None) -> dict[str, Any]:
+        response = await (await self._get_client()).get("/api/session-ingestion/native-protocol-profiles", headers=self._inject_tracking_headers("sdk.list_native_protocol_profiles", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    async def register_native_quarantine(self, request: NativeQuarantineRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
+        response = await (await self._get_client()).post("/api/session-ingestion/native-quarantine", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.register_native_quarantine", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return NativeSourceReceipt.model_validate(response.json())
+
+    async def ingest_native_quarantine(self, source_id: str, request: NativeQuarantineBatch, *, execution_owner_secret: str | None = None) -> NativeObservationResult:
+        response = await (await self._get_client()).post(f"/api/session-ingestion/native-quarantine/{source_id}/observations", json=request.model_dump(mode="json"), headers=self._inject_tracking_headers("sdk.ingest_native_quarantine", {"X-Agent-Hub-Internal": execution_owner_secret} if execution_owner_secret else None))
+        if not response.is_success:
+            handle_error(response)
+        return NativeObservationResult.model_validate(response.json())
 
     async def register_native_source(self, session_id: str, request: NativeSourceRegistration, *, execution_owner_secret: str | None = None) -> NativeSourceReceipt:
         client = await self._get_client()

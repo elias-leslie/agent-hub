@@ -16,6 +16,7 @@ from .feedback import app as feedback_app
 from .mandates import mandates
 from .memory import app as memory_app
 from .models import app as models_app
+from .native_sessions import app as native_sessions_app
 from .note import note
 from .persona import app as persona_app
 from .prompt import app as prompt_app
@@ -36,6 +37,7 @@ OWNED_APPS: dict[str, typer.Typer] = {
     "mandates": _leaf_app("mandates", mandates),
     "memory": memory_app,
     "models": models_app,
+    "native-sessions": native_sessions_app,
     "note": _leaf_app("note", note),
     "persona": persona_app,
     "prompt": prompt_app,

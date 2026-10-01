@@ -35,13 +35,21 @@ from app.services.session_ingestion.native_models import (
     NativeObservation,
     NativeObservationBatch,
     NativeObservationResult,
+    NativeProtocolProfileRegistration,
+    NativeQuarantineBatch,
+    NativeQuarantineRegistration,
     NativeSourceReceipt,
     NativeSourceRegistration,
 )
 from app.services.session_ingestion.native_observations import (
     approval_subject,
     ingest_native_observations,
+    ingest_native_quarantine,
+    list_native_protocol_profiles,
     native_capture_status,
+    native_evidence_summary,
+    qualify_native_protocol_profile,
+    register_native_quarantine,
     register_native_source,
 )
 from app.services.session_ingestion.service import SessionIngestionConflict
@@ -107,7 +115,7 @@ async def native_receipts_endpoint(
     rows = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.source_id == source.id, NativeObservationReceipt.position > after_position).order_by(NativeObservationReceipt.position).limit(limit))).scalars().all()
     receipts = []
     for row in rows:
-        receipts.append({"position": row.position, "payload_hash": row.payload_hash, "observation": row.observation, "disposition": row.disposition, "issue_code": row.issue_code, "entity_id": row.entity_id, "approval_subject": await approval_subject(db, source.id, NativeObservation.model_validate(row.observation))})
+        receipts.append({"position": row.position, "payload_hash": row.payload_hash, "observation": row.observation, "disposition": row.disposition, "issue_code": row.issue_code, "entity_id": row.entity_id, "normalized": row.normalized, "raw_pruned_at": row.raw_pruned_at.isoformat() if row.raw_pruned_at else None, "approval_subject": (row.normalized or {}).get("approval_subject") or await approval_subject(db, source.id, NativeObservation.model_validate(row.observation))})
     return {"source_id": source.id, "committed_position": source.committed_position, "receipts": receipts, "next_position": rows[-1].position if rows else after_position}
 
 
@@ -358,3 +366,103 @@ async def ingest_native_observations_endpoint(
         return await ingest_native_observations(db, session, source_id, request)
     except SessionIngestionConflict as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@router.post("/native-quarantine")
+async def register_native_quarantine_endpoint(request: NativeQuarantineRegistration, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> NativeSourceReceipt:
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native quarantine requires the internal evidence owner.")
+    require_project_access(http_request, request.project_id)
+    try:
+        return await register_native_quarantine(db, request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Unknown quarantine project.") from exc
+
+@router.post("/native-quarantine/{source_id}/observations")
+async def ingest_native_quarantine_endpoint(source_id: str, request: NativeQuarantineBatch, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> NativeObservationResult:
+    from app.models import NativeObservationSource
+
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native quarantine requires the internal evidence owner.")
+    source = await db.get(NativeObservationSource, source_id)
+    if source is None or source.session_id is not None or not source.project_id:
+        raise HTTPException(status_code=404, detail="Quarantine source not found.")
+    require_project_access(http_request, source.project_id)
+    try:
+        return await ingest_native_quarantine(db, source, request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@router.get("/native-quarantine")
+async def native_quarantine_health_endpoint(project_id: str, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
+    from sqlalchemy import func, select
+
+    from app.models import NativeObservationReceipt, NativeObservationSource
+
+    require_project_access(http_request, project_id)
+    rows = (await db.execute(select(NativeObservationSource).where(NativeObservationSource.session_id.is_(None), NativeObservationSource.project_id == project_id))).scalars().all()
+    sources = []
+    for source in rows:
+        count, maximum, latest = (await db.execute(select(func.count(), func.max(NativeObservationReceipt.position), func.max(NativeObservationReceipt.received_at)).where(NativeObservationReceipt.source_id == source.id))).one()
+        sources.append({"source_id": source.id, "committed_position": source.committed_position, "receipt_count": count, "max_position": maximum or 0, "last_received_at": latest.isoformat() if latest else None})
+    return {"schema_version": "native-observation.v1", "project_id": project_id, "subject_binding": "unbound", "sources": sources}
+
+
+@router.get("/native-quarantine/{source_id}/observations")
+async def native_quarantine_receipts_endpoint(source_id: str, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)], after_position: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from app.models import NativeObservationReceipt, NativeObservationSource
+
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native payloads require the internal evidence owner.")
+    source = await db.get(NativeObservationSource, source_id)
+    if source is None or source.session_id is not None or not source.project_id:
+        raise HTTPException(status_code=404, detail="Quarantine source not found.")
+    require_project_access(http_request, source.project_id)
+    rows = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.source_id == source_id, NativeObservationReceipt.position > after_position).order_by(NativeObservationReceipt.position).limit(limit))).scalars().all()
+    return {"source_id": source.id, "committed_position": source.committed_position, "receipts": [{"position": row.position, "payload_hash": row.payload_hash, "observation": row.observation, "disposition": row.disposition, "issue_code": row.issue_code} for row in rows], "next_position": rows[-1].position if rows else after_position}
+
+
+@router.get("/sessions/{session_id}/native-evidence-summary")
+async def native_evidence_summary_endpoint(session_id: str, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)], after_entity_id: str = Query(default="", max_length=64), limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    return await native_evidence_summary(db, session, after_entity_id=after_entity_id, limit=limit)
+
+
+@router.get("/native-quarantine/{source_id}/issues")
+async def native_quarantine_issues_endpoint(source_id: str, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)], after_position: int = Query(default=0, ge=0), after_id: str = Query(default="", max_length=64), limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
+    from sqlalchemy import and_, or_, select
+
+    from app.models import NativeObservationIssue, NativeObservationSource
+
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Native payloads require the internal evidence owner.")
+    source = await db.get(NativeObservationSource, source_id)
+    if source is None or source.session_id is not None or not source.project_id:
+        raise HTTPException(status_code=404, detail="Quarantine source not found.")
+    require_project_access(http_request, source.project_id)
+    rows = (await db.execute(select(NativeObservationIssue).where(NativeObservationIssue.source_id == source.id, or_(NativeObservationIssue.position > after_position, and_(NativeObservationIssue.position == after_position, NativeObservationIssue.id > after_id))).order_by(NativeObservationIssue.position, NativeObservationIssue.id).limit(limit))).scalars().all()
+    return {"source_id": source.id, "issues": [{"id": row.id, "position": row.position, "code": row.code, "observation": row.observation} for row in rows], "next_position": rows[-1].position if rows else after_position, "next_id": rows[-1].id if rows else after_id}
+
+
+@router.post("/native-protocol-profiles")
+async def qualify_native_protocol_profile_endpoint(request: NativeProtocolProfileRegistration, http_request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Protocol qualification requires the internal evidence owner.")
+    try:
+        return await qualify_native_protocol_profile(db, request)
+    except SessionIngestionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@router.get("/native-protocol-profiles")
+async def native_protocol_profiles_endpoint(http_request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
+    if not getattr(http_request.state, "is_internal", False):
+        raise HTTPException(status_code=403, detail="Protocol profiles require the internal evidence owner.")
+    return await list_native_protocol_profiles(db)

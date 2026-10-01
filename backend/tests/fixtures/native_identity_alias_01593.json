@@ -1,0 +1,39 @@
+{
+  "version": "codex-cli 0.159.3",
+  "external_network": "absent",
+  "credentials": "absent",
+  "thread_id": "01a0f7d6-22bb-79d2-b382-df5069370c96",
+  "turn_id": "01a0f7d6-22c3-7d20-bb1e-e746d6fa00ca",
+  "client_user_message_id": "488f259b-9174-43a3-84b9-34ea4a5f93f2",
+  "active_user_items": [
+    {
+      "type": "userMessage",
+      "id": "01a0f7d6-22e7-78e0-a39b-f91da4e28a2e",
+      "clientId": "488f259b-9174-43a3-84b9-34ea4a5f93f2"
+    }
+  ],
+  "resumed_user_items": [
+    {
+      "type": "userMessage",
+      "id": "item-1",
+      "clientId": "488f259b-9174-43a3-84b9-34ea4a5f93f2"
+    }
+  ],
+  "final_user_items": [
+    {
+      "type": "userMessage",
+      "id": "01a0f7d6-22e7-78e0-a39b-f91da4e28a2e",
+      "clientId": "488f259b-9174-43a3-84b9-34ea4a5f93f2"
+    }
+  ],
+  "command_id": "call-response-1",
+  "command_snapshot_ids": {
+    "active": [],
+    "resumed": [
+      "call-response-1"
+    ],
+    "final": []
+  },
+  "explicit_correlation": "own thread + native turn + request clientUserMessageId / response clientId",
+  "result": "pass"
+}

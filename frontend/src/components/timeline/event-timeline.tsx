@@ -3,6 +3,7 @@
 import { Database, Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { SessionTimelineEvent } from '@/lib/api'
+import type { NativeCommandEvidence } from '@/lib/api/native-evidence'
 import { cn } from '@/lib/utils'
 import { EVENT_CONFIGS } from './event-config'
 import { FilterChip } from './filter-chip'
@@ -14,16 +15,27 @@ interface EventTimelineProps {
   events: SessionTimelineEvent[]
   className?: string
   density?: 'default' | 'compact'
+  nativeCommands?: NativeCommandEvidence[]
 }
 
 export function EventTimeline({
   events,
   className,
   density = 'default',
+  nativeCommands,
 }: EventTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilters, setActiveFilters] = useState<Set<EventType>>(new Set())
   const compact = density === 'compact'
+  const commandByEvent = useMemo(() => {
+    const map = new Map<string, NativeCommandEvidence[]>()
+    for (const command of nativeCommands ?? []) {
+      for (const id of command.projection_event_ids) {
+        map.set(id, [...(map.get(id) ?? []), command])
+      }
+    }
+    return map
+  }, [nativeCommands])
 
   // Count events by type
   const eventCounts = useMemo(() => {
@@ -113,6 +125,7 @@ export function EventTimeline({
             )}
           />
           <input
+            aria-label="Search session events"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -128,6 +141,8 @@ export function EventTimeline({
           />
           {searchQuery && (
             <button
+              type="button"
+              aria-label="Clear event search"
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400"
             >
@@ -184,6 +199,7 @@ export function EventTimeline({
                 key={turn}
                 turn={turn}
                 events={turnEvents}
+                commandByEvent={commandByEvent}
                 isLast={idx === groupedByTurn.length - 1}
               />
             ))}

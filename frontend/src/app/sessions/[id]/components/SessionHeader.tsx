@@ -43,7 +43,10 @@ export function SessionHeader({
     : null
 
   return (
-    <header className="page-header">
+    <header
+      className="page-header shrink-0"
+      style={{ background: 'var(--card)' }}
+    >
       <div className="page-container px-4 lg:px-8">
         <div className="page-header-row">
           <div className="page-title-group">
@@ -78,10 +81,24 @@ export function SessionHeader({
               </div>
               <div className="page-meta">
                 <span className="page-pill">{effectiveProvider}</span>
-                <span className="page-pill">{effectiveModel}</span>
-                {showsFallback && (
-                  <span className="page-pill border-amber-500/20 bg-amber-500/10 text-amber-100">
-                    requested {requestedModel}
+                <span className="page-pill">
+                  {session.provider === 'codex' ? 'observed' : 'configured'}{' '}
+                  {effectiveModel === 'codex/unknown'
+                    ? 'unknown'
+                    : effectiveModel}
+                </span>
+                {(showsFallback || session.provider === 'codex') && (
+                  <span
+                    className={cn(
+                      'page-pill',
+                      showsFallback &&
+                        'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-100',
+                    )}
+                  >
+                    requested{' '}
+                    {requestedModel === 'codex/unknown'
+                      ? 'unknown'
+                      : requestedModel}
                   </span>
                 )}
                 {liveLabel && (
@@ -97,6 +114,7 @@ export function SessionHeader({
             <div className={cn('segmented-control')}>
               <button
                 type="button"
+                aria-pressed={activeTab === 'timeline'}
                 onClick={() => onTabChange('timeline')}
                 className={cn(
                   'segmented-option',
@@ -110,6 +128,7 @@ export function SessionHeader({
               </button>
               <button
                 type="button"
+                aria-pressed={activeTab === 'info'}
                 onClick={() => onTabChange('info')}
                 className={cn(
                   'segmented-option',

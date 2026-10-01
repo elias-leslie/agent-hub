@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import type { SessionTimelineEvent } from '@/lib/api'
+import type { NativeCommandEvidence } from '@/lib/api/native-evidence'
 import { cn } from '@/lib/utils'
 import { EventItem } from './event-item'
 
@@ -10,15 +11,23 @@ interface TurnGroupProps {
   turn: number
   events: SessionTimelineEvent[]
   isLast: boolean
+  commandByEvent?: Map<string, NativeCommandEvidence[]>
 }
 
-export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
+export function TurnGroup({
+  turn,
+  events,
+  isLast,
+  commandByEvent,
+}: TurnGroupProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   return (
     <div className="relative">
       {/* Turn header */}
       <button
+        type="button"
+        aria-expanded={!isCollapsed}
         onClick={() => setIsCollapsed(!isCollapsed)}
         className={cn(
           'sticky top-0 z-10 w-full flex items-center gap-3 py-2 px-3 mb-3',
@@ -26,6 +35,7 @@ export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
           'border-b border-slate-800/60',
           'hover:bg-slate-900/80 transition-colors',
           'text-left',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
         )}
       >
         <div className="flex items-center gap-2">
@@ -51,6 +61,7 @@ export function TurnGroup({ turn, events, isLast }: TurnGroupProps) {
             <EventItem
               key={event.id}
               event={event}
+              nativeCommands={commandByEvent?.get(event.id)}
               isFirst={idx === 0}
               isLast={idx === events.length - 1 && isLast}
             />
