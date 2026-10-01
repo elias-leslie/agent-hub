@@ -29,6 +29,8 @@ from .canonical_projection import (
 )
 from .native_observations import REQUIRED_CANARY_CASES, native_capture_status
 
+REGISTERED_HOST_PROJECT_ROOT = Path("/srv/workspaces/projects/agent-hub")
+
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -43,15 +45,45 @@ def _read_receipt(path: Path) -> dict[str, Any]:
     return receipt
 
 
+def _accepted_runtime_source(owner_root: Path) -> dict[str, str] | None:
+    """Read source binding only; ST remains the release/acceptance authority."""
+    owner_root = owner_root.resolve()
+    if owner_root == (REGISTERED_HOST_PROJECT_ROOT / "backend").resolve():
+        return None
+    source_root = owner_root.parent
+    release_root = source_root.parent
+    if owner_root.name != "backend" or source_root.name != "source" or release_root.parent.name != "releases":
+        raise ValueError("The owner runtime has no managed accepted source binding")
+    path = release_root.parent.parent / "receipts" / (release_root.name + ".json")
+    try:
+        receipt = _read_receipt(path)
+    except (OSError, ValueError):
+        raise ValueError("The owner runtime source receipt is unavailable or invalid") from None
+    source = receipt.get("source")
+    if receipt.get("schema_version") != 1 or receipt.get("project") != "agent-hub" or receipt.get("build_id") != release_root.name or receipt.get("source_root") != str(source_root) or not isinstance(source, dict):
+        raise ValueError("The owner runtime source receipt does not bind this backend")
+    commit, tree = source.get("source_commit"), source.get("source_tree")
+    if not isinstance(commit, str) or not commit or not isinstance(tree, str) or not tree:
+        raise ValueError("The owner runtime source receipt has no accepted source identity")
+    return {"commit": commit, "tree": tree}
+
+
 def _canonical_gate(owner_root: Path) -> dict[str, Any]:
+    runtime_source = _accepted_runtime_source(owner_root)
+    if not (REGISTERED_HOST_PROJECT_ROOT / ".git").exists():
+        raise ValueError("The registered Agent Hub host checkout is unavailable")
     environment = {key: value for key, value in os.environ.items() if key != "ST_EXTENSION_CONTEXT"}
-    result = run_process(["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"], cwd=owner_root.parent, env=environment, check=False, capture_output=True, text=True)
+    # Accepted archives have no Git metadata. Only the canonical host gate uses
+    # the checkout; domain actions continue importing the accepted runtime.
+    result = run_process(["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"], cwd=REGISTERED_HOST_PROJECT_ROOT, env=environment, check=False, capture_output=True, text=True)
     if result.returncode:
         raise ValueError("The current canonical ST acceptance gate failed")
     # The public ST acceptance wire uses a fixed label even with --json.
     receipt = json.loads(result.stdout.removeprefix("ACCEPTANCE:"))
     if not isinstance(receipt, dict):
         raise ValueError("The canonical ST acceptance gate did not return a receipt")
+    if runtime_source is not None and receipt.get("source") != runtime_source:
+        raise ValueError("The current canonical ST source does not match the accepted owner runtime; rebuild the owner first")
     return receipt
 
 

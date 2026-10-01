@@ -15,7 +15,8 @@ app = typer.Typer(help="Inspect and operate Agent Hub-owned native session autho
 
 
 def _backend_root() -> Path:
-    # The trusted executable is installed in the owner's backend environment.
+    # Keep domain actions pinned to the trusted executable's accepted backend.
+    # Its native_operator resolves the registered host checkout for Git gates only.
     candidates = (Path(sys.prefix).resolve().parent, Path("/srv/workspaces/projects/agent-hub/backend"), Path("/app"))
     for root in candidates:
         if (root / "app/services/session_ingestion/native_operator.py").is_file():

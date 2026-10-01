@@ -258,6 +258,14 @@ Driver failures produce content-free errors. These commands use the owner's
 backend environment, without a collector secret or ad hoc SQL. Deployment promotion
 remains a separate operator action after the full gate.
 
+The accepted runtime backend remains the module authority for status, projection
+and retention. Git acceptance alone runs from the fixed registered host checkout,
+because the deployed archive has no Git metadata. Its bounded owner-owned managed
+release receipt must bind that exact backend source root, and its accepted
+commit/tree must match the canonical ST gate. Missing, invalid or stale source
+bindings reject acceptance; the owner must rebuild before using a newer checkout's
+gate. This read-only guard does not replace ST's release or acceptance authority.
+
 ## Raw retention
 
 Original wire evidence can contain prompts and approval contents. Agent Hub has no

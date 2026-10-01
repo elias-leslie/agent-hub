@@ -804,6 +804,8 @@ def test_owner_gate_uses_public_st_and_removes_extension_context(monkeypatch, tm
 
     from app.services.session_ingestion.native_operator import _canonical_gate
     calls = []
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr("app.services.session_ingestion.native_operator.REGISTERED_HOST_PROJECT_ROOT", tmp_path)
     monkeypatch.setenv("ST_EXTENSION_CONTEXT", "recursive-untrusted-context")
     def run(command, **kwargs):
         calls.append((command, kwargs))
@@ -813,3 +815,38 @@ def test_owner_gate_uses_public_st_and_removes_extension_context(monkeypatch, tm
     command, arguments = calls[0]
     assert command == ["st", "--no-compact", "check", "--acceptance", "--sha", "HEAD", "--json"]
     assert arguments["cwd"] == tmp_path and "ST_EXTENSION_CONTEXT" not in arguments["env"]
+
+
+def test_accepted_owner_gate_uses_host_checkout_and_exact_runtime_source(monkeypatch, tmp_path):
+    import subprocess
+
+    from app.services.session_ingestion.native_operator import _canonical_gate
+    host = tmp_path / "host"
+    (host / ".git").mkdir(parents=True)
+    monkeypatch.setattr("app.services.session_ingestion.native_operator.REGISTERED_HOST_PROJECT_ROOT", host)
+    state = tmp_path / "managed/projects/agent-hub"
+    backend = state / "releases/accepted/source/backend"
+    backend.mkdir(parents=True)
+    receipts = state / "receipts"
+    receipts.mkdir()
+    binding = {"schema_version": 1, "project": "agent-hub", "build_id": "accepted", "source_root": str(backend.parent), "source": {"source_commit": "accepted-commit", "source_tree": "accepted-tree"}}
+    receipt_path = receipts / "accepted.json"
+    receipt_path.write_text(json.dumps(binding))
+    gate = {"schema_version": 1, "kind": "local_full_acceptance", "state": "success", "source": {"commit": "accepted-commit", "tree": "accepted-tree"}, "acceptance_id": "current"}
+    calls = []
+    def run(command, **kwargs):
+        calls.append(kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout="ACCEPTANCE:" + json.dumps(gate), stderr="")
+    monkeypatch.setattr("app.services.session_ingestion.native_operator.run_process", run)
+    assert _canonical_gate(backend) == gate
+    assert calls[0]["cwd"] == host
+    gate["source"]["tree"] = "different-tree"
+    with pytest.raises(ValueError, match="does not match the accepted owner runtime"):
+        _canonical_gate(backend)
+    binding["source_root"] = str(host)
+    receipt_path.write_text(json.dumps(binding))
+    with pytest.raises(ValueError, match="does not bind this backend"):
+        _canonical_gate(backend)
+    receipt_path.unlink()
+    with pytest.raises(ValueError, match="unavailable or invalid"):
+        _canonical_gate(backend)

@@ -38,3 +38,13 @@ def test_raw_retention_has_no_implicit_cutoff_or_apply(monkeypatch):
 def test_fixed_owner_root_ignores_current_directory(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     assert native_sessions._backend_root() == Path("/srv/workspaces/projects/agent-hub/backend")
+
+
+def test_accepted_prefix_retains_runtime_backend_instead_of_host_checkout(monkeypatch, tmp_path):
+    backend = tmp_path / "releases/accepted/source/backend"
+    module = backend / "app/services/session_ingestion/native_operator.py"
+    module.parent.mkdir(parents=True)
+    module.touch()
+    monkeypatch.setattr(native_sessions.sys, "prefix", str(backend / ".venv"))
+    monkeypatch.chdir(tmp_path)
+    assert native_sessions._backend_root() == backend
