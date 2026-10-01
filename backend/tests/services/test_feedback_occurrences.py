@@ -156,6 +156,8 @@ async def test_legacy_backfill_keeps_only_attributable_occurrences(occurrence_db
         await db.execute(text(f"ALTER TABLE feedback_items DROP COLUMN {name}"))
     await db.execute(text("ALTER TABLE feedback_votes ADD CONSTRAINT uq_feedback_votes_item_session UNIQUE (feedback_item_id, session_id)"))
     await db.execute(text("ALTER TABLE feedback_votes ALTER COLUMN session_id SET NOT NULL"))
+    await db.execute(text("ALTER TABLE feedback_votes DROP CONSTRAINT fk_feedback_votes_sessions_session_id"))
+    await db.execute(text("ALTER TABLE feedback_votes ADD CONSTRAINT feedback_votes_session_id_fkey FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE"))
     item_id = str(uuid4())
     session_id = str(uuid4())
     await db.execute(text("INSERT INTO sessions (id) VALUES (:id)"), {"id": session_id})
@@ -180,3 +182,6 @@ async def test_legacy_backfill_keeps_only_attributable_occurrences(occurrence_db
     item = await feedback_storage.get_feedback_item(db, item_id)
     assert item is not None
     assert item.occurrence_count == 2 and item.independent_run_count == 0
+    await db.execute(text("DELETE FROM sessions WHERE id = :id"), {"id": session_id})
+    retained_sessions = (await db.execute(text("SELECT session_id FROM feedback_votes"))).scalars().all()
+    assert len(retained_sessions) == 2 and all(value is None for value in retained_sessions)

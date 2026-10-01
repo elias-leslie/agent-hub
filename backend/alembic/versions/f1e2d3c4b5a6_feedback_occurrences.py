@@ -18,6 +18,13 @@ depends_on = None
 def upgrade() -> None:
     # Native reporters and retained initial reports need no managed session.
     op.alter_column("feedback_votes", "session_id", nullable=True)
+    for foreign_key in sa.inspect(op.get_bind()).get_foreign_keys("feedback_votes"):
+        if foreign_key["constrained_columns"] == ["session_id"]:
+            name = foreign_key["name"]
+            assert name is not None
+            op.drop_constraint(name, "feedback_votes", type_="foreignkey")
+    op.create_foreign_key("fk_feedback_votes_session", "feedback_votes", "sessions",
+                          ["session_id"], ["id"], ondelete="SET NULL")
     for column in (
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("independent_run_count", sa.Integer(), nullable=False, server_default="0"),
