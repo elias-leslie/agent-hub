@@ -16,6 +16,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Native reporters and retained initial reports need no managed session.
+    op.alter_column("feedback_votes", "session_id", nullable=True)
     for column in (
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("independent_run_count", sa.Integer(), nullable=False, server_default="0"),

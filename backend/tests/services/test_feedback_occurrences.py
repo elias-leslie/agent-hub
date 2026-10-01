@@ -155,10 +155,13 @@ async def test_legacy_backfill_keeps_only_attributable_occurrences(occurrence_db
     for name in ("last_seen_at", "independent_run_count", "affected_roles", "affected_projects", "merged_into_id"):
         await db.execute(text(f"ALTER TABLE feedback_items DROP COLUMN {name}"))
     await db.execute(text("ALTER TABLE feedback_votes ADD CONSTRAINT uq_feedback_votes_item_session UNIQUE (feedback_item_id, session_id)"))
+    await db.execute(text("ALTER TABLE feedback_votes ALTER COLUMN session_id SET NOT NULL"))
     item_id = str(uuid4())
+    session_id = str(uuid4())
+    await db.execute(text("INSERT INTO sessions (id) VALUES (:id)"), {"id": session_id})
     await db.execute(text("""INSERT INTO feedback_items (id, component_id, feedback_type, title, project_id, vote_count)
                             VALUES (:id, 'xc.product', 'friction', 'Legacy report', 'project-a', 99)"""), {"id": item_id})
-    await db.execute(text("INSERT INTO feedback_votes (feedback_item_id, comment) VALUES (:id, 'Retained vote')"), {"id": item_id})
+    await db.execute(text("INSERT INTO feedback_votes (feedback_item_id, session_id, comment) VALUES (:id, :session_id, 'Retained vote')"), {"id": item_id, "session_id": session_id})
     migration_path = Path(__file__).parents[2] / "alembic/versions/f1e2d3c4b5a6_feedback_occurrences.py"
     spec = spec_from_file_location("feedback_occurrences_migration", migration_path)
     assert spec is not None and spec.loader is not None
