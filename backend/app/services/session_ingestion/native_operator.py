@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     NativeCommandEntity,
+    NativeObservationIssue,
     NativeObservationReceipt,
     NativeObservationSource,
     NativeUserIdentity,
@@ -104,18 +105,35 @@ async def verify_acceptance(db: AsyncSession, session: Session, canary: dict[str
     if not managed or not rollout:
         raise ValueError("Acceptance must bind this session's qualified managed and verified rollout sources")
     entities = (await db.execute(select(NativeCommandEntity).where(NativeCommandEntity.session_id == session.id))).scalars().all()
-    terminal = [entity for entity in entities if entity.status in {"completed", "failed", "declined"}]
-    if not terminal:
-        raise ValueError("At least one terminal canonical command must be reconciled")
-    for entity in terminal:
-        receipts = (await db.execute(select(NativeObservationReceipt.source_id).where(NativeObservationReceipt.entity_id == entity.id, NativeObservationReceipt.disposition.in_(["accounted", "reconciled"])))).scalars().all()
+    executed = [entity for entity in entities if entity.status in {"completed", "failed"}]
+    if not executed:
+        raise ValueError("At least one completed or failed canonical command must be reconciled")
+    source_map = {source.id: source for source in sources}
+    declined_audit_only = []
+    for entity in entities:
+        observations = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.entity_id == entity.id))).scalars().all()
+        issue = (await db.execute(select(NativeObservationIssue.id).join(NativeObservationReceipt, (NativeObservationIssue.source_id == NativeObservationReceipt.source_id) & (NativeObservationIssue.position == NativeObservationReceipt.position)).where(NativeObservationReceipt.entity_id == entity.id).limit(1))).scalar_one_or_none()
+        if issue is not None or any(receipt.issue_code is not None or receipt.disposition not in {"accounted", "reconciled"} for receipt in observations):
+            raise ValueError("Canonical command identity has unresolved receipt issues")
+        if entity.status not in {"completed", "failed", "declined"}:
+            continue
+        receipts = {receipt.source_id for receipt in observations}
         rows = (await db.execute(select(SessionEvent).where(SessionEvent.session_id == session.id, SessionEvent.id.in_(entity.projection_event_ids)))).scalars().all()
+        if entity.status == "declined" and not entity.projection_event_ids and not rollout.intersection(receipts):
+            # Declined execution can be absent from stored history. Retain its
+            # validated native terminal/approval audit, without inventing a pair.
+            declined = [receipt for receipt in observations if receipt.source_id in managed and receipt.position <= source_map[receipt.source_id].committed_position and receipt.observation.get("kind") == "app_server_event" and receipt.observation.get("origin") == "live" and receipt.normalized is not None and all(receipt.normalized.get(key) == value for key, value in {"kind": "command_execution", "thread_id": entity.thread_id, "turn_id": entity.turn_id, "item_id": entity.item_id, "command_status": "declined"}.items())]
+            requests = (await db.execute(select(NativeObservationReceipt).where(NativeObservationReceipt.source_id.in_({receipt.source_id for receipt in declined}), NativeObservationReceipt.disposition == "retained", NativeObservationReceipt.issue_code.is_(None), NativeObservationReceipt.normalized["kind"].as_string() == "approval_request", NativeObservationReceipt.normalized["thread_id"].as_string() == entity.thread_id, NativeObservationReceipt.normalized["turn_id"].as_string() == entity.turn_id, NativeObservationReceipt.normalized["item_id"].as_string() == entity.item_id, ~select(NativeObservationIssue.id).where(NativeObservationIssue.source_id == NativeObservationReceipt.source_id, NativeObservationIssue.position == NativeObservationReceipt.position).exists()))).scalars().all() if declined else []
+            if not any(request.source_id == receipt.source_id and request.position < receipt.position for request in requests for receipt in declined):
+                raise ValueError("An audit-only declined command requires validated native terminal and approval evidence")
+            declined_audit_only.append(entity.id)
+            continue
         if not managed.intersection(receipts) or not rollout.intersection(receipts) or len(rows) != 2 or {row.event_type for row in rows} != {"tool_use", "tool_result"} or any(row.call_id != entity.item_id for row in rows):
             raise ValueError("Canonical command receipts and the single legacy projection pair must match")
     users = (await db.execute(select(NativeUserIdentity).where(NativeUserIdentity.session_id == session.id))).scalars().all()
     if not any(user.durable_item_id and len({alias["item_id"] for alias in user.aliases}) > 1 for user in users):
         raise ValueError("This session must retain attributable provisional user aliases")
-    evidence = {"checks": {key: True for key in ACCEPTANCE_CHECKS}, "source_ids": sorted(managed | rollout), "provider_version": canary["version"], "schema_fingerprint": canary["schema_fingerprint"], "canary_sha256": _digest(canary), "identity_sha256": _digest(identity), "acceptance_id": canonical_gate["acceptance_id"], "source": canonical_gate["source"]}
+    evidence = {"checks": {key: True for key in ACCEPTANCE_CHECKS}, "source_ids": sorted(managed | rollout), "declined_audit_only_entity_ids": sorted(declined_audit_only), "provider_version": canary["version"], "schema_fingerprint": canary["schema_fingerprint"], "canary_sha256": _digest(canary), "identity_sha256": _digest(identity), "acceptance_id": canonical_gate["acceptance_id"], "source": canonical_gate["source"]}
     evidence["evidence_sha256"] = _digest(evidence)
     await record_projection_acceptance(db, session, evidence)
     return {"session_id": session.id, "acceptance_recorded": True, "evidence_sha256": evidence["evidence_sha256"], "promotion_state": "shadow"}

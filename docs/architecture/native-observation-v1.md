@@ -258,6 +258,17 @@ Driver failures produce content-free errors. These commands use the owner's
 backend environment, without a collector secret or ad hoc SQL. Deployment promotion
 remains a separate operator action after the full gate.
 
+Acceptance requires at least one completed or failed command with exact receipts
+from both sources and one legacy use/result pair; every completed/failed command
+keeps that strict requirement. A declined command can legitimately be absent from
+stored rollout history. If it has no projection or rollout claim, acceptance retains
+it as audit-only evidence only with a clean, contiguous, validated live declined
+subject and earlier validated approval request for the same native thread/turn/item.
+It invents no pair and infers no approval decision. Linked receipt issues block
+acceptance, including changed-payload replay conflicts. The acceptance record names
+the audit-only entity IDs separately. An interrupted running command remains live
+evidence without being counted as completed execution.
+
 The accepted runtime backend remains the module authority for status, projection
 and retention. Git acceptance alone runs from the fixed registered host checkout,
 because the deployed archive has no Git metadata. Its bounded owner-owned managed

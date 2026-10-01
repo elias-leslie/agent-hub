@@ -799,6 +799,48 @@ async def test_owner_acceptance_requires_current_gate_and_matching_actual_ledger
         assert result["acceptance_recorded"] is True and len(result["evidence_sha256"]) == 64
 
 
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,approval,conflict", [("declined", True, False), ("completed", True, False), ("failed", True, False), ("declined", False, False), ("declined", True, True)])
+async def test_owner_acceptance_declined_audit_without_inventing_rollout_pair(isolated_native_db, tmp_path, status, approval, conflict):
+    from app.models import NativeProjectionState
+    from app.services.session_ingestion.canonical_projection import set_projection_mode
+    from app.services.session_ingestion.native_observations import REQUIRED_CANARY_CASES
+    from app.services.session_ingestion.native_operator import verify_acceptance
+
+    async with isolated_native_db() as db:
+        session, source, path = await _managed_fixture(db, tmp_path)
+        await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[_observation(session.id)]))
+        path.write_text(path.read_text() + _rollout_command(session.id))
+        await ingest_transcript_events(db, session.id, TranscriptIngestRequest(provider="codex", transcript_path=str(path)), session=session)
+        await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[_snapshot(session.id, 2, "thread/read", "durable-user", "explicit-client"), _snapshot(session.id, 3, "thread/resume", "item-1", "explicit-client")]))
+        await set_projection_mode(db, session, "shadow")
+        observations = [_observation(session.id, 4, status="running", item_id="declined-command")]
+        if approval:
+            observations.append(_wire(session.id, 5, "item/commandExecution/requestApproval", {"threadId": session.id, "turnId": "turn-proof", "itemId": "declined-command", "startedAtMs": 2, "command": "printf proof"}, 99))
+        terminal = _observation(session.id, len(observations) + 4, status=status, item_id="declined-command")
+        observations += [terminal, _observation(session.id, terminal.position + 1, status="running", item_id="interrupted-command")]
+        await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=observations))
+        if conflict:
+            alternate = terminal.model_copy(deep=True)
+            alternate.payload["params"]["item"]["command"] = "different command"
+            await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[alternate]))
+        declined = (await db.execute(sa.select(NativeCommandEntity).where(NativeCommandEntity.item_id == "declined-command"))).scalar_one()
+        assert declined.projection_event_ids == []
+        identity = json.loads((Path(__file__).parents[2] / "fixtures/native_identity_alias_01593.json").read_text())
+        canary = {"version": SUPPORTED_VERSION, "schema_fingerprint": protocol_contract()[0], "external_network": "absent", "provider": "scripted_loopback_fixture", "provider_requests": 1, "cases": {key: True for key in REQUIRED_CANARY_CASES}}
+        gate = {"schema_version": 1, "kind": "local_full_acceptance", "state": "success", "acceptance_id": "current", "source": {"commit": "current", "tree": "current-tree"}}
+        if status == "declined" and approval and not conflict:
+            assert (await verify_acceptance(db, session, canary, identity, gate, gate))["acceptance_recorded"] is True
+            state = await db.get(NativeProjectionState, session.id)
+            assert state.acceptance["declined_audit_only_entity_ids"] == [declined.id]
+            assert (await db.execute(sa.select(sa.func.count()).select_from(SessionEvent).where(SessionEvent.event_type.in_(["tool_use", "tool_result"])))).scalar_one() == 2
+        else:
+            message = "receipt issues" if conflict else "validated native terminal and approval" if not approval else "single legacy projection pair"
+            with pytest.raises(ValueError, match=message):
+                await verify_acceptance(db, session, canary, identity, gate, gate)
+
+
 def test_owner_gate_uses_public_st_and_removes_extension_context(monkeypatch, tmp_path):
     import subprocess
 
