@@ -210,7 +210,7 @@ export function EventItem({
             </div>
           )}
           {!!nativeCommands?.length && (
-            <details className="mt-3 border-t border-slate-800/60 pt-2 text-xs text-slate-400">
+            <details className="mt-3 border-t border-slate-800/60 pt-2 text-xs text-card-foreground">
               <summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">
                 Canonical command provenance
               </summary>
