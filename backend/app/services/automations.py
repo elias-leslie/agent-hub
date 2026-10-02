@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 EXTERNAL_WORKFLOWS: tuple[tuple[str, str, str, str, dict], ...] = (
     ("summitflow/work_pickup", "summitflow", "Work pickup", "cancel_in_progress", {"type": "every", "value": "900000", "timezone": "UTC"}),
     ("summitflow/task_generation", "summitflow", "Task generation", "cancel_in_progress", {"type": "every", "value": "3600000", "timezone": "UTC"}),
+    ("summitflow/browser_workflow", "summitflow", "Browser workflow", "cancel_newest", {}),
     ("portfolio-ai/jenny_daily_household_maintenance", "portfolio-ai", "Daily household maintenance", "cancel_in_progress", {"type": "cron", "value": "15 13 * * *", "timezone": "UTC"}),
     ("portfolio-ai/jenny_daily_operator", "portfolio-ai", "Daily operator", "cancel_in_progress", {"type": "cron", "value": "15 22 * * 1-5", "timezone": "UTC"}),
     ("portfolio-ai/jenny_weekly_learning", "portfolio-ai", "Weekly learning", "cancel_in_progress", {"type": "cron", "value": "0 14 * * 6", "timezone": "UTC"}),
@@ -103,6 +104,21 @@ def policy_schema_for(project_id: str) -> dict:
 
 
 def external_config_schema(workflow_key: str) -> dict:
+    if workflow_key == "summitflow/browser_workflow":
+        return {
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "object",
+                    "properties": {"schema_version": {"const": 1}, "steps": {"type": "array", "minItems": 1}},
+                    "required": ["schema_version", "steps"],
+                },
+                "parameters": {"type": "object"},
+                "target": {"enum": ["local-ai"]},
+            },
+            "required": ["workflow"],
+            "additionalProperties": False,
+        }
     if workflow_key == "summitflow/task_generation":
         return {"type": "object", "properties": {"upkeep_batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
     if workflow_key == "summitflow/work_pickup":
@@ -543,6 +559,15 @@ async def admit_run(
     )
     reasons.extend(await _policy_gate_reasons(db, policy, now))
     reasons.extend(policy_profile_gate_reasons(profile.workflow_key, policy))
+    if profile.workflow_key == "summitflow/browser_workflow":
+        # A human handoff is still active. Serialize against the profile lock
+        # held above so a new occurrence never supersedes its owned session.
+        active = await db.scalar(select(func.count()).select_from(AutomationRun).where(
+            AutomationRun.profile_id == profile.id,
+            AutomationRun.status.in_(["admitted", "dispatching", "dispatched", "accepted", "running"]),
+        ))
+        if active:
+            reasons.append("profile_overlap_cancel_newest")
     if policy_sync_pending(policy):
         reasons.append("owner_policy_sync_pending")
     if trigger == "scheduled" and profile.clock_owner != "central":
@@ -601,9 +626,9 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 dispatch_kind="callback", dispatch_target=f"/automations/dispatch/{key.split('/', 1)[1]}",
                 config_schema=external_config_schema(key),
                 policy_schema=policy_schema_for(project_id),
-                default_schedule=default_schedule, default_enabled=True,
+                default_schedule=default_schedule, default_enabled=key != "summitflow/browser_workflow",
                 manual_when_disabled=key in {
-                    "summitflow/task_generation", "portfolio-ai/jenny_weekly_price_check"
+                    "summitflow/task_generation", "summitflow/browser_workflow", "portfolio-ai/jenny_weekly_price_check"
                 },
                 manual_advances_cursor=key == "summitflow/task_generation",
                 overlap_strategy=overlap,
