@@ -5,8 +5,10 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy.exc import NoResultFound
 
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers.openai_codex_responses import _body
@@ -63,6 +65,22 @@ def test_prompt_change_is_exact_reversible_and_rejects_unrecognized_revisions():
     assert migration._reviewer_prompt(desired) == desired
     with pytest.raises(RuntimeError, match="unknown Daybreak-route revision"):
         migration._reviewer_prompt(previous + " altered review requirement")
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_route_preserves_absent_reviewer_without_creating_an_identity(reverse):
+    migration = _migration()
+    connection = MagicMock()
+    rows = connection.execute.return_value.mappings.return_value
+    rows.one.side_effect = NoResultFound
+    rows.one_or_none.return_value = None
+
+    migration._set_route(connection, reverse=reverse)
+
+    connection.execute.assert_called_once()
+    statement, parameters = connection.execute.call_args.args
+    assert 'FROM agents WHERE slug' in str(statement)
+    assert parameters == {'slug': migration._SLUG}
 
 
 def test_codex_daybreak_resolution_preserves_exact_model_and_high_effort():

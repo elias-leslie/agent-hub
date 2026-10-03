@@ -96,7 +96,12 @@ def _align_agent(
     current = conn.execute(
         text("SELECT system_prompt FROM agents WHERE slug = :slug FOR UPDATE"),
         {"slug": slug},
-    ).scalar_one()
+    ).scalar_one_or_none()
+    # Reviewers are supplied by the explicit agent seed, not by the schema
+    # chain. Preserve absent identities on a fresh database; present identities
+    # still require the exact known prompt revision below.
+    if current is None:
+        return
     prompt = _aligned_prompt(current, desired, expected)
     conn.execute(
         text(

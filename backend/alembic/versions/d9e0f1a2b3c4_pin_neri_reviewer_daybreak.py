@@ -65,7 +65,12 @@ def _set_route(conn, *, reverse: bool = False) -> None:
             "FROM agents WHERE slug = :slug FOR UPDATE"
         ),
         {"slug": _SLUG},
-    ).mappings().one()
+    ).mappings().one_or_none()
+    # The explicit agent seed owns reviewer creation. A schema-only install has
+    # no reviewer to repin; an existing reviewer still requires every route and
+    # canonical-prompt guard below.
+    if current is None:
+        return
     _check_route(current)
     prompt = _reviewer_prompt(current["system_prompt"], reverse=reverse)
     canonical = conn.execute(

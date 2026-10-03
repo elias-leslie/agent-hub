@@ -6,8 +6,10 @@ import importlib.util
 import json
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy.exc import NoResultFound
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _MIGRATION_PATH = (
@@ -75,6 +77,30 @@ def test_alignment_rejects_an_unknown_prompt_revision() -> None:
             migration._REVIEWER_PROMPT,
             (migration._EXPECTED_LIVE_REVIEWER_PROMPT,),
         )
+
+
+def test_alignment_preserves_an_unseeded_agent_on_a_fresh_database() -> None:
+    migration = _load_migration_module()
+    connection = MagicMock()
+    result = connection.execute.return_value
+    result.scalar_one.side_effect = NoResultFound
+    result.scalar_one_or_none.return_value = None
+
+    migration._align_agent(
+        connection,
+        slug='neri-reviewer',
+        name='Neri Reviewer System Prompt',
+        description='Existing reviewer alignment only.',
+        desired=migration._REVIEWER_PROMPT,
+        expected=(migration._SEEDED_REVIEWER_PROMPT,),
+    )
+
+    # This migration aligns existing identities; it must neither fail a fresh
+    # schema nor create a new reviewer, prompt, or binding implicitly.
+    connection.execute.assert_called_once()
+    statement, parameters = connection.execute.call_args.args
+    assert str(statement).startswith('SELECT system_prompt FROM agents')
+    assert parameters == {'slug': 'neri-reviewer'}
 
 
 def test_aligned_prompts_use_compact_ownership_and_inconclusive_semantics() -> None:
