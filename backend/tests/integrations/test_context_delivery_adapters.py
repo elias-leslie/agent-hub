@@ -4,11 +4,14 @@ import asyncio
 import hashlib
 import json
 import os
+import runpy
 import shutil
 import stat
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -820,7 +823,44 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     assert json.loads(drift_stdout)["passed"] is False
 
 
-def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks() -> None:
+@pytest.fixture
+def canonical_hook_is_exact() -> Callable[[dict[str, Any], dict[str, Any], Path], bool]:
+    installer = runpy.run_path(str(REPO_ROOT / "integrations/context-delivery/install.py"))
+    return cast(Callable[[dict[str, Any], dict[str, Any], Path], bool], installer["_canonical_hook_is_exact"])
+
+
+@pytest.mark.parametrize("event", ["SessionStart", "SubagentStart"])
+@pytest.mark.parametrize("variant,expected", [
+    ("unrelated", True), ("duplicate", False), ("missing", False),
+    ("timeout", False), ("type", False), ("matcher", False),
+])
+def test_codex_canonical_bind_coexists_without_duplicate_or_drift(
+    tmp_path: Path,
+    canonical_hook_is_exact: Callable[[dict[str, Any], dict[str, Any], Path], bool],
+    event: str,
+    variant: str,
+    expected: bool,
+) -> None:
+    command = f"{tmp_path}/.local/bin/agent-hub-context-client bind --surface codex"
+    entry = {"event": event, "command": command, "timeout": 10}
+    bind = {"hooks": [{"type": "command", "command": command, "timeout": 10}]}
+    # Unrelated native context/status and ownership hooks may share an event.
+    unrelated = {"hooks": [{"type": "command", "command": "operator-status-hook", "timeout": 30}]}
+    groups: list[dict[str, Any]] = [unrelated, bind]
+    if variant == "duplicate":
+        groups.append(bind)
+    elif variant == "missing":
+        groups = [unrelated]
+    elif variant in {"timeout", "type"}:
+        bind["hooks"][0][variant] = 11 if variant == "timeout" else "prompt"
+    elif variant == "matcher":
+        bind["matcher"] = "startup"
+    assert canonical_hook_is_exact({event: groups}, entry, tmp_path) is expected
+
+
+def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks(
+    canonical_hook_is_exact: Callable[[dict[str, Any], dict[str, Any], Path], bool],
+) -> None:
     codex_root = CONFIG_ROOT / "codex-config"
     wrapper = (codex_root / "bin/codex").read_text()
     wrapper_commands = "\n".join(
@@ -840,10 +880,11 @@ def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks() -> None:
     assert set(tomllib.loads(config)["hooks"]) == {"state"}
     hooks = json.loads((codex_root / "hooks.json").read_text())["hooks"]
     for event in ("SessionStart", "SubagentStart"):
-        assert len(hooks[event]) == 1
-        assert hooks[event][0]["hooks"][0]["command"] == (
-            "/home/kasadis/.local/bin/agent-hub-context-client bind --surface codex"
-        )
+        assert canonical_hook_is_exact(hooks, {
+            "event": event,
+            "command": "{home}/.local/bin/agent-hub-context-client bind --surface codex",
+            "timeout": 10,
+        }, Path("/home/kasadis"))
 
 
 def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
