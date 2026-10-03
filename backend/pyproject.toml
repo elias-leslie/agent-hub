@@ -65,7 +65,7 @@ web-research = "app.cli.web_research:main"
 # [tool.uv] exclude-dependencies. Base install omits this group, so the import in
 # app/llm/headroom_compress.py fails safe and compression no-ops.
 compression = [
-    "headroom-ai==0.23.0",
+    "headroom-ai==0.35.0",
 ]
 dev = [
     # Testing - Core

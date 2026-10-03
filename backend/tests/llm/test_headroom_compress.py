@@ -71,8 +71,10 @@ def test_json_array_compresses_and_preserves_every_row():
     assert len(compressed) < len(payload)
     assert stats["blocks_compressed"] == 1
     assert stats["tokens_after"] < stats["tokens_before"]
-    # Data-lossless: first, last, and a middle row's values all survive.
-    for i in (0, 50, 99):
+    # Data-lossless: every row survives, not just sampled boundary rows.
+    # The agent has no retrieval tool, so all data must remain inline.
+    assert "<<ccr:" not in compressed
+    for i in range(100):
         assert f"user_{i}@example.com" in compressed
         assert f"user_{i}" in compressed
 
