@@ -15,6 +15,7 @@ from .feedback_formatters import (
     output_feedback_detail,
     output_feedback_existing,
     output_feedback_list,
+    output_feedback_references,
     output_feedback_voted,
     output_summary,
 )
@@ -126,6 +127,22 @@ def get_impl(item_id: str, *, json_output: bool = False) -> None:
         output_json(result)
         return
     output_feedback_detail(result)
+
+
+def references_impl(run_refs: list[str], *, json_output: bool = False) -> None:
+    """Read references once for deduplicated exact run identities."""
+    normalized = list(dict.fromkeys(value.strip() for value in run_refs if value.strip()))
+    if not normalized:
+        raise typer.BadParameter("At least one nonblank --run-ref is required")
+    if len(normalized) > 20:
+        raise typer.BadParameter("At most 20 distinct --run-ref values are allowed")
+    result = feedback_request(
+        "GET", f"{FEEDBACK_API_PATH}/references", params={"run_ref": normalized}
+    )
+    if json_output:
+        output_json(result)
+        return
+    output_feedback_references(result.get("references", []), result.get("count", 0))
 
 
 def vote_impl(

@@ -34,6 +34,20 @@ def output_feedback_list(items: list[dict[str, Any]], total: int) -> None:
         print(format_item_line(item))
 
 
+def output_feedback_references(references: list[dict[str, Any]], count: int) -> None:
+    """Keep canonical identities intact without expanding feedback bodies."""
+    print(f"FEEDBACK_REFERENCES[{count}]")
+    for reference in references:
+        print(
+            f"{reference['feedback_item_id']}|occurrence={reference['occurrence_id']}|"
+            f"run={reference['run_ref']}|role={reference.get('role') or '-'}|"
+            f"project={reference.get('source_project_id') or '-'}|"
+            f"{reference['component_id']}|{reference['feedback_type']}|{reference['status']}|"
+            f"occurred_at={reference['occurred_at']}|updated_at={reference['item_updated_at']}|"
+            f"{reference['title']}"
+        )
+
+
 def output_feedback_created(item: dict[str, Any]) -> None:
     """Output for newly created feedback item."""
     id_short = item.get("id", "")[:8]

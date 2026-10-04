@@ -14,6 +14,7 @@ from .feedback_commands import (
     link_impl,
     list_impl,
     merge_impl,
+    references_impl,
     report_impl,
     resolve_impl,
     search_impl,
@@ -207,6 +208,24 @@ def get(
       st feedback get a1b2c3d4-...
     """
     get_impl(item_id, json_output=json_output)
+
+
+@app.command("references")
+@usage(
+    surface="st.feedback.references",
+    cmd="st feedback references --run-ref RUN [--run-ref RUN...] [--json]",
+    when="reconciling retained feedback for exact known run identities",
+    precautions=("read-only; returns at most 200 compact canonical occurrence references",),
+    tier="reference",
+)
+def references(
+    run_refs: Annotated[
+        list[str], typer.Option("--run-ref", help="Exact retained run identity; repeat for multiple runs")
+    ],
+    json_output: Annotated[bool, typer.Option("--json", help="Output compact reference JSON")] = False,
+) -> None:
+    """Read compact canonical feedback references for up to 20 exact runs."""
+    references_impl(run_refs, json_output=json_output)
 
 
 @app.command("vote")
