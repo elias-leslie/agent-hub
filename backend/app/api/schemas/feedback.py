@@ -178,6 +178,29 @@ class FeedbackCreateResponse(BaseModel):
     )
 
 
+class FeedbackOccurrenceReference(BaseModel):
+    """Compact canonical reference used to reconcile one retained occurrence."""
+
+    feedback_item_id: str
+    occurrence_id: str
+    run_ref: str
+    role: str | None
+    source_project_id: str | None
+    component_id: str
+    feedback_type: str
+    status: str
+    title: str
+    occurred_at: datetime
+    item_updated_at: datetime
+
+
+class FeedbackOccurrenceReferenceList(BaseModel):
+    """Bounded references for exact run identities; never a feedback event feed."""
+
+    references: list[FeedbackOccurrenceReference]
+    count: int
+
+
 class FeedbackMergeRequest(BaseModel):
     """Request body for merging a duplicate feedback item into a canonical item."""
 

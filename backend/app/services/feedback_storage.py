@@ -323,6 +323,45 @@ async def get_feedback_occurrence(db: AsyncSession, occurrence_id: str) -> Feedb
     return result.scalar_one_or_none()
 
 
+async def get_feedback_occurrence_references(
+    db: AsyncSession,
+    *,
+    run_refs: list[str],
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Return compact canonical references for exact known run identities.
+
+    This is a reconciliation read, not a subscription or an authority signal.  A
+    merge moves occurrence rows to the canonical item, so the join always returns
+    the current owner without copying occurrence bodies or evidence references.
+    """
+    if not run_refs:
+        return []
+    result = await db.execute(
+        select(FeedbackVote, FeedbackItem)
+        .join(FeedbackItem, FeedbackItem.id == FeedbackVote.feedback_item_id)
+        .where(FeedbackVote.run_ref.in_(run_refs))
+        .order_by(FeedbackVote.occurred_at.asc(), FeedbackVote.occurrence_id.asc())
+        .limit(limit)
+    )
+    return [
+        {
+            "feedback_item_id": str(item.id),
+            "occurrence_id": occurrence.occurrence_id,
+            "run_ref": occurrence.run_ref,
+            "role": occurrence.role,
+            "source_project_id": occurrence.source_project_id,
+            "component_id": item.component_id,
+            "feedback_type": item.feedback_type,
+            "status": item.status,
+            "title": item.title,
+            "occurred_at": occurrence.occurred_at,
+            "item_updated_at": item.updated_at,
+        }
+        for occurrence, item in result.all()
+    ]
+
+
 async def refresh_occurrence_rollup(db: AsyncSession, item_id: str) -> None:
     """Rebuild explainable aggregates from retained occurrence rows."""
     result = await db.execute(text("""

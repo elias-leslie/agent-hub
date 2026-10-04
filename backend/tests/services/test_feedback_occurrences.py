@@ -12,7 +12,12 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
-from app.api.feedback import create_feedback, get_feedback_item, vote_on_feedback
+from app.api.feedback import (
+    create_feedback,
+    get_feedback_item,
+    get_feedback_references,
+    vote_on_feedback,
+)
 from app.api.schemas.feedback import FeedbackItemCreate, FeedbackVoteCreate
 from app.models.feedback import FeedbackItem, FeedbackVote
 from app.services import feedback_storage
@@ -75,6 +80,22 @@ async def test_two_sessionless_reports_and_relay(occurrence_db):
     assert await feedback_storage.count_feedback_items(db, project_id="project-b") == 1
     assert (await feedback_storage.search_feedback_items(db, project_id="project-b"))[0].id == first.item.id
 
+    references = await get_feedback_references(
+        db,
+        run_ref=["run-b", "run-b"],
+        limit=200,
+    )
+    assert references.count == 1
+    reference = references.references[0]
+    assert reference.feedback_item_id == first.item.id
+    assert reference.occurrence_id == "origin-b"
+    assert reference.run_ref == "run-b"
+    assert reference.role == "reporter"
+    assert reference.source_project_id == "project-b"
+    assert reference.title == "Native feedback recurrence"
+    assert not hasattr(reference, "consequence")
+    assert not hasattr(reference, "evidence_refs")
+
 
 async def test_initial_report_and_legacy_session_vote_count_once(occurrence_db):
     db = occurrence_db
@@ -98,7 +119,16 @@ async def test_initial_report_and_legacy_session_vote_count_once(occurrence_db):
 async def test_merge_preserves_every_occurrence_and_old_references(occurrence_db):
     db = occurrence_db
     first = await create_feedback(report("canonical", title="Canonical feedback"), db)
-    second = await create_feedback(report("duplicate", title="Duplicate feedback", project="project-b"), db)
+    second = await create_feedback(
+        report(
+            "duplicate",
+            title="Duplicate feedback",
+            project="project-b",
+            run_ref="project-b-run",
+            role="support-root",
+        ),
+        db,
+    )
     await feedback_storage.merge_feedback_items(db, source_item_id=second.item.id, target_item_id=first.item.id)
     await db.commit()
     db.expire_all()
@@ -113,6 +143,15 @@ async def test_merge_preserves_every_occurrence_and_old_references(occurrence_db
     late = await feedback_storage.vote_on_item(db, item_id=second.item.id, occurrence_id="late-writer")
     assert late is not None and late.feedback_item_id == first.item.id
     assert (await get_feedback_item(first.item.id, db)).occurrence_count == 3
+
+    references = await get_feedback_references(
+        db,
+        run_ref=["project-b-run"],
+        limit=200,
+    )
+    assert references.count == 1
+    assert references.references[0].feedback_item_id == first.item.id
+    assert references.references[0].occurrence_id == "duplicate"
 
 
 async def test_concurrent_opposite_merges_preserve_one_canonical_item():

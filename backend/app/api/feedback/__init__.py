@@ -23,6 +23,8 @@ from app.api.schemas.feedback import (
     FeedbackListResponse,
     FeedbackMergeRequest,
     FeedbackOccurrenceFields,
+    FeedbackOccurrenceReference,
+    FeedbackOccurrenceReferenceList,
     FeedbackStatusUpdate,
     FeedbackSummaryResponse,
     FeedbackVoteCreate,
@@ -145,6 +147,36 @@ async def get_summary(
     """Get aggregated feedback summary."""
     summary = await feedback_storage.get_feedback_summary(db, project_id=project_id, days=days)
     return FeedbackSummaryResponse(**summary)
+
+
+@router.get("/references", response_model=FeedbackOccurrenceReferenceList)
+async def get_feedback_references(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    run_ref: Annotated[
+        list[str],
+        Query(
+            min_length=1,
+            max_length=20,
+            description="Exact retained run identity; repeat for multiple known roots",
+        ),
+    ],
+    limit: int = Query(default=200, ge=1, le=200),
+) -> FeedbackOccurrenceReferenceList:
+    """Reconcile compact feedback references for exact known run identities.
+
+    This endpoint is intentionally pull-only.  It does not acknowledge feedback,
+    create work, or act as a general event stream.
+    """
+    normalized = list(dict.fromkeys(value.strip() for value in run_ref if value.strip()))
+    if not normalized:
+        raise HTTPException(status_code=422, detail="At least one nonblank run_ref is required")
+    references = await feedback_storage.get_feedback_occurrence_references(
+        db,
+        run_refs=normalized,
+        limit=limit,
+    )
+    typed = [FeedbackOccurrenceReference(**reference) for reference in references]
+    return FeedbackOccurrenceReferenceList(references=typed, count=len(typed))
 
 
 @router.get("/components/{component_id}", response_model=ComponentFeedbackResponse)
