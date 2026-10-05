@@ -6,12 +6,12 @@ consumes them through per-item symlinks rather than copies, so a single edit pro
 everywhere and drift is structurally impossible.
 
 Commands:
-  install        create/repoint symlinks per manifest and profile (--adopt to replace real dirs)
+  install        reconcile canonical links per manifest and profile (--adopt to replace local entries)
   doctor         full drift report; nonzero exit on divergence
   status         compact health line for hooks (--json / --quiet)
   sync           pull canonical, install, reseed memory
   audit          intelligent structural, link, scope, token bloat, and overlap audit
-  create         scaffold a new canonical skill and link to all harnesses
+  create         scaffold a canonical skill and reconcile configured destinations
   import-github  download/import a skill from GitHub, validate, link, and audit
 """
 
@@ -29,9 +29,9 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from st_sdk.usage import usage
 import yaml
 from st_sdk.output import output_error, output_json, output_success
+from st_sdk.usage import usage
 
 app = typer.Typer(help="Manage harness-neutral agent skills (symlink distribution, audit, and import)")
 
@@ -56,24 +56,40 @@ class Harness:
 def _load_harnesses(canon: Path, profile_name: str | None = None) -> list[Harness]:
     """Read manifest.toml; apply profile-level exclusions."""
     manifest = canon / "manifest.toml"
-    effective_profile = profile_name or _active_profile()
-    profile_excludes: list[str] = []
+    effective_profile = (profile_name if profile_name is not None else _active_profile()).strip()
 
     if manifest.exists():
         data = tomllib.loads(manifest.read_text())
-        profiles = data.get("profile") or {}
-        if effective_profile in profiles:
-            profile_excludes = list(profiles[effective_profile].get("exclude") or [])
+        profiles = data.get("profile", {})
+        if not isinstance(profiles, dict):
+            raise ValueError("Invalid skills profiles")
+        if effective_profile not in profiles:
+            raise ValueError(f"Unknown skills profile: {effective_profile}")
+        profile = profiles[effective_profile]
+        if not isinstance(profile, dict):
+            raise ValueError(f"Invalid skills profile: {effective_profile}")
+        profile_excludes = profile.get("exclude", [])
+        if not isinstance(profile_excludes, list) or not all(isinstance(item, str) for item in profile_excludes):
+            raise ValueError(f"Invalid excludes for profile {effective_profile}")
 
         out: list[Harness] = []
         available_skills = set(_canonical_items(canon)[0])
-        for name, cfg in (data.get("harness") or {}).items():
-            sd = cfg.get("skills_dir", "").strip()
-            cd = cfg.get("commands_dir", "").strip()
-            if not sd:
-                continue
-            h_excludes = list(cfg.get("exclude") or [])
-            combined_excludes = list(set(h_excludes + profile_excludes))
+        harness_config = data.get("harness", {})
+        if not isinstance(harness_config, dict):
+            raise ValueError("Invalid skills harnesses")
+        for name, cfg in harness_config.items():
+            if not isinstance(cfg, dict):
+                raise ValueError(f"Invalid harness {name}")
+            sd = cfg.get("skills_dir", "")
+            cd = cfg.get("commands_dir", "")
+            if not isinstance(sd, str) or not sd.strip():
+                raise ValueError(f"Missing skills_dir for harness {name}")
+            if not isinstance(cd, str):
+                raise ValueError(f"Invalid commands_dir for harness {name}")
+            h_excludes = cfg.get("exclude", [])
+            if not isinstance(h_excludes, list) or not all(isinstance(item, str) for item in h_excludes):
+                raise ValueError(f"Invalid excludes for harness {name}")
+            combined_excludes = sorted(set(h_excludes + profile_excludes))
             include = cfg.get("include")
             if include is not None:
                 if not isinstance(include, list) or not all(isinstance(item, str) for item in include):
@@ -84,23 +100,21 @@ def _load_harnesses(canon: Path, profile_name: str | None = None) -> list[Harnes
             out.append(
                 Harness(
                     name=name,
-                    skills_dir=Path(sd).expanduser(),
-                    commands_dir=Path(cd).expanduser() if cd else None,
+                    skills_dir=Path(sd.strip()).expanduser(),
+                    commands_dir=Path(cd.strip()).expanduser() if cd.strip() else None,
                     exclude=combined_excludes,
                     include=include,
                 )
             )
         if out:
             return out
+        raise ValueError("Skills manifest has no harnesses")
 
-    default_excludes = []
-    if profile_excludes:
-        default_excludes = list(set(default_excludes + profile_excludes))
-
+    # Keep the legacy manifestless inspection fallback; installation needs a manifest.
     return [
-        Harness("claude", Path("~/.claude/skills").expanduser(), Path("~/.claude/commands").expanduser(), profile_excludes),
-        Harness("codex", Path("~/.codex/skills").expanduser(), None, default_excludes),
-        Harness("gemini", Path("~/.gemini/config/skills").expanduser(), None, default_excludes),
+        Harness("claude", Path("~/.claude/skills").expanduser(), Path("~/.claude/commands").expanduser()),
+        Harness("codex", Path("~/.codex/skills").expanduser(), None),
+        Harness("gemini", Path("~/.gemini/config/skills").expanduser(), None),
     ]
 
 
@@ -154,12 +168,13 @@ def _expected(canon: Path, profile_name: str | None = None) -> list[tuple[str, P
 
 
 def _unmanaged(canon: Path, profile_name: str | None = None) -> list[tuple[str, Path, str]]:
-    """Find any item in a harness dir that is not declared in canonical expectations."""
+    """Report unexpected owned items; explicit scopes coexist with native skills."""
     expected_by_harness: dict[str, set[Path]] = {}
     for h, dest, _target in _expected(canon, profile_name=profile_name):
         expected_by_harness.setdefault(h, set()).add(dest)
 
     unmanaged: list[tuple[str, Path, str]] = []
+    canonical_skills = set(_canonical_items(canon)[0])
     for h in _load_harnesses(canon, profile_name=profile_name):
         expected_dests = expected_by_harness.get(h.name, set())
         if h.skills_dir.is_dir():
@@ -167,6 +182,12 @@ def _unmanaged(canon: Path, profile_name: str | None = None) -> list[tuple[str, 
                 if item.name in _IGNORE_NAMES:
                     continue
                 if item not in expected_dests:
+                    if (
+                        h.include is not None
+                        and item.name not in canonical_skills
+                        and not _direct_canonical_skill_link(item, canon)
+                    ):
+                        continue
                     kind = "unmanaged-link" if item.is_symlink() else "unmanaged-copy"
                     unmanaged.append((h.name, item, kind))
         if h.commands_dir and h.commands_dir.is_dir():
@@ -177,6 +198,22 @@ def _unmanaged(canon: Path, profile_name: str | None = None) -> list[tuple[str, 
                     kind = "unmanaged-link" if item.is_symlink() else "unmanaged-copy"
                     unmanaged.append((h.name, item, kind))
     return unmanaged
+
+
+def _direct_canonical_skill_link(item: Path, canon: Path) -> bool:
+    """Recognize direct links into canonical skills without adopting alias links."""
+    if not item.is_symlink():
+        return False
+    try:
+        target = item.readlink()
+    except OSError:
+        return False
+    absolute = Path(os.path.abspath(item.parent / target))
+    if not absolute.is_relative_to(Path(os.path.abspath(canon / "skills"))):
+        return False
+    if target.is_absolute():
+        return target == absolute
+    return target == Path(os.path.relpath(absolute, item.parent))
 
 
 def _canon_dirty(canon: Path) -> bool:
@@ -610,6 +647,44 @@ def audit(
         raise typer.Exit(1)
 
 
+def _reconcile_created_skill(canon: Path, name: str, adopt: bool) -> None:
+    """Reconcile declared destinations and report observed skill discovery links."""
+    try:
+        selected = [
+            (dest, target) for _h, dest, target in _expected(canon)
+            if target == canon / "skills" / name
+        ]
+    except (OSError, ValueError) as exc:
+        output_error(str(exc))
+        raise typer.Exit(2) from exc
+    script = canon / "install.sh"
+    if not selected:
+        typer.echo(
+            f"No eligible skill destinations for '{name}' in profile '{_active_profile()}'. "
+            "Choose its project scope in manifest.toml before enabling discovery."
+        )
+        if not script.is_file():
+            return
+    if not script.is_file():
+        output_error(f"{script} not found; canonical skill retained, destinations were not reconciled.")
+        raise typer.Exit(2)
+    typer.echo(f"Reconciling configured destinations for '{name}'...")
+    args = ["bash", str(script)]
+    if adopt:
+        args.append("--adopt")
+    try:
+        result = subprocess.run(args, check=False)
+    except OSError as exc:
+        output_error(f"Skill installation failed: {exc}; canonical skill retained.")
+        raise typer.Exit(1) from exc
+    if result.returncode:
+        output_error(f"Skill installation failed (exit {result.returncode}); canonical skill retained.")
+        raise typer.Exit(result.returncode)
+    if selected:
+        linked = sum(_classify(dest, target) == "ok" for dest, target in selected)
+        typer.echo(f"Canonical links present for '{name}': {linked}/{len(selected)} configured destinations.")
+
+
 @app.command(name="import-github")
 def import_github(
     ctx: typer.Context,
@@ -617,9 +692,9 @@ def import_github(
     name: Annotated[str | None, typer.Option("--name", "-n", help="Destination skill name")] = None,
     ref: Annotated[str, typer.Option("--ref", "-r", help="Git branch/tag")] = "main",
     subpath: Annotated[str | None, typer.Option("--subpath", "-s", help="Subpath within repository")] = None,
-    adopt: Annotated[bool, typer.Option("--adopt", help="Adopt and materialize into all harnesses")] = True,
+    adopt: Annotated[bool, typer.Option("--adopt", help="Replace existing local entries in configured destinations")] = False,
 ) -> None:
-    """Import a skill from GitHub, normalize frontmatter, link, and audit."""
+    """Import a canonical skill, reconcile configured destinations, and audit."""
     canon = _canon()
     try:
         owner, repo, resolved_ref, resolved_subpath = _parse_github_source(source, default_ref=ref)
@@ -672,13 +747,7 @@ def import_github(
 
         shutil.copytree(skill_source_dir, dest_dir, ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__"))
 
-    typer.echo(f"Linking {dest_name} into all harnesses...")
-    script = canon / "install.sh"
-    if script.exists():
-        args = ["bash", str(script)]
-        if adopt:
-            args.append("--adopt")
-        subprocess.run(args, check=False)
+    _reconcile_created_skill(canon, dest_name, adopt)
 
     typer.echo(f"\nRunning audit on {dest_name}...")
     single_audit = _audit_single_skill(dest_dir, auto_fix=True)
@@ -687,7 +756,7 @@ def import_github(
         for err in single_audit["errors"]:
             typer.echo(f"    {err}")
     else:
-        output_success(f"Skill '{dest_name}' successfully imported and linked!")
+        output_success(f"Canonical skill '{dest_name}' imported at {dest_dir}.")
 
 
 @app.command()
@@ -695,9 +764,9 @@ def create(
     ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Name of the skill (lowercase slug, e.g. docker-helper)")],
     description: Annotated[str | None, typer.Option("--description", "-d", help="Trigger description")] = None,
-    adopt: Annotated[bool, typer.Option("--adopt", help="Adopt and materialize symlinks immediately")] = True,
+    adopt: Annotated[bool, typer.Option("--adopt", help="Replace existing local entries in configured destinations")] = False,
 ) -> None:
-    """Scaffold a new canonical skill, link to all harnesses, and audit."""
+    """Scaffold a canonical skill, reconcile configured destinations, and audit."""
     canon = _canon()
     slug = re.sub(r"[^a-z0-9_-]+", "-", name.strip().lower())
     skill_dir = canon / "skills" / slug
@@ -724,16 +793,11 @@ Provide clear, step-by-step procedures and runbooks for the agent.
     (skill_dir / "SKILL.md").write_text(skill_content)
     typer.echo(f"Created canonical skill template at {skill_dir}/SKILL.md")
 
-    script = canon / "install.sh"
-    if script.exists():
-        args = ["bash", str(script)]
-        if adopt:
-            args.append("--adopt")
-        subprocess.run(args, check=False)
+    _reconcile_created_skill(canon, slug, adopt)
 
     typer.echo("\nRunning audit...")
     _audit_single_skill(skill_dir)
-    output_success(f"Skill '{slug}' created and materialized across all harnesses.")
+    output_success(f"Canonical skill '{slug}' created at {skill_dir}.")
 
 
 @app.command()
@@ -750,7 +814,7 @@ def install(
         typer.echo(f"error: {script} not found (is {canon} cloned?)", err=True)
         raise typer.Exit(2)
     args = ["bash", str(script)]
-    if profile:
+    if profile is not None:
         args.extend(["--profile", profile])
     if adopt:
         args.append("--adopt")
@@ -771,14 +835,20 @@ def doctor(
         raise typer.Exit(2)
     problems = 0
     states: set[str] = set()
-    for h, dest, target in _expected(canon, profile_name=profile):
+    try:
+        expected = _expected(canon, profile_name=profile)
+        unmanaged = _unmanaged(canon, profile_name=profile)
+    except (OSError, ValueError) as exc:
+        output_error(str(exc))
+        raise typer.Exit(2) from exc
+    for h, dest, target in expected:
         state = _classify(dest, target)
         if state == "ok":
             continue
         problems += 1
         states.add(state)
         typer.echo(f"{state:14} [{h}] {dest}")
-    for h, dest, kind in _unmanaged(canon, profile_name=profile):
+    for h, dest, kind in unmanaged:
         problems += 1
         states.add("unmanaged")
         typer.echo(f"{kind:14} [{h}] {dest}")
@@ -811,7 +881,11 @@ def status(
 ) -> None:
     """Compact health, cheap enough for SessionStart hooks."""
     canon = _canon()
-    counts = _scan(canon, profile_name=profile)
+    try:
+        counts = _scan(canon, profile_name=profile)
+    except (OSError, ValueError) as exc:
+        output_error(str(exc))
+        raise typer.Exit(2) from exc
     dirty = _canon_dirty(canon)
     drifted = counts["wrong-target"] + counts["real-copy"] + counts["dangling"] + counts["unmanaged"]
     if as_json:
@@ -830,9 +904,23 @@ def status(
 def sync(ctx: typer.Context) -> None:
     """Pull canonical, re-install symlinks, reseed memory from skills."""
     canon = _canon()
-    if (canon / ".git").exists():
-        subprocess.run(["git", "-C", str(canon), "pull", "--ff-only"], check=False)
     install_script = canon / "install.sh"
-    if install_script.exists():
-        subprocess.run(["bash", str(install_script)], check=False)
-    subprocess.run(["st", "memory", "seed", str(canon / "skills")], check=False)
+    if not install_script.is_file():
+        output_error(f"{install_script} not found (is {canon} cloned?)")
+        raise typer.Exit(2)
+    steps = []
+    if (canon / ".git").exists():
+        steps.append(("pull", ["git", "-C", str(canon), "pull", "--ff-only"]))
+    steps.extend([
+        ("install", ["bash", str(install_script)]),
+        ("memory seed", ["st", "memory", "seed", str(canon / "skills")]),
+    ])
+    for label, args in steps:
+        try:
+            result = subprocess.run(args, check=False)
+        except OSError as exc:
+            output_error(f"Skills sync failed during {label}: {exc}")
+            raise typer.Exit(1) from exc
+        if result.returncode:
+            output_error(f"Skills sync failed during {label} (exit {result.returncode})")
+            raise typer.Exit(result.returncode)
