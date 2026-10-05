@@ -1,6 +1,7 @@
 """HTML extraction, page content parsing, and browser rendering for web fetch."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from html import unescape
@@ -110,7 +111,10 @@ def _structured_article_markdown(html: str) -> str:
     blocks: list[str] = []
 
     def visit(node: Any) -> None:
-        tag = str(node.tag).lower()
+        # lxml comments have a callable tag and their text_content can recurse.
+        if not isinstance(node.tag, str):
+            return
+        tag = node.tag.lower()
         value = _normalize_whitespace(node.text_content())
         if not value:
             return
@@ -166,7 +170,12 @@ def _extract_markdown_payload(html: str, url: str) -> tuple[dict[str, Any], str]
             metadata = cast(dict[str, Any], document)
     markdown = determine_returnstring(document, options) if document is not None and not isinstance(document, dict) else ""
     markdown = re.sub(r"^---\n.*?\n---\n", "", markdown, count=1, flags=re.DOTALL)
-    structured = _structured_article_markdown(html)
+    try:
+        structured = _structured_article_markdown(html)
+    except Exception as exc:
+        # This optional fidelity enhancement must not discard an extracted article.
+        logging.getLogger(__name__).warning("Optional structured web extraction failed: %s", exc)
+        structured = ""
     if structured and len(structured) >= len(markdown.strip()) * 0.6:
         markdown = structured
     return metadata, markdown.strip()

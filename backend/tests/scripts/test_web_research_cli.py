@@ -284,3 +284,47 @@ def test_benchmark_command_bounds_inputs_and_fails_unsuccessful_result(monkeypat
     assert capsys.readouterr().out == (
         '{"benchmark": "st web deterministic fetch", "passed": false}\n'
     )
+
+
+def test_fetch_forwards_lightpanda_options(monkeypatch, capsys):
+    from app.cli.web_research import main
+    async def fake_fetch(**kwargs):
+        assert kwargs == {"url": "https://example.com", "max_chars": 12000, "focus_query": None,
+                          "backend": "lightpanda", "selector": "article", "wait_script": "document.ready", "timeout": 3.5}
+        return json.dumps({"content": "Evidence", "content_complete": False})
+    monkeypatch.setattr("app.cli.web_research.fetch_web_page", fake_fetch)
+    assert main(["fetch", "https://example.com", "--backend", "lightpanda", "--selector", "article", "--wait-script", "document.ready", "--timeout", "3.5"]) == 0
+    assert json.loads(capsys.readouterr().out)["content_complete"] is False
+
+
+def test_batch_failure_returns_nonzero_with_all_results(monkeypatch, capsys):
+    from app.cli.web_research import main
+    async def fake_batch(urls, **kwargs):
+        assert urls == ["https://example.com/good", "https://example.com/fail"]
+        assert kwargs["max_chars"] == 12000 and kwargs["backend"] == "direct"
+        return json.dumps({"results": [{"content": "Good", "artifact_id": "saved"}, {"error": "Failed"}],
+                           "failed_count": 1, "error": "web batch contains failed fetches"})
+    monkeypatch.setattr("app.cli.web_research.fetch_web_batch", fake_batch)
+    assert main(["batch", "https://example.com/good", "https://example.com/fail", "--backend", "direct"]) == 1
+    assert len(json.loads(capsys.readouterr().out)["results"]) == 2
+
+
+def test_refocus_uses_owner_cache_contract(monkeypatch, capsys):
+    from app.cli.web_research import main
+    def fake_refocus(artifact, **kwargs):
+        assert artifact == "a" * 32
+        assert kwargs == {"max_chars": 12000, "focus_query": "qualifications"}
+        return json.dumps({"content": "Evidence", "network_access": False})
+    monkeypatch.setattr("app.cli.web_research.refocus_web_artifact", fake_refocus)
+    assert main(["refocus", "a" * 32, "--focus-query", "qualifications"]) == 0
+    assert json.loads(capsys.readouterr().out)["network_access"] is False
+
+
+def test_doctor_unusable_returns_nonzero(monkeypatch, capsys):
+    from app.cli.web_research import main
+    async def fake_doctor(timeout):
+        assert timeout == 20.0
+        return {"usable": False, "error": "Lightpanda verification failed", "detail": "pin mismatch"}
+    monkeypatch.setattr("app.cli.web_research.doctor_lightpanda", fake_doctor)
+    assert main(["doctor"]) == 1
+    assert json.loads(capsys.readouterr().out)["usable"] is False

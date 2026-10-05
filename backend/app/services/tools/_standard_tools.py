@@ -311,13 +311,16 @@ RESEARCH_WEB_TOOL = Tool(
                     "Defaults to the research query for concise retrieval."
                 ),
             },
+            "selector": {"type": "string", "description": "Lightpanda only: first matching CSS element to extract."},
+            "wait_script": {"type": "string", "description": "Lightpanda only: JavaScript readiness expression to wait for; does not prove full source coverage."},
+            "timeout": {"type": "number", "exclusiveMinimum": 0, "default": 20.0, "description": "Request/process deadline in seconds."},
             "backend": {
                 "type": "string",
-                "enum": ["auto", "direct", "jina"],
+                "enum": ["auto", "direct", "jina", "lightpanda"],
                 "description": (
                     "Fetch backend for the selected page. Use auto by default: direct "
                     "HTTP/trafilatura/browser first, then Jina Reader as a no-key markdown "
-                    "fallback when direct fetch fails or looks like a sparse dynamic shell."
+                    "fallback when direct fetch fails or looks like a sparse dynamic shell. Lightpanda is opt-in local DOM retrieval, with pinned binary verification and retained full artifacts."
                 ),
                 "default": "auto",
             },
@@ -408,13 +411,16 @@ FETCH_WEB_PAGE_TOOL = Tool(
                     "before truncation."
                 ),
             },
+            "selector": {"type": "string", "description": "Lightpanda only: first matching CSS element to extract."},
+            "wait_script": {"type": "string", "description": "Lightpanda only: JavaScript readiness expression to wait for; does not prove full source coverage."},
+            "timeout": {"type": "number", "exclusiveMinimum": 0, "default": 20.0, "description": "Request/process deadline in seconds."},
             "backend": {
                 "type": "string",
-                "enum": ["auto", "direct", "jina"],
+                "enum": ["auto", "direct", "jina", "lightpanda"],
                 "description": (
                     "Fetch backend. Use auto by default: direct HTTP/trafilatura/browser first, "
                     "then Jina Reader as a no-key markdown fallback when direct fetch fails or is sparse. "
-                    "Use jina explicitly after Firecrawl/rate-limit failures or when URL-to-markdown is enough."
+                    "Use jina explicitly after Firecrawl/rate-limit failures or when URL-to-markdown is enough. Lightpanda is opt-in local DOM retrieval, with pinned binary verification and retained full artifacts."
                 ),
                 "default": "auto",
             },

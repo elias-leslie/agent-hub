@@ -219,6 +219,7 @@ class DirectToolExecutor:
                 max_chars=args.get("max_chars", 12000),
                 focus_query=args.get("focus_query"),
                 backend=args.get("backend", "auto"),
+                **{key: args[key] for key in ("selector", "wait_script", "timeout") if key in args},
             )
         if name == "fetch_web_page":
             return await _fetch_web_page(
@@ -226,6 +227,7 @@ class DirectToolExecutor:
                 max_chars=args.get("max_chars", 12000),
                 focus_query=args.get("focus_query"),
                 backend=args.get("backend", "auto"),
+                **{key: args[key] for key in ("selector", "wait_script", "timeout") if key in args},
             )
         if name == "propose_thorough":
             from app.services.tools._propose_tools import execute_propose_thorough

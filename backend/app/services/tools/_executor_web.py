@@ -5,6 +5,8 @@ import asyncio
 import ipaddress
 import json
 import logging
+import math
+import time
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
@@ -12,6 +14,7 @@ import httpx
 
 from app.config import settings  # noqa: F401 — used by tests via _executor_web.settings
 
+from ._executor_web_artifacts import load_artifact, save_artifact
 from ._executor_web_focus import _select_focused_content
 from ._executor_web_html import (
     _browser_result_is_better,
@@ -24,6 +27,7 @@ from ._executor_web_html import (
     _render_html_via_browser,
     _should_try_browser_fallback,
 )
+from ._executor_web_lightpanda import fetch_lightpanda
 from ._executor_web_search import (
     _get_searxng_base_url,
     _run_search_request,
@@ -45,10 +49,48 @@ DEFAULT_USER_AGENT = (
 JINA_READER_BASE_URL = "https://r.jina.ai"
 _SEARCH_TYPES = frozenset({"text", "news"})
 _TIMELIMITS = frozenset({"d", "w", "m", "y"})
-_FETCH_BACKENDS = frozenset({"auto", "direct", "jina"})
+_FETCH_BACKENDS = frozenset({"auto", "direct", "jina", "lightpanda"})
 _SENSITIVE_QUERY_MARKERS = ("token", "credential", "api_key", "apikey", "password", "secret", "signature", "sig", "auth", "key", "code")
 
 logger = logging.getLogger(__name__)
+
+
+class _UnsupportedContentType(ValueError):
+    """The response MIME is unsupported, distinct from extraction failure."""
+
+
+def _retain_full_content(payload: dict[str, Any], content: str, *, max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS) -> str:
+    payload.setdefault("coverage", {"scope": "document", "source_completeness": "unverified"})
+    payload["coverage"]["full_extraction_retained"] = True
+    try:
+        payload.update(save_artifact(payload, content))
+    except OSError as exc:
+        payload["artifact_error"] = str(exc)
+        payload["coverage"]["full_extraction_retained"] = False
+        payload.setdefault("stages", []).append({"stage": "artifact_write", "error": str(exc)})
+    else:
+        payload["coverage"]["full_extraction_retained"] = True
+    diagnostic_truncated: list[str] = []
+
+    def bound_diagnostics(value: Any, prefix: str = "") -> None:
+        if isinstance(value, dict):
+            for key, item in list(value.items()):
+                path = f"{prefix}.{key}" if prefix else key
+                if key in {"raw_receipt", "stderr", "detail"} and isinstance(item, str) and len(item) > max_chars:
+                    value[key], _ = _truncate_text(item, max_chars)
+                    diagnostic_truncated.append(path)
+                else:
+                    bound_diagnostics(item, path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                bound_diagnostics(item, f"{prefix}[{index}]")
+
+    # Save exact evidence first; the response contains bounded diagnostic previews.
+    bound_diagnostics(payload)
+    if diagnostic_truncated:
+        payload["diagnostic_truncated"] = diagnostic_truncated
+        payload["diagnostic_artifact_available"] = bool(payload.get("artifact_id"))
+    return _json_payload(payload)
 
 
 def _json_payload(payload: dict[str, object]) -> str:
@@ -145,7 +187,7 @@ def _extract_page_content(
     elif content_type.startswith("text/") or "json" in content_type:
         content = raw_text
     else:
-        raise ValueError("unsupported content type")
+        raise _UnsupportedContentType("unsupported content type")
 
     if markdown_tokens_estimate and markdown_tokens_estimate.isdigit():
         parsed_markdown_tokens = int(markdown_tokens_estimate)
@@ -233,19 +275,29 @@ async def _try_browser_fallback(
     raw_text: str,
     page: _PageExtraction,
     original_final_url: str,
+    stages: list[dict[str, object]] | None = None,
 ) -> tuple[_PageExtraction, str, str]:
     """Try browser rendering; returns (page, final_url, fetch_backend)."""
     if not _should_try_browser_fallback(content_type, raw_text, page.content):
         return page, original_final_url, "direct"
+    started = time.monotonic()
+    stage: dict[str, object] = {"stage": "browser_fallback"}
     try:
         b_url, b_html = await _render_html_via_browser(normalized_url, browser_cdp_url)
         b_page = await asyncio.to_thread(
             _extract_page_content, "text/html; charset=utf-8", b_html, b_url,
         )
         if _browser_result_is_better(page.content, b_page.content):
+            stage["selected"] = True
             return b_page, b_url, "browser"
+        stage["selected"] = False
     except Exception as exc:
+        stage["error"] = str(exc)
         logger.warning("fetch_web_page browser fallback failed for %r: %s", normalized_url, exc)
+    finally:
+        stage["duration_ms"] = round((time.monotonic() - started) * 1000, 3)
+        if stages is not None:
+            stages.append(stage)
     return page, original_final_url, "direct"
 
 
@@ -269,18 +321,27 @@ async def _fetch_with_jina_reader(
     max_chars: int,
     focus_query: str | None,
     fallback_reason: str | None = None,
+    client: httpx.AsyncClient | None = None,
+    timeout: float = DEFAULT_FETCH_TIMEOUT,
+    stages: list[dict[str, object]] | None = None,
+    prior_failure: dict[str, Any] | None = None,
 ) -> str:
     if not _public_fallback_allowed(normalized_url):
         return _error_payload("fetch_web_page public reader rejects private or credential-bearing URL")
     reader_url = f"{JINA_READER_BASE_URL}/{normalized_url}"
+    started = time.monotonic()
     try:
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=DEFAULT_FETCH_TIMEOUT,
-            headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": "text/plain, text/markdown;q=0.9"},
-        ) as client:
-            response = await client.get(reader_url)
+        if client is not None:
+            response = await client.get(reader_url, timeout=timeout, headers={"Accept": "text/plain, text/markdown;q=0.9"})
             response.raise_for_status()
+        else:
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=timeout,
+                headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": "text/plain, text/markdown;q=0.9"},
+            ) as reader_client:
+                response = await reader_client.get(reader_url)
+                response.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning("fetch_web_page Jina Reader failed for %r: %s", normalized_url, exc)
         return _error_payload(
@@ -289,6 +350,8 @@ async def _fetch_with_jina_reader(
             fallback_reason=fallback_reason,
             reader_url=reader_url,
             url=normalized_url,
+            stages=(stages or []) + [{"stage": "jina_request", "duration_ms": round((time.monotonic() - started) * 1000, 3), "error": str(exc)}],
+            direct_failure=prior_failure,
         )
 
     page = _PageExtraction(
@@ -316,9 +379,12 @@ async def _fetch_with_jina_reader(
         excerpt,
     )
     payload["reader_url"] = reader_url
+    payload["stages"] = (stages or []) + [{"stage": "jina_request", "duration_ms": round((time.monotonic() - started) * 1000, 3)}]
+    if prior_failure:
+        payload["direct_failure"] = prior_failure
     if fallback_reason:
         payload["fallback_reason"] = fallback_reason
-    return _json_payload(payload)
+    return _retain_full_content(payload, page.content, max_chars=max_chars)
 
 
 async def search_web(
@@ -377,8 +443,14 @@ async def fetch_web_page(
     max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS,
     focus_query: str | None = None,
     backend: str = "auto",
+    selector: str | None = None,
+    wait_script: str | None = None,
+    timeout: float = DEFAULT_FETCH_TIMEOUT,
+    *,
+    _client: httpx.AsyncClient | None = None,
 ) -> str:
-    """Fetch a webpage and return extracted readable content."""
+    """Fetch through the shared extraction seam; retain the full extracted artifact."""
+    started = time.monotonic()
     normalized_url = url.strip()
     if not normalized_url:
         return _error_payload("fetch_web_page requires a non-empty url")
@@ -386,87 +458,163 @@ async def fetch_web_page(
         return _error_payload("fetch_web_page only supports http:// and https:// URLs")
     backend = (backend or "auto").strip().lower()
     if backend not in _FETCH_BACKENDS:
-        return _error_payload(
-            "fetch_web_page backend must be one of: auto, direct, jina",
-            backend=backend,
-        )
+        return _error_payload("fetch_web_page backend must be one of: auto, direct, jina, lightpanda", backend=backend)
+    if not math.isfinite(timeout) or timeout <= 0:
+        return _error_payload("fetch_web_page timeout must be finite and positive")
+    if backend != "lightpanda" and (selector or wait_script):
+        return _error_payload("selector and wait_script require backend lightpanda")
+    bounded = max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS))
+    stages: list[dict[str, object]] = []
 
-    bounded_max_chars = max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS))
+    async def reader(reason: str | None = None, target_url: str | None = None, prior_failure: dict[str, Any] | None = None) -> str:
+        raw = await _fetch_with_jina_reader(
+            target_url or normalized_url, max_chars=bounded, focus_query=focus_query,
+            fallback_reason=reason, client=_client,
+            timeout=timeout,
+            stages=stages, prior_failure=prior_failure,
+        )
+        result = json.loads(raw)
+        result.setdefault("stages", stages)
+        result["total_ms"] = round((time.monotonic() - started) * 1000, 3)
+        return _json_payload(result)
+
     if backend == "jina":
-        return await _fetch_with_jina_reader(
-            normalized_url,
-            max_chars=bounded_max_chars,
-            focus_query=focus_query,
-        )
+        return await reader()
+    if backend == "lightpanda":
+        receipt = await fetch_lightpanda(normalized_url, selector=selector, wait_script=wait_script, timeout=timeout)
+        content = str(receipt.get("content") or "")
+        page = _PageExtraction(content=content, format="markdown")
+        out, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(page, max_chars=bounded, focus_query=focus_query)
+        payload = _build_fetch_payload(page, receipt.get("http_status", 0), "lightpanda", normalized_url,
+                                       str(receipt.get("url") or normalized_url), "text/markdown", nfocus,
+                                       focus_meta, out, truncated, excerpt)
+        payload["lightpanda"] = receipt.get("lightpanda", receipt)
+        payload["stages"] = [
+            {"stage": "lightpanda_verification", "duration_ms": payload["lightpanda"].get("verification_ms", 0)},
+            {"stage": "lightpanda_fetch", "duration_ms": receipt.get("fetch_ms", 0), "error": receipt.get("error")},
+        ]
+        payload["coverage"] = {"scope": "selector" if selector else "document", "selector": selector,
+                               "readiness": "predicate_passed" if wait_script and not receipt.get("error") else "domcontentloaded" if not receipt.get("error") else "failed",
+                               "source_completeness": "unverified", "visual_rendering": False,
+                               "omitted_resources": ["images", "stylesheets", "workers", "iframes"]}
+        payload["content_complete"] = False
+        payload["incomplete_reason"] = "source_completeness_unverified"
+        if receipt.get("error"):
+            payload.update(error=receipt["error"], detail=receipt.get("detail", receipt.get("stderr", "")),
+                           process_exit_code=receipt.get("process_exit_code"))
+            payload["incomplete_reason"] = "backend_failure"
+            payload["recovery"] = "Retry with direct or jina for readable text; use a managed Chrome browser for visual or interaction evidence. Those routes do not verify this readiness predicate."
+            payload["backend_failure"] = {key: value for key, value in receipt.items() if key != "content"}
+        payload["total_ms"] = round((time.monotonic() - started) * 1000, 3)
+        return _retain_full_content(payload, content, max_chars=bounded)
 
+    request_started = time.monotonic()
     try:
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=DEFAULT_FETCH_TIMEOUT,
-            headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": DEFAULT_FETCH_ACCEPT},
-        ) as client:
-            response = await client.get(normalized_url)
+        if _client is not None:
+            response = await _client.get(normalized_url, timeout=timeout)
             response.raise_for_status()
+        else:
+            async with httpx.AsyncClient(
+                follow_redirects=True, timeout=timeout,
+                headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": DEFAULT_FETCH_ACCEPT},
+            ) as client:
+                response = await client.get(normalized_url)
+                response.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("fetch_web_page failed for %r: %s", normalized_url, exc)
+        stages.append({"stage": "direct_request", "error": str(exc), "duration_ms": round((time.monotonic() - request_started) * 1000, 3)})
         if backend == "auto":
-            return await _fetch_with_jina_reader(
-                normalized_url,
-                max_chars=bounded_max_chars,
-                focus_query=focus_query,
-                fallback_reason="direct request failed: provider returned an error",
-            )
-        return _error_payload("fetch_web_page request failed", detail=str(exc), url=normalized_url)
-
+            return await reader("direct request failed: provider returned an error")
+        return _error_payload("fetch_web_page request failed", detail=str(exc), url=normalized_url, stages=stages)
+    stages.append({"stage": "direct_request", "duration_ms": round((time.monotonic() - request_started) * 1000, 3)})
     content_type = response.headers.get("content-type", "").lower()
     final_url, raw_text = str(response.url), response.text
+    extraction_started = time.monotonic()
     try:
-        page = await asyncio.to_thread(
-            _extract_page_content, content_type, raw_text, final_url, response.headers.get("x-markdown-tokens"),
-        )
-    except ValueError:
+        page = await asyncio.to_thread(_extract_page_content, content_type, raw_text, final_url, response.headers.get("x-markdown-tokens"))
+    except Exception as exc:
+        unsupported = isinstance(exc, _UnsupportedContentType)
+        stages.append({"stage": "direct_extraction", "error": str(exc), "duration_ms": round((time.monotonic() - extraction_started) * 1000, 3)})
+        error = "fetch_web_page only supports text-like responses" if unsupported else "fetch_web_page extraction failed"
+        failure = {"error": error, "detail": str(exc), "content_type": content_type, "url": normalized_url,
+                   "stages": stages, "artifact_kind": "raw_response", "content_complete": False}
+        # Keep the response evidence even if auto's public reader succeeds.
+        failure = json.loads(_retain_full_content(failure, raw_text, max_chars=bounded))
         if backend == "auto":
-            return await _fetch_with_jina_reader(
-                normalized_url,
-                max_chars=bounded_max_chars,
-                focus_query=focus_query,
-                fallback_reason=f"unsupported content type: {content_type}",
-            )
-        return _error_payload("fetch_web_page only supports text-like responses", content_type=content_type, url=normalized_url)
-
+            return await reader(f"{'unsupported content type' if unsupported else 'direct extraction failed'}: {content_type}", prior_failure=failure)
+        return _json_payload(failure)
+    stages.append({"stage": "direct_extraction", "duration_ms": round((time.monotonic() - extraction_started) * 1000, 3)})
     browser_cdp_url = _get_browser_cdp_url() if backend == "auto" else None
     if browser_cdp_url:
-        page, final_url, fetch_backend = await _try_browser_fallback(
-            normalized_url, browser_cdp_url, content_type, raw_text, page, final_url,
-        )
+        page, final_url, fetch_backend = await _try_browser_fallback(normalized_url, browser_cdp_url, content_type, raw_text, page, final_url, stages)
     else:
         fetch_backend = "direct"
-    if (
-        backend == "auto"
-        and fetch_backend == "direct"
-        and _should_try_browser_fallback(content_type, raw_text, page.content)
-    ):
-        jina_raw = await _fetch_with_jina_reader(
-            final_url if _public_fallback_allowed(normalized_url) else normalized_url,
-            max_chars=bounded_max_chars,
-            focus_query=focus_query,
-            fallback_reason="direct extraction looked like a sparse dynamic shell",
-        )
+    fallback_failure = None
+    sparse = _should_try_browser_fallback(content_type, raw_text, page.content)
+    if backend == "auto" and fetch_backend == "direct" and sparse:
+        jina_raw = await reader("direct extraction looked like a sparse dynamic shell",
+                                final_url if _public_fallback_allowed(normalized_url) else normalized_url)
         jina_payload = json.loads(jina_raw)
         if "error" not in jina_payload:
             return jina_raw
-    trunc_content, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(
-        page,
-        max_chars=bounded_max_chars,
-        focus_query=focus_query,
-    )
-
-    payload = _build_fetch_payload(
-        page, response.status_code, fetch_backend, normalized_url, final_url,
-        content_type, nfocus, focus_meta, trunc_content, truncated, excerpt,
-    )
-    if fetch_backend == "direct" and _should_try_browser_fallback(content_type, raw_text, page.content):
+        fallback_failure = jina_payload
+    out, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(page, max_chars=bounded, focus_query=focus_query)
+    payload = _build_fetch_payload(page, response.status_code, fetch_backend, normalized_url, final_url,
+                                   content_type, nfocus, focus_meta, out, truncated, excerpt)
+    payload["stages"] = stages
+    payload["total_ms"] = round((time.monotonic() - started) * 1000, 3)
+    payload["coverage"] = {"scope": "document", "source_completeness": "unverified",
+                           "sparse_dynamic_shell": sparse, "full_extraction_retained": True}
+    if fallback_failure:
+        payload["fallback_failure"] = fallback_failure
+    if fetch_backend == "direct" and sparse:
         payload["content_complete"] = False
         payload["incomplete_reason"] = "sparse_dynamic_shell"
+    return _retain_full_content(payload, page.content, max_chars=bounded)
+
+
+def refocus_web_artifact(artifact: str, *, max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS, focus_query: str | None = None) -> str:
+    """Produce another bounded view from a trusted retained extraction, without network."""
+    try:
+        record = load_artifact(artifact)
+    except ValueError as exc:
+        return _error_payload("web artifact refocus failed", detail=str(exc))
+    if record.get("artifact_kind") == "raw_response":
+        return _error_payload("web artifact contains a failed raw response, not extracted content", artifact_id=record["artifact_id"])
+    page = _PageExtraction(content=record["content"], format=record.get("format", "text"),
+        title=record.get("title"), site_name=record.get("site_name"), author=record.get("author"),
+        published=record.get("published"), published_date_inferred=record.get("published_date_inferred", False),
+        markdown_tokens_estimate=record.get("markdown_tokens_estimate"))
+    out, truncated, excerpt, focus_meta, nfocus = _apply_focus_and_truncation(
+        page, max_chars=max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS)), focus_query=focus_query,
+    )
+    payload = _build_fetch_payload(page, record.get("status_code", 0), record.get("fetch_backend", "unknown"),
+        record.get("url", ""), record.get("final_url", ""), record.get("content_type", ""),
+        nfocus, focus_meta, out, truncated, excerpt)
+    payload.update(artifact_id=record["artifact_id"], artifact_path=record["artifact_path"],
+                   full_content_chars=len(page.content), coverage=record.get("coverage", {}), network_access=False)
+    # A cached view cannot strengthen the original source's coverage assertion.
+    payload["content_complete"] = False
+    if not truncated and not focus_meta.get("focused"):
+        payload["incomplete_reason"] = "source_completeness_unverified"
+    if record.get("error"):
+        payload.update(error=record["error"], detail=record.get("detail", ""))
+        if isinstance(payload["detail"], str) and len(payload["detail"]) > max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS)):
+            payload["detail"], _ = _truncate_text(payload["detail"], max(100, min(max_chars, MAX_WEB_FETCH_MAX_CHARS)))
+            payload.update(diagnostic_truncated=["detail"], diagnostic_artifact_available=True)
+    return _json_payload(payload)
+
+
+async def fetch_web_batch(urls: list[str], **options: Any) -> str:
+    """Serial fetches amortize imports and reuse one HTTP client; all errors are retained."""
+    results = []
+    async with httpx.AsyncClient(follow_redirects=True, timeout=options.get("timeout", DEFAULT_FETCH_TIMEOUT),
+        headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": DEFAULT_FETCH_ACCEPT}) as client:
+        for url in urls:
+            results.append(json.loads(await fetch_web_page(url, _client=client, **options)))
+    failed = sum("error" in result for result in results)
+    payload: dict[str, Any] = {"results": results, "failed_count": failed, "result_count": len(results)}
+    if failed:
+        payload["error"] = "web batch contains failed fetches"
     return _json_payload(payload)
 
 
@@ -479,6 +627,9 @@ async def research_web(
     max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS,
     focus_query: str | None = None,
     backend: str = "auto",
+    selector: str | None = None,
+    wait_script: str | None = None,
+    timeout: float = DEFAULT_FETCH_TIMEOUT,
 ) -> str:
     """Search the web, choose one result, and fetch readable content."""
     normalized_query = _normalize_whitespace(query)
@@ -504,6 +655,9 @@ async def research_web(
         max_chars=max_chars,
         focus_query=effective_focus,
         backend=backend,
+        **({"selector": selector} if selector else {}),
+        **({"wait_script": wait_script} if wait_script else {}),
+        **({"timeout": timeout} if timeout != DEFAULT_FETCH_TIMEOUT else {}),
     )
     page_payload, err = _decode_step(page_raw, "fetch_web_page", "fetch step")
     if err:
@@ -533,7 +687,9 @@ __all__ = [
     "DEFAULT_WEB_SEARCH_RESULTS",
     "MAX_WEB_FETCH_MAX_CHARS",
     "MAX_WEB_SEARCH_RESULTS",
+    "fetch_web_batch",
     "fetch_web_page",
+    "refocus_web_artifact",
     "research_web",
     "search_web",
 ]

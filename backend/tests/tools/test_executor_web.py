@@ -13,6 +13,11 @@ from app.services.tools import _executor_web
 from app.services.tools._executor_web import fetch_web_page, research_web, search_web
 
 
+@pytest.fixture(autouse=True)
+def isolated_web_artifact_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv("AGENT_HUB_WEB_CACHE_DIR", str(tmp_path / "web-cache"))
+
+
 class _FakeResponse:
     def __init__(
         self,

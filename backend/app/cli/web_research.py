@@ -5,10 +5,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import sys
 
 from app.cli.web_benchmark import benchmark_web
-from app.services.tools._executor_web import fetch_web_page, research_web, search_web
+from app.services.tools._executor_web import (
+    fetch_web_batch,
+    fetch_web_page,
+    refocus_web_artifact,
+    research_web,
+    search_web,
+)
+from app.services.tools._executor_web_lightpanda import doctor_lightpanda
 
 
 def _resolve_required_arg(primary: str | None, fallback: str | None, name: str) -> str:
@@ -26,6 +34,20 @@ def _add_output_options(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Emit compact single-line JSON instead of pretty JSON",
     )
+
+
+def _add_dom_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--selector", help="Lightpanda only: extract the first matching CSS element")
+    parser.add_argument("--wait-script", help="Lightpanda only: wait for this JavaScript readiness expression to return truthy")
+    parser.add_argument("--timeout", type=float, default=20.0, help="Positive request/process deadline in seconds (default 20)")
+
+
+def _dom_options(args: argparse.Namespace) -> dict[str, object]:
+    # Keep the existing default call contract intact for callers and dispatch tests.
+    return {key: value for key, value in {
+        "selector": args.selector, "wait_script": args.wait_script,
+        "timeout": args.timeout if args.timeout != 20.0 else None,
+    }.items() if value is not None}
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -96,10 +118,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     research_parser.add_argument(
         "--backend",
-        choices=("auto", "direct", "jina"),
+        choices=("auto", "direct", "jina", "lightpanda"),
         default="auto",
         help="Page fetch backend",
     )
+    _add_dom_options(research_parser)
     _add_output_options(research_parser)
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch and extract a webpage.")
@@ -117,11 +140,32 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     fetch_parser.add_argument(
         "--backend",
-        choices=("auto", "direct", "jina"),
+        choices=("auto", "direct", "jina", "lightpanda"),
         default="auto",
         help="Page fetch backend",
     )
+    _add_dom_options(fetch_parser)
     _add_output_options(fetch_parser)
+
+    batch_parser = subparsers.add_parser("batch", help="Fetch URLs serially, reuse HTTP connections, and retain full artifacts.")
+    batch_parser.add_argument("urls", nargs="+", help="HTTP or HTTPS URLs")
+    batch_parser.add_argument("--max-chars", type=int, default=12000)
+    batch_parser.add_argument("--focus-query")
+    batch_parser.add_argument("--backend", choices=("auto", "direct", "jina", "lightpanda"), default="auto")
+    _add_dom_options(batch_parser)
+    _add_output_options(batch_parser)
+
+    refocus_parser = subparsers.add_parser("refocus", help="Refocus a full extracted artifact in the owner cache without network access.")
+    refocus_parser.add_argument("artifact_arg", nargs="?", help="Artifact id or absolute owner cache path")
+    refocus_parser.add_argument("--artifact", help="Artifact id or absolute owner cache path")
+    refocus_parser.add_argument("--max-chars", type=int, default=12000)
+    refocus_parser.add_argument("--focus-query")
+    _add_output_options(refocus_parser)
+
+    doctor_parser = subparsers.add_parser("doctor", help="Verify the configured Lightpanda binary, exact digest and version (no network).",
+        description="Verify the local Lightpanda executable, full SHA256 digest and exact version without network access.")
+    doctor_parser.add_argument("--timeout", type=float, default=20.0)
+    _add_output_options(doctor_parser)
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -153,6 +197,7 @@ async def _run_command(args: argparse.Namespace) -> str:
             max_chars=args.max_chars,
             focus_query=args.focus_query,
             backend=args.backend,
+            **_dom_options(args),
         )
     if args.command == "fetch":
         url = _resolve_required_arg(args.url, args.url_arg, "--url")
@@ -161,7 +206,18 @@ async def _run_command(args: argparse.Namespace) -> str:
             max_chars=args.max_chars,
             focus_query=args.focus_query,
             backend=args.backend,
+            **_dom_options(args),
         )
+    if args.command == "batch":
+        return await fetch_web_batch(args.urls, max_chars=args.max_chars, focus_query=args.focus_query,
+                                     backend=args.backend, **_dom_options(args))
+    if args.command == "refocus":
+        artifact = _resolve_required_arg(args.artifact, args.artifact_arg, "--artifact")
+        return refocus_web_artifact(artifact, max_chars=args.max_chars, focus_query=args.focus_query)
+    if args.command == "doctor":
+        if args.timeout <= 0 or not math.isfinite(args.timeout):
+            raise ValueError("--timeout must be finite and positive")
+        return json.dumps(await doctor_lightpanda(args.timeout))
     if args.command == "benchmark":
         return await benchmark_web(
             iterations=max(1, min(args.iterations, 10)),

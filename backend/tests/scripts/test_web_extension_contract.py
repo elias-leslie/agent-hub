@@ -23,3 +23,15 @@ def test_missing_query_is_a_usage_error_without_traceback(capsys):
     captured = capsys.readouterr()
     assert captured.err == "ERROR --query is required\n"
     assert captured.out == ""
+
+
+def test_release_metadata_exposes_dom_and_cache_contracts(capsys):
+    assert web_research.main(["--describe-st"]) == 0
+    metadata = json.loads(capsys.readouterr().out)
+    assert metadata["version"] == "1.1.0"
+    for command in ("fetch", "research", "batch"):
+        assert "--selector" in metadata["help"][command]
+        assert "--wait-script" in metadata["help"][command]
+        assert "lightpanda" in metadata["help"][command]
+    assert "--artifact" in metadata["help"]["refocus"]
+    assert "digest" in metadata["help"]["doctor"]
