@@ -190,6 +190,7 @@ def status(
     surface="st.memory.save",
     cmd='st memory save -s project --scope-id <id> -S "summary" --content "learning"',
     when="durable learning surfaced; correction or validated approach",
+    on_demand="memory authoring",
     precautions=(
         "choose explicit scope: project-specific → -s project --scope-id <id>; global only for cross-project knowledge",
         "use ST for agent memory writes; reusable instructions belong in scoped DB prompts",
@@ -281,6 +282,7 @@ def list_cmd(
     surface="st.memory.search",
     cmd='st memory search "query"',
     when="durable rules / prior incidents / workflow history before retries",
+    on_demand="memory authoring",
     precautions=("not for live code/runtime facts — use st search, pulse, db, logs",),
     tier="mandate",
 )
@@ -314,6 +316,7 @@ def delete(uuids: UUIDsDeleteArg, change_reason: ChangeReasonOpt = None) -> None
     surface="st.memory.update",
     cmd="st memory update <uuid> [--scope project --scope-id <id> --preview]",
     when="correcting memory content or targeting",
+    on_demand="memory authoring",
     precautions=("scope changes are separate from content edits; --preview does not save", "scope edits require service and project authority, preserve revisions and undo"),
     tier="mandate",
 )
