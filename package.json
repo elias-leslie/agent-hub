@@ -13,7 +13,8 @@
       "postcss": "8.5.23",
       "source-map-js": "1.2.2",
       "vite": "8.0.16",
-      "esbuild": "0.28.1"
+      "esbuild": "0.28.1",
+      "sharp": "0.35.5"
     }
   }
 }
