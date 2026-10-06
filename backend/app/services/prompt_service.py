@@ -160,6 +160,7 @@ async def update_prompt(
     if not prompt:
         return None
 
+    previous_is_global = prompt.is_global
     allowed_fields = {
         "name",
         "content",
@@ -174,7 +175,7 @@ async def update_prompt(
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
 
-    if "is_global" in kwargs and prompt.context_policy is not None:
+    if prompt.is_global != previous_is_global and prompt.context_policy is not None:
         policy = dict(prompt.context_policy)
         policy.update(scope="global" if prompt.is_global else "unassigned", targets=[])
         prompt.context_policy = policy

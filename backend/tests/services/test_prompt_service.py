@@ -87,6 +87,62 @@ class TestPromptServiceRevisions:
         assert revision.change_reason == "benchmark tuning"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("is_global", [False, True])
+    async def test_update_prompt_preserves_policy_when_global_metadata_is_unchanged(
+        self, is_global: bool
+    ) -> None:
+        db = create_mock_db_session()
+        policy = {
+            "scope": "global" if is_global else "project",
+            "targets": [] if is_global else ["agent-hub", "neri"],
+            "surfaces": ["codex"],
+        }
+        prompt = _make_prompt(is_global=is_global, context_policy=policy)
+
+        with patch(
+            "app.services.prompt_service.get_prompt_by_slug",
+            new=AsyncMock(return_value=prompt),
+        ):
+            updated = await update_prompt(
+                db, prompt.slug, content="new content", is_global=is_global
+            )
+
+        revision = db.add.call_args_list[0].args[0]
+        assert updated is prompt
+        assert prompt.content == "new content"
+        assert prompt.context_policy is policy
+        assert revision.context_policy == policy
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("is_global", [False, True])
+    async def test_update_prompt_changes_policy_scope_on_global_transition(
+        self, is_global: bool
+    ) -> None:
+        db = create_mock_db_session()
+        policy = {
+            "scope": "project" if is_global else "global",
+            "targets": ["agent-hub"] if is_global else [],
+            "surfaces": ["codex"],
+        }
+        prompt = _make_prompt(is_global=not is_global, context_policy=policy)
+
+        with patch(
+            "app.services.prompt_service.get_prompt_by_slug",
+            new=AsyncMock(return_value=prompt),
+        ):
+            await update_prompt(db, prompt.slug, is_global=is_global)
+
+        expected_policy = {
+            **policy,
+            "scope": "global" if is_global else "unassigned",
+            "targets": [],
+        }
+        revision = db.add.call_args_list[0].args[0]
+        assert prompt.is_global is is_global
+        assert prompt.context_policy == expected_policy
+        assert revision.context_policy == expected_policy
+
+    @pytest.mark.asyncio
     async def test_update_owned_system_prompt_syncs_legacy_agent_mirror(self) -> None:
         db = create_mock_db_session()
         owner = Agent(
