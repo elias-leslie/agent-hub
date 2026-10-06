@@ -309,6 +309,9 @@ def test_fetch_help_explains_scoped_readiness_and_coverage(capsys):
     assert "verify the returned facts after readiness passes" in help_text
     assert "direct content_complete describes the returned extraction view" in help_text
     assert "coverage.source_completeness remains unverified" in help_text
+    normalized_help = " ".join(help_text.split())
+    assert "Local --raw/--compact emits complete result JSON through ST" in normalized_help
+    assert "global st --no-compact keeps the web details receipt" in normalized_help
 
 
 def test_batch_failure_returns_nonzero_with_all_results(monkeypatch, capsys):

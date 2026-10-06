@@ -38,7 +38,10 @@ def _add_output_options(parser: argparse.ArgumentParser) -> None:
         "--raw",
         dest="compact",
         action="store_true",
-        help="Emit compact single-line JSON instead of pretty JSON",
+        help=(
+            "Local --raw/--compact emits complete result JSON through ST; "
+            "global st --no-compact keeps the web details receipt"
+        ),
     )
 
 
