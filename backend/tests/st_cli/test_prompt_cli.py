@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+import yaml
 from agent_hub_st.prompt import app
 from agent_hub_st.prompt_formatters import (
     format_prompt_detail,
@@ -18,6 +20,84 @@ from st_sdk.state import set_compact_output
 from typer.testing import CliRunner
 
 runner = CliRunner()
+
+
+class TestPromptImportExport:
+    def test_export_preserves_excluded_agents(self) -> None:
+        prompt = {"slug": "policy", "name": "Policy", "content": "Policy text",
+                  "is_global": True, "exclude_agents": ["neri"]}
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value=prompt):
+            result = runner.invoke(app, ["export", "policy"])
+
+        assert result.exit_code == 0
+        assert yaml.safe_load(result.output)[0]["exclude_agents"] == ["neri"]
+
+    def test_export_all_includes_empty_exclusions(self) -> None:
+        prompt = {"slug": "policy", "name": "Policy", "content": "Policy text"}
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value={"prompts": [prompt]}):
+            result = runner.invoke(app, ["export"])
+
+        assert result.exit_code == 0
+        assert yaml.safe_load(result.output)[0]["exclude_agents"] == []
+
+    @pytest.mark.parametrize("dry_run", [False, True])
+    @pytest.mark.parametrize("exclude_agents", [["neri"], []])
+    def test_import_detects_exclusion_only_change(self, tmp_path: Path, dry_run: bool, exclude_agents: list[str]) -> None:
+        entry = {"slug": "policy", "name": "Policy", "content": "Policy text",
+                 "is_global": True, "exclude_agents": exclude_agents}
+        current = {**entry, "exclude_agents": ["other"]}
+        path = tmp_path / "prompts.yaml"
+        path.write_text(yaml.safe_dump([entry]), encoding="utf-8")
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value={"prompts": [current]}) as api:
+            result = runner.invoke(app, ["import", str(path), *(["--dry-run"] if dry_run else [])])
+
+        assert result.exit_code == 0
+        assert api.call_args_list[0].args == ("GET", "")
+        if dry_run:
+            api.assert_called_once_with("GET", "")
+            assert "[update] policy" in result.output
+        else:
+            assert api.call_count == 2
+            api.assert_called_with("PUT", "/policy", json={key: value for key, value in entry.items() if key != "slug"})
+
+    def test_import_preserves_exclusions_when_legacy_yaml_omits_them(self, tmp_path: Path) -> None:
+        entry = {"slug": "policy", "name": "Policy", "content": "Updated text", "is_global": True}
+        current = {**entry, "content": "Old text", "exclude_agents": ["neri"]}
+        path = tmp_path / "prompts.yaml"
+        path.write_text(yaml.safe_dump([entry]), encoding="utf-8")
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value={"prompts": [current]}) as api:
+            result = runner.invoke(app, ["import", str(path)])
+
+        assert result.exit_code == 0
+        api.assert_called_with("PUT", "/policy", json={"name": "Policy", "content": "Updated text",
+                                                      "is_global": True, "exclude_agents": ["neri"]})
+
+    @pytest.mark.parametrize("exclude_agents", [["neri"], []])
+    def test_import_creates_with_exclusions(self, tmp_path: Path, exclude_agents: list[str]) -> None:
+        entry = {"slug": "policy", "name": "Policy", "content": "Policy text",
+                 "is_global": True, "exclude_agents": exclude_agents}
+        path = tmp_path / "prompts.yaml"
+        path.write_text(yaml.safe_dump([entry]), encoding="utf-8")
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value={"prompts": []}) as api:
+            result = runner.invoke(app, ["import", str(path)])
+
+        assert result.exit_code == 0
+        api.assert_called_with("POST", "", json=entry)
+
+    @pytest.mark.parametrize("include_exclusions", [False, True])
+    def test_import_skips_unchanged_exclusions(self, tmp_path: Path, include_exclusions: bool) -> None:
+        current = {"slug": "policy", "name": "Policy", "content": "Policy text",
+                   "is_global": True, "exclude_agents": ["neri"]}
+        entry = dict(current)
+        if not include_exclusions:
+            del entry["exclude_agents"]
+        path = tmp_path / "prompts.yaml"
+        path.write_text(yaml.safe_dump([entry]), encoding="utf-8")
+        with patch("agent_hub_st.prompt_import_export.prompt_api", return_value={"prompts": [current]}) as api:
+            result = runner.invoke(app, ["import", str(path)])
+
+        assert result.exit_code == 0
+        api.assert_called_once_with("GET", "")
 
 
 class TestPromptHistoryCommands:

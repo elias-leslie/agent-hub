@@ -27,6 +27,7 @@ def export_prompts(
             "slug": p["slug"],
             "name": p["name"],
             "is_global": p.get("is_global", False),
+            "exclude_agents": p.get("exclude_agents") or [],
         }
         if p.get("description"):
             entry["description"] = p["description"]
@@ -57,16 +58,26 @@ def _apply_entry(entry: dict[str, Any], existing: dict[str, Any], dry_run: bool)
     is_global = entry.get("is_global", False)
     ex = existing.get(slug)
 
-    if ex and ex.get("content", "").strip() == content.strip():
-        return 0, 0, 1
+    exclude_agents = entry.get("exclude_agents", (ex or {}).get("exclude_agents") or [])
 
+    if (
+        ex
+        and ex.get("content", "").strip() == content.strip()
+        and (ex.get("exclude_agents") or []) == exclude_agents
+    ):
+        return 0, 0, 1
 
     if dry_run:
         action = "update" if ex else "create"
         print(f"  [{action}] {slug} ({line_count(content)}L)")
         return (0, 1, 0) if ex else (1, 0, 0)
 
-    payload: dict[str, Any] = {"content": content, "name": name, "is_global": is_global}
+    payload: dict[str, Any] = {
+        "content": content,
+        "name": name,
+        "is_global": is_global,
+        "exclude_agents": exclude_agents,
+    }
     if entry.get("description"):
         payload["description"] = entry["description"]
     if ex:
