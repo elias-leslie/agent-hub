@@ -35,8 +35,10 @@ def describe_extension() -> dict[str, object]:
                             "Use --backend direct for deterministic local benchmark verification.",
                             "Lightpanda is opt-in DOM retrieval with an exact local binary pin; use doctor before retrieval.",
                             "Use --selector and --wait-script to scope Lightpanda retrieval; readiness does not prove complete source coverage.",
+                            "Inspect scoped innerText in readiness predicates; document.body.textContent can match scripts/styles before readable content is ready. Verify returned facts.",
                             "Fetch retains full extracted artifacts; refocus reads the owner cache without network and batch reuses one HTTP client."],
-            "examples": ["st web search --query SummitFlow --limit 1", "st web benchmark --iterations 10 --raw"],
+            "examples": ["st web search --query SummitFlow --limit 1", "st web benchmark --iterations 10 --raw",
+                         "st web fetch https://example.com/article --backend lightpanda --selector article --wait-script 'document.querySelector(\"article\")?.innerText.includes(\"Conclusion\")'"],
             "task_types": ["web-research", "research"], "tier": "reference",
         }],
     }

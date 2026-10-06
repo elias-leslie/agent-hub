@@ -18,6 +18,12 @@ from app.services.tools._executor_web import (
 )
 from app.services.tools._executor_web_lightpanda import doctor_lightpanda
 
+_COVERAGE_HELP = (
+    "Coverage: direct content_complete describes the returned extraction view.\n"
+    "coverage.source_completeness remains unverified; JavaScript readiness does\n"
+    "not prove full source coverage. Verify the returned facts."
+)
+
 
 def _resolve_required_arg(primary: str | None, fallback: str | None, name: str) -> str:
     value = (primary or fallback or "").strip()
@@ -38,8 +44,19 @@ def _add_output_options(parser: argparse.ArgumentParser) -> None:
 
 def _add_dom_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--selector", help="Lightpanda only: extract the first matching CSS element")
-    parser.add_argument("--wait-script", help="Lightpanda only: wait for this JavaScript readiness expression to return truthy")
+    parser.add_argument("--wait-script", help="Lightpanda only: wait for a predicate on scoped readable content (see example below)")
     parser.add_argument("--timeout", type=float, default=20.0, help="Positive request/process deadline in seconds (default 20)")
+    parser.formatter_class = argparse.RawDescriptionHelpFormatter
+    parser.epilog = (
+        "Scoped readiness example:\n"
+        "  --backend lightpanda --selector article\n"
+        "  --wait-script 'document.querySelector(\"article\")?.innerText.includes(\"Conclusion\")'\n\n"
+        "Match expected readable content in the target article or #report.\n"
+        "document.body.textContent can include inline scripts and styles, causing\n"
+        "a predicate to pass before the readable content is ready. Prefer scoped\n"
+        "innerText and verify the returned facts after readiness passes.\n\n"
+        + _COVERAGE_HELP
+    )
 
 
 def _dom_options(args: argparse.Namespace) -> dict[str, object]:
@@ -155,7 +172,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_dom_options(batch_parser)
     _add_output_options(batch_parser)
 
-    refocus_parser = subparsers.add_parser("refocus", help="Refocus a full extracted artifact in the owner cache without network access.")
+    refocus_parser = subparsers.add_parser("refocus", help="Refocus a full extracted artifact in the owner cache without network access.",
+        epilog=_COVERAGE_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
     refocus_parser.add_argument("artifact_arg", nargs="?", help="Artifact id or absolute owner cache path")
     refocus_parser.add_argument("--artifact", help="Artifact id or absolute owner cache path")
     refocus_parser.add_argument("--max-chars", type=int, default=12000)

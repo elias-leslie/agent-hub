@@ -43,9 +43,16 @@ arbitrary batch caps.
 ```bash
 st web doctor
 st web fetch https://example.com/article --backend lightpanda \
-  --selector article --wait-script 'document.querySelector("article")?.textContent.includes("Conclusion")' \
+  --selector article --wait-script 'document.querySelector("article")?.innerText.includes("Conclusion")' \
   --timeout 20
 ```
+
+Choose a predicate tied to expected readable content within the target article
+or `#report`. `document.body.textContent` and broad containers can include inline
+scripts and styles containing the expected words before the readable report is
+ready. Prefer scoped `innerText`, then verify that the returned extraction
+contains the requested facts. A passing predicate establishes only the condition
+you supplied; it does not establish full source coverage.
 
 Lightpanda uses the reviewed binary at
 `${XDG_DATA_HOME:-~/.local/share}/agent-hub/web/lightpanda/e24d135bb5c4c0905cea9ee9a1cd87eff407755af24bd99b659fa64ec907f18d/lightpanda`.

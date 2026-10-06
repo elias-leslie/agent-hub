@@ -33,5 +33,12 @@ def test_release_metadata_exposes_dom_and_cache_contracts(capsys):
         assert "--selector" in metadata["help"][command]
         assert "--wait-script" in metadata["help"][command]
         assert "lightpanda" in metadata["help"][command]
+        help_text = metadata["help"][command]
+        assert 'document.querySelector("article")?.innerText.includes("Conclusion")' in help_text
+        assert "document.body.textContent can include inline scripts and styles" in help_text
+        assert "verify the returned facts" in help_text
+        assert "direct content_complete describes the returned extraction view" in help_text
+        assert "coverage.source_completeness remains unverified" in help_text
     assert "--artifact" in metadata["help"]["refocus"]
+    assert "coverage.source_completeness remains unverified" in metadata["help"]["refocus"]
     assert "digest" in metadata["help"]["doctor"]

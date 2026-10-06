@@ -297,6 +297,20 @@ def test_fetch_forwards_lightpanda_options(monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)["content_complete"] is False
 
 
+def test_fetch_help_explains_scoped_readiness_and_coverage(capsys):
+    from app.cli.web_research import main
+    with pytest.raises(SystemExit) as exc:
+        main(["fetch", "--help"])
+    assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert '--selector article' in help_text
+    assert 'document.querySelector("article")?.innerText.includes("Conclusion")' in help_text
+    assert "inline scripts and styles" in help_text
+    assert "verify the returned facts after readiness passes" in help_text
+    assert "direct content_complete describes the returned extraction view" in help_text
+    assert "coverage.source_completeness remains unverified" in help_text
+
+
 def test_batch_failure_returns_nonzero_with_all_results(monkeypatch, capsys):
     from app.cli.web_research import main
     async def fake_batch(urls, **kwargs):
