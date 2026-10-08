@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -18,7 +17,6 @@ _MIGRATION_PATH = (
     / 'versions'
     / '9a6c8e1f4b20_align_neri_post_handoff_agents.py'
 )
-_SEED_PATH = _BACKEND / 'scripts' / 'seed_agents_data' / 'seed_data.json'
 
 
 def _load_migration_module() -> ModuleType:
@@ -33,9 +31,9 @@ def _load_migration_module() -> ModuleType:
 
 def test_alignment_accepts_seeded_live_and_already_aligned_prompts() -> None:
     migration = _load_migration_module()
-    seed = json.loads(_SEED_PATH.read_text())
-    agents = {item['slug']: item for item in seed['agents']}
 
+    # Historical migration preimages are immutable; current role seeds evolve
+    # separately and are covered by the seed-agent policy tests.
     assert migration._digest(migration._EXPECTED_LIVE_REVIEWER_PROMPT) == (
         'c148adb15b961cd48fd3f276fc2c604ace6a270f656ba5cbbd63ee5030c7207c'
     )
@@ -46,10 +44,7 @@ def test_alignment_accepts_seeded_live_and_already_aligned_prompts() -> None:
         (migration._PREVIOUS_REPORTER_PROMPT,),
     ) == migration._REPORTER_PROMPT
     assert migration._aligned_prompt(
-        agents['neri-reviewer']['system_prompt'].replace(
-            'record gpt-daybreak-blue-latest as the executing model.',
-            'record gpt-6-astra as the executing model.',
-        ),
+        migration._SEEDED_REVIEWER_PROMPT,
         migration._REVIEWER_PROMPT,
         (
             migration._SEEDED_REVIEWER_PROMPT,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -17,9 +16,9 @@ from app.llm.types import Context, SimpleStreamOptions, Tool
 _BACKEND = Path(__file__).resolve().parents[1]
 
 
-def _migration():
-    path = _BACKEND / "alembic/versions/c8d9e0f1a2b3_lead_with_gpt_6_1_sol.py"
-    spec = importlib.util.spec_from_file_location("gpt61_migration", path)
+def _migration(filename: str = "c8d9e0f1a2b3_lead_with_gpt_6_1_sol.py"):
+    path = _BACKEND / "alembic/versions" / filename
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -60,18 +59,19 @@ def test_routes_accept_exact_preimages_and_reject_unknown_configuration():
 
 def test_review_prompt_identity_changes_without_other_semantic_changes():
     migration = _migration()
-    seeds = json.loads((_BACKEND / "scripts/seed_agents_data/seed_data.json").read_text())
-    reviewer = next(agent for agent in seeds["agents"] if agent["slug"] == "neri-reviewer")
-    prior_seed = reviewer["system_prompt"].replace(
-        "record gpt-daybreak-blue-latest as the executing model.", migration._NEW_IDENTITY,
-    )
-    previous = migration._reviewer_prompt(prior_seed, reverse=True)
+    alignment = _migration("9a6c8e1f4b20_align_neri_post_handoff_agents.py")
+    # Pin the historical predecessor independently of current role seed edits.
+    previous = alignment._REVIEWER_PROMPT
+    assert migration._digest(previous) == migration._REVIEWER_DIGEST
     desired = migration._reviewer_prompt(previous)
     assert desired == previous.replace(migration._OLD_IDENTITY, migration._NEW_IDENTITY)
     assert migration._reviewer_prompt(desired) == desired
     assert migration._reviewer_prompt(desired, reverse=True) == previous
-    with pytest.raises(RuntimeError, match="unknown model-migration revision"):
-        migration._reviewer_prompt(previous + " altered boundary")
+    assert migration._reviewer_prompt(previous, reverse=True) == previous
+    for reverse in (False, True):
+        for prompt in (previous, desired):
+            with pytest.raises(RuntimeError, match="unknown model-migration revision"):
+                migration._reviewer_prompt(prompt + " altered boundary", reverse=reverse)
 
 
 def test_codex_preserves_supported_effort_and_rejects_minimal():

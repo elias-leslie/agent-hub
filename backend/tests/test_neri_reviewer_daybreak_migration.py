@@ -17,9 +17,9 @@ from app.llm.types import Context, SimpleStreamOptions
 _BACKEND = Path(__file__).resolve().parents[1]
 
 
-def _migration():
-    path = _BACKEND / "alembic/versions/d9e0f1a2b3c4_pin_neri_reviewer_daybreak.py"
-    spec = importlib.util.spec_from_file_location("neri_daybreak_migration", path)
+def _migration(filename: str = "d9e0f1a2b3c4_pin_neri_reviewer_daybreak.py"):
+    path = _BACKEND / "alembic/versions" / filename
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -55,16 +55,24 @@ def test_exact_route_and_seed_preserve_reporter_and_disable_fallback():
 
 def test_prompt_change_is_exact_reversible_and_rejects_unrecognized_revisions():
     migration = _migration()
-    seed = json.loads((_BACKEND / "scripts/seed_agents_data/seed_data.json").read_text())
-    desired = next(agent for agent in seed["agents"] if agent["slug"] == "neri-reviewer")["system_prompt"]
-    previous = migration._reviewer_prompt(desired, reverse=True)
+    alignment = _migration("9a6c8e1f4b20_align_neri_post_handoff_agents.py")
+    # This route migration changes only the historical model identity sentence;
+    # the current compact seed intentionally has no model-delivery declaration.
+    previous = alignment._REVIEWER_PROMPT.replace(
+        "record gpt-6-astra as the executing model.", migration._PREVIOUS_IDENTITY,
+    )
+    desired = migration._reviewer_prompt(previous)
     assert migration._digest(previous) == migration._PREVIOUS_DIGEST
     assert migration._digest(desired) == migration._DIGEST
     assert desired == previous.replace(migration._PREVIOUS_IDENTITY, migration._IDENTITY)
     assert migration._reviewer_prompt(previous) == desired
     assert migration._reviewer_prompt(desired) == desired
-    with pytest.raises(RuntimeError, match="unknown Daybreak-route revision"):
-        migration._reviewer_prompt(previous + " altered review requirement")
+    assert migration._reviewer_prompt(desired, reverse=True) == previous
+    assert migration._reviewer_prompt(previous, reverse=True) == previous
+    for reverse in (False, True):
+        for prompt in (previous, desired):
+            with pytest.raises(RuntimeError, match="unknown Daybreak-route revision"):
+                migration._reviewer_prompt(prompt + " altered review requirement", reverse=reverse)
 
 
 @pytest.mark.parametrize('reverse', [False, True])
