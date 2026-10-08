@@ -185,7 +185,16 @@ def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
     )
 
 
-
+def test_security_research_seed_keeps_neri_as_a_separate_bounty_record_system() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    policy = next(prompt["content"] for prompt in data["prompts"] if prompt["slug"] == "security-research-operating-policy")
+    assert "Neri is a separate bug-bounty hunting record system" in policy
+    assert "must not be used as the store or workflow engine for general security research" in policy
+    for obsolete in (
+        "local-worker", "Jev", "Neri capability workflow", "fixed-denominator cohort",
+        "session binding", "autonomy-proven", "transcript-first", "training-ready",
+    ):
+        assert obsolete not in policy
 def test_portfolio_agents_prefer_codex_with_capable_gemini_fallbacks() -> None:
     data = json.loads(SEED_FILE.read_text())
     roles = {agent["slug"]: agent for agent in data["agents"]}

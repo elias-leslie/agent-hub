@@ -13,8 +13,7 @@ from __future__ import annotations
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
 from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
-from app.llm.runtime_profiles import get_model_runtime_profile, neri_qwen_compat
-from app.llm.types import Api, Model, ModelCost
+from app.llm.types import Api, Model, ModelCost, OpenAICompletionsCompat
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
 _PROVIDER_API: dict[str, Api] = {
@@ -95,8 +94,6 @@ _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
 def resolve_llm_model(
     model_id: str,
     provider: str,
-    *,
-    allow_restricted_runtime: bool = False,
 ) -> Model[Api]:
     """Build a pi-mono ``Model[Api]`` from the legacy catalog.
 
@@ -104,23 +101,12 @@ def resolve_llm_model(
     provider name from ``app.services.agent_routing.get_provider_for_model``.
     """
     resolved_id = resolve_model(model_id)
-    runtime_profile = get_model_runtime_profile(resolved_id)
-    if runtime_profile is not None and not allow_restricted_runtime:
-        raise ValueError(
-            f"Restricted runtime model requires its dedicated execution boundary: {resolved_id}"
-        )
-    upstream_id = (
-        runtime_profile.server_model_id
-        if runtime_profile is not None
-        else _upstream_model_id(resolved_id, provider)
-    )
+    upstream_id = _upstream_model_id(resolved_id, provider)
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
-    base_url = runtime_profile.base_url if runtime_profile is not None else _resolve_base_url(provider)
+    base_url = _resolve_base_url(provider)
 
     if entry is None:
-        if runtime_profile is not None:
-            raise ValueError(f"Pinned runtime model is absent from the catalog: {resolved_id}")
         # Catalog miss — return a minimal Model so the adapter can still try.
         return Model(
             id=upstream_id,
@@ -160,10 +146,26 @@ def resolve_llm_model(
         max_tokens=caps.max_output_tokens,
         headers=headers,
         compat=(
-            neri_qwen_compat()
-            if (runtime_profile is not None or (provider == "local" and entry.family == "qwen"))
+            _local_qwen_compat()
+            if provider == "local" and entry.family == "qwen"
             else None
         ),
+    )
+
+
+def _local_qwen_compat() -> OpenAICompletionsCompat:
+    """Preserve Qwen chat-template semantics for local model administration."""
+    return OpenAICompletionsCompat(
+        supports_store=False,
+        supports_developer_role=False,
+        supports_reasoning_effort=False,
+        supports_usage_in_streaming=True,
+        max_tokens_field="max_tokens",
+        thinking_format="qwen-chat-template",
+        supports_strict_mode=False,
+        supports_long_cache_retention=False,
+        reasoning_budget_tokens={"low": 512, "medium": 1_024, "xhigh": 2_048},
+        loopback_only_transport=True,
     )
 
 

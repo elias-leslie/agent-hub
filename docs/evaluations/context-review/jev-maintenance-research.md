@@ -14,7 +14,7 @@ Researched 2026-09-19. Sources below are implementations and reports by their au
 
 ## Local evidence and resulting choice
 
-The [existing evaluation record](README.md) retains the Neri agent's useful adverse experience: broad screening retained 18 of 18 candidates, so it demonstrated no downstream savings; Jev confused absent/out-of-scope evidence with contradiction in one comparative case. A prompt correction was a repeat, not a fresh holdout. Our 13-case synthetic context screen matched its labels and replayed without calls, but neither those cases nor the outside reports measure production maintenance outcomes.
+The [existing evaluation record](README.md) retains a 13-case synthetic context screen that matched its labels and replayed without calls. Neither those cases nor the outside reports measure production maintenance outcomes.
 
 Consequently:
 

@@ -1,1 +1,0 @@
-91a82f4c-a12e-4d8e-a08d-bc4ff7dda130|ah.sessions|friction|Same task checked 15+ times in heartbeat loop — no dedup/cooldown on repeated status checks|Same task checked 15+ times in heartbeat loop — no dedup/cooldown on repeated status checks||open|agent-hub||2026-03-05 12:18:55.630233+00|2026-03-12 23:46:04.634175+00

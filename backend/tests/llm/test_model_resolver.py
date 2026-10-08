@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from app.config import settings
+from app.constants.catalog_entries import MODEL_CATALOG
 from app.llm.model_resolver import resolve_llm_model
+from app.llm.types import OpenAICompletionsCompat
 
 
 def test_gemini_uses_google_sdk_default_endpoint() -> None:
@@ -51,3 +54,18 @@ def test_cloudflare_catalog_id_maps_to_workers_ai_model_id(monkeypatch) -> None:
 
     assert model.id == "@cf/moonshotai/kimi-k2.6"
     assert model.base_url == "https://api.cloudflare.com/client/v4/accounts/acct-123/ai/v1"
+
+
+def test_local_qwen_keeps_shared_endpoint_and_request_semantics(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "local_openai_base_url", "http://127.0.0.1:11434/v1")
+    model = resolve_llm_model("local/qwen3.8-27b-gsq-rco-iq3_s", "local")
+    assert model.id == "qwen3.8-27b-gsq-rco-iq3_s"
+    assert model.base_url == settings.local_openai_base_url
+    assert isinstance(model.compat, OpenAICompletionsCompat)
+    assert model.compat.thinking_format == "qwen-chat-template"
+    assert model.compat.reasoning_budget_tokens == {"low": 512, "medium": 1024, "xhigh": 2048}
+
+
+def test_seed_catalog_does_not_restore_neri_experiment_model() -> None:
+    assert all(entry.id != "local/qwen3.8-27b-gsq-rco-iq3_s-mtp" for entry in MODEL_CATALOG)
+    assert all(entry.alias != "local/neri-qwen" for entry in MODEL_CATALOG)

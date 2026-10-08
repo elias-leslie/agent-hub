@@ -31,32 +31,7 @@ Configuration binding and native tool/usage events were observed. Hidden system 
 
 A subsequent live curator review compared the Safety Directive with the two global owner-mandate memories. Review `ea51fb0c-e6cb-42d9-813a-6960040e7069` identified redundancy but joined non-contiguous source excerpts; the evidence validator rejected the response and retained it without source changes. After making the response schema explicitly require one contiguous quotation per source, review `067feca9-6c71-4e85-9a97-5326f487edac` returned two validated redundancy findings through `memory-curator` on `codex/gpt-5.5`. Both records remain in canonical review history. This is a corrected repeat, not an independent qualification. Regression tests retain rejection of joined excerpts and verify reviewer provenance for rejected responses.
 
-## Source-frozen repeat
-
-`native-runtime-frozen-v1.json` retains a fresh repeat registered with a fingerprint of every relevant source/test file. All six runs verified that the checkout remained unchanged. All six final answers were inspected and correct for the requested read-only inspections. The same canonical startup payload sizes were used. Later review-eligibility and catalog-display fixes are outside this measured snapshot.
-
-| Observed total across three cases | Scoped | Research active |
-| --- | ---: | ---: |
-| Total input tokens, including cached | 658,683 | 991,053 |
-| Cached input tokens | 570,752 | 821,120 |
-| Uncached input tokens | 87,931 | 169,933 |
-| Output tokens | 8,530 | 9,095 |
-| Elapsed seconds | 185.71 | 207.65 |
-| Shell command calls | 38 | 48 |
-| First command used prescribed ST search | 0/3 | 1/3 |
-| Commands returning nonzero | 1 | 4 |
-| Correct requested answer | 3/3 | 3/3 |
-| Operator interventions | 0 | 0 |
-
-The one initial ST search returned nonzero; tool-family choice alone did not establish a successful first call. Other failures included searching nonexistent `src`/`tests` directories. Scoped totals improved in this repeat, but the exploratory totals were mixed. Three tasks with one run per condition do not establish a reliable effect or a general coding-success rate. Subscription cost allocation and exact cache pricing are unknown, so no billed-dollar native comparison is claimed. Both favorable and adverse results remain retained.
-
 `delivery-scope-receipt.json` separately verifies the canonical CLI: Security Research is absent for global, Agent Hub and Neri context, present in its own project, and present in Agent Hub only when its workflow is explicitly activated. That is generated delivery evidence, not proof of native model receipt.
-
-## Neri experience used
-
-Reviewed the existing Neri TypeSafe preflight continuation results, comparison summary, dispatch/dedup receipt, and the recorded Jev learning (`M:c35555c9`). Its fresh native comparison was 11/11 versus Jev 10/11: Jev confidently treated absent/out-of-scope evidence as a contradiction. A narrower corrected question fixed that case, but was not a new holdout. Broad filtering retained all 18 candidates, showing no demonstrated efficiency benefit. Native responses also invented memory identifiers, so apparent recall did not prove consumption.
-
-Consequently this implementation uses narrow typed pair classification, explicit `unknown` for missing evidence, canonical eligibility before screening, immutable source evidence, and optional human-reviewed remedies. It uses its own durable semantic cache and accounting; it neither borrows Neri's pilot budget nor changes Neri's workflow. Confidence is not permission, proof of usefulness, or authority to rewrite a source.
 
 ## Repeating the evaluations
 

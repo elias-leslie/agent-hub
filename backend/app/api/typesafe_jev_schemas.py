@@ -1,14 +1,10 @@
-"""Typed request and response contract for the bounded TypeSafe Jev pilot."""
+"""Typed request and response contracts for TypeSafe System One."""
 
 from __future__ import annotations
 
 from typing import Annotated, Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
-
-JEV_MODEL_ID = "jev-1.13.0"
-JEV_PRICING_CONTRACT = "jev-1.13.0:usd-0.042-per-million-input:2026-09-19"
 
 
 class StrictModel(BaseModel):
@@ -48,43 +44,11 @@ class ScoreQuestion(StrictModel):
 JevQuestion = Annotated[NoulQuestion | ChoiceQuestion | ScoreQuestion, Field(discriminator="type")]
 
 
-class SourceProvenance(StrictModel):
-    source_id: str = Field(min_length=1)
-    revision: str = Field(min_length=1)
-    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
-class RubricProvenance(StrictModel):
-    rubric_id: str = Field(min_length=1)
-    revision: str = Field(min_length=1)
-    rubric_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
-class ObservationProvenance(StrictModel):
-    series_id: str = Field(min_length=1)
-    ordinal: int = Field(ge=1)
-    purpose: str = Field(min_length=1)
-
-
 class SystemOneRequest(StrictModel):
-    """Reusable typed transport, without a pilot budget or ledger identity."""
+    """State and typed questions for one System One model."""
     state: JsonValue
     questions: dict[str, JevQuestion] = Field(min_length=1)
     model: str = Field(min_length=1)
-
-
-class TypeSafeJevRequest(StrictModel):
-    request_id: UUID
-    state: JsonValue
-    questions: dict[str, JevQuestion] = Field(min_length=1)
-    sources: list[SourceProvenance] = Field(min_length=1)
-    rubric: RubricProvenance
-    observation: ObservationProvenance | None = None
-    model: Literal["jev-1.13.0"] = JEV_MODEL_ID
-    pricing_contract: Literal[
-        "jev-1.13.0:usd-0.042-per-million-input:2026-09-19"
-    ] = JEV_PRICING_CONTRACT
-    dry_run: bool = False
 
 
 class JevUsage(StrictModel):
@@ -119,30 +83,3 @@ class TypeSafeProviderResponse(StrictModel):
     model: str
     answers: dict[str, JevAnswer]
     usage: JevUsage
-
-
-class JevBudgetView(StrictModel):
-    ceiling_usd: str
-    spent_usd: str
-    reserved_usd: str
-    available_usd: str
-    reservation_usd: str
-
-
-class TypeSafeJevResult(StrictModel):
-    request_id: UUID
-    request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    status: Literal["dry_run", "reserved", "succeeded", "failed", "uncertain"]
-    deduplicated: bool = False
-    model_requested: str
-    model_observed: str | None = None
-    pricing_contract: str
-    provider_request_id: str | None = None
-    usage: JevUsage | None = None
-    answers: dict[str, JevAnswer] | None = None
-    budget: JevBudgetView
-    sources: list[SourceProvenance]
-    rubric: RubricProvenance
-    observation: ObservationProvenance | None = None
-    error_kind: str | None = None
-    error_detail: str | None = None

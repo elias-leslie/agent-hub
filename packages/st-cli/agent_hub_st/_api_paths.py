@@ -35,10 +35,6 @@ MEMORY_EPISODE_TAGS_PATH = "/api/memory/episodes/{uuid}/tags"
 AGENTS_BASE_PATH = "/api/agents"
 AGENTS_PREVIEW_PATH = "/api/agents/{slug}/preview"
 MODELS_BASE_PATH = "/api/models"
-NERI_LOCAL_WORKER_STATUS_PATH = "/api/neri/local-worker/status"
-NERI_LOCAL_WORKER_EVALUATE_PATH = "/api/neri/local-worker/evaluate"
-NERI_LOCAL_WORKER_BENCHMARK_PATH = "/api/neri/local-worker/benchmarks"
-NERI_JEV_EVALUATE_PATH = "/api/neri/jev/evaluate"
 
 # ── Prompts ──────────────────────────────────────────────────────────
 PROMPTS_BASE_PATH = "/api/prompts"
