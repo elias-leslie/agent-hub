@@ -69,6 +69,14 @@ context selection, not transport-side payload trimming. Before changing a
 home-owned settings file, the installer writes one unique read-only backup; an
 idempotent install does not create backup churn.
 
+Claude's context wrapper lives at `~/.claude/bin/claude`; the native installer
+owns `~/.local/bin/claude`. The wrapper follows that updater-managed launcher
+on every invocation, so `claude update`, version checks and new sessions use
+the same installation. `CLAUDE_REAL` remains an explicit override, and the npm
+binary is a fallback for npm installations. A link back to the context wrapper
+is skipped to prevent recursion. The installer retires the obsolete
+`claude-real` alias, which stayed pinned when the native updater advanced.
+
 The client applies a 15-second subprocess deadline because an unbounded local
 CLI child can otherwise hang a native TUI hook and survive as an orphan. Set
 `AGENT_HUB_CONTEXT_TIMEOUT_SECONDS` when a slower local deployment needs a

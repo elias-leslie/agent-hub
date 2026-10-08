@@ -80,6 +80,10 @@
   "retired": [
     {
       "surface": "claude_code",
+      "target": ".local/bin/claude-real"
+    },
+    {
+      "surface": "claude_code",
       "target": ".claude/hooks/memory-client.sh"
     },
     {

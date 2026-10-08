@@ -50,14 +50,25 @@ SYSTEM_PROMPT_OPTIONS = (
 async def _real_claude() -> str:
     candidates = (
         os.getenv("CLAUDE_REAL"),
-        str(Path.home() / ".local/bin/claude-real"),
+        # Resolve the updater-managed link on every launch so updates and
+        # sessions agree, without maintaining another version-pinned alias.
+        str(Path.home() / ".local/bin/claude"),
         str(
             Path.home()
             / ".local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
         ),
     )
+    launcher = await asyncio.to_thread(Path(__file__).resolve)
     for candidate in candidates:
-        if candidate and await asyncio.to_thread(os.access, candidate, os.X_OK):
+        if not candidate:
+            continue
+        try:
+            resolved = await asyncio.to_thread(Path(candidate).resolve)
+        except (OSError, RuntimeError):
+            continue
+        # Older installs may put this wrapper at the native launcher path.
+        # Following that link would recursively exec this same launcher.
+        if resolved != launcher and await asyncio.to_thread(os.access, candidate, os.X_OK):
             return candidate
     raise SystemExit("agent-hub-claude: real Claude Code binary not found (set CLAUDE_REAL)")
 

@@ -709,6 +709,7 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     (home / ".claude").mkdir(parents=True)
     (home / ".claude/CLAUDE.md").write_text("stale parallel policy")
     _executable(home / ".local/bin/claude-gpt", "#!/bin/sh\nexit 0\n")
+    _executable(home / ".local/bin/claude-real", "#!/bin/sh\nexit 0\n")
     (home / ".claude/claude-gpt-settings.json").write_text("{}")
 
     surfaces = [
@@ -737,6 +738,7 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     assert (home / ".gemini/config/plugins/agent-hub-context/rules/canonical-context.md").is_symlink()
     assert (home / ".claude/bin/claude").is_symlink()
     assert not (home / ".local/bin/claude-gpt").exists()
+    assert not (home / ".local/bin/claude-real").exists()
     assert not (home / ".claude/claude-gpt-settings.json").exists()
     assert (home / ".codex/bin/codex").is_symlink()
     assert (home / ".codex/config.toml").is_symlink()
@@ -1307,6 +1309,92 @@ with open({str(real_log)!r}, "w", encoding="utf-8") as handle:
     assert launched["hash"] is None
     assert launched["contract"] is None
     assert launched["text"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("launch_args", [("--version",), ("-p", "hello")])
+async def test_claude_launcher_follows_native_updates(
+    tmp_path: Path, launch_args: tuple[str, ...]
+) -> None:
+    home = tmp_path / "home"
+    native = home / ".local/bin/claude"
+    versions = home / ".local/share/claude/versions"
+    newest = _executable(
+        versions / "2.1.294", "#!/bin/sh\nprintf '2.1.294 (Claude Code)\\n'\n"
+    )
+    previous = _executable(
+        versions / "2.1.258",
+        f"""#!/usr/bin/env python3
+import os, sys
+if sys.argv[1:] == ["update"]:
+    os.unlink({str(native)!r})
+    os.symlink({str(newest)!r}, {str(native)!r})
+    print("Updated to 2.1.294")
+else:
+    print("2.1.258 (Claude Code)")
+""",
+    )
+    native.parent.mkdir(parents=True, exist_ok=True)
+    native.symlink_to(previous)
+    (native.parent / "claude-real").symlink_to(previous)
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "AGENT_HUB_CONTEXT_CLIENT": str(tmp_path / "missing-context-client"),
+    }
+    env.pop("CLAUDE_REAL", None)
+
+    code, stdout, stderr = await _run(str(CLAUDE_LAUNCHER), "update", env=env)
+    assert code == 0, stderr
+    assert "Updated to 2.1.294" in stdout
+    assert native.resolve() == newest
+    # The obsolete compatibility alias deliberately stays pinned to the old binary.
+    assert (native.parent / "claude-real").resolve() == previous
+
+    code, stdout, stderr = await _run(str(CLAUDE_LAUNCHER), *launch_args, env=env)
+    assert code == 0, stderr
+    assert stdout.strip() == "2.1.294 (Claude Code)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("native_state", ["missing", "broken", "wrapper"])
+async def test_claude_launcher_ignores_pinned_alias_without_recursing(
+    tmp_path: Path, native_state: str
+) -> None:
+    home = tmp_path / "home"
+    _executable(
+        home / ".local/bin/claude-real", "#!/bin/sh\nprintf 'obsolete pinned Claude\\n'\n"
+    )
+    _executable(
+        home / ".local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
+        "#!/bin/sh\nprintf 'npm Claude\\n'\n",
+    )
+    native = home / ".local/bin/claude"
+    if native_state == "broken":
+        native.symlink_to(tmp_path / "missing-binary")
+    elif native_state == "wrapper":
+        native.symlink_to(CLAUDE_LAUNCHER)
+    env = {**os.environ, "HOME": str(home)}
+    env.pop("CLAUDE_REAL", None)
+
+    code, stdout, stderr = await _run(str(CLAUDE_LAUNCHER), "--version", env=env)
+    assert code == 0, stderr
+    assert stdout.strip() == "npm Claude"
+
+
+@pytest.mark.asyncio
+async def test_claude_launcher_honors_explicit_binary_override(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _executable(home / ".local/bin/claude", "#!/bin/sh\nprintf 'native Claude\\n'\n")
+    override = _executable(tmp_path / "override", "#!/bin/sh\nprintf 'override Claude\\n'\n")
+
+    code, stdout, stderr = await _run(
+        str(CLAUDE_LAUNCHER),
+        "--version",
+        env={**os.environ, "HOME": str(home), "CLAUDE_REAL": str(override)},
+    )
+    assert code == 0, stderr
+    assert stdout.strip() == "override Claude"
 
 
 @pytest.mark.asyncio
