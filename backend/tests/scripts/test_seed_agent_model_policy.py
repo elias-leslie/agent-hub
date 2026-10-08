@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 
 from app.constants.catalog_entries import MODEL_CATALOG
-from app.constants.models import LOCAL_NERI_QWEN3_8_27B_IQ3_S
 
 SUBSCRIPTION_ONLY_SLUGS = {
-    "learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor", "neri-orchestrator",
+    "learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor",
 }
 
 # Exact owner-promoted routes supersede the older provider-diversity policy.
@@ -26,7 +25,6 @@ GPT61_PROMOTED_EFFORTS = {
     "ui-mockup-designer": "medium",
     "ux-polisher": "medium",
     "researcher": "medium",
-    "neri-orchestrator": "medium",
     "neri-reporter": "medium",
 }
 
@@ -45,7 +43,6 @@ EXCLUDED_SLUGS = {
     "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
     "neri-reporter",
     "neri-reviewer",
-    "neri-local-candidate",  # passive local qualification must fail visibly, never fall back
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
     # Explicit comparison/critic lanes retain provider identity.
     "jobs-cover-codex",
@@ -164,29 +161,28 @@ def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
     )
 
 
-def test_neri_local_candidate_is_exact_fallback_free_and_memory_free() -> None:
+def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
     data = json.loads(SEED_FILE.read_text())
-    candidate = next(agent for agent in data["agents"] if agent["slug"] == "neri-local-candidate")
-
-    assert candidate["primary_model_id"] == LOCAL_NERI_QWEN3_8_27B_IQ3_S
-    assert candidate["fallback_models"] == []
-    assert candidate.get("escalation_model_id") is None
-    assert candidate["max_concurrency"] == 1
-    memory = candidate["memory_config"]
+    retained_agents = {"neri-hunter", "neri-reporter", "neri-reviewer"}
+    retired_agents = {"neri-local-candidate", "neri-orchestrator"}
+    retired_prompts = {
+        "neri-local-candidate-system-prompt",
+        "neri-local-worker-routing",
+        "neri-orchestrator-system-prompt",
+    }
+    assert {
+        agent["slug"] for agent in data["agents"] if agent["slug"].startswith("neri-")
+    } == retained_agents
     assert not any(
-        memory[key]
-        for key in (
-            "injection_enabled",
-            "project_index_enabled",
-            "tool_capabilities_enabled",
-            "include_mandates",
-            "include_guardrails",
-            "include_references",
-            "reference_index_enabled",
-            "continuity_enabled",
-        )
+        prompt["slug"] in retired_prompts
+        or prompt.get("owner_agent_slug") in retired_agents
+        for prompt in data["prompts"]
     )
-    assert memory["audience_tags"] == []
+    assert not any(
+        assignment["agent_slug"] in retired_agents
+        or assignment["prompt_slug"] in retired_prompts
+        for assignment in data["agent_prompt_assignments"]
+    )
 
 
 
