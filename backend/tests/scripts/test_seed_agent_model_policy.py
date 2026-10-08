@@ -43,7 +43,7 @@ EXCLUDED_SLUGS = {
     "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
-    "neri-hunter",  # controlled lab comparisons require explicit subscription-only routing
+    "neri-hunter",  # Neri bounty roles retain explicit subscription-only routing
     "neri-reporter",
     "neri-reviewer",
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
@@ -133,7 +133,7 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
 
 
 
-def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
+def test_neri_bounty_roles_preserve_explicit_subscription_only_routes() -> None:
     data = json.loads(SEED_FILE.read_text())
     roles = {
         agent["slug"]: agent
@@ -141,7 +141,16 @@ def test_neri_labs_preserve_explicit_subscription_only_routes() -> None:
         if agent["slug"] in {"neri-hunter", "neri-reporter", "neri-reviewer"}
     }
     assert set(roles) == {"neri-hunter", "neri-reporter", "neri-reviewer"}
+    assert roles["neri-hunter"]["description"] == (
+        "Authorized bug-bounty hunting for one selected target under exact scope and evidence limits"
+    )
+    assert roles["neri-reviewer"]["description"] == (
+        "Independent review of one exact frozen bug-bounty report and cited sanitized evidence"
+    )
     for agent in roles.values():
+        description = agent["description"].lower()
+        for obsolete in ("lab", "grading-key", "training", "qualification", "cohort", "local-worker"):
+            assert obsolete not in description, agent["slug"]
         assert agent["primary_model_id"].startswith("codex/")
         assert not agent.get("fallback_models")
         assert not agent.get("escalation_model_id")
