@@ -88,14 +88,14 @@ def test_list_preserves_effective_gate_information() -> None:
 def test_import_preserves_owner_state_and_legacy_clock(tmp_path: Path) -> None:
     path = tmp_path / "owner.json"
     payload = {
-        "project_id": "neri",
-        "workflow_key": "neri/notification_maintenance",
-        "source_ref": "neri:notification-maintenance",
+        "project_id": "portfolio-ai",
+        "workflow_key": "portfolio-ai/retrain_ml",
+        "source_ref": "portfolio:retrain",
         "schedule_type": "every",
         "schedule_value": "300000",
         "enabled": True,
         "next_run_at": "2026-09-23T15:30:00Z",
-        "config": {"push_enabled": False},
+        "config": {},
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 

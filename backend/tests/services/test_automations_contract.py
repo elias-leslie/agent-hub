@@ -151,7 +151,7 @@ def test_summitflow_workflow_gates_do_not_disable_unrelated_project_routines():
     policy = SimpleNamespace(config={"autonomous_enabled": False, "routine_upkeep_enabled": True})
     assert policy_profile_gate_reasons("summitflow/work_pickup", policy) == ["autonomous_disabled"]
     assert policy_profile_gate_reasons("summitflow/task_generation", policy) == []
-    assert policy_profile_gate_reasons("neri/notification_maintenance", policy) == []
+    assert policy_profile_gate_reasons("portfolio-ai/retrain_ml", policy) == []
 
 
 def test_existing_summitflow_policy_values_keep_their_types():

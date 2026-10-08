@@ -1,7 +1,7 @@
 """Freeze, evaluate and replay the context-screening holdout through its real ledger.
 
 Run with -m scripts.evaluate_context_review --model <catalog-id> [--execute].
-Default is a read-only estimate. This never uses the Neri pilot budget.
+Default is a read-only estimate.
 """
 from __future__ import annotations
 

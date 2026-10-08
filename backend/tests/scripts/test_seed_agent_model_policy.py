@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
+
+import pytest
 
 from app.constants.catalog_entries import MODEL_CATALOG
 
@@ -183,6 +186,26 @@ def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
         or assignment["prompt_slug"] in retired_prompts
         for assignment in data["agent_prompt_assignments"]
     )
+
+
+@pytest.mark.parametrize(("slug", "body_sha256"), [
+    ("neri-hunter", "8c15f141cca20fe7b8ba995ae43cc6344f115b1eab1d6cfa8d8add321cca531f"),
+    ("neri-reviewer", "70233a25b35713a534593ccc12c78c909d11f984d36f5d2e1c056823416a9175"),
+])
+def test_neri_seed_bodies_match_canonical_bounty_only_previews(slug: str, body_sha256: str) -> None:
+    # Exact live agent_system_prompt sections observed on 2026-10-08; do not
+    # bake the inherited global prompt/context into an agent's system body.
+    data = json.loads(SEED_FILE.read_text())
+    body = next(agent["system_prompt"] for agent in data["agents"] if agent["slug"] == slug)
+    assert sha256(body.encode()).hexdigest() == body_sha256
+    assert "`neri-records` operating boundary" in body
+    assert "Never submit" in body
+    for obsolete in (
+        "catalog", "catalogue", "qualification", "cohort", "capture", "admission",
+        "neri-research", "local-worker", "gpt-daybreak", "routing mismatch",
+        "executing model", "model allowlist", "session binding",
+    ):
+        assert obsolete not in body.lower()
 
 
 def test_security_research_seed_keeps_neri_as_a_separate_bounty_record_system() -> None:

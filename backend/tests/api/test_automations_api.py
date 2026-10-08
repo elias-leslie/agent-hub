@@ -128,9 +128,9 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
         yield db
 
     definition = SimpleNamespace(
-        workflow_key="neri/notification_maintenance", owner_project_id="neri",
-        version=1, label="Notification maintenance",
-        config_schema={"type": "object", "properties": {"push_enabled": {"type": "boolean"}}},
+        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
+        version=1, label="Retrain ML",
+        config_schema={"type": "object", "additionalProperties": False},
     )
     app.dependency_overrides[get_db] = override_db
     try:
@@ -144,10 +144,10 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
                 headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
             ) as client:
                 response = await client.post("/api/automations/profiles/import", json={
-                    "project_id": "neri", "workflow_key": "neri/notification_maintenance",
-                    "source_ref": "neri:notification-maintenance", "schedule_type": "every",
+                    "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/retrain_ml",
+                    "source_ref": "portfolio:retrain", "schedule_type": "every",
                     "schedule_value": "300000", "schedule_timezone": "UTC",
-                    "config": {"push_enabled": True}, "enabled": False,
+                    "config": {}, "enabled": False,
                     "next_run_at": "2026-09-23T15:30:00Z",
                     "last_run_at": "2026-09-23T15:25:00Z",
                     "run_count": 7, "owner_gate_reasons": ["quiet_hours"],
@@ -167,11 +167,11 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
 @pytest.mark.asyncio
 async def test_cutover_requires_owner_fence_and_preserves_imported_cursor():
     row = AutomationProfile(
-        id="profile-1", project_id="neri", workflow_key="neri/notification_maintenance",
-        definition_version=1, label="Notification maintenance", schedule_type="every",
-        schedule_value="300000", schedule_timezone="UTC", config={"push_enabled": True},
+        id="profile-1", project_id="portfolio-ai", workflow_key="portfolio-ai/retrain_ml",
+        definition_version=1, label="Retrain ML", schedule_type="every",
+        schedule_value="300000", schedule_timezone="UTC", config={},
         enabled=True, clock_owner="legacy", owner_gate_reasons=[],
-        source_ref="neri:notification-maintenance", revision=3,
+        source_ref="portfolio:retrain", revision=3,
         imported_unreviewed_count=0,
     )
     db = AsyncMock()

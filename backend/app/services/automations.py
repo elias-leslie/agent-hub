@@ -43,7 +43,6 @@ EXTERNAL_WORKFLOWS: tuple[tuple[str, str, str, str, dict], ...] = (
     ("jobinator-4000/nightly_screen", "jobinator-4000", "Nightly screen", "group_round_robin", {}),
     ("jobinator-4000/nightly_enrich", "jobinator-4000", "Nightly enrich", "cancel_in_progress", {}),
     ("jobinator-4000/deferred_ab_sweep", "jobinator-4000", "Deferred A/B sweep", "cancel_in_progress", {}),
-    ("neri/notification_maintenance", "neri", "Notification maintenance", "cancel_in_progress", {"type": "every", "value": "300000", "timezone": "UTC"}),
 )
 
 
@@ -123,19 +122,6 @@ def external_config_schema(workflow_key: str) -> dict:
         return {"type": "object", "properties": {"upkeep_batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
     if workflow_key == "summitflow/work_pickup":
         return {"type": "object", "properties": {"batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
-    if workflow_key == "neri/notification_maintenance":
-        return {
-            "type": "object",
-            "properties": {
-                "push_enabled": {"type": "boolean"},
-                "timezone": {"type": "string", "maxLength": 80},
-                "digest_time": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-                "quiet_start": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-                "quiet_end": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
-            },
-            "required": ["push_enabled"],
-            "additionalProperties": False,
-        }
     if workflow_key.startswith("jobinator-4000/"):
         properties: dict = {"limit": {"type": ["integer", "null"], "minimum": 1}}
         if workflow_key == "jobinator-4000/nightly_screen":
@@ -284,11 +270,6 @@ def validate_profile_payload(payload: dict, definition: AutomationDefinition | N
             validate_json(data["config"], definition.config_schema or {"type": "object"})
         except JsonSchemaError as exc:
             raise AutomationValidationError(f"config: {exc.message}") from exc
-        if definition.workflow_key == "neri/notification_maintenance":
-            try:
-                ZoneInfo(str(data["config"].get("timezone") or "America/New_York"))
-            except ZoneInfoNotFoundError as exc:
-                raise AutomationValidationError("config.timezone is invalid") from exc
     return data
 
 

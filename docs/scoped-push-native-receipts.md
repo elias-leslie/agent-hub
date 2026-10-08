@@ -42,9 +42,7 @@ never another application. This path applies only when both `application_id`
 and the internal service header are omitted; a missing or invalid credential on
 an explicitly scoped call cannot silently fall back. Verified scoped calls do not include legacy rows.
 Direct Agent Hub transport callers default to its dashboard application owner,
-not a broadcast. Neri must register its own application service-worker
-subscription before receiving alerts. Application inboxes remain in their
-respective applications.
+not a broadcast. Application inboxes remain in their respective applications.
 
 The additive migration refuses to erase ownership. A code rollback must retain
 the scoped send filter: old broadcast implementations are incompatible once
