@@ -190,6 +190,7 @@ def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
 
 @pytest.mark.parametrize(("slug", "body_sha256"), [
     ("neri-hunter", "8c15f141cca20fe7b8ba995ae43cc6344f115b1eab1d6cfa8d8add321cca531f"),
+    ("neri-reporter", "9b97ee17c8c6c20dcf29463bad82be197a290bbd221d2ed282a0b26d6b923d2e"),
     ("neri-reviewer", "70233a25b35713a534593ccc12c78c909d11f984d36f5d2e1c056823416a9175"),
 ])
 def test_neri_seed_bodies_match_canonical_bounty_only_previews(slug: str, body_sha256: str) -> None:
@@ -198,12 +199,17 @@ def test_neri_seed_bodies_match_canonical_bounty_only_previews(slug: str, body_s
     data = json.loads(SEED_FILE.read_text())
     body = next(agent["system_prompt"] for agent in data["agents"] if agent["slug"] == slug)
     assert sha256(body.encode()).hexdigest() == body_sha256
-    assert "`neri-records` operating boundary" in body
+    if slug == "neri-reporter":
+        assert "from one frozen, sanitized Neri packet" in body
+        assert "Return only the caller's JSON schema" in body
+    else:
+        assert "`neri-records` operating boundary" in body
     assert "Never submit" in body
     for obsolete in (
         "catalog", "catalogue", "qualification", "cohort", "capture", "admission",
         "neri-research", "local-worker", "gpt-daybreak", "routing mismatch",
         "executing model", "model allowlist", "session binding",
+        "training", "source_unit.events", "source_event_ids",
     ):
         assert obsolete not in body.lower()
 
