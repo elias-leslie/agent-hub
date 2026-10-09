@@ -53,7 +53,16 @@ def _set_routes(*, reverse: bool) -> None:
         )
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
+    if _fresh_bootstrap():
+        # No production data exists to transform; the seed supplies current rows.
+        return
     _set_routes(reverse=False)
 
 

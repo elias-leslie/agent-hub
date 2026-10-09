@@ -50,6 +50,13 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations with a live DB connection."""
+    from alembic.runtime.migration import MigrationContext
+
+    # A run that starts from base bootstraps an empty database: there is no
+    # production data for data migrations to transform, and the seed supplies
+    # the current catalog and agents afterwards. Data migrations with exact
+    # preimage checks read this flag to skip their data changes.
+    config.attributes["fresh_bootstrap"] = MigrationContext.configure(connection).get_current_revision() is None
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():

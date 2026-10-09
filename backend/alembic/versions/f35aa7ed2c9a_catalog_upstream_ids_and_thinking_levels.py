@@ -75,7 +75,16 @@ def _fill(conn, sql: str, params: dict[str, str]) -> None:
         raise RuntimeError(f"Model '{params['id']}' has an unknown model-migration revision")
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
+    if _fresh_bootstrap():
+        # No production data exists to transform; the seed supplies current rows.
+        return
     op.add_column("models", sa.Column("thinking_level_map", postgresql.JSONB(), nullable=True))
     op.add_column("models", sa.Column("upstream_id", sa.String(200), nullable=True))
     conn = op.get_bind()
