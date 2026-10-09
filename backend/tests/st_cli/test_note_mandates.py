@@ -18,15 +18,22 @@ note_app = typer.Typer()
 note_app.command("note")(note_mod.note)
 
 
-def test_mandates_preserves_compact_and_json_contracts() -> None:
-    fake = {"mandates": {"items": ["**A**: do x.", "**B**: do y."], "count": 2}}
+def test_mandates_preserves_compact_and_json_contracts(monkeypatch) -> None:
+    monkeypatch.delenv(mandates_mod._CONTRACT_ENV, raising=False)
+    fake = {
+        "status": "ok", "estimated_tokens": 7, "payload_hash": "abc123", "rendered": "x",
+        "blocks": [{"block_id": "prompt:a", "kind": "global_guardrail", "title": "A", "estimated_tokens": 7}],
+    }
     with patch.object(mandates_mod, "agent_hub_request", return_value=fake):
         compact = runner.invoke(mandates_app, [], obj=OutputContext(compact=True))
         structured = runner.invoke(mandates_app, [], obj=OutputContext(compact=False))
 
     assert compact.exit_code == structured.exit_code == 0
-    assert "**A**: do x." in compact.stdout
-    assert json.loads(structured.stdout) == fake["mandates"]
+    assert "prompt:a global_guardrail tokens=7 A" in compact.stdout
+    data = json.loads(structured.stdout)
+    assert data["items"] == fake["blocks"]
+    assert data["count"] == 1
+    assert data["payload_hash"] == "abc123"
 
 
 def test_note_saves_a_reference_episode_with_kind_tag() -> None:
