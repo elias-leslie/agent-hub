@@ -9,7 +9,7 @@ import {
   Pencil,
   Search,
 } from 'lucide-react'
-import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { getProviderColor } from '@/components/settings/constants'
 import { cn } from '@/lib/utils'
 
 interface CapabilityFilters {
@@ -135,10 +135,7 @@ export function ModelFilters({
         <div className="flex flex-wrap gap-2">
           {Object.entries(providers).map(([id, displayName]) => {
             const isSelected = selectedProviders.has(id)
-            const providerColor = PROVIDER_COLORS[id] ?? {
-              dot: 'bg-slate-400',
-              bg: 'border-slate-500/20',
-            }
+            const providerColor = getProviderColor(id)
             return (
               <button
                 key={id}

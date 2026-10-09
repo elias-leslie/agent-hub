@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import type { ModelOption, ModelScores } from '@/components/chat/use-models'
-import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { getProviderColor } from '@/components/settings/constants'
 import { formatCatalogModelPricing } from '@/lib/model-pricing'
 import { cn } from '@/lib/utils'
 
@@ -43,7 +43,7 @@ export function ScoreBreakdown({ models }: SectionProps) {
                 !model.capabilities.supports_chat
                   ? null
                   : model.scores[category]
-              const providerColor = PROVIDER_COLORS[model.provider]
+              const providerColor = getProviderColor(model.provider)
               return (
                 <div key={model.id} className="flex items-center gap-3">
                   <div className="w-32 flex-shrink-0">
@@ -61,14 +61,11 @@ export function ScoreBreakdown({ models }: SectionProps) {
                   </div>
                   <div className="flex-1 h-6 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className={cn(
-                        'h-full rounded-full transition-all duration-500',
-                        providerColor.dot.replace(
-                          'bg-',
-                          'bg-gradient-to-r from-',
-                        ),
-                      )}
-                      style={{ width: `${score ?? 0}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${score ?? 0}%`,
+                        backgroundColor: providerColor.chart,
+                      }}
                     />
                   </div>
                   <span className="text-xs font-mono font-semibold text-slate-300 w-10 text-right">
@@ -92,7 +89,7 @@ export function CompositeScore({ models }: SectionProps) {
       </h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider]
+          const providerColor = getProviderColor(model.provider)
           return (
             <div
               key={model.id}
@@ -126,7 +123,7 @@ export function CostComparison({ models }: SectionProps) {
       <h3 className="text-sm font-semibold text-slate-100">Cost Comparison</h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider]
+          const providerColor = getProviderColor(model.provider)
           const pricing = formatCatalogModelPricing(model)
           return (
             <div
@@ -178,7 +175,7 @@ export function ContextWindow({ models }: SectionProps) {
       <h3 className="text-sm font-semibold text-slate-100">Context Window</h3>
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
-          const providerColor = PROVIDER_COLORS[model.provider]
+          const providerColor = getProviderColor(model.provider)
           return (
             <div
               key={model.id}
@@ -242,7 +239,7 @@ export function CapabilitiesMatrix({ models }: SectionProps) {
           </thead>
           <tbody>
             {models.map((model) => {
-              const providerColor = PROVIDER_COLORS[model.provider]
+              const providerColor = getProviderColor(model.provider)
               return (
                 <tr key={model.id} className="border-b border-slate-800/50">
                   <td className="py-3 px-4">
@@ -319,7 +316,7 @@ export function RemoveButtons({ models, onRemoveModel }: RemoveButtonsProps) {
   return (
     <div className="flex flex-wrap gap-2">
       {models.map((model) => {
-        const providerColor = PROVIDER_COLORS[model.provider]
+        const providerColor = getProviderColor(model.provider)
         return (
           <button
             key={model.id}

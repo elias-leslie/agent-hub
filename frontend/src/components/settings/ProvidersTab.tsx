@@ -1,14 +1,16 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { getProviderInfo, isOAuthProvider, PROVIDER_COLORS } from './constants'
+import { getProviderColor, getProviderInfo, isOAuthProvider } from './constants'
 import { ProviderCard } from './ProviderCard'
 import { useProvidersTab } from './useProvidersTab'
 
 export function ProvidersTab() {
   const {
     isLoading,
-    providerIds,
+    catalogError,
+    providers,
+    liveProviderNames,
     credentialsByProvider,
     editingProvider,
     setEditingProvider,
@@ -53,15 +55,21 @@ export function ProvidersTab() {
       <h3 className="text-sm font-medium text-slate-100">
         Provider Credentials
       </h3>
+      {catalogError && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          Couldn&apos;t load the provider list from the model catalog. Showing
+          providers with stored credentials only.
+        </p>
+      )}
 
       <div className="grid gap-3">
-        {providerIds.map((providerId) => {
-          const provider = getProviderInfo(providerId)
+        {providers.map(({ id: providerId, retired }) => {
+          const provider = getProviderInfo(providerId, {
+            displayName: liveProviderNames[providerId],
+            retired,
+          })
           const creds = credentialsByProvider[provider.id] ?? []
-          const colors = PROVIDER_COLORS[provider.id] ?? {
-            dot: 'bg-slate-400',
-            bg: 'border-slate-500/20',
-          }
+          const colors = getProviderColor(provider.id)
           const isEditing = editingProvider === provider.id
           const isAdding = addingProvider === provider.id
           const isConfirmDelete = confirmingDelete === provider.id

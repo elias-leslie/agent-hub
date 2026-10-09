@@ -13,7 +13,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { ModelOption } from '@/components/chat/use-models'
-import { PROVIDER_COLORS } from '@/components/settings/constants'
+import { getProviderColor } from '@/components/settings/constants'
 import { formatCatalogModelPricing } from '@/lib/model-pricing'
 import { cn } from '@/lib/utils'
 import { ModelRadar } from './model-radar'
@@ -59,19 +59,13 @@ function availabilityBadge(
   return null
 }
 
-const DEFAULT_PROVIDER_COLOR = {
-  dot: 'bg-slate-400',
-  bg: 'border-slate-500/20',
-} as const
-
 export function ModelCard({
   model,
   isSelected,
   onSelect,
   onExpand,
 }: ModelCardProps) {
-  const providerColor =
-    PROVIDER_COLORS[model.provider] ?? DEFAULT_PROVIDER_COLOR
+  const providerColor = getProviderColor(model.provider)
   const typedOnly =
     model.capabilities.supports_typed_judgment &&
     !model.capabilities.supports_chat

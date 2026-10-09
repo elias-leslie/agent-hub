@@ -56,6 +56,20 @@ export function ProviderCard({
   const [pendingCredentialDeleteId, setPendingCredentialDeleteId] = useState<
     number | null
   >(null)
+  if (provider.retired) {
+    return (
+      <RetiredProviderCard
+        provider={provider}
+        credentials={credentials}
+        isConfirmDelete={isConfirmDelete}
+        isDeletingThis={isDeletingThis}
+        onDeleteAll={onDeleteAll}
+        onConfirmDelete={onConfirmDelete}
+        onCancelDelete={onCancelDelete}
+      />
+    )
+  }
+
   const managedCredentials = provider.credentialFields
     ? credentials.filter((cred) =>
         provider.credentialFields?.some(
@@ -217,6 +231,63 @@ export function ProviderCard({
           onSaveMulti={onSaveMulti}
         />
       )}
+    </div>
+  )
+}
+
+function RetiredProviderCard({
+  provider,
+  credentials,
+  isConfirmDelete,
+  isDeletingThis,
+  onDeleteAll,
+  onConfirmDelete,
+  onCancelDelete,
+}: Pick<
+  ProviderCardProps,
+  | 'provider'
+  | 'credentials'
+  | 'isConfirmDelete'
+  | 'isDeletingThis'
+  | 'onDeleteAll'
+  | 'onConfirmDelete'
+  | 'onCancelDelete'
+>) {
+  const count = credentials.length
+  return (
+    <div className="rounded-lg border border-dashed border-slate-800 p-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-500" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-slate-100">
+              {provider.name}
+            </p>
+            <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+              Retired
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {provider.hint} {count} stored credential{count === 1 ? '' : 's'}.
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 ml-[1.25rem]">
+        <ProviderActionButtons
+          provider={provider}
+          credentials={credentials}
+          isConfigured={count > 0}
+          isOAuth={false}
+          isConfirmDelete={isConfirmDelete}
+          isDeletingThis={isDeletingThis}
+          hasOAuthToken={false}
+          onEdit={() => {}}
+          onAdd={() => {}}
+          onDeleteAll={onDeleteAll}
+          onConfirmDelete={onConfirmDelete}
+          onCancelDelete={onCancelDelete}
+        />
+      </div>
     </div>
   )
 }

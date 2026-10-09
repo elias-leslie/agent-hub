@@ -109,4 +109,54 @@ describe('ProviderCard', () => {
     )
     expect(onDeleteCredential).toHaveBeenCalledWith(101)
   })
+
+  it('offers only deletion for a retired provider with stored credentials', () => {
+    const onDeleteAll = vi.fn()
+    const retiredProvider: ProviderInfo = {
+      id: 'openrouter',
+      name: 'Openrouter',
+      hint: 'Not in the model catalog. Agent Hub no longer routes to it.',
+      retired: true,
+    }
+    const credentials = [
+      { ...baseCredential, id: 201, provider: 'openrouter' },
+      { ...baseCredential, id: 202, provider: 'openrouter' },
+    ]
+    const { rerender } = renderCard({
+      provider: retiredProvider,
+      credentials,
+      oauthStatus: undefined,
+      onDeleteAll,
+    })
+
+    expect(screen.getByText('Retired')).toBeInTheDocument()
+    expect(screen.getByText(/2 stored credentials/)).toBeInTheDocument()
+    expect(screen.queryByText('sk-****1234')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add/i })).toBeNull()
+    expect(screen.queryByTitle('Edit key')).toBeNull()
+    expect(screen.queryByText('Authenticate')).toBeNull()
+
+    rerender(
+      <ProviderCard
+        provider={retiredProvider}
+        credentials={credentials}
+        colors={{ dot: 'bg-slate-400', bg: 'border-slate-500/20' }}
+        isEditing={false}
+        isAdding={false}
+        isConfirmDelete
+        isSaving={false}
+        error={null}
+        onEdit={vi.fn()}
+        onAdd={vi.fn()}
+        onDeleteAll={onDeleteAll}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+        onConfirmDelete={vi.fn()}
+        onCancelDelete={vi.fn()}
+        isDeletingThis={false}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
+    expect(onDeleteAll).toHaveBeenCalledWith([201, 202])
+  })
 })

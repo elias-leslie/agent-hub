@@ -10,30 +10,12 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { ModelOption } from '@/components/chat/use-models'
+import { getProviderColor } from '@/components/settings/constants'
 
 interface ModelRadarProps {
   models: ModelOption[]
   size?: 'sm' | 'md' | 'lg'
 }
-
-const CHART_COLORS: Record<string, string> = {
-  claude: '#f59e0b', // amber-500
-  gemini: '#3b82f6', // blue-500
-  openai: '#10b981', // green-500
-  openrouter: '#a855f7', // purple-500
-  xai: '#ef4444', // red-500
-  zhipu: '#14b8a6', // teal-500
-  minimax: '#f97316', // orange-500
-  nvidia: '#84cc16', // lime-500
-  cloudflare: '#eab308', // yellow-500
-  codex: '#34d399', // emerald-400
-  deepseek: '#22d3ee', // cyan-400
-  'kimi-code': '#f472b6', // pink-400
-  local: '#94a3b8', // slate-400
-  moonshot: '#8b5cf6', // violet-500
-}
-
-const DEFAULT_CHART_COLOR = '#94a3b8'
 
 function buildScoreRow(
   category: string,
@@ -98,8 +80,8 @@ export function ModelRadar({
             key={model.id}
             name={model.name}
             dataKey={`model${index}`}
-            stroke={CHART_COLORS[model.provider] ?? DEFAULT_CHART_COLOR}
-            fill={CHART_COLORS[model.provider] ?? DEFAULT_CHART_COLOR}
+            stroke={getProviderColor(model.provider).chart}
+            fill={getProviderColor(model.provider).chart}
             fillOpacity={models.length === 1 ? 0.3 : 0.15}
             strokeWidth={2}
           />

@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
+import { useModelsWithSync } from '@/components/chat/use-models'
 import {
   type Credential,
   type CredentialCreate,
@@ -25,9 +26,9 @@ import {
   updateUserPreferences,
 } from '@/lib/api/preferences'
 import {
-  filterVisibleSettingsProviders,
+  buildSettingsProviders,
+  getProviderApiFamily,
   isOAuthProvider,
-  listKnownProviderIds,
 } from './constants'
 import type {
   ProviderHealthData,
@@ -36,10 +37,12 @@ import type {
 
 export function useProvidersTab() {
   const queryClient = useQueryClient()
-  const knownProviderIds = listKnownProviderIds()
-  const oauthProviderIds = knownProviderIds.filter(isOAuthProvider)
+  const catalog = useModelsWithSync()
+  const liveProviderNames = catalog.providers
+  const liveProviderIds = Object.keys(liveProviderNames)
+  const oauthProviderIds = liveProviderIds.filter(isOAuthProvider)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading: credentialsLoading } = useQuery({
     queryKey: ['credentials'],
     queryFn: () => fetchCredentials(),
   })
@@ -208,7 +211,7 @@ export function useProvidersTab() {
       Promise.all(ids.map((id) => deleteCredential(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
-      knownProviderIds.filter(isOAuthProvider).forEach((p) => {
+      oauthProviderIds.forEach((p) => {
         queryClient.invalidateQueries({ queryKey: ['oauth-status', p] })
       })
       queryClient.invalidateQueries({ queryKey: ['provider-status'] })
@@ -295,8 +298,11 @@ export function useProvidersTab() {
 
   function getHealthData(providerId: string): ProviderHealthData | undefined {
     if (!statusData) return undefined
-    // Status API uses adapter names which may differ from UI provider IDs
-    const match = statusData.providers.find((p) => p.name === providerId)
+    // Status API reports adapter families (e.g. openai-completions), not
+    // provider ids, so look up the family that serves this provider.
+    const family = getProviderApiFamily(providerId)
+    if (!family) return undefined
+    const match = statusData.providers.find((p) => p.name === family)
     if (!match) return undefined
     return {
       available: match.available,
@@ -306,11 +312,14 @@ export function useProvidersTab() {
     }
   }
 
-  const providerIds = filterVisibleSettingsProviders([
-    ...knownProviderIds,
-    ...Object.keys(credentialsByProvider),
-    ...(statusData?.providers.map((p) => p.name) ?? []),
-  ])
+  // Without the catalog nothing can be called retired, so a failed catalog
+  // load shows providers with stored credentials as ordinary cards.
+  const providers = catalog.isError
+    ? buildSettingsProviders(Object.keys(credentialsByProvider), [])
+    : buildSettingsProviders(
+        liveProviderIds,
+        Object.keys(credentialsByProvider),
+      )
 
   function getPreferredAuth(providerId: string): 'oauth' | 'api_key' {
     if (providerId === 'codex')
@@ -330,8 +339,10 @@ export function useProvidersTab() {
   }
 
   return {
-    isLoading,
-    providerIds,
+    isLoading: credentialsLoading || catalog.isLoading,
+    catalogError: catalog.isError,
+    providers,
+    liveProviderNames,
     credentialsByProvider,
     editingProvider,
     setEditingProvider,

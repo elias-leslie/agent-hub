@@ -176,6 +176,7 @@ function ApiKeyActions({
           <button
             onClick={() => onDeleteAll(credentials.map((c) => c.id))}
             disabled={isDeletingThis}
+            aria-label="Confirm delete"
             className="p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
           >
             {isDeletingThis ? (
@@ -186,6 +187,7 @@ function ApiKeyActions({
           </button>
           <button
             onClick={onCancelDelete}
+            aria-label="Cancel delete"
             className="p-1.5 rounded-md hover:bg-slate-800 text-slate-500 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
@@ -196,7 +198,7 @@ function ApiKeyActions({
 
     return (
       <div className="flex items-center gap-1 flex-wrap">
-        {provider.id === 'gemini' && (
+        {provider.id === 'gemini' && !provider.retired && (
           <button
             onClick={onAdd}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
@@ -205,23 +207,32 @@ function ApiKeyActions({
             Add Key
           </button>
         )}
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
-          title={provider.id === 'gemini' ? 'Update primary key' : 'Edit key'}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
+        {!provider.retired && (
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
+            title={provider.id === 'gemini' ? 'Update primary key' : 'Edit key'}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           onClick={onConfirmDelete}
           className="p-1.5 rounded-md hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors"
           title={credentials.length > 1 ? 'Delete all keys' : 'Delete key'}
+          aria-label={
+            credentials.length > 1
+              ? `Delete all ${provider.name} credentials`
+              : `Delete ${provider.name} credential`
+          }
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     )
   }
+
+  if (provider.retired) return null
 
   // Show "Add Key" for all unconfigured providers (including OAuth providers that also accept API keys)
   return (
