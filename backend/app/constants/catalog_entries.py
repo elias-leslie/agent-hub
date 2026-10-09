@@ -311,9 +311,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(0.00, 0.00), context_window=272_000, speed_tier="medium",
         capabilities=_CODEX_CAPABILITIES, knowledge_cutoff="2026-02-16", family="gpt",
         availability=(
-            "codex_oauth_subscription; verified_2026-10-09; listed_in_codex_models_2026-10-09; "
-            "rolling_latest_alias_codex_reports_no_snapshot; requires_access_programs_cyber_daybreak_blue; "
-            "openai_api_docs_deprecate_the_api_alias_default_snapshot_gpt-5.6-sol"
+            "codex_oauth_subscription; verified_2026-10-09; rolling_alias_no_snapshot; "
+            "needs_access_programs_cyber_daybreak_blue; openai_api_alias_deprecated_snapshot_gpt-5.6-sol"
         ),
         access_programs={"cyber": "daybreak_blue"},
     ),

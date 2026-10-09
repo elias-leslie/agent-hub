@@ -88,3 +88,27 @@ def test_routes_accept_exact_preimage_and_reject_unknown_configuration():
             migration._check_route(
                 slug, {**route["before"], "primary_model_id": "unrecognized/model"}, route["before"]
             )
+
+
+def test_migration_strings_fit_their_columns():
+    from sqlalchemy import String
+
+    from app.models.model_catalog import ModelAlias, ModelCatalogEntry
+
+    data = _data()
+    rows = [
+        *(dict(r) for r in data["new_models"]),
+        *({c: v["after"] for c, v in changes.items()} for changes in data["updated_models"].values()),
+    ]
+    columns = ModelCatalogEntry.__table__.columns
+    for row in rows:
+        for column, value in row.items():
+            kind = columns[column].type
+            if isinstance(kind, String) and kind.length and isinstance(value, str):
+                assert len(value) <= kind.length, (column, len(value), value)
+    alias_columns = ModelAlias.__table__.columns
+    for alias in data["new_aliases"]:
+        for column, value in alias.items():
+            kind = alias_columns[column].type
+            if isinstance(kind, String) and kind.length:
+                assert len(value) <= kind.length, (column, value)
