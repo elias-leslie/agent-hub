@@ -6,6 +6,7 @@ KNOWN_ROOTS always see the current cached project-root mapping.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -48,18 +49,20 @@ class _RootsProxy(dict):
 KNOWN_ROOTS: dict[str, str] = _RootsProxy()
 
 
-def _linked_worktrees(roots: list[Path]) -> list[Path]:
-    """Linked git worktrees of the known roots, read from each root's own git records."""
-    worktrees: list[Path] = []
+def _linked_worktrees(roots: list[str]) -> list[str]:
+    """Real paths of the known roots' linked git worktrees, read from each root's own git records."""
+    worktrees: list[str] = []
     for root in roots:
-        records = root / ".git" / "worktrees"
-        if not records.is_dir():
+        records = os.path.join(root, ".git", "worktrees")
+        if not os.path.isdir(records):
             continue
-        for gitdir_file in records.glob("*/gitdir"):
+        for name in os.listdir(records):
             try:
-                worktrees.append(Path(gitdir_file.read_text().strip()).resolve().parent)
+                with open(os.path.join(records, name, "gitdir")) as gitdir_file:
+                    gitdir = gitdir_file.read().strip()
             except OSError:
                 continue
+            worktrees.append(os.path.dirname(os.path.realpath(gitdir)))
     return worktrees
 
 
@@ -70,13 +73,13 @@ def contained_working_dir(working_dir: str) -> Path:
     temporary directory (scratch). Anything else raises ``ValueError`` before the
     path is touched; the directory is never created.
     """
-    directory = Path(working_dir).resolve()
-    roots = [Path(root).resolve() for root in _get_known_roots().values()]
-    bases = [*roots, Path(tempfile.gettempdir()).resolve()]
-    if not any(directory.is_relative_to(base) for base in bases) and not any(
-        directory.is_relative_to(worktree) for worktree in _linked_worktrees(roots)
-    ):
-        raise ValueError(f"working_dir {working_dir!r} is outside the known project roots and scratch")
-    if not directory.is_dir():
-        raise ValueError(f"working_dir {working_dir!r} is not an existing directory")
-    return directory
+    real = os.path.realpath(working_dir)
+    roots = [os.path.realpath(root) for root in _get_known_roots().values()]
+    bases = [*roots, os.path.realpath(tempfile.gettempdir())]
+    for base in bases + _linked_worktrees(roots):
+        if real == base or real.startswith(base + os.sep):
+            directory = Path(real)
+            if not directory.is_dir():
+                raise ValueError(f"working_dir {working_dir!r} is not an existing directory")
+            return directory
+    raise ValueError(f"working_dir {working_dir!r} is outside the known project roots and scratch")

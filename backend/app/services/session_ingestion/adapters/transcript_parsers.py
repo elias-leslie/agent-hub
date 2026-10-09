@@ -24,25 +24,31 @@ JsonObject = dict[str, object]
 PARSER_VERSION = "agent-hub.transcript-jsonl.v4"
 
 
-def transcript_roots() -> tuple[Path, ...]:
-    """Directories native runtimes write transcripts under.
+def transcript_roots() -> tuple[str, ...]:
+    """Real paths of the directories native runtimes write transcripts under.
 
     ``AGENT_HUB_TRANSCRIPT_ROOTS`` (os.pathsep-separated) replaces the default
     Codex and Claude Code locations, for hosts or tests that keep them elsewhere.
     """
     configured = os.environ.get("AGENT_HUB_TRANSCRIPT_ROOTS")
     if configured:
-        return tuple(Path(root).resolve() for root in configured.split(os.pathsep) if root)
-    home = Path.home()
-    return ((home / ".codex" / "sessions").resolve(), (home / ".claude" / "projects").resolve())
+        return tuple(os.path.realpath(root) for root in configured.split(os.pathsep) if root)
+    home = os.path.expanduser("~")
+    return (
+        os.path.realpath(os.path.join(home, ".codex", "sessions")),
+        os.path.realpath(os.path.join(home, ".claude", "projects")),
+    )
 
 
 def contained_transcript_path(transcript_path: str) -> Path | None:
     """Resolve a caller-supplied transcript path, or ``None`` outside the transcript roots."""
-    path = Path(transcript_path).resolve()
-    if any(path.is_relative_to(root) for root in transcript_roots()):
-        return path
+    real = os.path.realpath(transcript_path)
+    for root in transcript_roots():
+        if real == root or real.startswith(root + os.sep):
+            return Path(real)
     return None
+
+
 _KNOWN_TOP_LEVEL_TYPES = {
     "assistant",
     "compacted",

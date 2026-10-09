@@ -44,3 +44,18 @@ def test_working_dir_must_sit_in_a_known_root_worktree_or_scratch(tmp_path: Path
 
     (root / ".git" / "worktrees" / "lane" / "gitdir").write_text(f"{worktree}/.git\n")
     assert _executor_roots.contained_working_dir(str(worktree)) == worktree.resolve()
+
+
+def test_a_sibling_sharing_the_root_prefix_is_outside(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root, evil = tmp_path / "root", tmp_path / "root-evil"
+    root.mkdir()
+    evil.mkdir()
+    (evil / "t.jsonl").write_text('{"type": "session_meta", "payload": {"id": "s1"}}\n')
+    monkeypatch.setenv("AGENT_HUB_TRANSCRIPT_ROOTS", str(root))
+    monkeypatch.setattr(_executor_roots, "_get_known_roots", lambda: {"p": str(root)})
+    monkeypatch.setattr(_executor_roots.tempfile, "gettempdir", lambda: str(root / "scratch"))
+
+    assert transcript_parsers.contained_transcript_path(str(evil / "t.jsonl")) is None
+    assert transcript_parsers.contained_transcript_path(str(root)) == root.resolve()
+    with pytest.raises(ValueError, match="outside"):
+        _executor_roots.contained_working_dir(str(evil))
