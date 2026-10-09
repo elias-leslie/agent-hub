@@ -19,13 +19,11 @@ SUBSCRIPTION_ONLY_SLUGS = {
 GPT61_PROMOTED_EFFORTS = {
     "coder": "medium",
     "debugger": "high",
-    "designer": "medium",
     "fixer": "medium",
     "optimizer": "high",
     "refactor": "medium",
     "test-writer": "medium",
     "verifier": "high",
-    "ui-mockup-designer": "medium",
     "ux-polisher": "medium",
     "researcher": "medium",
     "neri-reporter": "medium",
@@ -40,7 +38,8 @@ EXCLUDED_SLUGS = {
     "kimi-code-test",
     "market-pulse-scout",
     "minimax-plan-test",
-    "game-art-critic",  # visual critique agent; model panel chosen by image-critique evals
+    "game-art-critic",  # visual critique agent; see the design-critic route test
+    "ui-mockup-designer",
     "game-audio-critic",  # audio input requires an audio-capable model chain
     "ux-polisher",
     "neri-hunter",  # Neri bounty roles retain explicit subscription-only routing
@@ -55,9 +54,10 @@ EXCLUDED_SLUGS = {
     "jobs-tailor-gemini",
     "household-receipt-vision",  # vision extraction; not a text-agent subscription policy
 }
-GROK_ALLOWED_SLUGS = {
-    "game-art-critic",  # tested as best current image critique primary
-}
+# xAI runs only when the owner explicitly requests it.
+GROK_ALLOWED_SLUGS: set[str] = set()
+# Visual design work leads with Claude (CLI subscription) and falls back to Codex.
+CLAUDE_FIRST_DESIGN_SLUGS = {"designer", "ui-mockup-designer", "game-art-critic"}
 SEED_FILE = Path(__file__).resolve().parents[2] / "scripts" / "seed_agents_data" / "seed_data.json"
 
 
@@ -94,9 +94,6 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
         assert fallback_models, f"{slug} should define fallback models"
         assert len(fallback_models) == len(set(fallback_models)), f"{slug} should not contain duplicate fallbacks"
         assert len(providers) >= 2, f"{slug} should keep provider-diverse routing: {model_chain}"
-        assert not any(model.startswith("claude-") for model in model_chain), (
-            f"{slug} should not route Agent Hub workloads to Claude: {model_chain}"
-        )
         assert any(model.startswith("codex/") for model in model_chain), (
             f"{slug} should include at least one subscription-backed route: {model_chain}"
         )
@@ -114,6 +111,15 @@ def test_seed_agents_do_not_use_grok_by_default() -> None:
         assert not grok_models, f"{agent['slug']} should not use Grok/xAI by default: {grok_models}"
 
 
+def test_design_agents_lead_with_claude_then_codex() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    agents = {agent["slug"]: agent for agent in data["agents"]}
+    for slug in CLAUDE_FIRST_DESIGN_SLUGS:
+        agent = agents[slug]
+        assert agent["primary_model_id"].startswith("claude-"), slug
+        assert agent["fallback_models"][0].startswith("codex/"), slug
+
+
 def test_memory_curator_is_retired_from_seeded_agents() -> None:
     data = json.loads(SEED_FILE.read_text())
     assert all(agent["slug"] != "memory-curator" for agent in data["agents"])
@@ -124,8 +130,8 @@ def test_game_audio_critic_has_audio_capable_quota_fallback() -> None:
     data = json.loads(SEED_FILE.read_text())
     audio_critic = next(agent for agent in data["agents"] if agent["slug"] == "game-audio-critic")
 
-    assert audio_critic["primary_model_id"] == "gemini-3.5-flash"
     entries = {entry.id: entry for entry in MODEL_CATALOG}
+    assert entries[audio_critic["primary_model_id"]].capabilities.supports_audio
     assert any(
         model in entries and entries[model].capabilities.supports_audio
         for model in audio_critic["fallback_models"]
