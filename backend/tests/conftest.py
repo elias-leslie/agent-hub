@@ -229,6 +229,12 @@ def clear_db_cache() -> Generator[None]:
 
 
 @pytest.fixture(autouse=True)
+def allow_test_transcript_roots(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Let transcript fixtures under pytest's temp directory pass the root guard."""
+    monkeypatch.setenv("AGENT_HUB_TRANSCRIPT_ROOTS", str(tmp_path_factory.getbasetemp()))
+
+
+@pytest.fixture(autouse=True)
 def clear_hatchet_cache() -> Generator[None]:
     """Clear Hatchet client cache so tests get fresh instances."""
     from app.hatchet_app import get_hatchet

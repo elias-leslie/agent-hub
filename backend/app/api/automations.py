@@ -206,22 +206,33 @@ async def list_registry(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[st
 async def validate_profile(
     payload: dict[str, Any], db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
+    if payload.get("id"):
+        profile = await db.get(AutomationProfile, payload["id"])
+        if profile is None:
+            return _invalid("unknown profile")
+        full = {**service.profile_snapshot(profile), **payload}
+    else:
+        full = payload
+    if not full.get("workflow_key"):
+        return _invalid("workflow_key is required")
     try:
-        if payload.get("id"):
-            profile = await db.get(AutomationProfile, payload["id"])
-            if profile is None:
-                raise KeyError(payload["id"])
-            full = {**service.profile_snapshot(profile), **payload}
-        else:
-            full = payload
         definition = await service.get_definition(db, full["workflow_key"])
+    except KeyError:
+        return _invalid("unknown workflow")
+    try:
         service.reject_persona_runtime_config_write(definition.workflow_key, payload)
         normalized = service.validate_profile_payload(full, definition)
         if not payload.get("id"):
             service.ensure_future_one_time(normalized, datetime.now(UTC))
-        return {"valid": True, "normalized": normalized, "errors": []}
-    except (KeyError, service.AutomationValidationError) as exc:
-        return {"valid": False, "normalized": None, "errors": [str(exc)]}
+    except service.AutomationValidationError as exc:
+        # Report only the message the validator wrote, never an arbitrary exception's text.
+        message = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "invalid profile"
+        return _invalid(message)
+    return {"valid": True, "normalized": normalized, "errors": []}
+
+
+def _invalid(message: str) -> dict[str, Any]:
+    return {"valid": False, "normalized": None, "errors": [message]}
 
 
 @router.get("/projects/{project_id}/policy")

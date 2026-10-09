@@ -22,6 +22,27 @@ from .codex_model_evidence import observe_model_record
 
 JsonObject = dict[str, object]
 PARSER_VERSION = "agent-hub.transcript-jsonl.v4"
+
+
+def transcript_roots() -> tuple[Path, ...]:
+    """Directories native runtimes write transcripts under.
+
+    ``AGENT_HUB_TRANSCRIPT_ROOTS`` (os.pathsep-separated) replaces the default
+    Codex and Claude Code locations, for hosts or tests that keep them elsewhere.
+    """
+    configured = os.environ.get("AGENT_HUB_TRANSCRIPT_ROOTS")
+    if configured:
+        return tuple(Path(root).resolve() for root in configured.split(os.pathsep) if root)
+    home = Path.home()
+    return ((home / ".codex" / "sessions").resolve(), (home / ".claude" / "projects").resolve())
+
+
+def contained_transcript_path(transcript_path: str) -> Path | None:
+    """Resolve a caller-supplied transcript path, or ``None`` outside the transcript roots."""
+    path = Path(transcript_path).resolve()
+    if any(path.is_relative_to(root) for root in transcript_roots()):
+        return path
+    return None
 _KNOWN_TOP_LEVEL_TYPES = {
     "assistant",
     "compacted",
@@ -65,7 +86,9 @@ def transcript_session_identity(transcript_path: str) -> str | None:
 
 def transcript_session_metadata(transcript_path: str) -> dict[str, Any] | None:
     """Read the first own native header, never a copied parent header."""
-    path = Path(transcript_path)
+    path = contained_transcript_path(transcript_path)
+    if path is None:
+        return None
     try:
         with path.open("rb") as transcript:
             for _ in range(32):
@@ -141,8 +164,8 @@ def _unsupported_record_issue(obj: JsonObject) -> str | None:
 
 def read_jsonl_lines(transcript_path: str, checkpoint: str | None = None) -> tuple[list[str], str | None]:
     """Read JSONL transcript lines from an optional line-offset checkpoint."""
-    path = Path(transcript_path)
-    if not path.exists() or path.suffix != ".jsonl":
+    path = contained_transcript_path(transcript_path)
+    if path is None or not path.exists() or path.suffix != ".jsonl":
         return [], checkpoint
 
     try:
@@ -173,8 +196,8 @@ def read_incremental_transcript_events(
     checkpoint: str | None = None,
 ) -> tuple[list[NormalizedEvent], str | None]:
     """Read and parse transcript deltas while preserving parser state across checkpoints."""
-    path = Path(transcript_path)
-    if not path.exists() or path.suffix != ".jsonl":
+    path = contained_transcript_path(transcript_path)
+    if path is None or not path.exists() or path.suffix != ".jsonl":
         return [], checkpoint
 
     parser_checkpoint = _load_parse_checkpoint(checkpoint)
@@ -287,8 +310,8 @@ def inspect_transcript_source(
 ) -> TranscriptSourceHealth:
     """Compare one committed parser cursor with the source currently on disk."""
     observed_at = datetime.now(UTC)
-    path = Path(transcript_path)
-    if path.suffix != ".jsonl" or not path.exists():
+    path = contained_transcript_path(transcript_path)
+    if path is None or path.suffix != ".jsonl" or not path.exists():
         return TranscriptSourceHealth(
             state="blocked",
             observed_at=observed_at,

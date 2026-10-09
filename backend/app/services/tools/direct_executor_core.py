@@ -36,6 +36,7 @@ from app.services.tools._executor_restart_guards import (
     _self_hosting_restart_block_reason,
 )
 from app.services.tools._executor_roots import KNOWN_ROOTS as KNOWN_ROOTS
+from app.services.tools._executor_roots import contained_working_dir
 from app.services.tools._executor_web import (
     fetch_web_page as _fetch_web_page,
 )
@@ -114,9 +115,7 @@ class DirectToolExecutor:
         """
         if working_dir is None and project_id and project_id in KNOWN_ROOTS:
             working_dir = KNOWN_ROOTS[project_id]
-        self.working_dir = Path(working_dir or ".").resolve()
-        if not self.working_dir.exists():
-            self.working_dir.mkdir(parents=True, exist_ok=True)
+        self.working_dir = contained_working_dir(working_dir) if working_dir else Path.cwd()
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
         self._session_id = session_id

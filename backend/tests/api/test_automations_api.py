@@ -306,3 +306,14 @@ async def test_policy_write_refreshes_server_timestamp_before_serializing():
         db.refresh.assert_awaited_once_with(row)
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_validation_errors_are_fixed_messages_not_exception_text():
+    db = AsyncMock()
+    db.get.return_value = None
+    assert (await validate_profile({"id": "nope"}, db))["errors"] == ["unknown profile"]
+    assert (await validate_profile({}, AsyncMock()))["errors"] == ["workflow_key is required"]
+    with patch("app.api.automations.service.get_definition", new_callable=AsyncMock, side_effect=KeyError("x")):
+        result = await validate_profile({"workflow_key": "missing.workflow"}, AsyncMock())
+    assert result == {"valid": False, "normalized": None, "errors": ["unknown workflow"]}
