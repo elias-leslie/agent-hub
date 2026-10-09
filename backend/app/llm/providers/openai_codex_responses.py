@@ -242,6 +242,19 @@ def _tools(tools: list[Tool] | None) -> list[dict[str, Any]] | None:
     ]
 
 
+
+# Matches the OpenAI SDK default: a stalled stream (no bytes for this long)
+# fails instead of hanging the request forever.
+_DEFAULT_STREAM_TIMEOUT_S = 600.0
+_CONNECT_TIMEOUT_S = 30.0
+
+
+def _stream_timeout(options: SimpleStreamOptions | None) -> httpx.Timeout:
+    seconds = _DEFAULT_STREAM_TIMEOUT_S
+    if options is not None and options.timeout_ms is not None:
+        seconds = options.timeout_ms / 1000
+    return httpx.Timeout(seconds, connect=min(_CONNECT_TIMEOUT_S, seconds))
+
 def _body(
     model: Model[Any],
     context: Context,
@@ -411,13 +424,17 @@ async def _run(
     try:
         body = _body(model, context, options)
         async with (
-            httpx.AsyncClient(timeout=None) as client,
+            httpx.AsyncClient(timeout=_stream_timeout(options)) as client,
             _authenticated_response(client, model, body) as response,
         ):
                 if response.status_code >= 400:
                     error_body = (await response.aread()).decode("utf-8", errors="replace")
                     _raise_codex_http_error(response.status_code, error_body, response.headers)
                 async for event in _parse_sse_lines(response):
+                    if options is not None and options.signal is not None and options.signal.is_set():
+                        error = replace(output, stop_reason="aborted", error_message="Request was aborted")
+                        stream.push(ErrorEvent(reason="aborted", error=error))
+                        return
                     error_message = _event_error_message(event)
                     if error_message:
                         raise RuntimeError(error_message)

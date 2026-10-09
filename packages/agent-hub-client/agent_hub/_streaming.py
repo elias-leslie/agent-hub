@@ -127,5 +127,8 @@ async def stream_completion_sse(
                 handle_error(response)
             async for chunk in _stream_sse_lines(response):
                 yield chunk
+    except AgentHubError:
+        # Keep typed errors (auth, rate limit with retry_after, kill switch).
+        raise
     except Exception as e:
         raise AgentHubError(f"SSE streaming error: {e}") from e

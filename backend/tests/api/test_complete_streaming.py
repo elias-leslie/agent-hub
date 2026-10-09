@@ -433,3 +433,57 @@ class TestStreamCompletionGenerator:
         assert first["session_id"] == "connected-session"
         assert first["model"] == CLAUDE_SONNET
         assert first["provider"] == "claude"
+
+
+class TestHeartbeat:
+    @pytest.mark.asyncio
+    async def test_emits_heartbeat_while_inner_is_silent(self) -> None:
+        import asyncio
+
+        from app.api.complete.streaming import _with_heartbeat
+
+        async def slow():
+            await asyncio.sleep(0.05)
+            yield "data: late\n\n"
+
+        chunks = [c async for c in _with_heartbeat(slow(), interval=0.01)]
+
+        assert chunks[-1] == "data: late\n\n"
+        assert ": heartbeat\n\n" in chunks[:-1]
+
+    @pytest.mark.asyncio
+    async def test_propagates_inner_errors(self) -> None:
+        from app.api.complete.streaming import _with_heartbeat
+
+        async def failing():
+            yield "data: one\n\n"
+            raise RuntimeError("boom")
+
+        received: list[str] = []
+        with pytest.raises(RuntimeError, match="boom"):
+            async for chunk in _with_heartbeat(failing(), interval=1):
+                received.append(chunk)
+        assert received == ["data: one\n\n"]
+
+    @pytest.mark.asyncio
+    async def test_closing_consumer_cancels_inner(self) -> None:
+        import asyncio
+
+        from app.api.complete.streaming import _with_heartbeat
+
+        cancelled = asyncio.Event()
+
+        async def endless():
+            try:
+                yield "data: first\n\n"
+                await asyncio.sleep(3600)
+                yield "data: never\n\n"
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        stream = _with_heartbeat(endless(), interval=1)
+        assert await anext(stream) == "data: first\n\n"
+        await stream.aclose()
+
+        assert cancelled.is_set()

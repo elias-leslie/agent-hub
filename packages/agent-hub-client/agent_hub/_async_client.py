@@ -16,6 +16,7 @@ from agent_hub._sessions import AsyncSessionOperationsMixin
 from agent_hub._streaming import stream_completion_sse
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
 from agent_hub.constants import DEFAULT_IMAGE_AGENT
+from agent_hub.exceptions import ClientDisabledError
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -326,6 +327,7 @@ class AsyncAgentHubClient(
                 "Prefer 'agent_slug' to route to pre-configured agents."
             )
 
+        self._check_disabled()
         client = await self._get_client()
         payload = build_completion_payload(
             messages=messages,
@@ -351,12 +353,18 @@ class AsyncAgentHubClient(
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
         headers = self._inject_tracking_headers("sdk.stream_sse", extra_headers=extra_headers)
 
-        async for chunk in stream_completion_sse(
-            client=client,
-            payload=payload,
-            headers=headers,
-        ):
-            yield chunk
+        try:
+            async for chunk in stream_completion_sse(
+                client=client,
+                payload=payload,
+                headers=headers,
+            ):
+                yield chunk
+        except ClientDisabledError as e:
+            # Enter dormant mode, matching non-streaming completions.
+            self._disabled = True
+            self._disabled_reason = e.reason
+            raise
 
     async def generate_image(
         self,

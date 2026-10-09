@@ -26,6 +26,7 @@ cost_tracking.py``, ``workflows/completion.py``) and are composed in
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -61,12 +62,22 @@ class OrchestratorResult:
     tool_calls_count: int = 0
 
 
-def completion_options(temperature: float, thinking_level: str | None, max_tokens: int | None = None) -> SimpleStreamOptions:
+def completion_options(
+    temperature: float,
+    thinking_level: str | None,
+    max_tokens: int | None = None,
+    signal: asyncio.Event | None = None,
+) -> SimpleStreamOptions:
     """One options mapping for HTTP streaming, single-turn and tool execution."""
     reasoning = "xhigh" if thinking_level == "ultrathink" else thinking_level
     if reasoning not in {None, "minimal", "low", "medium", "high", "xhigh"}:
         raise ValueError(f"Unsupported thinking level: {thinking_level}")
-    return SimpleStreamOptions(temperature=temperature, reasoning=cast(ThinkingLevel | None, reasoning), max_tokens=max_tokens)
+    return SimpleStreamOptions(
+        temperature=temperature,
+        reasoning=cast(ThinkingLevel | None, reasoning),
+        max_tokens=max_tokens,
+        signal=signal,
+    )
 
 
 def build_context_from_messages(

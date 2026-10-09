@@ -99,8 +99,9 @@ class StreamContext:
         return True
 
     def close(self) -> None:
-        """Unregister the active stream context."""
-        self._active_contexts.pop(self.session_id, None)
+        """Unregister the active stream context unless a newer stream owns the session."""
+        if self._active_contexts.get(self.session_id) is self:
+            del self._active_contexts[self.session_id]
 
     def next_seq(self) -> int:
         """Return the next monotonic sequence number."""

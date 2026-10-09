@@ -14,9 +14,13 @@ Section 6 cannot drift.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import suppress
+from dataclasses import dataclass
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -256,25 +260,58 @@ async def _emit_events(
         # counterparts in the locked downstream contract.
 
 
+@dataclass(slots=True)
+class _PumpFailure:
+    error: Exception
+
+
+_PUMP_DONE = object()
+
+
 async def _with_heartbeat(
     inner: AsyncIterator[str],
     interval: float = _HEARTBEAT_INTERVAL_S,
-) -> AsyncIterator[str]:
-    """Wrap an SSE iterator with periodic heartbeat comments.
+) -> AsyncGenerator[str]:
+    """Wrap an SSE iterator with heartbeat comments during silence.
 
-    Iterates the inner generator directly (same task) to avoid corrupting
-    provider SDK task-local cancel scopes. Wrapping ``__anext__`` in a
-    separate task (via ``asyncio.ensure_future`` or a drain task) can leave
-    cancellation cleanup spinning at 100% CPU.
+    One dedicated task drains ``inner`` for its whole life, so every
+    ``__anext__`` (and tool execution inside the loop) runs in the same task;
+    the consumer waits on a queue and emits a heartbeat whenever ``interval``
+    passes with no chunk. Long tool runs and slow first tokens therefore keep
+    proxy connections alive. (The removed Claude Agent SDK broke when
+    ``__anext__`` hopped between tasks; providers now run in their own runner
+    tasks and feed queues, so a single drain task is safe.)
     """
-    last_yield = time.monotonic()
-    async for chunk in inner:
-        now = time.monotonic()
-        while now - last_yield >= interval:
-            yield ": heartbeat\n\n"
-            last_yield += interval
-        yield chunk
-        last_yield = time.monotonic()
+    queue: asyncio.Queue[object] = asyncio.Queue(maxsize=16)
+
+    async def pump() -> None:
+        try:
+            async for chunk in inner:
+                await queue.put(chunk)
+        except Exception as exc:
+            await queue.put(_PumpFailure(exc))
+            return
+        await queue.put(_PUMP_DONE)
+
+    task = asyncio.create_task(pump())
+    try:
+        while True:
+            try:
+                async with asyncio.timeout(interval):
+                    item = await queue.get()
+            except TimeoutError:
+                yield ": heartbeat\n\n"
+                continue
+            if item is _PUMP_DONE:
+                return
+            if isinstance(item, _PumpFailure):
+                raise item.error
+            yield cast(str, item)
+    finally:
+        if not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 async def stream_completion(
@@ -374,7 +411,9 @@ async def stream_completion(
                 events = run_completion_stream(
                     llm_model,
                     context,
-                    options=completion_options(temperature, thinking_level, max_tokens),
+                    options=completion_options(
+                        temperature, thinking_level, max_tokens, signal=ctx.cancel_event
+                    ),
                     execute_tools=execute_tools,
                     run_tool=run_tool,
                     max_turns=max(max_tool_turns, 1) if execute_tools else 1,
@@ -408,6 +447,9 @@ async def stream_completion(
         logger.error("Streaming error: %s", exc)
         yield writer.error(_synthetic_error_message(model, provider, str(exc)))
     finally:
+        # Client disconnects close this generator; stop the provider request too.
+        if ctx.cancel_event is not None:
+            ctx.cancel_event.set()
         ctx.close()
         yield "data: [DONE]\n\n"
 

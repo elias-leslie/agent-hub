@@ -292,3 +292,17 @@ async def test_completion_preserves_observed_model_and_separates_cached_input(
     assert result.usage.output == 20
     assert result.usage.total_tokens == 120
     assert result.usage.cost.total == pytest.approx((40 * 2 + 60 * 0.1 + 20 * 10) / 1_000_000)
+
+
+def test_codex_stream_timeout_is_bounded_by_default() -> None:
+    timeout = openai_codex_responses._stream_timeout(None)
+    assert timeout.read == 600.0
+    assert timeout.connect == 30.0
+
+
+def test_codex_stream_timeout_honors_request_timeout() -> None:
+    from app.llm.types import SimpleStreamOptions
+
+    timeout = openai_codex_responses._stream_timeout(SimpleStreamOptions(timeout_ms=5_000))
+    assert timeout.read == 5.0
+    assert timeout.connect == 5.0

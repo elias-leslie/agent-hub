@@ -86,6 +86,7 @@ export function useSessionEvents(
   const filtersRef = useRef({ sessionIds, eventTypes })
   const onEventRef = useRef(onEvent)
   const connectRef = useRef<() => void>(() => {})
+  const sentFilterKeyRef = useRef<string | null>(null)
 
   // Keep refs in sync
   useEffect(() => {
@@ -187,6 +188,9 @@ export function useSessionEvents(
     }
 
     ws.onclose = () => {
+      // A replaced socket (StrictMode remount, manual reconnect) must not
+      // orphan the current one or schedule another reconnect.
+      if (wsRef.current !== ws) return
       wsRef.current = null
       setSubscriptionId(null)
 
@@ -254,10 +258,13 @@ export function useSessionEvents(
     setEvents([])
   }, [])
 
+  // Callers often pass fresh arrays each render; only send when filters change.
   useEffect(() => {
-    if (subscriptionId) {
-      updateFilters(sessionIds, eventTypes)
-    }
+    if (!subscriptionId) return
+    const key = JSON.stringify([subscriptionId, sessionIds, eventTypes])
+    if (key === sentFilterKeyRef.current) return
+    sentFilterKeyRef.current = key
+    updateFilters(sessionIds, eventTypes)
   }, [subscriptionId, sessionIds, eventTypes, updateFilters])
 
   // Auto-connect on mount

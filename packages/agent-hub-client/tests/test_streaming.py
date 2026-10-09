@@ -207,6 +207,58 @@ class TestStreamSSE:
         assert chunks[-1].output_tokens == 120
 
 
+class TestStreamSSEErrors:
+    @pytest.mark.asyncio
+    async def test_stream_sse_raises_typed_rate_limit_error(self, httpx_mock: HTTPXMock) -> None:
+        from agent_hub.exceptions import RateLimitError
+
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            status_code=429,
+            headers={"Retry-After": "7"},
+            json={"detail": "slow down"},
+        )
+
+        async with AsyncAgentHubClient() as client:
+            with pytest.raises(RateLimitError):
+                async for _ in client.stream_sse(
+                    agent_slug="coder",
+                    messages=[{"role": "user", "content": "Hi"}],
+                    project_id="test-project",
+                ):
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_stream_sse_kill_switch_enters_dormant_mode(self, httpx_mock: HTTPXMock) -> None:
+        from agent_hub.exceptions import ClientDisabledError
+
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            status_code=403,
+            json={"error": "client_disabled", "retry_after": -1, "reason": "budget"},
+        )
+
+        async with AsyncAgentHubClient() as client:
+            with pytest.raises(ClientDisabledError):
+                async for _ in client.stream_sse(
+                    agent_slug="coder",
+                    messages=[{"role": "user", "content": "Hi"}],
+                    project_id="test-project",
+                ):
+                    pass
+            assert client.is_disabled()
+
+            with pytest.raises(ClientDisabledError):
+                async for _ in client.stream_sse(
+                    agent_slug="coder",
+                    messages=[{"role": "user", "content": "Hi"}],
+                    project_id="test-project",
+                ):
+                    pass
+
+
 class TestStreamChunkModel:
     """Tests for StreamChunk model."""
 
