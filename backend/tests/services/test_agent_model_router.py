@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
+from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.agent_dto import AgentDTO
 from app.services.agent_model_router import (
     RoutingContext,
@@ -24,8 +24,8 @@ def _agent(**overrides: object) -> AgentDTO:
         "name": "Portfolio Manager",
         "description": None,
         "system_prompt": "test",
-        "primary_model_id": KIMI_CODE_FOR_CODING,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": CODEX_GPT_6_1_SOL,
+        "fallback_models": [DEFAULT_GEMINI_MODEL],
         "escalation_model_id": None,
         "strategies": {},
         "temperature": 0.1,
@@ -54,12 +54,12 @@ async def test_resolve_model_route_uses_agent_assignment_chain() -> None:
         RoutingContext(),
     )
 
-    assert agent.primary_model_id == KIMI_CODE_FOR_CODING
-    assert agent.fallback_models == [GEMINI_FLASH]
-    assert route.primary_model_id == KIMI_CODE_FOR_CODING
-    assert route.fallback_models == [GEMINI_FLASH]
+    assert agent.primary_model_id == CODEX_GPT_6_1_SOL
+    assert agent.fallback_models == [DEFAULT_GEMINI_MODEL]
+    assert route.primary_model_id == CODEX_GPT_6_1_SOL
+    assert route.fallback_models == [DEFAULT_GEMINI_MODEL]
     assert route.mode == "agent_assignment"
-    assert route.provider == "kimi-code"
+    assert route.provider == "codex"
     assert route.score_breakdown == {"agent_assignment_chain": True}
 
 

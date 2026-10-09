@@ -22,7 +22,7 @@ def seed_catalog():
 
 
 def test_build_model_info_includes_extended_capabilities() -> None:
-    entry = get_model_entry("codex/gpt-5.4")
+    entry = get_model_entry("codex/gpt-6.1-sol")
     assert entry is not None
 
     info = _build_model_info(entry)
@@ -52,7 +52,6 @@ def test_get_model_entry_resolves_new_claude_opus_4_7_alias() -> None:
 def test_gemini_flash_lite_models_support_agentic_extraction() -> None:
     for model_id, expected_cost in [
         ("gemini-3.1-flash-lite", (0.25, 1.5)),
-        ("gemini-3.1-flash-lite-preview", (0.25, 1.5)),
         ("gemini-2.5-flash-lite", (0.1, 0.4)),
     ]:
         entry = get_model_entry(model_id)
@@ -91,13 +90,13 @@ def test_gemini_3_5_flash_supports_long_form_audio_review() -> None:
 
 def test_gemini_free_tier_catalog_includes_current_generation_models() -> None:
     for model_id in [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-3-flash-preview",
         "gemini-3.1-flash-lite",
-        "gemini-3.1-flash-lite-preview",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.5-pro",
     ]:
         entry = get_model_entry(model_id)
         assert entry is not None

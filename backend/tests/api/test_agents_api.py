@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
+from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.agent_service import AgentDTO
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -29,8 +29,8 @@ def make_mock_dto(
     defaults = {
         "description": "Generates code",
         "system_prompt": "You are a coder.",
-        "primary_model_id": KIMI_CODE_FOR_CODING,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": CODEX_GPT_6_1_SOL,
+        "fallback_models": [DEFAULT_GEMINI_MODEL],
         "escalation_model_id": None,
         "strategies": {},
         "temperature": 0.7,
@@ -204,7 +204,7 @@ class TestAgentCreateEndpoint:
                     "slug": "new-agent",
                     "name": "New Agent",
                     "system_prompt": "You are new.",
-                    "primary_model_id": KIMI_CODE_FOR_CODING,
+                    "primary_model_id": CODEX_GPT_6_1_SOL,
                 },
             )
 
@@ -240,7 +240,7 @@ class TestAgentCreateEndpoint:
                     "slug": "new-agent",
                     "name": "New Agent",
                     "system_prompt": "You are new.",
-                    "primary_model_id": KIMI_CODE_FOR_CODING,
+                    "primary_model_id": CODEX_GPT_6_1_SOL,
                     "thinking_level": "xhigh",
                     "verbosity_level": "high",
                 },
@@ -270,7 +270,7 @@ class TestAgentCreateEndpoint:
                     "slug": "router",
                     "name": "Router",
                     "system_prompt": "You route context.",
-                    "primary_model_id": KIMI_CODE_FOR_CODING,
+                    "primary_model_id": CODEX_GPT_6_1_SOL,
                     "memory_config": {
                         "runtime_consumer_profile": "agent_operator",
                         "preview_consumer_profile": "agent_operator",
@@ -304,7 +304,7 @@ class TestAgentCreateEndpoint:
                     "slug": "existing",
                     "name": "Existing Agent",
                     "system_prompt": "You exist.",
-                    "primary_model_id": KIMI_CODE_FOR_CODING,
+                    "primary_model_id": CODEX_GPT_6_1_SOL,
                 },
             )
 

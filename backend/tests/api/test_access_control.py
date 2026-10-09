@@ -11,7 +11,7 @@ import pytest
 from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
-from app.constants.models import GEMINI_FLASH
+from app.constants.models import DEFAULT_GEMINI_MODEL
 from app.main import app
 
 
@@ -1100,7 +1100,7 @@ class TestSessionAttribution:
         response = await async_client.post(
             "/api/complete",
             json={
-                "model": GEMINI_FLASH,
+                "model": DEFAULT_GEMINI_MODEL,
                 "messages": [{"role": "user", "content": "test"}],
                 "project_id": "test-session-attribution",
                 "max_tokens": 50,

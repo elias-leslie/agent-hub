@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
+from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -25,7 +25,7 @@ class TestVerificationResult:
             content="Generated code",
             status="completed",
             provider="kimi-code",
-            model=KIMI_CODE_FOR_CODING,
+            model=CODEX_GPT_6_1_SOL,
             input_tokens=100,
             output_tokens=200,
         )
@@ -35,7 +35,7 @@ class TestVerificationResult:
             content="DECISION: APPROVED\nCONFIDENCE: 0.95",
             status="completed",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=200,
             output_tokens=50,
         )
@@ -63,7 +63,7 @@ class TestVerificationResult:
             content="Bad code",
             status="completed",
             provider="kimi-code",
-            model=KIMI_CODE_FOR_CODING,
+            model=CODEX_GPT_6_1_SOL,
             input_tokens=100,
             output_tokens=200,
         )
@@ -73,7 +73,7 @@ class TestVerificationResult:
             content="DECISION: NEEDS_REVISION\nISSUES:\n- Bug in line 5",
             status="completed",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=200,
             output_tokens=100,
         )
@@ -180,7 +180,7 @@ SUGGESTIONS:
             content="Perfect code",
             status="completed",
             provider="kimi-code",
-            model=KIMI_CODE_FOR_CODING,
+            model=CODEX_GPT_6_1_SOL,
             input_tokens=100,
             output_tokens=200,
         )
@@ -190,7 +190,7 @@ SUGGESTIONS:
             content="DECISION: APPROVED\nCONFIDENCE: 0.95",
             status="completed",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=200,
             output_tokens=50,
         )
@@ -230,7 +230,7 @@ SUGGESTIONS:
                     content=f"Code v{iteration}",
                     status="completed",
                     provider="kimi-code",
-                    model=KIMI_CODE_FOR_CODING,
+                    model=CODEX_GPT_6_1_SOL,
                     input_tokens=100,
                     output_tokens=200,
                 )
@@ -243,7 +243,7 @@ SUGGESTIONS:
                         content="DECISION: APPROVED\nCONFIDENCE: 0.9",
                         status="completed",
                         provider="gemini",
-                        model=GEMINI_FLASH,
+                        model=DEFAULT_GEMINI_MODEL,
                         input_tokens=200,
                         output_tokens=50,
                     )
@@ -253,7 +253,7 @@ SUGGESTIONS:
                     content="DECISION: NEEDS_REVISION\nCONFIDENCE: 0.5\nISSUES:\n- Needs work",
                     status="completed",
                     provider="gemini",
-                    model=GEMINI_FLASH,
+                    model=DEFAULT_GEMINI_MODEL,
                     input_tokens=200,
                     output_tokens=100,
                 )
@@ -279,7 +279,7 @@ SUGGESTIONS:
                     content="Still bad code",
                     status="completed",
                     provider="kimi-code",
-                    model=KIMI_CODE_FOR_CODING,
+                    model=CODEX_GPT_6_1_SOL,
                     input_tokens=100,
                     output_tokens=200,
                 )
@@ -289,7 +289,7 @@ SUGGESTIONS:
                 content="DECISION: NEEDS_REVISION\nCONFIDENCE: 0.3\nISSUES:\n- Still broken",
                 status="completed",
                 provider="gemini",
-                model=GEMINI_FLASH,
+                model=DEFAULT_GEMINI_MODEL,
                 input_tokens=200,
                 output_tokens=100,
             )
@@ -315,7 +315,7 @@ SUGGESTIONS:
                     content="",
                     status="error",
                     provider="kimi-code",
-                    model=KIMI_CODE_FOR_CODING,
+                    model=CODEX_GPT_6_1_SOL,
                     input_tokens=0,
                     output_tokens=0,
                     error="API error",
@@ -326,7 +326,7 @@ SUGGESTIONS:
                 content="Should not be called",
                 status="completed",
                 provider="gemini",
-                model=GEMINI_FLASH,
+                model=DEFAULT_GEMINI_MODEL,
                 input_tokens=0,
                 output_tokens=0,
             )

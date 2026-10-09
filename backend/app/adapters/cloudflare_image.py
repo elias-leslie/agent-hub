@@ -5,11 +5,14 @@ Uses the custom REST endpoint at:
 
 Response format: JSON ``{"result": {"image": "<base64-string>"}}``
 
-FLUX.2-dev supports reference images via multipart form data with
+FLUX.2 [klein] 9B supports reference images via multipart form data with
 ``input_image_0`` through ``input_image_3`` (up to 4 images, 512x512 each).
 
 On rate-limit, walks down a fallback chain:
-  FLUX.2-dev → FLUX.1-schnell → SD XL Lightning
+  FLUX.2 [klein] 9B → FLUX.1-schnell → SD XL Lightning
+
+FLUX.2-dev is not used: Workers AI returns HTTP 500 for it on our account
+(verified 2026-10-09) while the same multipart request to klein succeeds.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ import httpx
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import (
     CF_FLUX_1_SCHNELL,
-    CF_FLUX_2_DEV,
+    CF_FLUX_2_KLEIN_9B,
     CF_SD_XL_LIGHTNING,
 )
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
@@ -33,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Maps our cloudflare/<short> IDs to @cf/ model paths.
 _MODEL_PATH: dict[str, str] = {
-    "flux-2-dev": "@cf/black-forest-labs/flux-2-dev",
+    "flux-2-klein-9b": "@cf/black-forest-labs/flux-2-klein-9b",
     "flux-1-schnell": "@cf/black-forest-labs/flux-1-schnell",
     "sd-xl-lightning": "@cf/bytedance/stable-diffusion-xl-lightning",
     "sd-xl-base": "@cf/stabilityai/stable-diffusion-xl-base-1.0",
@@ -47,7 +50,7 @@ _MODEL_PATH: dict[str, str] = {
 _SD_IMG2IMG_MODELS = {"sd-xl-lightning", "sd-xl-base", "sd-v1.5-img2img", "dreamshaper-8-lcm"}
 
 # Ordered best quality → fastest. On rate-limit we walk down.
-_FALLBACK_CHAIN = [CF_FLUX_2_DEV, CF_FLUX_1_SCHNELL, CF_SD_XL_LIGHTNING]
+_FALLBACK_CHAIN = [CF_FLUX_2_KLEIN_9B, CF_FLUX_1_SCHNELL, CF_SD_XL_LIGHTNING]
 
 
 
@@ -86,7 +89,7 @@ class CloudflareImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = CF_FLUX_2_DEV,
+        model: str = CF_FLUX_2_KLEIN_9B,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: bytes | None = None,
@@ -132,9 +135,9 @@ class CloudflareImageAdapter(ImageAdapter):
         url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{path}"
         headers = {"Authorization": f"Bearer {api_key}"}
 
-        # FLUX.2-dev always requires multipart form data
+        # FLUX.2 models always require multipart form data
         short = model.removeprefix("cloudflare/")
-        if short == "flux-2-dev":
+        if short.startswith("flux-2-"):
             resp = await self._call_multipart(url, headers, prompt, reference_image, reference_mime_type)
         else:
             payload: dict[str, Any] = {"prompt": prompt}

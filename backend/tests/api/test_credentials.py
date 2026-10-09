@@ -64,19 +64,19 @@ class TestCreateCredential:
         response = client.post(
             "/api/credentials",
             json={
-                "provider": "kimi-code",
+                "provider": "nvidia",
                 "credential_type": "api_key",
-                "value": "kimi-test-12345678901234567890",
+                "value": "nvapi-test-12345678901234567890",
             },
         )
 
         assert response.status_code == 201
         data = response.json()
         assert data["id"] == 1
-        assert data["provider"] == "kimi-code"
+        assert data["provider"] == "nvidia"
         assert data["credential_type"] == "api_key"
         # Value should be masked
-        assert "kimi" in data["value_masked"]
+        assert "nvap" in data["value_masked"]
         assert "****" in data["value_masked"]
         assert "7890" in data["value_masked"]
         mock_db_session.add.assert_called_once()

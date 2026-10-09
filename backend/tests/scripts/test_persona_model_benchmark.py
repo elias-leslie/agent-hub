@@ -12,10 +12,10 @@ from app.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
-    CODEX_GPT_5_2,
-    CODEX_GPT_5_3,
-    CODEX_GPT_5_3_SPARK,
     CODEX_GPT_5_5,
+    CODEX_GPT_5_6_LUNA,
+    CODEX_GPT_6_1_SOL,
+    CODEX_GPT_6_LUNA,
 )
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
@@ -37,10 +37,10 @@ from scripts.persona_benchmark_report import generate_markdown_report
 
 def test_default_model_roster_includes_seven_configured_candidates() -> None:
     assert DEFAULT_PERSONA_BENCHMARK_MODELS == [
+        CODEX_GPT_6_1_SOL,
         CODEX_GPT_5_5,
-        CODEX_GPT_5_3,
-        CODEX_GPT_5_3_SPARK,
-        CODEX_GPT_5_2,
+        CODEX_GPT_6_LUNA,
+        CODEX_GPT_5_6_LUNA,
         CLAUDE_OPUS,
         CLAUDE_SONNET,
         CLAUDE_HAIKU,

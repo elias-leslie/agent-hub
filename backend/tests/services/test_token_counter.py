@@ -1,6 +1,6 @@
 """Tests for token counter service."""
 
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
@@ -139,10 +139,10 @@ class TestEstimateRequest:
         messages = [{"role": "user", "content": "Hello"}]
 
         claude_estimate = estimate_request(messages, CLAUDE_SONNET, 1000)
-        gemini_estimate = estimate_request(messages, GEMINI_FLASH, 1000)
+        gemini_estimate = estimate_request(messages, DEFAULT_GEMINI_MODEL, 1000)
 
         assert claude_estimate.context_limit == 1000000
-        assert gemini_estimate.context_limit == 1000000
+        assert gemini_estimate.context_limit == 1_048_576
 
 
 class TestGetContextLimit:
@@ -154,7 +154,7 @@ class TestGetContextLimit:
 
     def test_gemini_flash_limit(self):
         """Test Gemini Flash context limit."""
-        assert get_context_limit("gemini-3-flash-preview-exp") == 1000000
+        assert get_context_limit(DEFAULT_GEMINI_MODEL) == 1_048_576
 
     def test_unknown_model_default(self):
         """Test unknown model falls back to default limit."""

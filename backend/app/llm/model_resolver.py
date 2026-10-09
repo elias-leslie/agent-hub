@@ -66,8 +66,6 @@ _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
         "mistral-small-3.1-24b": "@cf/mistralai/mistral-small-3.1-24b-instruct",
         "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
         "glm-4.7-flash": "@cf/zai-org/glm-4.7-flash",
-        "kimi-k2.6": "@cf/moonshotai/kimi-k2.6",
-        "kimi-k2.5": "@cf/moonshotai/kimi-k2.5",
         "gpt-oss-120b": "@cf/openai/gpt-oss-120b",
         "gpt-oss-20b": "@cf/openai/gpt-oss-20b",
         "gemma-4-26b": "@cf/google/gemma-4-26b-a4b-it",
@@ -75,18 +73,10 @@ _PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
         "nemotron-3-120b": "@cf/nvidia/nemotron-3-120b-a12b",
     },
     "nvidia": {
-        "glm-5.2": "z-ai/glm-5.2",
-        "minimax-m3": "minimaxai/minimax-m3",
-        "deepseek-v4-flash-0731": "deepseek-ai/deepseek-v4-flash-0731",
-        "gpt-oss-120b": "openai/gpt-oss-120b",
+        "glm-5.3": "z-ai/glm-5.3",
+        "gpt-oss-20b": "openai/gpt-oss-20b",
         "nemotron-3-super-120b-a12b": "nvidia/nemotron-3-super-120b-a12b",
         "nemotron-3.5-lightning-30b-a3b": "nvidia/nemotron-3.5-lightning-30b-a3b",
-        # Retired upstream (410/404) — mappings kept so old rows resolve to a
-        # clear provider error instead of a confusing "unknown model".
-        "qwen3.5-397b-a17b": "qwen/qwen3.5-397b-a17b",
-        "deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
-        "minimax-m2.7": "minimaxai/minimax-m2.7",
-        "kimi-k2.6": "moonshotai/kimi-k2.6",
     },
 }
 
@@ -105,6 +95,7 @@ def resolve_llm_model(
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
     base_url = _resolve_base_url(provider)
+    headers = {"User-Agent": "KimiCLI/1.5"} if provider in {"kimi-code", "kimi-coding"} else None
 
     if entry is None:
         # Catalog miss — return a minimal Model so the adapter can still try.
@@ -119,6 +110,7 @@ def resolve_llm_model(
             cost=ModelCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0),
             context_window=128_000,
             max_tokens=8192,
+            headers=headers,
         )
 
     caps = entry.capabilities
@@ -127,7 +119,6 @@ def resolve_llm_model(
         + (["image"] if caps.has_vision else [])
         + (["audio"] if caps.supports_audio else [])
     )
-    headers = {"User-Agent": "KimiCLI/1.5"} if provider in {"kimi-code", "kimi-coding"} else None
     return Model(
         id=upstream_id,
         name=entry.name,

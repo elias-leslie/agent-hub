@@ -1,0 +1,5702 @@
+{
+ "deleted_aliases": [
+  {
+   "alias": "2.5-pro",
+   "alias_type": "canonical",
+   "model_id": "gemini-2.5-pro",
+   "source": "seed"
+  },
+  {
+   "alias": "3.1-flash-lite-preview",
+   "alias_type": "canonical",
+   "model_id": "gemini-3.1-flash-lite-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "3.1-pro",
+   "alias_type": "canonical",
+   "model_id": "gemini-3.1-pro-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "cf/flux2",
+   "alias_type": "canonical",
+   "model_id": "cloudflare/flux-2-dev",
+   "source": "seed"
+  },
+  {
+   "alias": "cf/kimi",
+   "alias_type": "canonical",
+   "model_id": "cloudflare/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "cf/kimi-cheap",
+   "alias_type": "canonical",
+   "model_id": "cloudflare/kimi-k2.5",
+   "source": "seed"
+  },
+  {
+   "alias": "codex",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.4-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.1",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.1-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.1-mini",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.1-codex-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.2",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.2-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.3",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.3-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.4",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.4",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-mini",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.4-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-spark",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.3-codex-spark",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.1",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.1-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.2",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.2-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.3",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.3-codex",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.4",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.4",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.4-mini",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.4-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "deepseek",
+   "alias_type": "seed",
+   "model_id": "deepseek/deepseek-v4-flash",
+   "source": "seed"
+  },
+  {
+   "alias": "deepseek-pro",
+   "alias_type": "canonical",
+   "model_id": "deepseek/deepseek-v4-pro",
+   "source": "seed"
+  },
+  {
+   "alias": "flash",
+   "alias_type": "canonical",
+   "model_id": "gemini-3-flash-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "glm-flashx",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-4.7-flashx",
+   "source": "seed"
+  },
+  {
+   "alias": "glm-free",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-4.7-flash",
+   "source": "seed"
+  },
+  {
+   "alias": "glm4.7",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-4.7",
+   "source": "seed"
+  },
+  {
+   "alias": "glm5",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-5",
+   "source": "seed"
+  },
+  {
+   "alias": "glm5-turbo",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-5-turbo",
+   "source": "seed"
+  },
+  {
+   "alias": "glm5.1",
+   "alias_type": "canonical",
+   "model_id": "zhipu/glm-5.1",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt-6.1-sol",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-6.1-sol",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt5.4",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-5.4",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt5.4-mini",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-5.4-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt5.4-nano",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-5.4-nano",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt5.4-pro",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-5.4-pro",
+   "source": "seed"
+  },
+  {
+   "alias": "gpt5.5",
+   "alias_type": "canonical",
+   "model_id": "openai/gpt-5.5",
+   "source": "seed"
+  },
+  {
+   "alias": "kimi",
+   "alias_type": "canonical",
+   "model_id": "moonshot/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "kimi-cheap",
+   "alias_type": "canonical",
+   "model_id": "moonshot/kimi-k2.5",
+   "source": "seed"
+  },
+  {
+   "alias": "kimi-code",
+   "alias_type": "seed",
+   "model_id": "kimi-code/kimi-for-coding",
+   "source": "seed"
+  },
+  {
+   "alias": "local/coder-14b",
+   "alias_type": "canonical",
+   "model_id": "local/qwen2.5-coder:14b",
+   "source": "seed"
+  },
+  {
+   "alias": "local/qwen-coder",
+   "alias_type": "canonical",
+   "model_id": "local/qwen3-coder:30b-a3b",
+   "source": "seed"
+  },
+  {
+   "alias": "local/qwen3",
+   "alias_type": "canonical",
+   "model_id": "local/qwen3:30b-a3b",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax",
+   "alias_type": "seed",
+   "model_id": "minimax/MiniMax-M2.7",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax-fast",
+   "alias_type": "canonical",
+   "model_id": "minimax/MiniMax-M2.7-highspeed",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax-m2.5",
+   "alias_type": "canonical",
+   "model_id": "minimax/MiniMax-M2.5",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax-m2.5-fast",
+   "alias_type": "canonical",
+   "model_id": "minimax/MiniMax-M2.5-highspeed",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax-m3",
+   "alias_type": "canonical",
+   "model_id": "minimax/MiniMax-M3",
+   "source": "seed"
+  },
+  {
+   "alias": "mm/image-01",
+   "alias_type": "canonical",
+   "model_id": "minimax/image-01",
+   "source": "seed"
+  },
+  {
+   "alias": "moonshot",
+   "alias_type": "seed",
+   "model_id": "moonshot/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "nano-banana",
+   "alias_type": "canonical",
+   "model_id": "gemini-2.5-flash-image",
+   "source": "seed"
+  },
+  {
+   "alias": "nano-banana-2",
+   "alias_type": "canonical",
+   "model_id": "gemini-3.1-flash-image-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/deepseek",
+   "alias_type": "canonical",
+   "model_id": "nvidia/deepseek-v4-flash",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/deepseek-0731",
+   "alias_type": "canonical",
+   "model_id": "nvidia/deepseek-v4-flash-0731",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/flux-schnell",
+   "alias_type": "canonical",
+   "model_id": "nvidia/flux.1-schnell",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/glm",
+   "alias_type": "canonical",
+   "model_id": "nvidia/glm-5.2",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/gpt-oss",
+   "alias_type": "canonical",
+   "model_id": "nvidia/gpt-oss-120b",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/kimi",
+   "alias_type": "canonical",
+   "model_id": "nvidia/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/minimax",
+   "alias_type": "canonical",
+   "model_id": "nvidia/minimax-m2.7",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/minimax-m3",
+   "alias_type": "canonical",
+   "model_id": "nvidia/minimax-m3",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/qwen",
+   "alias_type": "canonical",
+   "model_id": "nvidia/qwen3.5-397b-a17b",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/sd3.5",
+   "alias_type": "canonical",
+   "model_id": "nvidia/stable-diffusion-3.5-large",
+   "source": "seed"
+  },
+  {
+   "alias": "nvidia",
+   "alias_type": "seed",
+   "model_id": "nvidia/qwen3.5-397b-a17b",
+   "source": "seed"
+  },
+  {
+   "alias": "openai",
+   "alias_type": "seed",
+   "model_id": "openai/gpt-5.4-mini",
+   "source": "seed"
+  },
+  {
+   "alias": "openrouter",
+   "alias_type": "seed",
+   "model_id": "openrouter/moonshotai/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "or/free-glm",
+   "alias_type": "canonical",
+   "model_id": "openrouter/z-ai/glm-4.5-air:free",
+   "source": "seed"
+  },
+  {
+   "alias": "or/free-trinity",
+   "alias_type": "canonical",
+   "model_id": "openrouter/arcee-ai/trinity-large-preview:free",
+   "source": "seed"
+  },
+  {
+   "alias": "or/kimi",
+   "alias_type": "canonical",
+   "model_id": "openrouter/moonshotai/kimi-k2.6",
+   "source": "seed"
+  },
+  {
+   "alias": "pro",
+   "alias_type": "seed",
+   "model_id": "gemini-3.1-pro-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "pro-image",
+   "alias_type": "canonical",
+   "model_id": "gemini-3-pro-image-preview",
+   "source": "seed"
+  },
+  {
+   "alias": "zhipu",
+   "alias_type": "seed",
+   "model_id": "zhipu/glm-4.7-flashx",
+   "source": "seed"
+  }
+ ],
+ "deleted_models": [
+  {
+   "alias": "cf/flux2",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": true,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "flux",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Best image",
+   "id": "cloudflare/flux-2-dev",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "FLUX.2-dev (Cloudflare)",
+   "pricing_unit": "per_image",
+   "provider": "cloudflare",
+   "release_date": "2025-06-01",
+   "score_coding": 0,
+   "score_design": 90,
+   "score_instruction": 45,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 67,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": 0.0
+  },
+  {
+   "alias": "cf/kimi-cheap",
+   "availability": null,
+   "cache_read_per_million": 0.1,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.6,
+   "cost_output_per_m": 3.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Cheap Kimi",
+   "id": "cloudflare/kimi-k2.5",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.5 (Cloudflare)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "cloudflare",
+   "release_date": "2026-01-01",
+   "score_coding": 82,
+   "score_design": 82,
+   "score_instruction": 84,
+   "score_planning": 80,
+   "score_reasoning": 90,
+   "score_tool_use": 84,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 55,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "cf/kimi",
+   "availability": null,
+   "cache_read_per_million": 0.16,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.95,
+   "cost_output_per_m": 4.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agent coding",
+   "id": "cloudflare/kimi-k2.6",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.6 (Cloudflare)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "cloudflare",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 85,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 54,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-5.1",
+   "availability": "legacy_compat",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-codex",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Legacy coding",
+   "id": "codex/gpt-5.1-codex",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.1 Codex",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2025-11-20",
+   "score_coding": 86,
+   "score_design": 66,
+   "score_instruction": 84,
+   "score_planning": 72,
+   "score_reasoning": 88,
+   "score_tool_use": 72,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 20,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-5.1-mini",
+   "availability": "legacy_compat",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-mini",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Legacy cheap",
+   "id": "codex/gpt-5.1-codex-mini",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.1 Codex mini",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2025-11-20",
+   "score_coding": 70,
+   "score_design": 56,
+   "score_instruction": 72,
+   "score_planning": 58,
+   "score_reasoning": 72,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 21,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-5.2",
+   "availability": "legacy_compat",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-codex",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Legacy coding",
+   "id": "codex/gpt-5.2-codex",
+   "is_active": true,
+   "knowledge_cutoff": "2025-10-01",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.2 Codex",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-01-06",
+   "score_coding": 91,
+   "score_design": 70,
+   "score_instruction": 88,
+   "score_planning": 78,
+   "score_reasoning": 93,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 19,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-5.3",
+   "availability": "legacy_compat",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-codex",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Legacy coding",
+   "id": "codex/gpt-5.3-codex",
+   "is_active": true,
+   "knowledge_cutoff": "2025-10-01",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.3 Codex",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-02-05",
+   "score_coding": 93,
+   "score_design": 72,
+   "score_instruction": 90,
+   "score_planning": 80,
+   "score_reasoning": 95,
+   "score_tool_use": 80,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 19,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-spark",
+   "availability": "legacy_compat",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-codex",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Fast coding",
+   "id": "codex/gpt-5.3-codex-spark",
+   "is_active": true,
+   "knowledge_cutoff": "2025-10-01",
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.3 Codex Spark",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-02-12",
+   "score_coding": 88,
+   "score_design": 68,
+   "score_instruction": 85,
+   "score_planning": 72,
+   "score_reasoning": 88,
+   "score_tool_use": 72,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 20,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-5.4",
+   "availability": "codex_oauth_subscription",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Codex frontier",
+   "id": "codex/gpt-5.4",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4 (Codex)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-03-05",
+   "score_coding": 95,
+   "score_design": 78,
+   "score_instruction": 92,
+   "score_planning": 85,
+   "score_reasoning": 97,
+   "score_tool_use": 88,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 17,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-mini",
+   "availability": "codex_oauth_subscription",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-mini",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Codex cheap",
+   "id": "codex/gpt-5.4-mini",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4 mini (Codex)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-03-17",
+   "score_coding": 82,
+   "score_design": 70,
+   "score_instruction": 86,
+   "score_planning": 70,
+   "score_reasoning": 86,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 18,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "deepseek",
+   "availability": null,
+   "cache_read_per_million": 0.0028,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.14,
+   "cost_output_per_m": 0.28,
+   "family": "deepseek-v4",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Best cheap",
+   "id": "deepseek/deepseek-v4-flash",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 384000,
+   "max_state_question_tokens": null,
+   "name": "DeepSeek V4 Flash",
+   "pricing_unit": "per_million_tokens",
+   "provider": "deepseek",
+   "release_date": "2026-04-24",
+   "score_coding": 78,
+   "score_design": 62,
+   "score_instruction": 84,
+   "score_planning": 78,
+   "score_reasoning": 86,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 24,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "deepseek-pro",
+   "availability": "75pct_discount_until_2026-05-31_standard_1.74_3.48",
+   "cache_read_per_million": 0.003625,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.435,
+   "cost_output_per_m": 0.87,
+   "family": "deepseek-v4",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Cheap reasoning",
+   "id": "deepseek/deepseek-v4-pro",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 384000,
+   "max_state_question_tokens": null,
+   "name": "DeepSeek V4 Pro",
+   "pricing_unit": "per_million_tokens",
+   "provider": "deepseek",
+   "release_date": "2026-04-24",
+   "score_coding": 84,
+   "score_design": 65,
+   "score_instruction": 87,
+   "score_planning": 84,
+   "score_reasoning": 92,
+   "score_tool_use": 86,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 25,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nano-banana",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": true,
+   "can_generate_images": true,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.5,
+   "cost_output_per_m": 3.0,
+   "family": "gemini-image",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Fast image",
+   "id": "gemini-2.5-flash-image",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Nano Banana",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2025-06-01",
+   "score_coding": 15,
+   "score_design": 80,
+   "score_instruction": 50,
+   "score_planning": 20,
+   "score_reasoning": 30,
+   "score_tool_use": 20,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 12,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "2.5-pro",
+   "availability": "free_tier; context_over_200k_costs_more; quotas_project_specific_ai_studio",
+   "cache_read_per_million": 0.125,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 1.25,
+   "cost_output_per_m": 10.0,
+   "family": "gemini-pro",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Deep reasoning",
+   "id": "gemini-2.5-pro",
+   "is_active": true,
+   "knowledge_cutoff": "2025-01-01",
+   "max_output_tokens": 65536,
+   "max_state_question_tokens": null,
+   "name": "Gemini 2.5 Pro",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2025-03-20",
+   "score_coding": 80,
+   "score_design": 82,
+   "score_instruction": 86,
+   "score_planning": 78,
+   "score_reasoning": 92,
+   "score_tool_use": 80,
+   "service_tiers": {
+    "batch": 0.5,
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 1.8
+   },
+   "sort_order": 10,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "flash",
+   "availability": "free_tier; quotas_project_specific_ai_studio",
+   "cache_read_per_million": 0.05,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.5,
+   "cost_output_per_m": 3.0,
+   "family": "gemini-flash",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Fast",
+   "id": "gemini-3-flash-preview",
+   "is_active": true,
+   "knowledge_cutoff": "2025-09-01",
+   "max_output_tokens": 65536,
+   "max_state_question_tokens": null,
+   "name": "Gemini 3 Flash Preview",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2025-12-11",
+   "score_coding": 78,
+   "score_design": 85,
+   "score_instruction": 83,
+   "score_planning": 72,
+   "score_reasoning": 90,
+   "score_tool_use": 75,
+   "service_tiers": {
+    "batch": 0.5,
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 1.8
+   },
+   "sort_order": 4,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "pro-image",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": true,
+   "can_generate_images": true,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.9,
+   "cost_output_per_m": 5.4,
+   "family": "gemini-image",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Image gen",
+   "id": "gemini-3-pro-image-preview",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Gemini 3 Pro Image",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2025-12-11",
+   "score_coding": 20,
+   "score_design": 92,
+   "score_instruction": 60,
+   "score_planning": 30,
+   "score_reasoning": 40,
+   "score_tool_use": 25,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nano-banana-2",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": true,
+   "can_generate_images": true,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.5,
+   "cost_output_per_m": 3.0,
+   "family": "gemini-image",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Fastest image",
+   "id": "gemini-3.1-flash-image-preview",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Nano Banana 2",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2026-02-01",
+   "score_coding": 15,
+   "score_design": 85,
+   "score_instruction": 55,
+   "score_planning": 22,
+   "score_reasoning": 35,
+   "score_tool_use": 22,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 13,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "3.1-flash-lite-preview",
+   "availability": "retired_2026-08-17; preview_endpoint_removed_upstream",
+   "cache_read_per_million": 0.025,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.25,
+   "cost_output_per_m": 1.5,
+   "family": "gemini-flash-lite",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agentic cheap",
+   "id": "gemini-3.1-flash-lite-preview",
+   "is_active": false,
+   "knowledge_cutoff": "2025-01-01",
+   "max_output_tokens": 65536,
+   "max_state_question_tokens": null,
+   "name": "Gemini 3.1 Flash-Lite Preview",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2026-03-03",
+   "score_coding": 58,
+   "score_design": 58,
+   "score_instruction": 86,
+   "score_planning": 48,
+   "score_reasoning": 66,
+   "score_tool_use": 51,
+   "service_tiers": {
+    "batch": 0.5,
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 1.8
+   },
+   "sort_order": 6,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "3.1-pro",
+   "availability": "paid_only; context_over_200k_costs_more",
+   "cache_read_per_million": 0.2,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 2.0,
+   "cost_output_per_m": 12.0,
+   "family": "gemini-pro",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Deep reasoning",
+   "id": "gemini-3.1-pro-preview",
+   "is_active": true,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 65536,
+   "max_state_question_tokens": null,
+   "name": "Gemini 3.1 Pro Preview",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": "2026-02-01",
+   "score_coding": 82,
+   "score_design": 90,
+   "score_instruction": 88,
+   "score_planning": 82,
+   "score_reasoning": 96,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "batch": 0.5,
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 1.8
+   },
+   "sort_order": 9,
+   "source": "seed",
+   "speed_tier": "slow",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "kimi-code",
+   "availability": "subscription",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Subscription coding",
+   "id": "kimi-code/kimi-for-coding",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi Code",
+   "pricing_unit": "per_million_tokens",
+   "provider": "kimi-code",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 82,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 36,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "local/coder-14b",
+   "availability": "retired_2026-08-17; not_installed",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 128000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "qwen",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Local fast",
+   "id": "local/qwen2.5-coder:14b",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Qwen2.5-Coder 14B (Local)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "local",
+   "release_date": "2024-11-01",
+   "score_coding": 62,
+   "score_design": 45,
+   "score_instruction": 66,
+   "score_planning": 42,
+   "score_reasoning": 48,
+   "score_tool_use": 45,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 44,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "local/qwen-coder",
+   "availability": "retired_2026-08-17; ollama_tag_does_not_exist_http_404",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "qwen",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Local code",
+   "id": "local/qwen3-coder:30b-a3b",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "Qwen3-Coder 30B-A3B (Local)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "local",
+   "release_date": "2025-07-01",
+   "score_coding": 70,
+   "score_design": 55,
+   "score_instruction": 72,
+   "score_planning": 55,
+   "score_reasoning": 62,
+   "score_tool_use": 58,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 42,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "local/qwen3",
+   "availability": "retired_2026-08-17; not_installed_exceeds_16gb_vram_budget",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "qwen",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Local utility",
+   "id": "local/qwen3:30b-a3b",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "Qwen3 30B-A3B (Local)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "local",
+   "release_date": "2025-04-01",
+   "score_coding": 58,
+   "score_design": 50,
+   "score_instruction": 72,
+   "score_planning": 54,
+   "score_reasoning": 68,
+   "score_tool_use": 54,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 43,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "minimax-m2.5",
+   "availability": null,
+   "cache_read_per_million": 0.03,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.3,
+   "cost_output_per_m": 1.2,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Cheap coding",
+   "id": "minimax/MiniMax-M2.5",
+   "is_active": true,
+   "knowledge_cutoff": "2025-09-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-02-12",
+   "score_coding": 80,
+   "score_design": 60,
+   "score_instruction": 84,
+   "score_planning": 76,
+   "score_reasoning": 85,
+   "score_tool_use": 77,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 34,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "minimax-m2.5-fast",
+   "availability": null,
+   "cache_read_per_million": 0.03,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.6,
+   "cost_output_per_m": 2.4,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Cheap fast",
+   "id": "minimax/MiniMax-M2.5-highspeed",
+   "is_active": true,
+   "knowledge_cutoff": "2025-09-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.5 highspeed",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-02-12",
+   "score_coding": 80,
+   "score_design": 60,
+   "score_instruction": 84,
+   "score_planning": 76,
+   "score_reasoning": 85,
+   "score_tool_use": 77,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 35,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "minimax",
+   "availability": null,
+   "cache_read_per_million": 0.06,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.3,
+   "cost_output_per_m": 1.2,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Agent coding",
+   "id": "minimax/MiniMax-M2.7",
+   "is_active": true,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.7",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-03-27",
+   "score_coding": 84,
+   "score_design": 64,
+   "score_instruction": 86,
+   "score_planning": 80,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 32,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "minimax-fast",
+   "availability": null,
+   "cache_read_per_million": 0.06,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.6,
+   "cost_output_per_m": 2.4,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Fast agent",
+   "id": "minimax/MiniMax-M2.7-highspeed",
+   "is_active": true,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.7 highspeed",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-03-27",
+   "score_coding": 84,
+   "score_design": 64,
+   "score_instruction": 86,
+   "score_planning": 80,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 33,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "minimax-m3",
+   "availability": null,
+   "cache_read_per_million": 0.06,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.3,
+   "cost_output_per_m": 1.2,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agentic reasoning + long context",
+   "id": "minimax/MiniMax-M3",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M3",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-06-01",
+   "score_coding": 86,
+   "score_design": 66,
+   "score_instruction": 88,
+   "score_planning": 84,
+   "score_reasoning": 90,
+   "score_tool_use": 86,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 38,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "mm/image-01",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "minimax-image",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Image gen",
+   "id": "minimax/image-01",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "MiniMax Image-01",
+   "pricing_unit": "per_image",
+   "provider": "minimax",
+   "release_date": "2025-02-15",
+   "score_coding": 0,
+   "score_design": 80,
+   "score_instruction": 35,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 53,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": 0.0035
+  },
+  {
+   "alias": "kimi-cheap",
+   "availability": null,
+   "cache_read_per_million": 0.1,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.6,
+   "cost_output_per_m": 3.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Cheap Kimi",
+   "id": "moonshot/kimi-k2.5",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "moonshot",
+   "release_date": "2026-01-01",
+   "score_coding": 82,
+   "score_design": 82,
+   "score_instruction": 84,
+   "score_planning": 80,
+   "score_reasoning": 90,
+   "score_tool_use": 84,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 38,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "kimi",
+   "availability": null,
+   "cache_read_per_million": 0.16,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.95,
+   "cost_output_per_m": 4.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agent coding",
+   "id": "moonshot/kimi-k2.6",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.6",
+   "pricing_unit": "per_million_tokens",
+   "provider": "moonshot",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 85,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 37,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/deepseek",
+   "availability": "retired_2026-08-17; nim_eol_2026-08-07_http_410",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "deepseek-v4",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free cheap",
+   "id": "nvidia/deepseek-v4-flash",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 384000,
+   "max_state_question_tokens": null,
+   "name": "DeepSeek V4 Flash (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-04-24",
+   "score_coding": 78,
+   "score_design": 62,
+   "score_instruction": 84,
+   "score_planning": 78,
+   "score_reasoning": 86,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 46,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/deepseek-0731",
+   "availability": "nvidia_dev_free_endpoint",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "deepseek-v4",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free cheap",
+   "id": "nvidia/deepseek-v4-flash-0731",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "DeepSeek V4 Flash 0731 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-07-31",
+   "score_coding": 78,
+   "score_design": 62,
+   "score_instruction": 84,
+   "score_planning": 78,
+   "score_reasoning": 86,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 59,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/flux-schnell",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "flux",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Fast image",
+   "id": "nvidia/flux.1-schnell",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "FLUX.1-schnell (NVIDIA)",
+   "pricing_unit": "per_image",
+   "provider": "nvidia",
+   "release_date": "2024-12-01",
+   "score_coding": 0,
+   "score_design": 82,
+   "score_instruction": 35,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 50,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": 0.0
+  },
+  {
+   "alias": "nv/glm",
+   "availability": "nvidia_dev_free_endpoint; same_weights_as_paid_glm_coding_plan",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free flagship",
+   "id": "nvidia/glm-5.2",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "GLM 5.2 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-06-01",
+   "score_coding": 91,
+   "score_design": 82,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 92,
+   "score_tool_use": 89,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 55,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/gpt-oss",
+   "availability": "nvidia_dev_free_endpoint",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 131072,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-oss",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free reasoning",
+   "id": "nvidia/gpt-oss-120b",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-OSS 120B (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2025-08-05",
+   "score_coding": 84,
+   "score_design": 68,
+   "score_instruction": 86,
+   "score_planning": 82,
+   "score_reasoning": 89,
+   "score_tool_use": 84,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 56,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/kimi",
+   "availability": "retired_2026-08-17; nim_http_404_function_not_found",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Free Kimi",
+   "id": "nvidia/kimi-k2.6",
+   "is_active": false,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.6 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 85,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 48,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/minimax",
+   "availability": "retired_2026-08-17; nim_eol_2026-07-27_http_410",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free coding",
+   "id": "nvidia/minimax-m2.7",
+   "is_active": false,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.7 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-03-27",
+   "score_coding": 84,
+   "score_design": 64,
+   "score_instruction": 86,
+   "score_planning": 80,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 47,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/minimax-m3",
+   "availability": "nvidia_dev_free_endpoint",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Free agentic",
+   "id": "nvidia/minimax-m3",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M3 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-06-15",
+   "score_coding": 88,
+   "score_design": 70,
+   "score_instruction": 86,
+   "score_planning": 85,
+   "score_reasoning": 89,
+   "score_tool_use": 88,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 58,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/qwen",
+   "availability": "retired_2026-08-17; nim_eol_2026-07-27_http_410",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "qwen",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Free tier",
+   "id": "nvidia/qwen3.5-397b-a17b",
+   "is_active": false,
+   "knowledge_cutoff": "2025-09-01",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Qwen 3.5 397B (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-02-16",
+   "score_coding": 82,
+   "score_design": 86,
+   "score_instruction": 82,
+   "score_planning": 78,
+   "score_reasoning": 92,
+   "score_tool_use": 76,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 45,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/sd3.5",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "stable-diffusion",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Image gen",
+   "id": "nvidia/stable-diffusion-3.5-large",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "Stable Diffusion 3.5 Large (NVIDIA)",
+   "pricing_unit": "per_image",
+   "provider": "nvidia",
+   "release_date": "2024-10-01",
+   "score_coding": 0,
+   "score_design": 85,
+   "score_instruction": 38,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 51,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": 0.0
+  },
+  {
+   "alias": "gpt5.4",
+   "availability": null,
+   "cache_read_per_million": 0.25,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 2.5,
+   "cost_output_per_m": 15.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Frontier",
+   "id": "openai/gpt-5.4",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-03-05",
+   "score_coding": 95,
+   "score_design": 78,
+   "score_instruction": 92,
+   "score_planning": 85,
+   "score_reasoning": 97,
+   "score_tool_use": 88,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 12,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "gpt5.4-mini",
+   "availability": null,
+   "cache_read_per_million": 0.075,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.75,
+   "cost_output_per_m": 4.5,
+   "family": "gpt-mini",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Subagents",
+   "id": "openai/gpt-5.4-mini",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4 mini",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-03-17",
+   "score_coding": 82,
+   "score_design": 70,
+   "score_instruction": 86,
+   "score_planning": 70,
+   "score_reasoning": 86,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 13,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "gpt5.4-nano",
+   "availability": null,
+   "cache_read_per_million": 0.02,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 400000,
+   "cost_input_per_m": 0.2,
+   "cost_output_per_m": 1.25,
+   "family": "gpt-nano",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Extraction",
+   "id": "openai/gpt-5.4-nano",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4 nano",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-03-17",
+   "score_coding": 58,
+   "score_design": 55,
+   "score_instruction": 78,
+   "score_planning": 46,
+   "score_reasoning": 66,
+   "score_tool_use": 55,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 14,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "gpt5.4-pro",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 30.0,
+   "cost_output_per_m": 180.0,
+   "family": "gpt-pro",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Max reasoning",
+   "id": "openai/gpt-5.4-pro",
+   "is_active": true,
+   "knowledge_cutoff": "2025-08-31",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.4 pro",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-03-05",
+   "score_coding": 96,
+   "score_design": 80,
+   "score_instruction": 94,
+   "score_planning": 90,
+   "score_reasoning": 99,
+   "score_tool_use": 93,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 15,
+   "source": "seed",
+   "speed_tier": "slow",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "gpt5.5",
+   "availability": null,
+   "cache_read_per_million": 0.5,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 5.0,
+   "cost_output_per_m": 30.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Flagship",
+   "id": "openai/gpt-5.5",
+   "is_active": true,
+   "knowledge_cutoff": "2026-01-01",
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-04-23",
+   "score_coding": 98,
+   "score_design": 82,
+   "score_instruction": 94,
+   "score_planning": 90,
+   "score_reasoning": 99,
+   "score_tool_use": 91,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "luna",
+   "availability": "input_over_272k_bills_2x_input_1.5x_output; no_fine_tuning; no_realtime_api; no_assistants_api",
+   "cache_read_per_million": 0.02,
+   "cache_write_per_million": 0.25,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 0.2,
+   "cost_output_per_m": 1.2,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Cheap high volume",
+   "id": "openai/gpt-5.6-luna",
+   "is_active": true,
+   "knowledge_cutoff": "2026-02-16",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.6 Luna",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-07-09",
+   "score_coding": 88,
+   "score_design": 74,
+   "score_instruction": 90,
+   "score_planning": 78,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "sol",
+   "availability": "input_over_272k_bills_2x_input_1.5x_output; promotional_pricing_through_2026-11-21",
+   "cache_read_per_million": 0.4,
+   "cache_write_per_million": 5.0,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 4.0,
+   "cost_output_per_m": 20.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Flagship",
+   "id": "openai/gpt-5.6-sol",
+   "is_active": true,
+   "knowledge_cutoff": "2026-02-16",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.6 Sol",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-07-09",
+   "score_coding": 99,
+   "score_design": 86,
+   "score_instruction": 95,
+   "score_planning": 92,
+   "score_reasoning": 99,
+   "score_tool_use": 93,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "terra",
+   "availability": "input_over_272k_bills_2x_input_1.5x_output",
+   "cache_read_per_million": 0.2,
+   "cache_write_per_million": 2.5,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 2.0,
+   "cost_output_per_m": 12.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Balanced",
+   "id": "openai/gpt-5.6-terra",
+   "is_active": true,
+   "knowledge_cutoff": "2026-02-16",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.6 Terra",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-07-09",
+   "score_coding": 90,
+   "score_design": 78,
+   "score_instruction": 91,
+   "score_planning": 82,
+   "score_reasoning": 91,
+   "score_tool_use": 85,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "astra",
+   "availability": "input_over_272k_bills_2x_input_1.5x_output; fast_mode_unavailable_with_eu_data_residency",
+   "cache_read_per_million": 1.0,
+   "cache_write_per_million": 12.5,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 10.0,
+   "cost_output_per_m": 50.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Hardest end-to-end work",
+   "id": "openai/gpt-6-astra",
+   "is_active": true,
+   "knowledge_cutoff": "2026-04-30",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-6 Astra",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": "2026-09-03",
+   "score_coding": 100,
+   "score_design": 88,
+   "score_instruction": 96,
+   "score_planning": 95,
+   "score_reasoning": 100,
+   "score_tool_use": 96,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "gpt-6.1-sol",
+   "availability": "chat_completions_without_tools; input_over_272k_bills_2x_input_1.5x_output; fast_unavailable_with_eu_residency",
+   "cache_read_per_million": 0.1,
+   "cache_write_per_million": 2.5,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1050000,
+   "cost_input_per_m": 2.0,
+   "cost_output_per_m": 10.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "General complex work",
+   "id": "openai/gpt-6.1-sol",
+   "is_active": true,
+   "knowledge_cutoff": "2026-04-30",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-6.1 Sol",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openai",
+   "release_date": null,
+   "score_coding": 98,
+   "score_design": 82,
+   "score_instruction": 94,
+   "score_planning": 90,
+   "score_reasoning": 99,
+   "score_tool_use": 91,
+   "service_tiers": {
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 2.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "or/free-trinity",
+   "availability": "free_openrouter",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 128000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "trinity",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Free",
+   "id": "openrouter/arcee-ai/trinity-large-preview:free",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Trinity Large (Free)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openrouter",
+   "release_date": null,
+   "score_coding": 55,
+   "score_design": 45,
+   "score_instruction": 65,
+   "score_planning": 45,
+   "score_reasoning": 60,
+   "score_tool_use": 50,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 40,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "or/kimi",
+   "availability": null,
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.75,
+   "cost_output_per_m": 3.5,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Best Kimi price",
+   "id": "openrouter/moonshotai/kimi-k2.6",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi K2.6 (OpenRouter)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openrouter",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 85,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 39,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "or/free-glm",
+   "availability": "free_openrouter",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 128000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "glm",
+   "has_thinking": false,
+   "has_vision": true,
+   "hint": "Free GLM",
+   "id": "openrouter/z-ai/glm-4.5-air:free",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "GLM-4.5 Air (Free)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "openrouter",
+   "release_date": null,
+   "score_coding": 60,
+   "score_design": 50,
+   "score_instruction": 70,
+   "score_planning": 50,
+   "score_reasoning": 65,
+   "score_tool_use": 55,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 41,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm4.7",
+   "availability": null,
+   "cache_read_per_million": 0.11,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 200000,
+   "cost_input_per_m": 0.6,
+   "cost_output_per_m": 2.2,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Balanced GLM",
+   "id": "zhipu/glm-4.7",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-4.7",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2026-01-15",
+   "score_coding": 74,
+   "score_design": 70,
+   "score_instruction": 82,
+   "score_planning": 67,
+   "score_reasoning": 90,
+   "score_tool_use": 85,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 29,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm-free",
+   "availability": "free_tier",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 131072,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free",
+   "id": "zhipu/glm-4.7-flash",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-4.7-Flash",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2026-01-15",
+   "score_coding": 58,
+   "score_design": 52,
+   "score_instruction": 72,
+   "score_planning": 52,
+   "score_reasoning": 66,
+   "score_tool_use": 62,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 31,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm-flashx",
+   "availability": null,
+   "cache_read_per_million": 0.01,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 131072,
+   "cost_input_per_m": 0.07,
+   "cost_output_per_m": 0.4,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Cheap GLM",
+   "id": "zhipu/glm-4.7-flashx",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-4.7-FlashX",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2026-01-15",
+   "score_coding": 66,
+   "score_design": 58,
+   "score_instruction": 78,
+   "score_planning": 58,
+   "score_reasoning": 75,
+   "score_tool_use": 70,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 30,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm5",
+   "availability": null,
+   "cache_read_per_million": 0.2,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 200000,
+   "cost_input_per_m": 1.0,
+   "cost_output_per_m": 3.2,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "GLM reasoning",
+   "id": "zhipu/glm-5",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2025-10-01",
+   "score_coding": 78,
+   "score_design": 68,
+   "score_instruction": 85,
+   "score_planning": 70,
+   "score_reasoning": 92,
+   "score_tool_use": 75,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 27,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm5-turbo",
+   "availability": null,
+   "cache_read_per_million": 0.24,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 200000,
+   "cost_input_per_m": 1.2,
+   "cost_output_per_m": 4.0,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "GLM turbo",
+   "id": "zhipu/glm-5-turbo",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-5-Turbo",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2026-03-01",
+   "score_coding": 76,
+   "score_design": 66,
+   "score_instruction": 84,
+   "score_planning": 68,
+   "score_reasoning": 88,
+   "score_tool_use": 74,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 28,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "glm5.1",
+   "availability": null,
+   "cache_read_per_million": 0.26,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 200000,
+   "cost_input_per_m": 1.4,
+   "cost_output_per_m": 4.4,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "GLM latest",
+   "id": "zhipu/glm-5.1",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "GLM-5.1",
+   "pricing_unit": "per_million_tokens",
+   "provider": "zhipu",
+   "release_date": "2026-04-01",
+   "score_coding": 82,
+   "score_design": 70,
+   "score_instruction": 87,
+   "score_planning": 74,
+   "score_reasoning": 94,
+   "score_tool_use": 79,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 26,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  }
+ ],
+ "new_aliases": [
+  {
+   "alias": "3.6-flash",
+   "alias_type": "canonical",
+   "model_id": "gemini-3.6-flash",
+   "source": "seed"
+  },
+  {
+   "alias": "cf/flux2",
+   "alias_type": "canonical",
+   "model_id": "cloudflare/flux-2-klein-9b",
+   "source": "seed"
+  },
+  {
+   "alias": "codex",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-6.1-sol",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-6-luna",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-6-luna",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-6-sol",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-6-sol",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-astra",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-6-astra",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-daybreak",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-daybreak-blue-latest",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-luna",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.6-luna",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-sol",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.6-sol",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-terra",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.6-terra",
+   "source": "seed"
+  },
+  {
+   "alias": "flash",
+   "alias_type": "seed",
+   "model_id": "gemini-3.8-flash",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/glm",
+   "alias_type": "canonical",
+   "model_id": "nvidia/glm-5.3",
+   "source": "seed"
+  },
+  {
+   "alias": "nv/gpt-oss-20b",
+   "alias_type": "canonical",
+   "model_id": "nvidia/gpt-oss-20b",
+   "source": "seed"
+  },
+  {
+   "alias": "nvidia",
+   "alias_type": "seed",
+   "model_id": "nvidia/nemotron-3-super-120b-a12b",
+   "source": "seed"
+  }
+ ],
+ "new_models": [
+  {
+   "alias": "cf/flux2",
+   "availability": "workers_free_plan_10k_neurons_per_day; verified_2026-10-09; multipart_with_up_to_4_reference_images",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": true,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "flux",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Best image; scores inherited from FLUX.2-dev",
+   "id": "cloudflare/flux-2-klein-9b",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "FLUX.2 [klein] 9B (Cloudflare)",
+   "pricing_unit": "per_image",
+   "provider": "cloudflare",
+   "release_date": null,
+   "score_coding": 0,
+   "score_design": 90,
+   "score_instruction": 45,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 44,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": 0.0
+  },
+  {
+   "alias": "codex-6-luna",
+   "availability": "codex_oauth_subscription; verified_2026-10-09",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 272000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Fast, cheap everyday tasks; scores inherited from GPT-5.6 Luna",
+   "id": "codex/gpt-6-luna",
+   "is_active": true,
+   "knowledge_cutoff": "2026-05-18",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-6 Luna",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": null,
+   "score_coding": 88,
+   "score_design": 74,
+   "score_instruction": 90,
+   "score_planning": 78,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 15,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-6-sol",
+   "availability": "codex_oauth_subscription; verified_2026-10-09",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 272000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Previous-generation workhorse; scores inherited from GPT-6.1 Sol",
+   "id": "codex/gpt-6-sol",
+   "is_active": true,
+   "knowledge_cutoff": "2026-04-20",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-6 Sol",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": null,
+   "score_coding": 98,
+   "score_design": 82,
+   "score_instruction": 94,
+   "score_planning": 90,
+   "score_reasoning": 99,
+   "score_tool_use": 91,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 14,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "codex-daybreak",
+   "availability": "codex_oauth_subscription; verified_2026-10-09; deprecated_alias_upstream; default_snapshot_gpt-5.6-sol",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 272000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Defensive cybersecurity alias (Daybreak access); scores inherited from GPT-5.6 Sol",
+   "id": "codex/gpt-daybreak-blue-latest",
+   "is_active": true,
+   "knowledge_cutoff": "2026-02-16",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT Daybreak Blue",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": null,
+   "score_coding": 99,
+   "score_design": 86,
+   "score_instruction": 95,
+   "score_planning": 92,
+   "score_reasoning": 99,
+   "score_tool_use": 93,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 19,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "unit_price": null
+  },
+  {
+   "alias": "3.6-flash",
+   "availability": "stable; free_tier; verified_2026-10-09; promo_pricing_through_2026-12-31_then_1.50_7.50",
+   "cache_read_per_million": 0.075,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1048576,
+   "cost_input_per_m": 0.75,
+   "cost_output_per_m": 3.75,
+   "family": "gemini-flash",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agentic flash; scores inherited from Gemini 3.5 Flash",
+   "id": "gemini-3.6-flash",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 65536,
+   "max_state_question_tokens": null,
+   "name": "Gemini 3.6 Flash",
+   "pricing_unit": "per_million_tokens",
+   "provider": "gemini",
+   "release_date": null,
+   "score_coding": 85,
+   "score_design": 90,
+   "score_instruction": 90,
+   "score_planning": 84,
+   "score_reasoning": 94,
+   "score_tool_use": 86,
+   "service_tiers": {
+    "batch": 0.5,
+    "default": 1.0,
+    "flex": 0.5,
+    "priority": 1.8
+   },
+   "sort_order": 7,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": true,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/glm",
+   "availability": "nvidia_dev_free_endpoint; verified_2026-10-09",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1048576,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "glm",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free strong generalist; scores inherited from GLM-5.2",
+   "id": "nvidia/glm-5.3",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "GLM-5.3 (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2026-08-27",
+   "score_coding": 91,
+   "score_design": 82,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 92,
+   "score_tool_use": 89,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 29,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  },
+  {
+   "alias": "nv/gpt-oss-20b",
+   "availability": "nvidia_dev_free_endpoint; verified_2026-10-09; apache_2_0",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 128000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt-oss",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Free fast; scores inherited from Cloudflare GPT-OSS 20B",
+   "id": "nvidia/gpt-oss-20b",
+   "is_active": true,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "GPT-OSS 20B (NVIDIA)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "nvidia",
+   "release_date": "2025-08-05",
+   "score_coding": 58,
+   "score_design": 50,
+   "score_instruction": 70,
+   "score_planning": 50,
+   "score_reasoning": 62,
+   "score_tool_use": 55,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 30,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "unit_price": null
+  }
+ ],
+ "routes": {
+  "analyst": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "auditor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5",
+     "gemini-3.1-pro-preview"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "bear-researcher-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "bull-researcher-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "committee-router-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "committee-synthesizer-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "complexity-assessor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "context-compactor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "credit-card-offer-reviewer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M3",
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "credit-card-researcher": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "critic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "dependency-manager": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "equity-analyst": {
+   "after": {
+    "escalation_model_id": "codex/gpt-6.1-sol",
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": "gemini-3.1-pro-preview",
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "explorer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "extractor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "gemini-3.8-flash",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-haiku-4-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "gemini-3-flash-preview",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-haiku-4-5"
+   }
+  },
+  "fundamentals-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "game-art-critic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "cloudflare/llama-4-scout-17b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "xai/grok-4.20-0309-reasoning"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M3",
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "xai/grok-4.20-0309-reasoning"
+   }
+  },
+  "game-art-critic-gemma": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/gemma-4-26b",
+     "gemini-3.1-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/gemma4:12b-it-qat"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/gemma-4-26b",
+     "nvidia/minimax-m3",
+     "gemini-3.1-flash-lite",
+     "minimax/MiniMax-M3"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/gemma4:12b-it-qat"
+   }
+  },
+  "game-audio-critic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash"
+   }
+  },
+  "gemma-local-test": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/gemma-4-26b",
+     "gemini-3.1-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/gemma4:12b-it-qat"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/gemma-4-26b",
+     "nvidia/minimax-m3",
+     "gemini-3.1-flash-lite",
+     "minimax/MiniMax-M3"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/gemma4:12b-it-qat"
+   }
+  },
+  "git-agent": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "governance-auditor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "graphify-semantic-extractor": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "household-receipt-vision": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.1-flash-lite",
+     "cloudflare/llama-4-scout-17b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/qwen3-vl:8b-instruct"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.1-flash-lite",
+     "nvidia/minimax-m3",
+     "cloudflare/llama-4-scout-17b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "local/qwen3-vl:8b-instruct"
+   }
+  },
+  "ideator": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "ideator-public": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "image-gen": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/flux-1-schnell",
+     "nvidia/flux.1-dev",
+     "cloudflare/leonardo-phoenix"
+    ],
+    "is_active": true,
+    "primary_model_id": "cloudflare/flux-2-klein-9b"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/flux-1-schnell",
+     "gemini-2.5-flash-image",
+     "nvidia/flux.1-schnell",
+     "minimax/image-01"
+    ],
+    "is_active": true,
+    "primary_model_id": "cloudflare/flux-2-dev"
+   }
+  },
+  "investment-committee": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "jobs-company": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "nvidia/deepseek-v4-flash-0731",
+     "zhipu/glm-4.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.4-mini"
+   }
+  },
+  "jobs-cover": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-5.4-mini"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   }
+  },
+  "jobs-cover-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-5.4-mini"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-critic-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-sol"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-5.4"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-evaluator": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-5.4-mini"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   }
+  },
+  "jobs-evaluator-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-sol"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-5.4"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-prep": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-terra",
+     "codex/gpt-6-luna",
+     "codex/gpt-6-sol",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-terra",
+     "codex/gpt-5.4-mini",
+     "codex/gpt-5.4",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-luna"
+   }
+  },
+  "jobs-screener": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite",
+     "codex/gpt-5.4-mini"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   }
+  },
+  "jobs-tailor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-terra",
+     "codex/gpt-5.5",
+     "gemini-3.8-flash",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.4",
+     "codex/gpt-5.5",
+     "gemini-3.8-flash",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.4-mini"
+   }
+  },
+  "kimi-code-test": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": false,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "learning-extractor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "market-pulse-analyst": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "codex/gpt-5.5",
+     "claude-sonnet-4-6"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "codex/gpt-5.5",
+     "claude-sonnet-4-6",
+     "gemini-3.1-pro-preview"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "market-pulse-scout": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "memory-rater": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "minimax-plan-test": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "kimi-code/kimi-for-coding",
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": false,
+    "primary_model_id": "minimax/MiniMax-M2.7"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "kimi-code/kimi-for-coding",
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "minimax/MiniMax-M2.7"
+   }
+  },
+  "news-grounded-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "note-formatter": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "note-titler": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "portfolio-mgr-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "project-rebuild-runner": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "prompt-builder": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "qa": {
+   "after": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5",
+     "gemini-3.1-pro-preview"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "reasoner": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "reviewer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "risk-aggressive-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.1-pro-preview"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-conservative-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.1-pro-preview"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-manager": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-neutral-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "sentiment-grounded-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "specifier": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "summarizer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "supervisor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "task-sweep-orchestrator": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "technical-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "tester": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "tier1-screener-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "trade-manager": {
+   "after": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "trader-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "triager": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "validator": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "minimax/MiniMax-M2.7",
+     "cloudflare/glm-4.7-flash",
+     "nvidia/minimax-m3",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "vantage-domain-expert": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-intake": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.4-mini"
+   }
+  },
+  "vantage-methodologist": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-optimist": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-research": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-research-judge": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-skeptic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "voice-responder": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/minimax-m3",
+     "gemini-3.7-flash",
+     "minimax/MiniMax-M3",
+     "cloudflare/kimi-k2.6",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "worker": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "kimi-code/kimi-for-coding",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.4-mini"
+   }
+  }
+ },
+ "updated_models": {
+  "cloudflare/flux-1-schnell": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   }
+  },
+  "cloudflare/gemma-4-26b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 256000,
+    "before": 131072
+   }
+  },
+  "cloudflare/glm-4.7-flash": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "cost_input_per_m": {
+    "after": 0.0605,
+    "before": 0.06
+   }
+  },
+  "cloudflare/gpt-oss-120b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 128000,
+    "before": 131072
+   }
+  },
+  "cloudflare/gpt-oss-20b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 128000,
+    "before": 131072
+   }
+  },
+  "cloudflare/granite-4.0-h-micro": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 131000,
+    "before": 32768
+   }
+  },
+  "cloudflare/leonardo-lucid-origin": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09; list_0.007_per_512_tile_plus_0.000132_per_step",
+    "before": null
+   }
+  },
+  "cloudflare/leonardo-phoenix": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09; list_0.00583_per_512_tile_plus_0.00011_per_step",
+    "before": null
+   }
+  },
+  "cloudflare/llama-4-scout-17b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 131000,
+    "before": 131072
+   }
+  },
+  "cloudflare/mistral-small-3.1-24b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 128000,
+    "before": 131072
+   }
+  },
+  "cloudflare/nemotron-3-120b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 256000,
+    "before": 131072
+   }
+  },
+  "cloudflare/qwen2.5-coder-32b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 32768,
+    "before": 131072
+   }
+  },
+  "cloudflare/qwen3-30b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 32768,
+    "before": 131072
+   },
+   "cost_input_per_m": {
+    "after": 0.0509,
+    "before": 0.051
+   }
+  },
+  "cloudflare/qwq-32b": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   },
+   "context_window": {
+    "after": 24000,
+    "before": 131072
+   }
+  },
+  "cloudflare/sd-xl-lightning": {
+   "availability": {
+    "after": "workers_free_plan_10k_neurons_per_day; list_price_from_cloudflare_models_api_2026-10-09",
+    "before": null
+   }
+  },
+  "codex/gpt-5.5": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09; hidden_legacy_in_codex_model_list; reasoning_low_medium_high_xhigh",
+    "before": "codex_oauth_subscription"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   },
+   "hint": {
+    "after": "Legacy frontier",
+    "before": "Codex frontier"
+   },
+   "knowledge_cutoff": {
+    "after": "2025-12-01",
+    "before": "2026-01-01"
+   },
+   "max_output_tokens": {
+    "after": 128000,
+    "before": 32768
+   },
+   "supports_pdf": {
+    "after": false,
+    "before": true
+   }
+  },
+  "codex/gpt-5.6-luna": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09",
+    "before": "codex_oauth_subscription"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   }
+  },
+  "codex/gpt-5.6-sol": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09",
+    "before": "codex_oauth_subscription"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   }
+  },
+  "codex/gpt-5.6-terra": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09",
+    "before": "codex_oauth_subscription"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   }
+  },
+  "codex/gpt-6-astra": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09",
+    "before": "codex_oauth_subscription"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   }
+  },
+  "codex/gpt-6.1-sol": {
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09; reasoning_low_medium_high_xhigh_max_ultra",
+    "before": "codex_oauth_subscription; verified_2026-09-30; reasoning_low_medium_high_xhigh_max"
+   },
+   "context_window": {
+    "after": 272000,
+    "before": 1050000
+   },
+   "supports_verbosity": {
+    "after": true,
+    "before": false
+   }
+  },
+  "gemini-2.5-flash": {
+   "context_window": {
+    "after": 1048576,
+    "before": 1000000
+   },
+   "release_date": {
+    "after": "2025-06-17",
+    "before": "2025-03-20"
+   }
+  },
+  "gemini-2.5-flash-lite": {
+   "context_window": {
+    "after": 1048576,
+    "before": 1000000
+   },
+   "release_date": {
+    "after": "2025-07-22",
+    "before": "2025-06-01"
+   }
+  },
+  "gemini-3.1-flash-lite": {
+   "availability": {
+    "after": "stable; free_tier; shutdown_earliest_2027-05-07_replacement_gemini-3.5-flash-lite",
+    "before": "free_tier; quotas_project_specific_ai_studio"
+   },
+   "context_window": {
+    "after": 1048576,
+    "before": 1000000
+   },
+   "release_date": {
+    "after": "2026-05-07",
+    "before": "2026-05-01"
+   }
+  },
+  "local/qwen3-vl:8b-instruct": {
+   "service_tiers": {
+    "after": {
+     "default": 1.0
+    },
+    "before": {}
+   }
+  }
+ }
+}

@@ -111,12 +111,12 @@ class TestGetSession:
         mock_db_session.request_source = "codex-transcript-sync"
         mock_db_session.workstream_status = "completed_ready_for_closure"
         mock_db_session.summary_oneliner = "Closed the loop on session detail observability"
-        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
+        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-6.1-sol"]
         mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.provider_metadata = {
             "requested_model": CLAUDE_SONNET,
             "requested_provider": "claude",
-            "effective_model": "codex/gpt-5.4",
+            "effective_model": "codex/gpt-6.1-sol",
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
@@ -226,10 +226,10 @@ class TestGetSession:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "test-session-123"
-        assert data["model"] == "codex/gpt-5.4"
+        assert data["model"] == "codex/gpt-6.1-sol"
         assert data["provider"] == "codex"
         assert data["requested_model"] == CLAUDE_SONNET
-        assert data["effective_model"] == "codex/gpt-5.4"
+        assert data["effective_model"] == "codex/gpt-6.1-sol"
         assert data["fallback_used"] is True
         assert data["fallback_reason"] == "TimeoutError: primary timed out"
         assert data["client_id"] == "client-123"
@@ -247,7 +247,7 @@ class TestGetSession:
         # Verify context_usage is included
         assert "context_usage" in data
         assert data["context_usage"]["used_tokens"] == 0
-        assert data["context_usage"]["limit_tokens"] == 1050000
+        assert data["context_usage"]["limit_tokens"] == 272000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
         assert mock_session.execute.call_count == 7, (
@@ -357,12 +357,12 @@ class TestListSessions:
         mock_db_session.current_branch = "task-123/main"
         mock_db_session.workstream_status = "authoritative"
         mock_db_session.summary_oneliner = None
-        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
+        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-6.1-sol"]
         mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.provider_metadata = {
             "requested_model": CLAUDE_SONNET,
             "requested_provider": "claude",
-            "effective_model": "codex/gpt-5.4",
+            "effective_model": "codex/gpt-6.1-sol",
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
@@ -434,10 +434,10 @@ class TestListSessions:
         data = response.json()
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["id"] == "session-1"
-        assert data["sessions"][0]["model"] == "codex/gpt-5.4"
+        assert data["sessions"][0]["model"] == "codex/gpt-6.1-sol"
         assert data["sessions"][0]["provider"] == "codex"
         assert data["sessions"][0]["requested_model"] == CLAUDE_SONNET
-        assert data["sessions"][0]["effective_model"] == "codex/gpt-5.4"
+        assert data["sessions"][0]["effective_model"] == "codex/gpt-6.1-sol"
         assert data["sessions"][0]["fallback_used"] is True
         assert data["sessions"][0]["live_activity"]["phase"] == "waiting_for_model"
         assert data["sessions"][0]["live_activity"]["tool_calls_count"] == 2

@@ -12,7 +12,7 @@ from typing import Any
 import tiktoken
 
 from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry
-from app.constants.models import GEMINI_FLASH
+from app.constants.models import DEFAULT_GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def _get_model_entry(model: str) -> ModelEntry:
     entry = _resolve_model(model)
     if entry is not None:
         return entry
-    return MODEL_CATALOG_BY_ID[GEMINI_FLASH]
+    return MODEL_CATALOG_BY_ID[DEFAULT_GEMINI_MODEL]
 
 
 @dataclass

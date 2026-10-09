@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.db import get_db
 from app.main import app
 from tests.conftest import APITestClient
@@ -54,7 +54,7 @@ class TestSessionsApiFiltering:
         mock_db_session.id = "session-1"
         mock_db_session.project_id = "portfolio-ai"
         mock_db_session.provider = "gemini"
-        mock_db_session.model = GEMINI_FLASH
+        mock_db_session.model = DEFAULT_GEMINI_MODEL
         mock_db_session.status = "completed"
         mock_db_session.agent_slug = "thesis_generation"
         mock_db_session.session_type = "completion"
@@ -195,7 +195,7 @@ class TestSessionCreation:
             json={
                 "project_id": "monkey-fight",
                 "provider": "gemini",
-                "model": GEMINI_FLASH,
+                "model": DEFAULT_GEMINI_MODEL,
             },
         )
 
@@ -283,7 +283,7 @@ class TestMultiProjectScenario:
         mock_session_1.id = "port-1"
         mock_session_1.project_id = "portfolio-ai"
         mock_session_1.provider = "gemini"
-        mock_session_1.model = GEMINI_FLASH
+        mock_session_1.model = DEFAULT_GEMINI_MODEL
         mock_session_1.status = "completed"
         mock_session_1.agent_slug = "thesis_generation"
         mock_session_1.session_type = "completion"

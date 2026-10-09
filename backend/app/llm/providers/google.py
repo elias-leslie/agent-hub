@@ -115,6 +115,7 @@ def _is_gemini3_flash(model_id: str) -> bool:
 
 
 ClampedThinkingLevel = Literal["minimal", "low", "medium", "high"]
+_NO_MINIMAL_THINKING_PREFIXES = ("gemini-3.7-flash", "gemini-3.8-flash")
 
 
 def _disabled_thinking_config(model: Model[Any]) -> dict[str, Any]:
@@ -133,8 +134,9 @@ def _get_thinking_level(effort: ClampedThinkingLevel, model: Model[Any]) -> Goog
     if _is_gemma4(model.id):
         return "MINIMAL" if effort in ("minimal", "low") else "HIGH"
     if effort == "minimal":
-        # 3.8 Flash removed MINIMAL; LOW is its smallest supported budget.
-        if model.id.startswith("gemini-3.8-flash"):
+        # 3.7 and 3.8 Flash reject MINIMAL (HTTP 400, verified 2026-10-09); LOW
+        # is their smallest supported level.
+        if model.id.startswith(_NO_MINIMAL_THINKING_PREFIXES):
             return "LOW"
         return "MINIMAL"
     if effort == "low":

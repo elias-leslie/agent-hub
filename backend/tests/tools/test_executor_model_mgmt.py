@@ -36,10 +36,10 @@ async def test_get_model_details_resolves_explicit_catalog_aliases() -> None:
             return_value={},
         ),
     ):
-        result = await get_model_details("codex-5.2")
+        result = await get_model_details("codex-sol")
 
     assert "# " in result
-    assert "codex/gpt-5.2-codex" in result
+    assert "codex/gpt-5.6-sol" in result
 
 
 @pytest.mark.anyio
@@ -57,7 +57,7 @@ async def test_update_agent_model_normalizes_explicit_alias_inputs() -> None:
         service.get_by_slug = AsyncMock(
             return_value=SimpleNamespace(
                 id="agent-1",
-                primary_model_id="codex/gpt-5.4",
+                primary_model_id="codex/gpt-5.5",
                 fallback_models=[],
                 escalation_model_id=None,
                 version=7,
@@ -67,26 +67,26 @@ async def test_update_agent_model_normalizes_explicit_alias_inputs() -> None:
 
         result = await update_agent_model(
             agent_slug="persona",
-            primary_model_id="codex-5.2",
-            fallback_models=["codex/gpt-5.4", "openai/gpt-5.2"],
+            primary_model_id="codex-sol",
+            fallback_models=["codex/gpt-6-luna", "codex-terra"],
             escalation_model_id="kimi-code/kimi-for-coding",
             temperature=None,
             thinking_level=None,
             change_reason="normalize aliases",
         )
 
-    assert "codex/gpt-5.2-codex" in result
+    assert "codex/gpt-5.6-sol" in result
     service.update.assert_awaited_once()
     await_args = service.update.await_args
     assert await_args is not None
     kwargs = await_args.kwargs
-    assert kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
-    assert kwargs["fallback_models"] == ["codex/gpt-5.4", "openai/gpt-5.2"]
+    assert kwargs["primary_model_id"] == "codex/gpt-5.6-sol"
+    assert kwargs["fallback_models"] == ["codex/gpt-6-luna", "codex/gpt-5.6-terra"]
     assert kwargs["escalation_model_id"] == "kimi-code/kimi-for-coding"
 
 
 @pytest.mark.anyio
-async def test_update_agent_model_normalizes_legacy_prefixed_codex_model_ids() -> None:
+async def test_update_agent_model_keeps_prefixed_codex_model_ids() -> None:
     mock_db = AsyncMock()
     updated = SimpleNamespace(version=8)
 
@@ -100,7 +100,7 @@ async def test_update_agent_model_normalizes_legacy_prefixed_codex_model_ids() -
         service.get_by_slug = AsyncMock(
             return_value=SimpleNamespace(
                 id="agent-1",
-                primary_model_id="codex/gpt-5.4",
+                primary_model_id="codex/gpt-5.5",
                 fallback_models=[],
                 escalation_model_id=None,
                 version=8,
@@ -110,19 +110,19 @@ async def test_update_agent_model_normalizes_legacy_prefixed_codex_model_ids() -
 
         result = await update_agent_model(
             agent_slug="persona",
-            primary_model_id="codex/gpt-5.2",
+            primary_model_id="codex/gpt-5.6-sol",
             fallback_models=None,
             escalation_model_id=None,
             temperature=None,
             thinking_level=None,
-            change_reason="normalize legacy codex ids",
+            change_reason="normalize codex ids",
         )
 
-    assert "primary_model=codex/gpt-5.2-codex" in result
+    assert "primary_model=codex/gpt-5.6-sol" in result
     service.update.assert_awaited_once()
     await_args = service.update.await_args
     assert await_args is not None
-    assert await_args.kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
+    assert await_args.kwargs["primary_model_id"] == "codex/gpt-5.6-sol"
 
 
 @pytest.mark.anyio
@@ -132,7 +132,7 @@ async def test_get_agent_details_includes_memory_config() -> None:
         slug="debugger",
         name="Debugger",
         description="Investigates tricky failures.",
-        primary_model_id="codex/gpt-5.4",
+        primary_model_id="codex/gpt-5.5",
         fallback_models=["kimi-code/kimi-for-coding"],
         escalation_model_id=None,
         temperature=0.2,

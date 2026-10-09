@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.constants import (
-    GEMINI_FLASH,
+    DEFAULT_GEMINI_MODEL,
     MODEL_CATALOG,
     MODEL_CATALOG_BY_ID,
 )
@@ -51,7 +51,7 @@ def map_model_to_provider(original_model: str, target_provider: str) -> str:
 
     # Fallback to provider defaults
     if target_provider == "gemini":
-        return GEMINI_FLASH
+        return DEFAULT_GEMINI_MODEL
     else:
         # Try to find any model from target provider
         candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]

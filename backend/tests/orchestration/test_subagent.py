@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.api.complete.types import CompletionInternalResult
-from app.constants.models import GEMINI_FLASH, KIMI_CODE_FOR_CODING
+from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.llm_messages import Message
 from app.services.memory.context_builder import ProgressiveContext
 from app.services.orchestration.subagent import (
@@ -45,7 +45,7 @@ def _make_internal_result(
     *,
     content: str = "Test response",
     provider: str = "gemini",
-    model: str = GEMINI_FLASH,
+    model: str = DEFAULT_GEMINI_MODEL,
     input_tokens: int = 100,
     output_tokens: int = 50,
     thinking_content: str | None = None,
@@ -83,14 +83,14 @@ class TestSubagentConfig:
         config = SubagentConfig(
             name="analyzer",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             system_prompt="You are an analyzer.",
             temperature=0.5,
             thinking_level="low",
         )
 
         assert config.provider == "gemini"
-        assert config.model == GEMINI_FLASH
+        assert config.model == DEFAULT_GEMINI_MODEL
         assert config.thinking_level == "low"
 
 
@@ -102,7 +102,7 @@ class TestSubagentResult:
             content="Hello world",
             status="completed",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=100,
             output_tokens=50,
         )
@@ -118,7 +118,7 @@ class TestSubagentResult:
             content="",
             status="error",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=0,
             output_tokens=0,
             error="Connection failed",
@@ -134,7 +134,7 @@ class TestSubagentResult:
             content="Answer",
             status="completed",
             provider="gemini",
-            model=GEMINI_FLASH,
+            model=DEFAULT_GEMINI_MODEL,
             input_tokens=100,
             output_tokens=50,
             thinking_content="Let me think...",
@@ -148,16 +148,16 @@ class TestSubagentResult:
 class TestSubagentManager:
     def test_initialization(self):
         manager = SubagentManager()
-        assert manager._default_gemini_model == GEMINI_FLASH
-        assert manager._default_kimi_code_model == KIMI_CODE_FOR_CODING
+        assert manager._default_gemini_model == DEFAULT_GEMINI_MODEL
+        assert manager._default_codex_model == CODEX_GPT_6_1_SOL
 
     def test_custom_default_models(self):
         manager = SubagentManager(
             default_gemini_model="gemini-3-pro",
-            default_kimi_code_model="kimi-code/custom",
+            default_codex_model="codex/custom",
         )
         assert manager._default_gemini_model == "gemini-3-pro"
-        assert manager._default_kimi_code_model == "kimi-code/custom"
+        assert manager._default_codex_model == "codex/custom"
 
     @pytest.mark.asyncio
     async def test_spawn_success(self):
@@ -381,7 +381,7 @@ class TestSubagentCostTracking:
             mock_log_cost.assert_called_once_with(
                 project_id="agent-hub",
                 provider="gemini",
-                model=GEMINI_FLASH,
+                model=DEFAULT_GEMINI_MODEL,
                 input_tokens=100,
                 output_tokens=50,
             )

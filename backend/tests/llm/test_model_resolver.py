@@ -15,9 +15,9 @@ def test_gemini_uses_google_sdk_default_endpoint() -> None:
 
 
 def test_nvidia_catalog_id_maps_to_upstream_model_id() -> None:
-    model = resolve_llm_model("nvidia/kimi-k2.6", "nvidia")
+    model = resolve_llm_model("nvidia/glm-5.3", "nvidia")
 
-    assert model.id == "moonshotai/kimi-k2.6"
+    assert model.id == "z-ai/glm-5.3"
     assert model.base_url == "https://integrate.api.nvidia.com/v1"
 
 
@@ -39,10 +39,10 @@ def test_kimi_code_uses_anthropic_compatible_membership_endpoint() -> None:
 
 
 def test_codex_uses_chatgpt_codex_responses_endpoint() -> None:
-    model = resolve_llm_model("codex/gpt-5.4-mini", "codex")
+    model = resolve_llm_model("codex/gpt-6-luna", "codex")
 
     assert model.api == "openai-codex-responses"
-    assert model.id == "gpt-5.4-mini"
+    assert model.id == "gpt-6-luna"
     assert model.base_url == "https://chatgpt.com/backend-api/codex/responses"
     assert "audio" not in model.input
 
@@ -50,9 +50,9 @@ def test_codex_uses_chatgpt_codex_responses_endpoint() -> None:
 def test_cloudflare_catalog_id_maps_to_workers_ai_model_id(monkeypatch) -> None:
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-123")
 
-    model = resolve_llm_model("cloudflare/kimi-k2.6", "cloudflare")
+    model = resolve_llm_model("cloudflare/gpt-oss-120b", "cloudflare")
 
-    assert model.id == "@cf/moonshotai/kimi-k2.6"
+    assert model.id == "@cf/openai/gpt-oss-120b"
     assert model.base_url == "https://api.cloudflare.com/client/v4/accounts/acct-123/ai/v1"
 
 

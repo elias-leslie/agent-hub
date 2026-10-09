@@ -13,11 +13,11 @@ from app.constants.models import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
-    CODEX_GPT_5_4_MINI,
+    CODEX_GPT_6_1_SOL,
+    CODEX_GPT_6_LUNA,
+    DEFAULT_GEMINI_MODEL,
     GEMINI_2_5_FLASH,
     GEMINI_3_5_FLASH,
-    GEMINI_FLASH,
-    KIMI_CODE_FOR_CODING,
 )
 from app.routing.registry import is_workload_model, is_workload_provider
 from app.services.agent_routing import (
@@ -50,7 +50,7 @@ def _isolate_agent_routing_circuit_breaker(monkeypatch: pytest.MonkeyPatch) -> N
     )
     monkeypatch.setattr(
         "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
-        CircuitBreakerManager(["kimi-code", "gemini", "codex", "xai", "test"]),
+        CircuitBreakerManager(["gemini", "codex", "xai", "test"]),
     )
 
 
@@ -64,8 +64,8 @@ def mock_agent() -> AgentDTO:
         name="Coder Agent",
         description="A coding assistant",
         system_prompt="You are a helpful coding assistant.",
-        primary_model_id=KIMI_CODE_FOR_CODING,
-        fallback_models=[GEMINI_FLASH, CODEX_GPT_5_4_MINI],
+        primary_model_id=CODEX_GPT_6_1_SOL,
+        fallback_models=[DEFAULT_GEMINI_MODEL, CODEX_GPT_6_LUNA],
         escalation_model_id=None,
         strategies={},
         temperature=0.7,
@@ -94,7 +94,7 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         name="Simple Agent",
         description=None,
         system_prompt="Simple prompt.",
-        primary_model_id=CODEX_GPT_5_4_MINI,
+        primary_model_id=CODEX_GPT_6_LUNA,
         fallback_models=[],
         escalation_model_id=None,
         strategies={},
@@ -124,11 +124,11 @@ class TestGetProviderForModel:
         assert is_workload_model(CLAUDE_SONNET) is False
 
     def test_routable_workload_model(self) -> None:
-        assert get_provider_for_model(KIMI_CODE_FOR_CODING) == "kimi-code"
-        assert is_workload_model(KIMI_CODE_FOR_CODING) is True
+        assert get_provider_for_model(CODEX_GPT_6_1_SOL) == "codex"
+        assert is_workload_model(CODEX_GPT_6_1_SOL) is True
 
     def test_gemini_model(self) -> None:
-        assert get_provider_for_model(GEMINI_FLASH) == "gemini"
+        assert get_provider_for_model(DEFAULT_GEMINI_MODEL) == "gemini"
         assert get_provider_for_model("gemini-3-pro") == "gemini"
 
     def test_unknown_defaults_to_openai(self) -> None:
@@ -157,8 +157,8 @@ class TestResolveAgent:
 
         assert isinstance(result, ResolvedAgent)
         assert result.agent == mock_agent
-        assert result.model == KIMI_CODE_FOR_CODING
-        assert result.provider == "kimi-code"
+        assert result.model == CODEX_GPT_6_1_SOL
+        assert result.provider == "codex"
         mock_service.get_by_slug.assert_called_once_with(mock_db, "coder")
 
     @pytest.mark.asyncio
@@ -235,7 +235,7 @@ class TestInjectAgentMandates:
             name="Persona",
             description=None,
             system_prompt="Persona prompt",
-            primary_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_1_SOL,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -277,7 +277,7 @@ class TestInjectAgentMandates:
             name="Persona",
             description=None,
             system_prompt="Legacy persona system prompt",
-            primary_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_1_SOL,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -343,7 +343,7 @@ class TestInjectAgentMandates:
             name="Refactor",
             description=None,
             system_prompt="Refactor safely.",
-            primary_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_1_SOL,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -409,7 +409,7 @@ class TestInjectAgentMandates:
             name="Jenny",
             description=None,
             system_prompt="Coordinate work.",
-            primary_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_1_SOL,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -470,7 +470,7 @@ class TestInjectAgentMandates:
             name="Note Titler",
             description=None,
             system_prompt="Title notes tersely.",
-            primary_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_1_SOL,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -547,7 +547,7 @@ class TestCompleteWithFallback:
 
     @pytest.mark.asyncio
     async def test_primary_succeeds(self, mock_agent: AgentDTO) -> None:
-        internal = _internal_result_for(KIMI_CODE_FOR_CODING, "kimi-code")
+        internal = _internal_result_for(CODEX_GPT_6_1_SOL, "codex")
 
         with (
             patch(
@@ -564,7 +564,7 @@ class TestCompleteWithFallback:
             )
 
         assert isinstance(result, FallbackCompletionResult)
-        assert result.model_used == KIMI_CODE_FOR_CODING
+        assert result.model_used == CODEX_GPT_6_1_SOL
         assert result.used_fallback is False
         assert complete_mock.await_args is not None
         assert complete_mock.await_args.kwargs["canonical_context_preinjected"] is False
@@ -575,11 +575,11 @@ class TestCompleteWithFallback:
         self,
         mock_agent: AgentDTO,
     ) -> None:
-        gemini_internal = _internal_result_for(GEMINI_FLASH, "gemini")
+        gemini_internal = _internal_result_for(DEFAULT_GEMINI_MODEL, "gemini")
 
         async def mock_internal(**kwargs: object) -> object:
-            if kwargs.get("provider") == "kimi-code":
-                raise RateLimitError(provider="kimi-code", retry_after=60)
+            if kwargs.get("provider") == "codex":
+                raise RateLimitError(provider="codex", retry_after=60)
             return gemini_internal
 
         with (
@@ -589,7 +589,7 @@ class TestCompleteWithFallback:
             ),
             patch(
                 "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
-                new=CircuitBreakerManager(["kimi-code", "gemini"]),
+                new=CircuitBreakerManager(["codex", "gemini"]),
             ),
             patch(
                 "app.api.complete.core.complete_internal",
@@ -605,9 +605,9 @@ class TestCompleteWithFallback:
             )
 
         assert isinstance(result, FallbackCompletionResult)
-        assert result.model_used == GEMINI_FLASH
+        assert result.model_used == DEFAULT_GEMINI_MODEL
         assert result.used_fallback is True
-        assert result.fallback_reason == "RateLimitError: Rate limit exceeded for kimi-code"
+        assert result.fallback_reason == "RateLimitError: Rate limit exceeded for codex"
         assert mock_ci.await_count == 2
         assert record_failure.call_count == 1
 
@@ -663,12 +663,12 @@ class TestCompleteWithFallback:
         mock_agent: AgentDTO,
     ) -> None:
         primary_error = _internal_result_for(
-            KIMI_CODE_FOR_CODING,
-            "kimi-code",
+            CODEX_GPT_6_1_SOL,
+            "codex",
             finish_reason="error",
             error_message="provider returned empty error response",
         )
-        fallback_success = _internal_result_for(GEMINI_FLASH, "gemini")
+        fallback_success = _internal_result_for(DEFAULT_GEMINI_MODEL, "gemini")
 
         with patch(
             "app.api.complete.core.complete_internal",
@@ -682,7 +682,7 @@ class TestCompleteWithFallback:
             )
 
         assert isinstance(result, FallbackCompletionResult)
-        assert result.model_used == GEMINI_FLASH
+        assert result.model_used == DEFAULT_GEMINI_MODEL
         assert result.used_fallback is True
         assert result.fallback_reason == "RuntimeError: provider returned empty error response"
         assert mock_ci.await_count == 2
@@ -748,7 +748,7 @@ class TestCompleteWithFallback:
 
     @pytest.mark.asyncio
     async def test_no_fallbacks_primary_succeeds(self, mock_agent_no_fallbacks: AgentDTO) -> None:
-        internal = _internal_result_for(CODEX_GPT_5_4_MINI, "codex")
+        internal = _internal_result_for(CODEX_GPT_6_LUNA, "codex")
 
         with patch(
             "app.api.complete.core.complete_internal",
@@ -761,7 +761,7 @@ class TestCompleteWithFallback:
                 temperature=0.5,
             )
 
-        assert result.model_used == CODEX_GPT_5_4_MINI
+        assert result.model_used == CODEX_GPT_6_LUNA
         assert result.used_fallback is False
 
     @pytest.mark.asyncio
@@ -772,9 +772,9 @@ class TestCompleteWithFallback:
         agent = AgentDTO(
             id=3, slug="escalator", name="Escalator",
             description=None, system_prompt="Prompt.",
-            primary_model_id=CODEX_GPT_5_4_MINI,
-            fallback_models=[GEMINI_FLASH],
-            escalation_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_LUNA,
+            fallback_models=[DEFAULT_GEMINI_MODEL],
+            escalation_model_id=CODEX_GPT_6_1_SOL,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
             memory_config=None,
@@ -783,7 +783,7 @@ class TestCompleteWithFallback:
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
-        escalation_internal = _internal_result_for(KIMI_CODE_FOR_CODING, "kimi-code")
+        escalation_internal = _internal_result_for(CODEX_GPT_6_1_SOL, "codex")
         call_count = 0
 
         async def mock_internal(**kwargs: object) -> object:
@@ -802,7 +802,7 @@ class TestCompleteWithFallback:
                 agent=agent, max_tokens=100, temperature=0.7,
             )
 
-        assert result.model_used == KIMI_CODE_FOR_CODING
+        assert result.model_used == CODEX_GPT_6_1_SOL
         assert result.used_fallback is True
         assert call_count == 3
 
@@ -814,9 +814,9 @@ class TestCompleteWithFallback:
         agent = AgentDTO(
             id=4, slug="dedup", name="Dedup",
             description=None, system_prompt="Prompt.",
-            primary_model_id=CODEX_GPT_5_4_MINI,
-            fallback_models=[KIMI_CODE_FOR_CODING],
-            escalation_model_id=KIMI_CODE_FOR_CODING,  # same as fallback
+            primary_model_id=CODEX_GPT_6_LUNA,
+            fallback_models=[CODEX_GPT_6_1_SOL],
+            escalation_model_id=CODEX_GPT_6_1_SOL,  # same as fallback
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
             memory_config=None,
@@ -839,7 +839,7 @@ class TestCompleteWithFallback:
             )
 
         assert "All models failed" in str(exc_info.value)
-        assert f"escalation={KIMI_CODE_FOR_CODING}" in str(exc_info.value)
+        assert f"escalation={CODEX_GPT_6_1_SOL}" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_all_models_including_escalation_fail(self) -> None:
@@ -849,9 +849,9 @@ class TestCompleteWithFallback:
         agent = AgentDTO(
             id=5, slug="all-fail", name="AllFail",
             description=None, system_prompt="Prompt.",
-            primary_model_id=CODEX_GPT_5_4_MINI,
-            fallback_models=[GEMINI_FLASH],
-            escalation_model_id=KIMI_CODE_FOR_CODING,
+            primary_model_id=CODEX_GPT_6_LUNA,
+            fallback_models=[DEFAULT_GEMINI_MODEL],
+            escalation_model_id=CODEX_GPT_6_1_SOL,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
             memory_config=None,
@@ -874,7 +874,7 @@ class TestCompleteWithFallback:
             )
 
         assert "All models failed" in str(exc_info.value)
-        assert f"escalation={KIMI_CODE_FOR_CODING}" in str(exc_info.value)
+        assert f"escalation={CODEX_GPT_6_1_SOL}" in str(exc_info.value)
 
 
 class TestInjectSystemPromptIntoMessages:

@@ -33,17 +33,17 @@ class SubagentManager:
     def __init__(
         self,
         default_gemini_model: str | None = None,
-        default_kimi_code_model: str | None = None,
+        default_codex_model: str | None = None,
     ):
-        from app.constants import GEMINI_FLASH, KIMI_CODE_FOR_CODING
+        from app.constants import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 
-        self._default_gemini_model = default_gemini_model or GEMINI_FLASH
-        self._default_kimi_code_model = default_kimi_code_model or KIMI_CODE_FOR_CODING
+        self._default_gemini_model = default_gemini_model or DEFAULT_GEMINI_MODEL
+        self._default_codex_model = default_codex_model or CODEX_GPT_6_1_SOL
         self._active_subagents: dict[str, asyncio.Task[SubagentResult]] = {}
 
     def _get_default_model(self, provider: str) -> str:
-        if provider == "kimi-code":
-            return self._default_kimi_code_model
+        if provider == "codex":
+            return self._default_codex_model
         if provider == "gemini":
             return self._default_gemini_model
         return self._default_gemini_model

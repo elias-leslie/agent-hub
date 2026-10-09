@@ -53,8 +53,8 @@ class TestParseMentionProviderPrefixed:
         assert cleaned == "Describe this"
 
     def test_minimax_model(self) -> None:
-        model, cleaned = parse_mention("@minimax/MiniMax-M2.5 Hello world")
-        assert model == "minimax/MiniMax-M2.5"
+        model, cleaned = parse_mention("@minimax/some-model Hello world")
+        assert model == "minimax/some-model"
         assert cleaned == "Hello world"
 
     def test_openrouter_model(self) -> None:
@@ -77,8 +77,8 @@ class TestParseMentionExactCatalogIds:
         assert cleaned == "Explain this code"
 
     def test_exact_gemini_model_id(self) -> None:
-        model, cleaned = parse_mention("@gemini-3-flash-preview Quick question")
-        assert model == "gemini-3-flash-preview"
+        model, cleaned = parse_mention("@gemini-3.8-flash Quick question")
+        assert model == "gemini-3.8-flash"
         assert cleaned == "Quick question"
 
 

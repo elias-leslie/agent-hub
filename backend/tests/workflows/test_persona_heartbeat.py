@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CODEX_GPT_5_1_MINI, CODEX_GPT_5_4, KIMI_CODE_FOR_CODING
+from app.constants.models import CF_QWQ_32B, CODEX_GPT_5_5, CODEX_GPT_6_1_SOL
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_MEMORY_GROUP,
     HEARTBEAT_PROJECT,
@@ -37,8 +37,8 @@ class TestHeartbeatRuntimeInfo:
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (KIMI_CODE_FOR_CODING, "kimi-code"),
-            (CODEX_GPT_5_4, "codex"),
+            (CODEX_GPT_6_1_SOL, "codex"),
+            (CODEX_GPT_5_5, "codex"),
         ],
     )
     async def test_runtime_info_reports_supported_models(self, model_id, provider):
@@ -72,8 +72,8 @@ class TestHeartbeatRuntimeInfo:
     async def test_runtime_info_warns_when_model_cannot_run_heartbeat_tools(self):
         mock_db = AsyncMock()
         resolved = (
-            CODEX_GPT_5_1_MINI,
-            "codex",
+            CF_QWQ_32B,
+            "cloudflare",
             0.7,
             "medium",
             "You are Persona",
@@ -92,15 +92,15 @@ class TestHeartbeatRuntimeInfo:
 
         assert runtime.supports_tools is False
         assert runtime.heartbeat_supported is False
-        assert runtime.warnings == [_build_runtime_warning(CODEX_GPT_5_1_MINI)]
+        assert runtime.warnings == [_build_runtime_warning(CF_QWQ_32B)]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("model_id", "provider", "expected_supported"),
         [
-            (KIMI_CODE_FOR_CODING, "kimi-code", True),
-            (CODEX_GPT_5_4, "codex", True),
-            (CODEX_GPT_5_1_MINI, "codex", False),
+            (CODEX_GPT_6_1_SOL, "codex", True),
+            (CODEX_GPT_5_5, "codex", True),
+            (CF_QWQ_32B, "cloudflare", False),
         ],
     )
     async def test_runtime_info_provider_comparison_uses_model_aware_capability_checks(
@@ -177,9 +177,9 @@ class TestPersonaHeartbeatTask:
                 "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
-                    model=CODEX_GPT_5_1_MINI,
+                    model=CF_QWQ_32B,
                     heartbeat_supported=False,
-                    warnings=[_build_runtime_warning(CODEX_GPT_5_1_MINI)],
+                    warnings=[_build_runtime_warning(CF_QWQ_32B)],
                 ),
             ),
             patch(
@@ -194,7 +194,7 @@ class TestPersonaHeartbeatTask:
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
-        assert result["error"] == f"runtime_incompatible: {_build_runtime_warning(CODEX_GPT_5_1_MINI)}"
+        assert result["error"] == f"runtime_incompatible: {_build_runtime_warning(CF_QWQ_32B)}"
         mock_set_running.assert_not_awaited()
         mock_skip.assert_awaited_once()
 
@@ -658,8 +658,8 @@ class TestHeartbeatCompletionRouting:
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (KIMI_CODE_FOR_CODING, "kimi-code"),
-            (CODEX_GPT_5_4, "codex"),
+            (CODEX_GPT_6_1_SOL, "codex"),
+            (CODEX_GPT_5_5, "codex"),
         ],
     )
     async def test_do_completion_uses_tools_for_supported_models(self, model_id, provider):
@@ -722,8 +722,8 @@ class TestHeartbeatCompletionRouting:
     @pytest.mark.parametrize(
         ("model_id", "provider"),
         [
-            (KIMI_CODE_FOR_CODING, "kimi-code"),
-            (CODEX_GPT_5_4, "codex"),
+            (CODEX_GPT_6_1_SOL, "codex"),
+            (CODEX_GPT_5_5, "codex"),
         ],
     )
     async def test_do_completion_preserves_shared_contract_for_routable_providers(
@@ -813,7 +813,7 @@ class TestHeartbeatCompletionRouting:
             patch(
                 "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", 0.2, "medium", "You are Persona", {"mode": "auto"}),
+                return_value=(CODEX_GPT_6_1_SOL, "codex", 0.2, "medium", "You are Persona", {"mode": "auto"}),
             ) as mock_resolve_persona,
             patch(
                 "app.services.persona_service.get_persona",
@@ -846,7 +846,7 @@ class TestHeartbeatCompletionRouting:
             False,
             "not due",
             target_project_id="agent-hub",
-            provider="kimi-code",
+            provider="codex",
         )
         mock_resolve_persona.assert_awaited_once_with(mock_db, project_id="agent-hub")
         await_args = mock_complete.await_args

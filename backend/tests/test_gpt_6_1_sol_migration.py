@@ -10,8 +10,7 @@ import pytest
 from app.constants.catalog_entries import MODEL_CATALOG
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers.openai_codex_responses import _body
-from app.llm.providers.openai_completions import OpenAICompletionsOptions, _Compat, build_params
-from app.llm.types import Context, SimpleStreamOptions, Tool
+from app.llm.types import Context, SimpleStreamOptions
 
 _BACKEND = Path(__file__).resolve().parents[1]
 
@@ -28,9 +27,14 @@ def _migration(filename: str = "c8d9e0f1a2b3_lead_with_gpt_6_1_sol.py"):
 def test_catalog_and_insert_only_seeds_match_route_capabilities_and_official_prices():
     migration = _migration()
     entries = {entry.id: entry for entry in MODEL_CATALOG}
+    # 401372ee292c later pruned the keyless openai route and set Codex's 272k
+    # window and availability notes, so only the still-current columns are pinned.
+    assert "openai/gpt-6.1-sol" not in entries
     for row in migration._catalog_rows():
+        if row["id"] not in entries:
+            continue
         entry = entries[row["id"]]
-        assert entry.context_window == 1_050_000
+        assert entry.context_window == 272_000
         assert entry.capabilities.max_output_tokens == 128_000
         assert entry.release_date is None
         assert entry.knowledge_cutoff == "2026-04-30"
@@ -40,7 +44,6 @@ def test_catalog_and_insert_only_seeds_match_route_capabilities_and_official_pri
         assert entry.cost.cache_write_per_million == row["cache_write"]
         assert entry.capabilities.supports_tool_execution == row["tools"]
         assert entry.capabilities.supports_session_cache == row["session_cache"]
-        assert entry.availability == row["availability"]
 
 
 def test_routes_accept_exact_preimages_and_reject_unknown_configuration():
@@ -82,12 +85,3 @@ def test_codex_preserves_supported_effort_and_rejects_minimal():
     with pytest.raises(ValueError, match="does not support minimal"):
         _body(model, Context(messages=[]), SimpleStreamOptions(reasoning="minimal"))
 
-
-def test_metered_chat_route_rejects_tools_and_minimal_before_dispatch():
-    model = resolve_llm_model("openai/gpt-6.1-sol", "openai")
-    with pytest.raises(ValueError, match="requires a Responses route"):
-        build_params(model, Context(messages=[], tools=[Tool(name="read", description="read", parameters={})]),
-                     None, _Compat(), "none")
-    with pytest.raises(ValueError, match="does not support minimal"):
-        build_params(model, Context(messages=[]), OpenAICompletionsOptions(reasoning_effort="minimal"),
-                     _Compat(), "none")

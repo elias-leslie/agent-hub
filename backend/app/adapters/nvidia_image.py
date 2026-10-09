@@ -5,10 +5,7 @@ from the OpenAI-compatible chat endpoint used by NvidiaAdapter.
 
 Supported models and their NVIDIA vendor-namespaced IDs:
   nvidia/flux.1-dev          → black-forest-labs/flux.1-dev
-  nvidia/flux.1-schnell      → black-forest-labs/flux_1-schnell
-  nvidia/stable-diffusion-3.5-large → stabilityai/stable-diffusion-3.5-large
-
-On rate-limit, automatically walks down the fallback chain.
+  nvidia/flux.1-kontext-dev  → black-forest-labs/flux.1-kontext-dev (needs a reference image)
 """
 
 from __future__ import annotations
@@ -23,8 +20,6 @@ from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import (
     NVIDIA_FLUX_1_DEV,
     NVIDIA_FLUX_1_KONTEXT,
-    NVIDIA_FLUX_1_SCHNELL,
-    NVIDIA_SD_3_5_LARGE,
 )
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.provider_credentials import resolve_api_key
@@ -37,13 +32,11 @@ _BASE_URL = "https://ai.api.nvidia.com/v1/genai"
 _MODEL_PATH: dict[str, str] = {
     "flux.1-dev": "black-forest-labs/flux.1-dev",
     "flux.1-kontext-dev": "black-forest-labs/flux.1-kontext-dev",
-    "flux.1-schnell": "black-forest-labs/flux_1-schnell",
-    "stable-diffusion-3.5-large": "stabilityai/stable-diffusion-3.5-large",
 }
 
-# Ordered best quality → fastest.  On rate-limit we walk down.
+# FLUX.1-schnell and SD 3.5 Large return 404 on NIM (verified 2026-10-09).
 # Kontext is separate (requires reference image) so not in the standard chain.
-_FALLBACK_CHAIN = [NVIDIA_FLUX_1_DEV, NVIDIA_FLUX_1_SCHNELL, NVIDIA_SD_3_5_LARGE]
+_FALLBACK_CHAIN = [NVIDIA_FLUX_1_DEV]
 
 _KONTEXT_MODEL = NVIDIA_FLUX_1_KONTEXT
 

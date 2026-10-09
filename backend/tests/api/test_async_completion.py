@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.responses import JSONResponse
 
-from app.constants.models import KIMI_CODE_FOR_CODING
+from app.constants.models import CODEX_GPT_6_1_SOL
 from tests.conftest import APITestClient
 
 # Patch target: orchestrator imports at top-level from sub-modules
@@ -18,7 +18,7 @@ _ORCH = "app.api.complete.complete_orchestrator"
 
 def _mock_agent() -> MagicMock:
     mock_agent = MagicMock()
-    mock_agent.model = KIMI_CODE_FOR_CODING
+    mock_agent.model = CODEX_GPT_6_1_SOL
     mock_agent.provider = "kimi-code"
     mock_agent.agent.slug = "coder"
     mock_agent.agent.fallback_models = []
@@ -101,11 +101,11 @@ class TestAsyncDispatch:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -187,11 +187,11 @@ class TestAsyncDispatch:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -245,7 +245,7 @@ class TestAsyncTaskStatus:
         stored: dict[str, Any] = {
             "task_id": "task-123",
             "content": "Done",
-            "model": KIMI_CODE_FOR_CODING,
+            "model": CODEX_GPT_6_1_SOL,
             "provider": "kimi-code",
             "input_tokens": 100,
             "output_tokens": 50,
@@ -387,11 +387,11 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -417,7 +417,7 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.execute_and_respond",
                 new_callable=AsyncMock,
-                return_value=JSONResponse(content={"content": "sync response", "model": KIMI_CODE_FOR_CODING}),
+                return_value=JSONResponse(content={"content": "sync response", "model": CODEX_GPT_6_1_SOL}),
             ),
         ):
             response = api_client.post(
@@ -454,11 +454,11 @@ class TestBackwardsCompat:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code", agent, None, "coder"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=(KIMI_CODE_FOR_CODING, "kimi-code"),
+                return_value=(CODEX_GPT_6_1_SOL, "kimi-code"),
             ),
             patch(
                 f"{_ORCH}.build_session_and_messages",
@@ -511,7 +511,7 @@ class TestGetTaskStatusViaAPI:
         stored: dict[str, Any] = {
             "task_id": "task-api-1",
             "content": "Result from worker",
-            "model": KIMI_CODE_FOR_CODING,
+            "model": CODEX_GPT_6_1_SOL,
             "provider": "kimi-code",
             "input_tokens": 100,
             "output_tokens": 50,

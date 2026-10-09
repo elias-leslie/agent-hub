@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.context_tracker import (
     CONTEXT_CRITICAL_THRESHOLD,
     CONTEXT_HIGH_THRESHOLD,
@@ -244,12 +244,12 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", GEMINI_FLASH, 500000
+            mock_db, "test-session", DEFAULT_GEMINI_MODEL, 500000
         )
 
         assert can_proceed is True
-        assert usage.limit_tokens == 1000000
-        assert usage.percent_used == 50.0
+        assert usage.limit_tokens == 1_048_576
+        assert usage.percent_used == 47.68
 
 
 class TestShouldEmitWarning:
