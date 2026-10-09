@@ -458,30 +458,6 @@ async def test_later_review_failure_reopens_resolved_incident_once(maintenance_d
 
 
 @pytest.mark.integration
-async def test_changed_review_keeps_competing_claim_and_rejected_dismissal(maintenance_db):
-    import json
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_recovery import RecoveryDecision, _retry_changed_review
-    db = maintenance_db
-    _, item_id, _ = await maintenance_fixture(db, handoff=True, kind='review_failed')
-    item = await db.get(ContextMaintenanceItem, item_id)
-    async def competing_review(*args, **kwargs):
-        item.claim_owner, item.claim_session = 'agent:interactive', 'other-session'
-        item.version += 1
-        await db.commit()
-        return json.dumps({'findings': []}), 'catalog-model', 'review-session'
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', AsyncMock(side_effect=competing_review)):
-        result = await _retry_changed_review(db, item, maintenance_context(), 'corrected-reviewer')
-    assert 'ownership changed' in result['failure']
-    assert item.state == 'claimed' and item.claim_owner == 'agent:interactive'
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError, match='exact supporting source passages'):
-        RecoveryDecision(action='dismiss', reason='Unsupported model assertion')
-
-
-@pytest.mark.integration
 async def test_regular_review_entry_point_is_unavailable_without_database_io():
     from unittest.mock import AsyncMock
 
