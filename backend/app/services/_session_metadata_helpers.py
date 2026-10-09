@@ -1,15 +1,14 @@
 """Private helpers for extracting session metadata fields."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.constants.models import UNKNOWN_MODEL
 from app.models import Session
 from app.services.agent_routing import get_provider_for_model
-from app.services.session_ingestion.models import (
-    SessionModelEvidence,
-    validated_native_model_evidence,
-)
+
+if TYPE_CHECKING:
+    from app.services.session_ingestion.models import SessionModelEvidence
 
 _EXTERNAL_IDENTITY_KEYS = (
     "harness",
@@ -232,8 +231,11 @@ def session_model_info(session: Session) -> dict[str, str | bool | None]:
     }
 
 
-def native_model_evidence(session: Session) -> SessionModelEvidence | None:
+def native_model_evidence(session: Session) -> "SessionModelEvidence | None":
     """Expose bounded native evidence only for this exact registered source."""
     if session.provider != "codex":
         return None
+    # Imported here: the session_ingestion package imports this module back.
+    from app.services.session_ingestion.models import validated_native_model_evidence
+
     return validated_native_model_evidence(session.id, session_metadata(session))
