@@ -142,7 +142,6 @@ async def seed_agents(db: AsyncSession) -> int:
         Number of agents created
     """
     agents_data, deactivate_slugs = _load_seed_data()
-    deactivate_slugs.add("memory-curator")
     raw_seed = json.loads(SEED_FILE.read_text())
     prompts_data = raw_seed.get("prompts", [])
     assignments_data = raw_seed.get("agent_prompt_assignments", [])
