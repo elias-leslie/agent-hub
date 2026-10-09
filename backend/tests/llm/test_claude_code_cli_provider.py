@@ -75,3 +75,17 @@ def test_failures_are_worded_for_runtime_classification() -> None:
     assert classify_runtime_failure(RuntimeError(limited)).smoke_status == "quota_or_rate_limited"
     assert cli._rate_limit_message({"status": "allowed"}) is None
     assert cli._result_error({"subtype": "success", "is_error": False}, 0, "") is None
+
+
+def test_a_substituted_model_is_an_error_not_a_misattributed_answer() -> None:
+    model = resolve_llm_model("claude-opus-5-5", "claude")
+    def served(name: str | None) -> AssistantMessage:
+        return AssistantMessage(
+            content=[], api="x", provider="claude", model=model.id, usage=Usage(),
+            stop_reason="stop", timestamp=0, response_model=name,
+        )
+    assert cli._substitution_error(model, served("claude-opus-5-5")) is None
+    assert cli._substitution_error(model, served("claude-opus-5-5-20260922")) is None
+    assert cli._substitution_error(model, served(None)) is None
+    message = cli._substitution_error(model, served("claude-opus-4-8"))
+    assert message and "claude-opus-4-8" in message and "claude-opus-5-5" in message

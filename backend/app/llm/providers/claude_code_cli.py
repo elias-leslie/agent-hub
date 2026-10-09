@@ -247,6 +247,19 @@ def _result_error(result: dict[str, Any] | None, returncode: int | None, stderr:
     return f"Claude Code CLI failed: {detail}"
 
 
+def _substitution_error(model: Model[Any], output: AssistantMessage) -> str | None:
+    """Refuse a turn the CLI served on another model.
+
+    Claude Code can re-run safeguard-flagged requests on a different model
+    (code.claude.com/docs/en/model-config); reporting that as the requested
+    model would misattribute the result.
+    """
+    served = output.response_model
+    if served and not served.startswith(model.id):
+        return f"Claude Code CLI served {served} instead of {model.id}; the requested model did not answer"
+    return None
+
+
 async def _run(
     stream: AssistantMessageEventStream,
     model: Model[Any],
@@ -309,7 +322,7 @@ async def _run(
                         state.handle(event, model)
                 returncode = await process.wait()
             stderr = (await stderr_task).decode("utf-8", errors="replace") if stderr_task else ""
-        error = _result_error(state.result, returncode, stderr)
+        error = _result_error(state.result, returncode, stderr) or _substitution_error(model, output)
         if error is not None:
             raise ClaudeCliError(state.rate_limit_error or error)
         stream.push(DoneEvent(reason="length" if output.stop_reason == "length" else "stop", message=output))
