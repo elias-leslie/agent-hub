@@ -137,7 +137,8 @@ export function SessionsHeader({
               <RefreshCw
                 className={cn(
                   'h-3 w-3',
-                  isRefreshing && 'animate-spin text-amber-300',
+                  isRefreshing &&
+                    'animate-spin text-amber-800 dark:text-amber-300',
                 )}
               />
             </button>

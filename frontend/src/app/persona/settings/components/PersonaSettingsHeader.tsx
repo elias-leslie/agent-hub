@@ -52,7 +52,7 @@ export function PersonaSettingsHeader({
                   className={cn(
                     'page-pill',
                     hasChanges
-                      ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                      ? 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-100'
                       : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >
@@ -64,13 +64,13 @@ export function PersonaSettingsHeader({
 
           <div className="page-toolbar">
             {saveSuccess && !hasChanges && (
-              <span className="page-pill border-emerald-500/20 bg-emerald-500/10 text-emerald-200">
+              <span className="page-pill border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Saved
               </span>
             )}
             {saveError && (
-              <span className="page-pill border-rose-500/20 bg-rose-500/10 text-rose-200">
+              <span className="page-pill border-rose-500/20 bg-rose-500/10 text-rose-800 dark:text-rose-200">
                 <AlertCircle className="h-3.5 w-3.5" />
                 Failed to save
               </span>

@@ -71,7 +71,7 @@ export function AgentEditorHeader({
                   className={cn(
                     'page-pill',
                     agent.is_active
-                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
                       : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >
@@ -81,7 +81,7 @@ export function AgentEditorHeader({
                   className={cn(
                     'page-pill',
                     hasChanges
-                      ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                      ? 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-100'
                       : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >

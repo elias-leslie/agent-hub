@@ -70,9 +70,9 @@ export function SessionHeader({
                   className={cn(
                     'page-pill',
                     session.status === 'active'
-                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
                       : session.status === 'failed'
-                        ? 'border-rose-500/20 bg-rose-500/10 text-rose-200'
+                        ? 'border-rose-500/20 bg-rose-500/10 text-rose-800 dark:text-rose-200'
                         : 'border-slate-700/80 bg-slate-900/90 text-slate-400',
                   )}
                 >
@@ -102,7 +102,7 @@ export function SessionHeader({
                   </span>
                 )}
                 {liveLabel && (
-                  <span className="page-pill border-sky-500/20 bg-sky-500/10 text-sky-100">
+                  <span className="page-pill border-sky-500/20 bg-sky-500/10 text-sky-800 dark:text-sky-100">
                     {liveLabel}
                   </span>
                 )}
@@ -119,7 +119,7 @@ export function SessionHeader({
                 className={cn(
                   'segmented-option',
                   activeTab === 'timeline'
-                    ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                    ? 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-100'
                     : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                 )}
               >
@@ -133,7 +133,7 @@ export function SessionHeader({
                 className={cn(
                   'segmented-option',
                   activeTab === 'info'
-                    ? 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                    ? 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-100'
                     : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                 )}
               >
