@@ -73,7 +73,7 @@ describe('agent form helpers', () => {
             key: 'macro',
             label: 'Macro',
             enabled: true,
-            agent_slug: 'market-pulse-analyst',
+            agent_slug: 'market-pulse-scout',
             model_id: 'codex/gpt-5.4',
             instruction: 'Focus on macro regime.',
             weight: 1,

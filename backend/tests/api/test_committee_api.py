@@ -22,7 +22,7 @@ class TestCommitteeAPI:
                         "key": "macro",
                         "label": "Macro",
                         "enabled": True,
-                        "agent_slug": "market-pulse-analyst",
+                        "agent_slug": "market-pulse-scout",
                         "model_id": "codex/gpt-5.4",
                         "instruction": "Focus on macro regime.",
                         "weight": 1.0,
@@ -43,7 +43,7 @@ class TestCommitteeAPI:
             "votes": [
                 {
                     "seat_key": "macro",
-                    "agent_slug": "market-pulse-analyst",
+                    "agent_slug": "market-pulse-scout",
                     "model_id": "codex/gpt-5.4",
                     "provider": "codex",
                     "symbol": "SPY",

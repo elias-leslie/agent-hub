@@ -21,7 +21,7 @@ const DEFAULT_COMMITTEE_CONFIG: CommitteeConfig = {
       key: 'macro',
       label: 'Macro',
       enabled: true,
-      agent_slug: 'market-pulse-analyst',
+      agent_slug: 'market-pulse-scout',
       model_id: null,
       instruction:
         'Focus on macro regime, rates, breadth, and options positioning.',

@@ -19,7 +19,6 @@ SUBSCRIPTION_ONLY_SLUGS = {
 GPT61_PROMOTED_EFFORTS = {
     "coder": "medium",
     "debugger": "high",
-    "fixer": "medium",
     "optimizer": "high",
     "refactor": "medium",
     "test-writer": "medium",
@@ -35,9 +34,7 @@ EXCLUDED_SLUGS = {
     "image-gen",
     "gemma-local-test",
     "game-art-critic-gemma",
-    "kimi-code-test",
     "market-pulse-scout",
-    "minimax-plan-test",
     "game-art-critic",  # visual critique agent; see the design-critic route test
     "ui-mockup-designer",
     "game-audio-critic",  # audio input requires an audio-capable model chain
