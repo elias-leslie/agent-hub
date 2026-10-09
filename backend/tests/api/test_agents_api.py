@@ -311,6 +311,37 @@ class TestAgentCreateEndpoint:
             assert response.status_code == 409
 
 
+class TestInactiveModelAssignment:
+    """Inactive catalog rows (e.g. claude-fable-5-1) cannot be assigned to agents."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["primary_model_id", "fallback_models", "escalation_model_id"])
+    async def test_create_agent_rejects_inactive_model(self, api_client, field):
+        from dataclasses import replace
+
+        from app.constants import catalog
+        from app.constants.catalog_entries import MODEL_CATALOG
+
+        entry = replace(next(e for e in MODEL_CATALOG if e.provider == "claude"), id="claude-fable-5-1")
+        catalog.INACTIVE_MODEL_CATALOG_BY_ID[entry.id] = entry
+        body = {"slug": "new", "name": "New", "system_prompt": "x", "primary_model_id": CODEX_GPT_6_1_SOL}
+        body[field] = [entry.id] if field == "fallback_models" else entry.id
+        try:
+            with patch("app.api.agents.get_agent_service") as mock_get_service:
+                mock_svc = MagicMock()
+                mock_svc.get_by_slug = AsyncMock(return_value=None)
+                mock_svc.create = AsyncMock()
+                mock_get_service.return_value = mock_svc
+                response = api_client.post("/api/agents", json=body)
+        finally:
+            catalog.INACTIVE_MODEL_CATALOG_BY_ID.pop(entry.id, None)
+
+        assert response.status_code == 400
+        assert response.json()["error"] == "model_inactive"
+        assert "claude-fable-5-1" in response.json()["message"]
+        mock_svc.create.assert_not_called()
+
+
 class TestAgentUpdateEndpoint:
     """Tests for PUT /api/agents/{slug} endpoint."""
 

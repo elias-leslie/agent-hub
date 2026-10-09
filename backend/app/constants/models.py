@@ -13,7 +13,6 @@ from __future__ import annotations
 CLAUDE_HAIKU = "claude-haiku-5-5"
 CLAUDE_SONNET = "claude-sonnet-5-5"
 CLAUDE_OPUS = "claude-opus-5-5"
-CLAUDE_FABLE = "claude-fable-5-1"
 
 # Gemini 3 models (Google)
 GEMINI_3_8_FLASH = "gemini-3.8-flash"

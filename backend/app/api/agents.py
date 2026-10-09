@@ -24,6 +24,7 @@ from app.api.schemas.agent_schemas import (
     AgentResponse,
     AgentUpdateRequest,
 )
+from app.constants.catalog import INACTIVE_MODEL_CATALOG_BY_ID, resolve_model
 from app.db import get_db
 from app.models import RequestLog, Session
 from app.routing.registry import get_provider_for_model, is_workload_provider
@@ -162,6 +163,16 @@ def _reject_reference_only_models(
         candidates.append(("escalation_model_id", escalation_model_id))
 
     for field_name, model_id in candidates:
+        if resolve_model(model_id) in INACTIVE_MODEL_CATALOG_BY_ID:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "model_inactive",
+                    "field": field_name,
+                    "model": model_id,
+                    "message": f"Model {model_id!r} is inactive in the model catalog and cannot be routed.",
+                },
+            )
         provider = get_provider_for_model(model_id)
         if not is_workload_provider(provider):
             raise HTTPException(

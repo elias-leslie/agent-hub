@@ -51,7 +51,6 @@ from app.constants.models import (
     CF_QWEN3_30B,
     CF_QWQ_32B,
     CF_SD_XL_LIGHTNING,
-    CLAUDE_FABLE,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,

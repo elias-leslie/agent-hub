@@ -32,7 +32,8 @@ def test_active_new_rows_match_the_insert_only_seed_catalog():
     catalog = {e.id: _entry_values(e, i) for i, e in enumerate(MODEL_CATALOG, start=1)}
     assert not {r["id"] for r in data["deleted_models"]} & set(catalog)
     for row in data["new_models"]:
-        if row["is_active"]:
+        # b7f1c2d3e4a5 later deactivated Fable and dropped it from the seed catalog.
+        if row["is_active"] and row["id"] != "claude-fable-5-1":
             expected = {k: v for k, v in catalog[row["id"]].items() if k != "sort_order"}
             assert {k: v for k, v in row.items() if k != "sort_order"} == expected
     for column, change in data["updated_models"][_DAYBREAK].items():

@@ -70,6 +70,8 @@ def test_migration_backfills_the_catalog_values() -> None:
     )
     removed = {row["id"] for row in later["deleted_models"]}
     added = {row["id"] for row in later["new_models"] if row["thinking_level_map"]}
+    # b7f1c2d3e4a5 deactivated Fable and dropped it from the seed catalog.
+    added -= {"claude-fable-5-1"}
     assert set(migration._MINIMAL_AS_LOW_MODELS) - removed | added == {
         e.id for e in MODEL_CATALOG if e.capabilities.thinking_level_map
     }

@@ -120,6 +120,19 @@ def test_design_agents_lead_with_claude_then_codex() -> None:
         assert agent["fallback_models"][0].startswith("codex/"), slug
 
 
+# Owner policy: Claude Fable 5.1 is never routable (primary, fallback or escalation).
+FORBIDDEN_MODELS = {"claude-fable-5-1"}
+
+
+def test_no_agent_routes_to_forbidden_models() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    for agent in data["agents"]:
+        route = {agent["primary_model_id"], *agent.get("fallback_models", []), agent.get("escalation_model_id")}
+        assert not route & FORBIDDEN_MODELS, agent["slug"]
+    seeded = {entry.id for entry in MODEL_CATALOG}
+    assert not seeded & FORBIDDEN_MODELS, "the insert-only seed catalog must not recreate an active row"
+
+
 def test_memory_curator_is_retired_from_seeded_agents() -> None:
     data = json.loads(SEED_FILE.read_text())
     assert all(agent["slug"] != "memory-curator" for agent in data["agents"])
