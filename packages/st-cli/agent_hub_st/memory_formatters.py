@@ -212,19 +212,6 @@ def format_restore_compact(memory_uuid: str, revision_id: str, result: dict[str,
     typer.echo(f"RESTORED:{memory_uuid[:8]}:rev={revision_id[:8]}:version={version}")
 
 
-def format_orphaned_cleanup_compact(result: dict[str, Any]) -> None:
-    """Format orphaned edge cleanup results in TOON style."""
-    updated = result.get("edges_updated", 0)
-    deleted = result.get("edges_deleted", 0)
-    stale_refs = result.get("stale_refs_removed", 0)
-    error = result.get("error")
-
-    if error:
-        print(f"CLEANUP:FAIL:{error}")
-    else:
-        print(f"ORPHANED:updated={updated}|deleted={deleted}|stale_refs={stale_refs}")
-
-
 def format_stale_cleanup_compact(result: dict[str, Any]) -> None:
     """Format stale memory cleanup results in TOON style."""
     deleted = result.get("deleted", 0)

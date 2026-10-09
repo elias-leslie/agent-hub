@@ -21,7 +21,6 @@ from .agents_formatters import (
 )
 from .agents_memory import collect_memory_flags, resolve_memory_config
 from .agents_payload import build_agent_payload
-from .agents_routing import sync_manual_route
 from .preview_formatters import print_preview_detail, print_preview_summary
 
 app = typer.Typer(help="Agent management (Agent Hub)")
@@ -63,27 +62,6 @@ def _print_compact_agents(result: dict[str, Any], *, with_scores: bool) -> None:
 
 def _print_agents_by_model(result: dict[str, Any]) -> None:
     print_agents_by_model(result, scores_by_model=_score_map())
-
-
-def _sync_manual_route(
-    slug: str,
-    *,
-    primary_model: str | None,
-    fallback_model: list[str] | None,
-    escalation_model: str | None,
-    routing_mode: str | None,
-    change_reason: str | None,
-) -> None:
-    sync_manual_route(
-        slug,
-        primary_model=primary_model,
-        fallback_model=fallback_model,
-        escalation_model=escalation_model,
-        routing_mode=routing_mode,
-        change_reason=change_reason,
-        agents_api=agents_api,
-        output_error=output_error,
-    )
 
 
 @app.callback(invoke_without_command=True)
@@ -279,7 +257,6 @@ def update_agent(
     description: Annotated[str | None, typer.Option("--description")] = None,
     primary_model: Annotated[str | None, typer.Option("--primary-model")] = None,
     escalation_model: Annotated[str | None, typer.Option("--escalation-model")] = None,
-    routing_mode: Annotated[str | None, typer.Option("--routing-mode")] = None,
     temperature: Annotated[float | None, typer.Option("--temperature", min=0.0, max=2.0)] = None,
     timeout_seconds: Annotated[float | None, typer.Option("--timeout-seconds", min=1.0)] = None,
     thinking_level: Annotated[str | None, typer.Option("--thinking-level")] = None,
@@ -336,17 +313,7 @@ def update_agent(
     )
     if memory_result is not False:
         payload["memory_config"] = memory_result
-    has_routing_update = any([primary_model, effective_fallback_model is not None, escalation_model, routing_mode])
-    if not payload and not has_routing_update:
+    if not payload:
         output_error("Nothing to update. Provide at least one update flag.")
         raise typer.Exit(1)
-    updated = agents_api("PUT", f"/{slug}", json=payload) if payload else agents_api("GET", f"/{slug}")
-    _sync_manual_route(
-        slug,
-        primary_model=primary_model,
-        fallback_model=effective_fallback_model,
-        escalation_model=escalation_model,
-        routing_mode=routing_mode,
-        change_reason=change_reason,
-    )
-    _print_agent(updated)
+    _print_agent(agents_api("PUT", f"/{slug}", json=payload))

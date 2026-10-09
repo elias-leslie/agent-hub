@@ -462,14 +462,11 @@ def test_create_agent_posts_full_payload(tmp_path: Path) -> None:
     }
 
 
-def test_update_agent_model_flags_update_assignment_and_routing_mode_only() -> None:
+def test_update_agent_model_flags_update_assignment_only() -> None:
     with (
         patch(
             "agent_hub_st.agents.agents_api",
-            side_effect=[
-                {"slug": "verifier"},
-                {"agent_slug": "verifier"},
-            ],
+            return_value={"slug": "verifier"},
         ) as mock_agents_api,
         patch("agent_hub_st.agents._print_agent"),
     ):
@@ -486,25 +483,19 @@ def test_update_agent_model_flags_update_assignment_and_routing_mode_only() -> N
                 "claude-opus-5-5",
                 "--timeout-seconds",
                 "300",
-                "--routing-mode",
-                "manual_locked",
                 "--change-reason",
                 "critical verification route",
             ],
         )
 
     assert result.exit_code == 0
-    assert mock_agents_api.call_args_list[0].args == ("PUT", "/verifier")
-    assert mock_agents_api.call_args_list[0].kwargs["json"] == {
+    assert [call.args for call in mock_agents_api.call_args_list] == [("PUT", "/verifier")]
+    assert mock_agents_api.call_args.kwargs["json"] == {
         "primary_model_id": "codex/gpt-5.5",
         "escalation_model_id": "claude-opus-5-5",
         "timeout_seconds": 300.0,
         "fallback_models": ["claude-opus-5-5"],
         "change_reason": "critical verification route",
-    }
-    assert mock_agents_api.call_args_list[1].args == ("PUT", "/verifier/routing")
-    assert mock_agents_api.call_args_list[1].kwargs["json"] == {
-        "default_routing_mode": "manual_locked",
     }
 
 
@@ -559,37 +550,6 @@ def test_update_agent_fallback_only_does_not_sync_manual_route() -> None:
     assert mock_agents_api.call_args.kwargs["json"] == {
         "fallback_models": ["codex/gpt-5.5", "gemini-3.1-pro-preview"],
         "change_reason": "fallbacks only",
-    }
-
-
-def test_update_agent_routing_mode_does_not_sync_manual_route() -> None:
-    with (
-        patch(
-            "agent_hub_st.agents.agents_api",
-            side_effect=[
-                {"slug": "portfolio-mgr-v1"},
-                {"agent_slug": "portfolio-mgr-v1"},
-            ],
-        ) as mock_agents_api,
-        patch("agent_hub_st.agents._print_agent"),
-    ):
-        result = runner.invoke(
-            app,
-            [
-                "update",
-                "portfolio-mgr-v1",
-                "--routing-mode",
-                "manual_locked",
-            ],
-        )
-
-    assert result.exit_code == 0
-    assert [call.args for call in mock_agents_api.call_args_list] == [
-        ("GET", "/portfolio-mgr-v1"),
-        ("PUT", "/portfolio-mgr-v1/routing"),
-    ]
-    assert mock_agents_api.call_args_list[1].kwargs["json"] == {
-        "default_routing_mode": "manual_locked",
     }
 
 

@@ -323,11 +323,6 @@ DryRunOpt = Annotated[
 ]
 
 # Cleanup options
-OrphanedOpt = Annotated[
-    bool,
-    typer.Option("--orphaned", help="Clean up orphaned edges (stale episode refs)"),
-]
-
 StaleOpt = Annotated[
     bool,
     typer.Option("--stale", help="Clean up stale memories not accessed within TTL"),

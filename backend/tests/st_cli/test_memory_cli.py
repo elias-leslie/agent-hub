@@ -1119,3 +1119,16 @@ class TestMemoryListFormatting:
 
         out = capsys.readouterr().out
         assert "abc12345 [mandate] summary=Use dt" in out
+
+
+def test_cleanup_posts_only_to_the_live_stale_cleanup_endpoint():
+    with patch("agent_hub_st.memory_batch_cleanup.agent_hub_request", return_value={"deleted": 2}) as request:
+        result = runner.invoke(app, ["cleanup", "--stale", "--ttl-days", "45"], obj=OutputContext(compact=True))
+    assert result.exit_code == 0, result.output
+    request.assert_called_once()
+    assert request.call_args.args == ("POST", "/api/memory/cleanup?ttl_days=45")
+
+    with patch("agent_hub_st.memory_batch_cleanup.agent_hub_request") as request:
+        result = runner.invoke(app, ["cleanup", "--orphaned"], obj=OutputContext(compact=True))
+    assert result.exit_code != 0
+    request.assert_not_called()

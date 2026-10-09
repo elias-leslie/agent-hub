@@ -59,7 +59,6 @@ from .memory_options import (
     JsonInputOpt,
     LimitOpt,
     MinScoreOpt,
-    OrphanedOpt,
     OutputOpt,
     PinnedOpt,
     PinnedUpdateOpt,
@@ -414,14 +413,13 @@ def import_cmd(ctx: typer.Context, input_path: InputPathArg, dry_run: DryRunOpt 
 @app.command("cleanup")
 def cleanup(
     ctx: typer.Context,
-    orphaned: OrphanedOpt = False,
     stale: StaleOpt = False,
     ttl_days: TtlDaysOpt = 30,
     scope: ScopeOpt = "global",
     scope_id: ScopeIdOpt = None,
 ) -> None:
     """Clean up memory system."""
-    cleanup_impl(ctx.obj, orphaned, stale, ttl_days, scope, scope_id)
+    cleanup_impl(ctx.obj, stale, ttl_days, scope, scope_id)
 
 
 @app.command("seed")

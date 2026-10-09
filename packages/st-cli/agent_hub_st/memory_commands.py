@@ -211,11 +211,10 @@ def export(
 
 def cleanup(
     out: OutputContext,
-    orphaned: bool,
     stale: bool,
     ttl_days: int,
     scope: str,
     scope_id: str | None,
 ) -> None:
-    """Clean up orphaned or stale episodes."""
-    cleanup_impl(out, orphaned, stale, ttl_days, scope, scope_id)
+    """Clean up stale episodes."""
+    cleanup_impl(out, stale, ttl_days, scope, scope_id)
