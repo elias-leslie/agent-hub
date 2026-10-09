@@ -50,6 +50,8 @@ _capabilities: dict[str, ProviderCapabilities] = {
         supports_images=True,
     ),
     "cloudflare": ProviderCapabilities(supports_tool_execution=True),
+    # The headless Claude Code CLI runs tool-denied; Agent Hub owns the tool loop.
+    "claude": ProviderCapabilities(supports_thinking=True, supports_images=True),
 }
 _DEFAULT_CAPABILITIES = dict(_capabilities)
 

@@ -25,10 +25,10 @@ from app.constants.models import (
     CF_QWEN3_30B,
     CF_QWQ_32B,
     CF_SD_XL_LIGHTNING,
+    CLAUDE_FABLE,
     CLAUDE_HAIKU,
-    CLAUDE_OPUS_4_7,
+    CLAUDE_OPUS,
     CLAUDE_SONNET,
-    CODEX_GPT_5_5,
     CODEX_GPT_5_6_LUNA,
     CODEX_GPT_5_6_SOL,
     CODEX_GPT_5_6_TERRA,
@@ -65,40 +65,60 @@ _CODEX_CAPABILITIES = ModelCapabilities(
     # The Codex models endpoint lists low..xhigh (no minimal) for every model.
     thinking_level_map={"minimal": "low"},
 )
+_CLAUDE_CAPABILITIES = ModelCapabilities(
+    has_vision=True, has_thinking=True, supports_pdf=True, supports_xhigh=True, max_output_tokens=128_000,
+    # The CLI's --effort takes low..max; Agent Hub has no separate minimal level there.
+    thinking_level_map={"minimal": "low"},
+)
+_CLAUDE_AVAILABILITY = "claude_code_cli_subscription; verified_2026-10-09; prices_platform.claude.com_2026-10-09"
 
 # Single place to register UI-visible models. Everything else derives from this.
 # Static prices are current list prices checked 2026-05-07; DB enrichment may overlay.
 MODEL_CATALOG: list[ModelEntry] = [
     # --- Claude ---
+    # Served by the headless Claude Code CLI on the owner's subscription; the CLI
+    # runs tool-denied, so Agent Hub tool requests fall back to tool-capable models.
+    # Prices and limits from platform.claude.com, checked 2026-10-09. Scores are
+    # inherited from the 4.x predecessors until measured.
     ModelEntry(
-        id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 4.6",
-        hint="Balanced", provider="claude",
-        scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
-        cost=ModelCost(3.00, 15.00, cache_read_per_million=0.30, cache_write_per_million=3.75),
-        context_window=1_000_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=16_384),
-        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-sonnet",
-        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
-    ),
-    ModelEntry(
-        id=CLAUDE_OPUS_4_7, alias="opus", name="Claude Opus 4.7",
-        hint="Most capable", provider="claude",
-        scores=ModelScores(coding=85, reasoning=93, planning=74, tool_use=78, instruction=86, design=72),
-        cost=ModelCost(5.00, 25.00, cache_read_per_million=0.50, cache_write_per_million=6.25),
-        context_window=1_000_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=131_072),
-        release_date="2026-04-01", knowledge_cutoff="2026-01-01", family="claude-opus",
-        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
-    ),
-    ModelEntry(
-        id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 4.5",
-        hint="Quick", provider="claude",
+        id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 5.5",
+        hint="Fast, cheap; scores inherited from Haiku 4.5", provider="claude",
         scores=ModelScores(coding=73, reasoning=70, planning=50, tool_use=65, instruction=65, design=60),
-        cost=ModelCost(1.00, 5.00, cache_read_per_million=0.10, cache_write_per_million=1.25),
-        context_window=200_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_tool_execution=True, max_output_tokens=8_192),
-        release_date="2025-10-01", knowledge_cutoff="2025-04-01", family="claude-haiku",
-        availability="external_reference_only; claude_code_tui_only_not_agent_hub_routable",
+        cost=ModelCost(0.10, 0.50, cache_read_per_million=0.01, cache_write_per_million=0.125),
+        context_window=1_000_000, speed_tier="fast",
+        capabilities=_CLAUDE_CAPABILITIES,
+        release_date="2026-10-07", knowledge_cutoff="2026-06", family="claude-haiku",
+        availability=_CLAUDE_AVAILABILITY + "; prompts_over_100k_billed_0.50_2.50",
+    ),
+    ModelEntry(
+        id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 5.5",
+        hint="Balanced; design, critique and writing; scores inherited from Sonnet 4.6", provider="claude",
+        scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
+        cost=ModelCost(2.00, 10.00, cache_read_per_million=0.10, cache_write_per_million=2.50),
+        context_window=1_000_000, speed_tier="medium",
+        capabilities=_CLAUDE_CAPABILITIES,
+        release_date="2026-09-28", knowledge_cutoff="2026-06", family="claude-sonnet",
+        availability=_CLAUDE_AVAILABILITY,
+    ),
+    ModelEntry(
+        id=CLAUDE_OPUS, alias="opus", name="Claude Opus 5.5",
+        hint="Hard judgment; scores inherited from Opus 4.7", provider="claude",
+        scores=ModelScores(coding=85, reasoning=93, planning=74, tool_use=78, instruction=86, design=72),
+        cost=ModelCost(4.00, 20.00, cache_read_per_million=0.20, cache_write_per_million=5.00),
+        context_window=1_000_000, speed_tier="medium",
+        capabilities=_CLAUDE_CAPABILITIES,
+        release_date="2026-09-22", knowledge_cutoff="2026-06", family="claude-opus",
+        availability=_CLAUDE_AVAILABILITY,
+    ),
+    ModelEntry(
+        id=CLAUDE_FABLE, alias="fable", name="Claude Fable 5.1",
+        hint="Most capable Claude; scores inherited from Opus 4.7", provider="claude",
+        scores=ModelScores(coding=85, reasoning=93, planning=74, tool_use=78, instruction=86, design=72),
+        cost=ModelCost(10.00, 50.00, cache_read_per_million=0.25, cache_write_per_million=12.50),
+        context_window=1_000_000, speed_tier="medium",
+        capabilities=_CLAUDE_CAPABILITIES,
+        release_date="2026-09-01", knowledge_cutoff="2026-06", family="claude-fable",
+        availability=_CLAUDE_AVAILABILITY,
     ),
 
     # --- Gemini ---
@@ -286,20 +306,16 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CODEX_GPT_DAYBREAK_BLUE, alias="codex-daybreak", name="GPT Daybreak Blue",
-        hint="Defensive cybersecurity alias (Daybreak access); scores inherited from GPT-5.6 Sol", provider="codex",
+        hint="Defensive cybersecurity (Daybreak Blue access program)", provider="codex",
         scores=ModelScores(coding=99, reasoning=99, planning=92, tool_use=93, instruction=95, design=86),
         cost=ModelCost(0.00, 0.00), context_window=272_000, speed_tier="medium",
         capabilities=_CODEX_CAPABILITIES, knowledge_cutoff="2026-02-16", family="gpt",
-        availability="codex_oauth_subscription; verified_2026-10-09; deprecated_alias_upstream; default_snapshot_gpt-5.6-sol",
-    ),
-    ModelEntry(
-        id=CODEX_GPT_5_5, alias="codex-5.5", name="GPT-5.5 (Codex)",
-        hint="Legacy frontier", provider="codex",
-        scores=ModelScores(coding=98, reasoning=99, planning=90, tool_use=91, instruction=94, design=82),
-        cost=ModelCost(0.00, 0.00), context_window=272_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_tool_execution=True, supports_verbosity=True, supports_xhigh=True, supports_session_cache=True, max_output_tokens=128_000, thinking_level_map={"minimal": "low"}),
-        release_date="2026-04-23", knowledge_cutoff="2025-12-01", family="gpt",
-        availability="codex_oauth_subscription; verified_2026-10-09; hidden_legacy_in_codex_model_list; reasoning_low_medium_high_xhigh",
+        availability=(
+            "codex_oauth_subscription; verified_2026-10-09; listed_in_codex_models_2026-10-09; "
+            "rolling_latest_alias_codex_reports_no_snapshot; requires_access_programs_cyber_daybreak_blue; "
+            "openai_api_docs_deprecate_the_api_alias_default_snapshot_gpt-5.6-sol"
+        ),
+        access_programs={"cyber": "daybreak_blue"},
     ),
 
     # --- xAI direct ---

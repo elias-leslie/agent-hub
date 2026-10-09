@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -63,8 +64,27 @@ def test_migration_backfills_the_catalog_values() -> None:
     spec.loader.exec_module(migration)
     catalog_upstream_ids = {e.id: e.upstream_id for e in MODEL_CATALOG if e.upstream_id}
     assert catalog_upstream_ids == migration._UPSTREAM_IDS
-    assert set(migration._MINIMAL_AS_LOW_MODELS) == {
+    # 43f0a2fd606f later removed some of these models and added Claude 5 rows.
+    later = json.loads(
+        (_BACKEND / "alembic/versions/43f0a2fd606f_claude_cli_routes_and_codex_successors.json").read_text()
+    )
+    removed = {row["id"] for row in later["deleted_models"]}
+    added = {row["id"] for row in later["new_models"] if row["thinking_level_map"]}
+    assert set(migration._MINIMAL_AS_LOW_MODELS) - removed | added == {
         e.id for e in MODEL_CATALOG if e.capabilities.thinking_level_map
     }
     level_maps = {str(e.capabilities.thinking_level_map) for e in MODEL_CATALOG}
     assert level_maps <= {"None", str(migration._MINIMAL_AS_LOW)}
+
+
+def test_codex_request_carries_the_catalog_access_program() -> None:
+    daybreak = resolve_llm_model("codex/gpt-daybreak-blue-latest", "codex")
+    assert _body(daybreak, Context(messages=[]), None)["access_programs"] == {"cyber": "daybreak_blue"}
+    plain = resolve_llm_model("codex/gpt-6.1-sol", "codex")
+    assert "access_programs" not in _body(plain, Context(messages=[]), None)
+
+
+def test_claude_models_route_through_the_cli_provider() -> None:
+    model = resolve_llm_model("claude-sonnet-5-5", "claude")
+    assert model.api == "claude-code-cli"
+    assert model.thinking_level_map == {"minimal": "low"}

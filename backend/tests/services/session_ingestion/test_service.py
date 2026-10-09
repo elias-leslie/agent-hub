@@ -388,8 +388,8 @@ async def test_append_normalized_events_reconciles_transcript_backed_session_mod
     db.execute = AsyncMock(
         return_value=MagicMock(
             all=lambda: [
-                ("claude-sonnet-4-6", None),
-                ("claude-sonnet-4-6", None),
+                ("claude-sonnet-5-5", None),
+                ("claude-sonnet-5-5", None),
             ]
         )
     )
@@ -417,7 +417,7 @@ async def test_append_normalized_events_reconciles_transcript_backed_session_mod
                         event_type="assistant_message",
                         role="assistant",
                         content="direct",
-                        model_used="claude-sonnet-4-6",
+                        model_used="claude-sonnet-5-5",
                     )
                 ]
             ),
@@ -425,8 +425,8 @@ async def test_append_normalized_events_reconciles_transcript_backed_session_mod
         )
 
     assert result is append_result
-    assert session.model == "claude-sonnet-4-6"
-    assert session.models_used == ["claude-sonnet-4-6"]
+    assert session.model == "claude-sonnet-5-5"
+    assert session.models_used == ["claude-sonnet-5-5"]
     mock_store.assert_awaited_once()
     assert db.commit.await_count == 1
 
@@ -629,7 +629,7 @@ async def test_upsert_session_rejects_parent_from_another_project() -> None:
         id="session-parent",
         project_id="rootfall",
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         status="active",
         session_type="claude_code",
     )
@@ -670,7 +670,7 @@ async def test_upsert_session_links_existing_parent_in_same_project() -> None:
         id="session-parent",
         project_id="aftertimes",
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         status="active",
         session_type="claude_code",
     )
@@ -734,11 +734,11 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
         id="session-heartbeat",
         project_id="agent-hub",
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         status="active",
         session_type="claude_code",
         provider_metadata={},
-        models_used=["claude-sonnet-4-6"],
+        models_used=["claude-sonnet-5-5"],
         providers_used=["claude"],
     )
     session.created_at = datetime.now(UTC)
@@ -779,11 +779,11 @@ async def test_ingest_transcript_events_reconciles_direct_session_models_from_ev
         id="session-direct",
         project_id="agent-hub",
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         status="active",
         session_type="claude_code",
         provider_metadata={},
-        models_used=["claude-opus-4-6", "claude-sonnet-4-6"],
+        models_used=["claude-opus-4-6", "claude-sonnet-5-5"],
         providers_used=["claude"],
     )
     session.created_at = datetime.now(UTC)
@@ -793,9 +793,9 @@ async def test_ingest_transcript_events_reconciles_direct_session_models_from_ev
             MagicMock(scalar_one_or_none=lambda: session),
             MagicMock(
                 all=lambda: [
-                    ("claude-sonnet-4-6", None),
+                    ("claude-sonnet-5-5", None),
                     (None, None),
-                    ("claude-sonnet-4-6", None),
+                    ("claude-sonnet-5-5", None),
                 ]
             ),
             MagicMock(scalar_one_or_none=lambda: session),
@@ -834,8 +834,8 @@ async def test_ingest_transcript_events_reconciles_direct_session_models_from_ev
         )
 
     assert result.next_checkpoint == "4"
-    assert session.model == "claude-sonnet-4-6"
-    assert session.models_used == ["claude-sonnet-4-6"]
+    assert session.model == "claude-sonnet-5-5"
+    assert session.models_used == ["claude-sonnet-5-5"]
     assert db.commit.await_count == 1
 
 
@@ -952,7 +952,7 @@ async def test_ingest_transcript_events_preserves_delegated_model_history_from_e
         status="active",
         session_type="claude_code",
         provider_metadata={},
-        models_used=["claude-haiku-4-5"],
+        models_used=["claude-haiku-5-5"],
         providers_used=["claude"],
     )
     session.created_at = datetime.now(UTC)
@@ -962,9 +962,9 @@ async def test_ingest_transcript_events_preserves_delegated_model_history_from_e
             MagicMock(scalar_one_or_none=lambda: session),
             MagicMock(
                 all=lambda: [
-                    ("claude-sonnet-4-6", None),
+                    ("claude-sonnet-5-5", None),
                     ("claude-opus-4-6", "agent-1"),
-                    ("claude-sonnet-4-6", None),
+                    ("claude-sonnet-5-5", None),
                 ]
             ),
             MagicMock(scalar_one_or_none=lambda: session),
@@ -1002,8 +1002,8 @@ async def test_ingest_transcript_events_preserves_delegated_model_history_from_e
             ),
         )
 
-    assert session.model == "claude-sonnet-4-6"
-    assert session.models_used == ["claude-sonnet-4-6", "claude-opus-4-6"]
+    assert session.model == "claude-sonnet-5-5"
+    assert session.models_used == ["claude-sonnet-5-5", "claude-opus-4-6"]
     assert db.commit.await_count == 1
 
 

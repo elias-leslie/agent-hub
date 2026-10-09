@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.llm_messages import CacheMetrics
 from app.services.response_cache import CacheStats, ResponseCache
@@ -122,7 +123,7 @@ class TestCachingBenchmark:
         savings_percent = (1 - total_with_caching / uncached_cost.total_cost_usd) * 100
 
         # For prompts with large system messages, savings should be substantial
-        # (cached_input is 10x cheaper than regular input)
+        # (cache reads cost a small fraction of regular input)
         assert savings_percent > 0, "Caching should reduce costs"
 
     def test_benchmark_identical_requests_fully_cached(self, mock_settings):
@@ -167,7 +168,7 @@ class TestPromptCachingCostReduction:
         """
         Test that caching a large system prompt reduces costs by 50%+.
 
-        Cached input tokens cost 10x less than regular input tokens.
+        Cached input tokens cost far less than regular input tokens.
         """
         # Large system prompt (common in agentic workloads)
         large_prompt_tokens = 10000
@@ -195,7 +196,7 @@ class TestPromptCachingCostReduction:
         )
         input_savings_percent = (input_cost_reduction / first_request.input_cost_usd) * 100
 
-        # With 10x cheaper cached tokens, savings should be ~90% on input
+        # Cache reads are a small fraction of the input price, so input savings dominate
         assert input_savings_percent >= 50, (
             f"Expected 50%+ input savings, got {input_savings_percent:.1f}%"
         )
@@ -242,8 +243,8 @@ class TestPromptCachingCostReduction:
         # Multi-turn caching should yield significant savings
         assert savings_percent >= 30, f"Expected 30%+ savings, got {savings_percent:.1f}%"
 
-    def test_cached_input_pricing_is_10x_cheaper(self):
-        """Verify cached input tokens are 10x cheaper than regular input."""
+    def test_cached_input_uses_the_catalog_cache_read_price(self):
+        """Verify cached input tokens are billed at the catalog cache-read price."""
         model = CLAUDE_SONNET
         tokens = 1_000_000
 
@@ -258,10 +259,10 @@ class TestPromptCachingCostReduction:
             cached_input_tokens=tokens,
         )
 
-        # Regular input: $3/1M, Cached input: $0.30/1M (10x cheaper)
-        ratio = regular.input_cost_usd / cached.cached_input_cost_usd
-
-        assert ratio == 10.0, f"Expected 10x price difference, got {ratio}x"
+        price = MODEL_CATALOG_BY_ID[model].cost
+        assert regular.input_cost_usd == price.input_per_m
+        assert cached.cached_input_cost_usd == price.cache_read_per_million
+        assert cached.cached_input_cost_usd < regular.input_cost_usd
 
 
 # ============================================================================

@@ -762,7 +762,7 @@ async def test_call_reviewer_agent_does_not_fallback_on_auth_failure() -> None:
     mock_db = AsyncMock()
     resolved_agent = SimpleNamespace(
         temperature=0.2,
-        fallback_models=["claude-sonnet-4-6"],
+        fallback_models=["claude-sonnet-5-5"],
         thinking_level="medium",
     )
     resolved = SimpleNamespace(

@@ -818,7 +818,7 @@ def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):
     transcript.write_text(
         "\n".join(
             [
-                '{"type":"assistant","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"text","text":"Starting"}]}}',
+                '{"type":"assistant","message":{"model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"text","text":"Starting"}]}}',
                 '{"type":"progress","data":{"type":"agent_progress","agentId":"agent-1","message":{"type":"assistant","message":{"model":"claude-opus-4-6","role":"assistant","content":[{"type":"text","text":"Done"}]}}}}',
             ]
         )

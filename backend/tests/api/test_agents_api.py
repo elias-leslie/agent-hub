@@ -557,7 +557,7 @@ class TestAgentBenchmarkDashboardEndpoint:
                 "pass_rate": 75.0,
                 "open_regressions": 2,
                 "latest_completed_at": "2026-03-11T12:00:00Z",
-                "tracked_models": ["codex/gpt-5.4", "claude-sonnet-4-6"],
+                "tracked_models": ["codex/gpt-5.4", "claude-sonnet-5-5"],
             },
             "trend": [
                 {
@@ -626,7 +626,7 @@ class TestAgentBenchmarkDashboardEndpoint:
                     "pass_rate": 75.0,
                     "open_regressions": 2,
                     "latest_completed_at": "2026-03-11T12:00:00Z",
-                    "tracked_models": ["codex/gpt-5.4", "claude-sonnet-4-6"],
+                    "tracked_models": ["codex/gpt-5.4", "claude-sonnet-5-5"],
                     "case_ids": ["session_patience_quiet"],
                     "run_kinds": ["benchmark"],
                 }

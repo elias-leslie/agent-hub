@@ -44,7 +44,9 @@ from app.llm.types import (
     ToolCallEndEvent,
     ToolResultMessage,
 )
+from app.routing.availability import route_unavailable_reason
 from app.routing.registry import get_provider_for_model
+from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message
 
 from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
@@ -387,6 +389,13 @@ async def stream_completion(
             candidate_provider = get_provider_for_model(candidate_model)
             attempt_output_started = [False]
             has_later_candidate = attempt_index + 1 < len(candidate_models)
+            unavailable = await route_unavailable_reason(candidate_model)
+            if unavailable is not None:
+                logger.info("Skipping streaming model %s: %s", candidate_model, unavailable)
+                primary_failure = primary_failure or f"ProviderError: {unavailable}"
+                if not has_later_candidate:
+                    raise ProviderError(unavailable, provider=candidate_provider, status_code=503)
+                continue
             if attempt_index > 0:
                 ctx.model_used = candidate_model
                 ctx.fallback_used = True

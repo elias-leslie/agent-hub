@@ -6,7 +6,7 @@ import type { Agent, ModelInfo } from '@/app/agents/[slug]/types'
 import { codexModel } from './agent-model-fixtures'
 
 const baseFormData: Partial<Agent> = {
-  primary_model_id: 'codex/gpt-5.5',
+  primary_model_id: 'codex/gpt-6.1-sol',
   temperature: 0.7,
   thinking_level: 'medium',
   verbosity_level: 'high',

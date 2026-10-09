@@ -128,7 +128,7 @@ async def test_compact_streaming_context_replaces_messages_when_compacted() -> N
     ) as mock_compact:
         result = await _compact_streaming_context(
             messages,
-            "claude-sonnet-4-6",
+            "claude-sonnet-5-5",
             "sess-1",
             AsyncMock(),
         )

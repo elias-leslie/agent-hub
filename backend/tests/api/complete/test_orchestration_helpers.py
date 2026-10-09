@@ -97,7 +97,7 @@ async def test_execute_and_respond_rolls_back_and_handles_cancelled_error() -> N
     ) as handle_error, pytest.raises(HTTPException) as exc_info:
         await execute_and_respond(
             request=request,
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             provider="claude",
             resolved_agent=None,
             messages_dict=[{"role": "user", "content": "hello"}],
@@ -136,7 +136,7 @@ async def test_handle_completion_error_maps_cancelled_error_to_http_500() -> Non
             session_id="sess-123",
             db=AsyncMock(),
             agent_id="persona",
-            model_used="claude-sonnet-4-6",
+            model_used="claude-sonnet-5-5",
         )
 
     assert exc_info.value.status_code == 500
@@ -151,7 +151,7 @@ async def test_guard_provider_cooldowns_raises_when_all_candidates_blocked() -> 
     request = SimpleNamespace(disable_agent_fallbacks=False)
     resolved_agent = SimpleNamespace(
         agent=SimpleNamespace(
-            fallback_models=["claude-haiku-4-5"],
+            fallback_models=["claude-haiku-5-5"],
             escalation_model_id=None,
         )
     )

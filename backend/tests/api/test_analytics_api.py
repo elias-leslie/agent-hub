@@ -27,7 +27,7 @@ class TestCostLogExportEndpoint:
                 request_source="vantage",
                 session_type="agent",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5-5",
                 input_tokens=100,
                 output_tokens=50,
                 cost_usd=0.0123,
@@ -47,6 +47,8 @@ class TestCostLogExportEndpoint:
         assert data["rows"][0]["trace_id"] == "vantage:issue:iss-123:run:run-1"
         assert data["next_after_id"] == 10
         assert data["has_more"] is False
-        filters = mock_list.await_args.args[1]
+        listed = mock_list.await_args
+        assert listed is not None
+        filters = listed.args[1]
         assert filters.project_id == "vantage"
         assert filters.limit == 1

@@ -108,7 +108,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
             request=request,
             result=result,
             resolved_model="xai/grok-4-1-fast-reasoning",
-            model_used="claude-haiku-4-5",
+            model_used="claude-haiku-5-5",
             fallback_reason="TimeoutError: primary timed out",
             is_new_session=True,
         )
@@ -122,7 +122,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     cost_args = mock_cost.call_args
     assert cost_args is not None
 
-    assert save_events_args.args[6] == "claude-haiku-4-5"
+    assert save_events_args.args[6] == "claude-haiku-5-5"
     assert save_events_args.kwargs["source_metadata"] == {
         "transport": "web",
         "surface": "work_chats",
@@ -132,14 +132,14 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert observability_args.kwargs["orchestration_path"] == "single_turn"
     assert observability_args.kwargs["requested_max_turns"] == 1
     assert observability_args.kwargs["provider"] == "claude"
-    assert cost_args.args[2] == "claude-haiku-4-5"
-    assert log_tokens_args.args[2] == "claude-haiku-4-5"
-    assert session.model == "claude-haiku-4-5"
+    assert cost_args.args[2] == "claude-haiku-5-5"
+    assert log_tokens_args.args[2] == "claude-haiku-5-5"
+    assert session.model == "claude-haiku-5-5"
     assert session.provider == "claude"
-    assert "claude-haiku-4-5" in session.models_used
+    assert "claude-haiku-5-5" in session.models_used
     assert "claude" in session.providers_used
     assert session.provider_metadata["requested_model"] == "xai/grok-4-1-fast-reasoning"
-    assert session.provider_metadata["effective_model"] == "claude-haiku-4-5"
+    assert session.provider_metadata["effective_model"] == "claude-haiku-5-5"
     assert session.provider_metadata["fallback_used"] is True
     assert session.provider_metadata["fallback_reason"] == "TimeoutError: primary timed out"
 
@@ -314,18 +314,18 @@ async def test_update_session_metadata_flushes_without_commit() -> None:
         db=db,
         session=session,
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         agent_slug="persona",
     )
 
     db.flush.assert_awaited_once()
     db.commit.assert_not_awaited()
     assert session.provider == "claude"
-    assert session.model == "claude-sonnet-4-6"
+    assert session.model == "claude-sonnet-5-5"
     assert session.agent_slug == "persona"
-    assert session.provider_metadata["requested_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["requested_model"] == "claude-sonnet-5-5"
     assert session.provider_metadata["requested_provider"] == "claude"
-    assert session.provider_metadata["effective_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["effective_model"] == "claude-sonnet-5-5"
     assert session.provider_metadata["effective_provider"] == "claude"
     assert session.provider_metadata["fallback_used"] is False
 
@@ -346,14 +346,14 @@ async def test_update_session_metadata_honors_explicit_requested_model() -> None
         db=db,
         session=session,
         provider="claude",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         agent_slug="persona",
-        requested_model="claude-sonnet-4-6",
+        requested_model="claude-sonnet-5-5",
         requested_provider="claude",
     )
 
-    assert session.provider_metadata["requested_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["requested_model"] == "claude-sonnet-5-5"
     assert session.provider_metadata["requested_provider"] == "claude"
-    assert session.provider_metadata["effective_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["effective_model"] == "claude-sonnet-5-5"
     assert session.provider_metadata["effective_provider"] == "claude"
     assert session.provider_metadata["fallback_used"] is False

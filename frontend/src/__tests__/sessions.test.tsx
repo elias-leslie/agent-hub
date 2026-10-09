@@ -35,11 +35,11 @@ const mockSessions = {
       id: 'session-123-abc',
       project_id: 'test-project',
       provider: 'claude',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       requested_provider: 'claude',
-      requested_model: 'claude-opus-4-7',
+      requested_model: 'claude-opus-5-5',
       effective_provider: 'claude',
-      effective_model: 'claude-sonnet-4-6',
+      effective_model: 'claude-sonnet-5-5',
       fallback_used: true,
       fallback_reason: 'rate_limit',
       status: 'active',
@@ -119,11 +119,11 @@ describe('SessionsPage', () => {
       id: 'session-123-abc',
       project_id: 'test-project',
       provider: 'claude',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5-5',
       requested_provider: 'claude',
-      requested_model: 'claude-opus-4-7',
+      requested_model: 'claude-opus-5-5',
       effective_provider: 'claude',
-      effective_model: 'claude-sonnet-4-6',
+      effective_model: 'claude-sonnet-5-5',
       fallback_used: true,
       fallback_reason: 'rate_limit',
       status: 'active',
@@ -194,7 +194,7 @@ describe('SessionsPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText(/claude\/sonnet-4\.6/i)).toBeInTheDocument()
+      expect(screen.getByText(/claude\/sonnet-5\.5/i)).toBeInTheDocument()
       expect(screen.getByText(/^fallback$/i)).toBeInTheDocument()
       expect(screen.getByText(/5 msg/i)).toBeInTheDocument()
       expect(screen.getByText(/12 evt/i)).toBeInTheDocument()
@@ -402,7 +402,7 @@ describe('SessionsPage', () => {
         screen.getByRole('button', { name: /expand session session-123-abc/i }),
       ).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: /filter model claude-sonnet-4-6/i }),
+        screen.getByRole('button', { name: /filter model claude-sonnet-5-5/i }),
       ).toBeInTheDocument()
     })
 
@@ -415,7 +415,7 @@ describe('SessionsPage', () => {
     })
 
     fireEvent.click(
-      screen.getByRole('button', { name: /filter model claude-sonnet-4-6/i }),
+      screen.getByRole('button', { name: /filter model claude-sonnet-5-5/i }),
     )
 
     expect(fetchSession).toHaveBeenCalledTimes(1)

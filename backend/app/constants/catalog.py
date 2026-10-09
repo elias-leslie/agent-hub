@@ -19,10 +19,7 @@ from app.constants.catalog_types import (
 )
 from app.constants.models import (
     CF_GLM_4_7_FLASH,
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
-    CODEX_GPT_5_5,
     CODEX_GPT_6_1_SOL,
     DEFAULT_GEMINI_MODEL,
     GEMINI_3_1_FLASH_LITE,
@@ -32,6 +29,7 @@ from app.constants.models import (
 )
 
 __all__ = [
+    "INACTIVE_MODEL_CATALOG_BY_ID",
     "MODEL_ALIASES",
     "MODEL_CATALOG",
     "MODEL_CATALOG_BY_ID",
@@ -70,6 +68,9 @@ MODEL_CATALOG: list[ModelEntry] = list(SEED_MODEL_CATALOG)
 MODEL_REGISTRY: list[dict[str, str]] = []
 MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {}
 MODEL_ALIASES: dict[str, str] = {}
+# Catalogued but inactive rows: never routed, but their providers stay known so
+# credentials can be stored before a model is re-enabled.
+INACTIVE_MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {}
 
 
 def seed_alias_overrides() -> dict[str, str]:
@@ -84,21 +85,6 @@ def seed_alias_overrides() -> dict[str, str]:
         "local": LOCAL_GEMMA_4_12B,
         "nvidia": NVIDIA_NEMOTRON_3_SUPER,
         "xai": XAI_GROK_4_3,
-
-        # Exact legacy aliases only. These do not substitute one model for another.
-        "codex/gpt-5.5": CODEX_GPT_5_5,
-
-        # CloudCode aliases
-        "cc/sonnet": CLAUDE_SONNET,
-        "cc/opus": CLAUDE_OPUS_4_7,
-        "opus-4.7": CLAUDE_OPUS_4_7,
-        "cc/opus-4.7": CLAUDE_OPUS_4_7,
-        "cloudcode/claude-sonnet-4-6": CLAUDE_SONNET,
-        "cloudcode/claude-opus-4-6-thinking": CLAUDE_OPUS_4_7,
-        "cloudcode/claude-opus-4-7": CLAUDE_OPUS_4_7,
-
-        # Legacy dated Claude aliases retained in existing agent rows.
-        "claude-haiku-4-5-20251001": CLAUDE_HAIKU,
     }
 
 
@@ -148,8 +134,11 @@ def _refresh_valid_model_globals() -> None:
 def replace_runtime_model_catalog(
     entries: list[ModelEntry],
     aliases: dict[str, str] | None = None,
+    inactive: list[ModelEntry] | None = None,
 ) -> None:
     """Replace process-local catalog snapshot while preserving imported containers."""
+    INACTIVE_MODEL_CATALOG_BY_ID.clear()
+    INACTIVE_MODEL_CATALOG_BY_ID.update({e.id: e for e in inactive or []})
     MODEL_CATALOG[:] = list(entries)
     MODEL_REGISTRY[:] = [
         {"id": e.id, "alias": e.alias, "name": e.name, "hint": e.hint, "provider": e.provider}

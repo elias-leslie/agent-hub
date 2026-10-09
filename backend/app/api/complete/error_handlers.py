@@ -15,6 +15,7 @@ from app.services.llm_errors import (
     ProviderError,
     RateLimitError,
 )
+from app.services.model_runtime_health import classify_runtime_failure
 from app.services.session_health import health_detail_for_error
 from app.services.session_live_activity import mark_session_terminal_state
 
@@ -209,6 +210,15 @@ async def handle_completion_error(
 
     if isinstance(error, HTTPException):
         raise error
+
+    classification = classify_runtime_failure(error)
+    if classification.provider_status is not None:
+        # A provider refused for billing, credentials or entitlement: report it
+        # as an upstream failure with the provider's reason, not a server bug.
+        detail = f"Upstream provider refused the request ({classification.provider_status}): {error}"
+        logger.error(detail)
+        await _notify_error(session_id, db, "ProviderError", detail, agent_id, model_used)
+        raise HTTPException(status_code=502, detail=detail) from error
 
     logger.exception(f"Unexpected error in /complete: {error}")
     await _notify_error(session_id, db, "UnexpectedError", str(error), agent_id, model_used)

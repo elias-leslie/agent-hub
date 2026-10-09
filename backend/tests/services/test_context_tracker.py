@@ -17,6 +17,13 @@ from app.services.context_tracker import (
     log_token_usage,
     should_emit_warning,
 )
+from app.services.token_counter import get_context_limit
+
+_LIMIT = get_context_limit(CLAUDE_HAIKU)
+
+
+def _pct(percent: int) -> int:
+    return _LIMIT * percent // 100
 
 
 class TestLogTokenUsage:
@@ -86,20 +93,20 @@ class TestCalculateContextUsage:
 
         # Token totals query
         mock_totals = MagicMock()
-        mock_totals.one.return_value = (50000, 20000)
+        mock_totals.one.return_value = (_pct(25), 20000)
 
         # Latest context query
         mock_latest = MagicMock()
-        mock_latest.scalar_one_or_none.return_value = 50000
+        mock_latest.scalar_one_or_none.return_value = _pct(25)
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
         usage = await calculate_context_usage(mock_db, "test-session-123", CLAUDE_HAIKU)
 
-        assert usage.used_tokens == 50000
-        assert usage.limit_tokens == 200000  # Haiku context limit
+        assert usage.used_tokens == _pct(25)
+        assert usage.limit_tokens == _LIMIT
         assert usage.percent_used == 25.0
-        assert usage.remaining_tokens == 150000
+        assert usage.remaining_tokens == _LIMIT - _pct(25)
         assert usage.warning is None  # 25% is below warning threshold
 
     @pytest.mark.asyncio
@@ -108,10 +115,10 @@ class TestCalculateContextUsage:
         mock_db = AsyncMock()
 
         mock_totals = MagicMock()
-        mock_totals.one.return_value = (100000, 40000)
+        mock_totals.one.return_value = (_pct(50), 40000)
 
         mock_latest = MagicMock()
-        mock_latest.scalar_one_or_none.return_value = 100000
+        mock_latest.scalar_one_or_none.return_value = _pct(50)
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
@@ -128,10 +135,10 @@ class TestCalculateContextUsage:
         mock_db = AsyncMock()
 
         mock_totals = MagicMock()
-        mock_totals.one.return_value = (150000, 60000)
+        mock_totals.one.return_value = (_pct(75), 60000)
 
         mock_latest = MagicMock()
-        mock_latest.scalar_one_or_none.return_value = 150000
+        mock_latest.scalar_one_or_none.return_value = _pct(75)
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
@@ -147,10 +154,10 @@ class TestCalculateContextUsage:
         mock_db = AsyncMock()
 
         mock_totals = MagicMock()
-        mock_totals.one.return_value = (180000, 70000)
+        mock_totals.one.return_value = (_pct(90), 70000)
 
         mock_latest = MagicMock()
-        mock_latest.scalar_one_or_none.return_value = 180000
+        mock_latest.scalar_one_or_none.return_value = _pct(90)
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
@@ -177,7 +184,7 @@ class TestCalculateContextUsage:
 
         assert usage.used_tokens == 0
         assert usage.percent_used == 0.0
-        assert usage.remaining_tokens == 200000
+        assert usage.remaining_tokens == _LIMIT
         assert usage.measured is False
 
     @pytest.mark.asyncio
@@ -204,11 +211,11 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_HAIKU, 50000
+            mock_db, "test-session", CLAUDE_HAIKU, _pct(25)
         )
 
         assert can_proceed is True
-        assert usage.used_tokens == 50000
+        assert usage.used_tokens == _pct(25)
         assert usage.percent_used == 25.0
 
     @pytest.mark.asyncio
@@ -217,7 +224,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_HAIKU, 250000
+            mock_db, "test-session", CLAUDE_HAIKU, _pct(125)
         )
 
         assert can_proceed is False
@@ -230,7 +237,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_HAIKU, 180000
+            mock_db, "test-session", CLAUDE_HAIKU, _pct(90)
         )
 
         assert can_proceed is True

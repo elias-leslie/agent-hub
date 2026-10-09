@@ -19,9 +19,10 @@ _ORCH = "app.api.complete.complete_orchestrator"
 def _mock_agent() -> MagicMock:
     mock_agent = MagicMock()
     mock_agent.model = CODEX_GPT_6_1_SOL
-    mock_agent.provider = "kimi-code"
+    mock_agent.provider = "codex"
     mock_agent.agent.slug = "coder"
     mock_agent.agent.fallback_models = []
+    mock_agent.agent.escalation_model_id = None
     mock_agent.agent.memory_config = None
     mock_agent.agent.hourly_request_limit = None
     mock_agent.agent.daily_token_budget = None

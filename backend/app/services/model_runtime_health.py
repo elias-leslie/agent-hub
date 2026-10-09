@@ -11,6 +11,9 @@ from app.services.llm_errors import RateLimitError
 _AUTH_MARKERS = ("invalid api key", "unauthorized", "401", "invalid bearer token")
 _PROVIDER_QUOTA_MARKERS = (
     "insufficient credits",
+    "insufficient balance",
+    "insufficient_balance",
+    "payment required",
     "daily free allocation",
     "used up your daily free allocation",
     "402",
@@ -22,6 +25,7 @@ _RATE_LIMIT_MARKERS = (
     "quota",
     "rate limit",
 )
+_ACCESS_DENIED_MARKERS = ("403", "forbidden", "permission denied", "permission_denied", "not entitled")
 _NOT_FOUND_MARKERS = ("404", "not found", "model_not_found")
 
 
@@ -54,6 +58,13 @@ def classify_runtime_failure(error: BaseException) -> RuntimeFailureClassificati
         return RuntimeFailureClassification(
             smoke_status="auth_failed",
             provider_status="invalid_credentials",
+            routable=False,
+            cooldown_seconds=3600.0,
+        )
+    if any(marker in text for marker in _ACCESS_DENIED_MARKERS):
+        return RuntimeFailureClassification(
+            smoke_status="access_denied",
+            provider_status="access_denied",
             routable=False,
             cooldown_seconds=3600.0,
         )

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CF_QWQ_32B, CODEX_GPT_5_5, CODEX_GPT_6_1_SOL
+from app.constants.models import CF_QWQ_32B, CODEX_GPT_6_1_SOL, CODEX_GPT_6_LUNA
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_MEMORY_GROUP,
     HEARTBEAT_PROJECT,
@@ -38,7 +38,7 @@ class TestHeartbeatRuntimeInfo:
         ("model_id", "provider"),
         [
             (CODEX_GPT_6_1_SOL, "codex"),
-            (CODEX_GPT_5_5, "codex"),
+            (CODEX_GPT_6_LUNA, "codex"),
         ],
     )
     async def test_runtime_info_reports_supported_models(self, model_id, provider):
@@ -99,7 +99,7 @@ class TestHeartbeatRuntimeInfo:
         ("model_id", "provider", "expected_supported"),
         [
             (CODEX_GPT_6_1_SOL, "codex", True),
-            (CODEX_GPT_5_5, "codex", True),
+            (CODEX_GPT_6_LUNA, "codex", True),
             (CF_QWQ_32B, "cloudflare", False),
         ],
     )
@@ -659,7 +659,7 @@ class TestHeartbeatCompletionRouting:
         ("model_id", "provider"),
         [
             (CODEX_GPT_6_1_SOL, "codex"),
-            (CODEX_GPT_5_5, "codex"),
+            (CODEX_GPT_6_LUNA, "codex"),
         ],
     )
     async def test_do_completion_uses_tools_for_supported_models(self, model_id, provider):
@@ -723,7 +723,7 @@ class TestHeartbeatCompletionRouting:
         ("model_id", "provider"),
         [
             (CODEX_GPT_6_1_SOL, "codex"),
-            (CODEX_GPT_5_5, "codex"),
+            (CODEX_GPT_6_LUNA, "codex"),
         ],
     )
     async def test_do_completion_preserves_shared_contract_for_routable_providers(

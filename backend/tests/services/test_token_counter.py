@@ -1,5 +1,6 @@
 """Tests for token counter service."""
 
+from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.token_counter import (
     count_message_tokens,
@@ -71,9 +72,10 @@ class TestEstimateCost:
             output_tokens=1_000_000,
             model=CLAUDE_SONNET,
         )
-        assert cost.input_cost_usd == 3.0
-        assert cost.output_cost_usd == 15.0
-        assert cost.total_cost_usd == 18.0
+        price = MODEL_CATALOG_BY_ID[CLAUDE_SONNET].cost
+        assert cost.input_cost_usd == price.input_per_m
+        assert cost.output_cost_usd == price.output_per_m
+        assert cost.total_cost_usd == price.input_per_m + price.output_per_m
 
     def test_claude_haiku_cost(self):
         """Test Claude Haiku pricing (cheaper)."""
@@ -82,9 +84,10 @@ class TestEstimateCost:
             output_tokens=1_000_000,
             model=CLAUDE_HAIKU,
         )
-        assert cost.input_cost_usd == 1.0
-        assert cost.output_cost_usd == 5.0
-        assert cost.total_cost_usd == 6.0
+        price = MODEL_CATALOG_BY_ID[CLAUDE_HAIKU].cost
+        assert cost.input_cost_usd == price.input_per_m
+        assert cost.output_cost_usd == price.output_per_m
+        assert cost.total_cost_usd == price.input_per_m + price.output_per_m
 
     def test_cached_input_discount(self):
         """Test cached input tokens cost less."""

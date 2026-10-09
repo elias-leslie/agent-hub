@@ -103,6 +103,9 @@ class ModelEntry:
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     # Provider-side model id when it differs from the id minus its provider prefix.
     upstream_id: str | None = None
+    # Provider access programs the model requires on every request,
+    # e.g. Codex {"cyber": "daybreak_blue"}.
+    access_programs: dict[str, str] | None = field(default=None, hash=False)
     release_date: str | None = None
     knowledge_cutoff: str | None = None
     family: str | None = None

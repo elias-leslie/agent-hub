@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -29,7 +30,7 @@ def _make_run(attempts: list[PersonaBenchmarkAttempt]) -> PersonaBenchmarkRun:
     return PersonaBenchmarkRun(
         benchmark_id="bench-hone",
         project_id="agent-hub",
-        models=["codex/gpt-5.4", "claude-sonnet-4-6"],
+        models=["codex/gpt-5.4", "claude-sonnet-5-5"],
         case_ids=["feedback_triage_hotspot", "performance_review_honing"],
         runs_per_case=1,
         started_at="2026-03-11T00:00:00+00:00",
@@ -119,7 +120,7 @@ async def test_build_honing_prompt_includes_failure_clusters_and_reference_notes
                 used_tool_names=["review_agent_performance"],
             ),
             PersonaBenchmarkAttempt(
-                model_id="claude-sonnet-4-6",
+                model_id="claude-sonnet-5-5",
                 case_id="performance_review_honing",
                 run_number=1,
                 latency_ms=760,
@@ -409,9 +410,10 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     assert client.kwargs is not None
     assert client.kwargs["use_memory"] is False
     assert client.kwargs["agent_slug"] == "persona"
-    assert "Recent improvement signals" in client.kwargs["messages"][0]["content"]
-    assert "Recent real-heartbeat field evidence" in client.kwargs["messages"][0]["content"]
-    assert "missed rebuild.sh" in client.kwargs["messages"][0]["content"]
+    prompt = cast(list[dict[str, str]], client.kwargs["messages"])[0]["content"]
+    assert "Recent improvement signals" in prompt
+    assert "Recent real-heartbeat field evidence" in prompt
+    assert "missed rebuild.sh" in prompt
 
 
 @pytest.mark.asyncio
@@ -599,7 +601,8 @@ async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> 
         )
 
     assert captured_payload["benchmark_id"] == "persona-benchmark-abc12345-iter-2"
-    assert captured_payload["metadata"]["source_benchmark_id"] == "persona-benchmark-abc12345"
+    metadata = cast(dict[str, object], captured_payload["metadata"])
+    assert metadata["source_benchmark_id"] == "persona-benchmark-abc12345"
     assert record.persisted_run_id == "run-iteration-1"
 
 

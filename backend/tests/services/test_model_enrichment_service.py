@@ -9,7 +9,7 @@ def test_build_discovery_summary_only_tracks_first_party_providers() -> None:
             {"id": "grok-4.1", "provider_id": "x-ai", "provider_name": "xAI"},
             {"id": "grok-4.1", "provider_id": "302ai", "provider_name": "302.AI"},
             {"id": "grok-4.20-reasoning", "provider_id": "nano-gpt", "provider_name": "NanoGPT"},
-            {"id": "claude-sonnet-4-6", "provider_id": "anthropic", "provider_name": "Anthropic"},
+            {"id": "claude-sonnet-5-5", "provider_id": "anthropic", "provider_name": "Anthropic"},
             {"id": "claude-opus-5", "provider_id": "anthropic", "provider_name": "Anthropic"},
             {"id": "claude-opus-5", "provider_id": "llmgateway", "provider_name": "LLM Gateway"},
         ],

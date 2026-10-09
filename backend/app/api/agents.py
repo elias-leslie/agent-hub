@@ -172,8 +172,8 @@ def _reject_reference_only_models(
                     "provider": provider,
                     "model": model_id,
                     "message": (
-                        "Claude/Anthropic models are catalog references and external "
-                        "Claude Code TUI only; Agent Hub agent assignments must use a routable provider."
+                        f"Provider {provider!r} is credential-only and cannot serve "
+                        "Agent Hub agent assignments."
                     ),
                 },
             )

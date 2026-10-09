@@ -37,6 +37,8 @@ _PROVIDER_API: dict[str, Api] = {
     "nvidia": "openai-completions",
     "cloudflare": "openai-completions",
     "codex": "openai-codex-responses",
+    # Claude runs through the headless Claude Code CLI on the owner's subscription.
+    "claude": "claude-code-cli",
 }
 
 # Provider → default base URL. Per-model overrides happen via Model.base_url.
@@ -58,6 +60,7 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
     "codex": "https://chatgpt.com/backend-api/codex/responses",
+    "claude": "",
 }
 
 
@@ -117,6 +120,7 @@ def resolve_llm_model(
         max_tokens=caps.max_output_tokens,
         thinking_level_map=cast(ThinkingLevelMap | None, caps.thinking_level_map),
         headers=headers,
+        access_programs=entry.access_programs,
         compat=(
             _local_qwen_compat()
             if provider == "local" and entry.family == "qwen"

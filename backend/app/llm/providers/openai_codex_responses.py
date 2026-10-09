@@ -268,6 +268,9 @@ def _body(
         "stream": True,
         "store": False,
     }
+    if model.access_programs:
+        # Program-gated models (Daybreak Blue) reject requests that omit their program.
+        body["access_programs"] = dict(model.access_programs)
     tools = _tools(context.tools)
     if tools:
         body["tools"] = tools

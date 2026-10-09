@@ -287,7 +287,7 @@ class TestMemoryInjectEvent:
             event_type="tool_use",
             tool_name="Read",
             tool_input={"file_path": "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"},
-            model_used="claude-sonnet-4-6",
+            model_used="claude-sonnet-5-5",
             session=session,
         )
         await store_event(
@@ -299,8 +299,8 @@ class TestMemoryInjectEvent:
             session=session,
         )
 
-        assert session.model == "claude-sonnet-4-6"
-        assert session.models_used == ["claude-sonnet-4-6"]
+        assert session.model == "claude-sonnet-5-5"
+        assert session.models_used == ["claude-sonnet-5-5"]
         assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
         assert session.observed_write_paths == ["backend/app/services/event_storage.py"]
         assert session.scope_confidence == "observed_write"
@@ -374,11 +374,11 @@ class TestMemoryInjectEvent:
             id="sess-subagent",
             project_id="agent-hub",
             provider="claude",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             status="active",
             session_type="claude_code",
             provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub"},
-            models_used=["claude-sonnet-4-6"],
+            models_used=["claude-sonnet-5-5"],
             providers_used=["claude"],
         )
         session.created_at = datetime.now(UTC)
@@ -397,8 +397,8 @@ class TestMemoryInjectEvent:
             session=session,
         )
 
-        assert session.model == "claude-sonnet-4-6"
-        assert session.models_used == ["claude-sonnet-4-6", "claude-opus-4-6"]
+        assert session.model == "claude-sonnet-5-5"
+        assert session.models_used == ["claude-sonnet-5-5", "claude-opus-4-6"]
         assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
 
     @pytest.mark.asyncio

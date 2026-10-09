@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.routing.availability import route_unavailable_reason
 from app.routing.registry import is_workload_provider, list_providers
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 _COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.TimeoutError)
 _DEFAULT_RATE_LIMIT_COOLDOWN = 60.0
-_UNSUPPORTED_NATIVE_THINKING_PROVIDERS = {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}
+_UNSUPPORTED_NATIVE_THINKING_PROVIDERS = {"openai", "openrouter", "zhipu", "minimax", "xai"}
 _RATE_LIMIT_BREAKER = CircuitBreakerManager(list_providers())
 
 
@@ -152,11 +153,15 @@ async def _try_model(
         return None, ProviderError(
             provider=provider,
             message=(
-                "Claude/Anthropic models are catalog references and external "
-                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+                f"Provider {provider!r} is credential-only and cannot execute "
+                "Agent Hub workloads."
             ),
             status_code=400,
         )
+    unavailable = await route_unavailable_reason(model)
+    if unavailable is not None:
+        logger.info("Skipping model %s: %s", model, unavailable)
+        return None, ProviderError(provider=provider, message=unavailable, status_code=503)
     cooldown_error = None if allow_provider_cooldown_probe else await _active_cooldown_error(provider)
     if cooldown_error is not None:
         logger.warning(
@@ -327,6 +332,7 @@ def _raise_all_models_failed(
         message=f"All models failed for agent {agent.slug}: primary={primary_model}, "
         f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}, "
         f"primary_error={primary_reason}",
+        status_code=502,
     )
 
 

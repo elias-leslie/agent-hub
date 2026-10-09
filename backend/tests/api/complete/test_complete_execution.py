@@ -32,10 +32,10 @@ def test_prepare_tools_auto_provisions_for_non_streaming_tool_loop() -> None:
 @pytest.mark.asyncio
 async def test_execute_with_fallback_attaches_primary_failure_reason_to_result() -> None:
     resolved_agent = SimpleNamespace(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         agent=SimpleNamespace(
             slug="refactor",
-            primary_model_id="claude-sonnet-4-6",
+            primary_model_id="claude-sonnet-5-5",
             fallback_models=["codex/gpt-5.4"],
             temperature=0.0,
             verbosity_level=None,
@@ -83,14 +83,14 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
         agent=SimpleNamespace(
             slug="persona",
             primary_model_id="codex/gpt-5.4",
-            fallback_models=["claude-sonnet-4-6"],
+            fallback_models=["claude-sonnet-5-5"],
             temperature=0.0,
             verbosity_level=None,
         ),
     )
     adapter_result = CompletionInternalResult(
         content="ok",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         provider="claude",
         input_tokens=1,
         output_tokens=1,
@@ -101,7 +101,7 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
     )
     direct_override_result = SimpleNamespace(
         result=adapter_result,
-        model_used="claude-sonnet-4-6",
+        model_used="claude-sonnet-5-5",
         used_fallback=True,
         fallback_reason=None,
     )
@@ -115,11 +115,11 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
             resolved_agent=resolved_agent,
             tools_api=None,
             thinking_level=None,
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
         )
 
     assert result is adapter_result
-    assert model_used == "claude-sonnet-4-6"
+    assert model_used == "claude-sonnet-5-5"
     assert fallback_used is False
     assert result.fallback_reason is None
 
@@ -213,7 +213,7 @@ async def test_dispatch_db_bypasses_agentic_fallback_chain_when_disabled() -> No
 
     direct_result = CompletionInternalResult(
         content="done",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         provider="claude",
         input_tokens=1,
         output_tokens=1,
@@ -232,7 +232,7 @@ async def test_dispatch_db_bypasses_agentic_fallback_chain_when_disabled() -> No
     ) as run_with_fallback:
         result = await _dispatch_db(
             req=req,
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             provider="claude",
             agent=agent,
             msgs=[],
@@ -279,7 +279,7 @@ async def test_run_internal_forwards_use_memory_to_complete_internal(use_memory:
     )
     internal_result = CompletionInternalResult(
         content="done",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         provider="claude",
         input_tokens=1,
         output_tokens=1,
@@ -295,7 +295,7 @@ async def test_run_internal_forwards_use_memory_to_complete_internal(use_memory:
     ) as mock_complete_internal:
         result = await _run_internal(
             req=req,
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             provider="claude",
             agent=None,
             msgs=[{"role": "user", "content": "hi"}],
@@ -334,7 +334,7 @@ async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() ->
     )
     adapter_result = CompletionInternalResult(
         content="ok",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         provider="claude",
         input_tokens=5,
         output_tokens=7,
@@ -346,14 +346,14 @@ async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() ->
 
     with patch(
         "app.api.complete.complete_execution.execute_without_db",
-        new=AsyncMock(return_value=(adapter_result, "claude-sonnet-4-6")),
+        new=AsyncMock(return_value=(adapter_result, "claude-sonnet-5-5")),
     ) as execute_without_db, patch(
         "app.api.complete.complete_execution._dispatch_db",
         new=AsyncMock(),
     ) as dispatch_db:
         result = await execute_completion(
             request=request,
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             provider="claude",
             resolved_agent=None,
             messages_dict=[{"role": "user", "content": "hi"}],
@@ -366,7 +366,7 @@ async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() ->
             skip_cache=False,
         )
 
-    assert result == (adapter_result, "claude-sonnet-4-6", False, [], "sess-1", None)
+    assert result == (adapter_result, "claude-sonnet-5-5", False, [], "sess-1", None)
     execute_without_db.assert_awaited_once()
     dispatch_db.assert_not_awaited()
 
@@ -472,7 +472,7 @@ async def test_execute_without_db_routes_through_complete_internal() -> None:
     from app.api.complete.execution import execute_without_db
 
     request = _execute_without_db_request()
-    internal = _internal_result("claude-sonnet-4-6", "claude")
+    internal = _internal_result("claude-sonnet-5-5", "claude")
 
     with patch(
         "app.api.complete.core.complete_internal",
@@ -480,7 +480,7 @@ async def test_execute_without_db_routes_through_complete_internal() -> None:
     ) as ci:
         result, model_used = await execute_without_db(
             messages_for_adapter=[Message(role="user", content="hi")],
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             provider="claude",
             request=request,
             thinking_level=None,
@@ -488,9 +488,9 @@ async def test_execute_without_db_routes_through_complete_internal() -> None:
             response_format_dict=None,
         )
 
-    assert model_used == "claude-sonnet-4-6"
+    assert model_used == "claude-sonnet-5-5"
     assert result.content == "ok"
-    assert result.model == "claude-sonnet-4-6"
+    assert result.model == "claude-sonnet-5-5"
     ci.assert_awaited_once()
     assert ci.await_args is not None
     kwargs = ci.await_args.kwargs
@@ -543,7 +543,7 @@ async def test_execute_without_db_propagates_provider_errors() -> None:
     ):
         await execute_without_db(
             messages_for_adapter=[Message(role="user", content="hi")],
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             provider="claude",
             request=request,
             thinking_level=None,
@@ -555,7 +555,7 @@ async def test_execute_without_db_propagates_provider_errors() -> None:
 def test_build_agentic_response_preserves_internal_finish_reason_on_success() -> None:
     internal_result = CompletionInternalResult(
         content="done",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         provider="claude",
         input_tokens=1,
         output_tokens=2,

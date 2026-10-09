@@ -52,7 +52,7 @@ from app.llm.types import (
 
 def _claude_model() -> Model[Any]:
     return Model[Any](
-        id="claude-sonnet-4-6",
+        id="claude-sonnet-5-5",
         name="Claude Sonnet 4.6",
         api="anthropic-messages",
         provider="anthropic",
@@ -80,7 +80,7 @@ def test_event_stream_queue_and_result() -> None:
             content=[TextContent(text="hi")],
             api="anthropic-messages",
             provider="anthropic",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             usage=Usage(input=5, output=2, total_tokens=7),
             stop_reason="stop",
             timestamp=0,

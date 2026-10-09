@@ -12,10 +12,9 @@ from app.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
-    CODEX_GPT_5_5,
-    CODEX_GPT_5_6_LUNA,
     CODEX_GPT_6_1_SOL,
     CODEX_GPT_6_LUNA,
+    CODEX_GPT_6_SOL,
 )
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
@@ -35,12 +34,11 @@ from scripts.persona_benchmark_eval import (
 from scripts.persona_benchmark_report import generate_markdown_report
 
 
-def test_default_model_roster_includes_seven_configured_candidates() -> None:
+def test_default_model_roster_includes_six_configured_candidates() -> None:
     assert DEFAULT_PERSONA_BENCHMARK_MODELS == [
         CODEX_GPT_6_1_SOL,
-        CODEX_GPT_5_5,
+        CODEX_GPT_6_SOL,
         CODEX_GPT_6_LUNA,
-        CODEX_GPT_5_6_LUNA,
         CLAUDE_OPUS,
         CLAUDE_SONNET,
         CLAUDE_HAIKU,
@@ -143,7 +141,7 @@ def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=1234,
         content=(
@@ -153,7 +151,7 @@ def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
         ),
         session_id="sess-1",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -368,7 +366,7 @@ def test_score_attempt_fails_when_tool_requirement_missing() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-haiku-4-5",
+        model_id="claude-haiku-5-5",
         run_number=1,
         latency_ms=800,
         content=(
@@ -378,7 +376,7 @@ def test_score_attempt_fails_when_tool_requirement_missing() -> None:
         ),
         session_id="sess-2",
         provider="claude",
-        effective_model="claude-haiku-4-5",
+        effective_model="claude-haiku-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -398,7 +396,7 @@ def test_score_attempt_checks_required_summary_terms() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=900,
         content=(
@@ -408,7 +406,7 @@ def test_score_attempt_checks_required_summary_terms() -> None:
         ),
         session_id="sess-3",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -483,7 +481,7 @@ def test_score_attempt_requires_specific_tool_name() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=700,
         content=(
@@ -493,7 +491,7 @@ def test_score_attempt_requires_specific_tool_name() -> None:
         ),
         session_id="sess-4",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=2,
         tool_calls_count=1,
@@ -513,7 +511,7 @@ def test_score_attempt_accepts_normalized_specific_tool_name() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=700,
         content=(
@@ -523,7 +521,7 @@ def test_score_attempt_accepts_normalized_specific_tool_name() -> None:
         ),
         session_id="sess-5",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=2,
         tool_calls_count=1,
@@ -887,7 +885,7 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
                 ),
                 session_id="sess-1",
                 provider="claude",
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5-5",
                 turns=1,
                 tool_calls_count=0,
                 usage=SimpleNamespace(
@@ -905,7 +903,7 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             client=FakeClient(),
             benchmark_id="bench-1",
             project_id="persona-sandbox",
-            model_id="claude-sonnet-4-6",
+            model_id="claude-sonnet-5-5",
             case_id="ready_task_dispatch",
             run_number=1,
             working_root=tmp_path,
@@ -1015,7 +1013,7 @@ def test_web_research_case_accepts_normalized_shared_tool_names() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=1200,
         content=(
@@ -1025,7 +1023,7 @@ def test_web_research_case_accepts_normalized_shared_tool_names() -> None:
         ),
         session_id="sess-web",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=3,
         tool_calls_count=2,
@@ -1047,7 +1045,7 @@ def test_web_research_case_accepts_research_web_as_equivalent_coverage() -> None
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=900,
         content=(
@@ -1057,7 +1055,7 @@ def test_web_research_case_accepts_research_web_as_equivalent_coverage() -> None
         ),
         session_id="sess-web-1call",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=2,
         tool_calls_count=1,
@@ -1278,7 +1276,7 @@ def test_same_task_recent_progress_case_requires_monitor_language() -> None:
 
     attempt = score_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=700,
         content=(
@@ -1288,7 +1286,7 @@ def test_same_task_recent_progress_case_requires_monitor_language() -> None:
         ),
         session_id="sess-progress-task",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,

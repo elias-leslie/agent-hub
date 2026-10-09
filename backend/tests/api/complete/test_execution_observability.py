@@ -54,7 +54,7 @@ async def test_persist_execution_observability_updates_session_metadata_and_stor
             session,
             "sess-2",
             provider="claude",
-            model_used="claude-sonnet-4-6",
+            model_used="claude-sonnet-5-5",
             requested_max_turns=4,
             orchestration_path="multi_turn",
             final_finish_reason="end_turn",
@@ -67,6 +67,8 @@ async def test_persist_execution_observability_updates_session_metadata_and_stor
     assert session.provider_metadata["execution"] == execution
     assert execution["effective_turn_budget"] == 4
     assert execution["terminal_stop_reason"] == "end_turn"
-    assert mock_store.await_args.kwargs["event_type"] == "tool_audit"
-    assert mock_store.await_args.kwargs["tool_name"] == "execution_observability"
-    assert mock_store.await_args.kwargs["tool_output"] == execution
+    stored = mock_store.await_args
+    assert stored is not None
+    assert stored.kwargs["event_type"] == "tool_audit"
+    assert stored.kwargs["tool_name"] == "execution_observability"
+    assert stored.kwargs["tool_output"] == execution

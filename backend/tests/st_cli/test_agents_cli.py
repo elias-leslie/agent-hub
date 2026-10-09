@@ -55,14 +55,14 @@ def test_list_agents_defaults_to_compact_scored_rows() -> None:
     agents_payload = {
         "agents": [
             _agent("coder", "kimi-code/kimi-for-coding", coding=True, fallbacks=["minimax/MiniMax-M2.7"]),
-            _agent("designer", "claude-sonnet-4-6", name="UI Designer"),
+            _agent("designer", "claude-sonnet-5-5", name="UI Designer"),
         ],
         "total": 2,
     }
     models_payload = {
         "models": [
             _model("kimi-code/kimi-for-coding", coding=90, design=82),
-            _model("claude-sonnet-4-6", coding=80, design=72),
+            _model("claude-sonnet-5-5", coding=80, design=72),
         ]
     }
 
@@ -481,9 +481,9 @@ def test_update_agent_model_flags_update_assignment_and_routing_mode_only() -> N
                 "--primary-model",
                 "codex/gpt-5.5",
                 "--fallback-model",
-                "claude-opus-4-7",
+                "claude-opus-5-5",
                 "--escalation-model",
-                "claude-opus-4-7",
+                "claude-opus-5-5",
                 "--timeout-seconds",
                 "300",
                 "--routing-mode",
@@ -497,9 +497,9 @@ def test_update_agent_model_flags_update_assignment_and_routing_mode_only() -> N
     assert mock_agents_api.call_args_list[0].args == ("PUT", "/verifier")
     assert mock_agents_api.call_args_list[0].kwargs["json"] == {
         "primary_model_id": "codex/gpt-5.5",
-        "escalation_model_id": "claude-opus-4-7",
+        "escalation_model_id": "claude-opus-5-5",
         "timeout_seconds": 300.0,
-        "fallback_models": ["claude-opus-4-7"],
+        "fallback_models": ["claude-opus-5-5"],
         "change_reason": "critical verification route",
     }
     assert mock_agents_api.call_args_list[1].args == ("PUT", "/verifier/routing")

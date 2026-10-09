@@ -12,7 +12,7 @@ class TestStreamingChunkCostFields:
         """Done chunk should include cost_usd field."""
         chunk = StreamingChunk(
             type="done",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             provider="claude",
             input_tokens=1000,
             output_tokens=500,
@@ -41,7 +41,7 @@ class TestStreamingChunkCostFields:
         """Done chunk should include cache_read/write tokens."""
         chunk = StreamingChunk(
             type="done",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             provider="claude",
             input_tokens=5000,
             output_tokens=1000,
@@ -81,10 +81,10 @@ class TestMessageProvenance:
             role="assistant",
             content="Hello",
             provider="claude",
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
         )
         assert msg.provider == "claude"
-        assert msg.model == "claude-sonnet-4-6"
+        assert msg.model == "claude-sonnet-5-5"
 
     def test_message_provenance_defaults_to_none(self):
         """Message provenance should default to None."""

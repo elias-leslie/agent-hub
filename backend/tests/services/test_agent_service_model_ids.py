@@ -13,7 +13,7 @@ def test_canonicalize_model_chain_dedupes_after_alias_resolution() -> None:
         [
             "codex-sol",
             "codex/gpt-5.6-sol",
-            "claude-sonnet-4-6",
-            "claude-sonnet-4-6",
+            "claude-sonnet-5-5",
+            "claude-sonnet-5-5",
         ]
-    ) == ["codex/gpt-5.6-sol", "claude-sonnet-4-6"]
+    ) == ["codex/gpt-5.6-sol", "claude-sonnet-5-5"]

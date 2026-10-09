@@ -2,8 +2,8 @@
 
 Single-file provider. Native streaming only (no ``messages.create`` without
 ``stream=True`` anywhere). This adapter keeps the Anthropic Messages protocol
-for compatible providers such as Kimi Code and MiniMax; Agent Hub does not use
-Claude/Anthropic as a workload provider.
+for compatible providers such as Kimi Code and MiniMax. Claude workloads run
+through ``claude_code_cli`` on the owner's subscription instead.
 """
 
 from __future__ import annotations

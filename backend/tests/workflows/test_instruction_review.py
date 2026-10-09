@@ -105,7 +105,7 @@ class _FakeAgent:
 @dataclass
 class _FakeResolved:
     agent: _FakeAgent
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-sonnet-5-5"
     provider: str = "claude"
 
 
@@ -257,7 +257,7 @@ class TestWriteHeartbeatInstructionsReviewGate:
             reason="Removes safety constraint",
             session_id="rev-session",
             reviewer_agent_slug="supervisor",
-            reviewer_model_id="claude-sonnet-4-6",
+            reviewer_model_id="claude-sonnet-5-5",
             used=True,
         )
         mock_set = AsyncMock()
@@ -302,7 +302,7 @@ class TestWriteHeartbeatInstructionsReviewGate:
             reason="Safe addition",
             session_id="rev-session",
             reviewer_agent_slug="supervisor",
-            reviewer_model_id="claude-sonnet-4-6",
+            reviewer_model_id="claude-sonnet-5-5",
             used=True,
         )
         mock_set = AsyncMock()
@@ -392,7 +392,7 @@ class TestWriteHeartbeatInstructionsReviewGate:
             reason="Weakens monitoring behavior",
             session_id="rev-session",
             reviewer_agent_slug="supervisor",
-            reviewer_model_id="claude-sonnet-4-6",
+            reviewer_model_id="claude-sonnet-5-5",
             used=True,
         )
         mock_set = AsyncMock()

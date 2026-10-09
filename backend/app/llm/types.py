@@ -37,6 +37,7 @@ KnownApi = Literal[
     "azure-openai-responses",
     "openai-codex-responses",
     "anthropic-messages",
+    "claude-code-cli",
     "bedrock-converse-stream",
     "google-generative-ai",
     "google-vertex",
@@ -655,6 +656,8 @@ class Model[TApi: str]:
     thinking_level_map: ThinkingLevelMap | None = None
     headers: dict[str, str] | None = None
     compat: Compat | None = None
+    # Provider access programs required on every request (Codex ``access_programs``).
+    access_programs: dict[str, str] | None = None
 
 
 @dataclass(slots=True)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from scripts.agent_output_benchmark_cases import (
     get_agent_output_benchmark_cases,
@@ -76,13 +78,13 @@ def test_score_output_contract_attempt_requires_summary_tag_for_coder_case() -> 
 
     attempt = score_output_contract_attempt(
         case=case,
-        model_id="claude-haiku-4-5",
+        model_id="claude-haiku-5-5",
         run_number=1,
         latency_ms=600,
         content="BRANCH_OK",
         session_id="sess-coder-1",
         provider="claude",
-        effective_model="claude-haiku-4-5",
+        effective_model="claude-haiku-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -136,7 +138,7 @@ def test_build_persistence_payload_maps_output_summary() -> None:
     case = get_case_by_id("note-formatter", "note_formatter_bare_json")
     attempt = score_output_contract_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=900,
         content=(
@@ -147,7 +149,7 @@ def test_build_persistence_payload_maps_output_summary() -> None:
         ),
         session_id="sess-3",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -160,7 +162,7 @@ def test_build_persistence_payload_maps_output_summary() -> None:
         benchmark_id="output-bench-1",
         project_id="agent-hub",
         agent_slug="note-formatter",
-        models=["claude-sonnet-4-6"],
+        models=["claude-sonnet-5-5"],
         case_ids=[case.case_id],
         runs_per_case=1,
         started_at="2026-03-25T00:00:00+00:00",
@@ -169,14 +171,17 @@ def test_build_persistence_payload_maps_output_summary() -> None:
         summaries=summarize_output_contract_attempts([attempt]),
     )
 
-    payload = build_persistence_payload(
-        run,
-        suite_id="output-contract-note-formatter",
-        run_kind="output_contract_benchmark",
-        use_memory=False,
-        seed=42,
-        config_snapshot={"primary_model_id": "claude-sonnet-4-6"},
-        metadata={"benchmark_type": "output_contract"},
+    payload = cast(
+        dict[str, Any],
+        build_persistence_payload(
+            run,
+            suite_id="output-contract-note-formatter",
+            run_kind="output_contract_benchmark",
+            use_memory=False,
+            seed=42,
+            config_snapshot={"primary_model_id": "claude-sonnet-5-5"},
+            metadata={"benchmark_type": "output_contract"},
+        ),
     )
 
     assert payload["avg_score"] == 100.0

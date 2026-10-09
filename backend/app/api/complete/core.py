@@ -158,8 +158,8 @@ async def complete_internal(
         raise ProviderError(
             provider=provider,
             message=(
-                "Claude/Anthropic models are catalog references and external "
-                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+                f"Provider {provider!r} is credential-only and cannot execute "
+                "Agent Hub workloads."
             ),
             status_code=400,
         )

@@ -113,9 +113,9 @@ describe('persona settings tabs', () => {
       elapsed_seconds: null,
       interval_minutes: 60,
       runtime: {
-        model: 'claude-opus-4-6',
+        model: 'claude-opus-5-5',
         provider: 'claude',
-        model_display_name: 'Claude Opus 4.6',
+        model_display_name: 'Claude Opus 5.5',
         thinking_level: 'medium',
         supports_tools: true,
         supports_thinking: true,
@@ -176,7 +176,7 @@ describe('persona settings tabs', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select voice Guy' }))
     expect(mockSetSelectedVoice).toHaveBeenCalledWith('voice-2')
-    expect(screen.getByText('Claude Opus 4.6')).toBeInTheDocument()
+    expect(screen.getByText('Claude Opus 5.5')).toBeInTheDocument()
     expect(screen.getByText('Tools: supported')).toBeInTheDocument()
   })
 

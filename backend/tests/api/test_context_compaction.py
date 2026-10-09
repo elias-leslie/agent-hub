@@ -18,7 +18,7 @@ _AGENT_ROUTING = "app.services.agent_routing_utils"
 def _make_compactor_agent() -> SimpleNamespace:
     """Build a minimal agent DTO-like object for compaction tests."""
     return SimpleNamespace(
-        primary_model_id="claude-haiku-4-5",
+        primary_model_id="claude-haiku-5-5",
         temperature=0.2,
         thinking_level=None,
         system_prompt="Summarize earlier conversation concisely.",
@@ -28,7 +28,7 @@ def _make_compactor_agent() -> SimpleNamespace:
 def _make_resolved_compactor_agent() -> SimpleNamespace:
     return SimpleNamespace(
         agent=_make_compactor_agent(),
-        model="claude-haiku-4-5",
+        model="claude-haiku-5-5",
         provider="claude",
     )
 
@@ -36,7 +36,7 @@ def _make_resolved_compactor_agent() -> SimpleNamespace:
 def _make_compaction_result(content: str) -> CompletionInternalResult:
     return CompletionInternalResult(
         content=content,
-        model="claude-haiku-4-5",
+        model="claude-haiku-5-5",
         provider="claude",
         input_tokens=100,
         output_tokens=25,
@@ -75,7 +75,7 @@ class TestMaybeCompactContext:
                 return_value=100_000,
             ),
         ):
-            result, compacted = await maybe_compact_context(messages, "claude-sonnet-4-6")
+            result, compacted = await maybe_compact_context(messages, "claude-sonnet-5-5")
 
         assert compacted is False
         assert result is messages
@@ -84,7 +84,7 @@ class TestMaybeCompactContext:
     async def test_noop_too_few_messages(self):
         """No compaction when there aren't enough messages to split."""
         messages = _make_messages(4)  # system + 4 = 5 total, below keep_recent*2+2=14
-        result, compacted = await maybe_compact_context(messages, "claude-sonnet-4-6")
+        result, compacted = await maybe_compact_context(messages, "claude-sonnet-5-5")
 
         assert compacted is False
         assert result is messages
@@ -125,7 +125,7 @@ class TestMaybeCompactContext:
             ),
         ):
             result, compacted = await maybe_compact_context(
-                messages, "claude-sonnet-4-6", keep_recent=4, session_id="sess-123", db=mock_db
+                messages, "claude-sonnet-5-5", keep_recent=4, session_id="sess-123", db=mock_db
             )
 
         assert compacted is True
@@ -175,7 +175,7 @@ class TestMaybeCompactContext:
             ),
         ):
             result, compacted = await maybe_compact_context(
-                messages, "claude-sonnet-4-6", session_id="sess-123", db=mock_db
+                messages, "claude-sonnet-5-5", session_id="sess-123", db=mock_db
             )
 
         assert compacted is True
@@ -209,7 +209,7 @@ class TestMaybeCompactContext:
             ),
         ):
             result, compacted = await maybe_compact_context(
-                messages, "claude-sonnet-4-6", session_id="sess-123", db=mock_db
+                messages, "claude-sonnet-5-5", session_id="sess-123", db=mock_db
             )
 
         assert compacted is False
@@ -249,7 +249,7 @@ class TestMaybeCompactContext:
             ),
         ):
             _result, compacted = await maybe_compact_context(
-                messages, "claude-sonnet-4-6",
+                messages, "claude-sonnet-5-5",
                 keep_recent=3, threshold_pct=0.5,
                 session_id="sess-123", db=mock_db,
             )

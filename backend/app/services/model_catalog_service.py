@@ -60,6 +60,7 @@ def _entry_values(entry: ModelEntry, sort_order: int) -> dict[str, Any]:
         "max_state_question_tokens": entry.capabilities.max_state_question_tokens,
         "thinking_level_map": entry.capabilities.thinking_level_map,
         "upstream_id": entry.upstream_id,
+        "access_programs": entry.access_programs,
         "release_date": entry.release_date,
         "knowledge_cutoff": entry.knowledge_cutoff,
         "family": entry.family,
@@ -116,6 +117,7 @@ def row_to_model_entry(row: ModelCatalogEntry) -> ModelEntry:
             thinking_level_map=getattr(row, "thinking_level_map", None),
         ),
         upstream_id=getattr(row, "upstream_id", None),
+        access_programs=getattr(row, "access_programs", None),
         release_date=row.release_date,
         knowledge_cutoff=row.knowledge_cutoff,
         family=row.family,
@@ -184,9 +186,15 @@ async def refresh_runtime_model_catalog(db: AsyncSession) -> int:
     """Hydrate process-local catalog snapshot from the DB-backed catalog."""
     inserted = await seed_model_catalog(db)
     entries = await get_model_catalog_entries(db)
+    active_ids = {entry.id for entry in entries}
+    inactive = [
+        entry
+        for entry in await get_model_catalog_entries(db, active_only=False)
+        if entry.id not in active_ids
+    ]
     aliases = await get_model_aliases(db)
     from app.constants.catalog import replace_runtime_model_catalog
 
-    replace_runtime_model_catalog(entries, aliases)
+    replace_runtime_model_catalog(entries, aliases, inactive)
     logger.info("Loaded %d model catalog row(s) from DB", len(entries))
     return inserted

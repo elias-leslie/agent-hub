@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.constants import CLAUDE_OPUS, CODEX_GPT_5_5
+from app.constants import CLAUDE_OPUS, CODEX_GPT_6_1_SOL
 from app.services.persona_prompt_service import render_completion_review_rules
 
 DEFAULT_COMPLETION_REVIEW_MODELS = [
-    CODEX_GPT_5_5,
+    CODEX_GPT_6_1_SOL,
     CLAUDE_OPUS,
 ]
 

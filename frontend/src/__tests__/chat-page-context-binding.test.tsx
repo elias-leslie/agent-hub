@@ -84,7 +84,7 @@ describe('ChatPage context binding', () => {
           {
             slug: 'refactor',
             name: 'Refactoring Agent',
-            primary_model_id: 'codex/gpt-5.5',
+            primary_model_id: 'codex/gpt-6.1-sol',
           },
           {
             slug: 'debugger',

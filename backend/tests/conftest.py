@@ -144,7 +144,7 @@ class APITestClient(TestClient):
     - X-Agent-Hub-Internal: agent-hub-internal-v1 (bypasses access control)
     """
 
-    def request(self, method: str, url: str, **kwargs: Any) -> Response:  # type: ignore[override]
+    def request(self, method: str, url: str, **kwargs: Any) -> Response:
         """Add test headers to all requests."""
         headers = kwargs.get("headers") or {}
         # Don't override if explicitly set
@@ -236,6 +236,22 @@ def clear_hatchet_cache() -> Generator[None]:
     get_hatchet.cache_clear()
     yield
     get_hatchet.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def assume_route_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Treat provider credentials and the Claude CLI sign-in as present.
+
+    Route pre-flight still rejects inactive and uncatalogued models; tests that
+    exercise missing credentials override these two seams themselves.
+    """
+    from app.routing import availability
+
+    async def _signed_in() -> bool:
+        return True
+
+    monkeypatch.setattr(availability, "get_env_api_key", lambda provider: "test-credential")
+    monkeypatch.setattr(availability, "claude_cli_signed_in", _signed_in)
 
 
 class RealAPICallError(Exception):

@@ -1,8 +1,8 @@
 import type { ModelInfo } from '@/app/agents/[slug]/types'
 
 export const codexModel: ModelInfo = {
-  id: 'codex/gpt-5.5',
-  name: 'GPT-5.5 (Codex)',
+  id: 'codex/gpt-6.1-sol',
+  name: 'GPT-6.1 Sol (Codex)',
   provider: 'codex',
   alias: 'codex',
   hint: 'Frontier',

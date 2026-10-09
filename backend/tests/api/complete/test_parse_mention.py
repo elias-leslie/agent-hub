@@ -9,7 +9,7 @@ from app.constants.models import PROVIDER_NAMES
 
 
 class TestParseMentionAliases:
-    """Test alias resolution (e.g. @sonnet -> claude-sonnet-4-6)."""
+    """Test alias resolution (e.g. @sonnet -> claude-sonnet-5-5)."""
 
     def test_alias_sonnet(self) -> None:
         model, cleaned = parse_mention("@sonnet Explain this code")
@@ -72,8 +72,8 @@ class TestParseMentionExactCatalogIds:
     """Test exact catalog model IDs passed through @mention injection."""
 
     def test_exact_claude_model_id(self) -> None:
-        model, cleaned = parse_mention("@claude-sonnet-4-6 Explain this code")
-        assert model == "claude-sonnet-4-6"
+        model, cleaned = parse_mention("@claude-sonnet-5-5 Explain this code")
+        assert model == "claude-sonnet-5-5"
         assert cleaned == "Explain this code"
 
     def test_exact_gemini_model_id(self) -> None:

@@ -25,6 +25,7 @@ from app.api.complete.schemas import (
     NativeContinuationReceiptResponse,
     UsageInfo,
 )
+from app.constants.catalog import get_model_entry
 from app.models import NativeContinuationTurn, Session
 from app.routing.resolution import inject_agent_system_prompt
 from app.services.native_continuation_runtime import (
@@ -134,6 +135,17 @@ def _identity(
         "reasoning_effort": continuation.reasoning_effort,
         "cyber_access_program": continuation.cyber_access_program,
     }
+
+
+def _cyber_access_program(requested: str | None, resolved_model: str) -> str | None:
+    """Return the app-server cyber program: the caller's, else the model's required one."""
+    if requested is None:
+        entry = get_model_entry(resolved_model)
+        requested = (entry.access_programs or {}).get("cyber") if entry else None
+    if requested is None:
+        return None
+    head, *rest = requested.split("_")
+    return head + "".join(part.title() for part in rest)
 
 
 def _response_from_receipt(
@@ -637,7 +649,7 @@ async def execute_native_continuation(
         tool_policy_hash=NATIVE_TOOL_POLICY_HASH,
         model=resolved_model,
         reasoning_effort=continuation.reasoning_effort,
-        cyber_access_program=continuation.cyber_access_program,
+        cyber_access_program=_cyber_access_program(continuation.cyber_access_program, resolved_model),
     )
     output_schema = request.response_format.schema_ if request.response_format else None
     result: NativeTurnObservation | None = None

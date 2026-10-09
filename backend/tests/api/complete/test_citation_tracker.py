@@ -198,7 +198,7 @@ class TestTrackCitationsWithMetrics:
                 is_error=False,
                 db=db,
                 agent_id="chat",
-                model_used="claude-sonnet-4-6",
+                model_used="claude-sonnet-5-5",
             )
 
         assert cited == ["c37d31f2-df9c-4298-bb73-d63015d7f746"]
@@ -208,7 +208,7 @@ class TestTrackCitationsWithMetrics:
             "session-123",
             ["c37d31f2-df9c-4298-bb73-d63015d7f746"],
             "chat",
-            "claude-sonnet-4-6",
+            "claude-sonnet-5-5",
         )
         db.commit.assert_awaited_once()
         mock_record_metrics.assert_awaited_once_with(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from scripts.completion_review_benchmark_cases import (
     get_completion_review_case_by_id,
     get_default_completion_review_case_ids,
@@ -77,15 +79,18 @@ def test_build_persistence_payload_maps_decision_into_attempt_record() -> None:
         summaries=summarize_completion_review_attempts([attempt]),
     )
 
-    payload = build_persistence_payload(
-        run,
-        agent_slug="supervisor",
-        suite_id="completion-review-suite",
-        run_kind="completion_review_benchmark",
-        use_memory=False,
-        seed=42,
-        config_snapshot={"primary_model_id": "claude-opus-4-6"},
-        metadata={"reviewer_role": True},
+    payload = cast(
+        dict[str, Any],
+        build_persistence_payload(
+            run,
+            agent_slug="supervisor",
+            suite_id="completion-review-suite",
+            run_kind="completion_review_benchmark",
+            use_memory=False,
+            seed=42,
+            config_snapshot={"primary_model_id": "claude-opus-4-6"},
+            metadata={"reviewer_role": True},
+        ),
     )
 
     assert payload["avg_score"] == 100.0
@@ -132,7 +137,7 @@ def test_score_completion_review_attempt_accepts_monitor_as_recent_progress_foll
 
     attempt = score_completion_review_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=900,
         content=(
@@ -141,7 +146,7 @@ def test_score_completion_review_attempt_accepts_monitor_as_recent_progress_foll
         ),
         session_id="sess-3",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -159,7 +164,7 @@ def test_completion_review_summary_ignores_infra_failures() -> None:
     case = get_completion_review_case_by_id("review_true_complete_clean")
     failed = score_completion_review_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=1,
         latency_ms=1000,
         content="",
@@ -177,7 +182,7 @@ def test_completion_review_summary_ignores_infra_failures() -> None:
     )
     passed = score_completion_review_attempt(
         case=case,
-        model_id="claude-sonnet-4-6",
+        model_id="claude-sonnet-5-5",
         run_number=2,
         latency_ms=900,
         content=(
@@ -186,7 +191,7 @@ def test_completion_review_summary_ignores_infra_failures() -> None:
         ),
         session_id="sess-2",
         provider="claude",
-        effective_model="claude-sonnet-4-6",
+        effective_model="claude-sonnet-5-5",
         fallback_used=False,
         turns=1,
         tool_calls_count=0,
@@ -253,13 +258,16 @@ def test_completion_review_persistence_payload_ignores_infra_failures() -> None:
         summaries=summarize_completion_review_attempts([failed, passed]),
     )
 
-    payload = build_persistence_payload(
-        run,
-        agent_slug="supervisor",
-        suite_id="completion-review-suite",
-        run_kind="completion_review_benchmark",
-        use_memory=False,
-        seed=42,
+    payload = cast(
+        dict[str, Any],
+        build_persistence_payload(
+            run,
+            agent_slug="supervisor",
+            suite_id="completion-review-suite",
+            run_kind="completion_review_benchmark",
+            use_memory=False,
+            seed=42,
+        ),
     )
 
     assert payload["avg_score"] == 100.0

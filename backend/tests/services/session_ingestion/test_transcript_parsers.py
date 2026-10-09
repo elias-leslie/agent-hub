@@ -241,10 +241,10 @@ class TestParseTranscriptEvents:
     def test_parses_claude_progress_subagent_events_with_models_and_tool_results(self) -> None:
         lines = [
             '{"type":"user","message":{"role":"user","content":"Inspect adapters"}}',
-            '{"type":"assistant","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"description":"delegate"}}]}}',
+            '{"type":"assistant","message":{"model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"description":"delegate"}}]}}',
             '{"type":"progress","slug":"sparkling-dancing-peach","data":{"type":"agent_progress","agentId":"agent-1","message":{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Read the file"},{"type":"tool_result","tool_use_id":"toolu_1","content":"read ok"}]}}}}',
             '{"type":"progress","slug":"sparkling-dancing-peach","data":{"type":"agent_progress","agentId":"agent-1","message":{"type":"assistant","message":{"model":"claude-opus-4-6","role":"assistant","content":[{"type":"thinking","thinking":"Checking file"},{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/x.py"}},{"type":"text","text":"Done"}]}}}}',
-            '{"type":"assistant","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"text","text":"Finished"}]}}',
+            '{"type":"assistant","message":{"model":"claude-sonnet-5-5","role":"assistant","content":[{"type":"text","text":"Finished"}]}}',
         ]
 
         events = parse_transcript_events(lines)
@@ -259,7 +259,7 @@ class TestParseTranscriptEvents:
             ("assistant_message", 1, 7),
         ]
         assert events[1].tool_name == "Agent"
-        assert events[1].model_used == "claude-sonnet-4-6"
+        assert events[1].model_used == "claude-sonnet-5-5"
         assert events[2].content == "read ok"
         assert events[2].agent_id == "agent-1"
         assert events[2].agent_name == "sparkling-dancing-peach"
@@ -271,7 +271,7 @@ class TestParseTranscriptEvents:
         assert events[5].content == "Done"
         assert events[5].model_used == "claude-opus-4-6"
         assert events[6].content == "Finished"
-        assert events[6].model_used == "claude-sonnet-4-6"
+        assert events[6].model_used == "claude-sonnet-5-5"
 
 
 @pytest.mark.unit

@@ -1,0 +1,2005 @@
+{
+ "deleted_aliases": [
+  {
+   "alias": "cc/opus",
+   "alias_type": "seed",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "cc/opus-4.7",
+   "alias_type": "seed",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "cc/sonnet",
+   "alias_type": "seed",
+   "model_id": "claude-sonnet-4-6",
+   "source": "seed"
+  },
+  {
+   "alias": "claude",
+   "alias_type": "seed",
+   "model_id": "claude-sonnet-4-6",
+   "source": "seed"
+  },
+  {
+   "alias": "claude-haiku-4-5-20251001",
+   "alias_type": "seed",
+   "model_id": "claude-haiku-4-5",
+   "source": "seed"
+  },
+  {
+   "alias": "cloudcode/claude-opus-4-6-thinking",
+   "alias_type": "seed",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "cloudcode/claude-opus-4-7",
+   "alias_type": "seed",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "cloudcode/claude-sonnet-4-6",
+   "alias_type": "seed",
+   "model_id": "claude-sonnet-4-6",
+   "source": "seed"
+  },
+  {
+   "alias": "codex-5.5",
+   "alias_type": "canonical",
+   "model_id": "codex/gpt-5.5",
+   "source": "seed"
+  },
+  {
+   "alias": "codex/gpt-5.5",
+   "alias_type": "seed",
+   "model_id": "codex/gpt-5.5",
+   "source": "seed"
+  },
+  {
+   "alias": "haiku",
+   "alias_type": "canonical",
+   "model_id": "claude-haiku-4-5",
+   "source": "seed"
+  },
+  {
+   "alias": "opus",
+   "alias_type": "canonical",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "opus-4.7",
+   "alias_type": "seed",
+   "model_id": "claude-opus-4-7",
+   "source": "seed"
+  },
+  {
+   "alias": "sonnet",
+   "alias_type": "canonical",
+   "model_id": "claude-sonnet-4-6",
+   "source": "seed"
+  }
+ ],
+ "deleted_models": [
+  {
+   "access_programs": null,
+   "alias": "haiku",
+   "availability": "external_reference_only; claude_code_tui_only_not_agent_hub_routable",
+   "cache_read_per_million": 0.1,
+   "cache_write_per_million": 1.25,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 200000,
+   "cost_input_per_m": 1.0,
+   "cost_output_per_m": 5.0,
+   "family": "claude-haiku",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Quick",
+   "id": "claude-haiku-4-5",
+   "is_active": true,
+   "knowledge_cutoff": "2025-04-01",
+   "max_output_tokens": 8192,
+   "max_state_question_tokens": null,
+   "name": "Claude Haiku 4.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2025-10-01",
+   "score_coding": 73,
+   "score_design": 60,
+   "score_instruction": 65,
+   "score_planning": 50,
+   "score_reasoning": 70,
+   "score_tool_use": 65,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 3,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "sonnet",
+   "availability": "external_reference_only; claude_code_tui_only_not_agent_hub_routable",
+   "cache_read_per_million": 0.3,
+   "cache_write_per_million": 3.75,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 3.0,
+   "cost_output_per_m": 15.0,
+   "family": "claude-sonnet",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Balanced",
+   "id": "claude-sonnet-4-6",
+   "is_active": true,
+   "knowledge_cutoff": "2025-05-01",
+   "max_output_tokens": 16384,
+   "max_state_question_tokens": null,
+   "name": "Claude Sonnet 4.6",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-01-29",
+   "score_coding": 80,
+   "score_design": 72,
+   "score_instruction": 84,
+   "score_planning": 72,
+   "score_reasoning": 87,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 1,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "opus",
+   "availability": "external_reference_only; claude_code_tui_only_not_agent_hub_routable",
+   "cache_read_per_million": 0.5,
+   "cache_write_per_million": 6.25,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 5.0,
+   "cost_output_per_m": 25.0,
+   "family": "claude-opus",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Most capable",
+   "id": "claude-opus-4-7",
+   "is_active": true,
+   "knowledge_cutoff": "2026-01-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "Claude Opus 4.7",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-04-01",
+   "score_coding": 85,
+   "score_design": 72,
+   "score_instruction": 86,
+   "score_planning": 74,
+   "score_reasoning": 93,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 2,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "codex-5.5",
+   "availability": "codex_oauth_subscription; verified_2026-10-09; hidden_legacy_in_codex_model_list; reasoning_low_medium_high_xhigh",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 272000,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "gpt",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Legacy frontier",
+   "id": "codex/gpt-5.5",
+   "is_active": true,
+   "knowledge_cutoff": "2025-12-01",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "GPT-5.5 (Codex)",
+   "pricing_unit": "per_million_tokens",
+   "provider": "codex",
+   "release_date": "2026-04-23",
+   "score_coding": 98,
+   "score_design": 82,
+   "score_instruction": 94,
+   "score_planning": 90,
+   "score_reasoning": 99,
+   "score_tool_use": 91,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 16,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": true,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": true,
+   "supports_xhigh": true,
+   "thinking_level_map": {
+    "minimal": "low"
+   },
+   "unit_price": null,
+   "upstream_id": null
+  }
+ ],
+ "new_aliases": [
+  {
+   "alias": "claude",
+   "alias_type": "seed",
+   "model_id": "claude-sonnet-5-5",
+   "source": "seed"
+  },
+  {
+   "alias": "fable",
+   "alias_type": "canonical",
+   "model_id": "claude-fable-5-1",
+   "source": "seed"
+  },
+  {
+   "alias": "haiku",
+   "alias_type": "canonical",
+   "model_id": "claude-haiku-5-5",
+   "source": "seed"
+  },
+  {
+   "alias": "kimi-code",
+   "alias_type": "seed",
+   "model_id": "kimi-code/kimi-for-coding",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax",
+   "alias_type": "seed",
+   "model_id": "minimax/MiniMax-M2.7",
+   "source": "seed"
+  },
+  {
+   "alias": "minimax-m3",
+   "alias_type": "canonical",
+   "model_id": "minimax/MiniMax-M3",
+   "source": "seed"
+  },
+  {
+   "alias": "mm/image-01",
+   "alias_type": "canonical",
+   "model_id": "minimax/image-01",
+   "source": "seed"
+  },
+  {
+   "alias": "opus",
+   "alias_type": "canonical",
+   "model_id": "claude-opus-5-5",
+   "source": "seed"
+  },
+  {
+   "alias": "sonnet",
+   "alias_type": "canonical",
+   "model_id": "claude-sonnet-5-5",
+   "source": "seed"
+  }
+ ],
+ "new_models": [
+  {
+   "access_programs": null,
+   "alias": "haiku",
+   "availability": "claude_code_cli_subscription; verified_2026-10-09; prices_platform.claude.com_2026-10-09; prompts_over_100k_billed_0.50_2.50",
+   "cache_read_per_million": 0.01,
+   "cache_write_per_million": 0.125,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.1,
+   "cost_output_per_m": 0.5,
+   "family": "claude-haiku",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Fast, cheap; scores inherited from Haiku 4.5",
+   "id": "claude-haiku-5-5",
+   "is_active": true,
+   "knowledge_cutoff": "2026-06",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "Claude Haiku 5.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-10-07",
+   "score_coding": 73,
+   "score_design": 60,
+   "score_instruction": 65,
+   "score_planning": 50,
+   "score_reasoning": 70,
+   "score_tool_use": 65,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 10,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "thinking_level_map": {
+    "minimal": "low"
+   },
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "sonnet",
+   "availability": "claude_code_cli_subscription; verified_2026-10-09; prices_platform.claude.com_2026-10-09",
+   "cache_read_per_million": 0.1,
+   "cache_write_per_million": 2.5,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 2.0,
+   "cost_output_per_m": 10.0,
+   "family": "claude-sonnet",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Balanced; design, critique and writing; scores inherited from Sonnet 4.6",
+   "id": "claude-sonnet-5-5",
+   "is_active": true,
+   "knowledge_cutoff": "2026-06",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "Claude Sonnet 5.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-09-28",
+   "score_coding": 80,
+   "score_design": 72,
+   "score_instruction": 84,
+   "score_planning": 72,
+   "score_reasoning": 87,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 11,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "thinking_level_map": {
+    "minimal": "low"
+   },
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "opus",
+   "availability": "claude_code_cli_subscription; verified_2026-10-09; prices_platform.claude.com_2026-10-09",
+   "cache_read_per_million": 0.2,
+   "cache_write_per_million": 5.0,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 4.0,
+   "cost_output_per_m": 20.0,
+   "family": "claude-opus",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Hard judgment; scores inherited from Opus 4.7",
+   "id": "claude-opus-5-5",
+   "is_active": true,
+   "knowledge_cutoff": "2026-06",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "Claude Opus 5.5",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-09-22",
+   "score_coding": 85,
+   "score_design": 72,
+   "score_instruction": 86,
+   "score_planning": 74,
+   "score_reasoning": 93,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 12,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "thinking_level_map": {
+    "minimal": "low"
+   },
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "fable",
+   "availability": "claude_code_cli_subscription; verified_2026-10-09; prices_platform.claude.com_2026-10-09",
+   "cache_read_per_million": 0.25,
+   "cache_write_per_million": 12.5,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 10.0,
+   "cost_output_per_m": 50.0,
+   "family": "claude-fable",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Most capable Claude; scores inherited from Opus 4.7",
+   "id": "claude-fable-5-1",
+   "is_active": true,
+   "knowledge_cutoff": "2026-06",
+   "max_output_tokens": 128000,
+   "max_state_question_tokens": null,
+   "name": "Claude Fable 5.1",
+   "pricing_unit": "per_million_tokens",
+   "provider": "claude",
+   "release_date": "2026-09-01",
+   "score_coding": 85,
+   "score_design": 72,
+   "score_instruction": 86,
+   "score_planning": 74,
+   "score_reasoning": 93,
+   "score_tool_use": 78,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 13,
+   "source": "seed",
+   "speed_tier": "medium",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": true,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": true,
+   "thinking_level_map": {
+    "minimal": "low"
+   },
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "kimi-code",
+   "availability": "inactive_unfunded_2026-10-09: kimi-code subscription lacks Kimi Code (403); set is_active=true after top-up",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 262144,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "kimi",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Subscription coding",
+   "id": "kimi-code/kimi-for-coding",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 32768,
+   "max_state_question_tokens": null,
+   "name": "Kimi Code",
+   "pricing_unit": "per_million_tokens",
+   "provider": "kimi-code",
+   "release_date": "2026-04-20",
+   "score_coding": 90,
+   "score_design": 82,
+   "score_instruction": 88,
+   "score_planning": 88,
+   "score_reasoning": 93,
+   "score_tool_use": 90,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 36,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "minimax",
+   "availability": "inactive_unfunded_2026-10-09: minimax coding-plan key has zero balance (402); set is_active=true after top-up",
+   "cache_read_per_million": 0.06,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 204800,
+   "cost_input_per_m": 0.3,
+   "cost_output_per_m": 1.2,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": false,
+   "hint": "Agent coding",
+   "id": "minimax/MiniMax-M2.7",
+   "is_active": false,
+   "knowledge_cutoff": "2025-11-01",
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M2.7",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-03-27",
+   "score_coding": 84,
+   "score_design": 64,
+   "score_instruction": 86,
+   "score_planning": 80,
+   "score_reasoning": 88,
+   "score_tool_use": 82,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 32,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "minimax-m3",
+   "availability": "inactive_unfunded_2026-10-09: minimax coding-plan key has zero balance (402); set is_active=true after top-up",
+   "cache_read_per_million": 0.06,
+   "cache_write_per_million": 0.375,
+   "can_edit_images": false,
+   "can_generate_images": false,
+   "context_window": 1000000,
+   "cost_input_per_m": 0.3,
+   "cost_output_per_m": 1.2,
+   "family": "minimax",
+   "has_thinking": true,
+   "has_vision": true,
+   "hint": "Agentic reasoning + long context",
+   "id": "minimax/MiniMax-M3",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 131072,
+   "max_state_question_tokens": null,
+   "name": "MiniMax M3",
+   "pricing_unit": "per_million_tokens",
+   "provider": "minimax",
+   "release_date": "2026-06-01",
+   "score_coding": 86,
+   "score_design": 66,
+   "score_instruction": 88,
+   "score_planning": 84,
+   "score_reasoning": 90,
+   "score_tool_use": 86,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 38,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": true,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": null,
+   "upstream_id": null
+  },
+  {
+   "access_programs": null,
+   "alias": "mm/image-01",
+   "availability": "inactive_unfunded_2026-10-09: minimax coding-plan key has zero balance (402); set is_active=true after top-up",
+   "cache_read_per_million": null,
+   "cache_write_per_million": null,
+   "can_edit_images": false,
+   "can_generate_images": true,
+   "context_window": 0,
+   "cost_input_per_m": 0.0,
+   "cost_output_per_m": 0.0,
+   "family": "minimax-image",
+   "has_thinking": false,
+   "has_vision": false,
+   "hint": "Image gen",
+   "id": "minimax/image-01",
+   "is_active": false,
+   "knowledge_cutoff": null,
+   "max_output_tokens": 0,
+   "max_state_question_tokens": null,
+   "name": "MiniMax Image-01",
+   "pricing_unit": "per_image",
+   "provider": "minimax",
+   "release_date": "2025-02-15",
+   "score_coding": 0,
+   "score_design": 80,
+   "score_instruction": 35,
+   "score_planning": 0,
+   "score_reasoning": 0,
+   "score_tool_use": 0,
+   "service_tiers": {
+    "default": 1.0
+   },
+   "sort_order": 53,
+   "source": "seed",
+   "speed_tier": "fast",
+   "supports_audio": false,
+   "supports_chat": true,
+   "supports_pdf": false,
+   "supports_session_cache": false,
+   "supports_tool_execution": false,
+   "supports_typed_judgment": false,
+   "supports_verbosity": false,
+   "supports_xhigh": false,
+   "thinking_level_map": null,
+   "unit_price": 0.0035,
+   "upstream_id": null
+  }
+ ],
+ "routes": {
+  "auditor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "codex/gpt-6.1-sol"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-5-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "bear-researcher-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "bull-researcher-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "chat": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.5"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash-lite"
+   }
+  },
+  "committee-router-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "committee-synthesizer-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "credit-card-offer-reviewer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "credit-card-researcher": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "designer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "gemini-3.8-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   }
+  },
+  "extractor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "gemini-3.8-flash",
+     "codex/gpt-6.1-sol"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-haiku-5-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "gemini-3.8-flash",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-haiku-4-5"
+   }
+  },
+  "financial-document-reviewer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "fitness-bear-v1": {
+   "after": {
+    "escalation_model_id": "claude-opus-5-5",
+    "fallback_models": [
+     "claude-opus-5-5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-opus-4-7"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-4-6"
+   }
+  },
+  "fitness-bull-v1": {
+   "after": {
+    "escalation_model_id": "claude-opus-5-5",
+    "fallback_models": [
+     "claude-opus-5-5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-opus-4-7"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-4-6"
+   }
+  },
+  "fitness-judge-v1": {
+   "after": {
+    "escalation_model_id": "claude-opus-5-5",
+    "fallback_models": [
+     "claude-sonnet-5-5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-5-5"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-sonnet-4-6"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "fitness-skeptic-v1": {
+   "after": {
+    "escalation_model_id": "claude-opus-5-5",
+    "fallback_models": [
+     "claude-opus-5-5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-opus-4-7"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-sonnet-4-6"
+   }
+  },
+  "fundamentals-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "game-art-critic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "gemini-3.7-flash",
+     "cloudflare/llama-4-scout-17b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "cloudflare/llama-4-scout-17b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "xai/grok-4.20-0309-reasoning"
+   }
+  },
+  "game-audio-critic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.7-flash",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash"
+   }
+  },
+  "graphify-semantic-extractor": {
+   "after": {
+    "escalation_model_id": "codex/gpt-6.1-sol",
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "cloudflare/glm-4.7-flash",
+     "nvidia/nemotron-3-super-120b-a12b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.1-flash-lite"
+   }
+  },
+  "household-list-parser": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash-lite"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.5"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.5-flash-lite"
+   }
+  },
+  "household-price-scout": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.5"
+    ],
+    "is_active": true,
+    "primary_model_id": "gemini-3.8-flash"
+   }
+  },
+  "investment-committee": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "jobs-company": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash",
+     "gemini-3.1-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-cover-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-sol",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-critic-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-sol",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-sol"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-evaluator-codex": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6-sol",
+     "codex/gpt-6-luna"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-luna",
+     "codex/gpt-5.6-sol",
+     "codex/gpt-6-sol"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "jobs-prep": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-terra",
+     "codex/gpt-6-luna",
+     "codex/gpt-6-sol",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-luna"
+   }
+  },
+  "jobs-tailor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "gemini-3.8-flash",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-5.6-terra",
+     "codex/gpt-5.5",
+     "gemini-3.8-flash",
+     "gemini-3.7-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   }
+  },
+  "kimi-code-test": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": false,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": false,
+    "primary_model_id": "kimi-code/kimi-for-coding"
+   }
+  },
+  "learn-planner": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "learn-researcher": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "learn-reviewer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "learn-tutor": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-terra"
+   }
+  },
+  "market-pulse-analyst": {
+   "after": {
+    "escalation_model_id": "codex/gpt-6.1-sol",
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "claude-sonnet-5-5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-5-5"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "codex/gpt-5.5",
+     "claude-sonnet-4-6"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "market-pulse-scout": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "memory-curator": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "minimax-plan-test": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": false,
+    "primary_model_id": "minimax/MiniMax-M2.7"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "kimi-code/kimi-for-coding",
+     "nvidia/glm-5.2",
+     "gemini-3.7-flash",
+     "moonshot/kimi-k2.6",
+     "deepseek/deepseek-v4-pro",
+     "minimax/MiniMax-M3",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": false,
+    "primary_model_id": "minimax/MiniMax-M2.7"
+   }
+  },
+  "minimax-tester": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": false,
+    "primary_model_id": "minimax/MiniMax-M2.7"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-haiku-4-5",
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "minimax/MiniMax-M2.5"
+   }
+  },
+  "news-grounded-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "persona": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "planner": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash",
+     "gemini-3.7-flash",
+     "gemini-3.5-flash-lite"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.6-luna"
+   }
+  },
+  "portfolio-mgr-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "qa": {
+   "after": {
+    "escalation_model_id": "claude-opus-5-5",
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "codex/gpt-6.1-sol"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-5-5"
+   },
+   "before": {
+    "escalation_model_id": "claude-opus-4-7",
+    "fallback_models": [
+     "claude-sonnet-4-6",
+     "codex/gpt-5.5"
+    ],
+    "is_active": false,
+    "primary_model_id": "claude-opus-4-7"
+   }
+  },
+  "risk-aggressive-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-conservative-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "gemini-3.8-flash"
+    ],
+    "is_active": false,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-manager": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "risk-neutral-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "sentiment-grounded-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "technical-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "tier1-screener-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6-luna"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "trade-manager": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "claude-sonnet-5-5",
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": "codex/gpt-5.5",
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "trader-v1": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "ui-mockup-designer": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "codex/gpt-6.1-sol",
+     "gemini-3.8-flash"
+    ],
+    "is_active": true,
+    "primary_model_id": "claude-sonnet-5-5"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   }
+  },
+  "vantage-domain-expert": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-methodologist": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-optimist": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-research": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-research-judge": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  },
+  "vantage-skeptic": {
+   "after": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-6.1-sol"
+   },
+   "before": {
+    "escalation_model_id": null,
+    "fallback_models": [
+     "nvidia/glm-5.3",
+     "gemini-3.7-flash",
+     "cloudflare/gpt-oss-120b",
+     "local/gemma4:12b-it-qat"
+    ],
+    "is_active": true,
+    "primary_model_id": "codex/gpt-5.5"
+   }
+  }
+ },
+ "updated_models": {
+  "codex/gpt-daybreak-blue-latest": {
+   "access_programs": {
+    "after": {
+     "cyber": "daybreak_blue"
+    },
+    "before": null
+   },
+   "availability": {
+    "after": "codex_oauth_subscription; verified_2026-10-09; listed_in_codex_models_2026-10-09; rolling_latest_alias_codex_reports_no_snapshot; requires_access_programs_cyber_daybreak_blue; openai_api_docs_deprecate_the_api_alias_default_snapshot_gpt-5.6-sol",
+    "before": "codex_oauth_subscription; verified_2026-10-09; deprecated_alias_upstream; default_snapshot_gpt-5.6-sol"
+   },
+   "hint": {
+    "after": "Defensive cybersecurity (Daybreak Blue access program)",
+    "before": "Defensive cybersecurity alias (Daybreak access); scores inherited from GPT-5.6 Sol"
+   }
+  }
+ }
+}

@@ -14,10 +14,10 @@ vi.mock('@/lib/api-config', () => ({
 const models: ModelInfo[] = [
   codexModel,
   {
-    id: 'claude-opus-4-7',
-    name: 'Claude Opus 4.7',
+    id: 'claude-opus-5-5',
+    name: 'Claude Opus 5.5',
     provider: 'claude',
-    alias: 'opus-4.7',
+    alias: 'opus',
     hint: 'Frontier',
     routable: false,
     cost: {
@@ -84,7 +84,7 @@ describe('committee tab', () => {
     // entries like Claude (which agent-hub intentionally does not route)
     // are filtered out. codexModel is routable in the fixture.
     fireEvent.change(screen.getByLabelText('Macro seat model'), {
-      target: { value: 'codex/gpt-5.5' },
+      target: { value: 'codex/gpt-6.1-sol' },
     })
 
     expect(updateField).toHaveBeenCalledWith(
@@ -94,7 +94,7 @@ describe('committee tab', () => {
           seats: expect.arrayContaining([
             expect.objectContaining({
               key: 'macro',
-              model_id: 'codex/gpt-5.5',
+              model_id: 'codex/gpt-6.1-sol',
             }),
           ]),
         }),

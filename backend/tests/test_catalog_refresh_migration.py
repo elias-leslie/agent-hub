@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -27,21 +28,35 @@ def test_postimage_matches_the_insert_only_seed_catalog():
     catalog = {e.id: _entry_values(e, i) for i, e in enumerate(MODEL_CATALOG, start=1)}
 
     assert not {r["id"] for r in data["deleted_models"]} & set(catalog)
-    # f35aa7ed2c9a adds upstream_id and thinking_level_map afterwards.
-    later = {"upstream_id", "thinking_level_map"}
+    # f35aa7ed2c9a adds upstream_id and thinking_level_map afterwards; 43f0a2fd606f
+    # adds access_programs, rewrites the Daybreak row, removes some models and so
+    # shifts seed positions (sort_order is only an insert-time default).
+    later = {"upstream_id", "thinking_level_map", "access_programs", "sort_order"}
+    removed = _removed_later() | {"codex/gpt-daybreak-blue-latest"}
     for row in data["new_models"]:
-        assert row == {k: v for k, v in catalog[row["id"]].items() if k not in later}
+        if row["id"] not in removed:
+            expected = {k: v for k, v in catalog[row["id"]].items() if k not in later}
+            assert {k: v for k, v in row.items() if k != "sort_order"} == expected
     for model_id, changes in data["updated_models"].items():
+        if model_id in removed:
+            continue
         for column, change in changes.items():
             assert catalog[model_id][column] == change["after"]
     aliases = _seed_aliases(MODEL_CATALOG)
     for alias in data["new_aliases"]:
-        assert aliases[alias["alias"]] == (alias["model_id"], alias["alias_type"])
+        if alias["model_id"] not in removed:
+            assert aliases[alias["alias"]] == (alias["model_id"], alias["alias_type"])
+
+
+def _removed_later() -> set[str]:
+    """Models a later migration (43f0a2fd606f) deleted after re-pointing their routes."""
+    path = _BACKEND / "alembic/versions/43f0a2fd606f_claude_cli_routes_and_codex_successors.json"
+    return {row["id"] for row in json.loads(path.read_text())["deleted_models"]}
 
 
 def test_routes_point_only_at_catalogued_models():
     data = _migration()._data()
-    catalog = {e.id for e in MODEL_CATALOG}
+    catalog = {e.id for e in MODEL_CATALOG} | _removed_later()
     for slug, route in data["routes"].items():
         after = route["after"]
         ids = [after["primary_model_id"], *after["fallback_models"], after["escalation_model_id"]]
@@ -76,4 +91,4 @@ def test_fast_agents_gain_a_catalogued_subscription_fallback():
     for slug, (previous, desired) in migration._ROUTES.items():
         assert refreshed[slug]["after"]["fallback_models"] == previous
         assert desired[0] == "codex/gpt-6-luna"
-        assert all(model in catalog for model in desired)
+        assert all(model in catalog or model in _removed_later() for model in desired)

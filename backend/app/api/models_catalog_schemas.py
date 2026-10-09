@@ -111,6 +111,9 @@ class ModelInfo(BaseModel):
     hint: str = Field(..., description="Brief UI hint")
     provider: str = Field(..., description="Provider name")
     upstream_id: str | None = Field(default=None, description="Provider-side model id when it differs")
+    access_programs: dict[str, str] | None = Field(
+        default=None, description="Provider access programs the model requires on every request"
+    )
     routable: bool = Field(..., description="Whether Agent Hub may execute workloads through this model")
     scores: ModelScoresInfo
     cost: ModelCostInfo

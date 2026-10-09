@@ -12,7 +12,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: 'Persona',
     description: 'Primary persona agent',
     system_prompt: 'You are persona.',
-    primary_model_id: 'claude-sonnet-4-6',
+    primary_model_id: 'claude-sonnet-5-5',
     fallback_models: ['gemini-3-flash-preview'],
     escalation_model_id: null,
     strategies: {},
@@ -52,7 +52,7 @@ describe('agent form helpers', () => {
     const formData = createAgentFormData(makeAgent())
 
     expect(formData.name).toBe('Persona')
-    expect(formData.primary_model_id).toBe('claude-sonnet-4-6')
+    expect(formData.primary_model_id).toBe('claude-sonnet-5-5')
     expect(formData.effective_memory_config).toEqual(
       makeAgent().effective_memory_config,
     )
@@ -212,7 +212,7 @@ describe('agent form helpers', () => {
   it('strips effective_memory_config from update payloads', () => {
     const payload = buildAgentUpdatePayload({
       name: 'Voice Responder',
-      primary_model_id: 'claude-sonnet-4-6',
+      primary_model_id: 'claude-sonnet-5-5',
       effective_memory_config: makeAgent().effective_memory_config,
     })
 

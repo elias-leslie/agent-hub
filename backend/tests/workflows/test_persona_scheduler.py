@@ -119,7 +119,7 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
         ),
         patch(
             "app.workflows.persona_scheduler._resolve_self_honing_models",
-            new=AsyncMock(return_value=(["codex/gpt-5.4"], ["claude-sonnet-4-6"])),
+            new=AsyncMock(return_value=(["codex/gpt-5.4"], ["claude-sonnet-5-5"])),
         ),
         patch(
             "app.workflows.persona_scheduler.run_honing_loop",

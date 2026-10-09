@@ -13,58 +13,34 @@ from typing import Annotated
 
 from pydantic import BeforeValidator
 
+from app.constants.models import PROVIDER_NAMES
+
 logger = logging.getLogger(__name__)
 
 _INVALIDATED_PROVIDERS: set[str] = set()
-REFERENCE_ONLY_WORKLOAD_PROVIDERS = frozenset({"anthropic", "claude"})
 CREDENTIAL_ONLY_PROVIDERS = frozenset({"typesafe"})
+UNKNOWN_PROVIDER = "unknown"
 
 
 def get_provider_for_model(model: str) -> str:
-    """Determine provider from model ID using the catalog, with string fallback."""
-    from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
+    """Return the catalog provider for ``model``, or an explicit known-provider prefix."""
+    from app.constants.catalog import (
+        INACTIVE_MODEL_CATALOG_BY_ID,
+        MODEL_CATALOG_BY_ID,
+        resolve_model,
+    )
 
     resolved = resolve_model(model)
-    entry = MODEL_CATALOG_BY_ID.get(resolved)
+    entry = MODEL_CATALOG_BY_ID.get(resolved) or INACTIVE_MODEL_CATALOG_BY_ID.get(resolved)
     if entry:
         return entry.provider
 
-    model_lower = model.lower()
-    prefix_map = [
-        ("openrouter/", "openrouter"),
-        ("or/", "openrouter"),
-        ("codex/", "codex"),
-        ("openai/", "openai"),
-        ("xai/", "xai"),
-        ("zhipu/", "zhipu"),
-        ("kimi-code/", "kimi-code"),
-        ("minimax/", "minimax"),
-        ("moonshot/", "moonshot"),
-        ("deepseek/", "deepseek"),
-        ("local/", "local"),
-        ("nvidia/", "nvidia"),
-        ("cloudflare/", "cloudflare"),
-    ]
-    for prefix, provider in prefix_map:
-        if model_lower.startswith(prefix):
-            return provider
-
-    name_map = [
-        ("gemini", "gemini"),
-        ("gpt", "openai"),
-        ("grok", "xai"),
-        ("glm", "zhipu"),
-        ("kimi-for-coding", "kimi-code"),
-        ("kimi", "moonshot"),
-        ("minimax", "minimax"),
-        ("deepseek", "deepseek"),
-        ("qwen", "local"),
-    ]
-    for name, provider in name_map:
-        if name in model_lower:
-            return provider
-
-    return "openai"
+    # Uncatalogued ids route only by an explicit known-provider prefix; the
+    # catalog, not string guessing, decides everything else.
+    prefix, separator, _ = resolved.partition("/")
+    if separator and prefix in PROVIDER_NAMES:
+        return prefix
+    return UNKNOWN_PROVIDER
 
 
 def list_providers() -> list[str]:
@@ -76,7 +52,7 @@ def list_providers() -> list[str]:
 
 def is_workload_provider(provider: str) -> bool:
     """Return whether Agent Hub may execute workloads through ``provider``."""
-    return provider not in REFERENCE_ONLY_WORKLOAD_PROVIDERS | CREDENTIAL_ONLY_PROVIDERS
+    return provider not in CREDENTIAL_ONLY_PROVIDERS
 
 
 def is_workload_model(model: str) -> bool:
@@ -90,8 +66,15 @@ def list_workload_providers() -> list[str]:
 
 
 def list_credential_providers() -> list[str]:
-    """Return workload and explicitly non-routing credential provider names."""
-    return sorted(set(list_workload_providers()) | CREDENTIAL_ONLY_PROVIDERS)
+    """Return catalogued providers, including those whose models are all inactive.
+
+    A provider with only inactive rows (an unfunded subscription, say) still
+    accepts a credential, so topping it up needs no catalog or code change.
+    """
+    from app.constants.catalog import INACTIVE_MODEL_CATALOG_BY_ID
+
+    inactive = {entry.provider for entry in INACTIVE_MODEL_CATALOG_BY_ID.values()}
+    return sorted(set(list_workload_providers()) | inactive | CREDENTIAL_ONLY_PROVIDERS)
 
 
 def invalidate(provider: str) -> None:
@@ -124,7 +107,7 @@ ValidProvider = Annotated[str, BeforeValidator(_validate_provider)]
 def _validate_workload_provider(v: str) -> str:
     if not is_workload_provider(v):
         raise ValueError(
-            f"Provider {v!r} is reference-only and cannot execute Agent Hub workloads"
+            f"Provider {v!r} is credential-only and cannot execute Agent Hub workloads"
         )
     return _validate_provider(v)
 
@@ -134,7 +117,7 @@ ValidWorkloadProvider = Annotated[str, BeforeValidator(_validate_workload_provid
 
 __all__ = [
     "CREDENTIAL_ONLY_PROVIDERS",
-    "REFERENCE_ONLY_WORKLOAD_PROVIDERS",
+    "UNKNOWN_PROVIDER",
     "ValidProvider",
     "ValidWorkloadProvider",
     "clear_cache",

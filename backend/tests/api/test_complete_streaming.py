@@ -119,7 +119,7 @@ class TestStreamingChunk:
             fallback_used=True,
         )
         assert chunk.agent_used == "coder"
-        assert chunk.model_used == "claude-haiku-4-5"
+        assert chunk.model_used == "claude-haiku-5-5"
         assert chunk.fallback_used is True
 
 

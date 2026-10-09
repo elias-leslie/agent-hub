@@ -303,7 +303,7 @@ async def test_build_session_and_messages_records_reference_breakdown_on_non_str
         result = await build_session_and_messages(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             resolved_agent=_resolved_agent({"include_mandates": True}),
             mandate=None,
             db=db,
@@ -368,7 +368,7 @@ async def test_build_session_and_messages_compacts_before_context_limit_check() 
         result = await build_session_and_messages(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             resolved_agent=_resolved_agent(None),
             mandate=None,
             db=db,
@@ -379,9 +379,9 @@ async def test_build_session_and_messages_compacts_before_context_limit_check() 
 
     mock_compact.assert_awaited_once()
     mock_check_context.assert_awaited_once_with(
-        db, session, "sess-123", "claude-sonnet-4-6", compacted_messages
+        db, session, "sess-123", "claude-sonnet-5-5", compacted_messages
     )
-    mock_check_cache.assert_awaited_once_with(True, "claude-sonnet-4-6", compacted_messages, 1.0)
+    mock_check_cache.assert_awaited_once_with(True, "claude-sonnet-5-5", compacted_messages, 1.0)
     assert result[5] == compacted_messages
 
 
@@ -405,7 +405,7 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
         session_id, returned_session, context_messages, is_new_session = await setup_session(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             db=AsyncMock(),
             client_id="client-1",
             request_source="test",
@@ -421,7 +421,7 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
     assert get_args.kwargs["working_dir"] == "/tmp/lanes/task-123"
     assert get_args.kwargs["current_branch"] == "task-123/main"
     assert get_args.kwargs["parent_session_id"] == "persona-root"
-    mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-4-6", "summitflow")
+    mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-5-5", "summitflow")
 
 
 @pytest.mark.asyncio
@@ -439,7 +439,7 @@ async def test_setup_session_forwards_trace_id_to_session_creation() -> None:
         session_id, returned_session, context_messages, is_new_session = await setup_session(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             db=AsyncMock(),
             client_id="client-1",
             request_source="vantage",
@@ -489,7 +489,7 @@ async def test_setup_session_binds_work_context_and_source_metadata() -> None:
         await setup_session(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             db=AsyncMock(),
             client_id="client-1",
             request_source="test",
@@ -529,7 +529,7 @@ async def test_setup_session_marks_read_only_without_write_ownership() -> None:
         await setup_session(
             request=request,
             provider="claude",
-            resolved_model="claude-sonnet-4-6",
+            resolved_model="claude-sonnet-5-5",
             db=AsyncMock(),
             client_id="client-1",
             request_source="test",

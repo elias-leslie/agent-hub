@@ -128,12 +128,19 @@ async def _run_with_agentic_fallback(
     skip_cache: bool,
 ) -> CompletionInternalResult:
     """Try primary model then fallback_models for agentic DB execution."""
+    from app.routing.availability import route_unavailable_reason
     from app.routing.registry import get_provider_for_model
 
     primary_error: ProviderError | RuntimeError | asyncio.TimeoutError | None = None
     for model_id in [primary_model, *agent.agent.fallback_models]:
+        fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
+        unavailable = await route_unavailable_reason(model_id)
+        if unavailable is not None:
+            logger.info("Skipping model %s: %s", model_id, unavailable)
+            if model_id == primary_model:
+                primary_error = ProviderError(provider=fb_provider, message=unavailable, status_code=503)
+            continue
         try:
-            fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
             raw = await _run_internal(
                 req, model_id, fb_provider, agent, msgs, db, sid, client_id, source,
                 thinking, tools, fmt, skip_cache, True,

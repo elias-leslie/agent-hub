@@ -55,20 +55,20 @@ def _stub_canonical_context_injection():
 
 
 @pytest.mark.asyncio
-async def test_reference_only_provider_is_rejected_before_execution() -> None:
+async def test_credential_only_provider_is_rejected_before_execution() -> None:
     with pytest.raises(ProviderError) as exc_info:
         await complete_internal(
             temperature=0.0,
             messages=[{"role": "user", "content": "hi"}],
-            model="claude-sonnet-4-6",
-            provider="claude",
+            model="typesafe/any",
+            provider="typesafe",
             project_id="agent-hub",
             db=None,
             use_memory=False,
         )
 
     assert exc_info.value.status_code == 400
-    assert "catalog references" in str(exc_info.value)
+    assert "credential-only" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

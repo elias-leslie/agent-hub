@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from app.constants.models import (
     CLAUDE_HAIKU,
-    CLAUDE_OPUS_4_7,
+    CLAUDE_OPUS,
     CLAUDE_SONNET,
     CODEX_GPT_6_1_SOL,
     CODEX_GPT_6_LUNA,
@@ -116,12 +116,12 @@ def mock_agent_no_fallbacks() -> AgentDTO:
 
 class TestGetProviderForModel:
 
-    def test_claude_model_is_reference_only(self) -> None:
+    def test_claude_model_is_a_workload_route(self) -> None:
         assert get_provider_for_model(CLAUDE_SONNET) == "claude"
         assert get_provider_for_model(CLAUDE_HAIKU) == "claude"
-        assert get_provider_for_model(CLAUDE_OPUS_4_7) == "claude"
-        assert is_workload_provider("claude") is False
-        assert is_workload_model(CLAUDE_SONNET) is False
+        assert get_provider_for_model(CLAUDE_OPUS) == "claude"
+        assert is_workload_provider("claude") is True
+        assert is_workload_model(CLAUDE_SONNET) is True
 
     def test_routable_workload_model(self) -> None:
         assert get_provider_for_model(CODEX_GPT_6_1_SOL) == "codex"
@@ -129,10 +129,11 @@ class TestGetProviderForModel:
 
     def test_gemini_model(self) -> None:
         assert get_provider_for_model(DEFAULT_GEMINI_MODEL) == "gemini"
-        assert get_provider_for_model("gemini-3-pro") == "gemini"
+        assert get_provider_for_model("gemini/uncatalogued-model") == "gemini"
 
-    def test_unknown_defaults_to_openai(self) -> None:
-        assert get_provider_for_model("unknown-model") == "openai"
+    def test_unknown_model_is_not_guessed(self) -> None:
+        assert get_provider_for_model("unknown-model") == "unknown"
+        assert get_provider_for_model("gemini-3-pro") == "unknown"
 
 
 class TestResolveAgent:

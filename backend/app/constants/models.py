@@ -8,11 +8,12 @@ from __future__ import annotations
 # Update these when new model versions are released.
 # All code should import from here, not hardcode model strings.
 
-# Claude models (Anthropic)
-CLAUDE_SONNET = "claude-sonnet-4-6"
-CLAUDE_OPUS = "claude-opus-4-6"
-CLAUDE_OPUS_4_7 = "claude-opus-4-7"
-CLAUDE_HAIKU = "claude-haiku-4-5"
+# Claude models (Anthropic), served through the headless Claude Code CLI on the
+# owner's subscription.
+CLAUDE_HAIKU = "claude-haiku-5-5"
+CLAUDE_SONNET = "claude-sonnet-5-5"
+CLAUDE_OPUS = "claude-opus-5-5"
+CLAUDE_FABLE = "claude-fable-5-1"
 
 # Gemini 3 models (Google)
 GEMINI_3_8_FLASH = "gemini-3.8-flash"
@@ -39,7 +40,6 @@ CODEX_GPT_5_6_SOL = "codex/gpt-5.6-sol"
 CODEX_GPT_5_6_TERRA = "codex/gpt-5.6-terra"
 CODEX_GPT_5_6_LUNA = "codex/gpt-5.6-luna"
 CODEX_GPT_DAYBREAK_BLUE = "codex/gpt-daybreak-blue-latest"
-CODEX_GPT_5_5 = "codex/gpt-5.5"
 
 # xAI models (Direct)
 XAI_GROK_4_3 = "xai/grok-4.3"
@@ -90,17 +90,15 @@ CF_LEONARDO_LUCID = "cloudflare/leonardo-lucid-origin"
 
 # Provider display names — single source of truth for UI labels.
 # Keys match the `provider` field in MODEL_CATALOG entries.
+# Kimi Code, MiniMax and OpenRouter stay listed: their credentials are stored
+# and their catalog rows can be re-enabled once the account is funded.
 PROVIDER_NAMES: dict[str, str] = {
     "claude": "Claude",
-    "deepseek": "DeepSeek",
     "gemini": "Gemini",
     "kimi-code": "Kimi Code",
     "local": "Local",
-    "moonshot": "Moonshot",
-    "openai": "OpenAI",
     "openrouter": "OpenRouter",
     "xai": "xAI",
-    "zhipu": "Zhipu",
     "minimax": "MiniMax",
     "nvidia": "NVIDIA",
     "cloudflare": "Cloudflare",

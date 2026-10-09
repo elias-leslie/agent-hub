@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _reference_only_provider_error(model: str, provider: str) -> HTTPException:
+def _credential_only_provider_error(model: str, provider: str) -> HTTPException:
     return HTTPException(
         status_code=400,
         detail={
@@ -45,8 +45,8 @@ def _reference_only_provider_error(model: str, provider: str) -> HTTPException:
             "provider": provider,
             "model": model,
             "message": (
-                "Claude/Anthropic models are catalog references and external "
-                "Claude Code TUI only; Agent Hub workloads must use a routable provider."
+                f"Provider {provider!r} is credential-only and cannot execute "
+                "Agent Hub workloads."
             ),
         },
     )
@@ -59,9 +59,9 @@ def _guard_workload_routing(
     provider: str,
     resolved_agent: ResolvedAgent | None,
 ) -> None:
-    """Reject reference-only providers before execution or fallback handling."""
+    """Reject credential-only providers before execution or fallback handling."""
     if not is_workload_provider(provider):
-        raise _reference_only_provider_error(model, provider)
+        raise _credential_only_provider_error(model, provider)
 
     if not resolved_agent or request.disable_agent_fallbacks:
         return
@@ -69,13 +69,13 @@ def _guard_workload_routing(
     for fallback_model in resolved_agent.agent.fallback_models or []:
         fallback_provider = get_provider_for_model(fallback_model)
         if not is_workload_provider(fallback_provider):
-            raise _reference_only_provider_error(fallback_model, fallback_provider)
+            raise _credential_only_provider_error(fallback_model, fallback_provider)
 
     escalation_model = resolved_agent.agent.escalation_model_id
     if escalation_model:
         escalation_provider = get_provider_for_model(escalation_model)
         if not is_workload_provider(escalation_provider):
-            raise _reference_only_provider_error(escalation_model, escalation_provider)
+            raise _credential_only_provider_error(escalation_model, escalation_provider)
 
 
 async def _guard_provider_cooldowns(
