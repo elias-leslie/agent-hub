@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.complete.complete_orchestrator import _validate_and_resolve, orchestrate_completion
-from app.api.complete.native_continuation import _payload_hash
+from app.api.complete.native_continuation import _cyber_access_program, _payload_hash
 from app.api.complete.schemas import CompletionRequest
 
 NERI_PAYLOAD_CONTRACT_HASH = "2c6ad1d8636d7653b26d0d1783868eafdebfff37106b83e9032b4bbe2ef88a0f"
@@ -234,3 +234,9 @@ async def test_orchestrator_routes_native_before_transcript_reconstruction() -> 
     assert result is expected
     execute.assert_awaited_once()
     rebuild.assert_not_awaited()
+
+
+def test_cyber_access_program_defaults_to_the_catalog_requirement() -> None:
+    assert _cyber_access_program(None, "codex/gpt-daybreak-blue-latest") == "daybreakBlue"
+    assert _cyber_access_program(None, "codex/gpt-6.1-sol") is None
+    assert _cyber_access_program("standard", "codex/gpt-6.1-sol") == "standard"
