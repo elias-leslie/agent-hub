@@ -1,5 +1,6 @@
 import { NotesButton, NotesProvider } from '@summitflow/notes-ui'
 import { Activity, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { formatUptime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 
 interface StatusData {
@@ -38,7 +39,7 @@ export function SidebarFooter({
               {status.status}
             </p>
             <p className="text-[10px] text-slate-500 font-mono">
-              {Math.floor(status.uptime_seconds / 3600)}h uptime
+              {formatUptime(status.uptime_seconds)} uptime
             </p>
           </div>
         </div>

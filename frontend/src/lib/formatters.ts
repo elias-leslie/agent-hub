@@ -27,11 +27,17 @@ export function formatTokens(tokens: number): string {
   return tokens.toString()
 }
 
+/** Service uptime: minutes under an hour, otherwise whole hours. */
+export function formatUptime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 60) return '<1m'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  return `${Math.floor(seconds / 3600)}h`
+}
+
 export function formatModelName(model: string, maxLength: number = 14): string {
   return model
     .replace('claude-', '')
     .replace('gemini-', 'g-')
-    .replace('minimax/', '')
     .replace('models/', '')
     .slice(0, maxLength)
 }
