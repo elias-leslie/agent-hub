@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.llm.model_resolver import resolve_llm_model
@@ -29,6 +31,7 @@ def test_argv_is_tool_denied_isolated_and_maps_effort(tmp_path) -> None:
     argv = cli._argv("claude", model, SimpleStreamOptions(reasoning="minimal"), tmp_path / "p.md")
     assert argv[argv.index("--tools") + 1] == ""
     assert argv[argv.index("--setting-sources") + 1] == ""
+    assert json.loads(argv[argv.index("--settings") + 1]) == {"switchModelsOnFlag": False}
     for flag in ("--safe-mode", "--strict-mcp-config", "--no-session-persistence", "--disable-slash-commands"):
         assert flag in argv
     assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"

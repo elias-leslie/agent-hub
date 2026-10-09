@@ -128,6 +128,9 @@ def _argv(binary: str, model: Model[Any], options: SimpleStreamOptions | None, p
         "--exclude-dynamic-system-prompt-sections",
         "--tools", "",
         "--setting-sources", "",
+        # The owner's setting: a safety-flagged request fails instead of being
+        # re-run on another model, so the served model always matches the route.
+        "--settings", '{"switchModelsOnFlag": false}',
         "--strict-mcp-config",
         "--no-session-persistence",
     ]
