@@ -100,8 +100,12 @@ export function ProviderCard({
   const isDegraded = healthState === 'degraded'
   const isDown = healthState === 'unavailable'
 
-  // Dot color: health state takes priority when configured, else auth-based
-  const dotColor = healthData?.configured
+  // Health state takes priority only when the API family reports health
+  // details; a family without details falls back to auth-based styling.
+  const hasHealthDetails = Boolean(healthData?.configured && healthData.health)
+
+  // Dot color: health state takes priority when reported, else auth-based
+  const dotColor = hasHealthDetails
     ? isHealthy
       ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]'
       : isDegraded
@@ -120,7 +124,7 @@ export function ProviderCard({
         : 'bg-slate-500'
 
   // Border color based on health when available
-  const borderClass = healthData?.configured
+  const borderClass = hasHealthDetails
     ? isHealthy
       ? 'border-emerald-500/20 bg-emerald-950/5'
       : isDegraded

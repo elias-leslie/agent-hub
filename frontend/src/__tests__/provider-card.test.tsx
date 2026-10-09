@@ -159,4 +159,22 @@ describe('ProviderCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
     expect(onDeleteAll).toHaveBeenCalledWith([201, 202])
   })
+
+  it('keeps the provider colour when its API family reports no health details', () => {
+    const { container } = renderCard({
+      provider: { id: 'gemini', name: 'Gemini', hint: 'Google AI API key' },
+      credentials: [baseCredential],
+      oauthStatus: undefined,
+      healthData: {
+        available: true,
+        configured: true,
+        error: null,
+        health: null,
+      },
+      colors: { dot: 'bg-blue-400', bg: 'border-blue-500/20' },
+    })
+
+    expect(container.querySelector('.bg-blue-400')).not.toBeNull()
+    expect(container.querySelector('.border-dashed')).toBeNull()
+  })
 })

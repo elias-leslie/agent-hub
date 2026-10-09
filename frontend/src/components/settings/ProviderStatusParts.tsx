@@ -43,9 +43,9 @@ export function AuthBadges({
         className={cn(
           'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
           isAuth
-            ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20'
+            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20'
             : isExpired
-              ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
+              ? 'bg-red-500/15 text-red-700 dark:text-red-400 ring-1 ring-red-500/20'
               : 'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20',
         )}
       >
@@ -74,7 +74,7 @@ export function AuthBadges({
     badges.push(
       <span
         key="apikey"
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-amber-400 ring-1 ring-blue-500/20"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-amber-700 dark:text-amber-400 ring-1 ring-blue-500/20"
       >
         <Key className="h-2.5 w-2.5" />
         {apiKeyCount > 1 ? `API Key (${apiKeyCount})` : 'API Key'}
@@ -103,9 +103,9 @@ export function HealthMetricsStrip({
     !health.last_error
 
   const stateColors: Record<string, string> = {
-    healthy: 'text-emerald-400',
-    degraded: 'text-amber-400',
-    unavailable: 'text-red-400',
+    healthy: 'text-emerald-700 dark:text-emerald-400',
+    degraded: 'text-amber-700 dark:text-amber-400',
+    unavailable: 'text-red-700 dark:text-red-400',
     unknown: 'text-slate-400',
   }
 
@@ -159,10 +159,10 @@ export function HealthMetricsStrip({
       <span
         className={cn(
           availPct >= 95
-            ? 'text-emerald-400'
+            ? 'text-emerald-700 dark:text-emerald-400'
             : availPct >= 70
-              ? 'text-amber-400'
-              : 'text-red-400',
+              ? 'text-amber-700 dark:text-amber-400'
+              : 'text-red-700 dark:text-red-400',
         )}
       >
         {availPct}% avail
@@ -172,7 +172,7 @@ export function HealthMetricsStrip({
       {health.consecutive_failures > 0 && (
         <>
           <span className="text-slate-600">|</span>
-          <span className="text-red-400">
+          <span className="text-red-700 dark:text-red-400">
             <AlertTriangle className="h-2.5 w-2.5 inline mr-0.5 -mt-px" />
             {health.consecutive_failures} fail
             {health.consecutive_failures > 1 ? 's' : ''}
