@@ -384,7 +384,7 @@ async def build_done_sse(
         finish_reason=getattr(event, "finish_reason", None),
         session_id=ctx.session_id,
         agent_used=ctx.agent_used,
-        model_used=ctx.model_used,
+        model_used=model_id,
         model_display_name=display_name,
         fallback_used=ctx.fallback_used if ctx.agent_used else None,
         cost_usd=cost_usd,
