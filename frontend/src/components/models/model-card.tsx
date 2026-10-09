@@ -291,11 +291,18 @@ export function ModelCard({
               e.stopPropagation()
               onSelect(model)
             }}
+            aria-pressed={isSelected}
+            aria-label={
+              isSelected
+                ? `Remove ${model.name} from comparison`
+                : `Add ${model.name} to comparison`
+            }
             className={cn(
-              'absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity',
+              'absolute top-3 right-3 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100',
+              isSelected && 'lg:opacity-100',
               'px-2 py-1 rounded-md text-xs font-medium border',
               isSelected
-                ? 'bg-amber-500 text-slate-950 border-amber-400'
+                ? 'bg-amber-500 text-amber-950 border-amber-400'
                 : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700',
             )}
           >

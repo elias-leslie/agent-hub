@@ -27,6 +27,7 @@ import { useToastActions } from '@/components/error/toast'
 import { ModelCard } from '@/components/models/model-card'
 import { ModelComparison } from '@/components/models/model-comparison'
 import { ModelFilters } from '@/components/models/model-filters'
+import { useModelComparison } from '@/components/models/use-model-comparison'
 import { fetchApi } from '@/lib/api-config'
 import { getPricingSortValue } from '@/lib/model-pricing'
 
@@ -99,7 +100,8 @@ export default function ModelsPage() {
   })
   const [sortBy, setSortBy] = useState('composite')
   const [groupByProvider, setGroupByProvider] = useState(false)
-  const [selectedModels, setSelectedModels] = useState<ModelOption[]>([])
+  const comparison = useModelComparison()
+  const { selectedModels } = comparison
   const [, setExpandedModel] = useState<ModelOption | null>(null)
 
   const handleProviderToggle = (provider: string) => {
@@ -124,15 +126,6 @@ export default function ModelsPage() {
       ...prev,
       [capability]: !prev[capability],
     }))
-  }
-
-  const handleModelSelect = (model: ModelOption) => {
-    setSelectedModels((prev) => {
-      const isSelected = prev.some((m) => m.id === model.id)
-      if (isSelected) return prev.filter((m) => m.id !== model.id)
-      if (prev.length >= 3) return prev
-      return [...prev, model]
-    })
   }
 
   const handleSync = useCallback(async () => {
@@ -336,7 +329,7 @@ export default function ModelsPage() {
                 {selectedModels.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setSelectedModels([])}
+                    onClick={comparison.open}
                     className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/90 px-4 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300"
                   >
                     <Zap className="h-4 w-4" />
@@ -538,8 +531,8 @@ export default function ModelsPage() {
               <ModelCard
                 key={model.id}
                 model={model}
-                isSelected={selectedModels.some((m) => m.id === model.id)}
-                onSelect={handleModelSelect}
+                isSelected={comparison.isSelected(model.id)}
+                onSelect={comparison.toggleModel}
                 onExpand={setExpandedModel}
               />
             ))}
@@ -568,8 +561,8 @@ export default function ModelsPage() {
                     <ModelCard
                       key={model.id}
                       model={model}
-                      isSelected={selectedModels.some((m) => m.id === model.id)}
-                      onSelect={handleModelSelect}
+                      isSelected={comparison.isSelected(model.id)}
+                      onSelect={comparison.toggleModel}
                       onExpand={setExpandedModel}
                     />
                   ))}
@@ -580,11 +573,9 @@ export default function ModelsPage() {
         )}
 
         <ModelComparison
-          models={selectedModels}
-          onClose={() => setSelectedModels([])}
-          onRemoveModel={(modelId) =>
-            setSelectedModels((prev) => prev.filter((m) => m.id !== modelId))
-          }
+          models={comparison.isOpen ? selectedModels : []}
+          onClose={comparison.close}
+          onRemoveModel={comparison.removeModel}
         />
       </main>
     </div>
