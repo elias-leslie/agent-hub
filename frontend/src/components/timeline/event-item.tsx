@@ -117,7 +117,7 @@ export function EventItem({
               )}
 
               {event.model_used && (
-                <span className="px-2 py-0.5 rounded bg-indigo-900/30 text-xs font-mono text-indigo-400/70 truncate max-w-[160px]">
+                <span className="px-2 py-0.5 rounded bg-indigo-500/10 dark:bg-indigo-900/30 text-xs font-mono text-indigo-700 dark:text-indigo-400/70 truncate max-w-[160px]">
                   {event.model_used}
                 </span>
               )}
@@ -166,7 +166,8 @@ export function EventItem({
               className={cn(
                 'text-sm text-slate-300 whitespace-pre-wrap break-words',
                 'font-mono leading-relaxed',
-                event.event_type === 'thinking' && 'italic text-amber-200/80',
+                event.event_type === 'thinking' &&
+                  'italic text-amber-800 dark:text-amber-200/80',
               )}
             >
               {truncatedContent}

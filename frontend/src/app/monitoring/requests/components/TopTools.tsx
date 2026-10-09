@@ -23,7 +23,7 @@ export function TopTools({ data }: { data: ToolNameMetric[] }) {
             {idx + 1}
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-mono text-cyan-300 truncate">
+            <p className="text-sm font-mono text-cyan-800 dark:text-cyan-300 truncate">
               {tool.tool_name}
             </p>
             <div className="flex items-center gap-3 mt-0.5 text-[10px] text-slate-500">
@@ -31,10 +31,10 @@ export function TopTools({ data }: { data: ToolNameMetric[] }) {
               <span
                 className={cn(
                   tool.success_rate >= 95
-                    ? 'text-emerald-400'
+                    ? 'text-emerald-700 dark:text-emerald-400'
                     : tool.success_rate >= 80
-                      ? 'text-amber-400'
-                      : 'text-red-400',
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-red-700 dark:text-red-400',
                 )}
               >
                 {tool.success_rate.toFixed(0)}% success

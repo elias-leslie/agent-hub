@@ -57,7 +57,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
                 className={cn(
                   'segmented-option',
                   formData.is_active
-                    ? 'border-emerald-500/20 bg-emerald-500/12 text-emerald-100'
+                    ? 'border-emerald-500/20 bg-emerald-500/12 text-emerald-800 dark:text-emerald-100'
                     : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                 )}
               >
@@ -92,7 +92,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
                 className={cn(
                   'segmented-option',
                   formData.is_coding_agent
-                    ? 'border-cyan-500/20 bg-cyan-500/12 text-cyan-100'
+                    ? 'border-cyan-500/20 bg-cyan-500/12 text-cyan-800 dark:text-cyan-100'
                     : 'hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200',
                 )}
               >

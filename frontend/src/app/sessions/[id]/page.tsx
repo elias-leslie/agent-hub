@@ -120,8 +120,8 @@ export default function SessionDetailPage({
             <div
               className={cn(
                 'flex items-center gap-2 p-4 rounded-lg',
-                'bg-red-950/40 border border-red-800/50',
-                'text-red-400',
+                'bg-red-500/10 dark:bg-red-950/40 border border-red-800/50',
+                'text-red-700 dark:text-red-400',
               )}
             >
               <AlertCircle className="h-5 w-5" />

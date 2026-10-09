@@ -67,7 +67,7 @@ export function ChartsSection({
               <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 Daily Spend
               </span>
-              <span className="text-[10px] font-mono text-amber-300">
+              <span className="text-[10px] font-mono text-amber-800 dark:text-amber-300">
                 {formatCurrency(totalCosts?.total_cost_usd || 0)} total
               </span>
             </div>

@@ -25,10 +25,10 @@ export function TopEndpoints({ data }: { data: EndpointMetric[] }) {
               <span
                 className={cn(
                   endpoint.success_rate >= 95
-                    ? 'text-emerald-400'
+                    ? 'text-emerald-700 dark:text-emerald-400'
                     : endpoint.success_rate >= 80
-                      ? 'text-amber-400'
-                      : 'text-red-400',
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-red-700 dark:text-red-400',
                 )}
               >
                 {endpoint.success_rate.toFixed(0)}% success

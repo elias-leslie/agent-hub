@@ -135,7 +135,7 @@ export function Sidebar({
               className={cn(
                 'group w-full rounded-2xl border px-3 py-3 text-left transition',
                 activeTab === tab.id
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-100'
                   : 'border-transparent bg-slate-950/25 text-slate-300 hover:border-slate-700/80 hover:bg-slate-950/70',
               )}
             >
@@ -144,7 +144,7 @@ export function Sidebar({
                   className={cn(
                     'mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl border transition',
                     activeTab === tab.id
-                      ? 'border-amber-400/25 bg-amber-500/10 text-amber-200'
+                      ? 'border-amber-400/25 bg-amber-500/10 text-amber-800 dark:text-amber-200'
                       : 'border-slate-800 bg-slate-900/90 text-slate-400 group-hover:border-slate-700 group-hover:text-slate-200',
                   )}
                 >
@@ -157,7 +157,7 @@ export function Sidebar({
                       className={cn(
                         'h-4 w-4 transition',
                         activeTab === tab.id
-                          ? 'text-amber-300'
+                          ? 'text-amber-800 dark:text-amber-300'
                           : 'text-slate-600 group-hover:text-slate-400',
                       )}
                     />

@@ -169,7 +169,7 @@ export function SessionTableRow({
               fallbackUsed={identity.fallbackUsed}
             />
             {identity.fallbackUsed ? (
-              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-amber-300/80">
+              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-amber-800 dark:text-amber-300/80">
                 fallback
               </span>
             ) : null}

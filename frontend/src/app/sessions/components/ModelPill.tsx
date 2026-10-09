@@ -23,7 +23,7 @@ function pillClassName(isActive: boolean, clickable: boolean) {
     clickable &&
       'cursor-pointer hover:border-slate-700 hover:bg-slate-950/70 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40',
     isActive &&
-      'border-amber-500/25 bg-amber-950/12 text-amber-200 ring-1 ring-amber-400/20',
+      'border-amber-500/25 bg-amber-500/10 dark:bg-amber-950/12 text-amber-800 dark:text-amber-200 ring-1 ring-amber-400/20',
   )
 }
 
