@@ -14,7 +14,7 @@ from app.services.events import publish_message, publish_tool_result, publish_to
 from app.services.session_live_activity import mark_session_completed
 
 from .event_helpers import save_events
-from .schemas import MessageInput, StreamingChunk
+from .schemas import MessageInput
 from .streaming_context import StreamContext
 
 logger = logging.getLogger(__name__)
@@ -323,71 +323,3 @@ async def _track_citations(
                     await db.commit()
     except Exception as exc:
         logger.warning("Streaming citation tracking failed: %s", exc)
-
-
-async def _persist_completion(
-    ctx: StreamContext,
-    accumulated_content: str,
-    input_tokens: int,
-    output_tokens: int,
-) -> float:
-    """Save messages, track citations, close one-shot session. Returns total cost USD."""
-    await save_messages_to_db(
-        session_id=ctx.session_id,
-        user_messages=ctx.user_messages or [],
-        accumulated_content=accumulated_content,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        model=ctx.model,
-        agent_used=ctx.agent_used,
-        stream_start=ctx.stream_start,
-        source_metadata=ctx.source_metadata,
-    )
-    await _track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
-    if ctx.is_new_session and ctx.is_one_shot:
-        await close_one_shot_session(ctx.session_id)
-
-    from app.services.token_counter import estimate_cost
-
-    cost = estimate_cost(input_tokens, output_tokens, ctx.model)
-    if ctx.project_id and cost.total_cost_usd > 0:
-        from app.services.project_budget import record_project_cost
-
-        await record_project_cost(ctx.project_id, cost.total_cost_usd)
-    return cost.total_cost_usd
-
-
-async def build_done_sse(
-    event: object,
-    ctx: StreamContext,
-    accumulated_content: str,
-    seq: int,
-) -> str:
-    """Persist completion data and return the SSE done-chunk string."""
-    input_tokens: int = getattr(event, "input_tokens", None) or 0
-    output_tokens: int = getattr(event, "output_tokens", None) or 0
-    cost_usd = await _persist_completion(ctx, accumulated_content, input_tokens, output_tokens)
-
-    from app.constants.catalog import MODEL_CATALOG_BY_ID
-
-    model_id = ctx.model_used or ctx.model
-    catalog_entry = MODEL_CATALOG_BY_ID.get(model_id)
-    display_name = catalog_entry.name if catalog_entry else None
-
-    done_chunk = StreamingChunk(
-        type="done",
-        seq=seq,
-        model=ctx.model,
-        provider=ctx.provider,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        finish_reason=getattr(event, "finish_reason", None),
-        session_id=ctx.session_id,
-        agent_used=ctx.agent_used,
-        model_used=model_id,
-        model_display_name=display_name,
-        fallback_used=ctx.fallback_used if ctx.agent_used else None,
-        cost_usd=cost_usd,
-        thinking_tokens=getattr(event, "thinking_tokens", None),
-    )
-    return f"data: {done_chunk.model_dump_json()}\n\n"

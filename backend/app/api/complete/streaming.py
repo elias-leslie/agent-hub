@@ -137,6 +137,7 @@ async def _persist_and_build_done_sse(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "model": ctx.model,
+        "model_used": effective_model,
         "provider": ctx.provider,
         "session_id": ctx.session_id,
     }

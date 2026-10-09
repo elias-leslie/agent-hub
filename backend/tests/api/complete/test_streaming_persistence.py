@@ -43,25 +43,3 @@ async def test_track_citations_reuses_shared_inline_tag_tracker() -> None:
     )
     db.commit.assert_awaited_once()
 
-
-@pytest.mark.asyncio
-async def test_done_chunk_reports_the_served_model_when_the_primary_served() -> None:
-    """SDK callers read routing evidence from done; model_used must not be empty."""
-    import json
-    from types import SimpleNamespace
-
-    from app.api.complete.streaming_context import StreamContext
-    from app.api.complete.streaming_persistence import build_done_sse
-
-    ctx = StreamContext(
-        session_id="s-1", model="claude-opus-5-5", provider="claude", agent_used="neri-reviewer-claude",
-        model_used=None, fallback_used=False, user_messages=None, stream_start=0.0,
-        is_new_session=True, is_one_shot=True,
-    )
-    with patch("app.api.complete.streaming_persistence._persist_completion", AsyncMock(return_value=0.0)):
-        chunk = await build_done_sse(SimpleNamespace(input_tokens=1, output_tokens=1), ctx, "ok", 3)
-
-    done = json.loads(chunk.removeprefix("data: "))
-    assert (done["model_used"], done["agent_used"], done["fallback_used"]) == (
-        "claude-opus-5-5", "neri-reviewer-claude", False,
-    )
