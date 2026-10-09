@@ -69,7 +69,8 @@ def completion_options(
     signal: asyncio.Event | None = None,
 ) -> SimpleStreamOptions:
     """One options mapping for HTTP streaming, single-turn and tool execution."""
-    reasoning = "xhigh" if thinking_level == "ultrathink" else thinking_level
+    # Agent rows store "none" for reasoning off (app/models/agent.py).
+    reasoning = {"ultrathink": "xhigh", "none": None}.get(thinking_level or "", thinking_level)
     if reasoning not in {None, "minimal", "low", "medium", "high", "xhigh"}:
         raise ValueError(f"Unsupported thinking level: {thinking_level}")
     return SimpleStreamOptions(
