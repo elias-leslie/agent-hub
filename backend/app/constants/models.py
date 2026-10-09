@@ -10,6 +10,9 @@ from __future__ import annotations
 
 # Claude models (Anthropic), served through the headless Claude Code CLI on the
 # owner's subscription.
+# Placeholder some harness transcripts record for turns without a reported model.
+UNKNOWN_MODEL = "unknown"
+
 CLAUDE_HAIKU = "claude-haiku-5-5"
 CLAUDE_SONNET = "claude-sonnet-5-5"
 CLAUDE_OPUS = "claude-opus-5-5"

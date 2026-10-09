@@ -548,3 +548,27 @@ class TestMemoryInjectEvent:
         result = _extract_tool_result_content({"custom_field": long_text})
         assert result is not None
         assert len(result) == 2000
+
+
+def test_unknown_subagent_model_is_stored_as_no_model() -> None:
+    """Claude Code reports subagent turns as "unknown"; it must not read as a fallback model."""
+    from app.services.event_storage import _build_session_event
+
+    event = _build_session_event("s-1", 1, 1, "tool_use", model_used="unknown", agent_id="sub-1")
+    named = _build_session_event("s-1", 1, 2, "tool_use", model_used="claude-opus-5-5")
+
+    assert (event.model_used, named.model_used) == (None, "claude-opus-5-5")
+
+
+def test_session_model_info_ignores_a_stored_unknown_placeholder() -> None:
+    from app.services._session_metadata_helpers import session_model_info
+
+    session = Session(
+        id="s-1", provider="anthropic", model="claude-opus-5-5",
+        models_used=["claude-opus-5-5", "unknown"], providers_used=["anthropic"], provider_metadata={},
+    )
+
+    info = session_model_info(session)
+
+    assert (info["requested_model"], info["effective_model"]) == ("claude-opus-5-5", "claude-opus-5-5")
+    assert info["fallback_used"] is False

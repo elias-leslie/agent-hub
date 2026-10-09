@@ -3,6 +3,7 @@
 from typing import Any
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID
+from app.constants.models import UNKNOWN_MODEL
 from app.models import Session
 from app.services.agent_routing import get_provider_for_model
 from app.services.session_ingestion.models import (
@@ -173,12 +174,17 @@ def session_attribution(session: Session) -> dict[str, str | None]:
     }
 
 
+def _known_models(session: Session) -> list[str]:
+    # Rows stored before event ingestion dropped the "unknown" placeholder still carry it.
+    return [m for m in session.models_used or [] if isinstance(m, str) and m != UNKNOWN_MODEL]
+
+
 def requested_model(session: Session) -> str:
-    return metadata_value(session, "requested_model") or list_first(session.models_used) or str(session.model)
+    return metadata_value(session, "requested_model") or list_first(_known_models(session)) or str(session.model)
 
 
 def effective_model(session: Session) -> str:
-    return metadata_value(session, "effective_model") or list_last(session.models_used) or str(session.model)
+    return metadata_value(session, "effective_model") or list_last(_known_models(session)) or str(session.model)
 
 
 def requested_provider(session: Session, req_model: str) -> str:

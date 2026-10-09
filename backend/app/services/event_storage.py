@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.models import UNKNOWN_MODEL
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.narration_extraction import extract_narration_from_event
 from app.services.session_live_activity import update_live_activity_for_event
@@ -74,6 +75,11 @@ def _append_unique_string(values: list[str] | None, item: str | None) -> list[st
     return existing
 
 
+def _known_model(model: str | None) -> str | None:
+    """Claude Code transcripts report subagent turns as model "unknown"; that is no model."""
+    return None if model == UNKNOWN_MODEL else model
+
+
 def _sanitize_event_value(value: Any) -> Any:
     """Strip NUL bytes from event payloads before persistence.
 
@@ -130,7 +136,7 @@ def _build_session_event(
         role=s(role), content=s(content), tool_name=s(tool_name), call_id=s(call_id),
         tool_input=s(tool_input), tool_output=s(tool_output),
         tokens=tokens, duration_ms=duration_ms,
-        model_used=s(model_used), agent_id=s(agent_id), agent_name=s(agent_name),
+        model_used=_known_model(s(model_used)), agent_id=s(agent_id), agent_name=s(agent_name),
         transport=s(transport), surface=s(surface), chat_id=s(chat_id),
         message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
         source_event_id=s(source_event_id), source_timestamp=source_timestamp, usage=s(usage),
