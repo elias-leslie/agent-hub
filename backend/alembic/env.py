@@ -57,6 +57,9 @@ def do_run_migrations(connection: Connection) -> None:
     # the current catalog and agents afterwards. Data migrations with exact
     # preimage checks read this flag to skip their data changes.
     config.attributes["fresh_bootstrap"] = MigrationContext.configure(connection).get_current_revision() is None
+    # The probe autobegins a transaction; end it so alembic owns (and commits)
+    # the migration transaction below instead of joining an external one.
+    connection.rollback()
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
