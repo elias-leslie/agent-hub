@@ -97,7 +97,7 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
         assert not any(model.startswith("claude-") for model in model_chain), (
             f"{slug} should not route Agent Hub workloads to Claude: {model_chain}"
         )
-        assert any(model.startswith(("codex/", "kimi-code/", "minimax/")) for model in model_chain), (
+        assert any(model.startswith("codex/") for model in model_chain), (
             f"{slug} should include at least one subscription-backed route: {model_chain}"
         )
 
