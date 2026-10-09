@@ -11,9 +11,11 @@ the transitional surface.
 
 from __future__ import annotations
 
+from typing import cast
+
 from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
 from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
-from app.llm.types import Api, Model, ModelCost, OpenAICompletionsCompat
+from app.llm.types import Api, Model, ModelCost, OpenAICompletionsCompat, ThinkingLevelMap
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
 _PROVIDER_API: dict[str, Api] = {
@@ -58,28 +60,6 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "codex": "https://chatgpt.com/backend-api/codex/responses",
 }
 
-_PROVIDER_MODEL_IDS: dict[str, dict[str, str]] = {
-    "cloudflare": {
-        "llama-4-scout-17b": "@cf/meta/llama-4-scout-17b-16e-instruct",
-        "qwen3-30b": "@cf/qwen/qwen3-30b-a3b-fp8",
-        "qwq-32b": "@cf/qwen/qwq-32b",
-        "mistral-small-3.1-24b": "@cf/mistralai/mistral-small-3.1-24b-instruct",
-        "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
-        "glm-4.7-flash": "@cf/zai-org/glm-4.7-flash",
-        "gpt-oss-120b": "@cf/openai/gpt-oss-120b",
-        "gpt-oss-20b": "@cf/openai/gpt-oss-20b",
-        "gemma-4-26b": "@cf/google/gemma-4-26b-a4b-it",
-        "granite-4.0-h-micro": "@cf/ibm-granite/granite-4.0-h-micro",
-        "nemotron-3-120b": "@cf/nvidia/nemotron-3-120b-a12b",
-    },
-    "nvidia": {
-        "glm-5.3": "z-ai/glm-5.3",
-        "gpt-oss-20b": "openai/gpt-oss-20b",
-        "nemotron-3-super-120b-a12b": "nvidia/nemotron-3-super-120b-a12b",
-        "nemotron-3.5-lightning-30b-a3b": "nvidia/nemotron-3.5-lightning-30b-a3b",
-    },
-}
-
 
 def resolve_llm_model(
     model_id: str,
@@ -91,7 +71,7 @@ def resolve_llm_model(
     provider name from ``app.services.agent_routing.get_provider_for_model``.
     """
     resolved_id = resolve_model(model_id)
-    upstream_id = _upstream_model_id(resolved_id, provider)
+    upstream_id = upstream_model_id(resolved_id, provider)
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
     base_url = _resolve_base_url(provider)
@@ -135,6 +115,7 @@ def resolve_llm_model(
         ),
         context_window=entry.context_window,
         max_tokens=caps.max_output_tokens,
+        thinking_level_map=cast(ThinkingLevelMap | None, caps.thinking_level_map),
         headers=headers,
         compat=(
             _local_qwen_compat()
@@ -160,10 +141,13 @@ def _local_qwen_compat() -> OpenAICompletionsCompat:
     )
 
 
-def _upstream_model_id(model_id: str, provider: str) -> str:
+def upstream_model_id(model_id: str, provider: str) -> str:
+    """Return the provider-side id: the catalog ``upstream_id`` or the id minus its prefix."""
+    entry = MODEL_CATALOG_BY_ID.get(resolve_model(model_id))
+    if entry is not None and entry.upstream_id:
+        return entry.upstream_id
     prefix = f"{provider}/"
-    upstream_id = model_id[len(prefix):] if model_id.startswith(prefix) else model_id
-    return _PROVIDER_MODEL_IDS.get(provider, {}).get(upstream_id, upstream_id)
+    return model_id[len(prefix):] if model_id.startswith(prefix) else model_id
 
 
 def _resolve_base_url(provider: str) -> str:

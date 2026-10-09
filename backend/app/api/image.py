@@ -21,7 +21,7 @@ from app.adapters.gemini_image import GeminiImageAdapter
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.adapters.minimax_image import MinimaxImageAdapter
 from app.adapters.nvidia_image import NvidiaImageAdapter
-from app.constants import GEMINI_IMAGE, MODEL_CATALOG_BY_ID
+from app.constants import MODEL_CATALOG_BY_ID
 from app.db import get_db
 from app.models import Session as DBSession
 from app.services.agent_model_router import RoutingContext
@@ -129,7 +129,7 @@ async def _resolve_model_chain(
         if resolved:
             primary = resolved.model or request_model
             # If caller left default model, honor agent primary first.
-            if not request_model or request_model == GEMINI_IMAGE:
+            if not request_model:
                 chain = [primary, *(resolved.agent.fallback_models or [])]
             else:
                 chain = [request_model, *(resolved.agent.fallback_models or [])]

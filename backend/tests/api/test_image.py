@@ -8,10 +8,11 @@ import pytest
 
 from app.adapters.image_base import ImageGenerationResult
 from app.api.image import clear_image_adapter_cache
-from app.constants import GEMINI_IMAGE
 from app.main import app
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from tests.conftest import APITestClient
+
+_IMAGE_MODEL = "gemini-3-pro-image-preview"
 
 
 @pytest.fixture
@@ -32,7 +33,7 @@ def reset_adapter_cache():
 @pytest.fixture(autouse=True)
 def mock_image_agent_route():
     resolved = SimpleNamespace(
-        model=GEMINI_IMAGE,
+        model=_IMAGE_MODEL,
         provider="gemini",
         agent=SimpleNamespace(fallback_models=[]),
     )
@@ -52,7 +53,7 @@ class TestImageGenerationEndpoint:
                 return_value=ImageGenerationResult(
                     image_data=b"fake-image-data",
                     mime_type="image/png",
-                    model=GEMINI_IMAGE,
+                    model=_IMAGE_MODEL,
                     provider="gemini",
                     metadata={"size": "1024x1024"},
                 )

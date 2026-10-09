@@ -27,8 +27,10 @@ def test_postimage_matches_the_insert_only_seed_catalog():
     catalog = {e.id: _entry_values(e, i) for i, e in enumerate(MODEL_CATALOG, start=1)}
 
     assert not {r["id"] for r in data["deleted_models"]} & set(catalog)
+    # f35aa7ed2c9a adds upstream_id and thinking_level_map afterwards.
+    later = {"upstream_id", "thinking_level_map"}
     for row in data["new_models"]:
-        assert row == catalog[row["id"]]
+        assert row == {k: v for k, v in catalog[row["id"]].items() if k not in later}
     for model_id, changes in data["updated_models"].items():
         for column, change in changes.items():
             assert catalog[model_id][column] == change["after"]

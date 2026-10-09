@@ -21,11 +21,9 @@ GEMINI_3_6_FLASH = "gemini-3.6-flash"
 GEMINI_3_5_FLASH = "gemini-3.5-flash"
 GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite"
 GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
-# Gemini image models are not catalogued: our API keys have a zero free-tier
-# quota for them (verified 2026-10-09). The ids stay for the image adapter.
-GEMINI_IMAGE = "gemini-3-pro-image-preview"
-GEMINI_IMAGE_NANO = "gemini-2.5-flash-image"            # Nano Banana - stable, fast
-GEMINI_IMAGE_NANO2 = "gemini-3.1-flash-image-preview"   # Nano Banana 2 - preview, fastest
+
+# Gemini embedding model used by the memory store (768-dim Matryoshka output).
+GEMINI_EMBEDDING = "gemini-embedding-001"
 
 # Gemini 2.5 models (Google)
 GEMINI_2_5_FLASH = "gemini-2.5-flash"
@@ -55,10 +53,6 @@ NVIDIA_GLM_5_3 = "nvidia/glm-5.3"
 NVIDIA_GPT_OSS_20B = "nvidia/gpt-oss-20b"
 NVIDIA_NEMOTRON_3_SUPER = "nvidia/nemotron-3-super-120b-a12b"
 NVIDIA_NEMOTRON_3_5_LIGHTNING = "nvidia/nemotron-3.5-lightning-30b-a3b"
-
-# MiniMax image adapter default. Not catalogued: the stored MiniMax key is a
-# coding-plan key, which MiniMax rejects for image generation.
-MINIMAX_IMAGE_01 = "minimax/image-01"
 
 # NVIDIA NIM image generation models (ai.api.nvidia.com/v1/genai/)
 NVIDIA_FLUX_1_DEV = "nvidia/flux.1-dev"

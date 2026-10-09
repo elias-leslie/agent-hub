@@ -8,8 +8,8 @@ Response format: JSON ``{"result": {"image": "<base64-string>"}}``
 FLUX.2 [klein] 9B supports reference images via multipart form data with
 ``input_image_0`` through ``input_image_3`` (up to 4 images, 512x512 each).
 
-On rate-limit, walks down a fallback chain:
-  FLUX.2 [klein] 9B → FLUX.1-schnell → SD XL Lightning
+Model fallback is the caller's job: ``api/image.py`` walks the image agent's
+catalog chain. Upstream ``@cf/`` paths come from the catalog ``upstream_id``.
 
 FLUX.2-dev is not used: Workers AI returns HTTP 500 for it on our account
 (verified 2026-10-09) while the same multipart request to klein succeeds.
@@ -24,39 +24,25 @@ from typing import Any
 import httpx
 
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.constants.models import (
-    CF_FLUX_1_SCHNELL,
-    CF_FLUX_2_KLEIN_9B,
-    CF_SD_XL_LIGHTNING,
-)
+from app.llm.model_resolver import upstream_model_id
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.provider_credentials import resolve_api_key, resolve_cloudflare_account_id
 
 logger = logging.getLogger(__name__)
 
-# Maps our cloudflare/<short> IDs to @cf/ model paths.
-_MODEL_PATH: dict[str, str] = {
-    "flux-2-klein-9b": "@cf/black-forest-labs/flux-2-klein-9b",
-    "flux-1-schnell": "@cf/black-forest-labs/flux-1-schnell",
-    "sd-xl-lightning": "@cf/bytedance/stable-diffusion-xl-lightning",
-    "sd-xl-base": "@cf/stabilityai/stable-diffusion-xl-base-1.0",
-    "sd-v1.5-img2img": "@cf/runwayml/stable-diffusion-v1-5-img2img",
-    "dreamshaper-8-lcm": "@cf/lykon/dreamshaper-8-lcm",
-    "leonardo-phoenix": "@cf/leonardo/phoenix-1.0",
-    "leonardo-lucid-origin": "@cf/leonardo/lucid-origin",
-}
-
-# SD models that support img2img via base64 image + strength parameter
-_SD_IMG2IMG_MODELS = {"sd-xl-lightning", "sd-xl-base", "sd-v1.5-img2img", "dreamshaper-8-lcm"}
-
-# Ordered best quality → fastest. On rate-limit we walk down.
-_FALLBACK_CHAIN = [CF_FLUX_2_KLEIN_9B, CF_FLUX_1_SCHNELL, CF_SD_XL_LIGHTNING]
-
-
-
 def _model_path(model: str) -> str:
-    short = model.removeprefix("cloudflare/")
-    return _MODEL_PATH.get(short, short)
+    return upstream_model_id(model, "cloudflare")
+
+
+def _is_flux_2(path: str) -> bool:
+    """FLUX.2 models take multipart form data."""
+    return "/flux-2-" in path
+
+
+def _supports_sd_img2img(path: str) -> bool:
+    """Stable Diffusion-family models accept a base64 image plus strength."""
+    return "stable-diffusion" in path or "dreamshaper" in path
+
 
 
 def _map_error(status: int, body: str) -> None:
@@ -89,38 +75,19 @@ class CloudflareImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = CF_FLUX_2_KLEIN_9B,
+        model: str,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: bytes | None = None,
         reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
-        """Generate an image, falling back through models on rate-limit."""
+        """Generate an image with exactly ``model``."""
         full_prompt = f"{style} style: {prompt}" if style else prompt
-        api_key = self._api_key()
-        account_id = resolve_cloudflare_account_id()
-
-        models = [model] + [m for m in _FALLBACK_CHAIN if m != model]
-        last_exc: Exception | None = None
-
-        for try_model in models:
-            try:
-                result = await self._call_api(
-                    full_prompt, try_model, account_id, api_key,
-                    reference_image, reference_mime_type,
-                )
-                if try_model != model:
-                    logger.info("Cloudflare image gen fell back %s → %s", model, try_model)
-                return result
-            except RateLimitError as exc:
-                logger.warning("Cloudflare rate-limited on %s, trying next model", try_model)
-                last_exc = exc
-                continue
-            except (AuthenticationError, ProviderError):
-                raise
-
-        raise last_exc  # type: ignore[misc]
+        return await self._call_api(
+            full_prompt, model, resolve_cloudflare_account_id(), self._api_key(),
+            reference_image, reference_mime_type,
+        )
 
     async def _call_api(
         self,
@@ -135,13 +102,11 @@ class CloudflareImageAdapter(ImageAdapter):
         url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{path}"
         headers = {"Authorization": f"Bearer {api_key}"}
 
-        # FLUX.2 models always require multipart form data
-        short = model.removeprefix("cloudflare/")
-        if short.startswith("flux-2-"):
+        if _is_flux_2(path):
             resp = await self._call_multipart(url, headers, prompt, reference_image, reference_mime_type)
         else:
             payload: dict[str, Any] = {"prompt": prompt}
-            if reference_image and short in _SD_IMG2IMG_MODELS:
+            if reference_image and _supports_sd_img2img(path):
                 payload["image_b64"] = base64.b64encode(reference_image).decode()
                 payload["strength"] = 0.65
                 payload["num_steps"] = 20

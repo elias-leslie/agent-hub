@@ -274,12 +274,11 @@ def _body(
         body["tool_choice"] = "auto"
         body["parallel_tool_calls"] = True
     if options and options.reasoning:
-        if model.id == "gpt-6.1-sol" and options.reasoning == "minimal":
-            raise ValueError("GPT-6.1 Sol does not support minimal reasoning; use low or higher")
-        effort = (
-            "high" if options.reasoning == "xhigh" and model.id != "gpt-6.1-sol"
-            else options.reasoning
-        )
+        # The catalog's thinking_level_map declares per-model level support.
+        level_map = model.thinking_level_map or {}
+        effort = level_map.get(options.reasoning, options.reasoning)
+        if effort is None:
+            raise ValueError(f"{model.id} does not support {options.reasoning} reasoning")
         body["reasoning"] = {"effort": effort, "summary": "auto"}
     return body
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from app.constants.models import GEMINI_EMBEDDING
 from app.services.memory.embedder import EmbedderService, get_embedder
 from app.services.memory.repository import MemoryRepository, get_memory_repository
 
@@ -23,7 +24,7 @@ __all__ = [
 ]
 
 # Embedding configuration
-EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_MODEL = GEMINI_EMBEDDING
 EMBEDDING_DIM = 768
 
 

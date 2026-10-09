@@ -62,6 +62,8 @@ from app.constants.models import (
 _CODEX_CAPABILITIES = ModelCapabilities(
     has_vision=True, has_thinking=True, supports_tool_execution=True, supports_verbosity=True,
     supports_xhigh=True, supports_session_cache=True, max_output_tokens=128_000,
+    # The Codex models endpoint lists low..xhigh (no minimal) for every model.
+    thinking_level_map={"minimal": "low"},
 )
 
 # Single place to register UI-visible models. Everything else derives from this.
@@ -122,7 +124,7 @@ MODEL_CATALOG: list[ModelEntry] = [
             service_tiers={"default": 1.0, "batch": 0.5, "flex": 0.5, "priority": 1.8},
         ),
         context_window=1_048_576, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536, thinking_level_map={"minimal": "low"}),
         # knowledge_cutoff is left unset: Google's model page states a September
         # 2026 "latest update" but publishes no training cutoff for this model.
         release_date="2026-09-01", family="gemini-flash",
@@ -141,7 +143,7 @@ MODEL_CATALOG: list[ModelEntry] = [
             service_tiers={"default": 1.0, "batch": 0.5, "flex": 0.5, "priority": 1.8},
         ),
         context_window=1_048_576, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, supports_tool_execution=True, max_output_tokens=65_536, thinking_level_map={"minimal": "low"}),
         release_date="2026-08-01", knowledge_cutoff="2025-01-01", family="gemini-flash",
         availability="stable; free_tier; promo_pricing_through_2026-12-31_then_1.50_7.50",
     ),
@@ -295,7 +297,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Legacy frontier", provider="codex",
         scores=ModelScores(coding=98, reasoning=99, planning=90, tool_use=91, instruction=94, design=82),
         cost=ModelCost(0.00, 0.00), context_window=272_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_tool_execution=True, supports_verbosity=True, supports_xhigh=True, supports_session_cache=True, max_output_tokens=128_000),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_tool_execution=True, supports_verbosity=True, supports_xhigh=True, supports_session_cache=True, max_output_tokens=128_000, thinking_level_map={"minimal": "low"}),
         release_date="2026-04-23", knowledge_cutoff="2025-12-01", family="gpt",
         availability="codex_oauth_subscription; verified_2026-10-09; hidden_legacy_in_codex_model_list; reasoning_low_medium_high_xhigh",
     ),
@@ -372,6 +374,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     # --- NVIDIA NIM (free tier; all below probed live 2026-10-09) ---
     ModelEntry(
         id=NVIDIA_NEMOTRON_3_SUPER, alias="nv/nemotron", name="Nemotron 3 Super 120B-A12B (NVIDIA)",
+        upstream_id="nvidia/nemotron-3-super-120b-a12b",
         hint="Free MoE", provider="nvidia",
         scores=ModelScores(coding=82, reasoning=88, planning=84, tool_use=85, instruction=86, design=66),
         cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="medium",
@@ -381,6 +384,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=NVIDIA_NEMOTRON_3_5_LIGHTNING, alias="nv/lightning", name="Nemotron 3.5 Lightning 30B-A3B (NVIDIA)",
+        upstream_id="nvidia/nemotron-3.5-lightning-30b-a3b",
         hint="Free fast", provider="nvidia",
         scores=ModelScores(coding=74, reasoning=78, planning=76, tool_use=80, instruction=80, design=60),
         cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="fast",
@@ -390,6 +394,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=NVIDIA_GLM_5_3, alias="nv/glm", name="GLM-5.3 (NVIDIA)",
+        upstream_id="z-ai/glm-5.3",
         hint="Free strong generalist; scores inherited from GLM-5.2", provider="nvidia",
         scores=ModelScores(coding=91, reasoning=92, planning=88, tool_use=89, instruction=88, design=82),
         cost=ModelCost(0.00, 0.00), context_window=1_048_576, speed_tier="medium",
@@ -400,6 +405,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=NVIDIA_GPT_OSS_20B, alias="nv/gpt-oss-20b", name="GPT-OSS 20B (NVIDIA)",
+        upstream_id="openai/gpt-oss-20b",
         hint="Free fast; scores inherited from Cloudflare GPT-OSS 20B", provider="nvidia",
         scores=ModelScores(coding=58, reasoning=62, planning=50, tool_use=55, instruction=70, design=50),
         cost=ModelCost(0.00, 0.00), context_window=128_000, speed_tier="fast",
@@ -411,6 +417,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     # --- NVIDIA image ---
     ModelEntry(
         id=NVIDIA_FLUX_1_DEV, alias="nv/flux-dev", name="FLUX.1-dev (NVIDIA)",
+        upstream_id="black-forest-labs/flux.1-dev",
         hint="Image gen", provider="nvidia",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=40, design=88),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="slow",
@@ -419,6 +426,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=NVIDIA_FLUX_1_KONTEXT, alias="nv/flux-kontext", name="FLUX.1-Kontext (NVIDIA)",
+        upstream_id="black-forest-labs/flux.1-kontext-dev",
         hint="Image edit", provider="nvidia",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=50, design=90),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="medium",
@@ -429,6 +437,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     # --- Cloudflare Workers AI LLM ---
     ModelEntry(
         id=CF_GLM_4_7_FLASH, alias="cf/glm", name="GLM-4.7-Flash (Cloudflare)",
+        upstream_id="@cf/zai-org/glm-4.7-flash",
         hint="Very cheap", provider="cloudflare",
         scores=ModelScores(coding=58, reasoning=66, planning=52, tool_use=62, instruction=72, design=52),
         cost=ModelCost(0.0605, 0.40), context_window=131_072, speed_tier="fast",
@@ -438,6 +447,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_QWEN3_30B, alias="cf/qwen3", name="Qwen3 30B-A3B (Cloudflare)",
+        upstream_id="@cf/qwen/qwen3-30b-a3b-fp8",
         hint="Cheap thinking", provider="cloudflare",
         scores=ModelScores(coding=60, reasoning=70, planning=55, tool_use=55, instruction=68, design=50),
         cost=ModelCost(0.0509, 0.335), context_window=32_768, speed_tier="fast",
@@ -447,6 +457,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_GPT_OSS_120B, alias="cf/gpt-oss", name="GPT-OSS 120B (Cloudflare)",
+        upstream_id="@cf/openai/gpt-oss-120b",
         hint="OSS general", provider="cloudflare",
         scores=ModelScores(coding=68, reasoning=74, planning=60, tool_use=62, instruction=74, design=55),
         cost=ModelCost(0.35, 0.75), context_window=128_000, speed_tier="medium",
@@ -456,6 +467,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_GPT_OSS_20B, alias="cf/gpt-oss-20b", name="GPT-OSS 20B (Cloudflare)",
+        upstream_id="@cf/openai/gpt-oss-20b",
         hint="OSS cheap", provider="cloudflare",
         scores=ModelScores(coding=58, reasoning=62, planning=50, tool_use=55, instruction=70, design=50),
         cost=ModelCost(0.20, 0.30), context_window=128_000, speed_tier="fast",
@@ -465,6 +477,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_LLAMA_4_SCOUT, alias="cf/llama", name="Llama 4 Scout 17B (Cloudflare)",
+        upstream_id="@cf/meta/llama-4-scout-17b-16e-instruct",
         hint="Multimodal", provider="cloudflare",
         scores=ModelScores(coding=55, reasoning=60, planning=50, tool_use=50, instruction=65, design=55),
         cost=ModelCost(0.270, 0.850), context_window=131_000, speed_tier="fast",
@@ -474,6 +487,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_QWQ_32B, alias="cf/qwq", name="QwQ 32B (Cloudflare)",
+        upstream_id="@cf/qwen/qwq-32b",
         hint="Reasoning", provider="cloudflare",
         scores=ModelScores(coding=62, reasoning=75, planning=58, tool_use=52, instruction=66, design=48),
         cost=ModelCost(0.660, 1.000), context_window=24_000, speed_tier="medium",
@@ -483,6 +497,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_MISTRAL_SMALL, alias="cf/mistral", name="Mistral Small 3.1 24B (Cloudflare)",
+        upstream_id="@cf/mistralai/mistral-small-3.1-24b-instruct",
         hint="Fast general", provider="cloudflare",
         scores=ModelScores(coding=58, reasoning=62, planning=50, tool_use=55, instruction=70, design=52),
         cost=ModelCost(0.351, 0.555), context_window=128_000, speed_tier="fast",
@@ -492,6 +507,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_QWEN2_5_CODER, alias="cf/coder", name="Qwen2.5 Coder 32B (Cloudflare)",
+        upstream_id="@cf/qwen/qwen2.5-coder-32b-instruct",
         hint="Code gen", provider="cloudflare",
         scores=ModelScores(coding=72, reasoning=60, planning=48, tool_use=50, instruction=62, design=40),
         cost=ModelCost(0.660, 1.000), context_window=32_768, speed_tier="fast",
@@ -501,6 +517,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_GEMMA_4_26B, alias="cf/gemma", name="Gemma 4 26B (Cloudflare)",
+        upstream_id="@cf/google/gemma-4-26b-a4b-it",
         hint="Cheap general", provider="cloudflare",
         scores=ModelScores(coding=56, reasoning=62, planning=50, tool_use=50, instruction=70, design=50),
         cost=ModelCost(0.10, 0.30), context_window=256_000, speed_tier="fast",
@@ -510,6 +527,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_GRANITE_4_H_MICRO, alias="cf/granite", name="Granite 4.0-H Micro (Cloudflare)",
+        upstream_id="@cf/ibm-granite/granite-4.0-h-micro",
         hint="Tiny cheap", provider="cloudflare",
         scores=ModelScores(coding=45, reasoning=50, planning=40, tool_use=42, instruction=62, design=40),
         cost=ModelCost(0.017, 0.112), context_window=131_000, speed_tier="fast",
@@ -519,6 +537,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_NEMOTRON_3_120B, alias="cf/nemotron", name="Nemotron 3 120B (Cloudflare)",
+        upstream_id="@cf/nvidia/nemotron-3-120b-a12b",
         hint="Reasoning", provider="cloudflare",
         scores=ModelScores(coding=72, reasoning=84, planning=72, tool_use=70, instruction=80, design=58),
         cost=ModelCost(0.50, 1.50), context_window=256_000, speed_tier="medium",
@@ -530,6 +549,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     # --- Cloudflare image ---
     ModelEntry(
         id=CF_FLUX_2_KLEIN_9B, alias="cf/flux2", name="FLUX.2 [klein] 9B (Cloudflare)",
+        upstream_id="@cf/black-forest-labs/flux-2-klein-9b",
         hint="Best image; scores inherited from FLUX.2-dev", provider="cloudflare",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=45, design=90),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="medium",
@@ -539,6 +559,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_FLUX_1_SCHNELL, alias="cf/flux-schnell", name="FLUX.1-schnell (Cloudflare)",
+        upstream_id="@cf/black-forest-labs/flux-1-schnell",
         hint="Fast image", provider="cloudflare",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=35, design=82),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="fast",
@@ -548,6 +569,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_SD_XL_LIGHTNING, alias="cf/sdxl", name="SD XL Lightning (Cloudflare)",
+        upstream_id="@cf/bytedance/stable-diffusion-xl-lightning",
         hint="4-step fast", provider="cloudflare",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=30, design=75),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="fast",
@@ -557,6 +579,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_LEONARDO_PHOENIX, alias="cf/phoenix", name="Leonardo Phoenix (Cloudflare)",
+        upstream_id="@cf/leonardo/phoenix-1.0",
         hint="Text render", provider="cloudflare",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=40, design=85),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="medium",
@@ -566,6 +589,7 @@ MODEL_CATALOG: list[ModelEntry] = [
     ),
     ModelEntry(
         id=CF_LEONARDO_LUCID, alias="cf/lucid", name="Leonardo Lucid Origin (Cloudflare)",
+        upstream_id="@cf/leonardo/lucid-origin",
         hint="Design", provider="cloudflare",
         scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=38, design=83),
         cost=ModelCost(0.00, 0.00, pricing_unit="per_image", unit_price=0.00), context_window=0, speed_tier="medium",

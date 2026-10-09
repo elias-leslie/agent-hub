@@ -105,7 +105,7 @@ const THINKING_LEVELS = [
     hint: 'Balanced reasoning for most tasks',
   },
   { value: 'high', label: 'High', hint: 'Deep reasoning for complex analysis' },
-  { value: 'xhigh', label: 'xHigh', hint: 'Maximum reasoning (GPT-5.4/5.5)' },
+  { value: 'xhigh', label: 'xHigh', hint: 'Maximum reasoning where supported' },
 ] as const
 
 const VERBOSITY_LEVELS = [

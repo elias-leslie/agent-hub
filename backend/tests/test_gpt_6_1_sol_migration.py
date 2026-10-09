@@ -77,11 +77,10 @@ def test_review_prompt_identity_changes_without_other_semantic_changes():
                 migration._reviewer_prompt(prompt + " altered boundary", reverse=reverse)
 
 
-def test_codex_preserves_supported_effort_and_rejects_minimal():
+def test_codex_preserves_supported_effort_and_clamps_minimal():
     model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
     assert model.api == "openai-codex-responses"
     for effort in ("low", "medium", "high", "xhigh"):
         assert _body(model, Context(messages=[]), SimpleStreamOptions(reasoning=effort))["reasoning"]["effort"] == effort
-    with pytest.raises(ValueError, match="does not support minimal"):
-        _body(model, Context(messages=[]), SimpleStreamOptions(reasoning="minimal"))
-
+    # The catalog thinking_level_map clamps minimal, which Codex does not offer.
+    assert _body(model, Context(messages=[]), SimpleStreamOptions(reasoning="minimal"))["reasoning"]["effort"] == "low"

@@ -82,6 +82,9 @@ class ModelCapabilities:
     supports_typed_judgment: bool = False
     max_state_question_tokens: int | None = None
     max_output_tokens: int = 8192
+    # pi-mono ThinkingLevelMap: requested level -> provider value, None = unsupported.
+    # Levels absent from the map pass through unchanged.
+    thinking_level_map: dict[str, str | None] | None = field(default=None, hash=False)
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,8 @@ class ModelEntry:
     context_window: int
     speed_tier: str  # "fast", "medium", "slow"
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+    # Provider-side model id when it differs from the id minus its provider prefix.
+    upstream_id: str | None = None
     release_date: str | None = None
     knowledge_cutoff: str | None = None
     family: str | None = None

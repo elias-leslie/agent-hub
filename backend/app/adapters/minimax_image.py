@@ -24,7 +24,6 @@ from typing import Any
 import httpx
 
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.constants.models import MINIMAX_IMAGE_01
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.provider_credentials import resolve_api_key
 
@@ -107,7 +106,7 @@ class MinimaxImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = MINIMAX_IMAGE_01,
+        model: str,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: bytes | None = None,

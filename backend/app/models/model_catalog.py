@@ -55,6 +55,8 @@ class ModelCatalogEntry(Base):
     supports_typed_judgment: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     max_state_question_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    thinking_level_map: Mapped[dict[str, str | None] | None] = mapped_column(JSONB, nullable=True)
+    upstream_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     release_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
     knowledge_cutoff: Mapped[str | None] = mapped_column(String(40), nullable=True)

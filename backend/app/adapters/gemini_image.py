@@ -2,8 +2,8 @@
 
 Uses API key auth against generativelanguage.googleapis.com.
 
-On rate-limit, automatically falls back through the model chain:
-  gemini-3-pro-image-preview → gemini-3.1-flash-image-preview → gemini-2.5-flash-image
+Model fallback is the caller's job: ``api/image.py`` walks the image agent's
+catalog chain.
 """
 
 import logging
@@ -13,15 +13,10 @@ from google import genai
 from google.genai import types
 
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.provider_credentials import resolve_api_key
 
 logger = logging.getLogger(__name__)
-
-# Ordered best → fastest.  On rate-limit we walk down the chain.
-_MODEL_FALLBACK_CHAIN = [GEMINI_IMAGE, GEMINI_IMAGE_NANO2, GEMINI_IMAGE_NANO]
-
 
 def _build_prompt(prompt: str, style: str | None) -> str:
     """Return prompt optionally prefixed with a style directive."""
@@ -66,7 +61,7 @@ def _map_exception(exc: Exception) -> None:
 
 
 class GeminiImageAdapter(ImageAdapter):
-    """Gemini image generation via API key + model fallback on rate-limit."""
+    """Gemini image generation via API key."""
 
     def __init__(self, api_key: str | None = None) -> None:
         resolved_key = resolve_api_key("gemini", api_key)
@@ -91,48 +86,24 @@ class GeminiImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = GEMINI_IMAGE,
+        model: str,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: bytes | None = None,
         reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
-        """Generate an image, falling back through models on rate-limit."""
+        """Generate an image with exactly ``model``."""
         self._refresh_credentials()
-        full_prompt = _build_prompt(prompt, style)
-
-        # Build fallback chain starting with the requested model
-        models = [model] + [m for m in _MODEL_FALLBACK_CHAIN if m != model]
-        last_exc: Exception | None = None
-
-        for try_model in models:
-            try:
-                result = await self._generate_via_sdk(
-                    full_prompt, try_model, size, style, reference_image, reference_mime_type,
-                )
-                if try_model != model:
-                    logger.info("Image gen fell back %s → %s", model, try_model)
-                return result
-            except RateLimitError as exc:
-                logger.warning("Rate-limited on %s, trying next model", try_model)
-                last_exc = exc
-                continue
-            except (ProviderError, AuthenticationError):
-                raise
-            except Exception as exc:
-                # _map_exception re-raises; catch rate-limits so fallback continues
-                try:
-                    _map_exception(exc)
-                except RateLimitError as mapped:
-                    logger.warning("Rate-limited on %s, trying next model", try_model)
-                    last_exc = mapped
-                    continue
-                except Exception:
-                    raise
-
-        # All models exhausted
-        raise last_exc  # type: ignore[misc]
+        try:
+            return await self._generate_via_sdk(
+                _build_prompt(prompt, style), model, size, style, reference_image, reference_mime_type,
+            )
+        except (ProviderError, AuthenticationError, RateLimitError):
+            raise
+        except Exception as exc:
+            _map_exception(exc)
+            raise
 
     async def _generate_via_sdk(
         self, prompt: str, model: str, size: str, style: str | None,

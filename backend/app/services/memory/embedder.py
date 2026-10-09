@@ -20,6 +20,7 @@ from typing import TypeVar
 
 from google import genai
 
+from app.constants.models import GEMINI_EMBEDDING
 from app.llm.api_key_pool import mark_key_failure, mark_key_success, ordered_keys
 from app.llm.env_api_keys import get_env_api_keys
 from app.services.llm_errors import AuthenticationError
@@ -27,7 +28,7 @@ from app.services.llm_errors import AuthenticationError
 logger = logging.getLogger(__name__)
 
 # Embedding configuration
-EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_MODEL = GEMINI_EMBEDDING
 EMBEDDING_DIM = 768
 EMBEDDING_PROVIDER = "gemini"
 _EMBED_CACHE_MAX = 256

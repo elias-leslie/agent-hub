@@ -84,6 +84,7 @@ class ModelCapabilitiesInfo(BaseModel):
     supports_typed_judgment: bool = False
     max_state_question_tokens: int | None = None
     max_output_tokens: int = 8192
+    thinking_level_map: dict[str, str | None] | None = None
 
 
 class ModelEnrichmentInfo(BaseModel):
@@ -109,6 +110,7 @@ class ModelInfo(BaseModel):
     alias: str = Field(..., description="Short alias for @mention")
     hint: str = Field(..., description="Brief UI hint")
     provider: str = Field(..., description="Provider name")
+    upstream_id: str | None = Field(default=None, description="Provider-side model id when it differs")
     routable: bool = Field(..., description="Whether Agent Hub may execute workloads through this model")
     scores: ModelScoresInfo
     cost: ModelCostInfo

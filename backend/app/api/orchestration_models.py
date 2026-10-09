@@ -158,7 +158,7 @@ class CodeReviewRequest(BaseModel):
 
     task: str = Field(..., description="Code generation task")
     maker_provider: ValidWorkloadProvider = Field(
-        default="kimi-code", description="Provider for code generation"
+        default="codex", description="Provider for code generation"
     )
     checker_provider: ValidWorkloadProvider = Field(
         default="gemini", description="Provider for code review"

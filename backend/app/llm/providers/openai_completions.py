@@ -572,11 +572,6 @@ def build_params(
     compat: _Compat,
     cache_retention: CacheRetention,
 ) -> dict[str, Any]:
-    if model.id == "gpt-6.1-sol" and model.provider == "openai":
-        if context.tools or _has_tool_history(context.messages):
-            raise ValueError("GPT-6.1 Sol tool calling requires a Responses route")
-        if options and options.reasoning_effort == "minimal":
-            raise ValueError("GPT-6.1 Sol does not support minimal reasoning; use low or higher")
     messages = convert_messages(model, context, compat)
     cache_control = _get_compat_cache_control(compat, cache_retention)
 

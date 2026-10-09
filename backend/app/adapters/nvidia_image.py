@@ -3,9 +3,9 @@
 Uses the NVIDIA GenAI endpoint (ai.api.nvidia.com/v1/genai/) which is separate
 from the OpenAI-compatible chat endpoint used by NvidiaAdapter.
 
-Supported models and their NVIDIA vendor-namespaced IDs:
-  nvidia/flux.1-dev          → black-forest-labs/flux.1-dev
-  nvidia/flux.1-kontext-dev  → black-forest-labs/flux.1-kontext-dev (needs a reference image)
+Vendor-namespaced paths (e.g. black-forest-labs/flux.1-dev) come from the
+catalog ``upstream_id``. Kontext models need a reference image. Model fallback
+is the caller's job: ``api/image.py`` walks the image agent's catalog chain.
 """
 
 from __future__ import annotations
@@ -17,10 +17,7 @@ from typing import Any
 import httpx
 
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.constants.models import (
-    NVIDIA_FLUX_1_DEV,
-    NVIDIA_FLUX_1_KONTEXT,
-)
+from app.llm.model_resolver import upstream_model_id
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 from app.services.provider_credentials import resolve_api_key
 
@@ -28,22 +25,12 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://ai.api.nvidia.com/v1/genai"
 
-# Maps our nvidia/<short> IDs to NVIDIA's vendor-namespaced path segments.
-_MODEL_PATH: dict[str, str] = {
-    "flux.1-dev": "black-forest-labs/flux.1-dev",
-    "flux.1-kontext-dev": "black-forest-labs/flux.1-kontext-dev",
-}
-
-# FLUX.1-schnell and SD 3.5 Large return 404 on NIM (verified 2026-10-09).
-# Kontext is separate (requires reference image) so not in the standard chain.
-_FALLBACK_CHAIN = [NVIDIA_FLUX_1_DEV]
-
-_KONTEXT_MODEL = NVIDIA_FLUX_1_KONTEXT
-
-
 def _model_path(model: str) -> str:
-    short = model.removeprefix("nvidia/")
-    return _MODEL_PATH.get(short, short)
+    return upstream_model_id(model, "nvidia")
+
+
+def _is_kontext(model: str) -> bool:
+    return "kontext" in _model_path(model)
 
 
 def _build_payload(
@@ -51,10 +38,8 @@ def _build_payload(
     reference_image_b64: str | None = None,
 ) -> dict[str, Any]:
     """Build the model-specific request payload."""
-    short = model.removeprefix("nvidia/")
-
     # Kontext model: purpose-built for image editing with reference
-    if short == "flux.1-kontext-dev":
+    if _is_kontext(model):
         if not reference_image_b64:
             raise ProviderError(
                 "FLUX.1-Kontext requires a reference_image",
@@ -70,10 +55,7 @@ def _build_payload(
             "seed": 0,
         }
 
-    if short == "flux.1-schnell":
-        return {"prompt": prompt, "seed": 0, "steps": 4}
-
-    # Standard models (flux.1-dev, sd3.5): use canny mode when reference provided
+    # Standard models (flux.1-dev): use canny mode when reference provided
     payload = {
         "prompt": prompt,
         "mode": "canny" if reference_image_b64 else "base",
@@ -131,48 +113,24 @@ class NvidiaImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = NVIDIA_FLUX_1_DEV,
+        model: str,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: bytes | None = None,
         reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
-        """Generate an image, falling back through models on rate-limit."""
+        """Generate an image with exactly ``model``."""
         full_prompt = f"{style} style: {prompt}" if style else prompt
         width, height = _parse_size(size)
-        api_key = self._api_key()
 
         # Kontext expects raw base64; img2img models expect a data URI.
         ref_b64: str | None = None
         if reference_image:
             encoded = base64.b64encode(reference_image).decode()
-            if model == _KONTEXT_MODEL:
-                ref_b64 = encoded
-            else:
-                ref_b64 = f"data:{reference_mime_type};base64,{encoded}"
+            ref_b64 = encoded if _is_kontext(model) else f"data:{reference_mime_type};base64,{encoded}"
 
-        # Kontext model doesn't participate in the standard fallback chain
-        if model == _KONTEXT_MODEL:
-            return await self._call_api(full_prompt, model, width, height, api_key, ref_b64)
-
-        models = [model] + [m for m in _FALLBACK_CHAIN if m != model]
-        last_exc: Exception | None = None
-
-        for try_model in models:
-            try:
-                result = await self._call_api(full_prompt, try_model, width, height, api_key, ref_b64)
-                if try_model != model:
-                    logger.info("NVIDIA image gen fell back %s → %s", model, try_model)
-                return result
-            except RateLimitError as exc:
-                logger.warning("NVIDIA rate-limited on %s, trying next model", try_model)
-                last_exc = exc
-                continue
-            except (AuthenticationError, ProviderError):
-                raise
-
-        raise last_exc  # type: ignore[misc]
+        return await self._call_api(full_prompt, model, width, height, self._api_key(), ref_b64)
 
     async def _call_api(
         self, prompt: str, model: str, width: int, height: int, api_key: str,

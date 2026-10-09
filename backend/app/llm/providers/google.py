@@ -17,7 +17,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from google import genai
 
@@ -115,7 +115,6 @@ def _is_gemini3_flash(model_id: str) -> bool:
 
 
 ClampedThinkingLevel = Literal["minimal", "low", "medium", "high"]
-_NO_MINIMAL_THINKING_PREFIXES = ("gemini-3.7-flash", "gemini-3.8-flash")
 
 
 def _disabled_thinking_config(model: Model[Any]) -> dict[str, Any]:
@@ -133,11 +132,11 @@ def _get_thinking_level(effort: ClampedThinkingLevel, model: Model[Any]) -> Goog
         return "LOW" if effort in ("minimal", "low") else "HIGH"
     if _is_gemma4(model.id):
         return "MINIMAL" if effort in ("minimal", "low") else "HIGH"
+    mapped = (model.thinking_level_map or {}).get(effort)
+    if mapped:
+        # Catalog-declared level, e.g. models without MINIMAL map it to "low".
+        return cast(GoogleThinkingLevel, mapped.upper())
     if effort == "minimal":
-        # 3.7 and 3.8 Flash reject MINIMAL (HTTP 400, verified 2026-10-09); LOW
-        # is their smallest supported level.
-        if model.id.startswith(_NO_MINIMAL_THINKING_PREFIXES):
-            return "LOW"
         return "MINIMAL"
     if effort == "low":
         return "LOW"
