@@ -24,3 +24,19 @@ class TestSettings:
         assert settings.agent_hub_db_pool_size == 5
         assert settings.agent_hub_db_max_overflow == 25
         assert settings.agent_hub_db_pool_size + settings.agent_hub_db_max_overflow == 30
+
+    def test_cors_origins_accepts_json_array(self, monkeypatch) -> None:
+        monkeypatch.setenv("AGENT_HUB_DB_URL", "postgresql://agent_hub:password@localhost:5432/agent_hub")
+        monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3001","https://agent.example.dev"]')
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == ["http://localhost:3001", "https://agent.example.dev"]
+
+    def test_cors_origins_accepts_comma_separated(self, monkeypatch) -> None:
+        monkeypatch.setenv("AGENT_HUB_DB_URL", "postgresql://agent_hub:password@localhost:5432/agent_hub")
+        monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3001, https://agent.example.dev")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == ["http://localhost:3001", "https://agent.example.dev"]

@@ -352,6 +352,11 @@ class TestSessionStreaming:
         assert history[0]["content"] == "Tell me something"
         assert history[1]["content"] == "Hello world"
 
+        import json
+
+        stream_request = httpx_mock.get_requests()[-1]
+        assert json.loads(stream_request.content)["session_id"] == "stream-session"
+
 
 class TestSessionPersistence:
     """Tests for session state persistence across instances."""

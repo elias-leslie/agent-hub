@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 from app.core.project_roots import resolve_summitflow_scripts_dir
 from app.utils.safe_subprocess import run_process
+
+# The guard is a fast policy check; a hang must not stall the tool call forever.
+_GUARD_TIMEOUT_S = 30
 
 
 @dataclass(frozen=True)
@@ -139,7 +143,10 @@ def get_command_guard_block_reason(
             text=True,
             check=False,
             env=env,
+            timeout=_GUARD_TIMEOUT_S,
         )
+    except subprocess.TimeoutExpired:
+        return f"Shared command guard timed out after {_GUARD_TIMEOUT_S}s"
     except OSError as exc:
         return f"Shared command guard failed: {exc}"
 

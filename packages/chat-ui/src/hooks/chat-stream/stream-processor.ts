@@ -1,5 +1,5 @@
 /**
- * SSE stream processing utilities with automatic reconnection.
+ * SSE stream processing utilities with connect-time retry.
  */
 
 import type { ChatMessage, StreamMessage, StreamStatus } from "../../types/chat";
@@ -7,9 +7,7 @@ import type { StreamState, CompletionRequest } from "./types";
 import { handleStreamEvent } from "./message-handlers";
 
 /**
- * Backoff policy for SSE reconnection — modeled after OpenClaw's proven pattern.
- * Retries indefinitely with exponential backoff + jitter, resetting the
- * attempt counter on each successful event.
+ * Backoff policy for connect-time retries: exponential backoff + jitter.
  */
 const INITIAL_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
@@ -22,8 +20,21 @@ function computeBackoffDelay(attempt: number): number {
   return Math.round(base + jitter);
 }
 
+/**
+ * Raised once the backend has accepted the request. The backend has no resume
+ * contract, so re-POSTing would start a second run (duplicate tool execution
+ * and persisted turns); these failures surface to the user instead.
+ */
+export class StreamInterruptedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StreamInterruptedError";
+  }
+}
+
 function isRetryableError(err: unknown): boolean {
   if (err instanceof Error && err.name === "AbortError") return false;
+  if (err instanceof StreamInterruptedError) return false;
   if (err instanceof TypeError) return true; // Network error (fetch failed)
   if (err instanceof Error) {
     const match = err.message.match(/^HTTP (\d+)/);
@@ -66,10 +77,27 @@ export async function processStream(
   }
 
   if (!response.body) {
-    throw new Error("No response body");
+    throw new StreamInterruptedError("No response body");
   }
 
-  const reader = response.body.getReader();
+  try {
+    await readStream(response.body, assistantId, streamState, setMessages, setCurrentSessionId);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    throw new StreamInterruptedError(
+      err instanceof Error ? err.message : "Stream connection lost",
+    );
+  }
+}
+
+async function readStream(
+  body: ReadableStream<Uint8Array>,
+  assistantId: string,
+  streamState: StreamState,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  setCurrentSessionId: React.Dispatch<React.SetStateAction<string | null>>,
+): Promise<void> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
@@ -88,21 +116,23 @@ export async function processStream(
       const dataStr = line.slice(6);
       if (dataStr === "[DONE]") break;
 
+      let data: StreamMessage;
       try {
-        const data = JSON.parse(dataStr) as StreamMessage;
-        // Dedup on reconnect: skip events already processed
-        if (data.seq != null && data.seq <= streamState.lastSeq) continue;
-        if (data.seq != null) streamState.lastSeq = data.seq;
-        handleStreamEvent(
-          data,
-          assistantId,
-          streamState,
-          setMessages,
-          setCurrentSessionId,
-        );
+        data = JSON.parse(dataStr) as StreamMessage;
       } catch (parseError) {
         console.warn("Failed to parse SSE data:", dataStr, parseError);
+        continue;
       }
+      if (data.seq != null && data.seq <= streamState.lastSeq) continue;
+      if (data.seq != null) streamState.lastSeq = data.seq;
+      // Backend "error" events throw here and must reach the caller.
+      handleStreamEvent(
+        data,
+        assistantId,
+        streamState,
+        setMessages,
+        setCurrentSessionId,
+      );
     }
   }
 
@@ -110,29 +140,26 @@ export async function processStream(
   if (buffer.trim() && buffer.startsWith("data: ")) {
     const dataStr = buffer.slice(6);
     if (dataStr !== "[DONE]") {
+      let data: StreamMessage | null = null;
       try {
-        const data = JSON.parse(dataStr) as StreamMessage;
-        if (data.seq == null || data.seq > streamState.lastSeq) {
-          if (data.seq != null) streamState.lastSeq = data.seq;
-          handleStreamEvent(data, assistantId, streamState, setMessages, setCurrentSessionId);
-        }
+        data = JSON.parse(dataStr) as StreamMessage;
       } catch {
         // Incomplete final event — nothing to do
+      }
+      if (data && (data.seq == null || data.seq > streamState.lastSeq)) {
+        if (data.seq != null) streamState.lastSeq = data.seq;
+        handleStreamEvent(data, assistantId, streamState, setMessages, setCurrentSessionId);
       }
     }
   }
 }
 
 /**
- * Wraps processStream with automatic reconnection on transient failures.
- *
- * Adopts OpenClaw's proven infinite-retry pattern:
- *   while (!aborted) → try stream → on error, backoff → retry
- *
- * User-initiated aborts and 4xx client errors are NOT retried.
- * Successful stream completion exits normally.
- * Network errors, 5xx, and 429 retry indefinitely with exponential backoff
- * capped at 30 seconds — long-running tool executions (10+ minutes) stay alive.
+ * Wraps processStream with retries for failures before the backend accepts
+ * the request (network errors, 5xx, 429), with exponential backoff capped at
+ * 30 seconds. User aborts, 4xx errors, and anything after the stream starts
+ * (StreamInterruptedError) are NOT retried, because a retry would re-run the
+ * whole completion.
  */
 export async function processStreamWithReconnect(
   targetAgent: string,

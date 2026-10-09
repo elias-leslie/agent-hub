@@ -169,8 +169,10 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
       }),
     );
 
-    setStatus("idle");
+    if (abortControllersRef.current === controllers) setStatus("idle");
   } catch (err: unknown) {
+    // A newer sendMessage (user interruption) owns status now; don't clobber it.
+    if (abortControllersRef.current !== controllers) return;
     if (err instanceof Error && err.name === "AbortError") {
       setStatus("idle");
     } else {

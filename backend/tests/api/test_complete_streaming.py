@@ -257,6 +257,37 @@ class TestStreamCompletionGenerator:
         assert done_chunk["finish_reason"] == "stop"
 
     @pytest.mark.asyncio
+    async def test_tool_loop_persists_and_emits_done_only_for_final_turn(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield TextDeltaEvent(content_index=0, delta="Checking. ", partial=_partial_message())
+            intermediate = _done_event(finish_reason="toolUse")
+            yield DoneEvent(reason="toolUse", message=intermediate.message)
+            yield TextDeltaEvent(content_index=0, delta="Answer", partial=_partial_message())
+            yield _done_event()
+
+        save, citations, close = _patch_persistence()
+        with (
+            save as save_mock, citations, close,
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+            patch("app.api.complete.streaming.build_direct_tool_runner", return_value=AsyncMock()),
+        ):
+            chunks = [
+                chunk
+                async for chunk in stream_completion(
+                    messages=[Message(role="user", content="Hi")],
+                    model=CLAUDE_SONNET,
+                    provider="claude",
+                    temperature=0.7,
+                    session_id="tool-loop-session",
+                    tools=[{"name": "read_file"}],
+                )
+            ]
+
+        done_chunks = [c for c in chunks if '"type": "done"' in c]
+        assert len(done_chunks) == 1
+        assert save_mock.await_count == 1
+
+    @pytest.mark.asyncio
     async def test_error_handling(self) -> None:
         async def mock_stream(*_args: object, **_kwargs: object):
             yield _error_event("API error occurred")

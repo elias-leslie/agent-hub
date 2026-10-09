@@ -134,21 +134,28 @@ export function useChatStream(
       return;
     }
 
+    // Ignore a slower load for a session the user already switched away from.
+    let cancelled = false;
     const load = async () => {
       try {
         setStatus("connecting");
         const loadedSession = await loadSession(sessionId, fetchFn, sessionsEndpoint);
+        if (cancelled) return;
         setCurrentSessionId(sessionId);
         setMessages(loadedSession.messages);
         setLoadedSessionProjectId(loadedSession.projectId);
         setStatus("idle");
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load session");
         setStatus("error");
       }
     };
 
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, loadInitialSession, sessionLoadEpoch]);
 
   // Wrap setCurrentSessionId to track stream-established sessions
@@ -163,7 +170,12 @@ export function useChatStream(
   );
 
   const sendMessage = useCallback(
-    async (content: string, targetAgents?: string[], sessionIdOverride?: string) => {
+    async (
+      content: string,
+      targetAgents?: string[],
+      sessionIdOverride?: string,
+      historyOverride?: ChatMessage[],
+    ) => {
       // If a stream is active, interrupt it first (steering / user interruption)
       if (status !== "idle" && status !== "error") {
         // Abort frontend connections
@@ -193,7 +205,7 @@ export function useChatStream(
         });
       }
 
-      let effectiveMessages = messages;
+      let effectiveMessages = historyOverride ?? messages;
       let effectiveProjectId = loadedSessionProjectId ?? projectId;
       let effectiveSessionId = sessionIdOverride ?? currentSessionId ?? sessionId;
       const requestedSessionId = sessionIdOverride ?? sessionId;
@@ -392,12 +404,12 @@ export function useChatStream(
       }
       if (userMessageIndex < 0) return;
 
+      // Drop the original user turn too: sendMessage re-adds it, and the
+      // regenerated answer must not see the reply it replaces as history.
       const userMessage = messages[userMessageIndex];
-      setMessages((prev) => prev.slice(0, messageIndex));
-
-      setTimeout(() => {
-        sendMessage(userMessage.content);
-      }, 100);
+      const history = messages.slice(0, userMessageIndex);
+      setMessages(history);
+      void sendMessage(userMessage.content, undefined, undefined, history);
     },
     [messages, status, sendMessage],
   );

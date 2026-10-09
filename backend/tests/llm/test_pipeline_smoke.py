@@ -438,3 +438,34 @@ async def test_sse_writer_emits_contract_events() -> None:
     # seq is monotonic.
     seqs = [c["seq"] for c in chunks]
     assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_raised_tool_error_reaches_model_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = _claude_model()
+    turn1 = AssistantMessage(
+        content=[ToolCall(id="toolu_err", name="echo", arguments={"text": "hi"})],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(), stop_reason="toolUse", timestamp=0,
+    )
+    turn2 = AssistantMessage(
+        content=[TextContent(text="recovered")],
+        api=model.api, provider=model.provider, model=model.id,
+        usage=Usage(), stop_reason="stop", timestamp=0,
+    )
+    monkeypatch.setattr(
+        tool_loop, "stream_simple", _fake_provider_factory(turn1_message=turn1, turn2_message=turn2)
+    )
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        raise RuntimeError("permission denied: /etc/shadow")
+
+    context = Context(messages=[UserMessage(content="read it", timestamp=0)])
+    [event async for event in tool_loop.run(model, context, run_tool, options=SimpleStreamOptions(), max_turns=4)]
+
+    result = context.messages[2]
+    assert isinstance(result, ToolResultMessage)
+    assert result.is_error
+    error_text = result.content[0]
+    assert isinstance(error_text, TextContent)
+    assert "permission denied: /etc/shadow" in error_text.text

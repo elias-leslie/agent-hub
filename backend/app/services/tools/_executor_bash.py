@@ -51,7 +51,8 @@ async def run_bash(
     if persona_block_reason:
         return f"Error: Command blocked for workflow policy: {persona_block_reason}"
 
-    guard_block_reason = get_command_guard_block_reason(
+    guard_block_reason = await asyncio.to_thread(
+        get_command_guard_block_reason,
         command,
         working_dir,
         session_id=session_id,

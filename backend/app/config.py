@@ -5,6 +5,7 @@ Uses pydantic-settings for validated configuration with environment variable sup
 
 from __future__ import annotations
 
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -141,8 +142,10 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
-        """Parse CORS_ORIGINS from comma-separated string or list."""
+        """Parse CORS_ORIGINS from a JSON array, comma-separated string, or list."""
         if isinstance(v, str):
+            if v.strip().startswith("["):
+                return [str(origin).strip() for origin in json.loads(v) if str(origin).strip()]
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 

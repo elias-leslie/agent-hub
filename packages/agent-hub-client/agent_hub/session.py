@@ -117,6 +117,7 @@ class Session:
             model=self.model,
             messages=[{"role": "user", "content": content}],
             temperature=temperature,
+            session_id=self.session_id,
             project_id=self.project_id,
         ):
             if chunk.type == "content":

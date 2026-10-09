@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -121,10 +122,15 @@ class CircuitBreakerManager:
                 "last_error_signature": state.last_error_signature,
                 "cooldown_until": state.cooldown_until,
             }
+            # Keep the key alive at least until an explicit cooldown ends so
+            # other processes keep honoring long trips (auth/quota windows).
+            ttl = REDIS_CIRCUIT_TTL
+            if state.cooldown_until is not None:
+                ttl = max(ttl, math.ceil(state.cooldown_until - time.time()) + 60)
             await client.set(
                 self._redis_key(provider),
                 json.dumps(state_dict),
-                ex=REDIS_CIRCUIT_TTL,
+                ex=ttl,
             )
         except Exception as e:
             logger.warning(f"Error saving circuit state to Redis: {e}")

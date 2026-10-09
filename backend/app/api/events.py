@@ -3,10 +3,12 @@
 import json
 import logging
 from typing import Literal
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.services.events import SessionEventType, get_event_publisher
 
 logger = logging.getLogger(__name__)
@@ -128,9 +130,34 @@ async def _dispatch(
     return subscription_id, False
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _origin_allowed(websocket: WebSocket) -> bool:
+    """Block cross-site browser pages from reading the event stream.
+
+    Browsers always send Origin on WebSocket upgrades and CORS does not apply,
+    so any visited site could otherwise subscribe via ws://localhost. Non-browser
+    clients send no Origin and stay allowed.
+    """
+    origin = websocket.headers.get("origin")
+    if not origin:
+        return True
+    if origin in settings.cors_origins:
+        return True
+    parts = urlsplit(origin)
+    if parts.hostname in _LOOPBACK_HOSTS:
+        return True
+    return parts.netloc == websocket.headers.get("host")
+
+
 @router.websocket("/events")
 async def events_websocket(websocket: WebSocket) -> None:
     """WebSocket endpoint; connect → subscribe → receive events → update/unsubscribe."""
+    if not _origin_allowed(websocket):
+        logger.warning("Rejected events WebSocket from origin %s", websocket.headers.get("origin"))
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     logger.info("Events WebSocket connection accepted")
     subscription_id: str | None = None

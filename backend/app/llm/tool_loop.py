@@ -35,6 +35,7 @@ from .types import (
     Context,
     Model,
     SimpleStreamOptions,
+    TextContent,
     ToolCall,
     ToolResultMessage,
     UserMessage,
@@ -184,7 +185,7 @@ async def run(
                 result = ToolResultMessage(
                     tool_call_id=tool_call.id,
                     tool_name=tool_call.name,
-                    content=[],
+                    content=[TextContent(text=f"Tool execution failed: {error_msg}")],
                     is_error=True,
                     timestamp=int(_time.time() * 1000),
                 )

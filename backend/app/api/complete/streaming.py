@@ -179,8 +179,13 @@ async def _emit_events(
     content_buf: list[str],
     attempt_output_started: list[bool] | None = None,
     retry_error_before_output: bool = False,
+    tool_loop_active: bool = False,
 ) -> AsyncIterator[str]:
-    """Translate the orchestrator event stream into SSE, accumulating final text."""
+    """Translate the orchestrator event stream into SSE, accumulating final text.
+
+    When the server-side tool loop is active, each intermediate turn ends with
+    a ``toolUse`` DoneEvent; only the loop's final turn persists and emits done.
+    """
     cancel_event = ctx.cancel_event
     async for event in events:
         if cancel_event is not None and cancel_event.is_set():
@@ -228,6 +233,8 @@ async def _emit_events(
             yield writer.tool_result(event.tool_call.id, event.error, "error")
             continue
         if isinstance(event, DoneEvent):
+            if tool_loop_active and event.reason == "toolUse":
+                continue
             yield await _persist_and_build_done_sse(
                 writer=writer,
                 ctx=ctx,
@@ -383,6 +390,7 @@ async def stream_completion(
                         content_buf,
                         attempt_output_started,
                         has_later_candidate,
+                        tool_loop_active=execute_tools,
                     )
                 ):
                     yield chunk
