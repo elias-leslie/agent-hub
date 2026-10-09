@@ -13,7 +13,7 @@ import {
   Save,
   Sparkles,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   createPrompt,
   fetchOptionalPrompt,
@@ -46,7 +46,10 @@ function usePlatformContext() {
 
   const mutation = useMutation({
     mutationFn: async (payload: { content?: string; enabled?: boolean }) => {
-      if (!data) {
+      if (data === undefined) {
+        throw new Error('Platform context has not loaded yet')
+      }
+      if (data === null) {
         return createPrompt({
           slug: PLATFORM_CONTEXT_PROMPT_SLUG,
           name: 'Platform Context',
@@ -70,13 +73,19 @@ function usePlatformContext() {
     },
   })
 
-  useEffect(() => {
-    if (editedContent === null) setEditedContent(data?.content ?? '')
-  }, [data, editedContent])
+  // `data` is undefined until the query settles and null when the prompt does
+  // not exist yet. Saving before it settles would overwrite the stored global
+  // context with whatever the editor holds, so edits only count once loaded.
+  const isLoaded = data !== undefined
+  const hasChanges =
+    isLoaded &&
+    editedContent !== null &&
+    editedContent !== (data?.content ?? '')
 
   const handleSave = useCallback(() => {
-    if (editedContent !== null) mutation.mutate({ content: editedContent })
-  }, [editedContent, mutation])
+    if (hasChanges && editedContent !== null)
+      mutation.mutate({ content: editedContent })
+  }, [hasChanges, editedContent, mutation])
 
   const handleToggleEnabled = useCallback(() => {
     mutation.mutate({ enabled: !(data?.enabled ?? true) })
@@ -88,8 +97,7 @@ function usePlatformContext() {
     error,
     editedContent,
     setEditedContent,
-    hasChanges:
-      editedContent !== null && editedContent !== (data?.content ?? ''),
+    hasChanges,
     showSuccess,
     mutation,
     handleSave,
@@ -120,14 +128,16 @@ function CollapsedHeader({
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800/70 transition-colors',
             isEnabled
-              ? 'bg-amber-900/30 text-amber-300'
+              ? 'bg-amber-500/10 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
               : 'bg-slate-900 text-slate-400',
           )}
         >
           <Globe2
             className={cn(
               'h-4 w-4',
-              isEnabled ? 'text-amber-400' : 'text-slate-400',
+              isEnabled
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-slate-400',
             )}
           />
         </div>
@@ -136,7 +146,9 @@ function CollapsedHeader({
             <span
               className={cn(
                 'text-xs font-semibold uppercase tracking-[0.18em]',
-                isEnabled ? 'text-amber-300' : 'text-slate-500',
+                isEnabled
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-slate-500',
               )}
             >
               Platform Context
@@ -201,7 +213,7 @@ function Toolbar({
           className={cn(
             'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
             isEnabled
-              ? 'bg-amber-900/30 text-amber-300 hover:bg-amber-900/50'
+              ? 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50'
               : 'bg-slate-800 text-slate-500 hover:bg-slate-700',
           )}
         >
@@ -223,7 +235,7 @@ function Toolbar({
           className={cn(
             'flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all',
             hasChanges
-              ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]'
+              ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]'
               : 'bg-slate-800 text-slate-400 cursor-not-allowed',
           )}
         >
@@ -260,7 +272,7 @@ function Editor({
         className={cn(
           'min-h-[170px] max-h-[calc(100vh-20rem)] w-full resize-y rounded-2xl border px-4 py-4 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 transition-colors',
           isEnabled
-            ? 'bg-slate-950/80 border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400'
+            ? 'bg-slate-950/80 border-amber-500/40 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400'
             : 'bg-slate-900/50 border-slate-800 focus:ring-slate-500/30 text-slate-500',
         )}
       />
@@ -317,7 +329,7 @@ export function PlatformContextPanel({
         className={cn(
           'overflow-hidden rounded-2xl border transition-all duration-200',
           isEnabled
-            ? 'border-amber-700/40 bg-[linear-gradient(135deg,rgba(120,53,15,0.26),rgba(15,23,42,0.8))]'
+            ? 'border-amber-700/40 bg-[linear-gradient(135deg,rgba(245,158,11,0.12),var(--color-slate-900))] dark:bg-[linear-gradient(135deg,rgba(120,53,15,0.26),rgba(15,23,42,0.8))]'
             : 'border-slate-800 bg-slate-900/60',
         )}
       >
