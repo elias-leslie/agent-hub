@@ -1,15 +1,13 @@
-import { Archive, Copy, MessageSquare, MoreVertical } from 'lucide-react'
+import { Archive, MessageSquare, MoreVertical } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { Agent } from '../lib/types'
 
 export function AgentActionsMenu({
   agent,
-  onClone,
   onArchive,
 }: {
   agent: Agent
-  onClone?: (agent: Agent) => void
   onArchive?: (agent: Agent) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -71,18 +69,6 @@ export function AgentActionsMenu({
             <MessageSquare className="h-3.5 w-3.5" />
             Chat
           </Link>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onClone?.(agent)
-              setOpen(false)
-            }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-700"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Clone
-          </button>
           <div className="my-1 border-t border-slate-700" />
           <button
             type="button"

@@ -14,7 +14,6 @@ export function AgentsTable({
   sortDirection,
   onSort,
   getMetrics,
-  onClone,
   onArchive,
   totalAgents,
   searchQuery,
@@ -27,7 +26,6 @@ export function AgentsTable({
   sortDirection: SortDirection
   onSort: (field: SortField) => void
   getMetrics: (slug: string) => AgentMetrics | null
-  onClone: (agent: Agent) => void
   onArchive: (agent: Agent) => void
   totalAgents: number
   searchQuery: string
@@ -72,9 +70,6 @@ export function AgentsTable({
               Include inactive agents
             </button>
           )}
-          <a href="/agents/new" className="button-primary px-3 py-2 text-xs">
-            New Agent
-          </a>
         </div>
       </div>
     )
@@ -93,7 +88,6 @@ export function AgentsTable({
             key={agent.id}
             agent={agent}
             metrics={getMetrics(agent.slug)}
-            onClone={onClone}
             onArchive={onArchive}
           />
         ))}

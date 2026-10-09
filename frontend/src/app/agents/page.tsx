@@ -6,13 +6,10 @@ import {
   Archive,
   Bot,
   CheckCircle2,
-  Plus,
   RefreshCw,
   Search,
   X,
 } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
 
 import { PlatformContextPanel } from '@/components/PlatformContextPanel'
@@ -30,7 +27,6 @@ import type {
 } from './lib/types'
 
 export default function AgentsPage() {
-  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [sortField, setSortField] = useState<SortField>('name')
@@ -75,14 +71,6 @@ export default function AgentsPage() {
   const getMetrics = useCallback(
     (slug: string): AgentMetrics | null => metricsData?.metrics?.[slug] ?? null,
     [metricsData],
-  )
-
-  const handleClone = useCallback(
-    (agent: Agent) => {
-      const params = new URLSearchParams({ clone: agent.slug })
-      router.push(`/agents/new?${params}`)
-    },
-    [router],
   )
 
   const handleArchive = useCallback((agent: Agent) => {
@@ -208,11 +196,6 @@ export default function AgentsPage() {
                 />
                 Refresh
               </button>
-
-              <Link href="/agents/new" className="button-primary">
-                <Plus className="h-4 w-4" />
-                New Agent
-              </Link>
             </div>
           </div>
         </div>
@@ -341,7 +324,6 @@ export default function AgentsPage() {
               sortDirection={sortDirection}
               onSort={handleSort}
               getMetrics={getMetrics}
-              onClone={handleClone}
               onArchive={handleArchive}
               totalAgents={totalCount}
               searchQuery={searchQuery}

@@ -8,12 +8,10 @@ import { MetricCell } from './MetricCell'
 export function AgentRow({
   agent,
   metrics,
-  onClone,
   onArchive,
 }: {
   agent: Agent
   metrics: AgentMetrics | null
-  onClone: (agent: Agent) => void
   onArchive: (agent: Agent) => void
 }) {
   const requests24h = metrics?.requests_24h ?? 0
@@ -100,7 +98,7 @@ export function AgentRow({
       </div>
 
       {/* Actions */}
-      <AgentActionsMenu agent={agent} onClone={onClone} onArchive={onArchive} />
+      <AgentActionsMenu agent={agent} onArchive={onArchive} />
     </div>
   )
 }

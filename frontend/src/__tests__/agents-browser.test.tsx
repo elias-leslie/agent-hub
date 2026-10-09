@@ -35,13 +35,7 @@ const baseAgent: Agent = {
 
 describe('agent browser UI', () => {
   it('uses the chat route from the row actions menu', () => {
-    render(
-      <AgentActionsMenu
-        agent={baseAgent}
-        onClone={vi.fn()}
-        onArchive={vi.fn()}
-      />,
-    )
+    render(<AgentActionsMenu agent={baseAgent} onArchive={vi.fn()} />)
 
     fireEvent.click(
       screen.getByRole('button', { name: /open actions for builder/i }),
@@ -61,7 +55,6 @@ describe('agent browser UI', () => {
         sortDirection="asc"
         onSort={vi.fn()}
         getMetrics={() => null}
-        onClone={vi.fn()}
         onArchive={vi.fn()}
         totalAgents={4}
         searchQuery="missing"
