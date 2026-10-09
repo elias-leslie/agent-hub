@@ -98,7 +98,7 @@ export function PersonaRunHud({
               void runtime.stopCurrentStream()
             }}
             disabled={!stopEnabled || runtime.stoppingSessionId !== null}
-            className="rounded-lg border border-rose-500/20 bg-rose-950/15 p-2 text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-950/25 disabled:opacity-60"
+            className="rounded-lg border border-rose-500/20 bg-rose-500/10 dark:bg-rose-950/15 p-2 text-rose-800 dark:text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-500/20 dark:hover:bg-rose-950/25 disabled:opacity-60"
             aria-label="Stop active work"
           >
             <Square className="h-4 w-4" />

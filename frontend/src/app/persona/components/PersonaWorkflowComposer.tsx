@@ -238,8 +238,11 @@ export function PersonaWorkflowComposer({
   }
 
   return (
-    <div data-testid="persona-workflow-composer" className="space-y-3">
-      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+    <div
+      data-testid="persona-workflow-composer"
+      className="@container space-y-3"
+    >
+      <div className="grid gap-2 @lg:grid-cols-[minmax(0,1fr)_auto]">
         <textarea
           value={task}
           onChange={(event) => {
@@ -250,7 +253,7 @@ export function PersonaWorkflowComposer({
           className="min-h-[100px] w-full rounded-lg border border-slate-800/55 bg-slate-950/45 px-3 py-2 text-[13px] text-slate-100 outline-none placeholder:text-slate-500"
           placeholder="Describe work. Name the success bar and risk."
         />
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-2 @lg:grid-cols-1">
           <select
             value={selectedProjectId}
             onChange={(event) => onProjectChange(event.target.value)}
@@ -279,7 +282,7 @@ export function PersonaWorkflowComposer({
             type="button"
             onClick={() => void runWorkflow()}
             disabled={running || !task.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-[13px] font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900/80 hover:text-slate-50 disabled:opacity-60"
+            className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg @lg:col-span-1 border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-[13px] font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900/80 hover:text-slate-50 disabled:opacity-60"
           >
             <PlayCircle className="h-4 w-4" />
             {running ? 'Running…' : 'Run workflow'}

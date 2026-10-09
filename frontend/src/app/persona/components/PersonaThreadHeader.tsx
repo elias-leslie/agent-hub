@@ -121,7 +121,9 @@ export function PersonaThreadHeader({
                     <span className="text-slate-700">/</span>
                     <span
                       className={
-                        contextPct >= 80 ? 'text-amber-200' : undefined
+                        contextPct >= 80
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : undefined
                       }
                     >
                       context {Math.round(contextPct)}%
@@ -176,7 +178,7 @@ export function PersonaThreadHeader({
                 className={cn(
                   'inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition',
                   mainThreadSelected
-                    ? 'border-amber-500/30 bg-amber-950/20 text-amber-200'
+                    ? 'border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200'
                     : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700 hover:bg-slate-900',
                 )}
               >
@@ -190,7 +192,7 @@ export function PersonaThreadHeader({
                   className={cn(
                     'inline-flex max-w-full shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition',
                     selectedSessionId === session.id
-                      ? 'border-amber-500/30 bg-amber-950/20 text-amber-200'
+                      ? 'border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200'
                       : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700 hover:bg-slate-900',
                   )}
                 >

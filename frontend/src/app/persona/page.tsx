@@ -1,6 +1,5 @@
 'use client'
 
-import { formatDistanceToNow } from 'date-fns'
 import {
   AlertCircle,
   HeartPulse,
@@ -21,6 +20,7 @@ import { prettifyDisplayText, shortenText } from './components/workspace-format'
 import { useHeartbeat } from './hooks/useHeartbeat'
 import { usePersona } from './hooks/usePersona'
 import { usePersonaRuntime } from './hooks/usePersonaRuntime'
+import { formatCheckInSummary } from './utils/checkInStatus'
 import { getPersonaDisplayName } from './utils/displayName'
 
 type RuntimeLabel =
@@ -94,11 +94,9 @@ function buildLiveSummaryDescriptor(args: {
   if (args.personaPaused) {
     return { text: `${args.personaName} is paused`, source: 'session' }
   }
-  if (args.heartbeatStatus?.last_run) {
-    return {
-      text: `Last check-in ${formatDistanceToNow(new Date(args.heartbeatStatus.last_run), { addSuffix: true })}`,
-      source: 'advisory',
-    }
+  const checkInSummary = formatCheckInSummary(args.heartbeatStatus)
+  if (checkInSummary) {
+    return { text: checkInSummary, source: 'advisory' }
   }
   return { text: '', source: 'session' }
 }
@@ -149,9 +147,8 @@ function PersonaContent() {
   const toast = useToastActions()
 
   const isHeartbeatRunning = heartbeatStatus?.running || isTriggering
-  const heartbeatTooltip = heartbeatStatus?.last_run
-    ? `Last check-in ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
-    : 'No check-ins yet'
+  const heartbeatTooltip =
+    formatCheckInSummary(heartbeatStatus) ?? 'No check-ins yet'
   const executionState = persona?.execution_state ?? 'active'
   const personaName = getPersonaDisplayName(persona?.name)
   const personaPaused = executionState === 'paused'
@@ -236,11 +233,11 @@ function PersonaContent() {
                 className={cn(
                   'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]',
                   isActive
-                    ? 'bg-emerald-500/12 text-emerald-300'
+                    ? 'bg-emerald-500/12 text-emerald-800 dark:text-emerald-300'
                     : personaPaused
-                      ? 'bg-amber-500/12 text-amber-300'
+                      ? 'bg-amber-500/12 text-amber-800 dark:text-amber-300'
                       : runtimeLabel === 'Blocked'
-                        ? 'bg-rose-500/12 text-rose-300'
+                        ? 'bg-rose-500/12 text-rose-800 dark:text-rose-300'
                         : 'bg-slate-900 text-slate-500',
                 )}
               >
@@ -251,7 +248,9 @@ function PersonaContent() {
                 <span className="text-xs text-slate-500">saving…</span>
               ) : null}
               {autosave.status === 'error' ? (
-                <span className="text-xs text-rose-300">save failed</span>
+                <span className="text-xs text-rose-800 dark:text-rose-300">
+                  save failed
+                </span>
               ) : null}
             </div>
             {liveSummary.text ? (
@@ -277,7 +276,8 @@ function PersonaContent() {
               <HeartPulse
                 className={cn(
                   'h-3.5 w-3.5',
-                  isHeartbeatRunning && 'animate-pulse text-amber-300',
+                  isHeartbeatRunning &&
+                    'animate-pulse text-amber-800 dark:text-amber-300',
                 )}
               />
               {isHeartbeatRunning ? 'Check running' : 'Check now'}
@@ -288,7 +288,7 @@ function PersonaContent() {
               disabled={
                 activeWorkCount === 0 || runtime.stoppingSessionId !== null
               }
-              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3 py-2 text-xs font-medium text-rose-200 transition-all hover:border-rose-500/40 hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 dark:bg-rose-950/15 px-3 py-2 text-xs font-medium text-rose-800 dark:text-rose-200 transition-all hover:border-rose-500/40 hover:bg-rose-500/20 dark:hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Square className="h-3.5 w-3.5" />
               {runtime.stoppingSessionId ? 'Stopping…' : 'Stop'}
@@ -299,7 +299,7 @@ function PersonaContent() {
               className={cn(
                 'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
                 personaPaused
-                  ? 'border-emerald-500/20 bg-emerald-950/15 text-emerald-200 hover:border-emerald-400/30 hover:bg-emerald-950/25'
+                  ? 'border-emerald-500/20 bg-emerald-500/10 dark:bg-emerald-950/15 text-emerald-800 dark:text-emerald-200 hover:border-emerald-400/30 hover:bg-emerald-500/20 dark:hover:bg-emerald-950/25'
                   : 'border-slate-800 bg-slate-950/80 text-slate-200 hover:border-slate-700 hover:bg-slate-900',
               )}
             >
