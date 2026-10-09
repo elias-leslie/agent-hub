@@ -35,6 +35,17 @@ def test_native_event_response_exposes_source_and_usage() -> None:
     assert response.usage == event.usage
 
 
+
+def test_stored_unknown_subagent_model_is_returned_as_no_model() -> None:
+    timestamp = datetime(2026, 10, 9, 15, 0, tzinfo=UTC)
+    event = SessionEvent(
+        id="0b7c1f2e-2d7a-4b2a-9d3e-1f4a5b6c7d8e", session_id="session-1", turn=1, sequence=1,
+        event_type="tool_use", tool_name="Bash", model_used="unknown", agent_id="sub-1", created_at=timestamp,
+    )
+
+    assert build_event_responses([event])[0].model_used is None
+
+
 class TestResolveAgentDisplayNames:
     @pytest.mark.asyncio
     async def test_prefers_persona_display_name_from_persona_row(self) -> None:

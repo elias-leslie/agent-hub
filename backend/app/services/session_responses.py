@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent
+from app.services.event_storage import known_model
 from app.services.session_live_activity import is_session_actionably_active
 
 if TYPE_CHECKING:
@@ -164,7 +165,7 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
             tool_output=e.tool_output,
             tokens=e.tokens,
             duration_ms=e.duration_ms,
-            model_used=e.model_used,
+            model_used=known_model(e.model_used),
             agent_id=e.agent_id,
             agent_name=e.agent_name,
             transport=e.transport,
