@@ -1,7 +1,6 @@
 """Canonical native receipts and shadow reconciliation under the session ingest lock."""
 
 import asyncio
-import hashlib
 import json
 import shlex
 from datetime import UTC, datetime
@@ -24,7 +23,12 @@ from app.models import (
 from app.services.event_storage import lock_session_event_ingestion
 
 from .adapters._event_builders import _native_shell_command
-from .app_server_observations import SUPPORTED_VERSIONS, interpret_wire, protocol_contract
+from .app_server_observations import (
+    SUPPORTED_VERSIONS,
+    interpret_wire,
+    json_digest,
+    protocol_contract,
+)
 from .native_models import (
     NativeObservation,
     NativeObservationBatch,
@@ -37,10 +41,6 @@ from .native_models import (
     NativeSourceRegistration,
 )
 from .service import SessionIngestionConflict
-
-
-def _digest(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
 
 
 async def register_native_source(
@@ -73,7 +73,7 @@ async def register_native_source(
     identity = [session.id, request.namespace, request.source_kind, request.producer_id, request.epoch]
     if request.generation:
         identity.append(request.generation)
-    source_id = _digest(identity)
+    source_id = json_digest(identity)
     if request.generation:
         previous = await db.get(NativeObservationSource, request.predecessor_source_id) if request.predecessor_source_id else None
         if previous is None or previous.session_id != session.id or any(previous.registration.get(key) != registration.get(key) for key in ("namespace", "source_kind", "producer_id", "epoch")) or previous.registration.get("generation", 0) + 1 != request.generation:
@@ -150,7 +150,7 @@ def _command(observation: NativeObservation) -> tuple[str, dict[str, Any]] | Non
 
 async def _issue(db: AsyncSession, source_id: str, observation: NativeObservation, code: str) -> None:
     payload = observation.model_dump(mode="json")
-    key = _digest([source_id, observation.position, code, payload])
+    key = json_digest([source_id, observation.position, code, payload])
     if await db.get(NativeObservationIssue, key) is None:
         db.add(NativeObservationIssue(id=key, source_id=source_id, position=observation.position, code=code, observation=payload))
         await db.flush()
@@ -189,7 +189,7 @@ async def _retain(
     if observation.origin != "rollout_record" and source.registration["source_kind"] != "app_server":
         raise SessionIngestionConflict("native_observation_origin_mismatch", "The observation does not match its registered source kind.")
     payload = observation.model_dump(mode="json")
-    payload_hash = _digest(payload)
+    payload_hash = json_digest(payload)
     existing = await db.get(NativeObservationReceipt, (source.id, observation.position))
     if existing is not None:
         if existing.payload_hash != payload_hash:
@@ -259,7 +259,7 @@ async def _retain(
         disposition, code = "unsupported", "unsupported_command_shape"
     else:
         status, command = parsed
-        entity_id = _digest(["codex", source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id])
+        entity_id = json_digest(["codex", source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id])
         entity = await db.get(NativeCommandEntity, entity_id)
         output_hashes = _terminal_output_hashes(observation) if status in {"completed", "failed", "declined"} and source.registration["source_kind"] == "app_server" else {}
         previous_output_hashes = (entity.command.get("_terminal_output_hashes", {}).get(source.id, {}) if entity else {})
@@ -411,7 +411,7 @@ async def exclude_projected_rollout_commands(db: AsyncSession, session: Session,
                 await _retain(db, source, observation)
             excluded.add(observation.item_id)
             continue
-        entity_id = _digest(["codex", source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id])
+        entity_id = json_digest(["codex", source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id])
         entity = await db.get(NativeCommandEntity, entity_id)
         if entity is not None and entity.projection_event_ids:
             observation = observation.model_copy(update={"position": observation.position - source.registration.get("_command_position_base", 0)})
@@ -448,7 +448,7 @@ async def register_native_quarantine(db: AsyncSession, request: NativeQuarantine
 
     await _validate_project_id(request.project_id)
     registration = request.model_dump(mode="json")
-    source_id = _digest(["quarantine", request.project_id, request.namespace, request.producer_id, request.epoch, request.generation])
+    source_id = json_digest(["quarantine", request.project_id, request.namespace, request.producer_id, request.epoch, request.generation])
     await lock_session_event_ingestion(db, source_id)
     source = await db.get(NativeObservationSource, source_id)
     if source is not None and source.registration != registration:
@@ -468,7 +468,7 @@ async def ingest_native_quarantine(db: AsyncSession, source: NativeObservationSo
     dispositions = []
     for observation in request.observations:
         payload = observation.model_dump(mode="json")
-        digest = _digest(payload)
+        digest = json_digest(payload)
         prior = await db.get(NativeObservationReceipt, (source.id, observation.position))
         disposition, code = "quarantined", "unbound_native_subject"
         if prior:
@@ -477,7 +477,7 @@ async def ingest_native_quarantine(db: AsyncSession, source: NativeObservationSo
         else:
             db.add(NativeObservationReceipt(source_id=source.id, position=observation.position, payload_hash=digest, observation=payload, disposition=disposition, issue_code=code))
         if disposition != "replayed":
-            issue_id = _digest([source.id, observation.position, code, payload])
+            issue_id = json_digest([source.id, observation.position, code, payload])
             if await db.get(NativeObservationIssue, issue_id) is None:
                 db.add(NativeObservationIssue(id=issue_id, source_id=source.id, position=observation.position, code=code, observation=payload))
         await db.flush()
@@ -513,7 +513,7 @@ async def prepare_rollout_source_generation(db: AsyncSession, session: Session, 
     parser_generation = registration.get("_parser_generation", 0) + 1
     registration_source_id = registration.get("_registration_source_id", previous.id)
     registration.update({"_parser_generation": parser_generation, "_registration_source_id": registration_source_id, "_parser_predecessor_source_id": previous.id, "_command_position_base": 0, "_rotation_reason": "local_parser_generation_changed"})
-    source_id = _digest(["rollout-parser", registration_source_id, parser_generation])
+    source_id = json_digest(["rollout-parser", registration_source_id, parser_generation])
     db.add(NativeObservationSource(id=source_id, session_id=session.id, project_id=session.project_id, registration=registration, authenticity="local_verified", committed_position=0))
     await db.flush()
 
@@ -593,7 +593,7 @@ async def qualify_native_protocol_profile(db: AsyncSession, request: NativeProto
     if not candidates or receipt.get("version") != request.provider_version or receipt.get("schema_fingerprint") != request.schema_fingerprint or receipt.get("external_network") != "absent" or receipt.get("provider") != "scripted_loopback_fixture" or not isinstance(receipt.get("provider_requests"), int) or isinstance(receipt.get("provider_requests"), bool) or receipt["provider_requests"] < 1 or not isinstance(cases, dict) or any(cases.get(key) is not True for key in REQUIRED_CANARY_CASES):
         raise SessionIngestionConflict("native_protocol_qualification_failed", "Qualification requires an identical tested schema and the exact complete isolated canary receipt.")
     await lock_session_event_ingestion(db, "native-protocol:" + request.provider_version)
-    digest = _digest(receipt)
+    digest = json_digest(receipt)
     profile = await db.get(NativeProtocolProfile, request.provider_version)
     if profile is not None:
         if profile.schema_fingerprint != request.schema_fingerprint:
@@ -612,4 +612,4 @@ async def list_native_protocol_profiles(db: AsyncSession) -> dict[str, Any]:
 
 def _terminal_output_hashes(observation: NativeObservation) -> dict[str, str]:
     item = observation.payload.get("item", {})
-    return {key: _digest(value) for key, value in item.items() if key in {"stdout", "stderr", "aggregatedOutput"} and isinstance(value, str)}
+    return {key: json_digest(value) for key, value in item.items() if key in {"stdout", "stderr", "aggregatedOutput"} and isinstance(value, str)}

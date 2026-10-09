@@ -36,22 +36,19 @@ from app.llm.types import (
     AssistantMessage,
     DoneEvent,
     ErrorEvent,
-    ImageContent,
     StopReason,
-    TextContent,
     TextDeltaEvent,
     ThinkingDeltaEvent,
     ToolCallEndEvent,
-    ToolResultMessage,
 )
 from app.routing.availability import route_unavailable_reason
 from app.routing.registry import get_provider_for_model
 from app.services.llm_errors import ProviderError
-from app.services.llm_messages import Message
+from app.services.llm_messages import Message, messages_to_dicts
 
 from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
 from .schemas import MessageInput
-from .sse_writer import SseWriter
+from .sse_writer import SseWriter, tool_result_text
 from .streaming_context import StreamContext
 from .tool_provisioner import build_direct_tool_runner
 
@@ -73,19 +70,6 @@ class _EarlyStreamProviderError(RuntimeError):
 _StreamContext = StreamContext
 
 
-def _messages_to_dicts(messages: list[Message]) -> list[dict[str, object]]:
-    """Translate adapter ``Message`` rows to ``{role, content}`` dicts."""
-    return [{"role": m.role, "content": m.content} for m in messages]
-
-
-def _tool_result_text(result: ToolResultMessage) -> str:
-    parts: list[str] = []
-    for block in result.content:
-        if isinstance(block, TextContent):
-            parts.append(block.text)
-        elif isinstance(block, ImageContent):
-            parts.append(f"(image: {block.mime_type})")
-    return "\n".join(parts)
 
 
 def _finish_reason(stop_reason: StopReason) -> str:
@@ -229,7 +213,7 @@ async def _emit_events(
                 attempt_output_started[0] = True
             yield writer.tool_result(
                 event.tool_call.id,
-                _tool_result_text(event.result),
+                tool_result_text(event.result),
                 "complete",
             )
             continue
@@ -365,7 +349,7 @@ async def stream_completion(
 
     yield writer.connected(model=model, provider=provider)
     try:
-        context = build_context_from_messages(_messages_to_dicts(messages), tools=tools)
+        context = build_context_from_messages(messages_to_dicts(messages), tools=tools)
         execute_tools = bool(tools)
         run_tool = (
             build_direct_tool_runner(

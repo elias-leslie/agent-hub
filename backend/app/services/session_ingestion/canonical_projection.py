@@ -5,8 +5,6 @@ legacy positions. Receipt, identity, relocation and cursor changes share one loc
 """
 
 import asyncio
-import hashlib
-import json
 from typing import Any
 
 from sqlalchemy import select
@@ -21,16 +19,13 @@ from app.models import (
 )
 from app.services.event_storage import lock_session_event_ingestion, store_event
 
-from .app_server_observations import SUPPORTED_VERSIONS, protocol_contract
+from .app_server_observations import SUPPORTED_VERSIONS, json_digest, protocol_contract
 from .native_models import NativeObservation
 from .service import SessionIngestionConflict
 
 ACCEPTANCE_CHECKS = ("identity_aliases", "canonical_ordering", "lifecycle_usage", "protocol_conformance", "storage_recovery")
 RESERVED_SEQUENCE = 1_000_000_000
 
-
-def _digest(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 async def projection_status(db: AsyncSession, session: Session) -> dict[str, Any]:
@@ -136,7 +131,7 @@ async def project_live_observation(db: AsyncSession, session: Session, source: N
     method = observation.source_reference.get("wire_method")
     if observation.kind == "lifecycle" and method not in {"turn/started", "turn/completed", "thread/status/changed"}:
         return []
-    key = _digest([source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id, observation.kind, method, observation.payload.get("status"), observation.payload.get("turn", {}).get("status"), observation.source_reference.get("request_id", observation.payload.get("request_id", observation.payload.get("requestId"))), observation.source_reference.get("approval_request_position"), observation.source_reference.get("connection_id")])
+    key = json_digest([source.registration["namespace"], observation.thread_id, observation.turn_id, observation.item_id, observation.kind, method, observation.payload.get("status"), observation.payload.get("turn", {}).get("status"), observation.source_reference.get("request_id", observation.payload.get("request_id", observation.payload.get("requestId"))), observation.source_reference.get("approval_request_position"), observation.source_reference.get("connection_id")])
     event_source = "native-audit:" + key
     existing = (await db.execute(select(SessionEvent.id).where(SessionEvent.session_id == session.id, SessionEvent.source_event_id == event_source))).scalar_one_or_none()
     if existing:

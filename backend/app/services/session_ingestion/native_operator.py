@@ -1,7 +1,6 @@
 """Local owner verification, projection control and explicit raw retention."""
 
 import asyncio
-import hashlib
 import json
 import os
 from datetime import UTC, datetime
@@ -23,6 +22,7 @@ from app.models import (
 from app.services.event_storage import lock_session_event_ingestion
 from app.utils.safe_subprocess import run_process
 
+from .app_server_observations import json_digest
 from .canonical_projection import (
     ACCEPTANCE_CHECKS,
     record_projection_acceptance,
@@ -32,9 +32,6 @@ from .native_observations import REQUIRED_CANARY_CASES, native_capture_status
 
 REGISTERED_HOST_PROJECT_ROOT = Path("/srv/workspaces/projects/agent-hub")
 
-
-def _digest(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _read_receipt(path: Path) -> dict[str, Any]:
@@ -133,8 +130,8 @@ async def verify_acceptance(db: AsyncSession, session: Session, canary: dict[str
     users = (await db.execute(select(NativeUserIdentity).where(NativeUserIdentity.session_id == session.id))).scalars().all()
     if not any(user.durable_item_id and len({alias["item_id"] for alias in user.aliases}) > 1 for user in users):
         raise ValueError("This session must retain attributable provisional user aliases")
-    evidence = {"checks": {key: True for key in ACCEPTANCE_CHECKS}, "source_ids": sorted(managed | rollout), "declined_audit_only_entity_ids": sorted(declined_audit_only), "provider_version": canary["version"], "schema_fingerprint": canary["schema_fingerprint"], "canary_sha256": _digest(canary), "identity_sha256": _digest(identity), "acceptance_id": canonical_gate["acceptance_id"], "source": canonical_gate["source"]}
-    evidence["evidence_sha256"] = _digest(evidence)
+    evidence = {"checks": {key: True for key in ACCEPTANCE_CHECKS}, "source_ids": sorted(managed | rollout), "declined_audit_only_entity_ids": sorted(declined_audit_only), "provider_version": canary["version"], "schema_fingerprint": canary["schema_fingerprint"], "canary_sha256": json_digest(canary), "identity_sha256": json_digest(identity), "acceptance_id": canonical_gate["acceptance_id"], "source": canonical_gate["source"]}
+    evidence["evidence_sha256"] = json_digest(evidence)
     await record_projection_acceptance(db, session, evidence)
     return {"session_id": session.id, "acceptance_recorded": True, "evidence_sha256": evidence["evidence_sha256"], "promotion_state": "shadow"}
 

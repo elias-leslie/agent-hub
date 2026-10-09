@@ -16,6 +16,7 @@ from app.services.memory import (
     parse_memory_group_id,
     track_loaded_batch,
 )
+from app.services.memory.context_builder import count_memory_facts
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 from app.services.memory.context_resilience import (
     CanonicalContextInjectionFailed,
@@ -28,10 +29,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-def _memory_block_len(progressive_context: Any, field_name: str) -> int:
-    """Return the size of a progressive-context block, tolerating legacy test doubles."""
-    return len(getattr(progressive_context, field_name, []))
 
 
 async def inject_memory_context(
@@ -81,12 +78,7 @@ async def inject_memory_context(
             db=db,
         )
         require_successful_context_injection(progressive_context)
-        memory_facts_injected = (
-            _memory_block_len(progressive_context, "mandates")
-            + _memory_block_len(progressive_context, "guardrails")
-            + _memory_block_len(progressive_context, "reference_index")
-            + _memory_block_len(progressive_context, "reference")
-        )
+        memory_facts_injected = count_memory_facts(progressive_context)
         loaded_memory_uuids = progressive_context.get_loaded_uuids()
 
         if memory_facts_injected > 0:

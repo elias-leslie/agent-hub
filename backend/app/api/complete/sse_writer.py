@@ -45,7 +45,7 @@ def _format_sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
 
 
-def _tool_result_text(result: ToolResultMessage) -> str:
+def tool_result_text(result: ToolResultMessage) -> str:
     """Flatten a :class:`ToolResultMessage` to a string for the wire.
 
     Pi-mono allows mixed text/image content in tool results; the wire
@@ -240,7 +240,7 @@ async def write_events(
         if isinstance(event, ToolRunComplete):
             yield writer.tool_result(
                 event.tool_call.id,
-                _tool_result_text(event.result),
+                tool_result_text(event.result),
                 "complete",
             )
             continue
@@ -274,4 +274,4 @@ async def write_events(
         # are partial-message markers without SSE counterparts.
 
 
-__all__ = ["SseWriter", "write_events"]
+__all__ = ["SseWriter", "tool_result_text", "write_events"]

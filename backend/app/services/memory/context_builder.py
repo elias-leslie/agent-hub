@@ -320,6 +320,17 @@ async def fetch_all_episodes(
     return _process_gathered_results(task_keys, results)
 
 
+def count_memory_facts(progressive_context: object) -> int:
+    """Sum facts across all progressive-context memory blocks.
+
+    Uses ``getattr`` so lightweight test doubles without every block still count.
+    """
+    return sum(
+        len(getattr(progressive_context, block, []))
+        for block in ("mandates", "guardrails", "reference_index", "reference")
+    )
+
+
 @dataclass
 class ProgressiveContext:
     """Result of progressive disclosure context retrieval."""

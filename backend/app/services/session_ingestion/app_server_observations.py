@@ -15,13 +15,18 @@ SUPPORTED_VERSIONS = ("codex-cli 0.159.2", SUPPORTED_VERSION)
 PROTOCOL_ROOT = Path(__file__).with_name("codex_protocol")
 
 
+def json_digest(value: Any) -> str:
+    """Return the canonical SHA-256 of compact, key-sorted ASCII JSON."""
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 @lru_cache
 def protocol_contract(provider_version: str = SUPPORTED_VERSION) -> tuple[str, dict[str, Draft7Validator]]:
     if provider_version not in SUPPORTED_VERSIONS:
         raise ValueError("Unsupported Codex protocol profile")
     root = PROTOCOL_ROOT / provider_version.removeprefix("codex-cli ")
     schemas = {name: json.loads((root / f"{name}.json").read_text()) for name in ("ServerNotification", "ServerRequest")}
-    fingerprint = hashlib.sha256(json.dumps(schemas, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    fingerprint = json_digest(schemas)
     return fingerprint, {name: Draft7Validator(schema) for name, schema in schemas.items()}
 
 

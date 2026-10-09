@@ -18,7 +18,7 @@ from app.api.complete.schemas import (
 from app.api.complete.tool_provisioner import provision_standard_tools
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing import complete_with_fallback
-from app.services.llm_messages import Message
+from app.services.llm_messages import Message, messages_to_dicts
 from app.services.memory.context_injector_ops import has_verified_canonical_context
 
 if TYPE_CHECKING:
@@ -161,10 +161,6 @@ async def execute_with_fallback(
     )
 
 
-def _messages_to_dicts(messages: list[Message]) -> list[dict[str, Any]]:
-    """Translate adapter ``Message`` rows to the wire ``{role, content}`` shape."""
-    return [{"role": m.role, "content": m.content} for m in messages]
-
 
 async def execute_without_db(
     messages_for_adapter: list[Message],
@@ -185,7 +181,7 @@ async def execute_without_db(
     """
     from app.api.complete.core import complete_internal
 
-    message_dicts = _messages_to_dicts(messages_for_adapter)
+    message_dicts = messages_to_dicts(messages_for_adapter)
     internal = await complete_internal(
         messages=message_dicts,
         model=resolved_model,

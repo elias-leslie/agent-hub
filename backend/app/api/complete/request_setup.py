@@ -20,6 +20,7 @@ from app.services.memory import (
     parse_memory_group_id,
     track_loaded_batch,
 )
+from app.services.memory.context_builder import count_memory_facts
 from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
     resolve_memory_consumer_profile,
@@ -58,10 +59,6 @@ def apply_read_only_metadata(session: DBSession | None, read_only: bool) -> None
     if not (getattr(session, "declared_scope_paths", None) or getattr(session, "observed_write_paths", None)):
         session.scope_confidence = "observed_read"
 
-
-def _memory_block_len(progressive_context: Any, field_name: str) -> int:
-    """Return the size of a progressive-context block, tolerating legacy test doubles."""
-    return len(getattr(progressive_context, field_name, []))
 
 
 async def setup_session(
@@ -158,15 +155,6 @@ def build_message_list(
     return all_messages, messages_dict
 
 
-def _count_memory_facts(progressive_context: Any) -> int:
-    """Sum facts across all memory block types."""
-    return (
-        _memory_block_len(progressive_context, "mandates")
-        + _memory_block_len(progressive_context, "guardrails")
-        + _memory_block_len(progressive_context, "reference_index")
-        + _memory_block_len(progressive_context, "reference")
-    )
-
 
 async def _record_memory_injection(
     db: AsyncSession | None,
@@ -234,7 +222,7 @@ async def inject_memory(
             db=db,
         )
         require_successful_context_injection(progressive_context)
-        memory_facts_injected = _count_memory_facts(progressive_context)
+        memory_facts_injected = count_memory_facts(progressive_context)
         loaded_memory_uuids = progressive_context.get_loaded_uuids()
         if memory_facts_injected > 0:
             agent_slug = resolved_agent.agent.slug if resolved_agent else None

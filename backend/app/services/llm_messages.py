@@ -50,6 +50,11 @@ class Message:
         )
 
 
+def messages_to_dicts(messages: list[Message]) -> list[dict[str, Any]]:
+    """Translate ``Message`` rows to the wire ``{role, content}`` shape."""
+    return [{"role": m.role, "content": m.content} for m in messages]
+
+
 def _merge_system_contents(
     contents: list[str | list[dict[str, Any]]],
 ) -> str | list[dict[str, Any]]:

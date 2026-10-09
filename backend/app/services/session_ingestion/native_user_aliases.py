@@ -1,7 +1,5 @@
 """Explicit provider user-message correlation, independent of command identity."""
 
-import hashlib
-import json
 from typing import Any
 
 from jsonschema import Draft7Validator
@@ -9,12 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import NativeObservationSource, NativeUserIdentity
 
-from .app_server_observations import SUPPORTED_VERSIONS, protocol_contract
+from .app_server_observations import SUPPORTED_VERSIONS, json_digest, protocol_contract
 from .native_models import NativeObservation
-
-
-def _digest(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 async def correlate_snapshot_users(db: AsyncSession, source: NativeObservationSource, observation: NativeObservation) -> tuple[list[dict[str, Any]], str | None]:
@@ -44,7 +38,7 @@ async def correlate_snapshot_users(db: AsyncSession, source: NativeObservationSo
             client_id = item.get("clientId")
             if not isinstance(client_id, str) or not 0 < len(client_id) <= 512 or not isinstance(item.get("id"), str) or not 0 < len(item["id"]) <= 512:
                 continue
-            key = _digest(["codex-user", source.registration["namespace"], observation.thread_id, turn["id"], client_id])
+            key = json_digest(["codex-user", source.registration["namespace"], observation.thread_id, turn["id"], client_id])
             identity = await db.get(NativeUserIdentity, key)
             if forked and (identity is None or not identity.live_verified):
                 continue
@@ -69,7 +63,7 @@ async def correlate_live_user(db: AsyncSession, source: NativeObservationSource,
     client_id = item.get("clientId")
     if observation.origin != "live" or not observation.turn_id or not observation.item_id or not isinstance(client_id, str) or not 0 < len(client_id) <= 512:
         return [], "missing_explicit_user_correlation"
-    key = _digest(["codex-user", source.registration["namespace"], observation.thread_id, observation.turn_id, client_id])
+    key = json_digest(["codex-user", source.registration["namespace"], observation.thread_id, observation.turn_id, client_id])
     identity = await db.get(NativeUserIdentity, key)
     if identity and identity.durable_item_id not in (None, observation.item_id):
         return [], "native_user_identity_conflict"

@@ -16,6 +16,7 @@ from app.services.completion.types import CompletionOptions, CompletionSource
 from app.services.events import publish_session_start
 from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
+from app.services.memory.context_builder import count_memory_facts
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 from app.services.memory.context_resilience import (
     CanonicalContextInjectionFailed,
@@ -25,10 +26,6 @@ from app.services.memory.context_resilience import (
 
 logger = logging.getLogger(__name__)
 
-
-def _memory_block_len(progressive_context: object, field_name: str) -> int:
-    """Return the size of a progressive-context block, tolerating legacy test doubles."""
-    return len(getattr(progressive_context, field_name, []))
 
 
 async def inject_memory_context(
@@ -65,12 +62,7 @@ async def inject_memory_context(
             db=db,
         )
         require_successful_context_injection(context)
-        count = (
-            _memory_block_len(context, "mandates")
-            + _memory_block_len(context, "guardrails")
-            + _memory_block_len(context, "reference_index")
-            + _memory_block_len(context, "reference")
-        )
+        count = count_memory_facts(context)
         if count > 0:
             prefix = "Streaming: " if is_stream else ""
             logger.info(f"{prefix}Injected {count} memories (scope={scope.value})")

@@ -20,6 +20,7 @@ from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.llm_messages import Message
 from app.services.memory import inject_progressive_context, parse_memory_group_id
+from app.services.memory.context_builder import count_memory_facts
 from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
     resolve_memory_consumer_profile,
@@ -42,10 +43,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-def _memory_block_len(progressive_context: object, field_name: str) -> int:
-    """Return the size of a progressive-context block, tolerating legacy test doubles."""
-    return len(getattr(progressive_context, field_name, []))
 
 
 async def _setup_streaming_session(
@@ -154,12 +151,7 @@ async def _inject_streaming_memory(
             db=db,
         )
         require_successful_context_injection(progressive_context)
-        memory_facts_count = (
-            _memory_block_len(progressive_context, "mandates")
-            + _memory_block_len(progressive_context, "guardrails")
-            + _memory_block_len(progressive_context, "reference_index")
-            + _memory_block_len(progressive_context, "reference")
-        )
+        memory_facts_count = count_memory_facts(progressive_context)
         if memory_facts_count > 0:
             logger.info(
                 f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})"

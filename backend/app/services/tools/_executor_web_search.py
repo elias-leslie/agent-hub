@@ -1,12 +1,13 @@
 """Search provider implementations for web search."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import httpx
 
 from app.config import settings
+
+from ._executor_web_focus import _normalize_whitespace
 
 DEFAULT_SEARCH_REGION = "wt-wt"
 DEFAULT_SEARXNG_TIMEOUT = 8.0
@@ -20,10 +21,6 @@ _SEARXNG_TIMELIMITS = {
     "m": "month",
     "y": "year",
 }
-
-
-def _normalize_whitespace(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
 
 
 def _normalize_search_result(index: int, raw: dict[str, Any]) -> dict[str, object] | None:

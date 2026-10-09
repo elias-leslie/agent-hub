@@ -15,7 +15,7 @@ import httpx
 from app.config import settings  # noqa: F401 — used by tests via _executor_web.settings
 
 from ._executor_web_artifacts import load_artifact, save_artifact
-from ._executor_web_focus import _select_focused_content
+from ._executor_web_focus import _normalize_whitespace, _select_focused_content
 from ._executor_web_html import (
     _browser_result_is_better,
     _build_fetch_payload,
@@ -109,11 +109,6 @@ def _decode_payload(payload: str, *, source: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError(f"{source} returned a non-object JSON payload")
     return parsed
-
-
-def _normalize_whitespace(value: str) -> str:
-    import re
-    return re.sub(r"\s+", " ", value).strip()
 
 
 def _truncate_text(text: str, max_chars: int) -> tuple[str, bool]:

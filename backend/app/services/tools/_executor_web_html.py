@@ -10,6 +10,8 @@ from typing import Any, cast
 
 from app.config import settings
 
+from ._executor_web_focus import _normalize_whitespace
+
 DEFAULT_FETCH_TIMEOUT = 20.0
 DEFAULT_BROWSER_RENDER_WAIT_MS = 2500
 DEFAULT_BROWSER_CDP_PORT = 9222
@@ -29,10 +31,6 @@ _SPA_SHELL_MARKERS = (
 _EMPTY_DYNAMIC_CONTAINER_RE = re.compile(
     r"<(div|main|section|article)[^>]+(?:id|class)=['\"][^'\"]+['\"][^>]*>\s*</(?:div|main|section|article)>"
 )
-
-
-def _normalize_whitespace(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
 
 
 @dataclass(slots=True)

@@ -9,7 +9,7 @@ from textwrap import shorten
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from app.services.llm_messages import Message
+from app.services.llm_messages import Message, messages_to_dicts
 from app.services.telemetry import get_current_trace_id, get_tracer
 
 from .subagent_models import SubagentConfig, SubagentResult
@@ -140,9 +140,6 @@ def build_messages(
     return messages
 
 
-def _messages_to_dicts(messages: list[Message]) -> list[dict[str, object]]:
-    return [{"role": m.role, "content": m.content} for m in messages]
-
 
 async def _call_pipeline(
     messages: list[Message],
@@ -157,7 +154,7 @@ async def _call_pipeline(
     if config.project_id:
         async with async_session() as db:
             return await complete_internal(
-                messages=_messages_to_dicts(messages),
+                messages=messages_to_dicts(messages),
                 model=model,
                 provider=provider,
                 temperature=config.temperature,
@@ -179,7 +176,7 @@ async def _call_pipeline(
 
     async with async_session() as db:
         injected_messages, context = await inject_progressive_context(
-            messages=_messages_to_dicts(messages),
+            messages=messages_to_dicts(messages),
             scope=MemoryScope.GLOBAL,
             scope_id=None,
             task_type="orchestration",
