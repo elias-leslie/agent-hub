@@ -2,24 +2,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
 
 from agent_hub._agents import AgentOperationsMixin
+from agent_hub._automations import AutomationOperationsMixin
 from agent_hub._base import BaseClientMixin
+from agent_hub._catalog import CatalogOperationsMixin
 from agent_hub._completion import build_completion_payload, handle_completion_response
 from agent_hub._image import generate_image_sync
 from agent_hub._memory import MemoryOperationsMixin
 from agent_hub._sessions import SessionOperationsMixin
+from agent_hub._streaming import stream_completion_sse_sync
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
 from agent_hub.constants import DEFAULT_IMAGE_AGENT
+from agent_hub.exceptions import ClientDisabledError
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
     MessageInput,
     NativeContinuation,
-    RoutingConfig,
+    StreamChunk,
     ToolDefinition,
     ToolResultMessage,
 )
@@ -28,8 +33,10 @@ from agent_hub.models import (
 class AgentHubClient(
     BaseClientMixin,
     AgentOperationsMixin,
+    CatalogOperationsMixin,
     SessionOperationsMixin,
     MemoryOperationsMixin,
+    AutomationOperationsMixin,
 ):
     """Synchronous client for Agent Hub API.
 
@@ -55,6 +62,7 @@ class AgentHubClient(
         client_id: str | None = None,
         request_source: str | None = None,
         cli_command: str | None = None,
+        source_client: str = "agent-hub-sdk",
     ) -> None:
         """Initialize the client.
 
@@ -72,6 +80,8 @@ class AgentHubClient(
                 When set, this replaces the default SDK method name (e.g., "sdk.complete")
                 in the X-Tool-Name header. Use this from CLI tools to track the actual
                 command (e.g., "st memory save" instead of "sdk.save_learning").
+            source_client: ``X-Source-Client`` value; Agent Hub classifies
+                values containing "cli" as CLI traffic and "sdk" as SDK traffic.
         """
         super().__init__(
             base_url=base_url,
@@ -82,6 +92,7 @@ class AgentHubClient(
             client_id=client_id,
             request_source=request_source,
             cli_command=cli_command,
+            source_client=source_client,
         )
         self._client: httpx.Client | None = None
 
@@ -117,13 +128,11 @@ class AgentHubClient(
         model: str | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
-        purpose: str | None = None,
         external_id: str | None = None,
         enable_caching: bool = True,
         use_memory: bool = False,
         memory_group_id: str | None = None,
         memory_variant_override: str | None = None,
-        routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -135,13 +144,16 @@ class AgentHubClient(
         timeout_seconds: float | None = None,
         thinking_level: str | None = None,
         system_prompt: str | None = None,
-        resume_session_id: str | None = None,
         include_roles: list[str] | None = None,
         current_branch: str | None = None,
         skip_cache: bool = False,
         response_format: dict[str, Any] | None = None,
         disable_agent_fallbacks: bool = False,
         native_continuation: NativeContinuation | dict[str, Any] | None = None,
+        parent_session_id: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+        work_context: dict[str, Any] | None = None,
+        read_only: bool = False,
     ) -> CompletionResponse:
         """Generate a completion. Use agent_slug for routing with mandates and fallbacks."""
         if not agent_slug and not model:
@@ -160,13 +172,11 @@ class AgentHubClient(
             model=model,
             temperature=temperature,
             session_id=session_id,
-            purpose=purpose,
             external_id=external_id,
             enable_caching=enable_caching,
             use_memory=use_memory,
             memory_group_id=memory_group_id,
             memory_variant_override=memory_variant_override,
-            routing_config=routing_config,
             tools=tools,
             enable_programmatic_tools=enable_programmatic_tools,
             container_id=container_id,
@@ -178,13 +188,15 @@ class AgentHubClient(
             timeout_seconds=timeout_seconds,
             thinking_level=thinking_level,
             system_prompt=system_prompt,
-            resume_session_id=resume_session_id,
             include_roles=include_roles,
             current_branch=current_branch,
-            skip_cache=skip_cache,
             response_format=response_format,
             disable_agent_fallbacks=disable_agent_fallbacks,
             native_continuation=native_continuation,
+            parent_session_id=parent_session_id,
+            source_metadata=source_metadata,
+            work_context=work_context,
+            read_only=read_only,
         )
 
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
@@ -195,6 +207,75 @@ class AgentHubClient(
         )
 
         return handle_completion_response(response, self)
+
+    def stream_sse(
+        self,
+        messages: list[dict[str, str] | MessageInput | ToolResultMessage],
+        *,
+        project_id: str,
+        agent_slug: str | None = None,
+        model: str | None = None,
+        temperature: float = 1.0,
+        session_id: str | None = None,
+        use_memory: bool = False,
+        memory_group_id: str | None = None,
+        tools: list[dict[str, Any] | ToolDefinition] | None = None,
+        max_turns: int = 1,
+        working_dir: str | None = None,
+        execute_tools: bool = False,
+        task_type: str | None = None,
+        trace_id: str | None = None,
+        thinking_level: str | None = None,
+        include_roles: list[str] | None = None,
+        current_branch: str | None = None,
+        skip_cache: bool = False,
+        parent_session_id: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+        work_context: dict[str, Any] | None = None,
+        read_only: bool = False,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[StreamChunk]:
+        """Stream a completion using SSE; the synchronous form of ``AsyncAgentHubClient.stream_sse``."""
+        if not agent_slug and not model:
+            raise ValueError(
+                "Either 'agent_slug' or 'model' must be provided. "
+                "Prefer 'agent_slug' to route to pre-configured agents."
+            )
+        self._check_disabled()
+        payload = build_completion_payload(
+            messages=messages,
+            project_id=project_id,
+            agent_slug=agent_slug,
+            model=model,
+            temperature=temperature,
+            session_id=session_id,
+            use_memory=use_memory,
+            memory_group_id=memory_group_id,
+            tools=tools,
+            max_turns=max_turns,
+            working_dir=working_dir,
+            execute_tools=execute_tools,
+            task_type=task_type,
+            trace_id=trace_id,
+            thinking_level=thinking_level,
+            include_roles=include_roles,
+            current_branch=current_branch,
+            parent_session_id=parent_session_id,
+            source_metadata=source_metadata,
+            work_context=work_context,
+            read_only=read_only,
+            stream=True,
+        )
+        extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
+        headers = self._inject_tracking_headers("sdk.stream_sse", extra_headers=extra_headers)
+        try:
+            yield from stream_completion_sse_sync(
+                client=self._get_client(), payload=payload, headers=headers, timeout=timeout_seconds,
+            )
+        except ClientDisabledError as e:
+            self._disabled = True
+            self._disabled_reason = e.reason
+            raise
 
     def close_native_continuation(
         self,
@@ -265,7 +346,6 @@ class AgentHubClient(
         prompt: str,
         *,
         project_id: str,
-        purpose: str | None = None,
         agent_slug: str | None = DEFAULT_IMAGE_AGENT,
         model: str | None = None,
         size: str = "1024x1024",
@@ -281,7 +361,6 @@ class AgentHubClient(
             headers=headers,
             prompt=prompt,
             project_id=project_id,
-            purpose=purpose,
             agent_slug=agent_slug,
             model=model,
             size=size,

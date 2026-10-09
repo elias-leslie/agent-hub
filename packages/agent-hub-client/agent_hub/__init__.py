@@ -52,7 +52,6 @@ from agent_hub.models import (
     MessageInput,
     NativeContinuation,
     NativeContinuationInfo,
-    RoutingConfig,
     SessionCreate,
     SessionResponse,
     StreamChunk,
@@ -64,7 +63,7 @@ from agent_hub.models import (
 )
 from agent_hub.session import Session, SessionContext
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"
 __all__ = [
     # Clients
     "AgentHubClient",
@@ -93,7 +92,6 @@ __all__ = [
     "MessageInput",
     "NativeContinuation",
     "NativeContinuationInfo",
-    "RoutingConfig",
     "SessionCreate",
     "SessionResponse",
     "StreamChunk",

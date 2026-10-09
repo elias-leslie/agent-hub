@@ -16,34 +16,6 @@ class ContainerInfo(BaseModel):
     expires_at: str = Field(..., description="Container expiration timestamp")
 
 
-class RoutingConfig(BaseModel):
-    """Configuration for capability-based model routing.
-
-    Instead of specifying a model directly, consumers can request a capability
-    and let the routing layer select the appropriate model.
-    """
-
-    capability: str | None = Field(
-        default=None,
-        description=(
-            "Model capability: coding, planning, review, fast_task, "
-            "worker, supervisor_primary, supervisor_audit. "
-            "If provided, overrides the model field."
-        ),
-    )
-    provider_preference: str | None = Field(
-        default=None,
-        description="Prefer a specific provider: 'claude' or 'gemini'. Optional.",
-    )
-    is_autonomous: bool = Field(
-        default=False,
-        description=(
-            "If True, safety directive is injected into system prompt. "
-            "Required for autonomous/self-healing agents."
-        ),
-    )
-
-
 class NativeContinuation(BaseModel):
     """Delta-context request for a retained Codex native thread."""
 
@@ -153,3 +125,10 @@ class StreamChunk(BaseModel):
     tool_call: ToolCall | None = Field(
         default=None, description="Tool call for 'tool_use' events"
     )
+    agent_used: str | None = Field(default=None, description="Agent that served a 'done' event")
+    model_used: str | None = Field(default=None, description="Catalog model that served a 'done' event")
+    fallback_used: bool | None = Field(default=None, description="Whether agent routing fell back")
+    cost_usd: float | None = Field(default=None)
+    thinking_tokens: int | None = Field(default=None)
+    cache_read_tokens: int | None = Field(default=None)
+    cache_write_tokens: int | None = Field(default=None)

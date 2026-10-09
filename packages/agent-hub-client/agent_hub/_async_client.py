@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from agent_hub._agents import AsyncAgentOperationsMixin
+from agent_hub._automations import AsyncAutomationOperationsMixin
 from agent_hub._base import BaseClientMixin
+from agent_hub._catalog import AsyncCatalogOperationsMixin
 from agent_hub._completion import build_completion_payload, handle_completion_response
 from agent_hub._image import generate_image_async
 from agent_hub._memory import AsyncMemoryOperationsMixin
@@ -22,7 +24,6 @@ from agent_hub.models import (
     ImageGenerationResponse,
     MessageInput,
     NativeContinuation,
-    RoutingConfig,
     StreamChunk,
     ToolDefinition,
     ToolResultMessage,
@@ -35,8 +36,10 @@ if TYPE_CHECKING:
 class AsyncAgentHubClient(
     BaseClientMixin,
     AsyncAgentOperationsMixin,
+    AsyncCatalogOperationsMixin,
     AsyncSessionOperationsMixin,
     AsyncMemoryOperationsMixin,
+    AsyncAutomationOperationsMixin,
 ):
     """Asynchronous client for Agent Hub API.
 
@@ -69,6 +72,7 @@ class AsyncAgentHubClient(
         client_id: str | None = None,
         request_source: str | None = None,
         cli_command: str | None = None,
+        source_client: str = "agent-hub-sdk",
     ) -> None:
         """Initialize the client.
 
@@ -86,6 +90,8 @@ class AsyncAgentHubClient(
                 When set, this replaces the default SDK method name (e.g., "sdk.complete")
                 in the X-Tool-Name header. Use this from CLI tools to track the actual
                 command (e.g., "st memory save" instead of "sdk.save_learning").
+            source_client: ``X-Source-Client`` value; Agent Hub classifies
+                values containing "cli" as CLI traffic and "sdk" as SDK traffic.
         """
         super().__init__(
             base_url=base_url,
@@ -96,6 +102,7 @@ class AsyncAgentHubClient(
             client_id=client_id,
             request_source=request_source,
             cli_command=cli_command,
+            source_client=source_client,
         )
         self._client: httpx.AsyncClient | None = None
 
@@ -131,13 +138,11 @@ class AsyncAgentHubClient(
         model: str | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
-        purpose: str | None = None,
         external_id: str | None = None,
         enable_caching: bool = True,
         use_memory: bool = False,
         memory_group_id: str | None = None,
         memory_variant_override: str | None = None,
-        routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -149,13 +154,16 @@ class AsyncAgentHubClient(
         timeout_seconds: float | None = None,
         thinking_level: str | None = None,
         system_prompt: str | None = None,
-        resume_session_id: str | None = None,
         include_roles: list[str] | None = None,
         current_branch: str | None = None,
         skip_cache: bool = False,
         response_format: dict[str, Any] | None = None,
         disable_agent_fallbacks: bool = False,
         native_continuation: NativeContinuation | dict[str, Any] | None = None,
+        parent_session_id: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+        work_context: dict[str, Any] | None = None,
+        read_only: bool = False,
     ) -> CompletionResponse:
         """Generate a completion asynchronously. Use agent_slug for routing with mandates."""
         if not agent_slug and not model:
@@ -174,13 +182,11 @@ class AsyncAgentHubClient(
             model=model,
             temperature=temperature,
             session_id=session_id,
-            purpose=purpose,
             external_id=external_id,
             enable_caching=enable_caching,
             use_memory=use_memory,
             memory_group_id=memory_group_id,
             memory_variant_override=memory_variant_override,
-            routing_config=routing_config,
             tools=tools,
             enable_programmatic_tools=enable_programmatic_tools,
             container_id=container_id,
@@ -192,13 +198,15 @@ class AsyncAgentHubClient(
             timeout_seconds=timeout_seconds,
             thinking_level=thinking_level,
             system_prompt=system_prompt,
-            resume_session_id=resume_session_id,
             include_roles=include_roles,
             current_branch=current_branch,
-            skip_cache=skip_cache,
             response_format=response_format,
             disable_agent_fallbacks=disable_agent_fallbacks,
             native_continuation=native_continuation,
+            parent_session_id=parent_session_id,
+            source_metadata=source_metadata,
+            work_context=work_context,
+            read_only=read_only,
         )
 
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
@@ -295,6 +303,10 @@ class AsyncAgentHubClient(
         include_roles: list[str] | None = None,
         current_branch: str | None = None,
         skip_cache: bool = False,
+        parent_session_id: str | None = None,
+        source_metadata: dict[str, Any] | None = None,
+        work_context: dict[str, Any] | None = None,
+        read_only: bool = False,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion using SSE.
 
@@ -347,7 +359,10 @@ class AsyncAgentHubClient(
             thinking_level=thinking_level,
             include_roles=include_roles,
             current_branch=current_branch,
-            skip_cache=skip_cache,
+            parent_session_id=parent_session_id,
+            source_metadata=source_metadata,
+            work_context=work_context,
+            read_only=read_only,
             stream=True,
         )
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
@@ -371,7 +386,6 @@ class AsyncAgentHubClient(
         prompt: str,
         *,
         project_id: str,
-        purpose: str | None = None,
         agent_slug: str | None = DEFAULT_IMAGE_AGENT,
         model: str | None = None,
         size: str = "1024x1024",
@@ -387,7 +401,6 @@ class AsyncAgentHubClient(
             headers=headers,
             prompt=prompt,
             project_id=project_id,
-            purpose=purpose,
             agent_slug=agent_slug,
             model=model,
             size=size,

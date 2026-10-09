@@ -9,6 +9,7 @@ description = "Agent Hub-owned commands and client helpers for SummitFlow ST"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "agent-hub-client==0.5.0",
     "httpx>=0.28.0",
     "PyYAML>=6.0.0",
     "summitflow-st-sdk==0.1.0",
@@ -19,6 +20,7 @@ dependencies = [
 agent-hub-st = "agent_hub_st.__main__:main"
 
 [tool.uv.sources]
+agent-hub-client = { path = "../agent-hub-client" }
 summitflow-st-sdk = { path = "../../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
 
 [tool.hatch.build.targets.wheel]

@@ -24,17 +24,24 @@ async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
 
 ## Features
 
-- Async completions
-- SSE streaming via `stream_sse()`
+- Sync and async completions
+- SSE streaming via `stream_sse()` on both clients; the `done` chunk carries
+  `fallback_used`, `agent_used`, `model_used`, cost and token counts
 - Stateful conversations via `session(...)`
 - Session management
 - Full type hints
 - Automatic error handling
 
-### Canonical application integration (0.4.1)
+### Canonical application integration (0.5.0)
 
-Use this package for completions, agent metadata (`get_agent`) and context
-previews (`preview_agent`). Construct it from the application's configured
+This SDK is the only supported way to call Agent Hub from Python. Use it for
+completions, agent metadata (`get_agent`, `list_agents`), context previews
+(`preview_agent`), the model catalog (`list_models`), stored prompts
+(`get_prompt`), service health (`health`), session events
+(`list_session_events`, `append_session_event`) and automation-owner callbacks
+(`list_automation_profiles`, `complete_automation_run`, `accept_automation_run`,
+which take the owner's `internal_secret`). Never call private members such as
+`_get_client` or `_inject_tracking_headers`; ask for a public method instead. Construct it from the application's configured
 Agent Hub URL and registered client ID, with a stable `request_source`.
 Keep provider credentials, model assignments, fallbacks and shared prompts in
 Agent Hub. Applications own their domain validation, not alternative transports.
@@ -55,3 +62,8 @@ Build the wheel once from `packages/agent-hub-client`, then vendor that identica
 versioned wheel in consumers and refresh their `uv.lock`. Never edit installed
 SDK files or maintain copied SDK implementations. Existing sync and async clients
 use the same response handler and identity configuration.
+
+0.5.0 removed request fields the server never accepted (`purpose`,
+`routing_config`, `resume_session_id`); `skip_cache` is sent as the
+`X-Skip-Cache` header the server honours. CLI tools pass `source_client`
+(for example `"st-cli"`) so Agent Hub classifies their traffic as CLI.

@@ -46,7 +46,6 @@ PERSONA_BASE_PATH = "/api/persona"
 HEARTBEAT_BASE_PATH = "/api/heartbeat"
 
 # ── Complete ─────────────────────────────────────────────────────────
-COMPLETE_PATH = "/api/complete"
 
 # ── Admin ────────────────────────────────────────────────────────────
 ACCESS_CONTROL_METRICS_PATH = "/api/access-control/metrics"

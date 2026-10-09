@@ -1,15 +1,13 @@
 # Agent Hub Examples
 
-Example scripts demonstrating Agent Hub features.
+Every caller uses the `agent-hub-client` SDK (`packages/agent-hub-client`); there
+is no supported raw-HTTP client path. More SDK examples (basic completion,
+streaming, sessions) live in `packages/agent-hub-client/examples/`.
 
 ## Setup
 
 ```bash
-# Ensure backend is running
-cd ~/agent-hub/backend
-uvicorn app.main:app --port 8003
-
-# Install SDK (for sdk_example.py)
+# The backend runs as a managed service: st service status agent-hub
 pip install -e packages/agent-hub-client
 ```
 
@@ -17,33 +15,8 @@ pip install -e packages/agent-hub-client
 
 | File | Description |
 |------|-------------|
-| `simple_completion.py` | Basic completion request with httpx |
-| `streaming_example.py` | SSE streaming responses |
-| `session_management.py` | Multi-turn conversations with sessions |
+| `sdk_example.py` | SDK features: completion, streaming, sessions, vision |
 | `orchestration_example.py` | Canonical clarify -> plan -> execute -> review -> QA workflow |
-| `sdk_example.py` | Full SDK features: completion, streaming, sessions, vision |
 
-## Running
-
-```bash
-# Simple completion
-python examples/simple_completion.py
-
-# Streaming
-python examples/streaming_example.py
-
-# Sessions
-python examples/session_management.py
-
-# Canonical workflow
-python examples/orchestration_example.py
-
-# SDK
-python examples/sdk_example.py
-```
-
-## Requirements
-
-- httpx (`pip install httpx`)
-- agent-hub-client (`pip install -e packages/agent-hub-client`)
-- Running Agent Hub backend at localhost:8003
+Callers identify themselves with `client_id` and `request_source` (ST tools load
+them with `st_sdk.credentials.load_credentials()`), and route by `agent_slug`.

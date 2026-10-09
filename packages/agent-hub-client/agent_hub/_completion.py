@@ -10,7 +10,6 @@ from agent_hub.models import (
     CompletionResponse,
     MessageInput,
     NativeContinuation,
-    RoutingConfig,
     ToolDefinition,
     ToolResultMessage,
 )
@@ -49,12 +48,10 @@ def _apply_identity_fields(
     agent_slug: str | None,
     model: str | None,
     session_id: str | None,
-    purpose: str | None,
     external_id: str | None,
     use_memory: bool,
     memory_group_id: str | None,
     memory_variant_override: str | None,
-    routing_config: RoutingConfig | dict[str, Any] | None,
     tool_dicts: list[dict[str, Any]] | None,
     enable_programmatic_tools: bool,
     disable_agent_fallbacks: bool,
@@ -66,8 +63,6 @@ def _apply_identity_fields(
         payload["model"] = model
     if session_id:
         payload["session_id"] = session_id
-    if purpose:
-        payload["purpose"] = purpose
     if external_id:
         payload["external_id"] = external_id
     payload["use_memory"] = use_memory
@@ -75,11 +70,6 @@ def _apply_identity_fields(
         payload["memory_group_id"] = memory_group_id
     if memory_variant_override:
         payload["memory_variant_override"] = memory_variant_override
-    if routing_config:
-        if isinstance(routing_config, RoutingConfig):
-            payload["routing_config"] = routing_config.model_dump(exclude_none=True)
-        else:
-            payload["routing_config"] = routing_config
     if tool_dicts:
         payload["tools"] = tool_dicts
     if enable_programmatic_tools:
@@ -99,10 +89,8 @@ def _apply_execution_fields(
     timeout_seconds: float | None,
     thinking_level: str | None,
     system_prompt: str | None,
-    resume_session_id: str | None,
     include_roles: list[str] | None,
     current_branch: str | None,
-    skip_cache: bool,
     response_format: dict[str, Any] | None,
     native_continuation: NativeContinuation | dict[str, Any] | None,
 ) -> None:
@@ -123,14 +111,10 @@ def _apply_execution_fields(
         payload["thinking_level"] = thinking_level
     if system_prompt:
         payload["system_prompt"] = system_prompt
-    if resume_session_id:
-        payload["resume_session_id"] = resume_session_id
     if include_roles is not None:
         payload["include_roles"] = include_roles
     if current_branch:
         payload["current_branch"] = current_branch
-    if skip_cache:
-        payload["skip_cache"] = True
     if response_format:
         payload["response_format"] = response_format
     if native_continuation:
@@ -146,11 +130,10 @@ def build_completion_payload(
     project_id: str,
     agent_slug: str | None = None, model: str | None = None,
     temperature: float = 1.0, session_id: str | None = None,
-    purpose: str | None = None, external_id: str | None = None,
+    external_id: str | None = None,
     enable_caching: bool = True, use_memory: bool = False,
     memory_group_id: str | None = None,
     memory_variant_override: str | None = None,
-    routing_config: RoutingConfig | dict[str, Any] | None = None,
     tools: list[dict[str, Any] | ToolDefinition] | None = None,
     enable_programmatic_tools: bool = False,
     container_id: str | None = None, max_turns: int = 1,
@@ -158,14 +141,16 @@ def build_completion_payload(
     task_type: str | None = None,
     trace_id: str | None = None, timeout_seconds: float | None = None,
     thinking_level: str | None = None, system_prompt: str | None = None,
-    resume_session_id: str | None = None,
     include_roles: list[str] | None = None,
     current_branch: str | None = None,
-    skip_cache: bool = False,
     response_format: dict[str, Any] | None = None,
     disable_agent_fallbacks: bool = False,
     native_continuation: NativeContinuation | dict[str, Any] | None = None,
     stream: bool = False,
+    parent_session_id: str | None = None,
+    source_metadata: dict[str, Any] | None = None,
+    work_context: dict[str, Any] | None = None,
+    read_only: bool = False,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -179,19 +164,28 @@ def build_completion_payload(
         "project_id": project_id, "enable_caching": enable_caching,
     }
     _apply_identity_fields(
-        payload, agent_slug, model, session_id, purpose, external_id,
-        use_memory, memory_group_id, memory_variant_override, routing_config, tool_dicts,
+        payload, agent_slug, model, session_id, external_id,
+        use_memory, memory_group_id, memory_variant_override, tool_dicts,
         enable_programmatic_tools, disable_agent_fallbacks,
     )
     _apply_execution_fields(
         payload, container_id, max_turns, working_dir, execute_tools, task_type,
         trace_id, timeout_seconds, thinking_level, system_prompt,
-        resume_session_id, include_roles, current_branch, skip_cache,
+        include_roles, current_branch,
         response_format,
         native_continuation,
     )
     if stream:
         payload["stream"] = True
+    for key, value in (
+        ("parent_session_id", parent_session_id),
+        ("source_metadata", source_metadata),
+        ("work_context", work_context),
+    ):
+        if value:
+            payload[key] = value
+    if read_only:
+        payload["read_only"] = True
     return payload
 
 

@@ -19,6 +19,7 @@ class BaseClientMixin:
         client_id: str | None = None,
         request_source: str | None = None,
         cli_command: str | None = None,
+        source_client: str = "agent-hub-sdk",
     ) -> None:
         """Initialize base client attributes."""
         self.base_url = base_url.rstrip("/")
@@ -28,6 +29,7 @@ class BaseClientMixin:
         self.client_id = client_id
         self.request_source = request_source
         self.cli_command = cli_command
+        self.source_client = source_client
 
         # Auto-detect client name from caller if not provided
         if client_name:
@@ -70,7 +72,7 @@ class BaseClientMixin:
 
         # Auto-inject source headers for usage control
         if self.auto_inject_headers:
-            headers["X-Source-Client"] = "agent-hub-sdk"
+            headers["X-Source-Client"] = self.source_client
 
         # Inject access control headers if credentials provided
         if self.client_id:

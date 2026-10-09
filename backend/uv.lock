@@ -29,6 +29,7 @@ name = "agent-hub"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-hub-client" },
     { name = "agent-hub-st" },
     { name = "alembic" },
     { name = "anthropic" },
@@ -87,6 +88,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-hub-client", path = "../docker/workspace-packages/agent_hub_client-0.5.0-py3-none-any.whl" },
     { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl" },
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
@@ -139,21 +141,46 @@ requires-dist = [
 provides-extras = ["compression", "dev"]
 
 [[package]]
+name = "agent-hub-client"
+version = "0.5.0"
+source = { path = "../docker/workspace-packages/agent_hub_client-0.5.0-py3-none-any.whl" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+wheels = [
+    { filename = "agent_hub_client-0.5.0-py3-none-any.whl", hash = "sha256:f0a7083ebde777b20ae8c048408a2417d326e0b22c2d869cfb734790aa07b6bc" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
+    { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.34.0" },
+    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.17" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "agent-hub-st"
 version = "0.1.0"
 source = { path = "../docker/workspace-packages/agent_hub_st-0.1.0-py3-none-any.whl" }
 dependencies = [
+    { name = "agent-hub-client" },
     { name = "httpx" },
     { name = "pyyaml" },
     { name = "summitflow-st-sdk" },
     { name = "typer" },
 ]
 wheels = [
-    { filename = "agent_hub_st-0.1.0-py3-none-any.whl", hash = "sha256:85fc9f1fe25813b4d1c8add164454727f10057fc5875cd1d9f53c0110bd5f9e6" },
+    { filename = "agent_hub_st-0.1.0-py3-none-any.whl", hash = "sha256:7b39d6b52507cd606c5fface08df91cf8edf2fbd43effe79be4466cf6d6b3972" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-hub-client", specifier = "==0.5.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "summitflow-st-sdk", specifier = "==0.1.0" },

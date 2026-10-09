@@ -18,6 +18,15 @@ from agent_hub.models.native_observation import (
 )
 
 
+def _event_params(event_type: str | None, turn: int | None, page: int, page_size: int) -> dict[str, Any]:
+    params: dict[str, Any] = {"page": page, "page_size": page_size}
+    if event_type:
+        params["event_type"] = event_type
+    if turn is not None:
+        params["turn"] = turn
+    return params
+
+
 class SessionOperationsMixin:
     """Mixin providing session management methods."""
 
@@ -175,6 +184,20 @@ class SessionOperationsMixin:
             handle_error(response)
         return response.json()
 
+    def list_session_events(self, session_id: str, *, event_type: str | None = None, turn: int | None = None, page: int = 1, page_size: int = 100) -> dict[str, Any]:
+        """Return one page of a session's events (``GET /api/sessions/{id}/events``)."""
+        response = self._get_client().get(f"/api/sessions/{session_id}/events", params=_event_params(event_type, turn, page, page_size), headers=self._inject_tracking_headers("sdk.list_session_events"))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    def append_session_event(self, session_id: str, event: dict[str, Any]) -> dict[str, Any]:
+        """Record one event on a session (``POST /api/sessions/{id}/events``)."""
+        response = self._get_client().post(f"/api/sessions/{session_id}/events", json=event, headers=self._inject_tracking_headers("sdk.append_session_event"))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
 
 class AsyncSessionOperationsMixin:
     """Mixin providing async session management methods."""
@@ -296,3 +319,18 @@ class AsyncSessionOperationsMixin:
             handle_error(response)
         return response.json()
 
+    async def list_session_events(self, session_id: str, *, event_type: str | None = None, turn: int | None = None, page: int = 1, page_size: int = 100) -> dict[str, Any]:
+        """Return one page of a session's events (``GET /api/sessions/{id}/events``)."""
+        client = await self._get_client()
+        response = await client.get(f"/api/sessions/{session_id}/events", params=_event_params(event_type, turn, page, page_size), headers=self._inject_tracking_headers("sdk.list_session_events"))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()
+
+    async def append_session_event(self, session_id: str, event: dict[str, Any]) -> dict[str, Any]:
+        """Record one event on a session (``POST /api/sessions/{id}/events``)."""
+        client = await self._get_client()
+        response = await client.post(f"/api/sessions/{session_id}/events", json=event, headers=self._inject_tracking_headers("sdk.append_session_event"))
+        if not response.is_success:
+            handle_error(response)
+        return response.json()

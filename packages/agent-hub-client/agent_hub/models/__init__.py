@@ -13,7 +13,6 @@ from agent_hub.models.core import (
     ContainerInfo,
     NativeContinuation,
     NativeContinuationInfo,
-    RoutingConfig,
     StreamChunk,
 )
 from agent_hub.models.image import ImageGenerationResponse
@@ -46,7 +45,6 @@ __all__ = [
     "ContainerInfo",
     "NativeContinuation",
     "NativeContinuationInfo",
-    "RoutingConfig",
     "CompletionResponse",
     "StreamChunk",
     # Session models
