@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   Legend,
   PolarAngleAxis,
@@ -29,10 +30,18 @@ function buildScoreRow(
   return row
 }
 
+/**
+ * Below this chart width the default 80% radius leaves no room for the side
+ * axis labels (Instruction, Reasoning), so they clip at phone width.
+ */
+const NARROW_CHART_WIDTH = 420
+
 export function ModelRadar({
   models: allModels,
   size = 'md',
 }: ModelRadarProps) {
+  const [chartWidth, setChartWidth] = useState<number | null>(null)
+  const narrow = chartWidth !== null && chartWidth < NARROW_CHART_WIDTH
   const models = allModels.filter(
     (model) =>
       !(
@@ -63,12 +72,19 @@ export function ModelRadar({
   }
 
   return (
-    <ResponsiveContainer width="100%" height={heightMap[size]}>
-      <RadarChart data={chartData}>
+    <ResponsiveContainer
+      width="100%"
+      height={heightMap[size]}
+      onResize={(width) => setChartWidth(width)}
+    >
+      <RadarChart data={chartData} outerRadius={narrow ? '56%' : '80%'}>
         <PolarGrid stroke="#334155" strokeDasharray="3 3" />
         <PolarAngleAxis
           dataKey="category"
-          tick={{ fill: '#94a3b8', fontSize: size === 'sm' ? 10 : 12 }}
+          tick={{
+            fill: '#94a3b8',
+            fontSize: size === 'sm' || narrow ? 10 : 12,
+          }}
         />
         <PolarRadiusAxis
           angle={90}
