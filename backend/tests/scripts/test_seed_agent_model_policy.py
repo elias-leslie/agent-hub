@@ -45,6 +45,7 @@ EXCLUDED_SLUGS = {
     "neri-hunter",  # Neri bounty roles retain explicit subscription-only routing
     "neri-reporter",
     "neri-reviewer",
+    "neri-reviewer-claude",  # fallback-free Opus 5.5 review lane; see the Opus placement test
     "provider-liveness-probe",  # probe must not conceal provider failure via fallback
     # Explicit comparison/critic lanes retain provider identity.
     "jobs-cover-codex",
@@ -133,6 +134,30 @@ def test_no_agent_routes_to_forbidden_models() -> None:
     assert not seeded & FORBIDDEN_MODELS, "the insert-only seed catalog must not recreate an active row"
 
 
+# Opus 5.5 shares the owner's Max limits with interactive use: one dedicated
+# defensive-security review lane, otherwise last-resort escalation only.
+OPUS = "claude-opus-5-5"
+OPUS_ESCALATION_SLUGS = {"financial-document-reviewer", "investment-committee", "risk-manager"}
+
+
+def test_opus_is_placed_sparingly() -> None:
+    data = json.loads(SEED_FILE.read_text())
+    agents = {agent["slug"]: agent for agent in data["agents"]}
+    reviewer = agents["neri-reviewer-claude"]
+    assert reviewer["primary_model_id"] == OPUS
+    assert reviewer["fallback_models"] == [] and not reviewer.get("escalation_model_id")
+    assert reviewer["memory_config"] == agents["neri-reviewer"]["memory_config"]
+    for slug in OPUS_ESCALATION_SLUGS:
+        assert agents[slug]["escalation_model_id"] == OPUS, slug
+        assert OPUS not in [agents[slug]["primary_model_id"], *agents[slug]["fallback_models"]], slug
+    primaries = {slug for slug, agent in agents.items() if agent["primary_model_id"] == OPUS}
+    escalations = {slug for slug, agent in agents.items() if agent.get("escalation_model_id") == OPUS}
+    fallbacks = {slug for slug, agent in agents.items() if OPUS in agent.get("fallback_models", [])}
+    assert primaries == {"neri-reviewer-claude"}
+    assert escalations == OPUS_ESCALATION_SLUGS
+    assert not fallbacks
+
+
 def test_memory_curator_is_retired_from_seeded_agents() -> None:
     data = json.loads(SEED_FILE.read_text())
     assert all(agent["slug"] != "memory-curator" for agent in data["agents"])
@@ -188,7 +213,7 @@ def test_neri_bounty_roles_preserve_explicit_subscription_only_routes() -> None:
 
 def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
     data = json.loads(SEED_FILE.read_text())
-    retained_agents = {"neri-hunter", "neri-reporter", "neri-reviewer"}
+    retained_agents = {"neri-hunter", "neri-reporter", "neri-reviewer", "neri-reviewer-claude"}
     retired_agents = {"neri-local-candidate", "neri-orchestrator"}
     retired_prompts = {
         "neri-local-candidate-system-prompt",
@@ -214,6 +239,7 @@ def test_neri_seeds_cannot_restore_retired_agents_or_prompts() -> None:
     ("neri-hunter", "8c15f141cca20fe7b8ba995ae43cc6344f115b1eab1d6cfa8d8add321cca531f"),
     ("neri-reporter", "9b97ee17c8c6c20dcf29463bad82be197a290bbd221d2ed282a0b26d6b923d2e"),
     ("neri-reviewer", "70233a25b35713a534593ccc12c78c909d11f984d36f5d2e1c056823416a9175"),
+    ("neri-reviewer-claude", "70233a25b35713a534593ccc12c78c909d11f984d36f5d2e1c056823416a9175"),
 ])
 def test_neri_seed_bodies_match_canonical_bounty_only_previews(slug: str, body_sha256: str) -> None:
     # Exact live agent_system_prompt sections observed on 2026-10-08; do not
