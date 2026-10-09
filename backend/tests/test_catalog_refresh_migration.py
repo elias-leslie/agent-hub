@@ -63,3 +63,17 @@ def test_routes_accept_exact_preimage_and_reject_unknown_configuration():
             migration._check_route(
                 slug, {**route["before"], "primary_model_id": "unrecognized/model"}, route["before"]
             )
+
+
+def test_fast_agents_gain_a_catalogued_subscription_fallback():
+    path = _BACKEND / "alembic/versions/ac0650fc9388_subscription_fallback_for_fast_agents.py"
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    catalog = {e.id: e for e in MODEL_CATALOG}
+    refreshed = _migration()._data()["routes"]
+    for slug, (previous, desired) in migration._ROUTES.items():
+        assert refreshed[slug]["after"]["fallback_models"] == previous
+        assert desired[0] == "codex/gpt-6-luna"
+        assert all(model in catalog for model in desired)

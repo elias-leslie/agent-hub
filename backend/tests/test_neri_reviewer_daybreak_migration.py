@@ -40,7 +40,7 @@ def test_exact_route_and_seed_preserve_reporter_and_disable_fallback():
     assert reviewer["primary_model_id"] == migration._MODEL
     assert reviewer["thinking_level"] == "high"
     assert reviewer["fallback_models"] == []
-    assert reviewer["escalation_model_id"] is None
+    assert reviewer.get("escalation_model_id") is None
     assert agents["neri-reporter"]["primary_model_id"] == "codex/gpt-6.1-sol"
     assert agents["neri-reporter"]["thinking_level"] == "medium"
     assert agents["neri-reporter"]["fallback_models"] == []

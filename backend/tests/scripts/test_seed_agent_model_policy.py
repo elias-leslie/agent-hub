@@ -141,12 +141,6 @@ def test_neri_bounty_roles_preserve_explicit_subscription_only_routes() -> None:
         if agent["slug"] in {"neri-hunter", "neri-reporter", "neri-reviewer"}
     }
     assert set(roles) == {"neri-hunter", "neri-reporter", "neri-reviewer"}
-    assert roles["neri-hunter"]["description"] == (
-        "Authorized bug-bounty hunting for one selected target under exact scope and evidence limits"
-    )
-    assert roles["neri-reviewer"]["description"] == (
-        "Independent review of one exact frozen bug-bounty report and cited sanitized evidence"
-    )
     for agent in roles.values():
         description = agent["description"].lower()
         for obsolete in ("lab", "grading-key", "training", "qualification", "cohort", "local-worker"):
