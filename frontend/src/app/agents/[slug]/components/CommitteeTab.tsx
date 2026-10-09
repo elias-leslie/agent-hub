@@ -155,7 +155,7 @@ export function CommitteeTab({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_32%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(2,6,23,0.96))] p-6 shadow-[0_0_30px_-16px_rgba(245,158,11,0.5)]">
+      <section className="rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_32%),linear-gradient(180deg,var(--color-slate-900),var(--color-slate-950))] p-6 shadow-[0_0_30px_-16px_rgba(245,158,11,0.5)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="section-kicker">Committee Control Plane</p>
@@ -172,7 +172,7 @@ export function CommitteeTab({
             type="button"
             onClick={() => void runValidation()}
             disabled={isRunning}
-            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-800 transition dark:text-amber-100 hover:bg-amber-500/15 disabled:opacity-60"
           >
             {isRunning ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -183,39 +183,39 @@ export function CommitteeTab({
           </button>
         </div>
         {validationHeadline ? (
-          <p className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <p className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-100">
             {validationHeadline}
           </p>
         ) : null}
         {validationResult ? (
-          <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-50">
+          <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-900 dark:text-cyan-50">
             <p className="section-kicker">Validation snapshot</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200/70">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-700 dark:text-cyan-200/70">
                   Committee bias
                 </p>
-                <p className="mt-1 text-sm font-medium text-cyan-50">
+                <p className="mt-1 text-sm font-medium text-cyan-900 dark:text-cyan-50">
                   {validationResult.committee_summary?.headline ??
                     validationHeadline ??
                     'Validation completed.'}
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200/70">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-700 dark:text-cyan-200/70">
                   Seat count
                 </p>
-                <p className="mt-1 text-sm font-medium text-cyan-50">
+                <p className="mt-1 text-sm font-medium text-cyan-900 dark:text-cyan-50">
                   {validationResult.committee_summary?.seat_count ??
                     validationResult.votes?.length ??
                     0}
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-200/70">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-cyan-700 dark:text-cyan-200/70">
                   Disagreement
                 </p>
-                <p className="mt-1 text-sm font-medium text-cyan-50">
+                <p className="mt-1 text-sm font-medium text-cyan-900 dark:text-cyan-50">
                   {validationResult.committee_summary?.disagreement_label ??
                     'n/a'}
                 </p>
@@ -224,7 +224,7 @@ export function CommitteeTab({
           </div>
         ) : null}
         {validationError ? (
-          <p className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <p className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-100">
             {validationError}
           </p>
         ) : null}

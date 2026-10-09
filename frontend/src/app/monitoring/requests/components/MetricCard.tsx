@@ -26,7 +26,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        'relative min-h-[132px] overflow-hidden rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(15,23,42,0.58))] p-4 backdrop-blur-sm',
+        'relative min-h-[132px] overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/65 p-4 backdrop-blur-sm',
         'border-l-[3px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_46px_-34px_rgba(0,0,0,0.92)]',
         statusColors[status],
         'group',

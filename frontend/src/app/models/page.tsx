@@ -232,14 +232,14 @@ export default function ModelsPage() {
       value: compactNumber(catalogHealth?.total_models ?? models.length),
       detail: `${filteredModels.length} visible`,
       icon: Layers,
-      tone: 'from-amber-500/20 to-amber-500/5 border-amber-500/20 text-amber-100',
+      tone: 'from-amber-500/20 to-amber-500/5 border-amber-500/20 text-amber-800 dark:text-amber-100',
     },
     {
       label: 'Live Pricing',
       value: compactNumber(catalogHealth?.models_with_live_pricing ?? 0),
       detail: `${catalogHealth?.models_missing_live_pricing ?? 0} still catalog-only`,
       icon: Database,
-      tone: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/20 text-emerald-100',
+      tone: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/20 text-emerald-800 dark:text-emerald-100',
     },
     {
       label: 'Freshness',
@@ -247,8 +247,8 @@ export default function ModelsPage() {
       detail: formatMoment(lastSync),
       icon: Clock,
       tone: catalogHealth?.is_stale
-        ? 'from-rose-500/20 to-rose-500/5 border-rose-500/20 text-rose-100'
-        : 'from-sky-500/20 to-sky-500/5 border-sky-500/20 text-sky-100',
+        ? 'from-rose-500/20 to-rose-500/5 border-rose-500/20 text-rose-800 dark:text-rose-100'
+        : 'from-sky-500/20 to-sky-500/5 border-sky-500/20 text-sky-800 dark:text-sky-100',
     },
     {
       label: 'Watchlist',
@@ -257,7 +257,7 @@ export default function ModelsPage() {
       ),
       detail: `${catalogHealth?.discovery?.unmatched_provider_count ?? 0} tracked providers with new candidates`,
       icon: Activity,
-      tone: 'from-fuchsia-500/20 to-fuchsia-500/5 border-fuchsia-500/20 text-fuchsia-100',
+      tone: 'from-fuchsia-500/20 to-fuchsia-500/5 border-fuchsia-500/20 text-fuchsia-800 dark:text-fuchsia-100',
     },
   ]
 
@@ -282,12 +282,12 @@ export default function ModelsPage() {
       <div className="page-backdrop bg-grid-pattern opacity-40" />
 
       <main className="page-container px-4 py-6 lg:px-8">
-        <section className="relative overflow-hidden rounded-[28px] border border-slate-800 bg-slate-950 shadow-[0_24px_80px_rgba(2,6,23,0.55)]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_34%),radial-gradient(circle_at_80%_18%,rgba(34,211,238,0.14),transparent_26%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.92))]" />
+        <section className="relative overflow-hidden rounded-[28px] border border-slate-800 bg-slate-950 shadow-[0_24px_80px_-48px_rgba(2,6,23,0.55)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_34%),radial-gradient(circle_at_80%_18%,rgba(34,211,238,0.14),transparent_26%)]" />
           <div className="relative p-6 lg:p-8">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
                   <Cpu className="h-3.5 w-3.5" />
                   Catalog Command Deck
                 </div>
@@ -313,10 +313,10 @@ export default function ModelsPage() {
                   </div>
                 </div>
                 <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-right">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/70">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-700/80 dark:text-emerald-300/70">
                     Newest
                   </div>
-                  <div className="text-sm font-medium text-emerald-100">
+                  <div className="text-sm font-medium text-emerald-800 dark:text-emerald-100">
                     {newestModel?.name ?? 'No release dates yet'}
                   </div>
                 </div>
@@ -324,7 +324,7 @@ export default function ModelsPage() {
                   type="button"
                   onClick={handleSync}
                   disabled={syncing}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-800 transition dark:text-cyan-100 hover:bg-cyan-400/15 disabled:opacity-60"
                 >
                   {syncing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -337,7 +337,7 @@ export default function ModelsPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedModels([])}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/90 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-300"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/90 px-4 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300"
                   >
                     <Zap className="h-4 w-4" />
                     Compare {selectedModels.length}
@@ -448,7 +448,7 @@ export default function ModelsPage() {
                               {provider.provider_id}
                             </p>
                           </div>
-                          <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-semibold text-fuchsia-200">
+                          <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-semibold text-fuchsia-700 dark:text-fuchsia-200">
                             {provider.unmatched_count} candidates
                           </span>
                         </div>

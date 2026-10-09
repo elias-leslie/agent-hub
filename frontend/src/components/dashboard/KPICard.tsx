@@ -47,7 +47,7 @@ export function KPICard({
   return (
     <div
       className={cn(
-        'group relative min-h-[132px] overflow-hidden rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(15,23,42,0.58))] backdrop-blur-sm transition-all duration-200',
+        'group relative min-h-[132px] overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/65 backdrop-blur-sm transition-all duration-200',
         'hover:-translate-y-0.5 hover:shadow-[0_20px_46px_-34px_rgba(0,0,0,0.92)]',
         config.glow,
       )}
@@ -62,34 +62,28 @@ export function KPICard({
       <div className="absolute -right-10 top-5 h-24 w-24 rounded-full bg-slate-800/60 blur-2xl" />
 
       <div className="relative p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {label}
-              </span>
-              {pulse && (
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full animate-pulse shrink-0',
-                    config.dot,
-                  )}
-                />
+        <div className="flex min-w-0 items-center gap-1.5 text-slate-400 transition-colors group-hover:text-slate-300">
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words text-[10px] font-semibold uppercase leading-tight tracking-[0.14em] text-slate-500">
+            {label}
+          </span>
+          {pulse && (
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full animate-pulse shrink-0',
+                config.dot,
               )}
-            </div>
-            <p className="mt-3 text-[1.7rem] font-semibold tracking-tight text-slate-50 font-mono tabular-nums">
-              {value}
-            </p>
-            {subtext && (
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                {subtext}
-              </p>
-            )}
-          </div>
-          <div className="shrink-0 rounded-xl border border-slate-800/70 bg-slate-900/75 p-2 text-slate-300 transition-colors group-hover:border-slate-700/80 group-hover:bg-slate-800/80">
-            <Icon className="h-4 w-4" />
-          </div>
+            />
+          )}
         </div>
+        <p className="mt-3 text-[1.7rem] font-semibold tracking-tight text-slate-50 font-mono tabular-nums">
+          {value}
+        </p>
+        {subtext && (
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+            {subtext}
+          </p>
+        )}
       </div>
     </div>
   )

@@ -56,7 +56,7 @@ function buildDraftSession(
   return {
     id: sessionId,
     project_id: projectId,
-    provider: latestAssistant?.agentProvider ?? 'openai',
+    provider: latestAssistant?.agentProvider ?? 'unknown',
     model: latestAssistant?.agentModel ?? 'unknown',
     status: liveStatus === 'error' ? 'failed' : 'active',
     agent_slug: 'persona',
@@ -440,7 +440,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
             onClick={() => setDeskOpen(false)}
             className="absolute inset-0"
           />
-          <div className="absolute inset-y-0 right-0 w-full max-w-[26rem] overflow-hidden border-l border-slate-800/70 bg-[#07090d] shadow-[0_28px_80px_-36px_rgba(15,23,42,0.95)]">
+          <div className="absolute inset-y-0 right-0 w-full max-w-[26rem] overflow-hidden border-l border-slate-800/70 bg-background shadow-[0_28px_80px_-36px_rgba(15,23,42,0.95)]">
             <PersonaOperatorDeck
               persona={props.persona}
               personaName={state.personaDisplayName}

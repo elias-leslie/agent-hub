@@ -1,6 +1,6 @@
 export function LoadingState() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/85 shadow-[0_0_0_1px_rgba(15,23,42,0.35)]">
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/85">
       <div className="h-12 border-b border-slate-800 bg-slate-900/80" />
       {Array.from({ length: 10 }).map((_, i) => (
         <div
