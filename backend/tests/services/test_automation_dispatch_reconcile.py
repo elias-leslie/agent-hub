@@ -170,3 +170,25 @@ async def test_dispatch_snapshots_owner_definition_before_session_closes():
     assert run.status == "accepted"
     assert run.owner_run_id == "hatchet-1"
     sessions[1].commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_records_a_cancelled_hatchet_run_as_cancelled():
+    """A cancelled Hatchet run completes with no task output; it is not a success."""
+    pending = SimpleNamespace(
+        id="run-1", status="accepted", owner_run_id="hatchet-1",
+        workflow_key="agent-hub.model_enrichment_sync", definition_version=1,
+    )
+    run = SimpleNamespace(status="accepted", completed_at=None)
+    sessions = [Session(pending=[pending]), Session(item=BoundDefinition()), Session(item=run)]
+    result = AsyncMock(return_value={})
+    hatchet = SimpleNamespace(runs=SimpleNamespace(workflow_run_listener=SimpleNamespace(aio_result=result)))
+
+    with (
+        patch("app.services.automation_dispatch.async_session", side_effect=sessions),
+        patch("app.hatchet_app.get_hatchet", return_value=hatchet),
+    ):
+        settled = await reconcile_runs()
+
+    assert settled == 1
+    assert run.status == "cancelled"

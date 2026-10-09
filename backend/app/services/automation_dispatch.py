@@ -87,6 +87,7 @@ async def sync_jobinator_policy() -> bool:
 def _hatchet_task(target: str):
     from app.workflows.model_sync import model_enrichment_sync_task
     from app.workflows.persona_heartbeat import persona_heartbeat_task
+    from app.workflows.persona_scheduler import persona_scheduler_task
     from app.workflows.scheduled import (
         data_retention_task,
         feedback_cleanup_task,
@@ -99,6 +100,7 @@ def _hatchet_task(target: str):
 
     tasks = {
         "persona_heartbeat": persona_heartbeat_task,
+        "persona_scheduler": persona_scheduler_task,
         "session_cleanup": session_cleanup_task,
         "session_reaper": session_reaper_task,
         "tier_optimizer": tier_optimizer_task,
@@ -286,11 +288,12 @@ async def reconcile_runs() -> int:
         try:
             # The Hatchet REST status route is unavailable on this deployment;
             # its workflow listener returns completed results through gRPC.
-            await asyncio.wait_for(
+            output = await asyncio.wait_for(
                 get_hatchet().runs.workflow_run_listener.aio_result(owner_run_id),
                 timeout=2.0,
             )
-            terminal = "succeeded"
+            # A cancelled Hatchet run completes with no task output.
+            terminal = "succeeded" if output else "cancelled"
         except TimeoutError:
             continue
         except FailedTaskRunExceptionGroup:

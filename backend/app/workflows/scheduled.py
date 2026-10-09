@@ -82,12 +82,11 @@ class MemoryGovernanceResult(BaseModel):
 @hatchet.task(
     name="session-cleanup",
     input_validator=EmptyInput,
-    on_crons=["*/15 * * * *"],
     execution_timeout="120s",
     concurrency=ConcurrencyExpression(
         expression="'session_cleanup'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def session_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -110,12 +109,11 @@ async def session_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any
 @hatchet.task(
     name="tier-optimizer",
     input_validator=EmptyInput,
-    on_crons=["0 2 * * *"],
     execution_timeout="600s",
     concurrency=ConcurrencyExpression(
         expression="'tier_optimizer'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -146,12 +144,11 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 @hatchet.task(
     name="memory-cleanup",
     input_validator=EmptyInput,
-    on_crons=["0 3 * * 0"],
     execution_timeout="300s",
     concurrency=ConcurrencyExpression(
         expression="'memory_cleanup'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -192,12 +189,11 @@ async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 @hatchet.task(
     name="feedback-cleanup",
     input_validator=EmptyInput,
-    on_crons=["30 3 * * *"],
     execution_timeout="180s",
     concurrency=ConcurrencyExpression(
         expression="'feedback_cleanup'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -223,12 +219,11 @@ async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, An
 @hatchet.task(
     name="data-retention",
     input_validator=EmptyInput,
-    on_crons=["0 4 * * *"],
     execution_timeout="600s",
     concurrency=ConcurrencyExpression(
         expression="'data_retention'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -256,12 +251,11 @@ async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 @hatchet.task(
     name="memory-governance",
     input_validator=EmptyInput,
-    on_crons=["15 3 * * *"],
     execution_timeout="180s",
     concurrency=ConcurrencyExpression(
         expression="'memory_governance'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def memory_governance_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:

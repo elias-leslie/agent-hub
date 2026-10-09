@@ -305,7 +305,9 @@ async def sync_all(db: AsyncSession) -> dict[str, Any]:
         "bfcl": len(bfcl_data),
         "livebench": len(livebench_data),
     }
-    discovery_summary = _build_discovery_summary(models_dev_data, catalog_entries)
+    # Retired rows count as known, so the watchlist never offers them back.
+    known_entries = await get_model_catalog_entries(db, active_only=False)
+    discovery_summary = _build_discovery_summary(models_dev_data, known_entries)
 
     if not any(source_counts.values()):
         return {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
 from app.db import get_db
 from app.routing.registry import is_workload_provider
+from app.services._enrichment_normalizers import _bare_model_id
 
 if TYPE_CHECKING:
     from app.constants.catalog import ModelEntry
@@ -160,17 +161,45 @@ def _build_model_info(
     )
 
 
+def _bills_per_token(entry: ModelEntry) -> bool:
+    """Subscription and local models have no per-token price to sync."""
+    return entry.provider != "local" and "subscription" not in (entry.availability or "")
+
+
+def _current_discovery(raw: dict[str, Any], known_ids: set[str]) -> CatalogDiscoveryInfo:
+    """Drop watchlist samples that were catalogued after the saved sync."""
+    discovery = CatalogDiscoveryInfo.model_validate(raw)
+    providers = []
+    for provider in discovery.top_providers:
+        fresh = [model_id for model_id in provider.sample_model_ids if _bare_model_id(model_id) not in known_ids]
+        removed = len(provider.sample_model_ids) - len(fresh)
+        discovery.unmatched_model_count -= removed
+        provider = provider.model_copy(
+            update={"sample_model_ids": fresh, "unmatched_count": provider.unmatched_count - removed}
+        )
+        if provider.unmatched_count > 0:
+            providers.append(provider)
+    discovery.unmatched_provider_count -= len(discovery.top_providers) - len(providers)
+    discovery.top_providers = providers
+    discovery.sample_model_ids = [
+        model_id for model_id in discovery.sample_model_ids if _bare_model_id(model_id) not in known_ids
+    ]
+    return discovery
+
+
 def _build_catalog_health(
     *,
     entries: list[ModelEntry],
     enrichments: dict[str, ModelEnrichment],
     sync_state: ModelEnrichment | object | None,
     last_sync: datetime | None,
+    known_ids: set[str] | None = None,
 ) -> CatalogHealthInfo:
     enriched_models = sum(1 for entry in entries if entry.id in enrichments)
+    metered = [entry for entry in entries if _bills_per_token(entry)]
     live_priced_models = sum(
         1
-        for entry in entries
+        for entry in metered
         if (
             (enrichment := enrichments.get(entry.id)) is not None
             and (enrichment.ext_input_per_m is not None or enrichment.ext_output_per_m is not None)
@@ -182,14 +211,15 @@ def _build_catalog_health(
     )
     source_counts = getattr(sync_state, "source_counts", None)
     discovery_raw = getattr(sync_state, "discovery_summary", None)
-    discovery = CatalogDiscoveryInfo.model_validate(discovery_raw or {}) if discovery_raw else None
+    known = known_ids if known_ids is not None else {_bare_model_id(entry.id) for entry in entries}
+    discovery = _current_discovery(discovery_raw, known) if discovery_raw else None
 
     return CatalogHealthInfo(
         total_models=len(entries),
         enriched_models=enriched_models,
         unenriched_models=len(entries) - enriched_models,
         models_with_live_pricing=live_priced_models,
-        models_missing_live_pricing=len(entries) - live_priced_models,
+        models_missing_live_pricing=len(metered) - live_priced_models,
         is_stale=is_stale,
         stale_after_hours=_CATALOG_STALE_AFTER_HOURS,
         sync_status=getattr(sync_state, "status", None),
@@ -227,11 +257,16 @@ async def list_models() -> ModelsResponse:
                 synced_times = [e.synced_at for e in enrichments.values() if e.synced_at]
                 if synced_times:
                     last_sync = max(synced_times)
+            known_ids = {
+                _bare_model_id(entry.id)
+                for entry in await get_model_catalog_entries(db, active_only=False)
+            }
             catalog_health = _build_catalog_health(
                 entries=entries,
                 enrichments=enrichments,
                 sync_state=sync_state,
                 last_sync=last_sync,
+                known_ids=known_ids,
             )
     except Exception:
         logger.warning("Failed to load model enrichments", exc_info=True)

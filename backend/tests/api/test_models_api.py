@@ -243,3 +243,61 @@ def test_build_catalog_health_reads_sync_state_discovery() -> None:
     assert health.discovery is not None
     assert health.discovery.unmatched_model_count == 4
     assert health.discovery.top_providers[0].provider_name == "xAI"
+
+
+def _watchlist_state() -> SimpleNamespace:
+    return SimpleNamespace(
+        status="success",
+        error=None,
+        source_counts={"models_dev": 10},
+        discovery_summary={
+            "unmatched_model_count": 3,
+            "unmatched_provider_count": 2,
+            "top_providers": [
+                {"provider_id": "claude", "provider_name": "Claude", "unmatched_count": 1,
+                 "sample_model_ids": ["claude-opus-5-5"]},
+                {"provider_id": "gemini", "provider_name": "Gemini", "unmatched_count": 2,
+                 "sample_model_ids": ["gemini-9-pro", "claude-fable-5-1"]},
+            ],
+            "sample_model_ids": ["claude-opus-5-5", "gemini-9-pro", "claude-fable-5-1"],
+        },
+    )
+
+
+def test_watchlist_drops_models_catalogued_or_retired_after_the_saved_sync() -> None:
+    entry = get_model_entry("xai/grok-4.20-0309-reasoning")
+    assert entry is not None
+
+    health = _build_catalog_health(
+        entries=[entry],
+        enrichments={},
+        sync_state=_watchlist_state(),
+        last_sync=datetime.now(UTC),
+        known_ids={"claude-opus-5-5", "claude-fable-5-1", "grok-4.20-0309-reasoning"},
+    )
+
+    assert health.discovery is not None
+    assert health.discovery.sample_model_ids == ["gemini-9-pro"]
+    assert [p.provider_id for p in health.discovery.top_providers] == ["gemini"]
+    assert health.discovery.top_providers[0].unmatched_count == 1
+    assert (health.discovery.unmatched_model_count, health.discovery.unmatched_provider_count) == (1, 1)
+
+
+def test_subscription_and_local_models_are_not_counted_as_missing_live_pricing() -> None:
+    metered = get_model_entry("xai/grok-4.20-0309-reasoning")
+    assert metered is not None
+    subscription = _entry_with(metered, id="claude-opus-5-5", provider="claude",
+                               availability="claude_code_cli_subscription")
+    local = _entry_with(metered, id="local/qwen", provider="local", availability=None)
+
+    health = _build_catalog_health(
+        entries=[metered, subscription, local], enrichments={}, sync_state=None, last_sync=None,
+    )
+
+    assert (health.models_with_live_pricing, health.models_missing_live_pricing) == (0, 1)
+
+
+def _entry_with(entry: ModelEntry, **changes) -> ModelEntry:
+    from dataclasses import replace
+
+    return replace(entry, **changes)

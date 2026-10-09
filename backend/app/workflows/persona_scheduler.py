@@ -20,6 +20,7 @@ from app.db import async_session
 from app.hatchet_app import hatchet
 from app.services.telegram_config_service import load_runtime_config
 from app.services.telegram_delivery import send_rendered_message
+from app.workflows.scheduled import EmptyInput
 
 logger = logging.getLogger(__name__)
 
@@ -391,8 +392,7 @@ def _update_job_state(job: Any, now: datetime) -> None:
 
 @hatchet.task(
     name="persona-scheduler",
-    input_validator=BaseModel,
-    on_crons=["*/5 * * * *"],
+    input_validator=EmptyInput,
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",
         max_runs=1,
@@ -401,7 +401,7 @@ def _update_job_state(job: Any, now: datetime) -> None:
         limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
-async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+async def persona_scheduler_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     """Poll and execute due scheduled jobs."""
     from sqlalchemy import select
 
@@ -413,7 +413,7 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
     errors: list[str] = []
     executed = 0
 
-    if not await is_workflow_schedule_enabled("persona_scheduler"):
+    if not await is_workflow_schedule_enabled("persona_scheduler", automation_run_id=input.automation_run_id):
         ctx.log("Persona scheduler skipped (schedule disabled)")
         return SchedulerResult(status="disabled").model_dump()
 

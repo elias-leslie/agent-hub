@@ -1,12 +1,13 @@
-"""Model enrichment sync — daily cron to fetch external benchmark data.
+"""Model enrichment sync: fetch external pricing and benchmark data.
 
-Runs once daily at 6 AM UTC, fetching external pricing/benchmark data
-to enrich DB-backed model catalog rows.
+The central automation clock dispatches this daily (profile
+``static:model_enrichment_sync``); there is no Hatchet cron trigger, so a stray
+tick can never cancel the dispatched run. A run that saves nothing fails, so
+the automation run records the failure instead of a silent success.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
@@ -15,26 +16,22 @@ from pydantic import BaseModel
 from app.hatchet_app import hatchet
 from app.workflows.scheduled import EmptyInput
 
-logger = logging.getLogger(__name__)
-
 
 class ModelSyncResult(BaseModel):
     status: str
     enriched: int = 0
     total: int = 0
-    error: str | None = None
 
 
 @hatchet.task(
     name="model-enrichment-sync",
     input_validator=EmptyInput,
-    on_crons=["0 6 * * *"],
     execution_timeout="120s",
     retries=1,
     concurrency=ConcurrencyExpression(
         expression="'model_sync'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def model_enrichment_sync_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
@@ -51,27 +48,18 @@ async def model_enrichment_sync_task(input: EmptyInput, ctx: Context) -> dict[st
 
     ctx.log("Starting model enrichment sync")
 
-    try:
-        from app.db import async_session
-        from app.services.model_enrichment_service import sync_all
+    from app.db import async_session
+    from app.services.model_enrichment_service import sync_all
 
-        async with async_session() as db:
-            result = await sync_all(db)
+    async with async_session() as db:
+        result = await sync_all(db)
 
-        out = ModelSyncResult(
-            status=result.get("status", "success"),
-            enriched=result.get("enriched", 0),
-            total=result.get("total", 0),
-        )
-        ctx.log(
-            "Model sync complete: "
-            f"{out.enriched}/{out.total} enriched"
-        )
-        return out.model_dump()
-
-    except Exception as e:
-        logger.exception("Model enrichment sync failed")
-        return ModelSyncResult(
-            status="error",
-            error=str(e),
-        ).model_dump()
+    out = ModelSyncResult(
+        status=result.get("status", "error"),
+        enriched=result.get("enriched", 0),
+        total=result.get("total", 0),
+    )
+    if out.status != "success":
+        raise RuntimeError(f"Model enrichment sync saved nothing (status={out.status})")
+    ctx.log(f"Model sync complete: {out.enriched}/{out.total} enriched")
+    return out.model_dump()
