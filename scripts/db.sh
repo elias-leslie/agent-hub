@@ -480,10 +480,12 @@ cmd_query() {
         error "Write operations blocked. db query is read-only. Use psql directly for writes."
     fi
 
+    # The keyword check above misses multi-statement and CTE writes; the
+    # read-only transaction default makes the server reject them.
     if [[ "$plain_output" == "true" ]]; then
-        run_psql "$query"
+        PGOPTIONS="${PGOPTIONS:-} -c default_transaction_read_only=on" run_psql "$query"
     else
-        run_psql_formatted "$query"
+        PGOPTIONS="${PGOPTIONS:-} -c default_transaction_read_only=on" run_psql_formatted "$query"
     fi
 }
 

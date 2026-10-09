@@ -73,6 +73,31 @@ done
     assert "QUERY=SELECT current_database()" in result.stdout
 
 
+def test_db_query_runs_in_read_only_transaction(tmp_path: Path) -> None:
+    env = _fake_env(
+        tmp_path,
+        ["TEST2_DB_URL=postgresql://test2_user@localhost:5432/test2"],
+    )
+    _write_executable(
+        tmp_path / "bin" / "psql",
+        """#!/usr/bin/env bash
+printf 'PGOPTIONS=%s\n' "$PGOPTIONS"
+""",
+    )
+
+    result = subprocess.run(
+        [str(DB_SCRIPT), "-P", "test2", "query", "-t", "SELECT 1; DELETE FROM sessions"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "default_transaction_read_only=on" in result.stdout
+
+
 def test_db_query_unknown_aux_project_mentions_expected_env_var(tmp_path: Path) -> None:
     env = _fake_env(tmp_path, [])
     _write_executable(tmp_path / "bin" / "psql", "#!/usr/bin/env bash\nexit 0\n")
