@@ -263,6 +263,19 @@ export default function ModelsPage() {
 
   const sourceCounts = catalogHealth?.source_counts ?? {}
   const discoveryProviders = catalogHealth?.discovery?.top_providers ?? []
+  const newestModel = useMemo(
+    () =>
+      models
+        .filter((model) => model.release_date)
+        .reduce<(typeof models)[number] | null>(
+          (newest, model) =>
+            !newest || (model.release_date ?? '') > (newest.release_date ?? '')
+              ? model
+              : newest,
+          null,
+        ),
+    [models],
+  )
 
   return (
     <div className="page-shell">
@@ -280,13 +293,12 @@ export default function ModelsPage() {
                 </div>
                 <div className="space-y-3">
                   <h1 className="font-serif text-3xl tracking-tight text-slate-50 lg:text-4xl">
-                    Model truth, GPT-5.5 readiness, price honesty.
+                    Model truth, price honesty.
                   </h1>
                   <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                    Curated registry stays authoritative. GPT-5.5 is routed
-                    through Codex OAuth until API availability lands; sync
-                    overlays live pricing and benchmark evidence for API-backed
-                    models.
+                    The curated catalog decides which models Agent Hub can
+                    route. Codex and Claude run on subscriptions; sync overlays
+                    live pricing and benchmark evidence for API-billed models.
                   </p>
                 </div>
               </div>
@@ -305,7 +317,7 @@ export default function ModelsPage() {
                     Newest
                   </div>
                   <div className="text-sm font-medium text-emerald-100">
-                    GPT-5.5 Codex-only
+                    {newestModel?.name ?? 'No release dates yet'}
                   </div>
                 </div>
                 <button
