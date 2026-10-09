@@ -12,20 +12,6 @@ from app.constants.catalog import (
     MODEL_CATALOG_BY_ID,
     MODEL_REGISTRY,
     SCORE_WEIGHTS,
-    VALID_CLAUDE_MODELS,
-    VALID_CLOUDFLARE_MODELS,
-    VALID_CODEX_MODELS,
-    VALID_DEEPSEEK_MODELS,
-    VALID_GEMINI_MODELS,
-    VALID_KIMI_CODE_MODELS,
-    VALID_LOCAL_MODELS,
-    VALID_MINIMAX_MODELS,
-    VALID_MOONSHOT_MODELS,
-    VALID_NVIDIA_MODELS,
-    VALID_OPENAI_MODELS,
-    VALID_OPENROUTER_MODELS,
-    VALID_XAI_MODELS,
-    VALID_ZHIPU_MODELS,
     ModelCapabilities,
     ModelCost,
     ModelEntry,
@@ -75,7 +61,7 @@ from app.constants.models import (
     XAI_GROK_4_20,
     XAI_GROK_4_20_MULTI_AGENT,
 )
-from app.constants.projects import VALID_AGENT_TYPES, VALID_PROJECT_IDS
+from app.constants.projects import VALID_PROJECT_IDS
 from app.constants.subtask_types import (
     SUBTASK_TYPE_DESCRIPTIONS,
     SUBTASK_TYPES,

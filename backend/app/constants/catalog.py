@@ -35,20 +35,6 @@ __all__ = [
     "MODEL_CATALOG_BY_ID",
     "MODEL_REGISTRY",
     "SCORE_WEIGHTS",
-    "VALID_CLAUDE_MODELS",
-    "VALID_CLOUDFLARE_MODELS",
-    "VALID_CODEX_MODELS",
-    "VALID_DEEPSEEK_MODELS",
-    "VALID_GEMINI_MODELS",
-    "VALID_KIMI_CODE_MODELS",
-    "VALID_LOCAL_MODELS",
-    "VALID_MINIMAX_MODELS",
-    "VALID_MOONSHOT_MODELS",
-    "VALID_NVIDIA_MODELS",
-    "VALID_OPENAI_MODELS",
-    "VALID_OPENROUTER_MODELS",
-    "VALID_XAI_MODELS",
-    "VALID_ZHIPU_MODELS",
     "ModelCapabilities",
     "ModelCost",
     "ModelEntry",
@@ -99,38 +85,6 @@ def _default_aliases(entries: list[ModelEntry]) -> dict[str, str]:
     return aliases
 
 
-def _refresh_valid_model_globals() -> None:
-    global VALID_CLAUDE_MODELS
-    global VALID_CLOUDFLARE_MODELS
-    global VALID_CODEX_MODELS
-    global VALID_DEEPSEEK_MODELS
-    global VALID_GEMINI_MODELS
-    global VALID_KIMI_CODE_MODELS
-    global VALID_LOCAL_MODELS
-    global VALID_MINIMAX_MODELS
-    global VALID_MOONSHOT_MODELS
-    global VALID_NVIDIA_MODELS
-    global VALID_OPENAI_MODELS
-    global VALID_OPENROUTER_MODELS
-    global VALID_XAI_MODELS
-    global VALID_ZHIPU_MODELS
-
-    VALID_CLAUDE_MODELS = _models_for_provider("claude")
-    VALID_CLOUDFLARE_MODELS = _models_for_provider("cloudflare")
-    VALID_CODEX_MODELS = _models_for_provider("codex")
-    VALID_DEEPSEEK_MODELS = _models_for_provider("deepseek")
-    VALID_GEMINI_MODELS = _models_for_provider("gemini")
-    VALID_KIMI_CODE_MODELS = _models_for_provider("kimi-code")
-    VALID_LOCAL_MODELS = _models_for_provider("local")
-    VALID_MINIMAX_MODELS = _models_for_provider("minimax")
-    VALID_MOONSHOT_MODELS = _models_for_provider("moonshot")
-    VALID_NVIDIA_MODELS = _models_for_provider("nvidia")
-    VALID_OPENAI_MODELS = _models_for_provider("openai")
-    VALID_OPENROUTER_MODELS = _models_for_provider("openrouter")
-    VALID_XAI_MODELS = _models_for_provider("xai")
-    VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
-
-
 def replace_runtime_model_catalog(
     entries: list[ModelEntry],
     aliases: dict[str, str] | None = None,
@@ -148,7 +102,6 @@ def replace_runtime_model_catalog(
     MODEL_CATALOG_BY_ID.update({e.id: e for e in MODEL_CATALOG})
     MODEL_ALIASES.clear()
     MODEL_ALIASES.update(aliases or _default_aliases(MODEL_CATALOG))
-    _refresh_valid_model_globals()
 
 
 def resolve_model(alias: str) -> str:
@@ -166,30 +119,5 @@ def get_model_capabilities(model: str) -> ModelCapabilities | None:
     entry = get_model_entry(model)
     return entry.capabilities if entry else None
 
-
-def _models_for_provider(provider: str) -> tuple[str, ...]:
-    """Derive valid model IDs + aliases for a provider from the catalog."""
-    return tuple(
-        x
-        for entry in MODEL_CATALOG
-        if entry.provider == provider
-        for x in (entry.id, entry.alias)
-    )
-
-
-VALID_CLAUDE_MODELS: tuple[str, ...] = ()
-VALID_CLOUDFLARE_MODELS: tuple[str, ...] = ()
-VALID_CODEX_MODELS: tuple[str, ...] = ()
-VALID_DEEPSEEK_MODELS: tuple[str, ...] = ()
-VALID_GEMINI_MODELS: tuple[str, ...] = ()
-VALID_KIMI_CODE_MODELS: tuple[str, ...] = ()
-VALID_LOCAL_MODELS: tuple[str, ...] = ()
-VALID_MINIMAX_MODELS: tuple[str, ...] = ()
-VALID_MOONSHOT_MODELS: tuple[str, ...] = ()
-VALID_NVIDIA_MODELS: tuple[str, ...] = ()
-VALID_OPENAI_MODELS: tuple[str, ...] = ()
-VALID_OPENROUTER_MODELS: tuple[str, ...] = ()
-VALID_XAI_MODELS: tuple[str, ...] = ()
-VALID_ZHIPU_MODELS: tuple[str, ...] = ()
 
 replace_runtime_model_catalog(MODEL_CATALOG)

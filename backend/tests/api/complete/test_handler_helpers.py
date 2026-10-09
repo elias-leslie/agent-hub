@@ -131,7 +131,6 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     }
     assert observability_args.kwargs["orchestration_path"] == "single_turn"
     assert observability_args.kwargs["requested_max_turns"] == 1
-    assert observability_args.kwargs["provider"] == "claude"
     assert cost_args.args[2] == "claude-haiku-5-5"
     assert log_tokens_args.args[2] == "claude-haiku-5-5"
     assert session.model == "claude-haiku-5-5"

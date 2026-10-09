@@ -1,25 +1,8 @@
-"""Project and agent type constants backed by the canonical ``st`` registry."""
+"""Project constants backed by the canonical ``st`` registry."""
 
 from __future__ import annotations
 
 import time
-
-# Valid agent types supported by the platform
-VALID_AGENT_TYPES = {
-    "cloudflare",
-    "codex",
-    "deepseek",
-    "gemini",
-    "kimi-code",
-    "local",
-    "minimax",
-    "moonshot",
-    "nvidia",
-    "openai",
-    "openrouter",
-    "xai",
-    "zhipu",
-}
 
 # ---------------------------------------------------------------------------
 # Dynamic project identity — derived only from the SummitFlow project registry

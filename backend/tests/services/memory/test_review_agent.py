@@ -982,7 +982,6 @@ async def test_finalize_review_exception_closes_session_without_usage() -> None:
             db,
             session_id="review-session",
             model="codex/gpt-5.5",
-            provider="codex",
             reviewer_agent_slug="memory-curator",
             error=RuntimeError("provider unavailable"),
         )

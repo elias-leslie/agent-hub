@@ -80,11 +80,8 @@ async def update_preferences(
 ) -> PreferencesResponse:
     """Update user preferences. Only provided fields are updated."""
     try:
-        from app.routing.registry import invalidate as invalidate_adapter
-
         if preferences.codex_auth_preference is not None:
             await set_preference_value(db, "codex_auth_preference", preferences.codex_auth_preference)
-            invalidate_adapter("codex")
 
         # Return current state
         return PreferencesResponse(

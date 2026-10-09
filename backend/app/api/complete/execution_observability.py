@@ -17,7 +17,6 @@ ExecutionPath = Literal["single_turn", "multi_turn", "tool_loop"]
 def build_execution_observability(
     *,
     session: Any,
-    provider: str,
     requested_max_turns: int,
     orchestration_path: ExecutionPath,
     final_finish_reason: str | None,
@@ -30,7 +29,6 @@ def build_execution_observability(
     """Build structured execution metadata for DB/session-event observability."""
     effective_turn_budget = _effective_turn_budget(
         orchestration_path=orchestration_path,
-        provider=provider,
         requested_max_turns=requested_max_turns,
     )
     execution = {
@@ -63,7 +61,6 @@ async def persist_execution_observability(
     session: Any,
     session_id: str,
     *,
-    provider: str,
     model_used: str,
     requested_max_turns: int,
     orchestration_path: ExecutionPath,
@@ -77,7 +74,6 @@ async def persist_execution_observability(
     """Persist execution metadata to the session row and a tool_audit event."""
     execution = build_execution_observability(
         session=session,
-        provider=provider,
         requested_max_turns=requested_max_turns,
         orchestration_path=orchestration_path,
         final_finish_reason=final_finish_reason,
@@ -107,11 +103,10 @@ async def persist_execution_observability(
 def _effective_turn_budget(
     *,
     orchestration_path: ExecutionPath,
-    provider: str,
     requested_max_turns: int,
 ) -> int:
     if orchestration_path == "tool_loop":
-        return resolve_tool_max_turns(provider, requested_max_turns)
+        return resolve_tool_max_turns(requested_max_turns)
     if orchestration_path == "multi_turn":
         if requested_max_turns <= 4:
             return requested_max_turns

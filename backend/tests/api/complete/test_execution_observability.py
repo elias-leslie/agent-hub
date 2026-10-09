@@ -16,7 +16,6 @@ def test_build_execution_observability_uses_tool_budget_and_max_turn_stop_reason
 
     execution = build_execution_observability(
         session=session,
-        provider="codex",
         requested_max_turns=1,
         orchestration_path="tool_loop",
         final_finish_reason="max_turns",
@@ -53,7 +52,6 @@ async def test_persist_execution_observability_updates_session_metadata_and_stor
             db,
             session,
             "sess-2",
-            provider="claude",
             model_used="claude-sonnet-5-5",
             requested_max_turns=4,
             orchestration_path="multi_turn",

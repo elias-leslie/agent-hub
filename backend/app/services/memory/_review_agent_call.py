@@ -157,7 +157,6 @@ async def _complete_review_with_model(
             db,
             session_id=session_id,
             model=model,
-            provider=provider,
             reviewer_agent_slug=reviewer_agent_slug,
             error=exc,
         )
@@ -222,7 +221,6 @@ async def _finalize_review_exception(
     *,
     session_id: str,
     model: str,
-    provider: str,
     reviewer_agent_slug: str,
     error: Exception,
 ) -> None:
@@ -263,7 +261,6 @@ async def _finalize_review_exception(
         db,
         session,
         session_id,
-        provider=provider,
         model_used=model,
         requested_max_turns=1,
         orchestration_path="single_turn",

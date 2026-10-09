@@ -65,7 +65,6 @@ from ..utils.sanitize_unicode import sanitize_surrogates
 
 # Re-export for downstream type-checkers that don't follow the `as` alias.
 __all__ = [
-    "AnthropicEffort",
     "AnthropicOptions",
     "AnthropicThinkingDisplay",
     "anthropic_provider",
@@ -76,7 +75,6 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-AnthropicEffort = Literal["low", "medium", "high", "xhigh", "max"]
 AnthropicThinkingDisplay = Literal["summarized", "omitted"]
 
 
@@ -86,7 +84,6 @@ class AnthropicOptions(StreamOptions):
 
     thinking_enabled: bool | None = None
     thinking_budget_tokens: int | None = None
-    effort: AnthropicEffort | None = None
     thinking_display: AnthropicThinkingDisplay | None = None
     interleaved_thinking: bool | None = None
     tool_choice: str | dict[str, Any] | None = None
@@ -367,34 +364,6 @@ def _convert_tools(
     return out
 
 
-def _supports_adaptive_thinking(model_id: str) -> bool:
-    """Opus 4.6+/Sonnet 4.6 use adaptive thinking (model decides)."""
-
-    return (
-        "opus-4-6" in model_id
-        or "opus-4.6" in model_id
-        or "opus-4-7" in model_id
-        or "opus-4.7" in model_id
-        or "sonnet-4-6" in model_id
-        or "sonnet-4.6" in model_id
-    )
-
-
-def _map_thinking_level_to_effort(
-    model: Model[Any],
-    level: str | None,
-) -> AnthropicEffort:
-    if level and model.thinking_level_map:
-        mapped = model.thinking_level_map.get(level)
-        if isinstance(mapped, str) and mapped in ("low", "medium", "high", "xhigh", "max"):
-            return mapped
-    if level in ("minimal", "low"):
-        return "low"
-    if level == "medium":
-        return "medium"
-    return "high"
-
-
 def build_params(
     model: Model[Any],
     context: Context,
@@ -435,16 +404,11 @@ def build_params(
 
     if model.reasoning and options and options.thinking_enabled:
         display: AnthropicThinkingDisplay = options.thinking_display or "summarized"
-        if _supports_adaptive_thinking(model.id):
-            params["thinking"] = {"type": "adaptive", "display": display}
-            if options.effort:
-                params["output_config"] = {"effort": options.effort}
-        else:
-            params["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": options.thinking_budget_tokens or 1024,
-                "display": display,
-            }
+        params["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": options.thinking_budget_tokens or 1024,
+            "display": display,
+        }
     elif model.reasoning and options and options.thinking_enabled is False:
         params["thinking"] = {"type": "disabled"}
 
@@ -475,11 +439,10 @@ def create_client(
 ) -> AsyncAnthropic:
     """Return an Anthropic Messages-compatible client for ``model``."""
 
-    needs_interleaved_beta = interleaved_thinking and not _supports_adaptive_thinking(model.id)
     beta_features: list[str] = []
     if use_fine_grained_tool_streaming_beta:
         beta_features.append(_FINE_GRAINED_TOOL_STREAMING_BETA)
-    if needs_interleaved_beta:
+    if interleaved_thinking:
         beta_features.append(_INTERLEAVED_THINKING_BETA)
 
     if model.provider == "github-copilot":
@@ -726,14 +689,6 @@ def stream_simple_anthropic(
             _to_anthropic_options(base, thinking_enabled=False),
         )
 
-    if _supports_adaptive_thinking(model.id):
-        effort = _map_thinking_level_to_effort(model, options.reasoning)
-        return stream_anthropic(
-            model,
-            context,
-            _to_anthropic_options(base, thinking_enabled=True, effort=effort),
-        )
-
     level = clamp_reasoning(options.reasoning)
     if level is None or level == "xhigh":
         level = "high"
@@ -771,7 +726,6 @@ def _to_anthropic_options(
     base: StreamOptions,
     *,
     thinking_enabled: bool | None = None,
-    effort: AnthropicEffort | None = None,
     thinking_budget_tokens: int | None = None,
 ) -> AnthropicOptions:
     return AnthropicOptions(
@@ -791,7 +745,6 @@ def _to_anthropic_options(
         metadata=base.metadata,
         thinking_enabled=thinking_enabled,
         thinking_budget_tokens=thinking_budget_tokens,
-        effort=effort,
     )
 
 

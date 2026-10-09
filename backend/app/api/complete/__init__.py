@@ -1,8 +1,5 @@
 """Completion API package."""
 
-from app.routing.registry import clear_cache as clear_adapter_cache
-from app.routing.registry import get_provider_for_model as get_provider
-
 from .async_endpoints import router as async_router
 from .core import (
     CompletionInternalResult,
@@ -68,11 +65,9 @@ __all__ = [
     "ToolDefinition",
     "UsageInfo",
     "async_router",
-    "clear_adapter_cache",
     "complete_internal",
     "extract_text_content",
     "get_or_create_session",
-    "get_provider",
     "is_error_response",
     "normalize_content_for_storage",
     "parse_mention",

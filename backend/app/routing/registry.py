@@ -8,16 +8,12 @@ provider names such as ``claude`` or ``gemini``.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 
 from pydantic import BeforeValidator
 
 from app.constants.models import PROVIDER_NAMES
 
-logger = logging.getLogger(__name__)
-
-_INVALIDATED_PROVIDERS: set[str] = set()
 CREDENTIAL_ONLY_PROVIDERS = frozenset({"typesafe"})
 UNKNOWN_PROVIDER = "unknown"
 
@@ -77,22 +73,6 @@ def list_credential_providers() -> list[str]:
     return sorted(set(list_workload_providers()) | inactive | CREDENTIAL_ONLY_PROVIDERS)
 
 
-def invalidate(provider: str) -> None:
-    """Record provider credential invalidation.
-
-    The old adapter cache is gone. Credential refresh now happens at the
-    provider/request boundary, so this remains as a narrow compatibility hook
-    for OAuth and preferences endpoints.
-    """
-    _INVALIDATED_PROVIDERS.add(provider)
-    logger.info("Provider credentials invalidated for %s", provider)
-
-
-def clear_cache() -> None:
-    """Compatibility alias for old adapter-cache callers."""
-    _INVALIDATED_PROVIDERS.clear()
-
-
 def _validate_provider(v: str) -> str:
     if v not in set(list_providers()):
         raise ValueError(
@@ -120,9 +100,7 @@ __all__ = [
     "UNKNOWN_PROVIDER",
     "ValidProvider",
     "ValidWorkloadProvider",
-    "clear_cache",
     "get_provider_for_model",
-    "invalidate",
     "is_workload_model",
     "is_workload_provider",
     "list_credential_providers",

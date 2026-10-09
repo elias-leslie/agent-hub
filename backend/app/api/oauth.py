@@ -124,10 +124,6 @@ async def exchange_oauth_code(
 
     try:
         email = await exchange_codex(body, code_verifier)
-
-        from app.routing.registry import invalidate as invalidate_adapter
-
-        invalidate_adapter(provider)
         logger.info("Manual OAuth exchange succeeded for %s", provider)
         pop_pending_flow(body.state)
         return OAuthExchangeResponse(success=True, provider=provider, email=email)

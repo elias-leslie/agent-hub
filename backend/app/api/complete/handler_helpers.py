@@ -73,7 +73,6 @@ async def save_and_track(
         db,
         session,
         session_id,
-        provider=getattr(result, "provider", session.provider),
         model_used=effective_model,
         requested_max_turns=request.max_turns,
         orchestration_path="tool_loop" if request.execute_tools or request.max_turns > 1 else "single_turn",
