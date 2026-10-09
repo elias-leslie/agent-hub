@@ -22,7 +22,8 @@ jobs:
       postgres:
         # pgvector image (postgres 16 + the `vector` extension) — migrations run
         # `CREATE EXTENSION vector`, which the stock postgres:16-alpine lacks.
-        image: pgvector/pgvector:pg16
+        # Google's Docker Hub cache: same digests, no anonymous Docker Hub pull limit.
+        image: mirror.gcr.io/pgvector/pgvector:pg16
         env:
           POSTGRES_USER: agent_hub_app
           POSTGRES_PASSWORD: test
