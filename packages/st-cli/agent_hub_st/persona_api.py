@@ -58,30 +58,6 @@ def update_personality(personality: str, reason: str = "") -> dict[str, Any]:
     return resp.json()
 
 
-def _heartbeat_url(path: str = "") -> str:
-    """Build heartbeat API URL."""
-    from ._api_paths import HEARTBEAT_BASE_PATH
-
-    return f"{get_agent_hub_url()}{HEARTBEAT_BASE_PATH}{path}"
-
-
-def trigger_heartbeat(target_project_id: str | None = None) -> dict[str, Any]:
-    """POST /api/heartbeat/trigger — fire off a manual heartbeat."""
-    payload: dict[str, Any] | None = None
-    if target_project_id:
-        payload = {"target_project_id": target_project_id}
-    resp = httpx.post(_heartbeat_url("/trigger"), json=payload, headers=_get_headers(), timeout=10)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def get_heartbeat_status() -> dict[str, Any]:
-    """GET /api/heartbeat/status — running state + last run info."""
-    resp = httpx.get(_heartbeat_url("/status"), headers=_get_headers(), timeout=10)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def get_activity(time_range: str = "24h", page_size: int = 10) -> dict[str, Any]:
     """GET /api/persona/activity — paginated session history."""
     resp = httpx.get(

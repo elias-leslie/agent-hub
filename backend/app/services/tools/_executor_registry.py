@@ -218,11 +218,9 @@ def build_tool_registry(
         steer_consultation,
     )
     from app.services.tools._executor_feedback import manage_feedback
-    from app.services.tools._executor_io import send_push
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
-        review_improvement_signals,
     )
     from app.services.tools._executor_persona import (
         manage_memory_tags,
@@ -236,11 +234,6 @@ def build_tool_registry(
         write_personality,
         write_user_context,
     )
-    from app.services.tools._executor_scheduling import (
-        cancel_scheduled_job,
-        list_scheduled_jobs,
-        schedule_job,
-    )
 
     return {
         "steer_consultation": steer_consultation,
@@ -248,7 +241,6 @@ def build_tool_registry(
         "cancel_consultation": cancel_consultation,
         "log_agent_performance": log_agent_performance,
         "review_agent_performance": review_agent_performance,
-        "review_improvement_signals": review_improvement_signals,
         "read_personality": read_personality,
         "write_personality": write_personality,
         "write_user_context": write_user_context,
@@ -259,10 +251,6 @@ def build_tool_registry(
         "mark_memory_irrelevant": mark_memory_irrelevant,
         "manage_memory_tags": manage_memory_tags,
         "submit_onboarding": submit_onboarding,
-        "schedule_job": schedule_job,
-        "list_scheduled_jobs": list_scheduled_jobs,
-        "cancel_scheduled_job": cancel_scheduled_job,
-        "send_push": send_push,
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_backups": _make_manage_backups_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,

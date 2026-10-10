@@ -37,3 +37,12 @@ def test_focus_limits_block_findings_and_output_is_capped() -> None:
     many = [_block(f"prompt:{i}", "x", PROMPT_BLOCK_BUDGET + 1) for i in range(10)]
     capped = context_warnings(many, 0)
     assert len(capped) == 6 and capped[-1].startswith("CONTEXT_WARN:+5 more")
+
+
+def test_duplicate_detection_ignores_code_formatting() -> None:
+    blocks = [
+        _block("prompt:a", "never run recursive `find` `rg` `du` or `grep -r` from root"),
+        _block("prompt:b", "never run recursive find rg du or grep -r from root"),
+    ]
+    warnings = context_warnings(blocks)
+    assert len(warnings) == 1 and warnings[0].startswith("CONTEXT_WARN:duplicate prompt:a~prompt:b")

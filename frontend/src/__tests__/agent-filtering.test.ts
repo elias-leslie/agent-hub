@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 
 import { useAgentFiltering } from '@/app/agents/hooks/useAgentFiltering'
 import type { Agent } from '@/app/agents/lib/types'
-import { getPersonaDisplayName } from '@/hooks/use-persona-display-name'
 
 function agent(slug: string, name: string): Agent {
   return {
@@ -35,13 +34,5 @@ describe('agent list filtering', () => {
     )
 
     expect(result.current.map((a) => a.slug)).toEqual(['builder', 'persona'])
-  })
-})
-
-describe('persona display name', () => {
-  it('uses the persona row name and falls back when it is blank', () => {
-    expect(getPersonaDisplayName('  Jenny ')).toBe('Jenny')
-    expect(getPersonaDisplayName('   ')).toBe('Persona')
-    expect(getPersonaDisplayName(undefined)).toBe('Persona')
   })
 })

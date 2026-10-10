@@ -10,7 +10,6 @@ import {
   MessageSquare,
   ScrollText,
   Shield,
-  User,
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -28,12 +27,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Chat',
     icon: MessageSquare,
     description: 'Primary agent workspace',
-  },
-  {
-    href: '/persona',
-    label: 'Persona',
-    icon: User,
-    description: 'Workspace & automation',
   },
   {
     href: '/dashboard',
@@ -100,14 +93,9 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarNavProps {
   isCollapsed: boolean
   pathname: string
-  personaName?: string
 }
 
-export function SidebarNav({
-  isCollapsed,
-  pathname,
-  personaName,
-}: SidebarNavProps) {
+export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
@@ -118,8 +106,7 @@ export function SidebarNav({
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href)
         const Icon = item.icon
-        const label =
-          item.href === '/persona' && personaName ? personaName : item.label
+        const label = item.label
 
         return (
           <Link

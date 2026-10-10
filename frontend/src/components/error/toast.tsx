@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 import { cn } from '@/lib/utils'
@@ -43,19 +44,24 @@ export function useToast() {
 }
 
 // Convenience methods
+// Stable across renders so callers can list it in hook dependencies without
+// re-running effects on every render.
 export function useToastActions() {
   const { addToast } = useToast()
 
-  return {
-    success: (title: string, message?: string) =>
-      addToast({ type: 'success', title, message }),
-    error: (title: string, message?: string) =>
-      addToast({ type: 'error', title, message, duration: 8000 }),
-    warning: (title: string, message?: string) =>
-      addToast({ type: 'warning', title, message, duration: 6000 }),
-    info: (title: string, message?: string) =>
-      addToast({ type: 'info', title, message }),
-  }
+  return useMemo(
+    () => ({
+      success: (title: string, message?: string) =>
+        addToast({ type: 'success', title, message }),
+      error: (title: string, message?: string) =>
+        addToast({ type: 'error', title, message, duration: 8000 }),
+      warning: (title: string, message?: string) =>
+        addToast({ type: 'warning', title, message, duration: 6000 }),
+      info: (title: string, message?: string) =>
+        addToast({ type: 'info', title, message }),
+    }),
+    [addToast],
+  )
 }
 
 interface ToastProviderProps {

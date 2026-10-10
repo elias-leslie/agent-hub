@@ -52,7 +52,7 @@ def test_sync_workflow_posts_canonical_payload(httpx_mock: HTTPXMock) -> None:
         json=_workflow_response(),
     )
 
-    with AgentHubClient() as client:
+    with AgentHubClient() as client, pytest.warns(DeprecationWarning, match="0.8.0"):
         response = client.workflow(
             project_id="agent-hub",
             shared_context="Repo: agent-hub",
@@ -85,12 +85,13 @@ async def test_async_workflow_posts_canonical_payload(httpx_mock: HTTPXMock) -> 
     )
 
     async with AsyncAgentHubClient() as client:
-        response = await client.workflow(
-            project_id="agent-hub",
-            trace_id="task-123",
-            plan={"task": "Create the plan."},
-            review={"task": "Review the implementation."},
-        )
+        with pytest.warns(DeprecationWarning, match="0.8.0"):
+            response = await client.workflow(
+                project_id="agent-hub",
+                trace_id="task-123",
+                plan={"task": "Create the plan."},
+                review={"task": "Review the implementation."},
+            )
 
     request = httpx_mock.get_request()
     assert request is not None

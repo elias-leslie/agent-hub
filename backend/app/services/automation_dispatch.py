@@ -86,8 +86,6 @@ async def sync_jobinator_policy() -> bool:
 
 def _hatchet_task(target: str):
     from app.workflows.model_sync import model_enrichment_sync_task
-    from app.workflows.persona_heartbeat import persona_heartbeat_task
-    from app.workflows.persona_scheduler import persona_scheduler_task
     from app.workflows.scheduled import (
         data_retention_task,
         feedback_cleanup_task,
@@ -99,8 +97,6 @@ def _hatchet_task(target: str):
     from app.workflows.session_reaper import session_reaper_task
 
     tasks = {
-        "persona_heartbeat": persona_heartbeat_task,
-        "persona_scheduler": persona_scheduler_task,
         "session_cleanup": session_cleanup_task,
         "session_reaper": session_reaper_task,
         "tier_optimizer": tier_optimizer_task,
@@ -149,11 +145,7 @@ async def dispatch_run(run_id: str) -> None:
 
     try:
         if dispatch_kind == "hatchet":
-            if dispatch_target == "persona_job":
-                from app.workflows.automation_persona import automation_persona_job_task
-                task = automation_persona_job_task
-            else:
-                task = _hatchet_task(dispatch_target)
+            task = _hatchet_task(dispatch_target)
             try:
                 ref = await task.aio_run_no_wait(
                     input={"automation_run_id": run_id, "manual": manual},

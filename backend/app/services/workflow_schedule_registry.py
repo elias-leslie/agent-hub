@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import async_session
 from app.models import WorkflowScheduleControl
 
-ScheduleCategory = Literal["maintenance", "memory", "persona", "observability", "catalog"]
+ScheduleCategory = Literal["maintenance", "memory", "observability", "catalog"]
 
 
 @dataclass(frozen=True)
@@ -40,21 +40,6 @@ class WorkflowScheduleState(TypedDict):
 
 
 SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
-    WorkflowScheduleDefinition(
-        schedule_id="persona_heartbeat",
-        label="Persona heartbeat cron",
-        description="Checks whether Jenny should run a heartbeat tick. The real cadence still comes from Persona Settings.",
-        cron="*/5 * * * *",
-        category="persona",
-        notes="Persona Settings controls the heartbeat interval. This toggle hard-stops the cron entrypoint itself.",
-    ),
-    WorkflowScheduleDefinition(
-        schedule_id="persona_scheduler",
-        label="Persona scheduled jobs poller",
-        description="Polls and executes due persona_scheduled_jobs, including scheduled pushes and self-honing runs.",
-        cron="*/5 * * * *",
-        category="persona",
-    ),
     WorkflowScheduleDefinition(
         schedule_id="session_cleanup",
         label="Session cleanup",

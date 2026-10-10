@@ -222,7 +222,7 @@ def create_agent(
 )
 def preview_agent(
     slug: Annotated[str, typer.Argument(help="Agent slug")],
-    mode: Annotated[str, typer.Option("--mode", "-m", help="Preview mode: chat, heartbeat, wake, review")] = "chat",
+    mode: Annotated[str, typer.Option("--mode", "-m", help="Preview mode: chat, review")] = "chat",
     project: Annotated[str | None, typer.Option("--project", "-P", help="Optional project scope")] = None,
     phase: Annotated[str | None, typer.Option("--phase", help="Optional phase/event hint")] = None,
     prompt_input: Annotated[str | None, typer.Option("--input", help="Optional task input placeholder")] = None,

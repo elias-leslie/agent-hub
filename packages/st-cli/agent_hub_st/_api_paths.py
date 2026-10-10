@@ -42,7 +42,6 @@ PROMPT_RESTORE_PATH = "/api/prompts/{slug}/revisions/{revision_id}/restore"
 
 # ── Persona & Heartbeat ─────────────────────────────────────────────
 PERSONA_BASE_PATH = "/api/persona"
-HEARTBEAT_BASE_PATH = "/api/heartbeat"
 
 # ── Complete ─────────────────────────────────────────────────────────
 

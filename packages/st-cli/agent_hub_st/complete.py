@@ -44,7 +44,7 @@ def complete_default(
     session_id: Annotated[str | None, _Opt("--session", "-S", help="Continue existing session")] = None,
     memory: Annotated[bool, _Opt("--memory/--no-memory", "-m", help="Enable memory injection")] = True,
     memory_group: Annotated[str | None, _Opt("--memory-group", "-g", help="Memory group ID")] = None,
-    task_type: Annotated[str | None, _Opt("--task-type", help="Optional task type label (e.g. wake, heartbeat)")] = None,
+    task_type: Annotated[str | None, _Opt("--task-type", help="Optional task type label")] = None,
     thinking_level: Annotated[str | None, _Opt("--thinking", help="Thinking level: minimal|low|medium|high|ultrathink")] = None,
     skip_cache: Annotated[bool, _Opt("--skip-cache", help="Bypass response cache")] = False,
     stream: Annotated[bool, _Opt("--stream", help="Stream response via SSE")] = False,

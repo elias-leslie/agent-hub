@@ -3,48 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from agent_hub_st.persona import _get_dispatch_hint, app
+from agent_hub_st.persona import app
 from typer.testing import CliRunner
 
 runner = CliRunner()
-
-
-class TestPersonaHeartbeatHelpers:
-    def test_get_dispatch_hint_formats_first_running_task(self) -> None:
-        client = MagicMock()
-        client._global_url.return_value = "http://example.test/projects/agent-hub/pulse"
-        client.get.return_value = {
-            "running_tasks": [
-                {
-                    "id": "task-123",
-                    "title": "Refactor: backend/app/main.py",
-                }
-            ],
-            "active_owners": [
-                {
-                    "agent_slug": "refactor",
-                    "session_id": "abcd1234-1111-2222-3333-444455556666",
-                }
-            ],
-            "active_sessions": [],
-        }
-
-        result = _get_dispatch_hint(client, "agent-hub")
-
-        assert result == "Dispatch detected: task-123 | refactor | abcd1234 | Refactor: backend/app/main.py"
-
-    def test_get_dispatch_hint_returns_none_without_running_tasks(self) -> None:
-        client = MagicMock()
-        client._global_url.return_value = "http://example.test/projects/agent-hub/pulse"
-        client.get.return_value = {
-            "running_tasks": [],
-            "active_owners": [],
-            "active_sessions": [],
-        }
-
-        assert _get_dispatch_hint(client, "agent-hub") is None
 
 
 class TestPersonaInstructionsCommand:
@@ -80,7 +44,7 @@ class TestPersonaPreviewCommand:
     def test_preview_defaults_to_compact_summary(self) -> None:
         preview = {
             "name": "Jenny",
-            "task_type": "heartbeat",
+            "task_type": "chat",
             "sections": [
                 {
                     "label": "Persona Context",
@@ -110,7 +74,7 @@ class TestPersonaPreviewCommand:
             result = runner.invoke(app, ["preview"])
 
         assert result.exit_code == 0
-        assert "Jenny preview | mode=heartbeat | sections=1 | mandates=1 | guardrails=1" in result.output
+        assert "Jenny preview | mode=chat | sections=1 | mandates=1 | guardrails=1" in result.output
         assert "prompt=5853 tok | severity=danger | low_yield=3935 tok | warnings=1" in result.output
         assert "warn: Prompt budget danger" in result.output
         assert "Persona Context" in result.output
@@ -120,7 +84,7 @@ class TestPersonaPreviewCommand:
     def test_preview_uses_shared_agent_preview_api(self) -> None:
         preview = {
             "name": "Jenny",
-            "task_type": "heartbeat",
+            "task_type": "chat",
             "sections": [],
             "mandate_count": 0,
             "guardrail_count": 0,
@@ -138,8 +102,20 @@ class TestPersonaPreviewCommand:
         assert result.output.strip() == "FULL"
         mock_preview.assert_called_once_with(
             "persona",
-            task_type="heartbeat",
+            task_type="chat",
             project_id=None,
             phase=None,
             prompt_input=None,
         )
+
+
+class TestPersonaStatusCommand:
+    def test_status_reads_only_the_persona_row(self) -> None:
+        with patch(
+            "agent_hub_st.persona_api.get_persona",
+            return_value={"name": "Jenny", "onboarding_phase": "complete"},
+        ):
+            result = runner.invoke(app, ["status"])
+
+        assert result.exit_code == 0
+        assert result.output.strip() == "Persona: Jenny | Onboarding: complete"

@@ -1,0 +1,1152 @@
+{
+ "api_keys_active_ids": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54,
+  55,
+  56,
+  57,
+  58,
+  59,
+  60,
+  61,
+  62,
+  63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  70,
+  71,
+  72,
+  73,
+  74,
+  75,
+  76,
+  77,
+  78,
+  79,
+  80,
+  81,
+  82,
+  83,
+  84,
+  85,
+  86,
+  87,
+  88,
+  89,
+  90,
+  91,
+  92,
+  93,
+  94,
+  95,
+  96,
+  97,
+  98,
+  99,
+  100,
+  101,
+  102,
+  103,
+  104,
+  105,
+  106,
+  107,
+  108,
+  109,
+  110,
+  111,
+  112,
+  113,
+  114,
+  115,
+  116,
+  117,
+  118,
+  119,
+  120,
+  121,
+  122,
+  123,
+  124,
+  125,
+  126,
+  127
+ ],
+ "automation_definitions": [
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "execution_state": {
+      "enum": [
+       "active",
+       "paused"
+      ],
+      "type": "string"
+     },
+     "heartbeat_interval_minutes": {
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {
+    "timezone": "UTC",
+    "type": "cron",
+    "value": "*/5 * * * *"
+   },
+   "description": "Checks whether Jenny should run a heartbeat tick. The real cadence still comes from Persona Settings.",
+   "dispatch_kind": "hatchet",
+   "dispatch_target": "persona_heartbeat",
+   "label": "Persona heartbeat cron",
+   "manual_advances_cursor": false,
+   "manual_when_disabled": true,
+   "overlap_strategy": "cancel_newest",
+   "owner_project_id": "agent-hub",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "agent-hub.persona_heartbeat"
+  },
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "delivery": {
+      "enum": [
+       "none",
+       "push",
+       "telegram"
+      ],
+      "type": "string"
+     },
+     "payload_message": {
+      "type": "string"
+     },
+     "payload_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "payload_type": {
+      "enum": [
+       "agent_turn",
+       "push",
+       "self_honing",
+       "memory_review"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "payload_type",
+     "payload_message",
+     "delivery"
+    ],
+    "type": "object"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {},
+   "description": "Runs an individual persona automation.",
+   "dispatch_kind": "hatchet",
+   "dispatch_target": "persona_job",
+   "label": "Persona scheduled job",
+   "manual_advances_cursor": true,
+   "manual_when_disabled": true,
+   "overlap_strategy": "cancel_newest",
+   "owner_project_id": "agent-hub",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "type": "object"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {
+    "timezone": "UTC",
+    "type": "cron",
+    "value": "*/5 * * * *"
+   },
+   "description": "Polls and executes due persona_scheduled_jobs, including scheduled pushes and self-honing runs.",
+   "dispatch_kind": "hatchet",
+   "dispatch_target": "persona_scheduler",
+   "label": "Persona scheduled jobs poller",
+   "manual_advances_cursor": false,
+   "manual_when_disabled": true,
+   "overlap_strategy": "cancel_newest",
+   "owner_project_id": "agent-hub",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "agent-hub.persona_scheduler"
+  }
+ ],
+ "automation_profile_revisions": [
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "00c9b5e9-af7f-4a14-9fa7-6aff920f8d1d",
+   "profile_id": "88de4c27-382e-4a5d-a4a6-352c944ec977",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "delivery": "none",
+     "payload_message": "{\"dry_run\": false, \"batch_limit\": 10, \"cadence_days\": 45, \"include_archived\": false, \"reviewer_agent_slug\": \"memory-curator\"}",
+     "payload_title": null,
+     "payload_type": "memory_review"
+    },
+    "definition_version": 1,
+    "enabled": true,
+    "imported_unreviewed_count": 0,
+    "label": "Memory quality review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "17 4 * * *",
+    "source_ref": "persona:b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "0425b92d-b95b-492a-b9c9-859463ebed18",
+   "profile_id": "8f506509-01e2-4a76-b7fa-55df137b40df",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "execution_state": "active",
+     "heartbeat_interval_minutes": 0
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Persona heartbeat cron",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "*/5 * * * *",
+    "source_ref": "static:persona_heartbeat",
+    "subject_id": null,
+    "workflow_key": "agent-hub.persona_heartbeat"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "0c5c4592-7629-4605-b349-ebbe2610b3d4",
+   "profile_id": "54e39d25-b519-4f65-af83-185361e5892f",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Scheduled Jenny improvement run.",
+     "payload_title": null,
+     "payload_type": "self_honing"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Jenny improvement loop",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "every",
+    "schedule_value": "14400000",
+    "source_ref": "persona:e7d17897-141a-4441-99a4-40e264eb6c0d",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "28732f62-a953-4dff-937d-386764634c71",
+   "profile_id": "36cabae2-9540-4754-a619-6773d9f04e74",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Daily runtime hygiene follow-through for summitflow and agent-hub. Repo roots are /srv/workspaces/projects/summitflow and /srv/workspaces/projects/agent-hub; do not assume /workspace paths. First inspect SummitFlow runtime hygiene and backup state from the live operator surfaces. Check http://127.0.0.1:8001/api/system/maintenance and http://127.0.0.1:8001/api/backups/health. Use the runtime_hygiene task ids already named by the maintenance summary as the source of truth. If a runtime-hygiene task exists, stay inside that task context, verify the issue still reproduces with live evidence, and avoid duplicate task creation. Do due diligence with disk, CPU, memory, backup freshness, restore/drill freshness, and recent runtime errors. If unresolved issues remain with no task yet, create the smallest self-contained task in the affected project with injected evidence. If everything is healthy, say so and stop. Do not bypass task context.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Daily runtime hygiene follow-through",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "20 16 * * *",
+    "source_ref": "persona:cdf7dbe2-2b07-409c-b532-9459818a68ee",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "44f9e7dc-8de8-4f23-9897-c9ae2d874d9c",
+   "profile_id": "d0920193-a096-4a18-9357-34fd9b4f1c5a",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {},
+    "definition_version": 1,
+    "enabled": true,
+    "imported_unreviewed_count": 0,
+    "label": "Persona scheduled jobs poller",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "*/5 * * * *",
+    "source_ref": "static:persona_scheduler",
+    "subject_id": null,
+    "workflow_key": "agent-hub.persona_scheduler"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:36:30.565027+00:00",
+   "id": "5261ab59-aa8c-457b-acaf-81619640cbd4",
+   "profile_id": "54e39d25-b519-4f65-af83-185361e5892f",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Scheduled Jenny improvement run.",
+     "payload_title": null,
+     "payload_type": "self_honing"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:54e39d25-b519-4f65-af83-185361e5892f",
+    "imported_unreviewed_count": 0,
+    "label": "Jenny improvement loop",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "every",
+    "schedule_value": "14400000",
+    "source_ref": "persona:e7d17897-141a-4441-99a4-40e264eb6c0d",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:36:26.112094+00:00",
+   "id": "583ad56f-9804-4c99-a7a8-7e9ca6e5d224",
+   "profile_id": "33d64706-e8a5-467d-adf5-4a6d3a031070",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Run daily CodeRabbit review across all active projects. For each project (summitflow, agent-hub, terminal, portfolio-ai): 1) Run: source ~/summitflow/scripts/lib/coderabbit-helpers.sh && cr-review-since-last ~/<project> 2) If findings contain real issues, create bug tasks with: st bug 'Fix: <description>' -p 2 3) Skip false positives (common: unused import suggestions for re-exports, style nits). After reviewing all projects, check up on previously created CodeRabbit-originated bug tasks to see if they have been resolved.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:33d64706-e8a5-467d-adf5-4a6d3a031070",
+    "imported_unreviewed_count": 0,
+    "label": "Daily CodeRabbit Review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "America/New_York",
+    "schedule_type": "cron",
+    "schedule_value": "0 14 * * *",
+    "source_ref": "persona:1af63160-4379-429b-a6a2-e773a753170c",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:36:43.316776+00:00",
+   "id": "6a84e102-cc41-488d-b596-212f74e7eaa8",
+   "profile_id": "88de4c27-382e-4a5d-a4a6-352c944ec977",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "{\"dry_run\": false, \"batch_limit\": 10, \"cadence_days\": 45, \"include_archived\": false, \"reviewer_agent_slug\": \"memory-curator\"}",
+     "payload_title": null,
+     "payload_type": "memory_review"
+    },
+    "definition_version": 1,
+    "enabled": true,
+    "fence_receipt": "agent-hub:profile-row-fence:88de4c27-382e-4a5d-a4a6-352c944ec977",
+    "imported_unreviewed_count": 0,
+    "label": "Memory quality review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "17 4 * * *",
+    "source_ref": "persona:b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T20:22:32.304495+00:00",
+   "id": "8a845a51-672a-4516-93eb-4033c18429ca",
+   "profile_id": "88de4c27-382e-4a5d-a4a6-352c944ec977",
+   "revision": 4,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "{\"dry_run\": false, \"batch_limit\": 10, \"cadence_days\": 45, \"include_archived\": false, \"reviewer_agent_slug\": \"memory-curator\"}",
+     "payload_title": null,
+     "payload_type": "memory_review"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Memory quality review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "17 4 * * *",
+    "source_ref": "persona:b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:38:34.828208+00:00",
+   "id": "92987974-a807-432f-a1fb-671b04aec6ae",
+   "profile_id": "88de4c27-382e-4a5d-a4a6-352c944ec977",
+   "revision": 3,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "{\"dry_run\": false, \"batch_limit\": 10, \"cadence_days\": 45, \"include_archived\": false, \"reviewer_agent_slug\": \"memory-curator\"}",
+     "payload_title": null,
+     "payload_type": "memory_review"
+    },
+    "definition_version": 1,
+    "enabled": true,
+    "imported_unreviewed_count": 0,
+    "label": "Memory quality review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "17 4 * * *",
+    "source_ref": "persona:b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:36:26.883461+00:00",
+   "id": "a839678b-addb-4f3d-9652-da6b126e2569",
+   "profile_id": "36cabae2-9540-4754-a619-6773d9f04e74",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Daily runtime hygiene follow-through for summitflow and agent-hub. Repo roots are /srv/workspaces/projects/summitflow and /srv/workspaces/projects/agent-hub; do not assume /workspace paths. First inspect SummitFlow runtime hygiene and backup state from the live operator surfaces. Check http://127.0.0.1:8001/api/system/maintenance and http://127.0.0.1:8001/api/backups/health. Use the runtime_hygiene task ids already named by the maintenance summary as the source of truth. If a runtime-hygiene task exists, stay inside that task context, verify the issue still reproduces with live evidence, and avoid duplicate task creation. Do due diligence with disk, CPU, memory, backup freshness, restore/drill freshness, and recent runtime errors. If unresolved issues remain with no task yet, create the smallest self-contained task in the affected project with injected evidence. If everything is healthy, say so and stop. Do not bypass task context.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:36cabae2-9540-4754-a619-6773d9f04e74",
+    "imported_unreviewed_count": 0,
+    "label": "Daily runtime hygiene follow-through",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "20 16 * * *",
+    "source_ref": "persona:cdf7dbe2-2b07-409c-b532-9459818a68ee",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:38:07.846877+00:00",
+   "id": "ae7c9ecc-3007-4322-927d-f15ad9f56364",
+   "profile_id": "d0920193-a096-4a18-9357-34fd9b4f1c5a",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Persona scheduled jobs poller",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "*/5 * * * *",
+    "source_ref": "static:persona_scheduler",
+    "subject_id": null,
+    "workflow_key": "agent-hub.persona_scheduler"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:36:52.200255+00:00",
+   "id": "cb2994cd-6bfc-4643-bbbb-c39f3e0bfd2c",
+   "profile_id": "b81fca46-de2e-4d3a-a129-118fe6323eff",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Use review_improvement_signals with project_id=agent-hub and primary_agent_slug=persona. Work only from the evidence in that report. If the report justifies action, take the smallest effective step: retag or add project-scoped reference memories, adjust agent memory routing or model config, log a performance observation, or create a fully scoped task when code or benchmark coverage changes are needed. Do not invent new mandates or guardrails for routing problems. If no action is justified, say so and stop.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:b81fca46-de2e-4d3a-a129-118fe6323eff",
+    "imported_unreviewed_count": 0,
+    "label": "Daily Jenny Improvement Review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 09 * * *",
+    "source_ref": "persona:61c045a2-8ad8-4118-85db-84c3ae4a0251",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:38:17.911957+00:00",
+   "id": "e5a0d8d6-08b8-4d36-90c6-9e52c5d8f8bf",
+   "profile_id": "d0920193-a096-4a18-9357-34fd9b4f1c5a",
+   "revision": 3,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:d0920193-a096-4a18-9357-34fd9b4f1c5a",
+    "imported_unreviewed_count": 0,
+    "label": "Persona scheduled jobs poller",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "*/5 * * * *",
+    "source_ref": "static:persona_scheduler",
+    "subject_id": null,
+    "workflow_key": "agent-hub.persona_scheduler"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "ecc9a9d5-c459-4e20-b2a5-1eac3e08f3ad",
+   "profile_id": "b81fca46-de2e-4d3a-a129-118fe6323eff",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Use review_improvement_signals with project_id=agent-hub and primary_agent_slug=persona. Work only from the evidence in that report. If the report justifies action, take the smallest effective step: retag or add project-scoped reference memories, adjust agent memory routing or model config, log a performance observation, or create a fully scoped task when code or benchmark coverage changes are needed. Do not invent new mandates or guardrails for routing problems. If no action is justified, say so and stop.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Daily Jenny Improvement Review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 09 * * *",
+    "source_ref": "persona:61c045a2-8ad8-4118-85db-84c3ae4a0251",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "legacy-import",
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "id": "f84f2545-2716-49ca-83a9-ee284e19a730",
+   "profile_id": "33d64706-e8a5-467d-adf5-4a6d3a031070",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {
+     "delivery": "none",
+     "payload_message": "Run daily CodeRabbit review across all active projects. For each project (summitflow, agent-hub, terminal, portfolio-ai): 1) Run: source ~/summitflow/scripts/lib/coderabbit-helpers.sh && cr-review-since-last ~/<project> 2) If findings contain real issues, create bug tasks with: st bug 'Fix: <description>' -p 2 3) Skip false positives (common: unused import suggestions for re-exports, style nits). After reviewing all projects, check up on previously created CodeRabbit-originated bug tasks to see if they have been resolved.",
+     "payload_title": null,
+     "payload_type": "agent_turn"
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Daily CodeRabbit Review",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "America/New_York",
+    "schedule_type": "cron",
+    "schedule_value": "0 14 * * *",
+    "source_ref": "persona:1af63160-4379-429b-a6a2-e773a753170c",
+    "subject_id": "persona:1",
+    "workflow_key": "agent-hub.persona_job"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:29:42.162708+00:00",
+   "id": "fbc7f0d6-d79c-4c55-b3a8-2357cf60b3db",
+   "profile_id": "8f506509-01e2-4a76-b7fa-55df137b40df",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {
+     "execution_state": "active",
+     "heartbeat_interval_minutes": 0
+    },
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "agent-hub:profile-row-fence:8f506509-01e2-4a76-b7fa-55df137b40df",
+    "imported_unreviewed_count": 0,
+    "label": "Persona heartbeat cron",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "agent-hub",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "*/5 * * * *",
+    "source_ref": "static:persona_heartbeat",
+    "subject_id": null,
+    "workflow_key": "agent-hub.persona_heartbeat"
+   }
+  }
+ ],
+ "automation_profiles": [
+  {
+   "clock_owner": "central",
+   "config": {
+    "delivery": "none",
+    "payload_message": "Run daily CodeRabbit review across all active projects. For each project (summitflow, agent-hub, terminal, portfolio-ai): 1) Run: source ~/summitflow/scripts/lib/coderabbit-helpers.sh && cr-review-since-last ~/<project> 2) If findings contain real issues, create bug tasks with: st bug 'Fix: <description>' -p 2 3) Skip false positives (common: unused import suggestions for re-exports, style nits). After reviewing all projects, check up on previously created CodeRabbit-originated bug tasks to see if they have been resolved.",
+    "payload_title": null,
+    "payload_type": "agent_turn"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "33d64706-e8a5-467d-adf5-4a6d3a031070",
+   "imported_unreviewed_count": 0,
+   "label": "Daily CodeRabbit Review",
+   "last_reviewed_at": null,
+   "last_run_at": null,
+   "max_runs": null,
+   "next_run_at": "2026-03-02T19:00:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 2,
+   "run_count": 0,
+   "schedule_timezone": "America/New_York",
+   "schedule_type": "cron",
+   "schedule_value": "0 14 * * *",
+   "source_ref": "persona:1af63160-4379-429b-a6a2-e773a753170c",
+   "subject_id": "persona:1",
+   "updated_at": "2026-09-23T16:36:26.112094+00:00",
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "clock_owner": "central",
+   "config": {
+    "delivery": "none",
+    "payload_message": "Daily runtime hygiene follow-through for summitflow and agent-hub. Repo roots are /srv/workspaces/projects/summitflow and /srv/workspaces/projects/agent-hub; do not assume /workspace paths. First inspect SummitFlow runtime hygiene and backup state from the live operator surfaces. Check http://127.0.0.1:8001/api/system/maintenance and http://127.0.0.1:8001/api/backups/health. Use the runtime_hygiene task ids already named by the maintenance summary as the source of truth. If a runtime-hygiene task exists, stay inside that task context, verify the issue still reproduces with live evidence, and avoid duplicate task creation. Do due diligence with disk, CPU, memory, backup freshness, restore/drill freshness, and recent runtime errors. If unresolved issues remain with no task yet, create the smallest self-contained task in the affected project with injected evidence. If everything is healthy, say so and stop. Do not bypass task context.",
+    "payload_title": null,
+    "payload_type": "agent_turn"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "36cabae2-9540-4754-a619-6773d9f04e74",
+   "imported_unreviewed_count": 0,
+   "label": "Daily runtime hygiene follow-through",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-05-15T16:20:00.084063+00:00",
+   "max_runs": null,
+   "next_run_at": "2026-05-16T16:20:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 2,
+   "run_count": 28,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "20 16 * * *",
+   "source_ref": "persona:cdf7dbe2-2b07-409c-b532-9459818a68ee",
+   "subject_id": "persona:1",
+   "updated_at": "2026-09-23T16:36:26.883461+00:00",
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "clock_owner": "central",
+   "config": {
+    "delivery": "none",
+    "payload_message": "Scheduled Jenny improvement run.",
+    "payload_title": null,
+    "payload_type": "self_honing"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "54e39d25-b519-4f65-af83-185361e5892f",
+   "imported_unreviewed_count": 0,
+   "label": "Jenny improvement loop",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-04-03T12:07:44.625078+00:00",
+   "max_runs": null,
+   "next_run_at": null,
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 2,
+   "run_count": 36,
+   "schedule_timezone": "UTC",
+   "schedule_type": "every",
+   "schedule_value": "14400000",
+   "source_ref": "persona:e7d17897-141a-4441-99a4-40e264eb6c0d",
+   "subject_id": "persona:1",
+   "updated_at": "2026-09-23T16:36:30.565027+00:00",
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "clock_owner": "central",
+   "config": {
+    "delivery": "none",
+    "payload_message": "{\"dry_run\": false, \"batch_limit\": 10, \"cadence_days\": 45, \"include_archived\": false, \"reviewer_agent_slug\": \"memory-curator\"}",
+    "payload_title": null,
+    "payload_type": "memory_review"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "88de4c27-382e-4a5d-a4a6-352c944ec977",
+   "imported_unreviewed_count": 0,
+   "label": "Memory quality review",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-09-23T04:20:00.079087+00:00",
+   "max_runs": null,
+   "next_run_at": "2026-09-24T04:17:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 4,
+   "run_count": 136,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "17 4 * * *",
+   "source_ref": "persona:b38d138f-0ac8-462a-852f-b0b7c6520f8f",
+   "subject_id": "persona:1",
+   "updated_at": "2026-09-23T20:22:32.304495+00:00",
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "clock_owner": "central",
+   "config": {
+    "execution_state": "active",
+    "heartbeat_interval_minutes": 0
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "8f506509-01e2-4a76-b7fa-55df137b40df",
+   "imported_unreviewed_count": 0,
+   "label": "Persona heartbeat cron",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-04-22T22:02:16.689538+00:00",
+   "max_runs": null,
+   "next_run_at": "2026-09-23T16:30:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 2,
+   "run_count": 0,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "*/5 * * * *",
+   "source_ref": "static:persona_heartbeat",
+   "subject_id": null,
+   "updated_at": "2026-09-23T16:29:42.162708+00:00",
+   "workflow_key": "agent-hub.persona_heartbeat"
+  },
+  {
+   "clock_owner": "central",
+   "config": {
+    "delivery": "none",
+    "payload_message": "Use review_improvement_signals with project_id=agent-hub and primary_agent_slug=persona. Work only from the evidence in that report. If the report justifies action, take the smallest effective step: retag or add project-scoped reference memories, adjust agent memory routing or model config, log a performance observation, or create a fully scoped task when code or benchmark coverage changes are needed. Do not invent new mandates or guardrails for routing problems. If no action is justified, say so and stop.",
+    "payload_title": null,
+    "payload_type": "agent_turn"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "b81fca46-de2e-4d3a-a129-118fe6323eff",
+   "imported_unreviewed_count": 0,
+   "label": "Daily Jenny Improvement Review",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-04-22T09:00:07.394361+00:00",
+   "max_runs": null,
+   "next_run_at": null,
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 2,
+   "run_count": 31,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "0 09 * * *",
+   "source_ref": "persona:61c045a2-8ad8-4118-85db-84c3ae4a0251",
+   "subject_id": "persona:1",
+   "updated_at": "2026-09-23T16:36:52.200255+00:00",
+   "workflow_key": "agent-hub.persona_job"
+  },
+  {
+   "clock_owner": "central",
+   "config": {},
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "d0920193-a096-4a18-9357-34fd9b4f1c5a",
+   "imported_unreviewed_count": 0,
+   "label": "Persona scheduled jobs poller",
+   "last_reviewed_at": null,
+   "last_run_at": null,
+   "max_runs": null,
+   "next_run_at": "2026-09-23T16:40:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "agent-hub",
+   "revision": 3,
+   "run_count": 0,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "*/5 * * * *",
+   "source_ref": "static:persona_scheduler",
+   "subject_id": null,
+   "updated_at": "2026-09-23T16:38:17.911957+00:00",
+   "workflow_key": "agent-hub.persona_scheduler"
+  }
+ ],
+ "workflow_schedule_controls": [
+  {
+   "created_at": "2026-04-19T18:14:59.157445+00:00",
+   "enabled": false,
+   "schedule_id": "persona_heartbeat",
+   "updated_at": "2026-04-21T17:33:39.5935+00:00",
+   "updated_by": "hermes"
+  },
+  {
+   "created_at": "2026-09-23T16:38:07.846877+00:00",
+   "enabled": false,
+   "schedule_id": "persona_scheduler",
+   "updated_at": "2026-09-23T16:38:07.846877+00:00",
+   "updated_by": "agent-hub-dashboard"
+  }
+ ]
+}

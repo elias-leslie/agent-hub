@@ -10,15 +10,6 @@ from st_sdk.output import output_error, output_json
 
 from .agents_api import agent_preview_api
 from .persona_display import (
-    get_dispatch_hint as _get_dispatch_hint,
-)
-from .persona_display import (
-    maybe_report_dispatch as _maybe_report_dispatch,
-)
-from .persona_display import (
-    print_heartbeat_result as _print_heartbeat_result,
-)
-from .persona_display import (
     print_persona as _print_persona,
 )
 from .persona_helpers import (
@@ -47,7 +38,7 @@ _Opt = typer.Option
 _Arg = typer.Argument
 
 # Re-export for backward compatibility with tests
-__all__ = ["_api", "_get_dispatch_hint", "app"]
+__all__ = ["_api", "app"]
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +174,7 @@ def instructions(
 
 @app.command()
 def preview(
-    mode: Annotated[str, _Opt("--mode", "-m", help="Preview mode: chat, heartbeat, wake, review")] = "heartbeat",
+    mode: Annotated[str, _Opt("--mode", "-m", help="Preview mode: chat, review")] = "chat",
     project: Annotated[str | None, _Opt("--project", "-P", help="Optional project scope")] = None,
     phase: Annotated[str | None, _Opt("--phase", help="Optional phase/event hint")] = None,
     prompt_input: Annotated[str | None, _Opt("--input", help="Optional prompt input placeholder")] = None,
@@ -216,60 +207,6 @@ def preview(
 
 
 @app.command()
-def heartbeat(
-    watch: Annotated[bool, _Opt("--watch", "-w", help="Poll until heartbeat completes")] = False,
-    project: Annotated[str | None, _Opt("--project", "-P", help="Target project for this manual heartbeat")] = None,
-) -> None:
-    """Trigger a heartbeat. With --watch, poll until it finishes."""
-    import time
-
-    from ..client import STClient
-    from .persona_api import get_heartbeat_status, trigger_heartbeat
-
-    try:
-        result = trigger_heartbeat(project)
-        print(f"Heartbeat {result.get('status', 'dispatched')}: {result.get('message', '')}")
-    except Exception as e:
-        _handle_heartbeat_trigger_error(e)
-
-    if not watch:
-        return
-
-    pulse_client = STClient(require_project=False) if project else None
-    reported_dispatch = False
-    print("Watching...", end="", flush=True)
-    while True:
-        time.sleep(10)
-        try:
-            hb_status = get_heartbeat_status()
-            if not hb_status.get("running"):
-                print()
-                _print_heartbeat_result(hb_status)
-                return
-            reported_dispatch = _maybe_report_dispatch(pulse_client, project, reported_dispatch)
-            elapsed = hb_status.get("elapsed_seconds", 0)
-            print(f"\r  Running... {elapsed}s elapsed", end="", flush=True)
-        except Exception:
-            print(".", end="", flush=True)
-
-
-def _handle_heartbeat_trigger_error(e: Exception) -> None:
-    """Translate heartbeat trigger HTTP errors to user-friendly messages."""
-    status_code = getattr(getattr(e, "response", None), "status_code", None)
-    if status_code == 409:
-        print("Heartbeat already running")
-        return
-    if status_code == 400:
-        output_error("Onboarding not complete")
-        raise typer.Exit(1) from e
-    if status_code == 403:
-        output_error("Heartbeat permission is off")
-        raise typer.Exit(1) from e
-    output_error(f"Trigger failed: {e}")
-    raise typer.Exit(1) from e
-
-
-@app.command()
 def activity(
     hours: Annotated[int, _Opt("--hours", "-H", help="Lookback hours (default 24)")] = 24,
     limit: Annotated[int, _Opt("--limit", "-n", help="Max sessions to show")] = 10,
@@ -284,22 +221,13 @@ def activity(
 
 @app.command()
 def status() -> None:
-    """Show heartbeat state and persona overview."""
-    from .persona_api import get_heartbeat_status, get_persona
+    """Show the persona overview."""
+    from .persona_api import get_persona
 
     try:
-        hb = get_heartbeat_status()
         persona = get_persona()
     except Exception as e:
         output_error(f"Failed to fetch status: {e}")
         raise typer.Exit(1) from e
 
-    running = hb.get("running", False)
-    state = "running" if running else "idle"
-    last = hb.get("last_run", "never")
-    interval = hb.get("interval_minutes", 0)
-    elapsed = hb.get("elapsed_seconds")
-
-    elapsed_part = f" ({elapsed}s)" if running and elapsed is not None else ""
-    print(f"Heartbeat: {state}{elapsed_part} | Last: {last} | Interval: {interval}m")
     print(f"Persona: {persona.get('name', '?')} | Onboarding: {persona.get('onboarding_phase', '?')}")

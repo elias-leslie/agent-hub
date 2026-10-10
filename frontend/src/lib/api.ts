@@ -81,8 +81,6 @@ export type {
 export { fetchDashboardStats } from './api/dashboard'
 // Re-export all monitoring-related exports
 export { fetchMonitoringMetrics, fetchRequestLog } from './api/monitoring'
-export { fetchPersona, PERSONA_QUERY_KEY } from './api/persona'
-export { fetchPersonaImprovementDashboard } from './api/persona-improvement'
 // Re-export all preferences-related exports
 export type { UserPreferences } from './api/preferences'
 export {

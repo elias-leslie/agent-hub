@@ -19,7 +19,6 @@ from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
 from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
-from app.api.heartbeat import router as heartbeat_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
@@ -33,13 +32,10 @@ from app.api.preferences import router as preferences_router
 from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
-from app.api.push import router as push_router
 from app.api.runtime_context import router as runtime_context_router
 from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
-from app.api.wake import router as wake_router
-from app.api.work_chats import router as work_chats_router
 
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
@@ -70,13 +66,9 @@ router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 router.include_router(ownership_router)
 router.include_router(providers_router)  # Has its own prefix /providers and tags
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
-router.include_router(push_router)  # Has its own prefix /push and tags
 router.include_router(notifications_router)  # Has its own prefix /notifications and tags
 router.include_router(runtime_context_router)
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
-router.include_router(wake_router)  # Has its own prefix /wake and tags
-router.include_router(heartbeat_router)  # Has its own prefix /heartbeat and tags
-router.include_router(work_chats_router)
 
 __all__ = ["router"]

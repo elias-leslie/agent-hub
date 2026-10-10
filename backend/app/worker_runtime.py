@@ -11,12 +11,9 @@ from typing import Any
 from app.hatchet_app import hatchet
 from app.worker_diagnostics import install_asyncio_task_dump_signal
 from app.workflows.automation_clock import automation_clock_task
-from app.workflows.automation_persona import automation_persona_job_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
-from app.workflows.persona_heartbeat import persona_heartbeat_task
-from app.workflows.persona_scheduler import persona_scheduler_task
 from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
     data_retention_task,
@@ -35,14 +32,11 @@ WorkflowDef = Any
 
 AGENT_WORKFLOWS: tuple[WorkflowDef, ...] = (
     completion_task,
-    persona_heartbeat_task,
     agent_wake_task,
 )
 
 OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     automation_clock_task,
-    automation_persona_job_task,
-    persona_scheduler_task,
     session_cleanup_task,
     tier_optimizer_task,
     memory_cleanup_task,

@@ -24,8 +24,7 @@
       "agent-hub-hatchet-ops-worker.service"
     ],
     "optional_workers": [
-      "agent-hub-hatchet-agent-worker.service",
-      "agent-hub-telegram-bot.service"
+      "agent-hub-hatchet-agent-worker.service"
     ]
   },
   "hosts": {

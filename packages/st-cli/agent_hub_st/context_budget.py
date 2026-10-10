@@ -16,7 +16,7 @@ GENERATED_BLOCK_BUDGET = 1_200
 _GENERATED_KINDS = frozenset({"project_index", "tool_capabilities"})
 _SHINGLE_WORDS = 8
 _MAX_LINES = 6
-_WORD = re.compile(r"[a-z0-9`/._-]+")
+_WORD = re.compile(r"[a-z0-9/._-]+")
 
 
 def _shingles(text: str) -> dict[tuple[str, ...], int]:

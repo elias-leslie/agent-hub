@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { SettingsModal } from '@/components/settings-modal'
-import { usePersonaDisplayName } from '@/hooks/use-persona-display-name'
 import { fetchStatus } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { MobileHeader } from './mobile-header'
@@ -29,7 +28,6 @@ export function AppShell({ children }: AppShellProps) {
     refetchInterval: 30000,
     staleTime: 10000,
   })
-  const { personaName } = usePersonaDisplayName()
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -71,11 +69,7 @@ export function AppShell({ children }: AppShellProps) {
           onMobileClose={() => setIsMobileOpen(false)}
         />
 
-        <SidebarNav
-          isCollapsed={isCollapsed}
-          pathname={pathname}
-          personaName={personaName}
-        />
+        <SidebarNav isCollapsed={isCollapsed} pathname={pathname} />
 
         <SidebarFooter
           isCollapsed={isCollapsed}

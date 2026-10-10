@@ -67,13 +67,12 @@ from .session import (
     SessionSummarySegment,
 )
 from .telemetry import RequestLog, TruncationEvent
-from .work_chat import ActionRequest, SessionBinding
+from .work_chat import SessionBinding
 from .workflow_schedule_control import WorkflowScheduleControl
 
 # Export all models for backward compatibility
 __all__ = [
     "APIKey",
-    "ActionRequest",
     "Agent",
     "AgentBenchmarkAttempt",
     "AgentBenchmarkExperiment",

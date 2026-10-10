@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
@@ -257,7 +258,15 @@ class AsyncAgentHubClient(
         review: dict[str, Any] | None = None,
         qa: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Run the canonical clarify -> plan -> execute -> review -> qa workflow."""
+        """Deprecated: the server route was removed. Kept for import compatibility."""
+
+        warnings.warn(
+            "AsyncAgentHubClient.workflow() is deprecated in agent-hub-client 0.7.0: Agent Hub no "
+            "longer serves /api/orchestration/workflow. It will be removed in 0.8.0; "
+            "compose complete() calls with an explicit agent_slug instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         self._check_disabled()
 
