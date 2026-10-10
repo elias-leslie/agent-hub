@@ -7,8 +7,11 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
-from app.services.context_maintenance_work_product import verify_work_product
+from app.services.context_maintenance_actions import (
+    MaintenanceRequest,
+    handle_maintenance,
+    verify_work_product,
+)
 from app.services.context_policy import semantic_hash
 from app.services.runtime_context import CanonicalContextDeliveryRequest
 
@@ -82,15 +85,15 @@ async def _verify(row: SimpleNamespace, **overrides):
     db = _db(row)
     with (
         patch(
-            "app.services.context_maintenance_work_product.get_source",
+            "app.services.context_maintenance_actions.get_source",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "app.services.context_maintenance_work_product.source_revision",
+            "app.services.context_maintenance_actions.source_revision",
             return_value="rev-1",
         ),
         patch(
-            "app.services.context_maintenance_work_product.build_canonical_context_delivery",
+            "app.services.context_maintenance_actions.build_canonical_context_delivery",
             new=AsyncMock(
                 return_value=SimpleNamespace(
                     status="ok",
@@ -139,11 +142,11 @@ async def test_verify_work_product_rejects_stale_source_revision() -> None:
     db = _db(row)
     with (
         patch(
-            "app.services.context_maintenance_work_product.get_source",
+            "app.services.context_maintenance_actions.get_source",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "app.services.context_maintenance_work_product.source_revision",
+            "app.services.context_maintenance_actions.source_revision",
             return_value="rev-2",
         ),
     ):
@@ -228,10 +231,10 @@ async def test_verify_work_product_accepts_exact_change_before_after_receipt() -
     db = _db(row)
     db.get.return_value = change
     with (
-        patch("app.services.context_maintenance_work_product.get_source", new=AsyncMock(return_value=SimpleNamespace())),
-        patch("app.services.context_maintenance_work_product.source_revision", return_value="sha256:current"),
+        patch("app.services.context_maintenance_actions.get_source", new=AsyncMock(return_value=SimpleNamespace())),
+        patch("app.services.context_maintenance_actions.source_revision", return_value="sha256:current"),
         patch(
-            "app.services.context_maintenance_work_product.build_canonical_context_delivery",
+            "app.services.context_maintenance_actions.build_canonical_context_delivery",
             new=AsyncMock(return_value=SimpleNamespace(status="ok", payload_hash="hash-1", required_policy=SimpleNamespace(state="complete"))),
         ),
     ):
@@ -255,10 +258,10 @@ async def test_verify_work_product_rejects_wrong_change_after_revision() -> None
     db = _db(row)
     db.get.return_value = change
     with patch(
-        "app.services.context_maintenance_work_product.get_source",
+        "app.services.context_maintenance_actions.get_source",
         new=AsyncMock(return_value=SimpleNamespace()),
     ), patch(
-        "app.services.context_maintenance_work_product.source_revision",
+        "app.services.context_maintenance_actions.source_revision",
         return_value="sha256:current",
     ):
         result = await verify_work_product(

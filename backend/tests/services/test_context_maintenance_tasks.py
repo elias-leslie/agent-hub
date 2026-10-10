@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from app.services.context_maintenance_tasks import dispatch_technical_work, reconcile_technical_work
+from app.services.context_maintenance import dispatch_technical_work, reconcile_technical_work
 
 
 @pytest.mark.asyncio

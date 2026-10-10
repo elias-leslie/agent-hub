@@ -60,8 +60,25 @@ REVIEW_INSTRUCTION = (
 )
 
 
+async def reviewer_identity(db: AsyncSession, *, schema: dict[str, Any], instruction: str,
+                            agent_slug: str = "memory-curator", model_id: str | None = None) -> str:
+    from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
+
+    try:
+        resolved = await resolve_agent(agent_slug, db)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        return semantic_hash({"agent": agent_slug, "unavailable": True, "schema": schema, "instruction": instruction})
+    mandate = await inject_agent_mandates(resolved.agent, db, prompt_mode="minimal",
+        project_id="agent-hub", task_type="review")
+    return semantic_hash({"agent": agent_slug, "model": model_id or resolved.model,
+        "fallbacks": resolved.agent.fallback_models, "prompt": mandate.system_content,
+        "temperature": resolved.agent.temperature, "thinking": resolved.agent.thinking_level,
+        "schema": schema, "instruction": instruction})
+
+
 async def context_review_identity(db: AsyncSession) -> str:
-    from app.services.context_reviewer_identity import reviewer_identity
     return await reviewer_identity(db, schema=ReviewResponse.model_json_schema(), instruction=REVIEW_INSTRUCTION)
 
 

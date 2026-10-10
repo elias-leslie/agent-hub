@@ -37,7 +37,7 @@ from app.services.runtime_context import CanonicalContextDeliveryRequest
 
 @pytest.mark.integration
 async def test_service_scope_move_preserves_content_and_undo_receipt(maintenance_db, monkeypatch):
-    from app.services.context_memory_scope import (
+    from app.services.context_governance import (
         MemoryScopeApplyRequest,
         MemoryScopePreviewRequest,
         apply_memory_scope,
@@ -96,8 +96,8 @@ async def maintenance_db(monkeypatch):
     from unittest.mock import AsyncMock
     # Integration exercises local transactions only; never dispatch a real
     # implementation task from a fixture's deliberately invalid provider result.
-    monkeypatch.setattr('app.services.context_maintenance_tasks.dispatch_technical_work', AsyncMock(return_value={'status': 'queued', 'task_id': 'test-recovery'}))
-    monkeypatch.setattr('app.services.context_maintenance_tasks.reconcile_technical_work', AsyncMock(return_value={}))
+    monkeypatch.setattr('app.services.context_maintenance.dispatch_technical_work', AsyncMock(return_value={'status': 'queued', 'task_id': 'test-recovery'}))
+    monkeypatch.setattr('app.services.context_maintenance.reconcile_technical_work', AsyncMock(return_value={}))
     async with _get_engine().connect() as connection:
         assert (await connection.execute(text('SELECT current_database()'))).scalar() == 'agent_hub_test'
         try:
@@ -204,8 +204,8 @@ async def test_maintenance_owner_question_reporting_and_answer(maintenance_db):
 @pytest.mark.integration
 async def test_maintenance_rejects_stale_correction_and_retains_supersession(maintenance_db):
     from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance import reconcile_maintenance
     from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
-    from app.services.context_maintenance_reconcile import reconcile_maintenance
     db = maintenance_db
     source, item_id, snapshot = await maintenance_fixture(db, handoff=True)
     context = maintenance_context()
@@ -227,7 +227,7 @@ async def test_maintenance_rejects_stale_correction_and_retains_supersession(mai
 @pytest.mark.integration
 async def test_maintenance_mechanical_repair_is_idempotent_and_rechecks_recurrence(maintenance_db):
     from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_reconcile import reconcile_maintenance
+    from app.services.context_maintenance import reconcile_maintenance
     from app.services.memory.budget import count_tokens
     db = maintenance_db
     row = Memory(content='Retain observed decisions.', name='Derived-count fixture', memory_type='reference', scope='global', tier=3, status='active', token_count=999, metadata_={})
@@ -263,7 +263,7 @@ async def test_semantic_recovery_applies_exact_correction_and_retains_undo(maint
     from unittest.mock import AsyncMock, patch
 
     from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_recovery import recover_item
+    from app.services.context_maintenance_actions import recover_item
 
     db = maintenance_db
     prompt, item_id, source = await maintenance_fixture(db, handoff=True, kind='targeting')
@@ -296,7 +296,7 @@ async def test_invalid_recovery_cannot_mutate_or_repeat_inference(maintenance_db
     from unittest.mock import AsyncMock, patch
 
     from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_recovery import recover_item
+    from app.services.context_maintenance_actions import recover_item
 
     db = maintenance_db
     _, item_id, source = await maintenance_fixture(db, handoff=True)
@@ -322,7 +322,7 @@ async def test_recovery_rejects_edits_outside_maintenance_item_sources(maintenan
     from unittest.mock import AsyncMock, patch
 
     from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_recovery import recover_item
+    from app.services.context_maintenance_actions import recover_item
     from app.services.context_policy import ContextPolicy
 
     db = maintenance_db

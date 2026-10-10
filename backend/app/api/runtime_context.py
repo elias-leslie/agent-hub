@@ -12,7 +12,7 @@ from app.api.context_management import router as management_router
 from app.db import get_db
 from app.middleware.access_control_auth import require_service_client
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
-from app.services.context_memory_scope import (
+from app.services.context_governance import (
     MemoryScopeApplyRequest,
     MemoryScopePreviewRequest,
     apply_memory_scope,

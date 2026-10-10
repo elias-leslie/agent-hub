@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.services.context_memory_scope import MemoryScopePreviewRequest, _authorize
+from app.services.context_governance import MemoryScopePreviewRequest, _authorize
 
 PAYLOAD = {"memory_id": "12345678", "scope": "project", "scope_id": "learn-o-tron", "reason": "Correct targeting"}
 CLIENT = {"id": "internal-1", "status": "active", "client_type": "internal", "allowed_projects": None}
