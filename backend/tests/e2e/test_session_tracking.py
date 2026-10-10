@@ -61,6 +61,7 @@ class TestSessionsApiFiltering:
         mock_db_session.summary_oneliner = None
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
+        mock_db_session.last_activity_at = None
 
         # Mock count query
         mock_count_result = MagicMock()
@@ -68,7 +69,8 @@ class TestSessionsApiFiltering:
 
         # Mock list query
         mock_list_result = MagicMock()
-        mock_list_result.scalars.return_value.all.return_value = [mock_db_session]
+        # Rows: session then its sort keys (rank, activity, created_at, id).
+        mock_list_result.all.return_value = [(mock_db_session, 3, mock_db_session.created_at, mock_db_session.created_at, mock_db_session.id)]
 
         # Mock message count query
         mock_msg_count_result = MagicMock()
@@ -97,6 +99,12 @@ class TestSessionsApiFiltering:
         mock_specialists_result = MagicMock()
         mock_specialists_result.scalars.return_value.all.return_value = []
 
+        # Rollups for the page: first user message, then native usage.
+        mock_rollup_title = MagicMock()
+        mock_rollup_title.all.return_value = [("session-1", "  Draft the\n  thesis ")]
+        mock_rollup_usage = MagicMock()
+        mock_rollup_usage.all.return_value = [("session-1", 2, 40, 9, None)]
+
         mock_session.execute = AsyncMock(
             side_effect=[
                 mock_count_result,
@@ -105,6 +113,8 @@ class TestSessionsApiFiltering:
                 mock_event_count_result,
                 mock_token_stats_result,
                 mock_child_result,
+                mock_rollup_title,     # fetch_session_titles
+                mock_rollup_usage,     # fetch_session_usage_rollups
                 mock_ownership_result,      # _fetch_candidate_sessions
                 mock_specialists_result,    # _fetch_active_specialists
             ]
@@ -119,6 +129,10 @@ class TestSessionsApiFiltering:
         assert data["sessions"][0]["agent_slug"] == "thesis_generation"
         assert data["sessions"][0]["total_input_tokens"] == 50
         assert data["sessions"][0]["total_output_tokens"] == 100
+        assert data["sessions"][0]["title"] == "Draft the thesis"
+        assert data["sessions"][0]["usage_known"] is True
+        assert data["sessions"][0]["usage_input_tokens"] == 40
+        assert data["sessions"][0]["usage_cached_input_tokens"] is None
 
     def test_list_sessions_filter_by_status(self, client, mock_session):
         """Test filtering by status works."""
@@ -227,6 +241,7 @@ class TestGetSession:
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
+        mock_db_session.last_activity_at = None
         mock_db_session.messages = []
 
         # Session query result
@@ -253,6 +268,12 @@ class TestGetSession:
         mock_child_result = MagicMock()
         mock_child_result.scalars.return_value.all.return_value = []
 
+        # Detail rollups: no user message, no native usage events.
+        mock_title_result = MagicMock()
+        mock_title_result.all.return_value = []
+        mock_usage_result = MagicMock()
+        mock_usage_result.all.return_value = []
+
         mock_session.execute.side_effect = [
             mock_session_result,
             mock_token_result,
@@ -260,6 +281,8 @@ class TestGetSession:
             mock_ownership_result,      # _fetch_candidate_sessions
             mock_specialists_result,    # _fetch_active_specialists
             mock_child_result,
+            mock_title_result,          # fetch_session_titles
+            mock_usage_result,          # fetch_session_usage_rollups
         ]
 
         response = client.get("/api/sessions/session-portfolio-123")
@@ -268,6 +291,9 @@ class TestGetSession:
         data = response.json()
         assert data["project_id"] == "portfolio-ai"
         assert data["agent_slug"] == "strategy_generation"
+        assert data["title"] is None
+        assert data["usage_known"] is False
+        assert mock_session.execute.call_count == 8
 
 
 class TestMultiProjectScenario:
@@ -290,9 +316,11 @@ class TestMultiProjectScenario:
         mock_session_1.summary_oneliner = None
         mock_session_1.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_session_1.updated_at = datetime(2026, 1, 12, 10, 0, 0)
+        mock_session_1.last_activity_at = None
 
         mock_list_1 = MagicMock()
-        mock_list_1.scalars.return_value.all.return_value = [mock_session_1]
+        # Rows: session then its sort keys (rank, activity, created_at, id).
+        mock_list_1.all.return_value = [(mock_session_1, 3, mock_session_1.created_at, mock_session_1.created_at, mock_session_1.id)]
 
         mock_msg_count_1 = MagicMock()
         mock_msg_count_1.all.return_value = [("port-1", 5)]
@@ -314,6 +342,12 @@ class TestMultiProjectScenario:
         mock_specialists_1 = MagicMock()
         mock_specialists_1.scalars.return_value.all.return_value = []
 
+        # Rollups for the page: first user message, then native usage.
+        mock_rollup_1_title = MagicMock()
+        mock_rollup_1_title.all.return_value = [("port-1", "  Draft the\n  thesis ")]
+        mock_rollup_1_usage = MagicMock()
+        mock_rollup_1_usage.all.return_value = [("port-1", 2, 40, 9, None)]
+
         mock_session.execute = AsyncMock(
             side_effect=[
                 mock_count_1,
@@ -322,6 +356,8 @@ class TestMultiProjectScenario:
                 mock_event_count_1,
                 mock_token_stats_1,
                 mock_child_result_1,
+                mock_rollup_1_title,     # fetch_session_titles
+                mock_rollup_1_usage,     # fetch_session_usage_rollups
                 mock_ownership_1,       # _fetch_candidate_sessions
                 mock_specialists_1,     # _fetch_active_specialists
             ]
@@ -330,6 +366,7 @@ class TestMultiProjectScenario:
         response = client.get("/api/sessions?project_id=portfolio-ai")
         assert response.status_code == 200
         data = response.json()
+        assert len(data["sessions"]) == 1
         assert all(s["project_id"] == "portfolio-ai" for s in data["sessions"])
 
     def test_sessions_have_agent_slug_field(self, client, mock_session):
@@ -348,9 +385,11 @@ class TestMultiProjectScenario:
         mock_db_session.summary_oneliner = None
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
+        mock_db_session.last_activity_at = None
 
         mock_list = MagicMock()
-        mock_list.scalars.return_value.all.return_value = [mock_db_session]
+        # Rows: session then its sort keys (rank, activity, created_at, id).
+        mock_list.all.return_value = [(mock_db_session, 3, mock_db_session.created_at, mock_db_session.created_at, mock_db_session.id)]
 
         mock_msg_count = MagicMock()
         mock_msg_count.all.return_value = [("session-purpose", 2)]
@@ -375,6 +414,12 @@ class TestMultiProjectScenario:
         mock_specialists = MagicMock()
         mock_specialists.scalars.return_value.all.return_value = []
 
+        # Rollups for the page: first user message, then native usage.
+        mock_rollup_p_title = MagicMock()
+        mock_rollup_p_title.all.return_value = [("session-purpose", "  Draft the\n  thesis ")]
+        mock_rollup_p_usage = MagicMock()
+        mock_rollup_p_usage.all.return_value = [("session-purpose", 2, 40, 9, None)]
+
         mock_session.execute = AsyncMock(
             side_effect=[
                 mock_count,
@@ -383,6 +428,8 @@ class TestMultiProjectScenario:
                 mock_event_count,
                 mock_token_stats,
                 mock_child_result,
+                mock_rollup_p_title,     # fetch_session_titles
+                mock_rollup_p_usage,     # fetch_session_usage_rollups
                 mock_ownership,         # _fetch_candidate_sessions
                 mock_specialists,       # _fetch_active_specialists
             ]
@@ -394,3 +441,4 @@ class TestMultiProjectScenario:
         assert len(data["sessions"]) == 1
         assert "agent_slug" in data["sessions"][0]
         assert data["sessions"][0]["agent_slug"] == "mockup_generation"
+        assert data["sessions"][0]["usage_output_tokens"] == 9
