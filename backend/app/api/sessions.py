@@ -188,6 +188,7 @@ async def create_session(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    http_request.state.session_id = session.id  # request_logs attribution
     return build_session_response(session)
 
 

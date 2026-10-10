@@ -2,15 +2,13 @@
 
 Provides:
 - Client registration with UUID generation
-- Client identification by ID (no secret verification)
 - Client status management (active, suspended, blocked)
 """
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Client
@@ -20,7 +18,6 @@ from .status_manager import ClientStatusManager
 __all__ = [
     "ClientAuthService",
     "ClientRegistration",
-    "IdentifiedClient",
 ]
 
 
@@ -30,18 +27,6 @@ class ClientRegistration:
 
     client_id: str
     display_name: str
-
-
-@dataclass
-class IdentifiedClient:
-    """Result of successful client identification."""
-
-    client_id: str
-    display_name: str
-    client_type: str
-    status: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
 
 
 class ClientAuthService:
@@ -86,39 +71,6 @@ class ClientAuthService:
         return ClientRegistration(
             client_id=client_id,
             display_name=display_name,
-        )
-
-    async def identify(self, client_id: str) -> IdentifiedClient | None:
-        """Identify a client by ID.
-
-        Args:
-            client_id: The client UUID
-
-        Returns:
-            IdentifiedClient if found and active, None otherwise
-        """
-        result = await self.db.execute(select(Client).where(Client.id == client_id))
-        client = result.scalar_one_or_none()
-
-        if not client:
-            return None
-
-        if client.status != "active":
-            return None
-
-        # Update last_used_at
-        await self.db.execute(
-            update(Client).where(Client.id == client_id).values(last_used_at=datetime.now(UTC))
-        )
-        await self.db.commit()
-
-        return IdentifiedClient(
-            client_id=client.id,
-            display_name=client.display_name,
-            client_type=client.client_type,
-            status=client.status,
-            rate_limit_rpm=client.rate_limit_rpm,
-            rate_limit_tpm=client.rate_limit_tpm,
         )
 
     async def get_client(self, client_id: str) -> Client | None:

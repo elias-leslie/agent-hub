@@ -1,6 +1,7 @@
 """Request handlers for access control middleware."""
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -25,6 +26,24 @@ from app.middleware.access_control_logging import log_request
 from app.middleware.access_control_responses import internal_error_response
 
 logger = logging.getLogger(__name__)
+
+# Session heartbeats fire every few seconds per live session and carried most of
+# request_logs volume. Successful ones are not logged; failures still are.
+_HEARTBEAT_PATH_RE = re.compile(r"^/api/(?:session-ingestion/)?sessions/[^/]+/heartbeat/?$")
+
+
+def should_log_request(path: str, status_code: int) -> bool:
+    """Return False for successful session heartbeats, True otherwise."""
+    return not (200 <= status_code < 300 and _HEARTBEAT_PATH_RE.match(path))
+
+
+def request_session_id(request: Request) -> str | None:
+    """Session attributed to a request: handler-set state, else the path param."""
+    session_id = getattr(request.state, "session_id", None)
+    if session_id:
+        return str(session_id)
+    path_session_id = request.path_params.get("session_id")
+    return str(path_session_id) if path_session_id else None
 
 
 def set_internal_state(request: Request) -> None:
@@ -59,6 +78,8 @@ async def handle_auth_bypass(
     response: Response = await call_next(request)
 
     # Log request
+    if not should_log_request(path, response.status_code):
+        return response
     latency_ms = int((time.time() - start_time) * 1000)
     await log_request(
         client_id=client_id,
@@ -68,6 +89,7 @@ async def handle_auth_bypass(
         status_code=response.status_code,
         rejection_reason=None,
         latency_ms=latency_ms,
+        session_id=request_session_id(request),
         tool_type=tool_type,
         tool_name=tool_name,
         source_path=source_path,
@@ -106,6 +128,8 @@ async def handle_identified_request(
     response: Response = await call_next(request)
 
     # Log successful request
+    if not should_log_request(path, response.status_code):
+        return response
     latency_ms = int((time.time() - start_time) * 1000)
     agent_slug = getattr(request.state, "agent_slug", None)
     await log_request(
@@ -117,6 +141,7 @@ async def handle_identified_request(
         rejection_reason=None,
         latency_ms=latency_ms,
         model=getattr(request.state, "resolved_model", None),
+        session_id=request_session_id(request),
         agent_slug=agent_slug,
         tool_type=headers["tool_type"],
         tool_name=headers["tool_name"],

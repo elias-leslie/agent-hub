@@ -132,11 +132,16 @@ def _update_existing_session(
     if model is not None:
         session.model = model
     session.session_type = request.session_type
-    session.agent_slug = request.agent_slug
-    session.external_id = request.external_id
+    # Identity fields are sticky: a later upsert without them (e.g. a hook that
+    # lost its env) must not erase what an earlier upsert recorded.
+    if request.agent_slug:
+        session.agent_slug = request.agent_slug
+    if request.external_id:
+        session.external_id = request.external_id
     session.client_id = request.client_id
     session.request_source = request.request_source
-    session.current_branch = request.current_branch
+    if request.current_branch:
+        session.current_branch = request.current_branch
     session.status = "active"
     if request.parent_session_id is not None:
         session.parent_session_id = request.parent_session_id

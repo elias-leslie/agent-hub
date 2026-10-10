@@ -183,6 +183,8 @@ async def orchestrate_completion(
     db: AsyncSession | None,
 ) -> CompletionResponse | StreamingResponse | JSONResponse:
     """Orchestrate a completion request through the entire pipeline."""
+    if request.session_id:
+        http_request.state.session_id = request.session_id  # request_logs attribution
     rh, client_id, source, resolved_model, provider, resolved_agent, mandate, agent_used = (
         await _validate_and_resolve(request, http_request, db)
     )
@@ -211,11 +213,12 @@ async def orchestrate_completion(
             request=request, resolved_model=resolved_model, provider=provider,
             resolved_agent=resolved_agent, agent_mandate_injection=mandate,
             agent_used=agent_used, model_used=None, fallback_used=False, db=db,
-            client_id=client_id, request_source=source,
+            client_id=client_id, request_source=source, http_request=http_request,
         )
     is_agentic, session_id, session, is_new_session, all_messages, messages_dict, memory_facts, loaded_uuids, ctx_info, cached = (
         await build_session_and_messages(request, provider, resolved_model, resolved_agent, mandate, db, client_id, source, skip_cache)
     )
+    http_request.state.session_id = session_id
     if cached:
         response = await build_cached_completion_response(
             cached, db, session, session_id, request, resolved_model,

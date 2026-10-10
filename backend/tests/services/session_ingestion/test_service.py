@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -515,6 +516,66 @@ async def test_upsert_session_reactivates_existing_completed_session() -> None:
     assert session.updated_at is not None
     assert db.commit.await_count == 1
     db.refresh.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", [None, ""])
+async def test_upsert_session_keeps_identity_fields_when_later_upsert_omits_them(blank: str | None) -> None:
+    """Regression: a bare re-upsert erased external_id/agent_slug/current_branch."""
+    db = AsyncMock()
+    session = Session(
+        id="session-identity",
+        project_id="agent-hub",
+        provider="anthropic",
+        model="claude/external-tmux",
+        status="active",
+        session_type="claude_code",
+        agent_slug="coder",
+        external_id="cc-native-123",
+        current_branch="feature/x",
+        provider_metadata={},
+        models_used=["claude/external-tmux"],
+        providers_used=["anthropic"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+
+    async def _upsert(**fields: str | None) -> None:
+        with (
+            patch("app.services.session_ingestion.service._validate_project_id", new_callable=AsyncMock),
+            patch(
+                "app.services.session_ingestion.service.get_or_create_session",
+                new_callable=AsyncMock,
+                return_value=(session, True),
+            ),
+            patch(
+                "app.services.session_ingestion.service.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(provider="anthropic", model="claude/external-tmux"),
+            ),
+        ):
+            await upsert_session(
+                db=db,
+                request=SessionUpsertRequest(
+                    session_id="session-identity",
+                    project_id="agent-hub",
+                    provider="anthropic",
+                    model="claude/external-tmux",
+                    session_type="claude_code",
+                    **fields,
+                ),
+            )
+
+    await _upsert(agent_slug=blank, external_id=blank, current_branch=blank)
+    assert (session.agent_slug, session.external_id, session.current_branch) == (
+        "coder", "cc-native-123", "feature/x",
+    )
+
+    await _upsert(agent_slug="reviewer", external_id="cc-native-456", current_branch="main")
+    assert (session.agent_slug, session.external_id, session.current_branch) == (
+        "reviewer", "cc-native-456", "main",
+    )
 
 
 @pytest.mark.unit

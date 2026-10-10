@@ -76,6 +76,36 @@ def _finish_reason(stop_reason: StopReason) -> str:
     return stop_reason
 
 
+async def _log_stream_cost(
+    ctx: StreamContext,
+    message: AssistantMessage,
+    effective_model: str,
+    cost_usd: float,
+) -> None:
+    """Write the CostLog row for a finished stream, as the non-streaming path does."""
+    usage = message.usage
+    if not (usage.input or usage.output):
+        return
+    try:
+        from app.db import async_session
+        from app.services.context_tracker import log_token_usage
+
+        async with async_session() as fresh_db:
+            await log_token_usage(
+                fresh_db,
+                ctx.session_id,
+                effective_model,
+                usage.input,
+                usage.output,
+                cost_usd,
+                cache_read_tokens=int(usage.cache_read or 0),
+                cache_write_tokens=int(usage.cache_write or 0),
+            )
+            await fresh_db.commit()
+    except Exception as exc:
+        logger.error("Failed to log streaming token usage for %s: %s", ctx.session_id, exc)
+
+
 async def _persist_and_build_done_sse(
     *,
     writer: SseWriter,
@@ -123,6 +153,7 @@ async def _persist_and_build_done_sse(
         await close_one_shot_session(ctx.session_id)
 
     cost = estimate_cost(input_tokens, output_tokens, effective_model)
+    await _log_stream_cost(ctx, message, effective_model, cost.total_cost_usd)
     if ctx.project_id and cost.total_cost_usd > 0:
         from app.services.project_budget import record_project_cost
 

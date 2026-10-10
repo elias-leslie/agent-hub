@@ -1,13 +1,17 @@
 """Client identification helpers for access control middleware."""
 
+import logging
+from datetime import UTC, datetime
 from time import monotonic
 from typing import Any
 
 from fastapi import HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db import async_session
 from app.models import Client
+
+logger = logging.getLogger(__name__)
 
 # Client lookup cache: client_id -> (Client data dict, timestamp)
 # Only primitive data is cached — never ORM objects (they become detached).
@@ -21,6 +25,9 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
 
     Returns dict with: id, status, display_name, rate_limit_rpm, rate_limit_tpm,
     allowed_projects, suspension_reason, suspended_at
+
+    A cache miss for an active client also stamps ``clients.last_used_at``, so
+    the column stays current to within one cache TTL without a write per request.
     """
     now = monotonic()
 
@@ -47,6 +54,17 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
             "suspension_reason": client.suspension_reason,
             "suspended_at": client.suspended_at,
         }
+
+        if client.status == "active":
+            try:
+                await db.execute(
+                    update(Client)
+                    .where(Client.id == client_id)
+                    .values(last_used_at=datetime.now(UTC))
+                )
+                await db.commit()
+            except Exception as exc:
+                logger.warning("Failed to stamp last_used_at for client %s: %s", client_id, exc)
 
         # Evict oldest entries if cache exceeds max size
         if len(_client_cache) >= _CLIENT_CACHE_MAX_SIZE:

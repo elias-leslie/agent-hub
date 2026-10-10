@@ -162,6 +162,7 @@ async def upsert_session_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    http_request.state.session_id = result.session_id  # request_logs attribution
     return SessionUpsertResponse(
         session_id=result.session_id,
         created=result.created,

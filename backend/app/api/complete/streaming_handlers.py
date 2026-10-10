@@ -35,6 +35,7 @@ from app.services.session_live_activity import mark_session_execution_start
 from app.services.work_chats import bind_request_context
 
 if TYPE_CHECKING:
+    from fastapi import Request
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.api.complete.schemas import CompletionRequest
@@ -271,6 +272,7 @@ async def handle_streaming_request(
     db: AsyncSession | None,
     client_id: str | None,
     request_source: str | None,
+    http_request: Request | None = None,
 ) -> StreamingResponse:
     """Handle a streaming completion request, returning an SSE StreamingResponse."""
     if request.async_execution:
@@ -282,6 +284,8 @@ async def handle_streaming_request(
     session_id, context_messages, is_new_session = await _setup_streaming_session(
         request, provider, resolved_model, resolved_agent, db, client_id, request_source
     )
+    if http_request is not None:
+        http_request.state.session_id = session_id  # request_logs attribution
     messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
     messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent, db)
     if agent_mandate_injection:
