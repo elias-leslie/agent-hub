@@ -22,7 +22,7 @@ from app.models import (
     AutomationProjectPolicy,
     AutomationRun,
 )
-from app.services.automations import admit_run, policy_sync_pending
+from app.services.automations import admit_run, next_due, policy_sync_pending
 
 logger = logging.getLogger(__name__)
 
@@ -245,10 +245,17 @@ async def dispatch_due() -> int:
             profile = await db.get(AutomationProfile, profile_id)
             if profile is None or profile.next_run_at is None or profile.next_run_at > now:
                 continue
-            if profile.project_id == "jobinator-4000":
-                policy = await db.get(AutomationProjectPolicy, profile.project_id)
-                if policy is not None and policy_sync_pending(policy):
-                    continue
+            policy = await db.get(AutomationProjectPolicy, profile.project_id)
+            if policy is not None and not policy.enabled:
+                # A disabled project would only yield a rejected run per tick;
+                # move the clock past now instead of recording that noise.
+                profile.next_run_at = next_due(
+                    profile.schedule_type, profile.schedule_value, profile.schedule_timezone, now
+                )
+                await db.commit()
+                continue
+            if policy is not None and policy_sync_pending(policy):
+                continue
             run = await admit_run(
                 db, profile_id, trigger="scheduled", scheduled_for=profile.next_run_at,
                 requested_by="automation-clock",
