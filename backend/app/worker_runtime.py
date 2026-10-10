@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from app.hatchet_app import hatchet
+from app.services.tools.command_guard import warm_shared_command_guard
 from app.worker_diagnostics import install_asyncio_task_dump_signal
 from app.workflows.automation_clock import automation_clock_task
 from app.workflows.completion import completion_task
@@ -80,6 +81,8 @@ async def init_worker_credentials() -> None:
 def run_worker_process(worker_name: str, workflows: Sequence[WorkflowDef]) -> None:
     """Start a Hatchet worker process for the provided workflow set."""
     asyncio.run(init_worker_credentials())
+    # Before the worker loop starts: sync tool code reads these caches.
+    warm_shared_command_guard()
 
     worker = hatchet.worker(worker_name, workflows=list(workflows))
     worker._setup_loop()

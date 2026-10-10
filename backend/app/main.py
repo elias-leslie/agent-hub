@@ -2,6 +2,7 @@
 agent-hub API Server
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -32,6 +33,7 @@ from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usag
 from app.services.model_catalog_service import refresh_runtime_model_catalog
 from app.services.project_permission_service import reconcile_registered_project_access
 from app.services.telemetry import init_telemetry
+from app.services.tools.command_guard import warm_shared_command_guard
 
 # Configure logging for application modules (must be after imports)
 logging.basicConfig(
@@ -53,6 +55,9 @@ async def _startup() -> None:
 
     init_telemetry()
     logger.info("OpenTelemetry initialized")
+
+    # Sync tool code reads these caches; a cold lookup runs ``st`` subprocesses.
+    await asyncio.to_thread(warm_shared_command_guard)
 
     credential_manager = get_credential_manager()
     loaded = await credential_manager.load_with_retry(async_session)

@@ -83,3 +83,38 @@ def test_block_reason_blocks_when_present_guard_errors() -> None:
         reason = get_command_guard_block_reason("rm -rf /tmp/x", Path("/tmp"))
     assert reason is not None
     assert "boom" in reason
+
+
+def test_absent_guard_does_not_re_resolve_scripts_dir_per_call() -> None:
+    """An absent guard is cached; each call must not rerun the ``st`` lookup on the loop."""
+    from app.services.tools import command_guard
+
+    _resolve_shared_command_guard_cached.cache_clear()
+    with patch.object(command_guard, "resolve_summitflow_scripts_dir", return_value=None) as resolve:
+        resolve.cache_clear = lambda: None
+        with patch.dict(command_guard.os.environ, {"SUMMITFLOW_SCRIPTS_DIR": ""}):
+            assert command_guard.resolve_shared_command_guard() is None
+            assert command_guard.resolve_shared_command_guard() is None
+    _resolve_shared_command_guard_cached.cache_clear()
+    assert resolve.call_count == 1
+
+
+
+def test_warm_fills_scripts_dir_cache_so_tool_calls_skip_st(tmp_path: Path) -> None:
+    """After the startup warm, tool callers never reach the ``st`` subprocess lookup."""
+    from app.core import project_roots
+    from app.services.tools import command_guard
+
+    project_roots.resolve_summitflow_scripts_dir.cache_clear()
+    _resolve_shared_command_guard_cached.cache_clear()
+    with (
+        patch.dict(project_roots.os.environ, {"SUMMITFLOW_SCRIPTS_DIR": "", "SUMMITFLOW_ROOT": str(tmp_path)}),
+        patch.object(project_roots, "resolve_project_root") as st_lookup,
+    ):
+        (tmp_path / "scripts").mkdir()
+        command_guard.warm_shared_command_guard()
+        assert project_roots.resolve_summitflow_scripts_dir() == (tmp_path / "scripts").resolve()
+        command_guard.resolve_shared_command_guard()
+    project_roots.resolve_summitflow_scripts_dir.cache_clear()
+    _resolve_shared_command_guard_cached.cache_clear()
+    st_lookup.assert_not_called()

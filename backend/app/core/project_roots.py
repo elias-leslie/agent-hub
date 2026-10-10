@@ -272,7 +272,12 @@ def _resolve_manifest_root(project_id: str) -> Path | None:
 
 @lru_cache(maxsize=1)
 def resolve_summitflow_scripts_dir() -> Path | None:
-    """Resolve SummitFlow's shared scripts directory."""
+    """Resolve SummitFlow's shared scripts directory.
+
+    Memoized per process. A cold lookup may run ``st projects root`` (up to 5s),
+    and the tool code that calls this is synchronous, so processes warm it at
+    startup off the event loop (``command_guard.warm_shared_command_guard``).
+    """
     explicit = os.environ.get("SUMMITFLOW_SCRIPTS_DIR", "").strip()
     if explicit:
         scripts_dir = Path(explicit).expanduser().resolve()

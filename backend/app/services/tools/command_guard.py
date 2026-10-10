@@ -77,7 +77,9 @@ def _resolve_shared_command_guard_cached() -> SharedCommandGuard | None:
 def resolve_shared_command_guard() -> SharedCommandGuard | None:
     """Resolve the shared command guard binaries and recover from stale cached paths."""
     resolved = _resolve_shared_command_guard_cached()
-    if _guard_assets_exist(resolved):
+    if resolved is None or _guard_assets_exist(resolved):
+        # An absent guard stays absent until restart: re-resolving on every call
+        # would rerun ``st`` synchronously on the event loop.
         return resolved
 
     resolve_summitflow_scripts_dir.cache_clear()
@@ -85,6 +87,14 @@ def resolve_shared_command_guard() -> SharedCommandGuard | None:
 
     resolved = _resolve_shared_command_guard_cached()
     return resolved if _guard_assets_exist(resolved) else None
+
+
+def warm_shared_command_guard() -> None:
+    """Resolve the scripts dir and guard once, before request paths need them.
+
+    Both lookups can run subprocesses; callers run this off the event loop.
+    """
+    resolve_shared_command_guard()
 
 
 def build_command_guard_env_overlay() -> dict[str, str]:
