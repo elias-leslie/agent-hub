@@ -48,7 +48,7 @@ dependencies = [
     "playwright>=1.57.0",
     "mcp>=1.20.0",
     "agent-hub-client==0.7.0",
-    "agent-hub-st==0.2.0",
+    "agent-hub-st==0.2.1",
     "summitflow-st-sdk==0.1.0",
 ]
 
@@ -104,7 +104,7 @@ constraint-dependencies = [
 
 [tool.uv.sources]
 agent-hub-client = { path = "../docker/workspace-packages/agent_hub_client-0.7.0-py3-none-any.whl" }
-agent-hub-st = { path = "../docker/workspace-packages/agent_hub_st-0.2.0-py3-none-any.whl" }
+agent-hub-st = { path = "../docker/workspace-packages/agent_hub_st-0.2.1-py3-none-any.whl" }
 summitflow-st-sdk = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
 
 [build-system]

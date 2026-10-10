@@ -87,7 +87,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-hub-client", path = "../docker/workspace-packages/agent_hub_client-0.7.0-py3-none-any.whl" },
-    { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.2.0-py3-none-any.whl" },
+    { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.2.1-py3-none-any.whl" },
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
@@ -161,8 +161,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agent-hub-st"
-version = "0.2.0"
-source = { path = "../docker/workspace-packages/agent_hub_st-0.2.0-py3-none-any.whl" }
+version = "0.2.1"
+source = { path = "../docker/workspace-packages/agent_hub_st-0.2.1-py3-none-any.whl" }
 dependencies = [
     { name = "agent-hub-client" },
     { name = "httpx" },
@@ -171,7 +171,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { filename = "agent_hub_st-0.2.0-py3-none-any.whl", hash = "sha256:14991206a0fe69c0aed369e71392bdf38fcd4db400658efeb6c898678a48cb39" },
+    { filename = "agent_hub_st-0.2.1-py3-none-any.whl", hash = "sha256:078d86fd5987c4c0bd3598750a9c941b749fc7551034364cf92fe7b60197961e" },
 ]
 
 [package.metadata]
