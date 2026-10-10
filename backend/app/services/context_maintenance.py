@@ -8,7 +8,6 @@ callers get an explicit 410.
 """
 from __future__ import annotations
 
-import uuid
 from collections import Counter
 from typing import Any
 
@@ -19,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.context_governance import (
     ContextMaintenanceAttention,
-    ContextMaintenanceIngest,
     ContextMaintenanceItem,
     ContextRecord,
 )
@@ -27,13 +25,6 @@ from app.models.memory_unified import MemoryReviewRun
 from app.services.context_policy import ContextPolicy, policy_match, semantic_hash
 
 ACTIVE_STATES = ("pending", "claimed", "waiting_owner", "deferred")
-REVIEW_KINDS = ("context_review", "context_screen", "curator_proposal", "change", "feedback")
-CONTEXT_KEYS = ("project_id", "consumer_surface", "consumer_profile", "agent_slug", "workflow_ids", "task_type", "phase", "consumer_tags")
-
-
-def context_binding(context: dict[str, Any]) -> dict[str, Any]:
-    return {key: sorted(set(value)) if isinstance(value, list) else value
-            for key in CONTEXT_KEYS if (value := context.get(key))}
 
 
 def evidence_identity(sources: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -56,120 +47,6 @@ async def maintenance_event(db: AsyncSession, row: ContextMaintenanceItem, actor
     from app.services.context_governance import record
     await record(db, "maintenance", actor, {"item_id": row.id, "action": action, "state": row.state,
         "version": row.version, "sources": evidence_identity(row.sources), "evidence": evidence})
-
-
-async def enqueue(db: AsyncSession, *, kind: str, sources: list[dict[str, Any]], context: dict[str, Any],
-                  summary: str, recommendation: str, evidence_id: str | None = None,
-                  detail: dict[str, Any] | None = None) -> str:
-    binding = context_binding(context)
-    fingerprint = semantic_hash({"kind": kind, "sources": evidence_identity(sources), "context": binding,
-                                 "placement": (detail or {}).get("placement")})
-    key = str(uuid.uuid4())
-    inserted = (await db.execute(insert(ContextMaintenanceItem).values(
-        id=key, fingerprint=fingerprint, kind=kind, state="pending", version=1, summary=summary,
-        recommendation=recommendation, sources=sources, context=binding,
-        source_keys=sorted({s["source_id"] for s in sources}), evidence_ids=[evidence_id] if evidence_id else [],
-        detail=detail or {}, decision={}, resolution={},
-    ).on_conflict_do_nothing(index_elements=[ContextMaintenanceItem.fingerprint]).returning(ContextMaintenanceItem.id))).scalar_one_or_none()
-    if inserted is not None:
-        return inserted
-    row = (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.fingerprint == fingerprint).with_for_update())).scalar_one()
-    if kind == "review_failed" and row.state in {"resolved", "dismissed"} and evidence_id and evidence_id not in row.evidence_ids:
-        # A later failed audit is a new incident even when its source revision
-        # is unchanged. Preserve the prior repair without reusing its task.
-        previous = {"resolution": row.resolution, "detail": row.detail}
-        generation = row.detail.get("generation", 0) + 1
-        row.state, row.version, row.resolution = "pending", row.version + 1, {}
-        row.claim_owner, row.claim_session, row.decision = None, None, {}
-        row.detail = {**(detail or {}), "generation": generation}
-        await maintenance_event(db, row, "system:context-maintenance", "review_failure_recurred", previous)
-    if kind in {"token_count", "dangling_placement"} and row.state == "resolved":
-        previous = row.resolution
-        row.state, row.version, row.resolution = "pending", row.version + 1, {}
-        await maintenance_event(db, row, "system:context-maintenance", "derived_drift_recurred", {"previous_resolution": previous})
-    if evidence_id and evidence_id not in row.evidence_ids:
-        # Repeated evidence neither reopens work nor resets a claim.
-        row.evidence_ids = [*row.evidence_ids, evidence_id]
-        if (detail or {}).get("handoff_needed") and row.state in ACTIVE_STATES:
-            row.detail = {**row.detail, **(detail or {})}
-            row.version += 1
-    return row.id
-
-
-async def ingest_review(db: AsyncSession, record: ContextRecord) -> None:
-    if record.kind not in REVIEW_KINDS:
-        return
-    reserved = (await db.execute(insert(ContextMaintenanceIngest).values(record_id=record.id)
-        .on_conflict_do_nothing().returning(ContextMaintenanceIngest.record_id))).scalar_one_or_none()
-    if reserved is None:
-        return
-    payload = record.payload
-    if record.kind == "change":
-        for change in payload.get("changes", []):
-            if change["after"].get("enabled") and semantic_hash(change["before"]) != semantic_hash(change["after"]):
-                await enqueue(db, kind="review_due", sources=[{**change["after"], "revision": change["after_revision"]}], context={},
-                    summary=f"Changed context: {change['after']['name'] or change['after']['source_id']}",
-                    recommendation="Review this exact changed source against applicable authority and candidates.",
-                    evidence_id=record.id, detail={"change_reason": payload["reason"]})
-        return
-    if record.kind == "feedback":
-        if payload.get("matches_current_revision") and payload.get("assessment") in {"unnecessary", "conflicting", "incorrect", "missing"}:
-            from app.services.context_governance import get_source
-            from app.services.context_policy import source_revision, source_snapshot
-            row = await get_source(db, payload["source_type"], payload["source_id"])
-            if source_revision(row) == payload["source_revision"]:
-                await enqueue(db, kind="feedback", sources=[{**source_snapshot(row), "revision": source_revision(row)}], context={},
-                    summary=f"{payload['signal']} feedback: {payload['assessment']}", recommendation="Assess the retained feedback against current source evidence.",
-                    evidence_id=record.id, detail={"feedback": payload})
-        return
-    sources = payload.get("sources", [])
-    context = payload.get("coverage", {}).get("context", {}) if isinstance(payload.get("coverage"), dict) else {}
-    if record.kind == "curator_proposal":
-        sources = [{**payload["source"], "revision": payload["revision"]}]
-        decision = payload["decision"]
-        if decision.get("review_status") == "needs_action":
-            await enqueue(db, kind="memory_review", sources=sources, context={}, evidence_id=record.id,
-                summary=decision.get("reason") or "Memory curator recommends review.",
-                recommendation=f"Assess the proposed {decision['decision']} against current instructions and evidence.", detail={"decision": decision, "handoff_needed": True})
-    if not any(source.get("source_type") in {"prompt", "memory"} for source in sources):
-        # Evaluation fixtures and supplied-native-only experiments are retained
-        # as research evidence, never operational maintenance for real sessions.
-        return
-    if payload.get("failure"):
-        await enqueue(db, kind="review_failed", sources=sources, context=context, evidence_id=record.id,
-            summary="Context review could not validate its result.", recommendation="Inspect retained failure evidence before requesting another review; do not blindly retry provider calls.",
-            detail={"failure": payload["failure"], "handoff_needed": True})
-        return
-    by_id = {s["source_id"]: s for s in sources}
-    for finding in payload.get("findings", []):
-        cited = [by_id[key] for key in finding["source_ids"] if key in by_id]
-        if not cited:
-            continue
-        await enqueue(db, kind=finding["kind"], sources=cited, context=context, evidence_id=record.id,
-            summary=finding["explanation"], recommendation=finding["remedy"],
-            detail={"finding": finding, "handoff_needed": bool(payload.get("reviewer"))})
-    for entry in payload.get("entries", []):
-        result = entry.get("result") or {}
-        relationship = result.get("deterministic_relationship") or result.get("answers", {}).get("relationship", {}).get("choice")
-        if relationship not in {"conflict", "redundant"}:
-            continue
-        cited = [by_id[key] for key in entry["pair"] if key in by_id]
-        await enqueue(db, kind="screening_candidate", sources=cited, context=context, evidence_id=record.id,
-            summary=f"Optional screening suggests {relationship} instructions.", recommendation="Verify the literal sources independently before proposing a change. Screening is not proof.",
-            detail={"relationship": relationship, "screening_only": True})
-    # A successful exact-source review repairs an earlier review failure/due item,
-    # not its substantive findings. New findings keep their own lifecycle.
-    reviewed = {(s["source_type"], s["source_id"], s["revision"]) for s in sources}
-    if (record.kind == "context_review" and payload.get("reviewer")) or record.kind == "curator_proposal":
-        pending = (await db.execute(select(ContextMaintenanceItem).where(
-            ContextMaintenanceItem.state.in_(ACTIVE_STATES), ContextMaintenanceItem.kind.in_(["review_failed", "review_due"])).with_for_update())).scalars()
-        for item in pending:
-            expected = {(s["source_type"], s["source_id"], s["revision"]) for s in item.sources}
-            if expected and expected <= reviewed and all(context_binding(context).get(key) == value for key, value in item.context.items()):
-                item.state, item.version = "resolved", item.version + 1
-                item.resolution = {"verification": "validated_review_of_exact_sources", "review_id": record.id}
-                item.claim_owner, item.claim_session = None, None
-                await maintenance_event(db, item, "system:context-maintenance", "review_refreshed", item.resolution)
 
 
 def relevant(row: ContextMaintenanceItem, context: Any, *, assigned_prompts: set[str] | None = None) -> bool:

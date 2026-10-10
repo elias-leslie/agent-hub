@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import _get_engine
 from app.models import Base
-from app.models.context_governance import ContextRecord
+from app.models.context_governance import ContextMaintenanceItem, ContextRecord
 from app.models.memory_unified import Memory
 from app.models.prompt import Prompt
 from app.services.context_governance import (
@@ -108,17 +108,30 @@ def maintenance_context(session="first", project=None):
         capabilities=['bash'], include_memories=False, include_project_index=False, include_tool_capabilities=False, include_continuity=False)
 
 
-async def maintenance_fixture(db, *, policy=None, handoff=False, kind="conflict", detail=None):
+async def insert_maintenance_item(db, *, kind, sources, summary, recommendation, evidence_ids=None, detail=None):
+    """Insert a retained maintenance row directly; nothing creates new ones."""
+    row = ContextMaintenanceItem(
+        id=str(uuid.uuid4()), fingerprint=uuid.uuid4().hex, kind=kind, state='pending', version=1,
+        summary=summary, recommendation=recommendation, sources=sources, context={},
+        source_keys=sorted({source['source_id'] for source in sources}), evidence_ids=list(evidence_ids or []),
+        detail=detail or {}, decision={}, resolution={},
+    )
+    db.add(row)
+    await db.flush()
+    return row.id
+
+
+async def maintenance_fixture(db, *, policy=None, handoff=False, kind="conflict", detail=None, evidence_ids=None):
     """Seed a retained maintenance item; new reviews no longer create them."""
-    from app.services.context_maintenance import enqueue
     from app.services.context_policy import source_snapshot
     row = Prompt(slug='maintenance-fixture', name='Maintenance fixture', content='Use the existing canonical workflow.',
         enabled=True, is_global=True, prompt_type='standard', exclude_agents=[], context_policy=(policy or ContextPolicy(scope='global')).model_dump())
     db.add(row)
     await db.flush()
     source = {**source_snapshot(row), 'revision': source_revision(row)}
-    item_id = await enqueue(db, kind=kind, sources=[source], context={}, summary='Inspect conflicting guidance',
-        recommendation='Compare the current authority.', detail={'handoff_needed': handoff, **(detail or {})})
+    item_id = await insert_maintenance_item(db, kind=kind, sources=[source], summary='Inspect conflicting guidance',
+        recommendation='Compare the current authority.', evidence_ids=evidence_ids,
+        detail={'handoff_needed': handoff, **(detail or {})})
     await db.commit()
     return row, item_id, source
 
@@ -129,15 +142,12 @@ RETIRED_MAINTENANCE_ACTIONS = ('acknowledge', 'claim', 'release', 'recover', 'de
 
 @pytest.mark.integration
 async def test_manual_maintenance_lists_and_inspects_retained_items(maintenance_db):
-    from app.services.context_maintenance import enqueue
     from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
     db = maintenance_db
-    _, item_id, source = await maintenance_fixture(db, policy=ContextPolicy(scope='project', targets=['agent-hub']), handoff=True)
-    background_id = await enqueue(db, kind='review_due', sources=[source], context={}, summary='Background review',
+    _, item_id, source = await maintenance_fixture(
+        db, policy=ContextPolicy(scope='project', targets=['agent-hub']), handoff=True, evidence_ids=['review-2'])
+    background_id = await insert_maintenance_item(db, kind='review_due', sources=[source], summary='Background review',
         recommendation='Review the changed source.')
-    again = await enqueue(db, kind='conflict', sources=[source], context={}, summary='Same evidence',
-        recommendation='Same review', evidence_id='review-2')
-    assert again == item_id
     await db.commit()
     context = maintenance_context(project='agent-hub')
 
