@@ -59,7 +59,11 @@ export function KPISection({
       <KPICard
         label="Requests"
         value={formatNumber(totalReqs)}
-        subtext={`${dashboardStats?.requests.success_rate.toFixed(1)}% success`}
+        subtext={
+          dashboardStats
+            ? `${dashboardStats.requests.success_rate.toFixed(1)}% success`
+            : 'No request data'
+        }
         icon={Activity}
         status={
           dashboardStats?.requests.success_rate &&

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { useSessionEvents } from '@/hooks/use-session-events'
 import {
   fetchCosts,
@@ -24,16 +25,18 @@ export function useDashboardData({ daysRange }: UseDashboardDataOptions) {
     return new Set(recentEvents.map((e) => e.session_id)).size
   }, [events])
 
-  // Status query
-  const {
-    data: status,
-    isLoading: statusLoading,
-    error: statusError,
-  } = useQuery({
+  // Status query. The app shell shares this key and hydrates first, so its
+  // response can be cached before this page hydrates; hold it back until
+  // hydration so the first render matches the server HTML.
+  const hydrated = useHydrated()
+  const statusQuery = useQuery({
     queryKey: ['status'],
     queryFn: fetchStatus,
     refetchInterval: 30000,
   })
+  const status = hydrated ? statusQuery.data : undefined
+  const statusLoading = hydrated ? statusQuery.isLoading : true
+  const statusError = hydrated ? statusQuery.error : null
 
   // Cost queries
   const { data: dailyCosts, isLoading: dailyLoading } = useQuery({
