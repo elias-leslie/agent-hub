@@ -12,8 +12,6 @@ interface ClientResponse {
   display_name: string
   client_type: string
   status: string
-  rate_limit_rpm: number
-  rate_limit_tpm: number
   created_at: string
   updated_at: string
   last_used_at: string | null
@@ -82,8 +80,7 @@ export default function ClientsPage() {
                   </span>
                 </div>
                 <p className="page-subtitle">
-                  Manage authenticated client identities, throttles, and project
-                  access.
+                  Manage authenticated client identities and project access.
                 </p>
               </div>
             </div>
@@ -172,9 +169,6 @@ export default function ClientsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Last Used
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Rate Limits
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
@@ -231,10 +225,6 @@ export default function ClientsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-400">
                           {formatRelativeTime(client.last_used_at)}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-500 font-mono">
-                          {client.rate_limit_rpm} rpm /{' '}
-                          {(client.rate_limit_tpm / 1000).toFixed(0)}k tpm
                         </td>
                       </tr>
                     )

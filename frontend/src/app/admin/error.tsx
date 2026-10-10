@@ -15,7 +15,7 @@ export default function AdminError({
       error={error}
       reset={reset}
       title="Failed to load admin panel"
-      message="Unable to fetch kill switch data. Please try again."
+      message="Unable to load admin data. Please try again."
       icon={AlertTriangle}
       buttonColor="bg-amber-600 hover:bg-amber-500"
       label="Admin"

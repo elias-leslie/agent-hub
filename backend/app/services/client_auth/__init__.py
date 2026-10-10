@@ -40,16 +40,12 @@ class ClientAuthService:
         self,
         display_name: str,
         client_type: str = "external",
-        rate_limit_rpm: int = 60,
-        rate_limit_tpm: int = 100000,
     ) -> ClientRegistration:
         """Register a new client.
 
         Args:
             display_name: Human-readable name for the client
             client_type: One of "internal", "external", "service"
-            rate_limit_rpm: Requests per minute limit
-            rate_limit_tpm: Tokens per minute limit
 
         Returns:
             ClientRegistration with the client_id
@@ -61,8 +57,6 @@ class ClientAuthService:
             display_name=display_name,
             client_type=client_type,
             status="active",
-            rate_limit_rpm=rate_limit_rpm,
-            rate_limit_tpm=rate_limit_tpm,
         )
 
         self.db.add(client)

@@ -12,8 +12,6 @@ interface ClientCreateResponse {
   display_name: string
   client_type: string
   status: string
-  rate_limit_rpm: number
-  rate_limit_tpm: number
   created_at: string
 }
 
@@ -21,8 +19,6 @@ export default function NewClientPage() {
   const router = useRouter()
   const [displayName, setDisplayName] = useState('')
   const [clientType, setClientType] = useState('external')
-  const [rateLimitRpm, setRateLimitRpm] = useState(60)
-  const [rateLimitTpm, setRateLimitTpm] = useState(100000)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdClient, setCreatedClient] =
@@ -45,8 +41,6 @@ export default function NewClientPage() {
           body: JSON.stringify({
             display_name: displayName,
             client_type: clientType,
-            rate_limit_rpm: rateLimitRpm,
-            rate_limit_tpm: rateLimitTpm,
           }),
         },
       )
@@ -120,13 +114,6 @@ export default function NewClientPage() {
                 {createdClient.client_type}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Rate Limits</span>
-              <span className="text-slate-100 font-mono">
-                {createdClient.rate_limit_rpm} rpm /{' '}
-                {(createdClient.rate_limit_tpm / 1000).toFixed(0)}k tpm
-              </span>
-            </div>
           </div>
 
           <div className="mt-6 flex gap-3">
@@ -172,8 +159,7 @@ export default function NewClientPage() {
               <div className="page-title-stack">
                 <h1 className="page-title">Register New Client</h1>
                 <p className="page-subtitle">
-                  Create a caller identity with a display name, type, and
-                  throttle policy.
+                  Create a caller identity with a display name and type.
                 </p>
               </div>
             </div>
@@ -228,39 +214,6 @@ export default function NewClientPage() {
                   <option value="internal">Internal</option>
                   <option value="service">Service</option>
                 </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="detail-label mb-2 block">
-                    Rate Limit (RPM)
-                  </label>
-                  <input
-                    type="number"
-                    value={rateLimitRpm}
-                    onChange={(e) =>
-                      setRateLimitRpm(parseInt(e.target.value, 10) || 60)
-                    }
-                    min={1}
-                    max={10000}
-                    className="control-input"
-                  />
-                </div>
-                <div>
-                  <label className="detail-label mb-2 block">
-                    Rate Limit (TPM)
-                  </label>
-                  <input
-                    type="number"
-                    value={rateLimitTpm}
-                    onChange={(e) =>
-                      setRateLimitTpm(parseInt(e.target.value, 10) || 100000)
-                    }
-                    min={1000}
-                    max={10000000}
-                    className="control-input"
-                  />
-                </div>
               </div>
 
               <button

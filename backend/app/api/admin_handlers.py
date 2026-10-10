@@ -2,28 +2,12 @@
 
 from typing import Any
 
-from app.models import ClientControl
-
 from .admin_redis import _deserialize_entry
 from .admin_schemas import (
     BlockedRequestLog,
-    ClientControlResponse,
     RequestAuditLog,
     UnknownCallerStats,
 )
-
-
-def client_to_response(client: ClientControl) -> ClientControlResponse:
-    """Convert ClientControl model to response schema."""
-    return ClientControlResponse(
-        client_name=client.client_name,
-        enabled=client.enabled,
-        disabled_at=client.disabled_at,
-        disabled_by=client.disabled_by,
-        reason=client.reason,
-        created_at=client.created_at,
-        updated_at=client.updated_at,
-    )
 
 
 def process_blocked_requests(

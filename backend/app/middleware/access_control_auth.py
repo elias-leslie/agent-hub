@@ -23,7 +23,7 @@ _CLIENT_CACHE_MAX_SIZE = 500
 async def get_cached_client(client_id: str) -> dict[str, Any] | None:
     """Get client from cache or database.
 
-    Returns dict with: id, status, display_name, rate_limit_rpm, rate_limit_tpm,
+    Returns dict with: id, status, display_name, client_type,
     allowed_projects, suspension_reason, suspended_at
 
     A cache miss for an active client also stamps ``clients.last_used_at``, so
@@ -48,8 +48,6 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
             "status": client.status,
             "display_name": client.display_name,
             "client_type": client.client_type,
-            "rate_limit_rpm": client.rate_limit_rpm,
-            "rate_limit_tpm": client.rate_limit_tpm,
             "allowed_projects": client.allowed_projects,
             "suspension_reason": client.suspension_reason,
             "suspended_at": client.suspended_at,

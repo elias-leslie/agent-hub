@@ -3,8 +3,6 @@ import { buildApiUrl, fetchApi } from '@/lib/api-config'
 
 interface ClientUpdateRequest {
   display_name?: string
-  rate_limit_rpm?: number
-  rate_limit_tpm?: number
   allowed_projects?: string[]
 }
 

@@ -2,16 +2,6 @@
 
 import { fetchApi } from '@/lib/api-config'
 
-export interface ClientControl {
-  client_name: string
-  enabled: boolean
-  disabled_at: string | null
-  disabled_by: string | null
-  reason: string | null
-  created_at: string
-  updated_at: string
-}
-
 export interface BlockedRequest {
   timestamp: string
   client_name: string | null
@@ -85,12 +75,6 @@ export interface SessionHotspots {
   zero_event_active_sessions: ZeroEventActiveSessionRow[]
 }
 
-export async function fetchClients(): Promise<ClientControl[]> {
-  const res = await fetchApi('/api/admin/clients')
-  const data = await res.json()
-  return data.clients || []
-}
-
 export async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
   const res = await fetchApi('/api/admin/blocked-requests?limit=1000')
   const data = await res.json()
@@ -108,22 +92,4 @@ export async function fetchSessionHotspots(
   const res = await fetchApi(`/api/admin/session-hotspots?${params.toString()}`)
   if (!res.ok) throw new Error('Failed to fetch session hotspots')
   return res.json()
-}
-
-export async function disableClient(
-  clientName: string,
-  reason: string,
-  disabledBy: string,
-): Promise<void> {
-  await fetchApi(`/api/admin/clients/${clientName}/disable`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reason, disabled_by: disabledBy }),
-  })
-}
-
-export async function enableClient(clientName: string): Promise<void> {
-  await fetchApi(`/api/admin/clients/${clientName}/disable`, {
-    method: 'DELETE',
-  })
 }

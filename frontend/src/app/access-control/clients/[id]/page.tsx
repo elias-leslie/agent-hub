@@ -17,8 +17,6 @@ interface ClientResponse {
   display_name: string
   client_type: string
   status: string
-  rate_limit_rpm: number
-  rate_limit_tpm: number
   allowed_projects: string[] | null
   created_at: string
   updated_at: string
@@ -30,8 +28,6 @@ interface ClientResponse {
 
 interface ClientUpdateRequest {
   display_name?: string
-  rate_limit_rpm?: number
-  rate_limit_tpm?: number
   allowed_projects?: string[]
 }
 
@@ -188,24 +184,6 @@ export default function ClientDetailPage() {
                 onBlock={() => setShowBlockModal(true)}
                 isActivating={activateMutation.isPending}
               />
-              <section className="panel-surface p-5 lg:p-6">
-                <p className="section-kicker">Request Budget</p>
-                <h2 className="section-heading mt-2">Throttle Snapshot</h2>
-                <div className="mt-5 detail-grid">
-                  <div className="detail-card">
-                    <p className="detail-label">RPM</p>
-                    <p className="detail-value font-mono">
-                      {client.rate_limit_rpm}
-                    </p>
-                  </div>
-                  <div className="detail-card">
-                    <p className="detail-label">TPM</p>
-                    <p className="detail-value font-mono">
-                      {client.rate_limit_tpm.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </section>
             </div>
           </div>
         </div>

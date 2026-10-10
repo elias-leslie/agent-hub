@@ -5,34 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class ClientControlResponse(BaseModel):
-    """Response for client control status."""
-
-    client_name: str
-    enabled: bool
-    disabled_at: datetime | None
-    disabled_by: str | None
-    reason: str | None
-    created_at: datetime
-    updated_at: datetime
-
-
-class DisableRequest(BaseModel):
-    """Request to disable a client."""
-
-    reason: str | None = Field(default=None, max_length=500, description="Reason for disabling")
-    disabled_by: str | None = Field(
-        default=None, max_length=100, description="User/admin who disabled"
-    )
-
-
-class ClientListResponse(BaseModel):
-    """Response for listing clients."""
-
-    clients: list[ClientControlResponse]
-    total: int
-
-
 class BlockedRequestLog(BaseModel):
     """A log entry for a blocked request."""
 

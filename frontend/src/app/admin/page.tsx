@@ -1,33 +1,20 @@
 'use client'
 
-import {
-  AlertTriangle,
-  PowerOff,
-  RefreshCw,
-  Shield,
-  Users,
-  Zap,
-} from 'lucide-react'
+import { AlertTriangle, RefreshCw, Shield, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useToastActions } from '@/components/error/toast'
 import {
   type BlockedRequest,
-  type ClientControl,
-  disableClient,
-  enableClient,
   fetchBlockedRequests,
-  fetchClients,
   fetchSessionHotspots,
   type SessionHotspots,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { BlockedRequestsTable } from './components/BlockedRequestsTable'
-import { KillSwitchToggle } from './components/KillSwitchToggle'
 import { SessionHotspotsPanel } from './components/SessionHotspotsPanel'
 
 export default function AdminPage() {
-  const [clients, setClients] = useState<ClientControl[]>([])
   const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([])
   const [hotspots, setHotspots] = useState<SessionHotspots | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -37,19 +24,14 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      const [c, b, h] = await Promise.all([
-        fetchClients(),
+      const [b, h] = await Promise.all([
         fetchBlockedRequests(),
         fetchSessionHotspots(),
       ])
-      setClients(c)
       setBlockedRequests(b)
       setHotspots(h)
     } catch {
-      toast.error(
-        'Failed to refresh',
-        'Could not load admin control-plane data',
-      )
+      toast.error('Failed to refresh', 'Could not load admin data')
     } finally {
       setIsRefreshing(false)
       setIsLoading(false)
@@ -61,22 +43,6 @@ export default function AdminPage() {
     const interval = setInterval(refresh, 30000)
     return () => clearInterval(interval)
   }, [refresh])
-
-  const handleToggleClient = useCallback(
-    async (clientName: string, enabled: boolean, reason: string) => {
-      try {
-        if (enabled) {
-          await disableClient(clientName, reason, 'admin')
-        } else {
-          await enableClient(clientName)
-        }
-        await refresh()
-      } catch {
-        toast.error('Failed to toggle client', `Could not update ${clientName}`)
-      }
-    },
-    [refresh],
-  )
 
   const todayBlocked = useMemo(() => {
     const today = new Date().toDateString()
@@ -98,9 +64,7 @@ export default function AdminPage() {
         <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">
-              Client Access Control
-            </h1>
+            <h1 className="text-base font-semibold text-slate-100">Admin</h1>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800/50">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -115,7 +79,7 @@ export default function AdminPage() {
           <button
             onClick={refresh}
             disabled={isRefreshing}
-            aria-label="Refresh client and request data"
+            aria-label="Refresh admin data"
             className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
             title="Refresh"
           >
@@ -128,31 +92,7 @@ export default function AdminPage() {
 
       <main className="px-6 lg:px-8 py-8 space-y-8 relative">
         {/* Stats Summary */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-emerald-900/30">
-                <Users className="w-4 h-4 text-emerald-400" />
-              </div>
-              <span className="text-sm text-slate-400">Total Clients</span>
-            </div>
-            <div className="text-3xl font-bold text-slate-100 tabular-nums">
-              {clients.length}
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-red-900/30">
-                <PowerOff className="w-4 h-4 text-red-400" />
-              </div>
-              <span className="text-sm text-slate-400">Disabled Clients</span>
-            </div>
-            <div className="text-3xl font-bold text-red-400 tabular-nums">
-              {clients.filter((c) => !c.enabled).length}
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-5 rounded-xl bg-gradient-to-br from-amber-950/50 to-slate-900/40 border border-amber-800/50 hover:border-amber-700 transition-colors">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-lg bg-amber-900/30">
@@ -219,55 +159,6 @@ export default function AdminPage() {
           <Link href="/automations" className="button-secondary">
             Open Automations
           </Link>
-        </section>
-
-        {/* Client Kill Switches Section */}
-        <section>
-          <div className="flex items-center gap-3 mb-4">
-            <Users className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-lg font-semibold text-slate-100">
-              Client Kill Switches
-            </h2>
-            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-              {clients.length} registered
-            </span>
-          </div>
-          <div className="space-y-3">
-            {isLoading ? (
-              <div className="animate-pulse space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-16 bg-slate-800/50 rounded-xl" />
-                ))}
-              </div>
-            ) : clients.length === 0 ? (
-              <div className="text-center py-12 rounded-xl border border-dashed border-slate-800">
-                <Users className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                <p className="text-slate-500">No clients registered yet</p>
-                <p className="text-xs text-slate-600 mt-1">
-                  Clients auto-register on first API call
-                </p>
-              </div>
-            ) : (
-              clients.map((client) => (
-                <KillSwitchToggle
-                  key={client.client_name}
-                  name={client.client_name}
-                  enabled={client.enabled}
-                  disabledAt={client.disabled_at}
-                  disabledBy={client.disabled_by}
-                  reason={client.reason}
-                  onToggle={(reason) =>
-                    handleToggleClient(
-                      client.client_name,
-                      client.enabled,
-                      reason,
-                    )
-                  }
-                  type="client"
-                />
-              ))
-            )}
-          </div>
         </section>
 
         {/* Blocked Requests Section - Full Width */}

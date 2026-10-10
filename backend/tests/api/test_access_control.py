@@ -43,8 +43,6 @@ def _make_mock_client(
     client_id="test-client-id",
     status="active",
     display_name="Test Client",
-    rate_limit_rpm=60,
-    rate_limit_tpm=100000,
     allowed_projects=None,
     suspension_reason=None,
     suspended_at=None,
@@ -54,8 +52,6 @@ def _make_mock_client(
     client.id = client_id
     client.status = status
     client.display_name = display_name
-    client.rate_limit_rpm = rate_limit_rpm
-    client.rate_limit_tpm = rate_limit_tpm
     client.allowed_projects = allowed_projects
     client.suspension_reason = suspension_reason
     client.suspended_at = suspended_at
@@ -73,7 +69,7 @@ class TestAccessControlMiddleware:
     async def test_admin_paths_require_internal_header(self, async_client):
         """Test that admin paths require internal header."""
         # Without internal header, should get 403
-        response = await async_client.get("/api/admin/clients")
+        response = await async_client.get("/api/admin/request-audit")
         assert response.status_code == 403
         assert response.json()["error"] == "internal_only"
         guidance = response.json()["agent_instructions"]["guidance"]
@@ -81,11 +77,23 @@ class TestAccessControlMiddleware:
         assert "human user" not in guidance
 
         # With internal header, should succeed
-        response = await async_client.get(
-            "/api/admin/clients",
-            headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
-        )
+        with patch("app.api.admin.get_admin_redis", AsyncMock(return_value=None)):
+            response = await async_client.get(
+                "/api/admin/request-audit",
+                headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+            )
         assert response.status_code == 200
+        assert response.json() == {"requests": [], "total": 0}
+
+    async def test_removed_client_kill_switch_routes_are_gone(self, async_client):
+        """The unread client kill switch endpoints no longer exist."""
+        headers = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
+        response = await async_client.get("/api/admin/clients", headers=headers)
+        assert response.status_code == 404
+        response = await async_client.post(
+            "/api/admin/clients/example/disable", headers=headers, json={}
+        )
+        assert response.status_code in (404, 405)
 
     async def test_access_control_paths_require_internal_header(self, async_client):
         """Test that access control paths require internal header."""
@@ -380,8 +388,6 @@ class TestIdentifyClientUnit:
             "id": "client-123",
             "status": "active",
             "display_name": "Test",
-            "rate_limit_rpm": 60,
-            "rate_limit_tpm": 100000,
             "allowed_projects": None,
             "suspension_reason": None,
             "suspended_at": None,
@@ -436,8 +442,6 @@ class TestIdentifyClientUnit:
             "id": "client-123",
             "status": "suspended",
             "display_name": "Suspended Client",
-            "rate_limit_rpm": 60,
-            "rate_limit_tpm": 100000,
             "allowed_projects": None,
             "suspension_reason": "Rate abuse",
             "suspended_at": datetime.now(UTC),
@@ -469,8 +473,6 @@ class TestIdentifyClientUnit:
             "id": "client-123",
             "status": "blocked",
             "display_name": "Blocked Client",
-            "rate_limit_rpm": 60,
-            "rate_limit_tpm": 100000,
             "allowed_projects": None,
             "suspension_reason": "Permanently blocked",
             "suspended_at": datetime.now(UTC),
@@ -698,8 +700,6 @@ class TestAccessControlAPI:
             json={
                 "display_name": "Test API Client",
                 "client_type": "external",
-                "rate_limit_rpm": 60,
-                "rate_limit_tpm": 100000,
             },
             headers=self.INTERNAL_HEADERS,
         )
@@ -716,8 +716,6 @@ class TestAccessControlAPI:
             json={
                 "display_name": "No Secret Client",
                 "client_type": "external",
-                "rate_limit_rpm": 60,
-                "rate_limit_tpm": 100000,
             },
             headers=self.INTERNAL_HEADERS,
         )
@@ -735,8 +733,6 @@ class TestAccessControlAPI:
             json={
                 "display_name": "Schema Test Client",
                 "client_type": "service",
-                "rate_limit_rpm": 120,
-                "rate_limit_tpm": 200000,
             },
             headers=self.INTERNAL_HEADERS,
         )
@@ -744,8 +740,8 @@ class TestAccessControlAPI:
         data = response.json()
         # Verify schema fields
         assert data["client_type"] == "service"
-        assert data["rate_limit_rpm"] == 120
-        assert data["rate_limit_tpm"] == 200000
+        assert "rate_limit_rpm" not in data
+        assert "rate_limit_tpm" not in data
         assert "created_at" in data
 
     async def test_no_rotate_secret_endpoint(self, async_client):

@@ -90,20 +90,6 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Allow embedding /embed routes in iframes from known origins
-      {
-        source: '/embed/:path*',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'ALLOWALL',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: 'frame-ancestors *',
-          },
-        ],
-      },
     ]
   },
 

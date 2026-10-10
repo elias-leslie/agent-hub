@@ -4,8 +4,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.constants import DEFAULT_RATE_LIMIT_TPM
-
 
 # Client schemas
 class ClientCreateRequest(BaseModel):
@@ -13,8 +11,6 @@ class ClientCreateRequest(BaseModel):
 
     display_name: str = Field(..., min_length=1, max_length=100)
     client_type: str = Field(default="external", pattern="^(internal|external|service)$")
-    rate_limit_rpm: int = Field(default=60, ge=1, le=10000)
-    rate_limit_tpm: int = Field(default=DEFAULT_RATE_LIMIT_TPM, ge=1000, le=10000000)
 
 
 class ClientCreateResponse(BaseModel):
@@ -24,8 +20,6 @@ class ClientCreateResponse(BaseModel):
     display_name: str
     client_type: str
     status: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
     created_at: datetime
 
 
@@ -36,8 +30,6 @@ class ClientResponse(BaseModel):
     display_name: str
     client_type: str
     status: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
     allowed_projects: list[str] | None = None  # None = unrestricted
     created_at: datetime
     updated_at: datetime
@@ -51,8 +43,6 @@ class ClientUpdateRequest(BaseModel):
     """Request to update client settings."""
 
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
-    rate_limit_rpm: int | None = Field(default=None, ge=1, le=10000)
-    rate_limit_tpm: int | None = Field(default=None, ge=1000, le=10000000)
     allowed_projects: list[str] | None = Field(
         default=None,
         description="List of allowed project_ids. Empty list = no projects allowed. Omit/null to keep unchanged.",

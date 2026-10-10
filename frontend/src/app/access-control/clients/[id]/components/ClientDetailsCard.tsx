@@ -5,8 +5,6 @@ interface ClientResponse {
   display_name: string
   client_type: string
   status: string
-  rate_limit_rpm: number
-  rate_limit_tpm: number
   allowed_projects: string[] | null
   created_at: string
   updated_at: string
@@ -38,7 +36,7 @@ export function ClientDetailsCard({
           <p className="section-kicker">Authentication Profile</p>
           <h2 className="section-heading mt-2">Client Details</h2>
           <p className="section-copy mt-2">
-            Review identity, project scope, and throttle limits for this caller.
+            Review identity and project scope for this caller.
           </p>
         </div>
       </div>
@@ -56,13 +54,6 @@ export function ClientDetailsCard({
           <p className="detail-label">Status</p>
           <p className={cn('detail-value capitalize', statusConfig.color)}>
             {client.status}
-          </p>
-        </div>
-        <div className="detail-card">
-          <p className="detail-label">Rate Limit</p>
-          <p className="detail-value font-mono">{client.rate_limit_rpm} rpm</p>
-          <p className="mt-1 text-xs text-slate-500">
-            {client.rate_limit_tpm.toLocaleString()} tpm
           </p>
         </div>
         <div className="detail-card md:col-span-2 xl:col-span-3">

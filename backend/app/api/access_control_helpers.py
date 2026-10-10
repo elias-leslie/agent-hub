@@ -77,8 +77,6 @@ def client_to_response(client: Client) -> ClientResponse:
         display_name=client.display_name,
         client_type=client.client_type,
         status=client.status,
-        rate_limit_rpm=client.rate_limit_rpm,
-        rate_limit_tpm=client.rate_limit_tpm,
         allowed_projects=parse_allowed_projects(client.allowed_projects),
         created_at=client.created_at,
         updated_at=client.updated_at,

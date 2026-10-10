@@ -35,8 +35,6 @@ async def create_client(
     registration = await service.register_client(
         display_name=request.display_name,
         client_type=request.client_type,
-        rate_limit_rpm=request.rate_limit_rpm,
-        rate_limit_tpm=request.rate_limit_tpm,
     )
 
     # Get full client for response
@@ -47,8 +45,6 @@ async def create_client(
         display_name=registration.display_name,
         client_type=client.client_type if client else request.client_type,
         status="active",
-        rate_limit_rpm=request.rate_limit_rpm,
-        rate_limit_tpm=request.rate_limit_tpm,
         created_at=client.created_at if client else datetime.now(UTC),
     )
 
@@ -98,7 +94,7 @@ async def update_client(
     request: ClientUpdateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ClientResponse:
-    """Update client settings (display name, rate limits, allowed projects)."""
+    """Update client settings (display name, allowed projects)."""
     from app.middleware.access_control import invalidate_client_cache
 
     service = ClientAuthService(db)
@@ -110,10 +106,6 @@ async def update_client(
     # Update fields if provided
     if request.display_name is not None:
         client.display_name = request.display_name
-    if request.rate_limit_rpm is not None:
-        client.rate_limit_rpm = request.rate_limit_rpm
-    if request.rate_limit_tpm is not None:
-        client.rate_limit_tpm = request.rate_limit_tpm
     if request.allowed_projects is not None:
         # Convert list to JSON string for storage
         client.allowed_projects = json.dumps(request.allowed_projects)

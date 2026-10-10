@@ -1,19 +1,15 @@
-"""Admin API endpoints for kill switch and usage control."""
+"""Admin API endpoints for schedules, request audit and session diagnostics."""
 
 import logging
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.automation_guidance import automation_moved
 from app.db import get_db
-from app.models import ClientControl
 
 from .admin_handlers import (
-    client_to_response,
     process_audit_requests,
     process_blocked_requests,
     process_unknown_callers,
@@ -28,9 +24,6 @@ from .admin_redis import (
 )
 from .admin_schemas import (
     BlockedRequestsResponse,
-    ClientControlResponse,
-    ClientListResponse,
-    DisableRequest,
     RequestAuditResponse,
     SessionHotspotsResponse,
     UnknownCallersResponse,
@@ -40,103 +33,6 @@ from .admin_schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-# Client endpoints
-@router.get("/clients", response_model=ClientListResponse)
-async def list_clients(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    include_enabled: bool = True,
-    include_disabled: bool = True,
-) -> ClientListResponse:
-    """List all registered clients with their kill switch status."""
-    query = select(ClientControl)
-
-    if not include_enabled:
-        query = query.where(ClientControl.enabled == False)  # noqa: E712
-    if not include_disabled:
-        query = query.where(ClientControl.enabled == True)  # noqa: E712
-
-    query = query.order_by(ClientControl.client_name)
-    result = await db.execute(query)
-    clients = result.scalars().all()
-
-    return ClientListResponse(
-        clients=[client_to_response(c) for c in clients],
-        total=len(clients),
-    )
-
-
-@router.get("/clients/{client_name}", response_model=ClientControlResponse)
-async def get_client(
-    client_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ClientControlResponse:
-    """Get a specific client's status."""
-    result = await db.execute(select(ClientControl).where(ClientControl.client_name == client_name))
-    client = result.scalar_one_or_none()
-
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    return client_to_response(client)
-
-
-@router.post("/clients/{client_name}/disable", response_model=ClientControlResponse)
-async def disable_client(
-    client_name: str,
-    request: DisableRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ClientControlResponse:
-    """Disable a client. Blocked requests will get 403 with retry_after=-1."""
-    result = await db.execute(select(ClientControl).where(ClientControl.client_name == client_name))
-    client = result.scalar_one_or_none()
-
-    if not client:
-        # Create new client control record
-        client = ClientControl(
-            client_name=client_name,
-            enabled=False,
-            disabled_at=datetime.now(UTC),
-            disabled_by=request.disabled_by,
-            reason=request.reason,
-        )
-        db.add(client)
-    else:
-        if not client.enabled:
-            raise HTTPException(status_code=400, detail="Client already disabled")
-        client.enabled = False
-        client.disabled_at = datetime.now(UTC)
-        client.disabled_by = request.disabled_by
-        client.reason = request.reason
-
-    await db.commit()
-    await db.refresh(client)
-    return client_to_response(client)
-
-
-@router.delete("/clients/{client_name}/disable", response_model=ClientControlResponse)
-async def enable_client(
-    client_name: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ClientControlResponse:
-    """Re-enable a disabled client."""
-    result = await db.execute(select(ClientControl).where(ClientControl.client_name == client_name))
-    client = result.scalar_one_or_none()
-
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    if client.enabled:
-        raise HTTPException(status_code=400, detail="Client already enabled")
-
-    client.enabled = True
-    client.disabled_at = None
-    client.disabled_by = None
-    client.reason = None
-
-    await db.commit()
-    await db.refresh(client)
-    return client_to_response(client)
 
 
 @router.get("/schedules", response_model=list[WorkflowScheduleResponse])

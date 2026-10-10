@@ -1,7 +1,15 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Ban, Clock, DollarSign, FolderLock, Shield, Users } from 'lucide-react'
+import {
+  Ban,
+  Clock,
+  DollarSign,
+  FolderLock,
+  Settings,
+  Shield,
+  Users,
+} from 'lucide-react'
 import { buildApiUrl, fetchApi } from '@/lib/api-config'
 import { cn } from '@/lib/utils'
 
@@ -171,7 +179,7 @@ export default function AccessControlPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
                 <a
                   href="/access-control/clients"
                   className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-1"
@@ -183,7 +191,7 @@ export default function AccessControlPage() {
                     </h2>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Manage registered clients and rate limits
+                    Manage registered clients and project access
                   </p>
                 </a>
 
@@ -233,8 +241,23 @@ export default function AccessControlPage() {
                 </a>
 
                 <a
+                  href="/admin"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-5"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Settings className="h-5 w-5 text-slate-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Admin
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Session hotspots, blocked requests, and schedules
+                  </p>
+                </a>
+
+                <a
                   href="/access-control/clients/new"
-                  className="block p-5 rounded-xl border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 hover:border-amber-700/50 transition-all card-hover-lift animate-fade-up stagger-5"
+                  className="block p-5 rounded-xl border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 hover:border-amber-700/50 transition-all card-hover-lift animate-fade-up stagger-6"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <Shield className="h-5 w-5 text-amber-400" />

@@ -2,15 +2,11 @@ import { useEffect, useState } from 'react'
 
 interface ClientResponse {
   display_name: string
-  rate_limit_rpm: number
-  rate_limit_tpm: number
   allowed_projects: string[] | null
 }
 
 interface ClientUpdateRequest {
   display_name?: string
-  rate_limit_rpm?: number
-  rate_limit_tpm?: number
   allowed_projects?: string[]
 }
 
@@ -30,16 +26,12 @@ export function EditClientModal({
   isPending,
 }: EditClientModalProps) {
   const [displayName, setDisplayName] = useState('')
-  const [rateLimitRpm, setRateLimitRpm] = useState(60)
-  const [rateLimitTpm, setRateLimitTpm] = useState(100000)
   const [allowedProjects, setAllowedProjects] = useState('')
   const [allowUnrestricted, setAllowUnrestricted] = useState(true)
 
   useEffect(() => {
     if (isOpen && client) {
       setDisplayName(client.display_name)
-      setRateLimitRpm(client.rate_limit_rpm)
-      setRateLimitTpm(client.rate_limit_tpm)
       setAllowUnrestricted(client.allowed_projects === null)
       setAllowedProjects(
         client.allowed_projects ? client.allowed_projects.join(', ') : '',
@@ -50,10 +42,6 @@ export function EditClientModal({
   function handleUpdate() {
     const updates: ClientUpdateRequest = {}
     if (displayName !== client.display_name) updates.display_name = displayName
-    if (rateLimitRpm !== client.rate_limit_rpm)
-      updates.rate_limit_rpm = rateLimitRpm
-    if (rateLimitTpm !== client.rate_limit_tpm)
-      updates.rate_limit_tpm = rateLimitTpm
     if (!allowUnrestricted) {
       const projects = allowedProjects
         .split(',')
@@ -83,39 +71,6 @@ export function EditClientModal({
               onChange={(e) => setDisplayName(e.target.value)}
               className="control-input"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="detail-label mb-2 block">
-                Rate Limit (RPM)
-              </label>
-              <input
-                type="number"
-                value={rateLimitRpm}
-                onChange={(e) =>
-                  setRateLimitRpm(parseInt(e.target.value, 10) || 60)
-                }
-                min={1}
-                max={10000}
-                className="control-input"
-              />
-            </div>
-            <div>
-              <label className="detail-label mb-2 block">
-                Rate Limit (TPM)
-              </label>
-              <input
-                type="number"
-                value={rateLimitTpm}
-                onChange={(e) =>
-                  setRateLimitTpm(parseInt(e.target.value, 10) || 100000)
-                }
-                min={1000}
-                max={10000000}
-                className="control-input"
-              />
-            </div>
           </div>
 
           <div className="section-card space-y-3">
