@@ -17,12 +17,9 @@ export function ErrorAlert({
             <AlertCircle className="h-4 w-4" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold">
-              Unable to load sessions ledger
-            </p>
+            <p className="text-sm font-semibold">Unable to load sessions</p>
             <p className="text-xs text-rose-200/80">
-              The first page failed to load. Retry the request to recover the
-              ledger.
+              The list request failed. Filters are kept; retry to load again.
             </p>
             {detail && (
               <p className="text-[11px] font-mono text-rose-200/70">{detail}</p>
@@ -37,7 +34,7 @@ export function ErrorAlert({
             className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-100 transition-colors hover:bg-rose-500/20"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Retry sessions
+            Retry
           </button>
         )}
       </div>

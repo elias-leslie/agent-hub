@@ -1,0 +1,200 @@
+import { memo } from 'react'
+import type { SessionListItem } from '@/lib/api/sessions'
+import { cn } from '@/lib/utils'
+import {
+  formatDurationMs,
+  formatRelativeTime,
+  getExecutionIdentity,
+  getSessionLastActive,
+  getSessionSourceLabel,
+  getSessionTitle,
+  getUsageSummary,
+} from '../utils'
+import { StatusCell } from './StatusCell'
+
+/** Column templates shared by the header and rows so they always line up. */
+export function sessionGridClass(compact: boolean) {
+  return compact
+    ? 'md:grid md:grid-cols-[92px_minmax(0,1fr)_120px_96px_44px_104px_72px]'
+    : 'md:grid md:grid-cols-[92px_minmax(0,1fr)_128px_104px_44px_104px_72px] lg:grid-cols-[92px_minmax(0,1fr)_128px_104px_150px_44px_104px_72px_64px] xl:grid-cols-[92px_minmax(0,1fr)_128px_104px_150px_140px_44px_104px_72px_64px]'
+}
+
+function absolute(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+export const SessionRow = memo(function SessionRow({
+  session,
+  isCursor,
+  isSelected,
+  compact,
+  onClick,
+  onDoubleClick,
+}: {
+  session: SessionListItem
+  /** Keyboard cursor; carries the roving tabindex. */
+  isCursor: boolean
+  /** Row shown in the open preview. */
+  isSelected: boolean
+  /** Preview is open beside the list, so the secondary columns are hidden. */
+  compact: boolean
+  onClick: (id: string) => void
+  onDoubleClick: (id: string) => void
+}) {
+  const title = getSessionTitle(session)
+  const shortId = session.id.slice(0, 8)
+  const titleIsId = title === `session ${shortId}`
+  const identity = getExecutionIdentity(session)
+  const usage = getUsageSummary(session)
+  const lastActive = getSessionLastActive(session)
+  const durationMs =
+    new Date(lastActive).getTime() - new Date(session.created_at).getTime()
+  const source = getSessionSourceLabel(session)
+  const children = session.child_session_count ?? 0
+  const activeChildren = session.active_child_session_count ?? 0
+  const modelTitle = identity.showRequested
+    ? `requested ${identity.requestedModel} · ran ${identity.effectiveModel}`
+    : identity.effectiveModel
+
+  return (
+    // biome-ignore lint/a11y/useFocusableInteractive: roving tabindex; only the cursor row is tabbable
+    <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={isCursor ? 0 : -1}
+      data-session-id={session.id}
+      data-testid="session-row"
+      onClick={() => onClick(session.id)}
+      onDoubleClick={() => onDoubleClick(session.id)}
+      className={cn(
+        'cursor-pointer gap-3 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors md:h-9 md:items-center md:py-0',
+        sessionGridClass(compact),
+        isSelected
+          ? 'bg-slate-800/60'
+          : isCursor
+            ? 'bg-slate-900/60'
+            : 'hover:bg-slate-900/40',
+        'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/60',
+      )}
+    >
+      {/* Phone: line 1 is title + status */}
+      <div className="flex min-w-0 items-center gap-2 md:contents">
+        <div className="order-2 shrink-0 md:order-none">
+          <StatusCell
+            status={session.status}
+            liveActivity={session.live_activity}
+            showLabel
+          />
+        </div>
+        <div className="order-1 flex min-w-0 flex-1 items-baseline gap-2 md:order-none">
+          <span className="truncate text-slate-100" title={title}>
+            {title}
+          </span>
+          {titleIsId ? null : (
+            <span className="hidden shrink-0 font-mono text-[11px] text-slate-500 sm:inline">
+              {shortId}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Phone: line 2 is project · kind · last active · tokens */}
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-[12px] text-slate-400 md:contents">
+        <span className="truncate md:text-[13px] md:text-slate-300">
+          {session.project_id}
+        </span>
+        <span className="truncate">{source}</span>
+        {compact ? null : (
+          <span
+            className="hidden truncate font-mono text-[12px] text-slate-400 lg:block"
+            title={modelTitle}
+          >
+            {identity.effectiveModel}
+            {identity.fallbackUsed ? (
+              <span className="ml-1 text-amber-300/80">fallback</span>
+            ) : null}
+          </span>
+        )}
+        {compact ? null : (
+          <span
+            className="hidden truncate font-mono text-[12px] text-slate-500 xl:block"
+            title={session.current_branch ?? undefined}
+          >
+            {session.current_branch || '—'}
+          </span>
+        )}
+        <span
+          className={cn(
+            'font-mono text-[12px] tabular-nums md:text-right',
+            children > 0 ? 'text-slate-300' : 'hidden text-slate-600 md:inline',
+          )}
+          title={
+            children > 0
+              ? `${children} sub-agent${children === 1 ? '' : 's'}${activeChildren ? `, ${activeChildren} active` : ''}`
+              : 'No sub-agents'
+          }
+        >
+          {children > 0 ? (
+            <>
+              <span className="md:hidden">sub-agents </span>
+              {children}
+            </>
+          ) : (
+            '—'
+          )}
+        </span>
+        <span
+          className={cn(
+            'font-mono text-[12px] tabular-nums md:text-right',
+            usage.known ? 'text-slate-300' : 'text-slate-500',
+          )}
+          title={usage.title}
+        >
+          {usage.label}
+        </span>
+        <span
+          className="font-mono text-[12px] tabular-nums text-slate-400 md:text-right"
+          title={`Last active ${absolute(lastActive)}`}
+        >
+          {formatRelativeTime(lastActive)}
+        </span>
+        {compact ? null : (
+          <span
+            className="hidden font-mono text-[12px] tabular-nums text-slate-500 md:text-right lg:block"
+            title={`Started ${absolute(session.created_at)}`}
+          >
+            {formatDurationMs(durationMs)}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+})
+
+export function SessionListHeader({ compact }: { compact: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'hidden h-8 items-center gap-3 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
+        sessionGridClass(compact),
+      )}
+    >
+      <span>Status</span>
+      <span>Session</span>
+      <span>Project</span>
+      <span>Source</span>
+      {compact ? null : <span className="hidden lg:block">Model</span>}
+      {compact ? null : <span className="hidden xl:block">Branch</span>}
+      <span className="text-right" title="Sub-agents">
+        Sub
+      </span>
+      <span className="text-right">Tokens in/out</span>
+      <span className="text-right">Active</span>
+      {compact ? null : (
+        <span className="hidden text-right lg:block">Duration</span>
+      )}
+    </div>
+  )
+}

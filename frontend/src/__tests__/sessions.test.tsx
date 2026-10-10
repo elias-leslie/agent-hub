@@ -1,19 +1,58 @@
-import {
-  act,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionExpansion } from '@/app/sessions/hooks/useSessionExpansion'
+import {
+  parseSessionListState,
+  serializeSessionListState,
+} from '@/app/sessions/hooks/useSessionListState'
 import SessionsPage from '@/app/sessions/page'
+import { DEFAULT_LIST_STATE } from '@/app/sessions/types'
+import {
+  formatDurationMs,
+  getExecutionIdentity,
+  getSessionTitle,
+  getUsageSummary,
+} from '@/app/sessions/utils'
+import type { SessionListItem } from '@/lib/api/sessions'
 import { createQueryClientWrapper } from './test-utils'
 
-vi.mock('@/components/chat/use-models', () => ({
-  useModels: () => [],
-}))
+const nav = vi.hoisted(() => {
+  let search = ''
+  const listeners = new Set<() => void>()
+  const set = (href: string) => {
+    search = href.includes('?') ? href.slice(href.indexOf('?') + 1) : ''
+    for (const listener of listeners) listener()
+  }
+  return {
+    get search() {
+      return search
+    },
+    reset(value = '') {
+      search = value
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    push: vi.fn((href: string) => set(href)),
+    replace: vi.fn((href: string) => set(href)),
+  }
+})
+
+vi.mock('next/navigation', async () => {
+  const { useSyncExternalStore } = await import('react')
+  return {
+    usePathname: () => '/sessions',
+    useRouter: () => ({ push: nav.push, replace: nav.replace }),
+    useSearchParams: () => {
+      const search = useSyncExternalStore(
+        nav.subscribe,
+        () => nav.search,
+        () => nav.search,
+      )
+      return new URLSearchParams(search)
+    },
+  }
+})
 
 vi.mock('@/components/timeline', () => ({
   EventTimeline: ({ events }: { events: Array<unknown> }) => (
@@ -21,752 +60,344 @@ vi.mock('@/components/timeline', () => ({
   ),
 }))
 
-vi.mock('@/lib/api', () => ({
-  fetchSessions: vi.fn(),
+vi.mock('@/lib/api/sessions', async (original) => ({
+  ...(await original<typeof import('@/lib/api/sessions')>()),
+  querySessions: vi.fn(),
+  fetchSessionFacets: vi.fn(),
   fetchSession: vi.fn(),
-  fetchAllSessionEvents: vi.fn(),
+  fetchSessionEvents: vi.fn(),
 }))
 
-import { fetchAllSessionEvents, fetchSession, fetchSessions } from '@/lib/api'
+import {
+  fetchSession,
+  fetchSessionEvents,
+  fetchSessionFacets,
+  querySessions,
+} from '@/lib/api/sessions'
 
-const mockSessions = {
-  sessions: [
-    {
-      id: 'session-123-abc',
-      project_id: 'test-project',
-      provider: 'claude',
-      model: 'claude-sonnet-5-5',
-      requested_provider: 'claude',
-      requested_model: 'claude-opus-5-5',
-      effective_provider: 'claude',
-      effective_model: 'claude-sonnet-5-5',
-      fallback_used: true,
-      fallback_reason: 'rate_limit',
-      status: 'active',
-      agent_slug: 'code_generation',
-      session_type: 'completion',
-      summary_oneliner: 'dispatch parser cleared branch drift',
-      live_activity: {
-        phase: 'tool',
-        status: 'running',
-        health: 'healthy',
-        stalled: false,
-        outstanding_tool_calls: 0,
-        tool_calls_count: 3,
-        files_touched: [],
-        lifecycle_state: 'working',
-        lifecycle_reason_codes: [],
-        dead_signals: [],
-        anti_reap_signals: [],
-        has_owner_lane: true,
-        has_specialist_lane: false,
-        reapable: false,
-      },
-      message_count: 5,
-      event_count: 12,
-      total_input_tokens: 1500,
-      total_output_tokens: 800,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-07T10:00:00Z',
-    },
-    {
-      id: 'session-456-def',
-      project_id: 'test-project',
-      provider: 'gemini',
-      model: 'gemini-3-flash',
-      requested_provider: 'gemini',
-      requested_model: 'gemini-3-flash',
-      effective_provider: 'gemini',
-      effective_model: 'gemini-3-flash',
-      fallback_used: false,
-      fallback_reason: null,
-      status: 'completed',
-      agent_slug: null,
-      session_type: 'chat',
-      summary_oneliner: 'verification passed cleanly',
-      message_count: 10,
-      event_count: 20,
-      total_input_tokens: 3200,
-      total_output_tokens: 1200,
-      created_at: '2026-01-02T00:00:00Z',
-      updated_at: '2026-01-06T15:00:00Z',
-    },
-  ],
-  total: 2,
-  page: 1,
-  page_size: 20,
+function row(overrides: Partial<SessionListItem>): SessionListItem {
+  return {
+    id: 'aaaaaaaa-0000-0000-0000-000000000000',
+    project_id: 'agent-hub',
+    provider: 'codex',
+    model: 'codex/gpt-5.5',
+    status: 'completed',
+    agent_slug: 'coder',
+    session_type: 'agent',
+    message_count: 4,
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    child_session_count: 0,
+    active_child_session_count: 0,
+    usage_known: false,
+    created_at: '2026-10-10T08:00:00Z',
+    updated_at: '2026-10-10T09:00:00Z',
+    last_active_at: '2026-10-10T10:30:00Z',
+    ...overrides,
+  }
 }
 
-function renderPage() {
-  return render(<SessionsPage />, { wrapper: createQueryClientWrapper() })
+const codexRow = row({
+  id: 'c0dec0de-1111-2222-3333-444444444444',
+  title: 'Fix the dispatcher retry loop',
+  requested_model: 'codex/gpt-5.5',
+  effective_model: 'codex/unknown',
+  usage_known: true,
+  usage_input_tokens: 120_000,
+  usage_output_tokens: 4_500,
+  usage_cached_input_tokens: 90_000,
+  child_session_count: 3,
+})
+const claudeRow = row({
+  id: 'c1a0de00-5555-6666-7777-888888888888',
+  provider: 'claude',
+  model: 'claude-opus-5-5',
+  session_type: 'claude_code',
+  title: null,
+  summary_oneliner: null,
+  current_branch: 'feature/sessions',
+})
+
+function listResponse(sessions: SessionListItem[], next: string | null = null) {
+  return {
+    sessions,
+    total: sessions.length + (next ? 100 : 0),
+    page: 1,
+    page_size: 100,
+    next_cursor: next,
+  }
 }
 
-function createDeferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (error?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
+const facets = {
+  status: { active: 1, completed: 40, failed: 2, running: 1 },
+  kind: { coding: 30, chat: 13, completion: 900, image: 2 },
+  projects: [{ project_id: 'agent-hub', count: 43 }],
+}
+
+function mount() {
+  const Wrapper = createQueryClientWrapper()
+  return render(
+    <Wrapper>
+      <SessionsPage />
+    </Wrapper>,
+  )
+}
+
+beforeEach(() => {
+  nav.reset()
+  nav.push.mockClear()
+  nav.replace.mockClear()
+  vi.mocked(querySessions).mockResolvedValue(
+    listResponse([codexRow, claudeRow]),
+  )
+  vi.mocked(fetchSessionFacets).mockResolvedValue(facets)
+  vi.mocked(fetchSession).mockResolvedValue({
+    ...codexRow,
+    message_count: 4,
+    event_count: 9,
   })
-  return { promise, resolve, reject }
-}
+  vi.mocked(fetchSessionEvents).mockResolvedValue({
+    session_id: codexRow.id,
+    events: [],
+    total: 0,
+  } as never)
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('SessionsPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(fetchSessions).mockResolvedValue(mockSessions)
-    vi.mocked(fetchSession).mockResolvedValue({
-      id: 'session-123-abc',
-      project_id: 'test-project',
-      provider: 'claude',
-      model: 'claude-sonnet-5-5',
-      requested_provider: 'claude',
-      requested_model: 'claude-opus-5-5',
-      effective_provider: 'claude',
-      effective_model: 'claude-sonnet-5-5',
-      fallback_used: true,
-      fallback_reason: 'rate_limit',
-      status: 'active',
-      agent_slug: 'code_generation',
-      session_type: 'completion',
-      live_activity: null,
-      messages: [],
-      context_usage: null,
-      agent_token_breakdown: [],
-      message_count: 5,
-      event_count: 12,
-      total_input_tokens: 1500,
-      total_output_tokens: 800,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-07T10:00:00Z',
-    })
-    vi.mocked(fetchAllSessionEvents).mockResolvedValue({
-      session_id: 'session-123-abc',
-      events: [],
-      total: 12,
-      max_turn: 3,
-    })
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('shows explicit visible, loaded, and total counts in the ledger header', async () => {
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByTestId('sessions-visible-count')).toHaveTextContent(
-        '2',
-      )
-      expect(screen.getByTestId('sessions-loaded-count')).toHaveTextContent('2')
-      expect(screen.getByTestId('sessions-total-count')).toHaveTextContent('2')
-    })
-
-    expect(screen.getByTestId('sessions-filter-scope')).toHaveTextContent(
-      /2\s+visible\s*·\s*2\s+loaded\s*·\s*2\s+total/i,
-    )
-  })
-
-  it('updates visible count when search filters the loaded subset', async () => {
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
-      target: { value: '456' },
-    })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('sessions-visible-count')).toHaveTextContent(
-        '1',
-      )
-      expect(screen.getByTestId('sessions-loaded-count')).toHaveTextContent('2')
-      expect(screen.getByTestId('sessions-total-count')).toHaveTextContent('2')
-    })
-  })
-
-  it('surfaces effective model identity, fallback state, and compact message/event counts', async () => {
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText(/claude\/sonnet-5\.5/i)).toBeInTheDocument()
-      expect(screen.getByText(/^fallback$/i)).toBeInTheDocument()
-      expect(screen.getByText(/5 msg/i)).toBeInTheDocument()
-      expect(screen.getByText(/12 evt/i)).toBeInTheDocument()
-    })
-  })
-
-  it('auto-refreshes session rows without a manual refresh click', async () => {
-    vi.useFakeTimers()
-    vi.mocked(fetchSessions).mockResolvedValue(mockSessions)
-
-    renderPage()
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(fetchSessions).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      vi.advanceTimersByTime(5_000)
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(fetchSessions).toHaveBeenCalledTimes(2)
-  })
-
-  it('splits status, project, and description while defaulting active work above stalled and ended rows', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      sessions: [
-        {
-          ...mockSessions.sessions[1],
-          id: 'ended-session',
-          project_id: 'ended-project',
-          summary_oneliner: 'finished cleanup',
-          live_activity: {
-            phase: 'waiting_for_model',
-            status: 'active',
-            health: 'active',
-            outstanding_tool_calls: 0,
-            tool_calls_count: 3,
-            files_touched: [],
-            stalled: false,
-            lifecycle_state: 'active',
-            lifecycle_reason_codes: [],
-            dead_signals: [],
-            anti_reap_signals: [],
-            has_owner_lane: false,
-            has_specialist_lane: false,
-            reapable: false,
-          },
-          updated_at: '2026-01-09T10:00:00Z',
-        },
-        {
-          ...mockSessions.sessions[0],
-          id: 'stalled-session',
-          project_id: 'stalled-project',
-          summary_oneliner: 'waiting for provider',
-          live_activity: {
-            phase: 'waiting_for_model',
-            status: 'active',
-            health: 'stalled',
-            outstanding_tool_calls: 0,
-            tool_calls_count: 3,
-            files_touched: [],
-            stalled: true,
-            lifecycle_state: 'stalled',
-            lifecycle_reason_codes: [],
-            dead_signals: [],
-            anti_reap_signals: [],
-            has_owner_lane: true,
-            has_specialist_lane: false,
-            reapable: false,
-          },
-          updated_at: '2026-01-08T10:00:00Z',
-        },
-        {
-          ...mockSessions.sessions[0],
-          id: 'working-session',
-          project_id: 'working-project',
-          summary_oneliner: 'claiming next task',
-          live_activity: {
-            phase: 'tool',
-            status: 'running',
-            health: 'healthy',
-            outstanding_tool_calls: 0,
-            tool_calls_count: 3,
-            files_touched: [],
-            stalled: false,
-            lifecycle_state: 'working',
-            lifecycle_reason_codes: [],
-            dead_signals: [],
-            anti_reap_signals: [],
-            has_owner_lane: true,
-            has_specialist_lane: false,
-            reapable: false,
-          },
-          updated_at: '2026-01-07T10:00:00Z',
-        },
-      ],
-      total: 3,
-      page: 1,
-      page_size: 20,
-    })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText('Status')).toBeInTheDocument()
-      expect(screen.getByText('Project')).toBeInTheDocument()
-      expect(screen.getByText('Description')).toBeInTheDocument()
-      expect(screen.getByText('Agent')).toBeInTheDocument()
-    })
-
-    const rows = screen.getAllByTestId('session-row')
-    expect(rows[0]).toHaveTextContent('working-project')
-    expect(rows[0]).toHaveTextContent('claiming next task')
-    expect(rows[1]).toHaveTextContent('stalled-project')
-    expect(rows[1]).toHaveTextContent('waiting for provider')
-    expect(rows[2]).toHaveTextContent('ended-project')
-    expect(rows[2]).toHaveTextContent('finished cleanup')
-
-    fireEvent.mouseEnter(screen.getByLabelText('Working'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Working')).toBeInTheDocument()
-    })
-
-    fireEvent.mouseEnter(screen.getByLabelText('Ended'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Ended')).toBeInTheDocument()
-    })
-  })
-
-  it('shows a live usage placeholder instead of blank dashes for active zero-token rows', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      ...mockSessions,
-      sessions: [
-        {
-          ...mockSessions.sessions[0],
-          total_input_tokens: 0,
-          total_output_tokens: 0,
-        },
-      ],
-      total: 1,
-    })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText(/^collecting$/i)).toBeInTheDocument()
-      expect(screen.queryByText(/^usage pending$/i)).not.toBeInTheDocument()
-    })
-  })
-
-  it('keeps active asymmetric token rows visibly live instead of rendering them as final accounting', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      ...mockSessions,
-      sessions: [
-        {
-          ...mockSessions.sessions[0],
-          total_input_tokens: 0,
-          total_output_tokens: 631,
-        },
-      ],
-      total: 1,
-    })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText(/^live · in 0 · out 631$/i)).toBeInTheDocument()
-      expect(screen.queryByText(/^usage pending$/i)).not.toBeInTheDocument()
-    })
-  })
-
-  it('does not mistake empty stored counters for measured zero usage', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      ...mockSessions,
-      sessions: [
-        {
-          ...mockSessions.sessions[1],
-          agent_slug: 'reviewer',
-          total_input_tokens: 0,
-          total_output_tokens: 0,
-        },
-      ],
-      total: 1,
-    })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText(/^usage unavailable$/i)).toBeInTheDocument()
-      expect(screen.queryByText(/^in 0 · out 0$/i)).not.toBeInTheDocument()
-    })
-  })
-
-  it('expands from the row body while keeping nested controls isolated', async () => {
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /expand session session-123-abc/i }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: /filter model claude-sonnet-5-5/i }),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByText('dispatch parser cleared branch drift'))
-
-    await waitFor(() => {
-      expect(fetchSession).toHaveBeenCalledWith('session-123-abc')
-      expect(screen.getByText(/5 messages · 12 events/i)).toBeInTheDocument()
-      expect(screen.getByTestId('event-timeline')).toHaveTextContent('0 events')
-    })
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /filter model claude-sonnet-5-5/i }),
-    )
-
-    expect(fetchSession).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(/5 messages · 12 events/i)).toBeInTheDocument()
-    expect(screen.getByTestId('event-timeline')).toBeInTheDocument()
-  })
-
-  it('shows a no-match state when the current filters remove every loaded row', async () => {
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
-      target: { value: 'no-match' },
-    })
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/no loaded rows match the current filters/i),
-      ).toBeInTheDocument()
-    })
-  })
-
-  it('keeps a load-more cue available when filters hide all loaded rows but more pages remain', async () => {
-    vi.mocked(fetchSessions)
-      .mockResolvedValueOnce({
-        ...mockSessions,
-        total: 30,
-        page_size: 25,
-      })
-      .mockResolvedValueOnce({
-        sessions: [],
-        total: 30,
-        page: 2,
-        page_size: 25,
-      })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
-      target: { value: 'no-match' },
-    })
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/search only covers the 2 loaded rows/i),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /load more results/i }))
-
-    await waitFor(() => {
-      expect(fetchSessions).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  it('clears expanded row state and returns focus to search when filters hide the active row', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue(mockSessions)
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /expand session session-123-abc/i }),
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', {
-          name: /collapse session session-123-abc/i,
-        }),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /filter model gemini-3-flash/i }),
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText('dispatch parser cleared branch drift'),
-      ).not.toBeInTheDocument()
-    })
-
-    expect(screen.getByPlaceholderText(/search loaded rows/i)).toHaveFocus()
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /filter model gemini-3-flash/i }),
-    )
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /expand session session-123-abc/i }),
-      ).toBeInTheDocument()
-    })
-
-    expect(
-      screen.queryByRole('button', {
-        name: /collapse session session-123-abc/i,
+  it('asks the server for recent root coding and chat sessions by default', async () => {
+    mount()
+    await screen.findByText('Fix the dispatcher retry loop')
+    expect(querySessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: ['coding', 'chat'],
+        roots_only: true,
+        exclude_benchmarks: true,
+        sort_by: 'last_active',
+        sort_direction: 'desc',
+        cursor: undefined,
+        page_size: 100,
       }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('shows an empty-data state when the server returns no sessions', async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      sessions: [],
-      total: 0,
-      page: 1,
-      page_size: 20,
-    })
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText(/no sessions loaded\./i)).toBeInTheDocument()
-    })
-  })
-
-  it('shows a retryable error state when the sessions query fails', async () => {
-    vi.mocked(fetchSessions)
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce(mockSessions)
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/unable to load sessions ledger/i),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /retry sessions/i }))
-
-    await waitFor(() => {
-      expect(fetchSessions).toHaveBeenCalledTimes(2)
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-  })
-
-  it('keeps row context visible and shows a local evidence error when detail fetch fails', async () => {
-    vi.mocked(fetchSession).mockRejectedValueOnce(new Error('detail boom'))
-    vi.mocked(fetchAllSessionEvents).mockRejectedValueOnce(
-      new Error('detail boom'),
     )
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('dispatch parser cleared branch drift'),
-      ).toBeInTheDocument()
-    })
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /expand session session-123-abc/i }),
+    expect(screen.getByTestId('sessions-total-count')).toHaveTextContent(
+      '2 matching',
     )
+  })
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(/session evidence unavailable/i),
-      ).toBeInTheDocument()
+  it('shows honest usage, sub-agent counts and the title fallback chain', async () => {
+    mount()
+    await screen.findByText('Fix the dispatcher retry loop')
+    const rows = screen.getAllByTestId('session-row')
+    expect(rows[0]).toHaveTextContent('120.0K / 4.5K')
+    expect(rows[0]).toHaveTextContent('3')
+    expect(rows[0]).not.toHaveTextContent('fallback')
+    expect(rows[1]).toHaveTextContent('feature/sessions')
+    expect(rows[1]).toHaveTextContent('not captured')
+    expect(rows[1]).toHaveTextContent('claude code')
+  })
+
+  it('opens the preview from a row, pushing sel and fetching without events', async () => {
+    mount()
+    fireEvent.click(await screen.findByText('Fix the dispatcher retry loop'))
+    expect(nav.push).toHaveBeenCalledWith(`/sessions?sel=${codexRow.id}`, {
+      scroll: false,
     })
+    expect(await screen.findByTestId('session-preview')).toBeInTheDocument()
+    expect(fetchSession).toHaveBeenCalledWith(codexRow.id, {
+      includeEvents: false,
+    })
+    expect(fetchSessionEvents).toHaveBeenCalledWith(
+      codexRow.id,
+      expect.objectContaining({ order: 'desc', page_size: 20 }),
+    )
+    const selected = screen
+      .getAllByTestId('session-row')
+      .find((node) => node.getAttribute('aria-selected') === 'true')
+    expect(selected).toHaveAttribute('data-session-id', codexRow.id)
+  })
 
+  it('restores filters and selection from the URL', async () => {
+    nav.reset(`q=retry&status=failed&subagents=1&sel=${codexRow.id}`)
+    mount()
+    await screen.findByTestId('session-preview')
+    expect(querySessions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: 'retry',
+        status: 'failed',
+        roots_only: false,
+      }),
+    )
+    expect(screen.getByLabelText('Search sessions')).toHaveValue('retry')
+  })
+
+  it('debounces search into a replaced URL entry', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      mount()
+      await screen.findByText('Fix the dispatcher retry loop')
+      fireEvent.change(screen.getByLabelText('Search sessions'), {
+        target: { value: 'task-66a9' },
+      })
+      expect(nav.replace).not.toHaveBeenCalled()
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+      })
+      expect(nav.replace).toHaveBeenCalledWith('/sessions?q=task-66a9', {
+        scroll: false,
+      })
+      expect(nav.push).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows facet counts and toggles kinds through the URL', async () => {
+    mount()
+    const completions = await screen.findByRole('button', {
+      name: /Completions/,
+    })
+    await waitFor(() => expect(completions).toHaveTextContent('900'))
+    expect(completions).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(completions)
+    expect(nav.replace).toHaveBeenCalledWith(
+      '/sessions?kind=coding%2Cchat%2Ccompletion',
+      { scroll: false },
+    )
+  })
+
+  it('offers to clear filters when nothing matches', async () => {
+    nav.reset('q=nothing-here')
+    vi.mocked(querySessions).mockResolvedValue(listResponse([]))
+    mount()
     expect(
-      screen.getByText('dispatch parser cleared branch drift'),
+      await screen.findByText('No sessions match these filters.'),
     ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(nav.replace).toHaveBeenCalledWith('/sessions', { scroll: false })
+  })
+
+  it('shows a retryable error', async () => {
+    vi.mocked(querySessions).mockRejectedValueOnce(new Error('boom'))
+    mount()
+    expect(await screen.findByText('Unable to load sessions')).toBeVisible()
+    vi.mocked(querySessions).mockResolvedValue(listResponse([codexRow]))
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
     expect(
-      screen.queryByText(/unable to load sessions ledger/i),
-    ).not.toBeInTheDocument()
+      await screen.findByText('Fix the dispatcher retry loop'),
+    ).toBeInTheDocument()
+  })
+
+  it('labels a partial list and pages with the server cursor', async () => {
+    vi.mocked(querySessions).mockResolvedValueOnce(
+      listResponse([codexRow], 'cursor-2'),
+    )
+    mount()
+    expect(
+      await screen.findByTestId('sessions-loaded-count'),
+    ).toHaveTextContent('Partial: showing 1 of 101')
+    vi.mocked(querySessions).mockResolvedValueOnce(listResponse([claudeRow]))
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() =>
+      expect(screen.getAllByTestId('session-row')).toHaveLength(2),
+    )
+    expect(querySessions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'cursor-2' }),
+    )
+  })
+
+  it('moves the row cursor with j/k but not while typing in search', async () => {
+    mount()
+    await screen.findByText('Fix the dispatcher retry loop')
+    const [first, second] = screen.getAllByTestId('session-row')
+    expect(first).toHaveAttribute('tabindex', '0')
+    first.focus()
+    fireEvent.keyDown(first, { key: 'j' })
+    expect(second).toHaveAttribute('tabindex', '0')
+    expect(document.activeElement).toBe(second)
+
+    const search = screen.getByLabelText('Search sessions')
+    search.focus()
+    fireEvent.keyDown(search, { key: 'k' })
+    expect(second).toHaveAttribute('tabindex', '0')
+
+    second.focus()
+    fireEvent.keyDown(second, { key: ' ' })
+    expect(nav.push).toHaveBeenCalledWith(`/sessions?sel=${claudeRow.id}`, {
+      scroll: false,
+    })
   })
 })
 
-describe('useSessionExpansion', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+describe('session list URL state', () => {
+  it('round-trips non-default state and omits defaults', () => {
+    expect(serializeSessionListState(DEFAULT_LIST_STATE).toString()).toBe('')
+    const state = {
+      ...DEFAULT_LIST_STATE,
+      q: 'abc',
+      kinds: ['completion' as const],
+      since: '7d' as const,
+      project: 'summitflow',
+      includeSubagents: true,
+      sort: 'status' as const,
+      selected: 'xyz',
+    }
+    const params = serializeSessionListState(state)
+    expect(parseSessionListState(params)).toEqual(state)
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
+  it('ignores unknown values instead of producing an empty view', () => {
+    const state = parseSessionListState(
+      new URLSearchParams('kind=bogus&status=nope&sort=cost&since=1h'),
+    )
+    expect(state.kinds).toEqual(DEFAULT_LIST_STATE.kinds)
+    expect(state.status).toBe('')
+    expect(state.sort).toBe('last_active')
+    expect(state.since).toBe('all')
+  })
+})
+
+describe('session display helpers', () => {
+  it('formats long durations with hours and days', () => {
+    expect(formatDurationMs(950)).toBe('950ms')
+    expect(formatDurationMs(90_000)).toBe('1m 30s')
+    expect(formatDurationMs(3 * 3_600_000 + 5 * 60_000)).toBe('3h 5m')
+    expect(formatDurationMs(50 * 3_600_000)).toBe('2d 2h')
   })
 
-  it('drops stale expansion responses and preserves the most recently requested session', async () => {
-    const aSession = createDeferred<{ id: string }>()
-    const aEvents = createDeferred<{
-      session_id: string
-      events: Array<unknown>
-      total: number
-      max_turn: number
-    }>()
-    const bSession = createDeferred<{ id: string }>()
-    const bEvents = createDeferred<{
-      session_id: string
-      events: Array<unknown>
-      total: number
-      max_turn: number
-    }>()
-
-    vi.mocked(fetchSession).mockImplementation((sessionId: string) => {
-      if (sessionId === 'session-a') {
-        return aSession.promise as never
-      }
-      return bSession.promise as never
-    })
-
-    vi.mocked(fetchAllSessionEvents).mockImplementation((sessionId: string) => {
-      if (sessionId === 'session-a') {
-        return aEvents.promise as never
-      }
-      return bEvents.promise as never
-    })
-
-    const { result } = renderHook(() => useSessionExpansion())
-
-    await act(async () => {
-      void result.current.handleToggleExpand('session-a')
-      void result.current.handleToggleExpand('session-b')
-    })
-
-    await act(async () => {
-      bSession.resolve({ id: 'session-b' })
-      bEvents.resolve({
-        session_id: 'session-b',
-        events: [],
-        total: 0,
-        max_turn: 0,
-      })
-      await Promise.resolve()
-    })
-
-    await waitFor(() => {
-      expect(result.current.expandedSessionId).toBe('session-b')
-      expect(result.current.expandedSessionData).toEqual({ id: 'session-b' })
-      expect(result.current.expandedEventsData).toEqual({
-        session_id: 'session-b',
-        events: [],
-        total: 0,
-        max_turn: 0,
-      })
-      expect(result.current.isLoadingDetails).toBe(false)
-    })
-
-    await act(async () => {
-      aSession.resolve({ id: 'session-a' })
-      aEvents.resolve({
-        session_id: 'session-a',
-        events: [],
-        total: 0,
-        max_turn: 0,
-      })
-      await Promise.resolve()
-    })
-
-    expect(result.current.expandedSessionId).toBe('session-b')
-    expect(result.current.expandedSessionData).toEqual({ id: 'session-b' })
-    expect(result.current.expandedEventsData).toEqual({
-      session_id: 'session-b',
-      events: [],
-      total: 0,
-      max_turn: 0,
-    })
+  it('does not report an unobserved Codex model as a fallback', () => {
+    const identity = getExecutionIdentity(codexRow)
+    expect(identity.effectiveModel).toBe('codex/gpt-5.5')
+    expect(identity.fallbackUsed).toBe(false)
   })
 
-  it('clears both session and evidence data when expansion is cleared', async () => {
-    vi.mocked(fetchSession).mockResolvedValue({ id: 'session-a' } as never)
-    vi.mocked(fetchAllSessionEvents).mockResolvedValue({
-      session_id: 'session-a',
-      events: [],
-      total: 0,
-      max_turn: 0,
-    } as never)
-
-    const { result } = renderHook(() => useSessionExpansion())
-
-    await act(async () => {
-      await result.current.handleToggleExpand('session-a')
-    })
-
-    expect(result.current.expandedSessionData).toEqual({ id: 'session-a' })
-    expect(result.current.expandedEventsData).toEqual({
-      session_id: 'session-a',
-      events: [],
-      total: 0,
-      max_turn: 0,
-    })
-
-    act(() => {
-      result.current.clearExpansion()
-    })
-
-    expect(result.current.expandedSessionId).toBeNull()
-    expect(result.current.expandedSessionData).toBeNull()
-    expect(result.current.expandedEventsData).toBeNull()
+  it('still reports a real fallback', () => {
+    const identity = getExecutionIdentity(
+      row({
+        requested_model: 'claude-opus-5-5',
+        effective_model: 'claude-sonnet-5-5',
+        fallback_used: true,
+      }),
+    )
+    expect(identity.fallbackUsed).toBe(true)
+    expect(identity.showRequested).toBe(true)
   })
 
-  it('refreshes active expanded session evidence without collapsing the row', async () => {
-    vi.useFakeTimers()
-    vi.mocked(fetchSession)
-      .mockResolvedValueOnce({ id: 'session-a', status: 'active' } as never)
-      .mockResolvedValueOnce({ id: 'session-a', status: 'completed' } as never)
-    vi.mocked(fetchAllSessionEvents)
-      .mockResolvedValueOnce({
-        session_id: 'session-a',
-        events: [],
-        total: 0,
-        max_turn: 0,
-      } as never)
-      .mockResolvedValueOnce({
-        session_id: 'session-a',
-        events: [{ id: 'event-1' }],
-        total: 1,
-        max_turn: 1,
-      } as never)
+  it('prefers usage events, then message counters, then says not captured', () => {
+    expect(getUsageSummary(codexRow).label).toBe('120.0K / 4.5K')
+    expect(
+      getUsageSummary(row({ total_input_tokens: 10, total_output_tokens: 5 }))
+        .known,
+    ).toBe(true)
+    expect(getUsageSummary(claudeRow).label).toBe('not captured')
+  })
 
-    const { result } = renderHook(() => useSessionExpansion())
-
-    await act(async () => {
-      await result.current.handleToggleExpand('session-a')
-    })
-
-    expect(fetchSession).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      vi.advanceTimersByTime(5_000)
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(fetchSession).toHaveBeenCalledTimes(2)
-    expect(result.current.expandedSessionId).toBe('session-a')
-    expect(result.current.expandedSessionData).toEqual({
-      id: 'session-a',
-      status: 'completed',
-    })
-    expect(result.current.expandedEventsData?.total).toBe(1)
-    expect(result.current.isLoadingDetails).toBe(false)
+  it('falls back from title to summary to branch to short id', () => {
+    expect(getSessionTitle(row({ title: '  Hi  ' }))).toBe('Hi')
+    expect(getSessionTitle(row({ summary_oneliner: 'sum' }))).toBe('sum')
+    expect(getSessionTitle(row({ current_branch: 'main' }))).toBe('main')
+    expect(getSessionTitle(row({}))).toBe('session aaaaaaaa')
   })
 })

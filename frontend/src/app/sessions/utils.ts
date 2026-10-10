@@ -171,13 +171,134 @@ export function getSessionDescriptionTitle(session: SessionListItem): string {
   return parts.join(' · ')
 }
 
-export function formatDuration(startDate: string, endDate: string): string {
-  const start = new Date(startDate).getTime()
-  const end = new Date(endDate).getTime()
-  const diffMs = end - start
-  if (diffMs < 1000) return `${diffMs}ms`
+export function formatDurationMs(diffMs: number): string {
+  if (diffMs < 1000) return `${Math.max(diffMs, 0)}ms`
   if (diffMs < 60000) return `${(diffMs / 1000).toFixed(1)}s`
-  return `${Math.floor(diffMs / 60000)}m ${Math.floor((diffMs % 60000) / 1000)}s`
+  const totalMinutes = Math.floor(diffMs / 60000)
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m ${Math.floor((diffMs % 60000) / 1000)}s`
+  }
+  const hours = Math.floor(totalMinutes / 60)
+  if (hours < 48) return `${hours}h ${totalMinutes % 60}m`
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`
+}
+
+export function formatDuration(startDate: string, endDate: string): string {
+  return formatDurationMs(
+    new Date(endDate).getTime() - new Date(startDate).getTime(),
+  )
+}
+
+type TitleSource = Pick<
+  SessionListItem,
+  'id' | 'title' | 'summary_oneliner' | 'current_branch'
+>
+
+/** Most distinguishing human label: first prompt, then summary, branch, id. */
+export function getSessionTitle(session: TitleSource): string {
+  return (
+    session.title?.trim() ||
+    session.summary_oneliner?.trim() ||
+    session.current_branch?.trim() ||
+    `session ${session.id.slice(0, 8)}`
+  )
+}
+
+export function getSessionKindLabel(sessionType: string): string {
+  switch (sessionType) {
+    case 'agent':
+    case 'claude_code':
+      return 'coding'
+    case 'image_generation':
+      return 'image'
+    default:
+      return sessionType || 'unknown'
+  }
+}
+
+/** The harness or provider a person recognises: "codex", "claude code", "gemini chat". */
+export function getSessionSourceLabel(
+  session: Pick<SessionListItem, 'session_type' | 'provider'>,
+): string {
+  if (session.session_type === 'claude_code') return 'claude code'
+  if (session.session_type === 'agent') return session.provider || 'agent'
+  return `${session.provider} ${getSessionKindLabel(session.session_type)}`
+}
+
+export function getSessionLastActive(
+  session: Pick<SessionListItem, 'last_active_at' | 'updated_at'>,
+): string {
+  return session.last_active_at || session.updated_at
+}
+
+type UsageSource = Pick<
+  SessionListItem,
+  | 'usage_known'
+  | 'usage_input_tokens'
+  | 'usage_output_tokens'
+  | 'usage_cached_input_tokens'
+  | 'total_input_tokens'
+  | 'total_output_tokens'
+>
+
+export interface UsageSummary {
+  known: boolean
+  input: number
+  output: number
+  cached: number
+  label: string
+  title: string
+}
+
+/** Native usage events first, stored message counters second, otherwise honestly unknown. */
+export function getUsageSummary(session: UsageSource): UsageSummary {
+  if (session.usage_known) {
+    const input = session.usage_input_tokens ?? 0
+    const output = session.usage_output_tokens ?? 0
+    const cached = session.usage_cached_input_tokens ?? 0
+    return {
+      known: true,
+      input,
+      output,
+      cached,
+      label: `${formatTokens(input)} / ${formatTokens(output)}`,
+      title: `Input ${formatTokens(input)} (cached ${formatTokens(cached)}) · output ${formatTokens(output)}`,
+    }
+  }
+  const input = session.total_input_tokens ?? 0
+  const output = session.total_output_tokens ?? 0
+  if (input > 0 || output > 0) {
+    return {
+      known: true,
+      input,
+      output,
+      cached: 0,
+      label: `${formatTokens(input)} / ${formatTokens(output)}`,
+      title: `Input ${formatTokens(input)} · output ${formatTokens(output)} (message counters)`,
+    }
+  }
+  return {
+    known: false,
+    input: 0,
+    output: 0,
+    cached: 0,
+    label: 'not captured',
+    title: 'This harness did not report token usage for the session',
+  }
+}
+
+export function sinceToIso(
+  preset: 'today' | '7d' | '30d' | 'all',
+  now: Date = new Date(),
+): string | undefined {
+  if (preset === 'all') return undefined
+  if (preset === 'today') {
+    const start = new Date(now)
+    start.setHours(0, 0, 0, 0)
+    return start.toISOString()
+  }
+  const days = preset === '7d' ? 7 : 30
+  return new Date(now.getTime() - days * 86_400_000).toISOString()
 }
 
 type ExecutionIdentitySource = Pick<
@@ -193,6 +314,11 @@ type ExecutionIdentitySource = Pick<
   | 'fallback_used'
   | 'fallback_reason'
 >
+
+function isUnknownModel(model: string | null | undefined): boolean {
+  const value = model?.trim().toLowerCase() ?? ''
+  return value === 'unknown' || value.endsWith('/unknown')
+}
 
 function coalesceLabel(
   ...values: Array<string | null | undefined>
@@ -210,12 +336,19 @@ export function getExecutionIdentity(source: ExecutionIdentitySource) {
     source.requested_model_display_name,
     source.requested_model,
   )
+  // Harnesses such as Codex report "unknown" until a model is observed; that is
+  // missing evidence, not a fallback to another model.
+  const observedModel = coalesceLabel(
+    source.effective_model_display_name,
+    source.effective_model,
+  )
   const effectiveModel =
-    coalesceLabel(
-      source.effective_model_display_name,
-      source.effective_model,
-      source.model,
-    ) ?? source.model
+    (observedModel && !isUnknownModel(observedModel)
+      ? observedModel
+      : coalesceLabel(
+          requestedModel,
+          isUnknownModel(source.model) ? null : source.model,
+        )) ?? source.model
   const requestedProvider = coalesceLabel(
     source.requested_provider,
     source.provider,

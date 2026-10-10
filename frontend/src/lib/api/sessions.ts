@@ -381,6 +381,7 @@ export async function fetchSessionEvents(
     exclude_types?: readonly string[]
     q?: string
     after?: string
+    order?: 'asc' | 'desc'
   },
 ): Promise<SessionEventsResponse> {
   const searchParams = new URLSearchParams()
@@ -389,6 +390,7 @@ export async function fetchSessionEvents(
     searchParams.set('exclude_types', params.exclude_types.join(','))
   if (params?.q) searchParams.set('q', params.q)
   if (params?.after) searchParams.set('after', params.after)
+  if (params?.order) searchParams.set('order', params.order)
   if (params?.turn !== undefined)
     searchParams.set('turn', params.turn.toString())
   if (params?.page) searchParams.set('page', params.page.toString())

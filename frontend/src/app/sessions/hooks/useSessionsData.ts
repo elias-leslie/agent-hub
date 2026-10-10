@@ -1,78 +1,109 @@
-import { useInfiniteQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { fetchSessions } from '@/lib/api'
-import type { SortDirection, SortField } from '../types'
+import {
+  fetchSessionFacets,
+  querySessions,
+  type SessionListItem,
+  type SessionListQuery,
+} from '@/lib/api/sessions'
+import type { SessionListState } from '../types'
+import { sinceToIso } from '../utils'
 
-const SESSIONS_REFRESH_INTERVAL_MS = 5_000
+/** Background tabs do not poll: react-query pauses intervals while hidden. */
+const SESSIONS_REFRESH_INTERVAL_MS = 10_000
+const PAGE_SIZE = 100
 
-interface UseSessionsDataProps {
-  statusFilter: string
-  projectFilter: string
-  pageSize: number
-  sortField: SortField
-  sortDirection: SortDirection
+type FilterQuery = Omit<
+  SessionListQuery,
+  'cursor' | 'page_size' | 'sort_by' | 'sort_direction'
+>
+
+export function toFilterQuery(state: SessionListState): FilterQuery {
+  return {
+    q: state.q.trim() || undefined,
+    kind: state.kinds,
+    status: state.status || undefined,
+    since: sinceToIso(state.since),
+    project_id: state.project || undefined,
+    model: state.model || undefined,
+    roots_only: !state.includeSubagents,
+    exclude_benchmarks: !state.includeBenchmarks,
+  }
 }
 
-export function useSessionsData({
-  statusFilter,
-  projectFilter,
-  pageSize,
-  sortField,
-  sortDirection,
-}: UseSessionsDataProps) {
-  const {
-    data,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
-    queryKey: [
-      'sessions',
-      {
-        status: statusFilter,
-        project: projectFilter,
-        pageSize,
-        sortField,
-        sortDirection,
-      },
-    ],
-    queryFn: ({ pageParam = 1 }) =>
-      fetchSessions({
-        page: pageParam,
-        page_size: pageSize,
-        status: statusFilter || undefined,
-        project_id: projectFilter || undefined,
-        sort_by: sortField,
-        sort_direction: sortDirection,
+/** Stable cache identity: the since preset, not the moving ISO timestamp. */
+function filterKey(state: SessionListState) {
+  return {
+    q: state.q.trim(),
+    kinds: [...state.kinds].sort(),
+    status: state.status,
+    since: state.since,
+    project: state.project,
+    model: state.model,
+    subagents: state.includeSubagents,
+    benchmarks: state.includeBenchmarks,
+  }
+}
+
+export function useSessionsData(state: SessionListState) {
+  const key = filterKey(state)
+
+  const list = useInfiniteQuery({
+    queryKey: ['sessions', 'list', key, state.sort],
+    queryFn: ({ pageParam }) =>
+      querySessions({
+        ...toFilterQuery(state),
+        sort_by: state.sort,
+        sort_direction: state.sort === 'status' ? 'asc' : 'desc',
+        cursor: pageParam,
+        page_size: PAGE_SIZE,
       }),
-    getNextPageParam: (lastPage) => {
-      const totalPages = Math.ceil(lastPage.total / lastPage.page_size)
-      return lastPage.page < totalPages ? lastPage.page + 1 : undefined
-    },
-    initialPageParam: 1,
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    placeholderData: keepPreviousData,
     refetchInterval: SESSIONS_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   })
 
-  const allSessions = useMemo(
-    () => data?.pages.flatMap((page) => page.sessions) ?? [],
-    [data],
-  )
+  const facets = useQuery({
+    queryKey: ['sessions', 'facets', key],
+    queryFn: () => fetchSessionFacets(toFilterQuery(state)),
+    placeholderData: keepPreviousData,
+    refetchInterval: SESSIONS_REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  })
 
-  const total = data?.pages[0]?.total ?? 0
-  const loadedCount = allSessions.length
+  // A refetch of several keyset pages can briefly overlap; keep the first copy.
+  const sessions = useMemo(() => {
+    const seen = new Set<string>()
+    const rows: SessionListItem[] = []
+    for (const page of list.data?.pages ?? []) {
+      for (const session of page.sessions) {
+        if (seen.has(session.id)) continue
+        seen.add(session.id)
+        rows.push(session)
+      }
+    }
+    return rows
+  }, [list.data])
 
   return {
-    data,
-    allSessions,
-    loadedCount,
-    total,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    sessions,
+    total: list.data?.pages[0]?.total ?? 0,
+    hasData: Boolean(list.data),
+    isLoading: list.isLoading,
+    isFetching: list.isFetching,
+    isPlaceholder: list.isPlaceholderData,
+    error: list.error,
+    fetchNextPage: list.fetchNextPage,
+    hasNextPage: Boolean(list.hasNextPage),
+    isFetchingNextPage: list.isFetchingNextPage,
+    refetch: list.refetch,
+    facets: facets.data ?? null,
+    facetsError: facets.error,
   }
 }
