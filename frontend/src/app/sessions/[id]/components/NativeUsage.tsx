@@ -1,3 +1,4 @@
+import type { SessionEventsSummary } from '@/lib/api/sessions'
 import type { TimelineEvent } from '@/types/events'
 import { formatTokens } from './utils'
 
@@ -130,12 +131,45 @@ function CountGrid({
   )
 }
 
+function SessionUsageTotals({ summary }: { summary: SessionEventsSummary }) {
+  if (!summary.usage_known) {
+    return (
+      <p className="text-sm text-slate-300">
+        Usage not captured. This session has no native usage records.
+      </p>
+    )
+  }
+  const totals = [
+    ['Input', summary.usage_input_tokens],
+    ['Output', summary.usage_output_tokens],
+    ['Cached input', summary.usage_cached_input_tokens],
+  ] as const
+  return (
+    <dl className="grid gap-3 sm:grid-cols-3">
+      {totals.map(([label, value]) => (
+        <div key={label} className="detail-card min-w-0">
+          <dt className="detail-label">{label}</dt>
+          <dd className="mt-2 font-mono text-sm text-slate-200">
+            {typeof value === 'number' ? formatTokens(value) : 'Unavailable'}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export function NativeUsage({
   events,
   totalEvents,
+  sessionSummary,
+  scopeLabel = 'session events',
 }: {
   events: TimelineEvent[]
   totalEvents: number | null
+  /** Server totals for every usage event in the session. */
+  sessionSummary?: SessionEventsSummary | null
+  /** What `events` and `totalEvents` count, e.g. "usage events". */
+  scopeLabel?: string
 }) {
   const summary = summarizeNativeUsage(events)
 
@@ -151,6 +185,18 @@ export function NativeUsage({
         >
           Native token usage
         </h3>
+        {sessionSummary && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-slate-400">
+              Session totals from all usage records (server summary). Child
+              sessions are not included.
+            </p>
+            <SessionUsageTotals summary={sessionSummary} />
+            <h4 className="pt-2 text-xs font-medium text-slate-300">
+              Per-response records
+            </h4>
+          </div>
+        )}
         <p className="mt-1 text-xs text-slate-400">
           {summary.responseCount > 0
             ? `${summary.responseCount} response record${summary.responseCount === 1 ? '' : 's'} in loaded events. Coverage of all model responses is unknown.`
@@ -162,7 +208,7 @@ export function NativeUsage({
         <p className="mt-1 text-xs text-slate-500">
           {totalEvents === null
             ? 'Session event coverage is unavailable.'
-            : `Inspected ${events.length} of ${totalEvents} session events.`}
+            : `Inspected ${events.length} of ${totalEvents} ${scopeLabel}.`}
         </p>
       </div>
       <CountGrid

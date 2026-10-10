@@ -1,13 +1,25 @@
 'use client'
 
-import { ChevronDown, ChevronRight, Clock, Sparkles } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Sparkles,
+} from 'lucide-react'
+import Link from 'next/link'
 import { useState } from 'react'
 import { CodeBlock } from '@/components/output/code-block'
 import type { SessionTimelineEvent } from '@/lib/api'
 import type { NativeCommandEvidence } from '@/lib/api/native-evidence'
 import { cn } from '@/lib/utils'
 import { getEventConfig } from './event-config'
-import { formatDuration, formatTimestamp, formatTokens } from './timeline-utils'
+import {
+  childSessionIdOf,
+  formatDuration,
+  formatTimestamp,
+  formatTokens,
+} from './timeline-utils'
 
 interface EventItemProps {
   event: SessionTimelineEvent
@@ -25,6 +37,7 @@ export function EventItem({
   const [isExpanded, setIsExpanded] = useState(false)
   const config = getEventConfig(event.event_type)
   const Icon = config.icon
+  const childSessionId = childSessionIdOf(event)
 
   const hasExpandableContent =
     (event.content && event.content.length > 200) ||
@@ -114,6 +127,16 @@ export function EventItem({
                 <span className="px-2 py-0.5 rounded bg-slate-800/60 text-xs text-slate-400">
                   {event.agent_name}
                 </span>
+              )}
+
+              {childSessionId && (
+                <Link
+                  href={`/sessions/${childSessionId}`}
+                  className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-mono text-teal-700 underline-offset-2 hover:underline dark:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Open sub-agent {childSessionId.slice(0, 8)}
+                  <ExternalLink className="h-3 w-3" aria-hidden />
+                </Link>
               )}
 
               {event.model_used && (

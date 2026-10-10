@@ -1,11 +1,13 @@
 import { Activity, Clock, Cpu, Layers } from 'lucide-react'
 import type { Session } from '@/lib/api'
+import type { SessionEventsSummary } from '@/lib/api/sessions'
 import type { SessionMemoryObservability } from '@/lib/session-memory-observability'
 import { cn } from '@/lib/utils'
 import type { TimelineEvent } from '@/types/events'
 import { ContextUsageBar } from './ContextUsageBar'
 import { NativeUsage } from './NativeUsage'
 import { StatCard } from './StatCard'
+import { liveActivityLabel } from './session-display'
 import { formatDate, formatTokens } from './utils'
 
 interface SessionInfoProps {
@@ -13,6 +15,12 @@ interface SessionInfoProps {
   events: TimelineEvent[]
   eventsTotal: number | null
   memorySummary?: SessionMemoryObservability | null
+  /** memorySummary covers only some memory events. */
+  memoryPartial?: boolean
+  /** Server events summary (usage totals). */
+  eventsSummary?: SessionEventsSummary | null
+  /** What `events`/`eventsTotal` count; defaults to all session events. */
+  eventsScopeLabel?: string
 }
 
 export function SessionInfo({
@@ -20,6 +28,9 @@ export function SessionInfo({
   events,
   eventsTotal,
   memorySummary,
+  memoryPartial = false,
+  eventsSummary,
+  eventsScopeLabel,
 }: SessionInfoProps) {
   const requestedModel = session.requested_model || session.model
   const effectiveModel = session.effective_model || session.model
@@ -30,6 +41,9 @@ export function SessionInfo({
       ? `${requestedProvider}/${requestedModel} -> ${effectiveProvider}/${effectiveModel}`
       : effectiveModel
   const live = session.live_activity
+  const liveLabel = liveActivityLabel(session.status, live)
+  const storedCountersEmpty =
+    !session.total_input_tokens && !session.total_output_tokens
 
   return (
     <div className="space-y-6 p-5 lg:p-6">
@@ -44,7 +58,12 @@ export function SessionInfo({
         </div>
       </div>
 
-      <NativeUsage events={events} totalEvents={eventsTotal} />
+      <NativeUsage
+        events={events}
+        totalEvents={eventsTotal}
+        sessionSummary={eventsSummary}
+        scopeLabel={eventsScopeLabel}
+      />
 
       {/* Context Usage */}
       {session.context_usage && (
@@ -87,7 +106,7 @@ export function SessionInfo({
             icon={Layers}
             label="References"
             value={`${memorySummary.selectedCount} selected / ${memorySummary.indexCount} index`}
-            subValue={`selected cited ${memorySummary.selectedCitedCount}/${memorySummary.selectedCount} (${memorySummary.selectedCitationRate}%)`}
+            subValue={`selected cited ${memorySummary.selectedCitedCount}/${memorySummary.selectedCount} (${memorySummary.selectedCitationRate}%)${memoryPartial ? ' · loaded memory events only' : ''}`}
           />
         )}
       </div>
@@ -104,9 +123,7 @@ export function SessionInfo({
           )}
         >
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-            <span className="text-slate-300">
-              {live.health} · {live.phase}
-            </span>
+            {liveLabel && <span className="text-slate-300">{liveLabel}</span>}
             {live.current_tool_name && (
               <span className="text-sky-400">
                 tool {live.current_tool_name}
@@ -182,15 +199,21 @@ export function SessionInfo({
                       {agent.message_count} messages
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-mono text-slate-300">
-                      {formatTokens(agent.total_tokens)}
+                  {agent.input_tokens || agent.output_tokens ? (
+                    <div className="text-right">
+                      <p className="text-sm font-mono text-slate-300">
+                        {formatTokens(agent.total_tokens)}
+                      </p>
+                      <p className="text-xs text-slate-500 font-mono">
+                        {formatTokens(agent.input_tokens)} in /{' '}
+                        {formatTokens(agent.output_tokens)} out
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-right text-xs text-slate-500">
+                      Usage not captured
                     </p>
-                    <p className="text-xs text-slate-500 font-mono">
-                      {formatTokens(agent.input_tokens)} in /{' '}
-                      {formatTokens(agent.output_tokens)} out
-                    </p>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -218,7 +241,9 @@ export function SessionInfo({
               <p className="text-2xl font-mono font-semibold text-sky-400">
                 {session.total_input_tokens === undefined
                   ? 'Unavailable'
-                  : formatTokens(session.total_input_tokens)}
+                  : storedCountersEmpty
+                    ? 'Not captured'
+                    : formatTokens(session.total_input_tokens)}
               </p>
               <p className="text-xs text-sky-500 mt-1">Input Tokens</p>
             </div>
@@ -231,7 +256,9 @@ export function SessionInfo({
               <p className="text-2xl font-mono font-semibold text-violet-400">
                 {session.total_output_tokens === undefined
                   ? 'Unavailable'
-                  : formatTokens(session.total_output_tokens)}
+                  : storedCountersEmpty
+                    ? 'Not captured'
+                    : formatTokens(session.total_output_tokens)}
               </p>
               <p className="text-xs text-violet-500 mt-1">Output Tokens</p>
             </div>

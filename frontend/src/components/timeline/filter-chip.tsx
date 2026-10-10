@@ -11,6 +11,8 @@ interface FilterChipProps {
   count: number
   compact?: boolean
   onClick: () => void
+  /** Accessible description of what the count covers. */
+  countLabel?: string
 }
 
 export function FilterChip({
@@ -20,15 +22,20 @@ export function FilterChip({
   count,
   compact = false,
   onClick,
+  countLabel,
 }: FilterChipProps) {
   const config = getEventConfig(eventType)
   const Icon = config.icon
 
   return (
     <button
+      type="button"
+      aria-pressed={isActive}
+      title={countLabel}
       onClick={onClick}
       className={cn(
         'flex items-center rounded-lg',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400',
         compact ? 'gap-1 px-2 py-1' : 'gap-1.5 px-2.5 py-1.5',
         compact
           ? 'text-[11px] font-medium tracking-wide'
@@ -39,7 +46,7 @@ export function FilterChip({
           : 'bg-slate-900/40 border-slate-800/50 text-slate-500 hover:text-slate-400 hover:border-slate-700',
       )}
     >
-      <Icon className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+      <Icon className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} aria-hidden />
       <span>{label}</span>
       <span
         className={cn(
