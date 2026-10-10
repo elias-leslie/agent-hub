@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -113,7 +114,7 @@ def _descriptor_for_generated_channel(channel: str, content: str) -> str | None:
     return f"generated:{channel}:{_content_hash(content)}"
 
 
-def _capture_generated_context(
+async def _capture_generated_context(
     agent: Agent,
     *,
     task_type: str | None,
@@ -125,7 +126,8 @@ def _capture_generated_context(
 
     project_index_enabled = bool(memory_config.get("project_index_enabled", True))
     project_index_text = (
-        format_project_index_context(
+        await asyncio.to_thread(
+            format_project_index_context,
             project_id,
             consumer_profile=consumer_profile,
             task_type=task_type,
@@ -359,7 +361,7 @@ async def capture_benchmark_config_snapshot(
             task_type=task_type,
             project_id=project_id,
         )
-        snapshot["generated_context"] = _capture_generated_context(
+        snapshot["generated_context"] = await _capture_generated_context(
             agent,
             task_type=task_type,
             project_id=project_id,

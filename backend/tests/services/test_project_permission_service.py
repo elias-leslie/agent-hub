@@ -307,7 +307,8 @@ class TestCreateProjectPermission:
 
         with (
             patch(
-                "app.services.project_permission_service.resolve_project_root",
+                "app.services.project_permission_service.aresolve_project_root",
+                new_callable=AsyncMock,
                 return_value=Path("/srv/workspaces/projects/test2"),
             ),
             patch(
@@ -479,7 +480,8 @@ class TestReconcileRegisteredProjectAccess:
 
         with (
             patch(
-                "app.services.project_permission_service.resolve_project_root",
+                "app.services.project_permission_service.aresolve_project_root",
+                new_callable=AsyncMock,
                 return_value=Path("/srv/workspaces/projects/test2"),
             ),
             patch(

@@ -64,7 +64,7 @@ async def sync_jobinator_policy() -> bool:
     try:
         if not settings.internal_service_secret:
             raise RuntimeError("Internal service secret is not configured")
-        url = _owner_api_base("jobinator-4000") + "/automations/policy/sync"
+        url = await asyncio.to_thread(_owner_api_base, "jobinator-4000") + "/automations/policy/sync"
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 url, json=payload,
@@ -173,7 +173,7 @@ async def dispatch_run(run_id: str) -> None:
         elif dispatch_kind == "callback":
             if not settings.internal_service_secret:
                 raise RuntimeError("Internal service secret is not configured")
-            url = _owner_api_base(owner_project_id) + dispatch_target
+            url = await asyncio.to_thread(_owner_api_base, owner_project_id) + dispatch_target
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     url, json=payload,

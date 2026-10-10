@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -166,11 +167,44 @@ def _env_override(project_id: str) -> Path | None:
     return Path(raw).expanduser().resolve()
 
 
-@lru_cache(maxsize=16)
+_ROOT_CACHE_SIZE = 32
+_resolved_roots: dict[str, Path | None] = {}
+_resolved_roots_lock = threading.Lock()
+
+
+def clear_project_root_cache() -> None:
+    """Forget memoized project roots so the next lookup re-resolves them."""
+    _resolved_roots.clear()
+
+
 def resolve_project_root(project_id: str) -> Path | None:
-    """Resolve a project's canonical root via env, `st`, or the Btrfs workspace."""
+    """Resolve a project's canonical root via env, `st`, or the Btrfs workspace.
+
+    Results are memoized per id. A cold lookup may run ``st projects root``
+    (up to 5s), so async callers use :func:`aresolve_project_root`.
+    """
     if not is_valid_project_id(project_id):
         return None
+    if project_id in _resolved_roots:
+        return _resolved_roots[project_id]
+    root = _resolve_project_root_uncached(project_id)
+    with _resolved_roots_lock:  # cold lookups may run concurrently in worker threads
+        if len(_resolved_roots) >= _ROOT_CACHE_SIZE:
+            _resolved_roots.pop(next(iter(_resolved_roots)))
+        _resolved_roots[project_id] = root
+    return root
+
+
+async def aresolve_project_root(project_id: str) -> Path | None:
+    """Async ``resolve_project_root``: cold lookups run off the event loop."""
+    if not is_valid_project_id(project_id):
+        return None
+    if project_id in _resolved_roots:
+        return _resolved_roots[project_id]
+    return await asyncio.to_thread(resolve_project_root, project_id)
+
+
+def _resolve_project_root_uncached(project_id: str) -> Path | None:
     override = _env_override(project_id)
     if override and override.exists():
         return override

@@ -66,12 +66,12 @@ def invalidate_project_cache() -> None:
     _cached_roots = None
     _cache_timestamp = 0.0
     from app.core.project_roots import (
+        clear_project_root_cache,
         invalidate_registered_project_roots,
-        resolve_project_root,
     )
 
     invalidate_registered_project_roots()
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
 
 
 # Backward-compatible module-level constant — now a lazy proxy.

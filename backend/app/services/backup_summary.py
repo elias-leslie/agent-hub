@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 from urllib.parse import urlencode
@@ -66,7 +67,7 @@ def _read_summitflow_api_url() -> str:
 
 async def _fetch_backup_json(path: str, *, failure_log: str) -> Any:
     """Fetch one SummitFlow backup API payload."""
-    api_base = _read_summitflow_api_url()
+    api_base = await asyncio.to_thread(_read_summitflow_api_url)
     if not api_base:
         logger.debug("Missing SummitFlow API URL for backup summary")
         return None

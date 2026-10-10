@@ -240,7 +240,9 @@ async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | N
         thinking_level=input.thinking_level,
         parent_session_id=input.parent_session_id,
         current_branch=input.current_branch,
-        working_dir=_resolve_wake_working_dir(input.project_id, input.working_dir),
+        working_dir=await asyncio.to_thread(
+            _resolve_wake_working_dir, input.project_id, input.working_dir
+        ),
     )
 
 

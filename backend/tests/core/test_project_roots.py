@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -12,7 +13,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core import project_roots
-from app.core.project_roots import resolve_project_root, resolve_summitflow_scripts_dir
+from app.core.project_roots import (
+    aresolve_project_root,
+    clear_project_root_cache,
+    resolve_project_root,
+    resolve_summitflow_scripts_dir,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -24,7 +30,7 @@ def _no_inherited_root_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_resolve_project_root_prefers_env_override(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SUMMITFLOW_ROOT", str(tmp_path))
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
 
     resolved = resolve_project_root("summitflow")
 
@@ -37,7 +43,7 @@ def test_resolve_summitflow_scripts_dir_uses_rebuild_path(tmp_path: Path, monkey
     (scripts_dir / "rebuild.sh").write_text("#!/usr/bin/env bash\n")
     monkeypatch.delenv("SUMMITFLOW_SCRIPTS_DIR", raising=False)
     monkeypatch.delenv("SUMMITFLOW_ROOT", raising=False)
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
     resolve_summitflow_scripts_dir.cache_clear()
 
     with (
@@ -50,7 +56,7 @@ def test_resolve_summitflow_scripts_dir_uses_rebuild_path(tmp_path: Path, monkey
 
 
 def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
 
     with (
         patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
@@ -66,7 +72,7 @@ def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
 
 
 def test_resolve_project_root_falls_back_when_st_times_out(tmp_path: Path) -> None:
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
     candidate = tmp_path / "summitflow"
     candidate.mkdir()
 
@@ -86,7 +92,7 @@ def test_resolve_project_root_falls_back_when_st_times_out(tmp_path: Path) -> No
 def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differs(
     tmp_path: Path,
 ) -> None:
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
     repo_root = tmp_path / "a-term"
     repo_root.mkdir()
     (repo_root / "project.identity.json").write_text(
@@ -113,7 +119,7 @@ def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differ
 
 
 def test_resolve_project_root_rejects_ids_that_escape_or_inject(tmp_path: Path) -> None:
-    resolve_project_root.cache_clear()
+    clear_project_root_cache()
     workspace = tmp_path / "projects"
     workspace.mkdir()
     (tmp_path / "outside").mkdir()
@@ -126,6 +132,38 @@ def test_resolve_project_root_rejects_ids_that_escape_or_inject(tmp_path: Path) 
         for project_id in ("../outside", "--help", "a/b", "..", "", "x" * 200):
             assert resolve_project_root(project_id) is None
     run_process.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_aresolve_project_root_runs_cold_st_lookup_off_the_event_loop(tmp_path: Path) -> None:
+    clear_project_root_cache()
+    loop_thread = threading.get_ident()
+    calling_threads: list[int] = []
+
+    def fake_run_process(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        calling_threads.append(threading.get_ident())
+        return SimpleNamespace(returncode=0, stdout=str(tmp_path), stderr="")
+
+    with (
+        patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
+        patch("app.core.project_roots.run_process", side_effect=fake_run_process),
+    ):
+        assert await aresolve_project_root("a-term") == tmp_path.resolve()
+        # Warm lookups are served from the memo without a thread hop or subprocess.
+        with patch("app.core.project_roots.asyncio.to_thread") as to_thread:
+            assert await aresolve_project_root("a-term") == tmp_path.resolve()
+        to_thread.assert_not_called()
+
+    assert len(calling_threads) == 1
+    assert calling_threads[0] != loop_thread
+
+
+@pytest.mark.asyncio
+async def test_aresolve_project_root_rejects_invalid_ids_without_lookup() -> None:
+    clear_project_root_cache()
+    with patch("app.core.project_roots.asyncio.to_thread") as to_thread:
+        assert await aresolve_project_root("../outside") is None
+    to_thread.assert_not_called()
 
 
 class _FakeProcess:

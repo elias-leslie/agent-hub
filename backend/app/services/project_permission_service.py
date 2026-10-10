@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.constants.projects import invalidate_project_cache
-from app.core.project_roots import resolve_project_root
+from app.core.project_roots import aresolve_project_root
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.models.client import Client
 from app.models.project_permission import (
@@ -410,7 +410,7 @@ async def create_project_permission(
 
     resolved_root_path = root_path
     if resolved_root_path is None:
-        resolved_root = resolve_project_root(project_id)
+        resolved_root = await aresolve_project_root(project_id)
         resolved_root_path = str(resolved_root) if resolved_root else None
 
     perm = ProjectPermission(
