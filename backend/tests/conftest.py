@@ -166,13 +166,9 @@ def test_client() -> Generator[TestClient]:
 def api_client() -> Generator[APITestClient]:
     """Create FastAPI test client with source headers for API tests.
 
-    Use this fixture for any test that calls API endpoints protected by
-    the kill switch middleware. The client automatically adds:
-    - X-Source-Client: pytest
-    - X-Source-Path: /tests
-
-    Tests using this fixture will be visible in the Agent Hub Admin UI
-    under the 'pytest' client, allowing tracking and blocking of test traffic.
+    Use this fixture for any test that calls API endpoints behind the
+    access control middleware. The client adds the headers listed on
+    APITestClient (pytest source attribution plus the internal bypass).
     """
     with APITestClient(app) as client:
         yield client
@@ -192,8 +188,7 @@ def setup_test_app_state() -> Generator[None]:
     2. Disables database sessions to prevent polluting the sessions table
        (The /api/complete endpoint checks `if db:` before creating sessions)
 
-    The kill switch middleware is NOT bypassed - it checks headers before
-    accessing the database, and has fail-open behavior for db errors.
+    The access control middleware is not bypassed by this fixture.
 
     Tests that actually need database access should use:
         @pytest.fixture

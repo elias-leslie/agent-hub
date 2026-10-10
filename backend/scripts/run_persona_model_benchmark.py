@@ -214,7 +214,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--use-memory", action="store_true", help="Enable persona memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
     parser.add_argument("--memory-variant-override", choices=("BASELINE", "ENHANCED", "MINIMAL", "AGGRESSIVE"), help="Override the memory injection variant for controlled benchmark experiments")
-    parser.add_argument("--task-type", default=_DEFAULT_TASK_TYPE, choices=("wake", "heartbeat"), help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context")
+    parser.add_argument("--task-type", default=_DEFAULT_TASK_TYPE, choices=("wake",), help="Agent task type to benchmark")
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
     parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
     parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")

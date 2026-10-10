@@ -7,7 +7,6 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.automation_guidance import automation_moved
 from app.db import get_db
 from app.services.agent_service import get_agent_service
 from app.services.persona_document_prompt_service import (
@@ -18,7 +17,6 @@ from app.services.persona_document_prompt_service import (
 )
 from app.services.persona_documents import normalize_user_profile
 from app.services.persona_identity import PERSONA_SLUG, sync_persona_name_to_agent
-from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
 from .activity import router as _activity_router
@@ -59,16 +57,12 @@ async def update_persona(
     """Update persona fields (partial update — only provided fields are changed)."""
     update_data = update.model_dump(exclude_unset=True)
 
-    if "heartbeat_interval_minutes" in update_data:
-        raise automation_moved()
-
     persona = await get_or_create_persona(db)
 
     if not update_data:
         return await persona_to_response(db, persona)
 
     personality = update_data.pop("personality", None)
-    heartbeat_instructions = update_data.pop("heartbeat_instructions", None)
     user_profile = update_data.pop("user_profile", None)
     user_context = update_data.pop("user_context", None)
 
@@ -79,23 +73,6 @@ async def update_persona(
             changed_by="api",
             change_reason="Persona settings update",
         )
-
-    if heartbeat_instructions is not None:
-        old_text = (await persona_to_response(db, persona)).heartbeat_instructions or ""
-        old_len = len(old_text)
-        new_text = heartbeat_instructions.strip()
-        new_len = len(new_text)
-        if old_len > 200 and new_len < (old_len * 0.5):
-            from fastapi import HTTPException
-
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"REJECTED: New heartbeat_instructions ({new_len} chars) is dramatically shorter "
-                    f"than existing ({old_len} chars). This looks like accidental data loss."
-                ),
-            )
-        await set_persona_heartbeat_instructions(db, new_text)
 
     if user_context is not None:
         await set_persona_user_context_document(

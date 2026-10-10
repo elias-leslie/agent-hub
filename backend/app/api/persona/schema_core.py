@@ -35,11 +35,9 @@ class PersonaResponse(BaseModel):
     name: str
     personality: str | None = None
     user_profile: PersonaUserProfile | None = None
-    heartbeat_instructions: str | None = None
     user_context: str | None = None
     voice_id: str = "en-US-AriaNeural"
     voice_enabled: bool = False
-    heartbeat_interval_minutes: int = 60
     execution_state: str = "active"
     avatar_url: str | None = None
     greeting: str | None = None
@@ -60,11 +58,9 @@ class PersonaUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     personality: str | None = Field(default=None, max_length=50000)
     user_profile: PersonaUserProfile | None = None
-    heartbeat_instructions: str | None = Field(default=None, max_length=10000)
     user_context: str | None = Field(default=None, max_length=10000)
     voice_id: str | None = Field(default=None, max_length=200)
     voice_enabled: bool | None = None
-    heartbeat_interval_minutes: int | None = Field(default=None, ge=0, le=1440)
     execution_state: str | None = Field(default=None, pattern="^(active|paused)$")
     avatar_url: str | None = Field(default=None, max_length=500)
     greeting: str | None = Field(default=None, max_length=2000)

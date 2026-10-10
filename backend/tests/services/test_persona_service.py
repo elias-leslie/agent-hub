@@ -34,11 +34,9 @@ def _make_persona(**overrides) -> MagicMock:
         "name": "Persona",
         "personality": "I am a helpful assistant.",
         "user_profile": None,
-        "heartbeat_instructions": "Check system health.",
         "user_context": "User prefers concise answers.",
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
-        "heartbeat_interval_minutes": 60,
         "avatar_url": None,
         "greeting": "Hello!",
         "onboarding_complete": True,
@@ -298,7 +296,6 @@ class TestGetPersonaContextForAgent:
     async def test_identity_tag_always_present(self):
         persona = _make_persona(
             personality=None,
-            heartbeat_instructions=None,
             user_context=None,
         )
         db = create_mock_db_session()
@@ -339,38 +336,29 @@ class TestGetPersonaContextForAgent:
         assert "<personality>" not in result
 
     @pytest.mark.asyncio
-    async def test_heartbeat_instructions_present_when_set(self):
-        persona = _make_persona(heartbeat_instructions="Check task queue.")
+    async def test_retired_heartbeat_task_type_injects_no_heartbeat_sections(self):
+        persona = _make_persona(user_context="Prefers dark mode.")
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
         db.execute.return_value = mock_result_persona
 
-        with patch(
-            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-            new_callable=AsyncMock,
-            return_value="Check task queue.",
-        ):
-            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
+        result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
         assert result is not None
-        assert "<heartbeat_instructions>" in result
-        assert "Check task queue." in result
+        assert "<heartbeat_instructions>" not in result
+        assert "<focus_harness>" not in result
+        assert "<user_context_notes>" in result
 
     @pytest.mark.asyncio
-    async def test_heartbeat_focus_harness_present_for_heartbeat_context(self):
-        persona = _make_persona(heartbeat_instructions="Check task queue.")
+    async def test_wake_context_adds_focus_harness(self):
+        persona = _make_persona()
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
         db.execute.return_value = mock_result_persona
 
-        with patch(
-            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-            new_callable=AsyncMock,
-            return_value="Check task queue.",
-        ):
-            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
+        result = await get_persona_context_for_agent(db, agent_id=10, task_type="wake")
 
         assert result is not None
         assert "<focus_harness>" in result
@@ -379,19 +367,6 @@ class TestGetPersonaContextForAgent:
         assert "active session with recent progress => wait" in result
         assert "cleanup/workspace gate unresolved => primary_action=block and should_dispatch=false" in result
         assert "explicit stalled/failed/terminated session => reconcile" in result
-
-    @pytest.mark.asyncio
-    async def test_heartbeat_instructions_absent_when_null(self):
-        persona = _make_persona(heartbeat_instructions=None)
-        db = create_mock_db_session()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        db.execute.return_value = mock_result_persona
-
-        result = await get_persona_context_for_agent(db, agent_id=10)
-
-        assert result is not None
-        assert "<heartbeat_instructions>" not in result
 
     @pytest.mark.asyncio
     async def test_user_context_present_when_set(self):
@@ -408,26 +383,17 @@ class TestGetPersonaContextForAgent:
         assert "Prefers dark mode." in result
 
     @pytest.mark.asyncio
-    async def test_user_context_omitted_in_heartbeat_context(self):
-        persona = _make_persona(
-            heartbeat_instructions="Check task queue.",
-            user_context="Prefers dark mode.",
-        )
+    async def test_user_context_omitted_in_wake_context(self):
+        persona = _make_persona(user_context="Prefers dark mode.")
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
         db.execute.return_value = mock_result_persona
 
-        with patch(
-            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-            new_callable=AsyncMock,
-            return_value="Check task queue.",
-        ):
-            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
+        result = await get_persona_context_for_agent(db, agent_id=10, task_type="wake")
 
         assert result is not None
         assert "<user_context_notes>" not in result
-        assert "<heartbeat_instructions>" in result
 
     @pytest.mark.asyncio
     async def test_user_profile_present_when_set(self):
@@ -453,7 +419,6 @@ class TestGetPersonaContextForAgent:
     async def test_evolution_guidelines_present_in_chat_context(self):
         persona = _make_persona(
             personality=None,
-            heartbeat_instructions=None,
             user_context=None,
         )
         db = create_mock_db_session()
@@ -466,29 +431,6 @@ class TestGetPersonaContextForAgent:
         assert result is not None
         assert "<evolution_guidelines>" in result
         assert "Self-Evolution Guidelines" in result
-
-    @pytest.mark.asyncio
-    async def test_evolution_guidelines_omitted_in_heartbeat_context(self):
-        persona = _make_persona(
-            personality=None,
-            heartbeat_instructions="Check task queue.",
-            user_context=None,
-        )
-        db = create_mock_db_session()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        db.execute.return_value = mock_result_persona
-
-        with patch(
-            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-            new_callable=AsyncMock,
-            return_value="Check task queue.",
-        ):
-            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
-
-        assert result is not None
-        assert "<heartbeat_instructions>" in result
-        assert "<evolution_guidelines>" not in result
 
     @pytest.mark.asyncio
     async def test_chat_context_includes_usage_context_and_omits_evolution(self):
@@ -509,7 +451,6 @@ class TestGetPersonaContextForAgent:
         assert "<usage_context>" in result
         assert "You are in a live chat with the user." in result
         assert "<evolution_guidelines>" not in result
-        assert "<heartbeat_instructions>" not in result
         assert "<user_context_notes>" in result
 
     @pytest.mark.asyncio

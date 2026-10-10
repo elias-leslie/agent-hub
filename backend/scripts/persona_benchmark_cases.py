@@ -515,21 +515,21 @@ _SELF_CORRECTION_CASES: list[PersonaBenchmarkCase] = [
         case_id="performance_review_honing",
         family="self-correction",
         name="Performance Review Honing",
-        description="Inspect performance history plus heartbeat instructions before deciding to self-correct.",
+        description="Inspect performance history before deciding to self-correct.",
         scenario=(
-            "Use review_agent_performance and read_heartbeat_instructions before answering.\n"
+            "Use review_agent_performance before answering.\n"
             "BENCHMARK_SIGNAL: Two consecutive evaluation runs showed repeated misses on tool-required "
             "governance cases.\n"
             "correct_layer=the persona's own operating model, observability habits, or model assignment.\n"
-            "question=Should the persona dispatch project work now, or reconcile the heartbeat/performance loop first?\n"
+            "question=Should the persona dispatch project work now, or reconcile its performance loop first?\n"
         ),
         action="reconcile",
-        required_tool_names=("review_agent_performance", "read_heartbeat_instructions"),
+        required_tool_names=("review_agent_performance",),
         max_turns=8,
         execute_tools=True,
-        required_summary_terms=("heartbeat", "performance"),
+        required_summary_terms=("loop", "performance"),
         summary_term_alternatives={
-            "heartbeat": ("governance", "operating model", "loop"),
+            "loop": ("governance", "operating model"),
             "performance": ("observability", "evaluation"),
         },
     ),

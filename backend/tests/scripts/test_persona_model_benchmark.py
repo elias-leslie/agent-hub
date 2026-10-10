@@ -305,7 +305,7 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
         seed=42,
         config_snapshot={
             "primary_model_id": "codex/gpt-5.4",
-            "benchmark_task_type": "heartbeat",
+            "benchmark_task_type": "wake",
             "thinking_level": "medium",
             "heartbeat_prompt": {
                 "slug": "persona-heartbeat-instructions",
@@ -341,7 +341,7 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     first_attempt = attempts[0]
     assert isinstance(first_attempt, dict)
     assert config_snapshot["thinking_level"] == "medium"
-    assert config_snapshot["benchmark_task_type"] == "heartbeat"
+    assert config_snapshot["benchmark_task_type"] == "wake"
     assert experiment["experiment_key"] == "persona-patience-ab"
     assert experiment["cohort"] == "candidate"
     assert efficiency["avg_total_tokens"] == 120.0
@@ -912,14 +912,14 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             use_memory=False,
             memory_group_id="benchmark:bench-1",
             memory_variant_override="MINIMAL",
-            task_type="heartbeat",
+            task_type="wake",
         )
 
     assert attempt.passed is True
     assert captured_kwargs["enable_caching"] is False
     assert captured_kwargs["skip_cache"] is True
     assert captured_kwargs["memory_variant_override"] == "MINIMAL"
-    assert captured_kwargs["task_type"] == "heartbeat"
+    assert captured_kwargs["task_type"] == "wake"
     assert captured_kwargs["disable_agent_fallbacks"] is True
     response_format = captured_kwargs["response_format"]
     assert isinstance(response_format, dict)
@@ -1196,17 +1196,14 @@ def test_stale_reviewer_path_case_requires_verified_path_language() -> None:
     assert "path" in case.required_summary_terms
 
 
-def test_performance_honing_case_requires_instruction_and_performance_tools() -> None:
+def test_performance_honing_case_requires_performance_tool() -> None:
     case = get_case_by_id("performance_review_honing")
 
     prompt = case.build_prompt()
 
     assert "review_agent_performance" in prompt
-    assert "read_heartbeat_instructions" in prompt
-    assert case.required_tool_names == (
-        "review_agent_performance",
-        "read_heartbeat_instructions",
-    )
+    assert "read_heartbeat_instructions" not in prompt
+    assert case.required_tool_names == ("review_agent_performance",)
 
 
 def test_model_config_reconsideration_case_requires_model_tools() -> None:

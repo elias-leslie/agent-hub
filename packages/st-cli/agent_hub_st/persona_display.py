@@ -19,7 +19,6 @@ def print_persona(persona: dict[str, Any]) -> None:
         preview = lines[0][:60] if lines else ""
     print(f"persona | {persona.get('name', '?')} | agent={persona.get('agent_slug', '?')}")
     print(f"  voice={persona.get('voice_id', '?')} enabled={persona.get('voice_enabled', False)}")
-    print(f"  heartbeat={persona.get('heartbeat_interval_minutes', 0)}m")
     mode = persona.get("session_reset_mode", "off")
     if mode == "daily":
         detail = f" hour={persona.get('session_reset_hour', 0)}"
@@ -29,7 +28,6 @@ def print_persona(persona: dict[str, Any]) -> None:
         detail = ""
     print(f"  session_reset={mode}{detail}")
     print(f"  personality_v{persona.get('version', 0)}: {preview}")
-    print(f"  heartbeat_instructions: {field_status(persona, 'heartbeat_instructions')}")
     print(f"  user_context: {field_status(persona, 'user_context')}")
     if persona.get("onboarding_phase"):
         print(f"  onboarding_phase: {persona['onboarding_phase']}")

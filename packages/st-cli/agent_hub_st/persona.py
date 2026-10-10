@@ -27,9 +27,6 @@ from .persona_helpers import (
     print_activity_sessions,
     print_update_result,
 )
-from .persona_helpers import (
-    write_file as _write_file,
-)
 from .preview_formatters import print_preview_detail as _print_preview_detail
 from .preview_formatters import print_preview_summary as _print_preview_summary
 
@@ -58,11 +55,9 @@ def show() -> None:
 
 @app.command()
 def update(
-    heartbeat_instructions: Annotated[str | None, _Opt("--heartbeat-instructions", "-H", help="Import heartbeat instructions from file into DB")] = None,
     user_context: Annotated[str | None, _Opt("--user-context", "-U", help="File with user context")] = None,
     voice_enabled: Annotated[bool | None, _Opt("--voice-enabled/--no-voice", help="Toggle voice")] = None,
     voice_id: Annotated[str | None, _Opt("--voice-id", help="Voice ID string")] = None,
-    heartbeat_interval: Annotated[int | None, _Opt("--heartbeat-interval", help="Minutes between heartbeats (0-1440)")] = None,
     session_reset_mode: Annotated[str | None, _Opt("--session-reset-mode", help="off, daily, or idle")] = None,
     session_reset_hour: Annotated[int | None, _Opt("--session-reset-hour", help="Hour (0-23) for daily reset")] = None,
     greeting: Annotated[str | None, _Opt("--greeting", help="Greeting message")] = None,
@@ -73,8 +68,8 @@ def update(
 
     fields: dict[str, Any] = {}
     _apply_file_and_scalar_fields(
-        fields, heartbeat_instructions, user_context, voice_enabled, voice_id,
-        heartbeat_interval, session_reset_mode, session_reset_hour, greeting,
+        fields, user_context, voice_enabled, voice_id,
+        session_reset_mode, session_reset_hour, greeting,
     )
     if limits is not None:
         load_limits_field(fields, limits)
@@ -131,45 +126,6 @@ def name(
         return
     persona = _api(get_persona, "Failed to fetch persona")
     print(persona.get("name", "Unknown"))
-
-
-@app.command()
-def instructions(
-    edit: Annotated[bool, _Opt("--edit", "-e", help="Open $EDITOR to modify")] = False,
-    set_text: Annotated[str | None, _Opt("--set", "-s", help="Set heartbeat instructions directly")] = None,
-    export: Annotated[str | None, _Opt("--export", help="Export DB-backed heartbeat instructions to file")] = None,
-) -> None:
-    """Print, modify, or export DB-backed heartbeat instructions."""
-    from .persona_api import get_persona, update_persona
-
-    if sum([edit, set_text is not None, export is not None]) > 1:
-        output_error("--edit, --set, and --export are mutually exclusive")
-        raise typer.Exit(1)
-    if set_text is not None:
-        result = _api(
-            lambda: update_persona({"heartbeat_instructions": set_text}),
-            "Failed to update heartbeat instructions",
-        )
-        print(f"Heartbeat instructions updated (version {result.get('version', '?')})")
-        return
-    persona = _api(get_persona, "Failed to fetch persona")
-    text = persona.get("heartbeat_instructions") or ""
-    if export is not None:
-        _write_file(export, text)
-        print(f"Heartbeat instructions exported to {export} ({len(text)} chars)")
-        return
-    if edit:
-        new_text = _edit_text_in_editor(text)
-        if new_text is None:
-            print("No changes made.")
-            return
-        result = _api(
-            lambda: update_persona({"heartbeat_instructions": new_text}),
-            "Failed to update heartbeat instructions",
-        )
-        print(f"Heartbeat instructions updated (version {result.get('version', '?')})")
-        return
-    print(text if text else "(No heartbeat instructions set)")
 
 
 @app.command()

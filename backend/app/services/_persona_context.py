@@ -102,11 +102,11 @@ async def get_persona_context_for_agent(
     Returns the formatted context string, or None if no persona exists.
 
     Args:
-        task_type: Usage-scenario flag from the caller. "heartbeat" includes
-            heartbeat_instructions; "chat" assembles a user-facing live-chat
-            stack (no onboarding, no evolution guidelines, plus a usage
-            override that suspends autonomous-run protocol). Other values
-            (or None) get the default stack.
+        task_type: Usage-scenario flag from the caller. "wake" adds the focus
+            harness and omits user-context notes; "chat" assembles a
+            user-facing live-chat stack (no onboarding, no evolution
+            guidelines, plus a usage override that suspends autonomous-run
+            protocol). Other values (or None) get the default stack.
     """
     persona = await get_persona_for_agent(db, agent_id)
     if not persona:
@@ -135,32 +135,19 @@ async def get_persona_context_for_agent(
                 user_context_text=user_context_text,
             )
 
-    if task_type == "heartbeat":
-        from app.services.persona_instruction_service import (
-            get_persona_heartbeat_instructions,
-        )
-
-        heartbeat_instructions = await get_persona_heartbeat_instructions(db)
-    else:
-        heartbeat_instructions = None
-
     sections.extend(
         _build_persona_sections(
             persona,
             personality_text=personality_text,
             user_context_text=user_context_text,
-            include_user_context_notes=task_type not in {"heartbeat", "wake"},
+            include_user_context_notes=task_type != "wake",
         )
     )
-    if task_type in {"heartbeat", "wake"}:
+    if task_type == "wake":
         focus_harness = await get_persona_focus_harness()
         sections.append(f"<focus_harness>\n{focus_harness}\n</focus_harness>")
-    if heartbeat_instructions:
-        sections.append(
-            f"<heartbeat_instructions>\n{heartbeat_instructions}\n</heartbeat_instructions>"
-        )
 
-    if phase == "complete" and task_type not in {"heartbeat", "chat"}:
+    if phase == "complete" and task_type != "chat":
         evolution_guidelines = await get_persona_evolution_guidelines()
         sections.append(
             f"<evolution_guidelines>\n{evolution_guidelines}\n</evolution_guidelines>"

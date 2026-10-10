@@ -88,49 +88,6 @@ READ_USER_CONTEXT_TOOL = Tool(
     defer_loading=True,
 )
 
-# --- Heartbeat instructions tools ---
-
-READ_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
-    name="read_heartbeat_instructions",
-    description=(
-        "Read your current heartbeat instructions. These define what you do during "
-        "periodic background check-ins. Review before making changes."
-    ),
-    input_schema={"type": "object", "properties": {}},
-    category="persona-memory",
-    search_keywords=["heartbeat", "background workflow"],
-    usage_examples=["Read heartbeat instructions before changing recurring behavior."],
-    defer_loading=True,
-)
-
-WRITE_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
-    name="write_heartbeat_instructions",
-    description=(
-        "Update your heartbeat instructions. IMPORTANT: You MUST call read_heartbeat_instructions "
-        "first and include ALL existing sections in your update — this tool replaces the full document. "
-        "Update when you discover better workflows for your background tasks. "
-        "Dramatic shrinkage (>50%) will be rejected as a safety measure."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "heartbeat_instructions": {
-                "type": "string",
-                "description": "The new heartbeat instructions document (markdown)",
-            },
-            "reason": {
-                "type": "string",
-                "description": "Why you're updating heartbeat instructions — what you learned",
-            },
-        },
-        "required": ["heartbeat_instructions", "reason"],
-    },
-    category="persona-memory",
-    search_keywords=["update heartbeat", "background workflow"],
-    usage_examples=["Refine heartbeat instructions after a recurring failure mode is confirmed."],
-    defer_loading=True,
-)
-
 # --- Memory curation tools ---
 
 MARK_MEMORY_RELEVANT_TOOL = Tool(

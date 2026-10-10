@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Generator
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.api.persona.schemas import PersonaUpdate
+from app.api.persona.schemas import PersonaResponse, PersonaUpdate
 from app.db import get_db
 from app.main import app
 from app.models.persona import Persona
@@ -26,11 +25,9 @@ def _make_persona(**overrides) -> MagicMock:
         "agent_id": 10,
         "name": "Persona",
         "personality": "I'm a helpful AI.",
-        "heartbeat_instructions": "Check health.",
         "user_context": "User likes brevity.",
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
-        "heartbeat_interval_minutes": 60,
         "execution_state": "active",
         "avatar_url": None,
         "greeting": "Hey!",
@@ -49,16 +46,6 @@ def _make_persona(**overrides) -> MagicMock:
     for k, v in defaults.items():
         setattr(mock, k, v)
     return mock
-
-
-@contextmanager
-def _patch_persona_instruction_prompt(persona: MagicMock):
-    """Only heartbeat guidance remains prompt-backed; row fields need no mock."""
-    with patch(
-        "app.api.persona.helpers.get_persona_heartbeat_instructions",
-        new=AsyncMock(return_value=persona.heartbeat_instructions),
-    ):
-        yield
 
 
 class TestPersonaSchemaValidation:
@@ -83,7 +70,6 @@ class TestGetPersonaEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona")
@@ -125,10 +111,6 @@ class TestGetPersonaEndpoint:
                 "app.api.persona.commit_and_refresh",
                 new=AsyncMock(return_value=persona),
             ) as mock_commit,
-            patch(
-                "app.api.persona.helpers.get_persona_heartbeat_instructions",
-                new=AsyncMock(side_effect=lambda _db: persona.heartbeat_instructions),
-            ),
         ):
             mock_get_persona.return_value = persona
             response = api_client.get("/api/persona")
@@ -201,25 +183,11 @@ class TestUpdatePersonaEndpoint:
         assert data["execution_state"] == "paused"
         assert data["version"] == 6
 
-    def test_heartbeat_interval_is_managed_in_automations(self, api_client, mock_db_session):
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
-            response = api_client.put("/api/persona", json={"heartbeat_interval_minutes": 30})
-
-        assert response.status_code == 409
-        assert "/automations?project_id=agent-hub" in response.json()["hint"]
-        mock.assert_not_awaited()
-        mock_db_session.commit.assert_not_awaited()
-
-    def test_mixed_update_cannot_change_heartbeat_interval(self, api_client, mock_db_session):
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
-            response = api_client.put(
-                "/api/persona",
-                json={"voice_enabled": True, "heartbeat_interval_minutes": 30},
-            )
-
-        assert response.status_code == 409
-        mock.assert_not_awaited()
-        mock_db_session.commit.assert_not_awaited()
+    def test_heartbeat_fields_are_not_persona_settings(self) -> None:
+        assert "heartbeat_interval_minutes" not in PersonaUpdate.model_fields
+        assert "heartbeat_instructions" not in PersonaUpdate.model_fields
+        assert "heartbeat_interval_minutes" not in PersonaResponse.model_fields
+        assert "heartbeat_instructions" not in PersonaResponse.model_fields
 
 
 class TestRetiredPersonaSchedulingRoutes:
@@ -250,7 +218,6 @@ class TestResetOnboardingEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_instruction_prompt(persona),
             patch(
                 "app.api.persona.clear_persona_user_context_document",
                 new=AsyncMock(),
@@ -275,7 +242,6 @@ class TestGetPersonalityEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
@@ -290,7 +256,6 @@ class TestGetPersonalityEndpoint:
 
         with (
             patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
-            _patch_persona_instruction_prompt(persona),
         ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
@@ -316,10 +281,6 @@ class TestUpdatePersonalityEndpoint:
                 "app.api.persona.set_persona_personality_document",
                 new=AsyncMock(side_effect=_set_personality),
             ) as mock_set,
-            patch(
-                "app.api.persona.helpers.get_persona_heartbeat_instructions",
-                new=AsyncMock(return_value=persona.heartbeat_instructions),
-            ),
         ):
             mock.return_value = persona
             response = api_client.put(
@@ -347,10 +308,6 @@ class TestUpdatePersonalityEndpoint:
                 "app.api.persona.set_persona_personality_document",
                 new=AsyncMock(side_effect=_set_personality),
             ) as mock_set,
-            patch(
-                "app.api.persona.helpers.get_persona_heartbeat_instructions",
-                new=AsyncMock(return_value=persona.heartbeat_instructions),
-            ),
         ):
             mock.return_value = persona
             response = api_client.put(

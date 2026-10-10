@@ -17,7 +17,6 @@ def _make_persona(**overrides) -> MagicMock:
         "personality_previous": None,
         "user_context": "B" * 300,
         "user_context_previous": None,
-        "heartbeat_instructions": "C" * 300,
         "version": 1,
     }
     defaults.update(overrides)
@@ -113,33 +112,6 @@ def _mock_prompt_backed_persona_documents():
         persona.user_context = new_text
         return len(old_text), len(new_text)
 
-    async def _get_heartbeat(db):
-        result = await db.execute(object())
-        while hasattr(result, "__await__"):
-            result = await result
-        persona = result.scalar_one_or_none()
-        while hasattr(persona, "__await__"):
-            persona = await persona
-        if persona is None:
-            return None
-        return getattr(persona, "heartbeat_instructions", None)
-
-    async def _set_heartbeat(db, heartbeat_instructions, **_kwargs):
-        result = await db.execute(object())
-        while hasattr(result, "__await__"):
-            result = await result
-        persona = result.scalar_one_or_none()
-        while hasattr(persona, "__await__"):
-            persona = await persona
-        old_raw = getattr(persona, "heartbeat_instructions", "") or ""
-        old_text, new_text = validate_text_document_update(
-            old_raw,
-            heartbeat_instructions,
-            field_label="heartbeat_instructions",
-        )
-        persona.heartbeat_instructions = new_text
-        return len(old_text), len(persona.heartbeat_instructions)
-
     with (
         patch(
             "app.services.persona_document_prompt_service.get_persona_personality_document",
@@ -156,24 +128,6 @@ def _mock_prompt_backed_persona_documents():
         patch(
             "app.services.persona_document_prompt_service.set_persona_user_context_document",
             new=_set_user_context,
-        ),
-        patch(
-            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-            new=_get_heartbeat,
-        ),
-        patch(
-            "app.services.persona_instruction_service.set_persona_heartbeat_instructions",
-            new=_set_heartbeat,
-        ),
-        patch(
-            "app.workflows._instruction_review.review_instruction_edit",
-            new=AsyncMock(
-                return_value=MagicMock(
-                    used=False,
-                    decision=None,
-                    reason=None,
-                )
-            ),
         ),
     ):
         yield
@@ -311,63 +265,5 @@ class TestWritePersonality:
             from app.services.tools._executor_persona import write_personality
 
             result = await write_personality("tiny", "oops")
-
-        assert "REJECTED" in result
-
-
-# --- write_heartbeat_instructions ---
-
-
-class TestWriteHeartbeatInstructions:
-    @pytest.mark.asyncio
-    async def test_normal_update_succeeds(self):
-        """Normal heartbeat instructions update succeeds."""
-        persona = _make_persona(heartbeat_instructions="H" * 300)
-        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
-
-        with (
-            patch_session,
-            patch_persona,
-            patch(
-                "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-                new_callable=AsyncMock,
-                return_value="H" * 300,
-            ),
-        ):
-            from app.services.tools._executor_persona import write_heartbeat_instructions
-
-            result = await write_heartbeat_instructions(
-                "H" * 280 + " new check", "discovered better workflow"
-            )
-
-        assert "Heartbeat instructions updated" in result
-
-    @pytest.mark.asyncio
-    async def test_empty_rejected(self):
-        """Empty heartbeat instructions rejected."""
-        from app.services.tools._executor_persona import write_heartbeat_instructions
-
-        result = await write_heartbeat_instructions("", "no reason")
-        assert "Error" in result
-        assert "cannot be empty" in result
-
-    @pytest.mark.asyncio
-    async def test_shrinkage_rejected(self):
-        """50%+ shrinkage in heartbeat instructions is rejected."""
-        persona = _make_persona(heartbeat_instructions="Z" * 600)
-        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
-
-        with (
-            patch_session,
-            patch_persona,
-            patch(
-                "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
-                new_callable=AsyncMock,
-                return_value="Z" * 600,
-            ),
-        ):
-            from app.services.tools._executor_persona import write_heartbeat_instructions
-
-            result = await write_heartbeat_instructions("short", "trim")
 
         assert "REJECTED" in result

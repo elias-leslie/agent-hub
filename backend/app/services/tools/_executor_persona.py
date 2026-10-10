@@ -5,7 +5,6 @@ Handles personality, user context, memory tagging, and onboarding.
 
 from __future__ import annotations
 
-import inspect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -214,123 +213,6 @@ async def write_user_context(user_context: str) -> str:
     except Exception as e:
         logger.exception("write_user_context failed")
         return f"Error writing user context: {e}"
-
-
-async def read_heartbeat_instructions() -> str:
-    """Read the persona's current heartbeat instructions."""
-    try:
-        from app.db import async_session
-        from app.services.persona_instruction_service import (
-            get_persona_heartbeat_instructions,
-        )
-
-        async with async_session() as db:
-            heartbeat_instructions = await get_persona_heartbeat_instructions(db)
-            if heartbeat_instructions:
-                return heartbeat_instructions
-            return "(No heartbeat instructions set. Use write_heartbeat_instructions to create them.)"
-    except Exception as e:
-        logger.exception("read_heartbeat_instructions failed")
-        return f"Error reading heartbeat instructions: {e}"
-
-
-async def _resolve_heartbeat_old_text(db) -> str:
-    """Fetch and normalise the current heartbeat instructions string."""
-    from app.services.persona_instruction_service import get_persona_heartbeat_instructions
-
-    old_text = await get_persona_heartbeat_instructions(db)
-    while inspect.isawaitable(old_text):
-        old_text = await old_text
-    return old_text if isinstance(old_text, str) else ""
-
-
-async def _check_supervisor_review(
-    old_value: str, new_value: str, reason: str
-) -> tuple[str | None, bool]:
-    """Run supervisor review.
-
-    Returns (error_message, was_approved): error_message is set when the edit
-    should be blocked; was_approved is True when the review ran and approved.
-    """
-    from app.workflows._instruction_review import review_instruction_edit
-
-    review = await review_instruction_edit(
-        old_instructions=old_value,
-        new_instructions=new_value,
-        change_reason=reason,
-    )
-    if review.used and review.decision == "reject":
-        logger.warning("Instruction edit rejected by supervisor: %s", review.reason)
-        return (
-            f"Edit REJECTED by supervisor review: {review.reason}\n\n"
-            "Revise your proposed changes to address the concern, then try again.",
-            False,
-        )
-    if review.used and review.decision == "revise":
-        logger.info("Instruction edit needs revision per supervisor: %s", review.reason)
-        return (
-            f"Edit needs REVISION per supervisor review: {review.reason}\n\n"
-            "Adjust your proposed changes to address the feedback, then resubmit.",
-            False,
-        )
-    if review.used:
-        logger.info("Instruction edit approved by supervisor")
-    else:
-        logger.warning("Instruction review unavailable — proceeding with write")
-    return None, review.used
-
-
-def _validate_heartbeat_update(old_text: str, new_text: str) -> tuple[str, str] | str:
-    """Validate the heartbeat text update; return (old_value, new_value) or an error string."""
-    from app.services.persona_documents import (
-        PersonaDocumentShrinkageError,
-        validate_text_document_update,
-    )
-
-    try:
-        return validate_text_document_update(
-            old_text, new_text, field_label="heartbeat_instructions"
-        )
-    except PersonaDocumentShrinkageError as exc:
-        return (
-            f"{exc} Call read_heartbeat_instructions first, then include ALL existing sections. "
-            "If you genuinely need to shorten it, explain why in the reason."
-        )
-
-
-async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str) -> str:
-    """Update the persona's heartbeat instructions with shrinkage protection and supervisor review."""
-    if not heartbeat_instructions or not heartbeat_instructions.strip():
-        return "Error: heartbeat_instructions cannot be empty. Call read_heartbeat_instructions first."
-
-    try:
-        from app.db import async_session
-        from app.services.persona_instruction_service import set_persona_heartbeat_instructions
-        from app.services.persona_service import get_or_create_persona
-
-        async with async_session() as db:
-            persona = await get_or_create_persona(db)
-            old_text = await _resolve_heartbeat_old_text(db)
-            validated = _validate_heartbeat_update(old_text, heartbeat_instructions)
-            if isinstance(validated, str):
-                return validated
-            old_value, new_value = validated
-
-            review_error, was_approved = await _check_supervisor_review(old_value, new_value, reason)
-            if review_error is not None:
-                return review_error
-
-            old_len, new_len = len(old_value), len(new_value)
-            await set_persona_heartbeat_instructions(db, heartbeat_instructions)
-            persona.version += 1
-            await db.commit()
-
-        logger.info("heartbeat_instructions updated: %d → %d chars", old_len, new_len)
-        reviewed = " (supervisor-approved)" if was_approved else ""
-        return f"Heartbeat instructions updated ({old_len} → {new_len} chars){reviewed}. Reason: {reason}"
-    except Exception as e:
-        logger.exception("write_heartbeat_instructions failed")
-        return f"Error writing heartbeat instructions: {e}"
 
 
 async def mark_memory_relevant(memory_uuid: str) -> str:

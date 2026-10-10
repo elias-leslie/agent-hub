@@ -28,7 +28,6 @@ from app.services._persona_crud import (
 )
 from app.services._persona_onboarding import submit_and_review_onboarding
 from app.services._persona_templates import DEFAULT_PERSONA_PERSONALITY
-from app.services.owned_prompt_service import sync_persona_instruction_prompts
 
 __all__ = [
     "DEFAULT_LIMITS",
@@ -65,17 +64,10 @@ async def get_or_create_persona(db: AsyncSession) -> Persona:
         personality=DEFAULT_PERSONA_PERSONALITY,
         voice_id="en-US-AriaNeural",
         voice_enabled=False,
-        heartbeat_interval_minutes=60,
         execution_state="active",
     )
     db.add(persona)
     await db.flush()
-    await sync_persona_instruction_prompts(
-        db,
-        agent=agent,
-        heartbeat_instructions="",
-        change_reason="Initial persona instruction prompt bootstrap",
-    )
     await db.commit()
     await db.refresh(persona)
     logger.info("Created default persona for agent %s", agent.slug)

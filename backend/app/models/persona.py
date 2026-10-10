@@ -22,7 +22,7 @@ class Persona(Base):
     """First-class persona entity with personality, voice, and identity config.
 
     Sits above an agent and provides a customizable, nameable identity
-    with its own personality document, voice preferences, and heartbeat config.
+    with its own personality document, voice preferences, and session-reset config.
     """
 
     __tablename__ = "persona"
@@ -39,7 +39,6 @@ class Persona(Base):
     user_context_previous: Mapped[str | None] = mapped_column(Text, nullable=True)
     voice_id: Mapped[str] = mapped_column(String(200), default="en-US-AriaNeural")
     voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    heartbeat_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
     execution_state: Mapped[str] = mapped_column(
         String(16), default="active", server_default="active"
     )

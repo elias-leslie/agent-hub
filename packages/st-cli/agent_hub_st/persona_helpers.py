@@ -22,15 +22,6 @@ def read_file(path: str) -> str:
     return p.read_text(encoding="utf-8")
 
 
-def write_file(path: str, content: str) -> None:
-    """Write content to a file, exiting on invalid destination."""
-    p = Path(path)
-    if not p.parent.exists():
-        output_error(f"Directory not found: {p.parent}")
-        raise typer.Exit(1)
-    p.write_text(content, encoding="utf-8")
-
-
 def api_call(fn: Any, msg: str) -> Any:
     """Call fn(); on exception print msg and exit."""
     try:
@@ -59,26 +50,20 @@ def edit_text_in_editor(current_text: str, suffix: str = ".md") -> str | None:
 
 def apply_file_and_scalar_fields(
     fields: dict[str, Any],
-    heartbeat_instructions: str | None,
     user_context: str | None,
     voice_enabled: bool | None,
     voice_id: str | None,
-    heartbeat_interval: int | None,
     session_reset_mode: str | None,
     session_reset_hour: int | None,
     greeting: str | None,
 ) -> None:
     """Populate fields dict from provided update arguments."""
-    if heartbeat_instructions is not None:
-        fields["heartbeat_instructions"] = read_file(heartbeat_instructions)
     if user_context is not None:
         fields["user_context"] = read_file(user_context)
     if voice_enabled is not None:
         fields["voice_enabled"] = voice_enabled
     if voice_id is not None:
         fields["voice_id"] = voice_id
-    if heartbeat_interval is not None:
-        fields["heartbeat_interval_minutes"] = heartbeat_interval
     if session_reset_mode is not None:
         fields["session_reset_mode"] = session_reset_mode
     if session_reset_hour is not None:

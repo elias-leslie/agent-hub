@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Agent
 from app.models.prompt import AgentPrompt, Prompt
 from app.services.prompt_catalog import (
-    PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
     build_agent_system_prompt_slug,
 )
 from app.services.prompt_service import get_prompt_by_slug, record_prompt_revision
@@ -19,7 +18,6 @@ STANDARD_PROMPT_TYPE = "standard"
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 GLOBAL_MANDATE_PROMPT_TYPE = "global_mandate"
 GLOBAL_GUARDRAIL_PROMPT_TYPE = "global_guardrail"
-PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE = "persona_heartbeat_instructions"
 
 
 async def _get_assignment(
@@ -178,37 +176,12 @@ async def sync_agent_system_prompt(
     )
 
 
-async def sync_persona_instruction_prompts(
-    db: AsyncSession,
-    *,
-    agent: Agent,
-    heartbeat_instructions: str,
-    changed_by: str | None = None,
-    change_reason: str | None = None,
-) -> None:
-    await ensure_owned_prompt(
-        db,
-        agent=agent,
-        slug=PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-        name="Persona Heartbeat Instructions",
-        content=heartbeat_instructions,
-        description="Persona-specific mutable guidance for heartbeat runs.",
-        prompt_type=PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE,
-        role="heartbeat-instructions",
-        priority=40,
-        changed_by=changed_by,
-        change_reason=change_reason,
-    )
-
-
 __all__ = [
     "AGENT_SYSTEM_PROMPT_TYPE",
     "GLOBAL_GUARDRAIL_PROMPT_TYPE",
     "GLOBAL_MANDATE_PROMPT_TYPE",
-    "PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE",
     "STANDARD_PROMPT_TYPE",
     "ensure_owned_prompt",
     "get_owned_prompt",
     "sync_agent_system_prompt",
-    "sync_persona_instruction_prompts",
 ]

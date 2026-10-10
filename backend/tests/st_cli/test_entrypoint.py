@@ -87,7 +87,7 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
 
 def test_public_helper_contract_is_versioned_and_importable() -> None:
     assert agent_hub_st.PUBLIC_HELPER_API_VERSION == 1
-    assert agent_hub_st.__version__ == "0.2.0"
+    assert agent_hub_st.__version__ == "0.2.1"
     assert all(
         callable(helper)
         for helper in (

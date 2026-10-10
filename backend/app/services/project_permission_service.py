@@ -86,8 +86,6 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "write_personality",
     "read_user_context",
     "write_user_context",
-    "read_heartbeat_instructions",
-    "write_heartbeat_instructions",
     "submit_onboarding",
     "mark_memory_relevant",
     "mark_memory_irrelevant",

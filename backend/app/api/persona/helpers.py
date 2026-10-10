@@ -9,7 +9,6 @@ from app.services._persona_crud import get_persona_limit
 from app.services.persona_documents import (
     normalize_user_profile,
 )
-from app.services.persona_instruction_service import get_persona_heartbeat_instructions
 
 from .schemas import PersonaResponse
 
@@ -21,7 +20,6 @@ async def persona_to_response(
 ) -> PersonaResponse:
     """Convert the already-loaded canonical Persona row to the response schema."""
     personality = (persona.personality or "").strip() or None
-    heartbeat_instructions = await get_persona_heartbeat_instructions(db)
     user_context = (persona.user_context or "").strip() or None
     limits = None
     if persona.limits is not None:
@@ -31,11 +29,9 @@ async def persona_to_response(
         name=persona.name,
         personality=personality,
         user_profile=normalize_user_profile(persona.user_profile),
-        heartbeat_instructions=heartbeat_instructions,
         user_context=user_context,
         voice_id=persona.voice_id,
         voice_enabled=persona.voice_enabled,
-        heartbeat_interval_minutes=persona.heartbeat_interval_minutes,
         execution_state=persona.execution_state,
         avatar_url=persona.avatar_url,
         greeting=persona.greeting,

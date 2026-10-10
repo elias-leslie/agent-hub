@@ -132,7 +132,7 @@ async def test_build_honing_prompt_includes_failure_clusters_and_reference_notes
                 total_tokens=110,
                 turns=2,
                 tool_calls_count=2,
-                used_tool_names=["review_agent_performance", "read_heartbeat_instructions"],
+                used_tool_names=["review_agent_performance"],
             ),
         ]
     )
@@ -375,7 +375,7 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     with (
         patch(
             "scripts.persona_honing._experiment._fetch_used_tool_names",
-            new=AsyncMock(return_value=["read_heartbeat_instructions"]),
+            new=AsyncMock(return_value=["review_agent_performance"]),
         ),
         patch(
             "scripts.persona_honing._experiment._load_recent_improvement_signals",
@@ -400,7 +400,7 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
 
     assert session_id == "sess-improve"
     assert '"durable_learning_saved":false' in content
-    assert tools == ["read_heartbeat_instructions"]
+    assert tools == ["review_agent_performance"]
     assert parsed == {
         "summary": "tightened prompt",
         "changes_applied": ["edited heartbeat"],
@@ -629,7 +629,7 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
         ),
         patch(
             "scripts.persona_honing._experiment._run_improvement_pass",
-            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
+            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["review_agent_performance"], {"summary": "tuned"})),
         ),
         patch(
             "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
@@ -667,7 +667,7 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             timeout_seconds=5.0,
             client_id="client-1",
             use_memory=False,
-            benchmark_task_type="heartbeat",
+            benchmark_task_type="wake",
             max_iterations=1,
             cohort_repetitions=2,
             base_url="http://localhost:8003",
@@ -701,7 +701,7 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
         ),
         patch(
             "scripts.persona_honing._experiment._run_improvement_pass",
-            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
+            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["review_agent_performance"], {"summary": "tuned"})),
         ),
         patch(
             "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
@@ -739,7 +739,7 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
             timeout_seconds=5.0,
             client_id="client-1",
             use_memory=False,
-            benchmark_task_type="heartbeat",
+            benchmark_task_type="wake",
             max_iterations=1,
             cohort_repetitions=2,
             base_url="http://localhost:8003",
@@ -801,7 +801,7 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
         ),
         patch(
             "scripts.persona_honing._experiment._run_improvement_pass",
-            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
+            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["review_agent_performance"], {"summary": "tuned"})),
         ),
         patch(
             "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
@@ -847,7 +847,7 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             timeout_seconds=5.0,
             client_id="client-1",
             use_memory=False,
-            benchmark_task_type="heartbeat",
+            benchmark_task_type="wake",
             max_iterations=1,
             cohort_repetitions=2,
             base_url="http://localhost:8003",

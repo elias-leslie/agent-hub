@@ -89,7 +89,6 @@ class DirectToolExecutor:
         "propose_thorough", "propose_committee", "propose_honing", "start_research",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
-        "read_heartbeat_instructions", "write_heartbeat_instructions",
         "mark_memory_relevant", "mark_memory_irrelevant", "manage_memory_tags",
         "submit_onboarding",
         "steer_consultation", "list_consultations", "cancel_consultation",

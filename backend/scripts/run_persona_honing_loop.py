@@ -96,7 +96,7 @@ class HoningLoopParser(argparse.ArgumentParser):
         self.add_argument(
             "--benchmark-task-type",
             default=DEFAULT_BENCHMARK_TASK_TYPE,
-            choices=("wake", "heartbeat"),
+            choices=("wake",),
         )
         self.add_argument("--output-json")
         self.add_argument("--suite-id")

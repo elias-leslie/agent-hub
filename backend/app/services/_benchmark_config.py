@@ -27,7 +27,6 @@ from app.services.prompt_catalog import (
     COMPLETION_REVIEW_RULES_PROMPT_SLUG,
     PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
     PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-    PERSONA_HEARTBEAT_PROMPT_SLUG,
     PERSONA_WAKE_GUIDANCE_PROMPT_SLUG,
 )
 from app.services.runtime_prompt_stack import collect_runtime_prompt_sections
@@ -87,12 +86,6 @@ def run_config_fingerprint(run: object) -> str:
 
 
 def _task_prompt_slugs(task_type: str | None) -> list[str]:
-    if task_type == "heartbeat":
-        return [
-            PERSONA_HEARTBEAT_PROMPT_SLUG,
-            PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-            PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
-        ]
     if task_type == "wake":
         return [
             PERSONA_WAKE_GUIDANCE_PROMPT_SLUG,

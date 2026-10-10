@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
 
 from agent_hub_st.persona import app
@@ -11,33 +10,33 @@ from typer.testing import CliRunner
 runner = CliRunner()
 
 
-class TestPersonaInstructionsCommand:
-    def test_instructions_prints_db_backed_text(self) -> None:
-        with patch("agent_hub_st.persona._api") as mock_api:
-            mock_api.return_value = {"heartbeat_instructions": "DB text"}
-
-            result = runner.invoke(app, ["instructions"])
-
-        assert result.exit_code == 0
-        assert "DB text" in result.output
-
-    def test_instructions_exports_db_backed_text(self, tmp_path: Path) -> None:
-        target = tmp_path / "heartbeat.md"
-
-        with patch("agent_hub_st.persona._api") as mock_api:
-            mock_api.return_value = {"heartbeat_instructions": "DB text"}
-
-            result = runner.invoke(app, ["instructions", "--export", str(target)])
+class TestPersonaHeartbeatRetired:
+    def test_show_omits_heartbeat_fields(self) -> None:
+        persona = {
+            "name": "Jenny",
+            "agent_slug": "persona",
+            "heartbeat_interval_minutes": 60,
+            "heartbeat_instructions": "legacy",
+            "user_context": "ctx",
+        }
+        with patch("agent_hub_st.persona._api", return_value=persona):
+            result = runner.invoke(app, ["show"])
 
         assert result.exit_code == 0
-        assert target.read_text(encoding="utf-8") == "DB text"
-        assert f"Heartbeat instructions exported to {target} (7 chars)" in result.output
+        assert "heartbeat" not in result.output
+        assert "user_context: set (3 chars)" in result.output
 
-    def test_instructions_rejects_conflicting_modes(self) -> None:
-        result = runner.invoke(app, ["instructions", "--edit", "--export", "heartbeat.md"])
+    def test_instructions_command_removed(self) -> None:
+        result = runner.invoke(app, ["instructions"])
 
-        assert result.exit_code == 1
-        assert "--edit, --set, and --export are mutually exclusive" in result.output
+        assert result.exit_code != 0
+
+    def test_update_rejects_heartbeat_flags(self) -> None:
+        with patch("agent_hub_st.persona._api") as mock_api:
+            result = runner.invoke(app, ["update", "--heartbeat-interval", "30"])
+
+        assert result.exit_code != 0
+        mock_api.assert_not_called()
 
 
 class TestPersonaPreviewCommand:
