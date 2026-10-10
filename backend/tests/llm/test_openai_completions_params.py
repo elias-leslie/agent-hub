@@ -104,3 +104,15 @@ def test_remote_non_reasoning_model_does_not_get_reasoning_effort() -> None:
     )
 
     assert "reasoning_effort" not in params
+
+
+def test_base_url_provider_detection_matches_host_not_substring() -> None:
+    from app.llm.providers.openai_completions import _host_is
+
+    assert _host_is("https://api.deepseek.com/v1", "deepseek.com")
+    assert _host_is("https://API.OpenAI.com/v1", "api.openai.com")
+    assert _host_is("api.minimax.io/v1", "api.minimax.io")
+    assert not _host_is("https://proxy.example.net/deepseek.com/v1", "deepseek.com")
+    assert not _host_is("https://api.openai.com.example.net/v1", "api.openai.com")
+    assert not _host_is("https://notdeepseek.com/v1", "deepseek.com")
+    assert not _host_is("", "deepseek.com")

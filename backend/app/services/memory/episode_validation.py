@@ -22,7 +22,7 @@ class EpisodeValidator:
         r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
     )
     TASK_EXECUTION_LOG_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?i)\b(subtask\s+[a-z0-9-]+.*\battempts?\b|merge of task\s+[a-z0-9-]+|task-[a-z0-9]{6,})\b"
+        r"(?i)\b(subtask\s+[a-z0-9-].*\battempts?\b|merge of task\s+[a-z0-9-]+|task-[a-z0-9]{6,})\b"
     )
     DOCUMENT_ARTIFACT_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?i)(document pattern for this household|source document:\s|^question:\s|^answer:\s)"

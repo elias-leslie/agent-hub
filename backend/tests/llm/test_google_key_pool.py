@@ -124,3 +124,9 @@ async def test_non_key_errors_leave_every_account_available(
 
     assert (await _run(model)).stop_reason == "error"
     assert api_key_pool._states["gemini"].cooldowns == {}
+
+
+def test_pool_key_label_names_position_without_key_material() -> None:
+    assert google._pool_key_label("google", "live-key-0002") == "pool account 2/2"
+    assert google._pool_key_label("google", "other-key-9999") == "pool account (unlisted)"
+    assert "0002" not in google._pool_key_label("google", "live-key-0002")

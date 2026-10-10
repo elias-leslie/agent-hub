@@ -205,6 +205,10 @@ async def execute_query(
         q = f"{q.rstrip(';')} LIMIT {limit}"
 
     try:
+        # The keyword screen is advisory; the database enforces read-only.
+        # SELECT can still call side-effecting functions (nextval, setval,
+        # pg_terminate_backend, ...), which a READ ONLY transaction refuses.
+        await db.execute(text("SET TRANSACTION READ ONLY"))
         result = await db.execute(text(q))
         columns = list(result.keys())
         rows_raw = result.fetchall()

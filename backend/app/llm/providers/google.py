@@ -260,6 +260,14 @@ def _select_pool_key(model: Model[Any]) -> str | None:
     return candidates[0] if candidates else None
 
 
+def _pool_key_label(provider: str, key: str) -> str:
+    """Name a pooled key by its configured position; never log key material."""
+    keys = get_env_api_keys(provider)
+    if key in keys:
+        return f"pool account {keys.index(key) + 1}/{len(keys)}"
+    return "pool account (unlisted)"
+
+
 def stream_google(
     model: Model[Any],
     context: Context,
@@ -458,9 +466,9 @@ def stream_google(
                 cooldown = mark_key_failure(model.provider, pool_key, exc)
                 if cooldown is not None:
                     logger.warning(
-                        "%s key ...%s benched for %.0fs after refusal: %s",
+                        "%s %s benched for %.0fs after refusal: %s",
                         model.provider,
-                        pool_key[-4:],
+                        _pool_key_label(model.provider, pool_key),
                         cooldown,
                         str(exc)[:200],
                     )

@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 
 _MDV2_ESCAPE_RE = re.compile(r"([_*\[\]()~`>#\+\-=|{}.!\\])")
-_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*){1,}\|?\s*$")
+# Each whitespace run has exactly one owner so a long run of spaces cannot be
+# split between adjacent quantifiers (polynomial backtracking).
+_TABLE_SEPARATOR_RE = re.compile(r"^[ \t]*(?:\|[ \t]*)?:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)+(?:\|[ \t]*)?$")
 
 
 def utf16_len(text: str) -> int:
@@ -114,13 +116,15 @@ def format_markdown_v2(content: str | None) -> str | None:
         url = match.group(2).replace("\\", "\\\\").replace(")", "\\)")
         return _ph(f"[{display}]({url})")
 
-    text = re.sub(r"\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)", _convert_link, text)
+    # Display text excludes "[" so each candidate scan stops at the next opening
+    # bracket; "[^\]]+" rescanned the rest of the message from every "[".
+    text = re.sub(r"\[([^\[\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)", _convert_link, text)
 
     def _convert_header(match: re.Match[str]) -> str:
         inner = re.sub(r"\*\*(.+?)\*\*", r"\1", match.group(1).strip())
         return _ph(f"*{_escape_mdv2(inner)}*")
 
-    text = re.sub(r"^#{1,6}\s+(.+)$", _convert_header, text, flags=re.MULTILINE)
+    text = re.sub(r"^#{1,6}[ \t]+(\S.*)$", _convert_header, text, flags=re.MULTILINE)
     text = re.sub(r"\*\*(.+?)\*\*", lambda m: _ph(f"*{_escape_mdv2(m.group(1))}*"), text)
     text = re.sub(r"\*([^*\n]+)\*", lambda m: _ph(f"_{_escape_mdv2(m.group(1))}_"), text)
     text = re.sub(r"~~(.+?)~~", lambda m: _ph(f"~{_escape_mdv2(m.group(1))}~"), text)

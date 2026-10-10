@@ -52,3 +52,19 @@ def test_chunk_for_telegram_respects_utf16_limit_and_adds_markdown_suffixes() ->
     total = len(chunks)
     assert chunks[0].endswith(rf"\(1/{total}\)")
     assert chunks[-1].endswith(rf"\({total}/{total}\)")
+
+
+def test_format_markdown_v2_link_and_header_regexes_stay_linear() -> None:
+    import time
+
+    adversarial = "[\\" * 20_000 + "\n#" + " " * 20_000 + "\n" + "|" + " " * 20_000 + "-"
+    started = time.monotonic()
+    format_markdown_v2(adversarial)
+    _wrap_markdown_tables("a | b\n" + " " * 20_000 + "|x")
+    assert time.monotonic() - started < 2.0
+
+
+def test_format_markdown_v2_link_inside_bracket_text_and_table_separator() -> None:
+    assert format_markdown_v2("see [a [docs](https://x.io)") == "see \\[a [docs](https://x.io)"
+    assert _wrap_markdown_tables("a | b\n| --- | :-: |\n| 1 | 2 |").startswith("```")
+    assert _wrap_markdown_tables("a | b\n --- | --- \n1 | 2").startswith("```")

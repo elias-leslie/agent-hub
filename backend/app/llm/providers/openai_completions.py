@@ -150,46 +150,64 @@ class _Compat:
     loopback_only_transport: bool = False
 
 
+def _base_url_host(base_url: str) -> str:
+    """Return the lower-cased hostname of ``base_url`` (scheme optional)."""
+    if not base_url:
+        return ""
+    parsed = urlparse(base_url if "://" in base_url else f"//{base_url}")
+    return (parsed.hostname or "").lower()
+
+
+def _host_is(base_url: str, domain: str) -> bool:
+    """Match ``domain`` or its subdomains against the URL host, not the raw string.
+
+    Substring checks also matched paths, query strings and look-alike hosts
+    (``api.openai.com.example.net``), applying another provider's compat rules.
+    """
+    host = _base_url_host(base_url)
+    return host == domain or host.endswith(f".{domain}")
+
+
 def _detect_compat(model: Model[Any]) -> _Compat:
     provider = model.provider
     base_url = model.base_url or ""
 
-    is_zai = provider == "zai" or "api.z.ai" in base_url
+    is_zai = provider == "zai" or _host_is(base_url, "api.z.ai")
     is_together = (
         provider == "together"
-        or "api.together.ai" in base_url
-        or "api.together.xyz" in base_url
+        or _host_is(base_url, "api.together.ai")
+        or _host_is(base_url, "api.together.xyz")
     )
     is_moonshot = (
-        provider in ("moonshotai", "moonshotai-cn") or "api.moonshot." in base_url
+        provider in ("moonshotai", "moonshotai-cn") or _base_url_host(base_url).startswith("api.moonshot.")
     )
-    is_cf_workers = provider == "cloudflare-workers-ai" or "api.cloudflare.com" in base_url
-    is_cf_gateway = provider == "cloudflare-ai-gateway" or "gateway.ai.cloudflare.com" in base_url
-    is_minimax = provider == "minimax" or "api.minimax.io" in base_url
+    is_cf_workers = provider == "cloudflare-workers-ai" or _host_is(base_url, "api.cloudflare.com")
+    is_cf_gateway = provider == "cloudflare-ai-gateway" or _host_is(base_url, "gateway.ai.cloudflare.com")
+    is_minimax = provider == "minimax" or _host_is(base_url, "api.minimax.io")
     is_ollama = provider == "local" or ":11434" in base_url
 
     is_non_standard = (
         provider == "cerebras"
-        or "cerebras.ai" in base_url
+        or _host_is(base_url, "cerebras.ai")
         or is_minimax
         or provider == "xai"
-        or "api.x.ai" in base_url
+        or _host_is(base_url, "api.x.ai")
         or is_together
-        or "chutes.ai" in base_url
-        or "deepseek.com" in base_url
+        or _host_is(base_url, "chutes.ai")
+        or _host_is(base_url, "deepseek.com")
         or is_zai
         or is_moonshot
         or provider == "opencode"
-        or "opencode.ai" in base_url
+        or _host_is(base_url, "opencode.ai")
         or is_cf_workers
         or is_cf_gateway
     )
 
     use_max_tokens = (
-        "chutes.ai" in base_url or is_minimax or is_moonshot or is_cf_gateway or is_together
+        _host_is(base_url, "chutes.ai") or is_minimax or is_moonshot or is_cf_gateway or is_together
     )
-    is_grok = provider == "xai" or "api.x.ai" in base_url
-    is_deepseek = provider == "deepseek" or "deepseek.com" in base_url
+    is_grok = provider == "xai" or _host_is(base_url, "api.x.ai")
+    is_deepseek = provider == "deepseek" or _host_is(base_url, "deepseek.com")
 
     cache_control_format: Literal["anthropic"] | None = (
         "anthropic" if provider == "openrouter" and model.id.startswith("anthropic/") else None
@@ -204,7 +222,7 @@ def _detect_compat(model: Model[Any]) -> _Compat:
         thinking_format = "zai"
     elif is_together:
         thinking_format = "together"
-    elif provider == "openrouter" or "openrouter.ai" in base_url:
+    elif provider == "openrouter" or _host_is(base_url, "openrouter.ai"):
         thinking_format = "openrouter"
     else:
         thinking_format = "openai"
@@ -583,7 +601,7 @@ def build_params(
 
     prompt_cache_key: str | None = None
     if (
-        ("api.openai.com" in (model.base_url or "") and cache_retention != "none")
+        (_host_is(model.base_url or "", "api.openai.com") and cache_retention != "none")
         or (cache_retention == "long" and compat.supports_long_cache_retention)
     ):
         prompt_cache_key = options.session_id if options else None
@@ -664,12 +682,12 @@ def build_params(
         params["reasoning_effort"] = "none"
 
     # OpenRouter provider routing.
-    if "openrouter.ai" in (model.base_url or "") and isinstance(model.compat, OpenAICompletionsCompat) and model.compat.open_router_routing:
+    if _host_is(model.base_url or "", "openrouter.ai") and isinstance(model.compat, OpenAICompletionsCompat) and model.compat.open_router_routing:
         params["provider"] = model.compat.open_router_routing
 
     # Vercel AI Gateway routing.
     if (
-        "ai-gateway.vercel.sh" in (model.base_url or "")
+        _host_is(model.base_url or "", "ai-gateway.vercel.sh")
         and isinstance(model.compat, OpenAICompletionsCompat)
         and model.compat.vercel_gateway_routing
     ):

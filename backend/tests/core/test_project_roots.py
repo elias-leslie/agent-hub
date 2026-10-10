@@ -99,3 +99,19 @@ def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differ
         resolved = resolve_project_root("a-term")
 
     assert resolved == repo_root.resolve()
+
+
+def test_resolve_project_root_rejects_ids_that_escape_or_inject(tmp_path: Path) -> None:
+    resolve_project_root.cache_clear()
+    workspace = tmp_path / "projects"
+    workspace.mkdir()
+    (tmp_path / "outside").mkdir()
+
+    with (
+        patch("app.core.project_roots._CANONICAL_WORKSPACE_ROOT", workspace),
+        patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
+        patch("app.core.project_roots.run_process") as run_process,
+    ):
+        for project_id in ("../outside", "--help", "a/b", "..", "", "x" * 200):
+            assert resolve_project_root(project_id) is None
+    run_process.assert_not_called()

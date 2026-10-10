@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import time
 from functools import lru_cache
@@ -15,6 +16,10 @@ from app.utils.safe_subprocess import create_process, run_process
 
 _CANONICAL_WORKSPACE_ROOT = Path(os.environ.get("AGENT_HUB_PROJECTS_ROOT", Path.home() / ".local" / "share" / "agent-hub" / "projects"))
 _MANIFEST_NAME = "project.identity.json"
+# Registered project ids are slugs (``a-term``, ``WIP``). Requiring a leading
+# alphanumeric and no separators keeps an id from becoming a CLI option or a
+# path that escapes the canonical workspace root.
+_PROJECT_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 _REGISTRY_CACHE_SECONDS = 300.0
 _registry_roots: dict[str, str] | None = None
 _registry_loaded_at = 0.0
@@ -103,6 +108,11 @@ def invalidate_registered_project_roots() -> None:
     _registry_loaded_at = 0.0
 
 
+def is_valid_project_id(project_id: object) -> bool:
+    """Return whether ``project_id`` is a registered-project slug."""
+    return isinstance(project_id, str) and _PROJECT_ID_PATTERN.fullmatch(project_id) is not None
+
+
 def _env_override(project_id: str) -> Path | None:
     key = f"{project_id.upper().replace('-', '_')}_ROOT"
     raw = os.environ.get(key, "").strip()
@@ -114,6 +124,8 @@ def _env_override(project_id: str) -> Path | None:
 @lru_cache(maxsize=16)
 def resolve_project_root(project_id: str) -> Path | None:
     """Resolve a project's canonical root via env, `st`, or the Btrfs workspace."""
+    if not is_valid_project_id(project_id):
+        return None
     override = _env_override(project_id)
     if override and override.exists():
         return override
@@ -135,8 +147,9 @@ def resolve_project_root(project_id: str) -> Path | None:
             if resolved.exists():
                 return resolved
 
-    candidate = (_CANONICAL_WORKSPACE_ROOT / project_id).resolve()
-    if candidate.exists():
+    workspace_root = _CANONICAL_WORKSPACE_ROOT.resolve()
+    candidate = (workspace_root / project_id).resolve()
+    if candidate.is_relative_to(workspace_root) and candidate.exists():
         return candidate
 
     manifest_root = _resolve_manifest_root(project_id)

@@ -138,3 +138,21 @@ class TestApplyPrivacyFilter:
         assert "secret" not in result
         assert "visible" in result
         assert stats["private_tags_stripped"] == 1
+
+
+class TestLinearScan:
+    def test_unclosed_tag_is_left_untouched(self) -> None:
+        content = "a <private>b <private>c</private> d <private>e"
+        result, count = strip_private_tags(content)
+        assert result == "a [REDACTED] d <private>e"
+        assert count == 1
+
+    def test_many_unclosed_opening_tags_are_linear(self) -> None:
+        import time
+
+        content = "<private>" * 50_000 + "<memory>" * 50_000
+        started = time.monotonic()
+        result, stats = apply_privacy_filter(content)
+        assert time.monotonic() - started < 1.0
+        assert result == content
+        assert stats == {"private_tags_stripped": 0, "memory_tags_stripped": 0}
