@@ -2,14 +2,6 @@
 
 import { fetchApi } from '@/lib/api-config'
 
-export interface BlockedRequest {
-  timestamp: string
-  client_name: string | null
-  source_path: string | null
-  block_reason: string
-  endpoint: string
-}
-
 export interface HotspotTotals {
   sessions: number
   input_tokens: number
@@ -73,12 +65,6 @@ export interface SessionHotspots {
   repeated_workloads: RepeatedWorkloadRow[]
   low_yield_sessions: LowYieldSessionRow[]
   zero_event_active_sessions: ZeroEventActiveSessionRow[]
-}
-
-export async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
-  const res = await fetchApi('/api/admin/blocked-requests?limit=1000')
-  const data = await res.json()
-  return data.requests || []
 }
 
 export interface RequestBlockStats {

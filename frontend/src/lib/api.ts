@@ -8,7 +8,6 @@
 
 // Re-export all admin-related exports
 export type {
-  BlockedRequest,
   HotspotBreakdownRow,
   HotspotTotals,
   LowYieldSessionRow,
@@ -16,10 +15,7 @@ export type {
   SessionHotspots,
   ZeroEventActiveSessionRow,
 } from './api/admin'
-export {
-  fetchBlockedRequests,
-  fetchSessionHotspots,
-} from './api/admin'
+export { fetchSessionHotspots } from './api/admin'
 // Re-export all agent-detail-related exports
 export {
   fetchAgent,
