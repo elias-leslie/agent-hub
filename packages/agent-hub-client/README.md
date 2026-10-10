@@ -32,12 +32,15 @@ async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
 - Full type hints
 - Automatic error handling
 
-### Canonical application integration (0.5.0)
+### Canonical application integration (0.6.0)
 
 This SDK is the only supported way to call Agent Hub from Python. Use it for
 completions, agent metadata (`get_agent`, `list_agents`), context previews
 (`preview_agent`), the model catalog (`list_models`), stored prompts
-(`get_prompt`), service health (`health`), session events
+(`get_prompt`), service health (`health`), project execution permission
+(`get_execution_permission`), live project ownership (`get_project_ownership`),
+sessions (`get_session`, `list_sessions` with agent, parent, external-ID and
+type filters), session events
 (`list_session_events`, `append_session_event`) and automation-owner callbacks
 (`list_automation_profiles`, `complete_automation_run`, `accept_automation_run`,
 which take the owner's `internal_secret`). Never call private members such as
@@ -67,3 +70,9 @@ use the same response handler and identity configuration.
 `routing_config`, `resume_session_id`); `skip_cache` is sent as the
 `X-Skip-Cache` header the server honours. CLI tools pass `source_client`
 (for example `"st-cli"`) so Agent Hub classifies their traffic as CLI.
+
+0.6.0 adds `list_agents(is_coding_agent=...)`, the `list_sessions` filters
+`agent_slug`, `parent_session_id`, `external_id` and `session_type`, and
+`get_execution_permission` / `get_project_ownership`. Session responses now
+carry routing, workspace and `live_activity` fields and keep any field the
+server adds rather than dropping it.

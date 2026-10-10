@@ -27,6 +27,12 @@ def _event_params(event_type: str | None, turn: int | None, page: int, page_size
     return params
 
 
+def _list_params(*, page: int, page_size: int, **filters: str | None) -> dict[str, Any]:
+    params: dict[str, Any] = {"page": page, "page_size": page_size}
+    params.update({name: value for name, value in filters.items() if value})
+    return params
+
+
 class SessionOperationsMixin:
     """Mixin providing session management methods."""
 
@@ -129,24 +135,32 @@ class SessionOperationsMixin:
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,
+        *,
+        agent_slug: str | None = None,
+        parent_session_id: str | None = None,
+        external_id: str | None = None,
+        session_type: str | None = None,
     ) -> SessionListResponse:
         """List sessions with pagination.
 
         Args:
             project_id: Filter by project.
-            status: Filter by status.
+            status: Filter by status (also the live aliases ``stale`` and ``reapable``).
             page: Page number.
             page_size: Items per page.
+            agent_slug: Filter by agent.
+            parent_session_id: Filter to children of one session.
+            external_id: Filter by caller-assigned external ID (e.g. a task ID).
+            session_type: Filter by session type.
 
         Returns:
             SessionListResponse with sessions and pagination info.
         """
         client = self._get_client()
-        params: dict[str, Any] = {"page": page, "page_size": page_size}
-        if project_id:
-            params["project_id"] = project_id
-        if status:
-            params["status"] = status
+        params = _list_params(
+            page=page, page_size=page_size, project_id=project_id, status=status, agent_slug=agent_slug,
+            parent_session_id=parent_session_id, external_id=external_id, session_type=session_type,
+        )
         headers = self._inject_tracking_headers("sdk.list_sessions")
         response = client.get("/api/sessions", params=params, headers=headers)
         if not response.is_success:
@@ -286,14 +300,18 @@ class AsyncSessionOperationsMixin:
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,
+        *,
+        agent_slug: str | None = None,
+        parent_session_id: str | None = None,
+        external_id: str | None = None,
+        session_type: str | None = None,
     ) -> SessionListResponse:
         """List sessions with pagination asynchronously."""
         client = await self._get_client()
-        params: dict[str, Any] = {"page": page, "page_size": page_size}
-        if project_id:
-            params["project_id"] = project_id
-        if status:
-            params["status"] = status
+        params = _list_params(
+            page=page, page_size=page_size, project_id=project_id, status=status, agent_slug=agent_slug,
+            parent_session_id=parent_session_id, external_id=external_id, session_type=session_type,
+        )
         headers = self._inject_tracking_headers("sdk.list_sessions")
         response = await client.get("/api/sessions", params=params, headers=headers)
         if not response.is_success:

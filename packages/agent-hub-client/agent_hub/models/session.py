@@ -1,9 +1,9 @@
 """Session-related models for Agent Hub client."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from agent_hub.models.content import Message
 from agent_hub.models.usage import ContextUsage
@@ -38,7 +38,27 @@ class SessionCreate(BaseModel):
     model: str = Field(..., description="Model identifier")
 
 
-class SessionResponse(BaseModel):
+class _SessionFields(BaseModel):
+    """Routing, workspace and live-activity fields shared by session responses.
+
+    Fields the server adds later are kept rather than dropped, so a caller
+    passing a session on loses nothing.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    requested_provider: str | None = None
+    effective_provider: str | None = None
+    fallback_used: bool | None = None
+    fallback_reason: str | None = None
+    external_id: str | None = None
+    current_branch: str | None = None
+    working_dir: str | None = None
+    workstream_status: str | None = None
+    live_activity: dict[str, Any] | None = None
+
+
+class SessionResponse(_SessionFields):
     """Response from session operations."""
 
     id: str
@@ -62,7 +82,7 @@ class SessionResponse(BaseModel):
     context_usage: ContextUsage | None = Field(default=None)
 
 
-class SessionListItem(BaseModel):
+class SessionListItem(_SessionFields):
     """Session item in list response."""
 
     id: str
