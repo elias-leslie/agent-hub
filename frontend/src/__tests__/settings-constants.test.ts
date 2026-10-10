@@ -4,7 +4,7 @@ import {
   buildSettingsProviders,
   DEFAULT_PROVIDER_COLOR,
   filterVisibleSettingsProviders,
-  getProviderApiFamily,
+  findProviderHealth,
   getProviderColor,
   getProviderInfo,
   isOAuthProvider,
@@ -84,12 +84,34 @@ describe('settings provider constants', () => {
     )
     expect(getProviderInfo('typesafe').retired).toBeUndefined()
   })
+})
 
-  it('maps provider ids to the API family that reports their health', () => {
-    expect(getProviderApiFamily('gemini')).toBe('google-generative-ai')
-    expect(getProviderApiFamily('codex')).toBe('openai-codex-responses')
-    expect(getProviderApiFamily('xai')).toBe('openai-completions')
-    expect(getProviderApiFamily('openrouter')).toBeUndefined()
+describe('findProviderHealth', () => {
+  it('reads the status entry reported under the provider id', () => {
+    const providers = [
+      {
+        name: 'codex',
+        available: true,
+        configured: true,
+        error: null,
+        health: null,
+      },
+      {
+        name: 'xai',
+        available: false,
+        configured: false,
+        error: 'no credential is stored for provider xai',
+        health: null,
+      },
+    ]
+    expect(findProviderHealth(providers, 'xai')).toEqual({
+      available: false,
+      configured: false,
+      error: 'no credential is stored for provider xai',
+      health: null,
+    })
+    expect(findProviderHealth(providers, 'codex')?.available).toBe(true)
+    expect(findProviderHealth(providers, 'openai-completions')).toBeUndefined()
   })
 })
 

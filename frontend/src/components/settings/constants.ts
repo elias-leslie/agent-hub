@@ -1,3 +1,6 @@
+import type { ProviderStatus } from '@/lib/api'
+import type { ProviderHealthData } from './ProviderCardTypes'
+
 export interface CredentialField {
   credentialType: string
   label: string
@@ -45,22 +48,19 @@ const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, 'id'>> = {
   },
 }
 
-/**
- * `/api/status` reports health per API adapter family, not per provider.
- * A provider shows the health of the adapter family that serves it.
- */
-const PROVIDER_API_FAMILY: Record<string, string> = {
-  claude: 'claude-code-cli',
-  codex: 'openai-codex-responses',
-  gemini: 'google-generative-ai',
-  xai: 'openai-completions',
-  local: 'openai-completions',
-  nvidia: 'openai-completions',
-  cloudflare: 'openai-completions',
-}
-
-export function getProviderApiFamily(providerId: string): string | undefined {
-  return PROVIDER_API_FAMILY[providerId]
+/** The `/api/status` entry for a routing provider, reported under its id. */
+export function findProviderHealth(
+  providers: ProviderStatus[],
+  providerId: string,
+): ProviderHealthData | undefined {
+  const match = providers.find((p) => p.name === providerId)
+  if (!match) return undefined
+  return {
+    available: match.available,
+    configured: match.configured,
+    error: match.error,
+    health: match.health,
+  }
 }
 
 function titleCaseProviderId(providerId: string): string {

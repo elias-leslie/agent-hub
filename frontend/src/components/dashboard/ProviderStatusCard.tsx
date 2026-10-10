@@ -1,4 +1,5 @@
 import { Server } from 'lucide-react'
+import { getProviderInfo } from '@/components/settings/constants'
 import type { ProviderStatus } from '@/lib/api'
 import { formatLatency } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
@@ -56,8 +57,8 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-100 capitalize">
-              {provider.name}
+            <span className="text-sm font-medium text-slate-100">
+              {getProviderInfo(provider.name).name}
             </span>
             <span
               className={cn(

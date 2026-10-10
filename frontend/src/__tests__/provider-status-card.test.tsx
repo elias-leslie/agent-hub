@@ -32,6 +32,7 @@ describe('ProviderStatusCard', () => {
         }}
       />,
     )
+    expect(screen.getByText('xAI')).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
     expect(screen.getByText(reason)).toHaveAttribute('title', reason)
   })

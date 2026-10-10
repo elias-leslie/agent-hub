@@ -27,7 +27,7 @@ import {
 } from '@/lib/api/preferences'
 import {
   buildSettingsProviders,
-  getProviderApiFamily,
+  findProviderHealth,
   isOAuthProvider,
 } from './constants'
 import type {
@@ -297,19 +297,9 @@ export function useProvidersTab() {
   }
 
   function getHealthData(providerId: string): ProviderHealthData | undefined {
-    if (!statusData) return undefined
-    // Status API reports adapter families (e.g. openai-completions), not
-    // provider ids, so look up the family that serves this provider.
-    const family = getProviderApiFamily(providerId)
-    if (!family) return undefined
-    const match = statusData.providers.find((p) => p.name === family)
-    if (!match) return undefined
-    return {
-      available: match.available,
-      configured: match.configured,
-      error: match.error,
-      health: match.health,
-    }
+    return statusData
+      ? findProviderHealth(statusData.providers, providerId)
+      : undefined
   }
 
   // Without the catalog nothing can be called retired, so a failed catalog

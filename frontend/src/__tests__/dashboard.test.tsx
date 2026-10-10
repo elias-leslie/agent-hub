@@ -134,8 +134,8 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createQueryClientWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('claude')).toBeInTheDocument()
-      expect(screen.getByText('gemini')).toBeInTheDocument()
+      expect(screen.getByText('Claude')).toBeInTheDocument()
+      expect(screen.getByText('Gemini')).toBeInTheDocument()
     })
   })
 
