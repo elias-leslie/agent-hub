@@ -271,3 +271,10 @@ Per stage, report:
 - lines removed
 - cross-repo commits (claude-config, summitflow, design-tools and other consumers)
 - open follow-ups
+
+## Owner decisions during execution (2026-10-10)
+
+- `persona_scheduled_jobs` readers: remove `/api/persona/improvement`, `/api/persona/improvement/schedule`, `/api/persona/automations*` and `scripts/persona_honing/*` scheduling with 3.2 (no traffic in 14 days, not used by `st persona`), then drop the table in Stage 4 as planned. Move `compute_next_run` only if a kept caller remains.
+- SummitFlow alerts: 3.4 also fixes `storage/notifications.py:95-104` (delivery skipped without a running event loop) and sends critical/error notifications to the existing `/api/notifications/telegram` chat with a severity prefix.
+- 2.3 narrowing: API-key rate limits (`api_key_helpers.py`, `api_key_auth.py`) are enforced and stay; only client-level `rate_limit_rpm`/`rate_limit_tpm` are removed.
+- `seed_data.json` lives at `backend/scripts/seed_agents_data/seed_data.json`.
