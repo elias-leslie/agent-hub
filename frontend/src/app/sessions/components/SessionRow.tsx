@@ -16,8 +16,8 @@ import { StatusCell } from './StatusCell'
 export function sessionGridClass(compact: boolean) {
   // Title is the only flexible column; branch appears only on wide screens.
   return compact
-    ? 'md:grid md:grid-cols-[84px_minmax(8rem,1fr)_104px_92px_60px]'
-    : 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_92px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_92px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_92px_60px_60px]'
+    ? 'md:grid md:grid-cols-[84px_minmax(8rem,1fr)_104px_112px_60px]'
+    : 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_112px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_112px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_112px_60px_60px]'
 }
 
 function absolute(value: string) {
@@ -148,7 +148,7 @@ export const SessionRow = memo(function SessionRow({
         </span>
         <span
           className={cn(
-            'font-mono text-[12px] tabular-nums md:text-right',
+            'whitespace-nowrap font-mono text-[12px] tabular-nums md:text-right',
             usage.known ? 'text-slate-300' : 'text-slate-500',
           )}
           title={usage.title}

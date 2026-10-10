@@ -467,8 +467,12 @@ async def fetch_session_facets(db: AsyncSession, filters: SessionListFilters) ->
 
 
 # Harness-injected context delivered as user messages (Codex AGENTS.md and
-# <environment_context>, Claude Code <task-notification>, ...); never a title.
-_HARNESS_SCAFFOLD_PATTERN = r"^\s*(# AGENTS\.md instructions|<[a-z][a-z0-9_-]*>)"
+# <environment_context>, Claude Code <task-notification> / <pasted_content id=..>,
+# sub-agent dispatch preambles); never a title.
+_HARNESS_SCAFFOLD_PATTERN = (
+    r"^\s*(# AGENTS\.md instructions|<[a-z][a-z0-9_-]*(\s[^>]*)?>"
+    r"|Message Type: [A-Z_]+|The following is the Codex agent history)"
+)
 
 
 def normalize_session_title(content: str | None) -> str | None:
