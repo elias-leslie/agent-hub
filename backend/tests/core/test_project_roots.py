@@ -8,7 +8,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from app.core.project_roots import resolve_project_root, resolve_summitflow_scripts_dir
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_root_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The st launcher exports SUMMITFLOW_ROOT to the processes it runs.
+    for key in ("SUMMITFLOW_ROOT", "A_TERM_ROOT"):
+        monkeypatch.delenv(key, raising=False)
 
 
 def test_resolve_project_root_prefers_env_override(tmp_path: Path, monkeypatch) -> None:
