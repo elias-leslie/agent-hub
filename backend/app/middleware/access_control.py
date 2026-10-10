@@ -36,6 +36,7 @@ from app.middleware.access_control_paths import (
     is_path_exempt,
 )
 from app.middleware.access_control_responses import internal_only_response
+from app.middleware.access_control_ui_logging import schedule_ui_request_log
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,9 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
             if is_internal_request(request):
                 logger.debug(f"Internal request to dashboard endpoint: {path}")
                 set_internal_state(request)
-                return await call_next(request)
+                response = await call_next(request)
+                schedule_ui_request_log(request, response, method, start_time)
+                return response
             else:
                 return internal_only_response()
 
@@ -86,7 +89,9 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         if is_internal_request(request):
             logger.debug(f"Internal request bypassing identification: {path}")
             set_internal_state(request)
-            return await call_next(request)
+            response = await call_next(request)
+            schedule_ui_request_log(request, response, method, start_time)
+            return response
 
         # Perform client identification
         return await handle_identified_request(request, call_next, path, method, start_time)
