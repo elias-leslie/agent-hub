@@ -74,3 +74,20 @@ async def test_spawn_runs_in_background(monkeypatch: pytest.MonkeyPatch) -> None
 
     assert len(seen) == 1
     assert not sfn._background_tasks
+
+
+async def test_sends_dedupe_key_and_accepts_204(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(204)
+
+    _install_transport(monkeypatch, handler)
+
+    ok = await sfn.create_summitflow_notification(
+        title="t", message="m", severity="error", dedupe_key="host-guardian:warning"
+    )
+
+    assert ok is True
+    assert json.loads(seen[0].content)["dedupe_key"] == "host-guardian:warning"

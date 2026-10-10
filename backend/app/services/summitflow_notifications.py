@@ -30,12 +30,15 @@ async def create_summitflow_notification(
     message: str,
     severity: NotificationSeverity,
     metadata: dict[str, Any] | None = None,
+    dedupe_key: str | None = None,
     project_id: str = AGENT_HUB_PROJECT_ID,
     timeout: float = _DEFAULT_TIMEOUT_S,
 ) -> bool:
-    """Create one ``system`` notification in SummitFlow. Returns True when stored.
+    """Create one ``system`` notification in SummitFlow. Returns True when accepted.
 
-    Never raises: failures are logged so callers on hot paths stay unaffected.
+    ``dedupe_key`` scopes SummitFlow's system cooldown to this event stream so
+    unrelated producers don't suppress each other; a deduplicated create returns
+    204 and counts as accepted. Never raises: failures are logged so callers on hot paths stay unaffected.
     """
     api_base = await asyncio.to_thread(_read_summitflow_api_url)
     if not api_base:
@@ -48,6 +51,8 @@ async def create_summitflow_notification(
         "severity": severity,
         "metadata": metadata or {},
     }
+    if dedupe_key:
+        payload["dedupe_key"] = dedupe_key
     url = f"{api_base.rstrip('/')}/projects/{project_id}/notifications"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

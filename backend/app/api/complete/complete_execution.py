@@ -83,6 +83,7 @@ def _notify_codex_auth_dead(model_id: str, error: Exception) -> None:
             "Fix: Agent Hub > Settings > LLM Providers > Codex > Re-auth."
         ),
         severity="error",
+        dedupe_key="agent-hub:codex_auth_dead",
         metadata={"source": "agent-hub", "kind": "codex_auth_dead", "model_id": model_id},
     )
 

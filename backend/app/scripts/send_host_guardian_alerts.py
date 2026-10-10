@@ -157,6 +157,7 @@ async def deliver(event: dict[str, Any], title: str, body: str) -> None:
         title=title,
         message=body,
         severity=event_severity(event),
+        dedupe_key=f"host-guardian:{event.get('status') or 'unknown'}",
         metadata={
             "source": "host-guardian",
             "event_id": str(event.get("event_id") or ""),
