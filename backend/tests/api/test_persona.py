@@ -222,169 +222,23 @@ class TestUpdatePersonaEndpoint:
         mock_db_session.commit.assert_not_awaited()
 
 
-class TestPersonaImprovementDashboardEndpoint:
-    """Tests for GET /api/persona/improvement."""
+class TestRetiredPersonaSchedulingRoutes:
+    """Persona improvement dashboard, schedule and automation routes are removed."""
 
-    @pytest.mark.parametrize("query", ["days=0", "days=366", "limit=0", "limit=51"])
-    def test_rejects_invalid_windows(self, api_client, query):
-        """Invalid improvement windows are rejected before dashboard work."""
-        response = api_client.get(f"/api/persona/improvement?{query}")
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("get", "/api/persona/improvement"),
+            ("put", "/api/persona/improvement/schedule"),
+            ("get", "/api/persona/automations"),
+            ("post", "/api/persona/automations"),
+            ("post", "/api/persona/automations/job-1/trigger"),
+        ],
+    )
+    def test_route_is_gone(self, api_client, mock_db_session, method, path):
+        response = getattr(api_client, method)(path)
 
-        assert response.status_code == 422
-
-    def test_returns_focused_improvement_dashboard(self, api_client, mock_db_session):
-        payload = {
-            "generated_at": "2026-03-31T18:00:00Z",
-            "suite_id": "persona-suite-self-improvement",
-            "days": 30,
-            "schedule": {
-                "job_id": "job-123",
-                "enabled": True,
-                "schedule_type": "every",
-                "schedule_value": "86400000",
-                "schedule_timezone": "UTC",
-                "cadence_minutes": 1440,
-                "cadence_label": "24h",
-                "last_run_at": "2026-03-31T00:00:00Z",
-                "next_run_at": "2026-04-01T00:00:00Z",
-                "run_count": 12,
-            },
-            "overview": {
-                "total_runs": 12,
-                "latest_completed_at": "2026-03-31T17:00:00Z",
-                "reliability": 91.2,
-                "effectiveness": 84.5,
-                "tokens_per_passed_attempt": 1880.4,
-                "prompt_tokens": 16780.0,
-                "open_regressions": 2,
-            },
-            "latest_lab_run": {
-                "run_id": "run-12",
-                "benchmark_id": "persona-benchmark-latest",
-                "suite_id": "persona-suite-self-improvement",
-                "run_kind": "honing_iteration",
-                "started_at": "2026-03-31T16:55:00Z",
-                "completed_at": "2026-03-31T17:00:00Z",
-                "models": ["codex/gpt-5.4"],
-                "case_ids": ["manual_project_access_block"],
-                "attempt_count": 9,
-                "passed_attempt_count": 9,
-                "infra_failure_count": 0,
-                "reliability": 100.0,
-                "effectiveness": 100.0,
-                "avg_total_tokens": 1600.0,
-                "tokens_per_passed_attempt": 1600.0,
-                "avg_tool_calls": 0.1,
-                "avg_turns": 1.0,
-                "prompt_tokens": 16780,
-                "failure_count": 0,
-                "top_failure_detail": None,
-                "family_breakdown": [],
-                "experiment_decision": None,
-                "experiment_decision_reason": None,
-                "decision_source": None,
-            },
-            "field_overview": {
-                "total_heartbeats": 4,
-                "latest_completed_at": "2026-03-31T17:15:00Z",
-                "reliability": 89.0,
-                "effectiveness": 83.5,
-                "truth_quality": 92.0,
-                "tokens_per_healthy_heartbeat": 2460.0,
-                "avg_tool_calls": 3.1,
-                "avg_turns": 2.3,
-                "healthy_heartbeats": 2,
-                "healthy_rate": 50.0,
-                "risky_heartbeats": 1,
-                "critical_heartbeats": 0,
-                "action_heartbeats": 2,
-                "action_rate": 50.0,
-                "ok_heartbeats": 2,
-                "ok_rate": 50.0,
-                "partial_heartbeats": 0,
-                "partial_rate": 0.0,
-                "completed_heartbeats": 0,
-                "failed_heartbeats": 0,
-                "unknown_heartbeats": 0,
-                "top_issue_code": "cleanup_actionable",
-                "top_issue_label": "cleanup still actionable",
-                "top_issue_count": 2,
-            },
-            "field_window_days": 7,
-            "field_window_lab_runs": 5,
-            "field_review_gate": {
-                "needs_review": True,
-                "reason_codes": ["field_repeated_issue"],
-                "summary": "repeated field issue needs a source fix",
-            },
-            "trend": [
-                {
-                    "run_id": "run-1",
-                    "completed_at": "2026-03-31T17:00:00Z",
-                    "run_kind": "honing_baseline",
-                    "suite_id": "persona-suite-self-improvement",
-                    "reliability": 90.0,
-                    "effectiveness": 82.0,
-                    "avg_total_tokens": 1600.0,
-                    "tokens_per_passed_attempt": 1800.0,
-                    "avg_tool_calls": 3.2,
-                    "avg_turns": 2.1,
-                    "prompt_tokens": 16780,
-                }
-            ],
-            "field_trend": [
-                {
-                    "session_id": "sess-1",
-                    "completed_at": "2026-03-31T17:15:00Z",
-                    "reliability": 89.0,
-                    "effectiveness": 83.5,
-                    "truth_quality": 92.0,
-                    "total_tokens": 2410,
-                    "tool_calls": 3,
-                    "turns": 2,
-                    "result_status": "action",
-                }
-            ],
-            "recent_runs": [],
-            "recent_heartbeats": [],
-            "open_regressions": [],
-            "field_risks": [],
-            "schedule_risks": [],
-        }
-
-        with patch(
-            "app.api.persona.get_persona_improvement_dashboard",
-            new=AsyncMock(return_value=payload),
-        ) as mock_dashboard:
-            response = api_client.get("/api/persona/improvement?days=30&limit=8")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["suite_id"] == "persona-suite-self-improvement"
-        assert data["schedule"]["enabled"] is True
-        assert data["overview"]["reliability"] == 91.2
-        assert data["latest_lab_run"]["run_id"] == "run-12"
-        assert data["field_window_lab_runs"] == 5
-        assert data["field_review_gate"]["needs_review"] is True
-        mock_dashboard.assert_awaited_once()
-
-
-class TestPersonaImprovementScheduleEndpoint:
-    """Legacy schedule writes route to central Automations."""
-
-    def test_schedule_update_is_retired(self, api_client, mock_db_session):
-        with patch(
-            "app.services.persona_improvement.update_persona_self_honing_schedule",
-            new=AsyncMock(),
-        ) as mock_update:
-            response = api_client.put(
-                "/api/persona/improvement/schedule",
-                json={"enabled": True, "cadence_minutes": 720},
-            )
-
-        assert response.status_code == 409
-        assert "/automations?project_id=agent-hub" in response.json()["hint"]
-        mock_update.assert_not_awaited()
+        assert response.status_code in {404, 405}
         mock_db_session.commit.assert_not_awaited()
 
 
@@ -1430,53 +1284,3 @@ class TestPersonaStreamHelpers:
         assert parsed.status_terms == ["failed"]
         assert parsed.task_terms == ["task-123"]
         assert parsed.general_terms == ["verify", "bug"]
-
-
-class TestPersonaAutomationEndpoints:
-    """Legacy persona automation readers remain; writers route to central Automations."""
-
-    def test_lists_persona_automations(self, api_client, mock_db_session):
-        persona = _make_persona(id=7)
-        job = MagicMock()
-        job.id = "job-1"
-        job.name = "Nightly review"
-        job.schedule_type = "cron"
-        job.schedule_value = "0 9 * * *"
-        job.schedule_timezone = "UTC"
-        job.payload_type = "agent_turn"
-        job.payload_message = "Run nightly review and report back in persona workspace."
-        job.payload_title = None
-        job.delivery = "none"
-        job.enabled = True
-        job.last_run_at = datetime(2026, 4, 14, 9, 0, tzinfo=UTC)
-        job.next_run_at = datetime(2026, 4, 15, 9, 0, tzinfo=UTC)
-        job.run_count = 3
-        job.max_runs = None
-        job.created_at = datetime(2026, 4, 10, 9, 0, tzinfo=UTC)
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [job]
-        mock_db_session.execute.return_value = mock_result
-
-        with patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)):
-            response = api_client.get("/api/persona/automations")
-
-        assert response.status_code == 200
-        assert response.json()[0]["id"] == "job-1"
-
-    @pytest.mark.parametrize(
-        ("method", "path", "payload"),
-        [
-            ("post", "/api/persona/automations", {"name": "New job"}),
-            ("patch", "/api/persona/automations/job-1", {"enabled": False}),
-            ("delete", "/api/persona/automations/job-1", None),
-            ("post", "/api/persona/automations/job-1/trigger", None),
-        ],
-    )
-    def test_writer_is_retired(self, api_client, mock_db_session, method, path, payload):
-        request = getattr(api_client, method)
-        response = request(path, json=payload) if payload is not None else request(path)
-
-        assert response.status_code == 409
-        assert "/automations?project_id=agent-hub" in response.json()["hint"]
-        mock_db_session.commit.assert_not_awaited()
-        mock_db_session.delete.assert_not_awaited()

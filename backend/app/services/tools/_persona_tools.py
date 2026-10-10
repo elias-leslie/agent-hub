@@ -1,8 +1,8 @@
-"""Tool definitions for the persona agent (personality, memory, scheduling, etc.).
+"""Tool definitions for the persona agent (personality, memory, dispatch, etc.).
 
 This module re-exports all persona tool symbols from focused sub-modules:
 - _persona_memory_tools: personality, user context, memory curation, onboarding
-- _persona_schedule_tools: scheduling and subagent steering
+- _persona_schedule_tools: subagent dispatch and consultation steering
 - _persona_ops_tools: task orchestration, model config, agent performance
 """
 
@@ -29,27 +29,21 @@ from app.services.tools._persona_ops_tools import (
     MANAGE_TASKS_TOOL,
     QUERY_SESSIONS_TOOL,
     REVIEW_AGENT_PERFORMANCE_TOOL,
-    REVIEW_IMPROVEMENT_SIGNALS_TOOL,
     SEARCH_PERSONA_HISTORY_TOOL,
 )
 from app.services.tools._persona_schedule_tools import (
     CANCEL_CONSULTATION_TOOL,
-    CANCEL_SCHEDULED_JOB_TOOL,
     DISPATCH_AGENT_TOOL,
     LIST_CONSULTATIONS_TOOL,
-    LIST_SCHEDULED_JOBS_TOOL,
-    SCHEDULE_JOB_TOOL,
     STEER_CONSULTATION_TOOL,
 )
 from app.services.tools.base import Tool
 
 __all__ = [
     "CANCEL_CONSULTATION_TOOL",
-    "CANCEL_SCHEDULED_JOB_TOOL",
     "DISPATCH_AGENT_TOOL",
     "INSPECT_SESSION_TOOL",
     "LIST_CONSULTATIONS_TOOL",
-    "LIST_SCHEDULED_JOBS_TOOL",
     "LOG_AGENT_PERFORMANCE_TOOL",
     "MANAGE_BACKUPS_TOOL",
     "MANAGE_FEEDBACK_TOOL",
@@ -64,8 +58,6 @@ __all__ = [
     "READ_PERSONALITY_TOOL",
     "READ_USER_CONTEXT_TOOL",
     "REVIEW_AGENT_PERFORMANCE_TOOL",
-    "REVIEW_IMPROVEMENT_SIGNALS_TOOL",
-    "SCHEDULE_JOB_TOOL",
     "SEARCH_PERSONA_HISTORY_TOOL",
     "STEER_CONSULTATION_TOOL",
     "SUBMIT_ONBOARDING_TOOL",
@@ -86,9 +78,6 @@ PERSONA_EXTRA_TOOLS: list[Tool] = [
     MARK_MEMORY_RELEVANT_TOOL,
     MARK_MEMORY_IRRELEVANT_TOOL,
     SUBMIT_ONBOARDING_TOOL,
-    SCHEDULE_JOB_TOOL,
-    LIST_SCHEDULED_JOBS_TOOL,
-    CANCEL_SCHEDULED_JOB_TOOL,
     STEER_CONSULTATION_TOOL,
     LIST_CONSULTATIONS_TOOL,
     DISPATCH_AGENT_TOOL,
@@ -100,7 +89,6 @@ PERSONA_EXTRA_TOOLS: list[Tool] = [
     LOG_AGENT_PERFORMANCE_TOOL,
     INSPECT_SESSION_TOOL,
     REVIEW_AGENT_PERFORMANCE_TOOL,
-    REVIEW_IMPROVEMENT_SIGNALS_TOOL,
     QUERY_SESSIONS_TOOL,
     SEARCH_PERSONA_HISTORY_TOOL,
 ]

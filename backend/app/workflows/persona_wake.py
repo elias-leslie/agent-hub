@@ -1,8 +1,7 @@
-"""Persona wake workflow — event-driven agent invocations.
+"""Agent wake workflow — fire-and-forget agent invocations.
 
-Dispatched by the /api/wake endpoint when external events (task failures,
-quality gate failures, autocode completions) need the persona's attention.
-Each wake gets its own ephemeral session for isolation.
+Dispatched by the ``dispatch_agent`` tool to run an agent task in the
+background. Each wake gets its own ephemeral session for isolation.
 """
 
 from __future__ import annotations

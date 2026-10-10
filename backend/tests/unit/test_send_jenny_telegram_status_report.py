@@ -67,22 +67,22 @@ def test_extract_report_text_rejects_empty_content() -> None:
         extract_report_text(json.dumps({"content": "   "}))
 
 
-def test_persona_status_report_allows_disabled_heartbeat() -> None:
-    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=0)
+def test_persona_status_report_runs_for_active_persona() -> None:
+    persona = SimpleNamespace(execution_state="active")
 
-    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True) is None
-
-
-def test_persona_status_report_allows_disabled_heartbeat_schedule() -> None:
-    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=60)
-
-    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=False) is None
+    assert persona_status_report_skip_reason(persona) is None
 
 
-def test_persona_status_report_skip_reason_allows_active_heartbeat() -> None:
-    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=60)
+def test_persona_status_report_skips_paused_or_missing_persona() -> None:
+    assert persona_status_report_skip_reason(SimpleNamespace(execution_state="paused")) == "persona_paused"
+    assert persona_status_report_skip_reason(None) == "persona_missing"
 
-    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True) is None
+
+def test_build_prompt_does_not_read_retired_persona_schedules() -> None:
+    prompt = build_prompt()
+
+    assert "persona_scheduled_jobs" not in prompt
+    assert "heartbeat" not in prompt
 
 
 @pytest.mark.asyncio

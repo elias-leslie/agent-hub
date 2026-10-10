@@ -338,10 +338,10 @@ async def preview_agent(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
-    task_type: Annotated[str | None, Query(description="Preview mode: chat, heartbeat, wake, or review")] = None,
+    task_type: Annotated[str | None, Query(description="Preview mode: chat or review")] = None,
     project_id: Annotated[str | None, Query(description="Optional project scope for permission and memory preview")] = None,
     phase: Annotated[str | None, Query(description="Optional phase/event hint for memory and task prompt preview")] = None,
-    prompt_input: Annotated[str | None, Query(description="Optional task input placeholder for wake/review preview")] = None,
+    prompt_input: Annotated[str | None, Query(description="Optional task input placeholder for review preview")] = None,
 ) -> AgentPreviewResponse:
     """Preview agent's combined system prompt with memory injection.
 

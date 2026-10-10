@@ -78,9 +78,9 @@ async def _filtered_cleanup_action_items(
     if use_live_ownership and (workstream_rows := await _ownership_workstream_rows(bash_fn, project_id)):
         return filter_reconciled_cleanup_items(items, workstream_rows)
 
-    from app.workflows._heartbeat_data import _query_recent_workstream_sessions
+    from app.services.workstream_sessions import query_recent_workstream_sessions
 
-    fallback_rows = await _query_recent_workstream_sessions(project_id)
+    fallback_rows = await query_recent_workstream_sessions(project_id)
     if not fallback_rows:
         return items
     return filter_reconciled_cleanup_items(items, fallback_rows)

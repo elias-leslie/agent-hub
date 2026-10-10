@@ -20,9 +20,6 @@ from app.models import (
     AutomationProfileRevision,
     AutomationProjectPolicy,
     AutomationRun,
-    Persona,
-    PersonaScheduledJob,
-    ProjectPermission,
     WorkflowScheduleControl,
 )
 from app.services.workflow_schedule_registry import SCHEDULE_DEFINITIONS
@@ -158,50 +155,23 @@ def effective_gate_reasons(
     owner_gate_reasons: list[str],
     manual: bool,
     manual_when_disabled: bool,
-    manual_bypass_reasons: tuple[str, ...] = (),
 ) -> list[str]:
     reasons: list[str] = []
     if not policy_enabled:
         reasons.append("project_disabled")
     if not profile_enabled and not (manual and manual_when_disabled):
         reasons.append("profile_disabled")
-    reasons.extend(
-        reason for reason in owner_gate_reasons
-        if not (manual and reason in manual_bypass_reasons)
-    )
+    reasons.extend(owner_gate_reasons)
     return reasons
 
 
 async def live_owner_gate_reasons(db: AsyncSession, profile: AutomationProfile) -> list[str]:
-    """Read legacy AH gates that can change outside the Automations editor."""
-    reasons = [reason for reason in (profile.owner_gate_reasons or []) if reason not in {
+    """Return the owner gate reasons recorded on a profile, minus retired persona gates."""
+    del db
+    return [reason for reason in (profile.owner_gate_reasons or []) if reason not in {
         "project_permission_off", "persona_paused", "persona_not_onboarded",
         "heartbeat_interval_disabled", "persona_missing",
     }]
-    if profile.workflow_key not in {"agent-hub.persona_heartbeat", "agent-hub.persona_job"}:
-        return reasons
-    permission = (await db.execute(select(ProjectPermission).where(
-        ProjectPermission.project_id == "agent-hub"
-    ))).scalar_one_or_none()
-    if profile.workflow_key == "agent-hub.persona_heartbeat":
-        persona = (await db.execute(select(Persona).limit(1))).scalar_one_or_none()
-        if persona is None:
-            reasons.append("persona_missing")
-        else:
-            if not persona.onboarding_complete:
-                reasons.append("persona_not_onboarded")
-            if persona.execution_state == "paused":
-                reasons.append("persona_paused")
-            if persona.heartbeat_interval_minutes == 0:
-                reasons.append("heartbeat_interval_disabled")
-        if permission and permission.permission_tier == "off":
-            reasons.append("project_permission_off")
-    elif profile.workflow_key == "agent-hub.persona_job":
-        if (profile.config or {}).get("payload_type") == "memory_review":
-            reasons.append("memory_curator_retired")
-        if (profile.config or {}).get("payload_type") == "agent_turn" and permission and permission.permission_tier == "off":
-            reasons.append("project_permission_off")
-    return reasons
 
 
 def occurrence_key(profile_id: str, scheduled_for: datetime) -> str:
@@ -258,8 +228,6 @@ def validate_profile_payload(payload: dict, definition: AutomationDefinition | N
     data["config"] = data.get("config") or {}
     if not isinstance(data["config"], dict):
         raise AutomationValidationError("config must be an object")
-    if data.get("workflow_key") == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review" and data.get("enabled"):
-        raise AutomationValidationError("Memory Curator schedules are retired")
     if definition is not None:
         if (
             data.get("project_id") != definition.owner_project_id
@@ -341,15 +309,6 @@ def profile_snapshot(profile: AutomationProfile) -> dict:
     )}
 
 
-def reject_persona_runtime_config_write(workflow_key: str, payload: dict) -> None:
-    """Keep the Persona runtime pause control separate from the heartbeat schedule."""
-    config = payload.get("config")
-    if workflow_key == "agent-hub.persona_heartbeat" and isinstance(config, dict) and "execution_state" in config:
-        raise AutomationValidationError(
-            "Persona pause is managed on the Persona page; remove execution_state from this automation config"
-        )
-
-
 async def _record_revision(db: AsyncSession, profile: AutomationProfile, changed_by: str | None) -> None:
     db.add(AutomationProfileRevision(
         id=str(uuid4()), profile_id=profile.id, revision=profile.revision,
@@ -360,13 +319,10 @@ async def _record_revision(db: AsyncSession, profile: AutomationProfile, changed
 
 async def create_profile(db: AsyncSession, payload: dict, *, changed_by: str | None) -> AutomationProfile:
     definition = await get_definition(db, payload["workflow_key"])
-    reject_persona_runtime_config_write(definition.workflow_key, payload)
     data = validate_profile_payload(payload, definition)
-    if definition.workflow_key == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review":
-        raise AutomationValidationError("Memory Curator schedules are retired")
     now = datetime.now(UTC)
     ensure_future_one_time(data, now)
-    if definition.workflow_key.startswith("agent-hub.") and definition.dispatch_target != "persona_job":
+    if definition.workflow_key.startswith("agent-hub."):
         existing = (await db.execute(select(AutomationProfile.id).where(
             AutomationProfile.workflow_key == definition.workflow_key
         ).limit(1))).scalar_one_or_none()
@@ -381,31 +337,6 @@ async def create_profile(db: AsyncSession, payload: dict, *, changed_by: str | N
         clock_owner="central", owner_gate_reasons=[], revision=1,
         next_run_at=next_due(data["schedule_type"], data["schedule_value"], data["schedule_timezone"], now),
     )
-    if definition.dispatch_target == "persona_job":
-        subject = data.get("subject_id")
-        if subject:
-            if not subject.startswith("persona:"):
-                raise AutomationValidationError("subject_id must be persona:<id>")
-            persona_id = int(subject.split(":", 1)[1])
-            if await db.get(Persona, persona_id) is None:
-                raise AutomationValidationError("persona subject does not exist")
-        else:
-            persona_id = (await db.execute(select(Persona.id).order_by(Persona.id).limit(1))).scalar_one_or_none()
-            if persona_id is None:
-                raise AutomationValidationError("persona subject does not exist")
-            profile.subject_id = f"persona:{persona_id}"
-        config = data["config"]
-        job = PersonaScheduledJob(
-            id=str(uuid4()), persona_id=persona_id, name=profile.label,
-            schedule_type=profile.schedule_type, schedule_value=profile.schedule_value,
-            schedule_timezone=profile.schedule_timezone,
-            payload_type=config["payload_type"], payload_message=config["payload_message"],
-            payload_title=config.get("payload_title"), delivery=config["delivery"],
-            enabled=False, next_run_at=None, max_runs=1 if profile.schedule_type == "at" else None,
-        )
-        db.add(job)
-        profile.source_ref = f"persona:{job.id}"
-        profile.max_runs = job.max_runs
     db.add(profile)
     await db.flush()
     await _record_revision(db, profile, changed_by)
@@ -424,11 +355,8 @@ async def update_profile(
     if expected != profile.revision:
         raise RevisionConflict("profile revision has changed")
     definition = await get_definition(db, profile.workflow_key)
-    reject_persona_runtime_config_write(definition.workflow_key, payload)
     full = {**profile_snapshot(profile), **payload}
     data = validate_profile_payload(full, definition)
-    if definition.workflow_key == "agent-hub.persona_job" and data["config"].get("payload_type") == "memory_review" and data.get("enabled"):
-        raise AutomationValidationError("Memory Curator schedules are retired")
     for key in ("subject_id", "label", "schedule_type", "schedule_value", "schedule_timezone", "config", "enabled"):
         if key in payload:
             setattr(profile, key, (data[key] or definition.label) if key == "label" else data[key])
@@ -436,25 +364,7 @@ async def update_profile(
         profile.next_run_at = next_due(
             profile.schedule_type, profile.schedule_value, profile.schedule_timezone, datetime.now(UTC)
         )
-    if definition.dispatch_target == "persona_job" and profile.source_ref:
-        job = await db.get(PersonaScheduledJob, profile.source_ref.split(":", 1)[1])
-        if job is not None:
-            job.name = profile.label
-            job.schedule_type = profile.schedule_type
-            job.schedule_value = profile.schedule_value
-            job.schedule_timezone = profile.schedule_timezone
-            config = profile.config or {}
-            job.payload_type = config["payload_type"]
-            job.payload_message = config["payload_message"]
-            job.payload_title = config.get("payload_title")
-            job.delivery = config["delivery"]
-            job.enabled = profile.enabled if profile.clock_owner == "legacy" else False
-            job.next_run_at = profile.next_run_at if profile.clock_owner == "legacy" else None
-    elif profile.workflow_key == "agent-hub.persona_heartbeat" and "config" in payload:
-        persona = (await db.execute(select(Persona).limit(1))).scalar_one_or_none()
-        if persona is not None and "heartbeat_interval_minutes" in profile.config:
-            persona.heartbeat_interval_minutes = int(profile.config["heartbeat_interval_minutes"])
-    elif profile.clock_owner == "legacy" and profile.source_ref and profile.source_ref.startswith("static:"):
+    if profile.clock_owner == "legacy" and profile.source_ref and profile.source_ref.startswith("static:"):
         control = await db.get(WorkflowScheduleControl, profile.source_ref.split(":", 1)[1])
         if control is None:
             control = WorkflowScheduleControl(schedule_id=profile.source_ref.split(":", 1)[1])
@@ -535,8 +445,6 @@ async def admit_run(
         profile_enabled=profile.enabled, policy_enabled=policy.enabled,
         owner_gate_reasons=owner_reasons,
         manual=trigger == "manual", manual_when_disabled=definition.manual_when_disabled,
-        manual_bypass_reasons=("heartbeat_interval_disabled",)
-        if profile.workflow_key == "agent-hub.persona_heartbeat" else (),
     )
     reasons.extend(await _policy_gate_reasons(db, policy, now))
     reasons.extend(policy_profile_gate_reasons(profile.workflow_key, policy))
@@ -567,7 +475,7 @@ async def admit_run(
         profile.next_run_at = next_due(
             profile.schedule_type, profile.schedule_value, profile.schedule_timezone, scheduled_for
         )
-    if not reasons and definition.dispatch_target != "persona_job" and (trigger == "scheduled" or definition.manual_advances_cursor):
+    if not reasons and (trigger == "scheduled" or definition.manual_advances_cursor):
         profile.last_run_at = now
         profile.run_count += 1
         if profile.max_runs is not None and profile.run_count >= profile.max_runs:
@@ -590,15 +498,6 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
         await db.execute(select(AutomationProfile).where(AutomationProfile.source_ref.is_not(None)))
     ).scalars().all()}
     now = datetime.now(UTC)
-    persona = (await db.execute(select(Persona).limit(1))).scalar_one_or_none()
-    heartbeat_last_run: datetime | None = None
-    try:
-        from app.workflows._heartbeat_redis import get_last_run_info
-
-        raw_last_run = await get_last_run_info()
-        heartbeat_last_run = datetime.fromisoformat(raw_last_run) if raw_last_run else None
-    except Exception:
-        logger.debug("Could not import Persona heartbeat cursor", exc_info=True)
     for key, project_id, label, overlap, default_schedule in EXTERNAL_WORKFLOWS:
         if await db.get(AutomationDefinition, (key, 1)) is None:
             db.add(AutomationDefinition(
@@ -622,18 +521,12 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 workflow_key=key, version=1, owner_project_id="agent-hub",
                 label=schedule.label, description=schedule.description,
                 dispatch_kind="hatchet", dispatch_target=schedule.schedule_id,
-                config_schema=(
-                    {"type": "object", "properties": {
-                        "heartbeat_interval_minutes": {"type": "integer", "minimum": 0},
-                    }, "additionalProperties": False}
-                    if schedule.schedule_id == "persona_heartbeat"
-                    else {"type": "object", "additionalProperties": False}
-                ),
+                config_schema={"type": "object", "additionalProperties": False},
                 policy_schema=policy_schema_for("agent-hub"),
                 default_schedule={"type": "cron", "value": schedule.cron, "timezone": "UTC"},
                 default_enabled=schedule.default_enabled,
                 manual_when_disabled=True, manual_advances_cursor=False,
-                overlap_strategy="cancel_newest" if schedule.schedule_id in {"persona_heartbeat", "persona_scheduler"} else "cancel_in_progress",
+                overlap_strategy="cancel_in_progress",
             )
             db.add(definition)
         source = f"static:{schedule.schedule_id}"
@@ -644,13 +537,9 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
             profile = AutomationProfile(
                 id=str(uuid4()), project_id="agent-hub", workflow_key=key,
                 definition_version=1, label=schedule.label, schedule_type="cron",
-                schedule_value=schedule.cron, schedule_timezone="UTC", config=(
-                    {"heartbeat_interval_minutes": persona.heartbeat_interval_minutes}
-                    if persona and schedule.schedule_id == "persona_heartbeat" else {}
-                ),
+                schedule_value=schedule.cron, schedule_timezone="UTC", config={},
                 enabled=enabled, clock_owner="legacy", owner_gate_reasons=[], source_ref=source,
                 next_run_at=next_due("cron", schedule.cron, "UTC", now),
-                last_run_at=heartbeat_last_run if schedule.schedule_id == "persona_heartbeat" else None,
                 revision=1,
             )
             db.add(profile)
@@ -658,61 +547,7 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
             await _record_revision(db, profile, "legacy-import")
         elif profile.clock_owner == "legacy":
             profile.enabled = enabled
-            if persona and schedule.schedule_id == "persona_heartbeat":
-                profile.config = {
-                    "heartbeat_interval_minutes": persona.heartbeat_interval_minutes,
-                }
-                if heartbeat_last_run is not None:
-                    profile.last_run_at = heartbeat_last_run
 
-    jobs = (await db.execute(select(PersonaScheduledJob))).scalars().all()
-    persona_key = "agent-hub.persona_job"
-    if await db.get(AutomationDefinition, (persona_key, 1)) is None:
-        db.add(AutomationDefinition(
-            workflow_key=persona_key, version=1, owner_project_id="agent-hub",
-            label="Persona scheduled job", description="Runs an individual persona automation.",
-            dispatch_kind="hatchet", dispatch_target="persona_job",
-            config_schema={
-                "type": "object",
-                "properties": {
-                    "payload_type": {"type": "string", "enum": ["agent_turn", "push", "self_honing", "memory_review"]},
-                    "payload_message": {"type": "string"},
-                    "payload_title": {"type": ["string", "null"]},
-                    "delivery": {"type": "string", "enum": ["none", "push", "telegram"]},
-                },
-                "required": ["payload_type", "payload_message", "delivery"],
-                "additionalProperties": False,
-            }, policy_schema=policy_schema_for("agent-hub"),
-            default_schedule={}, default_enabled=True, manual_when_disabled=True,
-            manual_advances_cursor=True, overlap_strategy="cancel_newest",
-        ))
-    for job in jobs:
-        source = f"persona:{job.id}"
-        profile = existing.get(source)
-        retired_review = job.payload_type == "memory_review" or (
-            profile is not None and (profile.config or {}).get("payload_type") == "memory_review"
-        )
-        if profile is None:
-            profile = AutomationProfile(
-                id=str(uuid4()), project_id="agent-hub", subject_id=f"persona:{job.persona_id}",
-                workflow_key=persona_key, definition_version=1, label=job.name,
-                schedule_type=job.schedule_type, schedule_value=job.schedule_value,
-                schedule_timezone=job.schedule_timezone, config={
-                    "payload_type": job.payload_type, "payload_message": job.payload_message,
-                    "payload_title": job.payload_title, "delivery": job.delivery,
-                }, enabled=job.enabled and not retired_review, clock_owner="legacy", owner_gate_reasons=[],
-                source_ref=source, next_run_at=None if retired_review else job.next_run_at, last_run_at=job.last_run_at,
-                run_count=job.run_count, max_runs=job.max_runs, revision=1,
-            )
-            db.add(profile)
-            await db.flush()
-            await _record_revision(db, profile, "legacy-import")
-        elif profile.clock_owner == "legacy":
-            profile.enabled = job.enabled and not retired_review
-            profile.next_run_at = None if retired_review else job.next_run_at
-            profile.last_run_at = job.last_run_at
-            profile.run_count = job.run_count
-            profile.max_runs = job.max_runs
     for project_id in {"agent-hub", *(item[1] for item in EXTERNAL_WORKFLOWS)}:
         if await db.get(AutomationProjectPolicy, project_id) is None:
             db.add(AutomationProjectPolicy(project_id=project_id, enabled=True, config={}, revision=1))

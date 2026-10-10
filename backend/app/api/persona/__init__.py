@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.automation_guidance import automation_moved
@@ -19,15 +18,12 @@ from app.services.persona_document_prompt_service import (
 )
 from app.services.persona_documents import normalize_user_profile
 from app.services.persona_identity import PERSONA_SLUG, sync_persona_name_to_agent
-from app.services.persona_improvement import get_persona_improvement_dashboard
 from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
 from .activity import router as _activity_router
-from .automations import router as _automations_router
 from .helpers import commit_and_refresh, persona_to_response
 from .schemas import (
-    PersonaImprovementDashboardResponse,
     PersonaPersonalityResponse,
     PersonaPersonalityUpdate,
     PersonaResponse,
@@ -130,24 +126,6 @@ async def update_persona(
     )
 
 
-@router.get("/improvement", response_model=PersonaImprovementDashboardResponse)
-async def get_improvement_dashboard(
-    db: AsyncSession = Depends(get_db),
-    days: Annotated[int, Query(ge=1, le=365, description="Days to include in improvement history")] = 30,
-    limit: Annotated[int, Query(ge=1, le=50, description="Maximum recent rows per section")] = 8,
-) -> PersonaImprovementDashboardResponse:
-    """Return the focused persona improvement dashboard payload."""
-    return PersonaImprovementDashboardResponse(
-        **await get_persona_improvement_dashboard(db, days=days, limit=limit)
-    )
-
-
-@router.put("/improvement/schedule")
-async def update_improvement_schedule() -> None:
-    """Retired writer; central Automations owns the improvement cadence."""
-    raise automation_moved()
-
-
 @router.post("/reset-onboarding", response_model=PersonaResponse)
 async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
     """Reset onboarding so bootstrap instructions are injected on next conversation.
@@ -207,7 +185,6 @@ async def update_personality(
 
 
 router.include_router(_activity_router)
-router.include_router(_automations_router)
 router.include_router(_stream_router)
 
 __all__ = ["router"]

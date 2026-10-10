@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.api.automations import _definition, _profile, validate_profile
+from app.api.automations import validate_profile
 from app.db import get_db
 from app.main import app
 from app.models import AutomationProfile, AutomationProjectPolicy
@@ -16,12 +16,12 @@ from app.models import AutomationProfile, AutomationProjectPolicy
 @pytest.mark.asyncio
 async def test_new_profile_preview_rejects_past_one_time_schedule():
     definition = SimpleNamespace(
-        workflow_key="agent-hub.persona_job", owner_project_id="agent-hub",
+        workflow_key="agent-hub.session_cleanup", owner_project_id="agent-hub",
         config_schema={"type": "object"},
     )
     with patch("app.api.automations.service.get_definition", new_callable=AsyncMock, return_value=definition):
         result = await validate_profile({
-            "project_id": "agent-hub", "workflow_key": "agent-hub.persona_job",
+            "project_id": "agent-hub", "workflow_key": "agent-hub.session_cleanup",
             "schedule_type": "at", "schedule_value": "2026-03-05T12:00:00Z",
         }, AsyncMock())
     assert result["valid"] is False
@@ -31,8 +31,8 @@ async def test_new_profile_preview_rejects_past_one_time_schedule():
 @pytest.mark.asyncio
 async def test_existing_historical_one_time_profile_preview_remains_valid():
     profile = AutomationProfile(
-        id="historical", project_id="agent-hub", workflow_key="agent-hub.persona_job",
-        definition_version=1, label="Historical reminder", subject_id="persona:1",
+        id="historical", project_id="agent-hub", workflow_key="agent-hub.session_cleanup",
+        definition_version=1, label="Historical reminder", subject_id=None,
         schedule_type="at", schedule_value="2026-03-05T12:00:00Z",
         schedule_timezone="UTC", config={}, enabled=False, clock_owner="central",
         owner_gate_reasons=[], revision=2,
@@ -40,45 +40,12 @@ async def test_existing_historical_one_time_profile_preview_remains_valid():
     db = AsyncMock()
     db.get.return_value = profile
     definition = SimpleNamespace(
-        workflow_key="agent-hub.persona_job", owner_project_id="agent-hub",
+        workflow_key="agent-hub.session_cleanup", owner_project_id="agent-hub",
         config_schema={"type": "object"},
     )
     with patch("app.api.automations.service.get_definition", new_callable=AsyncMock, return_value=definition):
         result = await validate_profile({"id": "historical"}, db)
     assert result["valid"] is True
-
-
-@pytest.mark.asyncio
-async def test_heartbeat_api_hides_legacy_pause_config_but_keeps_read_only_gate():
-    profile = AutomationProfile(
-        id="profile-1", project_id="agent-hub", workflow_key="agent-hub.persona_heartbeat",
-        definition_version=1, label="Persona heartbeat", schedule_type="cron",
-        schedule_value="0 * * * *", schedule_timezone="UTC",
-        config={"heartbeat_interval_minutes": 30, "execution_state": "paused"},
-        enabled=True, clock_owner="central", owner_gate_reasons=[], revision=1,
-    )
-    definition = SimpleNamespace(
-        workflow_key="agent-hub.persona_heartbeat", version=1, owner_project_id="agent-hub",
-        label="Persona heartbeat", description="", dispatch_kind="hatchet",
-        dispatch_target="persona_heartbeat", config_schema={"type": "object", "properties": {
-            "heartbeat_interval_minutes": {"type": "integer"},
-            "execution_state": {"type": "string"},
-        }}, policy_schema={}, default_schedule={}, default_enabled=True,
-        manual_when_disabled=True, manual_advances_cursor=False, overlap_strategy="cancel_newest",
-    )
-    db = AsyncMock()
-    db.get.return_value = definition
-    db.scalar.return_value = 0
-    with (
-        patch("app.api.automations.service.get_policy", new_callable=AsyncMock,
-              return_value=SimpleNamespace(enabled=True, config={})),
-        patch("app.api.automations.service.live_owner_gate_reasons", new_callable=AsyncMock,
-              return_value=["persona_paused"]),
-    ):
-        result = await _profile(db, profile)
-    assert result["config"] == {"heartbeat_interval_minutes": 30}
-    assert "persona_paused" in result["gate_reasons"]
-    assert "execution_state" not in _definition(definition)["config_schema"]["properties"]
 
 
 @pytest.mark.asyncio
@@ -200,46 +167,6 @@ async def test_cutover_requires_owner_fence_and_preserves_imported_cursor():
         assert row.revision == 4
         assert row.next_run_at == datetime(2026, 9, 23, 15, 30, tzinfo=UTC)
         assert db.add.call_args.args[0].snapshot["fence_receipt"] == "owner-fence-42"
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_persona_cutover_disables_the_old_job_clock():
-    row = AutomationProfile(
-        id="profile-1", project_id="agent-hub", workflow_key="agent-hub.persona_job",
-        definition_version=1, label="Daily review", schedule_type="cron",
-        schedule_value="17 4 * * *", schedule_timezone="UTC", config={},
-        enabled=True, clock_owner="legacy", owner_gate_reasons=[],
-        source_ref="persona:job-1", revision=1,
-    )
-    old_job = SimpleNamespace(enabled=True, next_run_at=datetime(2026, 9, 24, 4, 17, tzinfo=UTC))
-    db = AsyncMock()
-    db.add = MagicMock()
-    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=row))
-    db.get.return_value = old_job
-
-    async def override_db():
-        yield db
-
-    app.dependency_overrides[get_db] = override_db
-    try:
-        with (
-            patch("app.api.automations._require_project_owner", new_callable=AsyncMock),
-            patch("app.api.automations._profile", new_callable=AsyncMock, return_value={"clock_owner": "central"}),
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test",
-                headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
-            ) as client:
-                response = await client.post("/api/automations/profiles/profile-1/cutover", json={
-                    "expected_revision": 1, "fence_receipt": "agent-hub:profile-row-fence:profile-1",
-                })
-        assert response.status_code == 200
-        assert row.clock_owner == "central"
-        assert old_job.enabled is False
-        assert old_job.next_run_at is None
-        db.get.assert_awaited_once()
     finally:
         app.dependency_overrides.clear()
 

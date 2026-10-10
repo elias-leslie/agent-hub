@@ -40,11 +40,11 @@ class TestWorkflowSchedules:
         ac, _ = client
         payload = [
             {
-                "schedule_id": "persona_scheduler",
-                "label": "Persona scheduled jobs poller",
-                "description": "Polls persona jobs.",
+                "schedule_id": "session_cleanup",
+                "label": "Session cleanup",
+                "description": "Reaps stale sessions.",
                 "cron": "*/5 * * * *",
-                "category": "persona",
+                "category": "maintenance",
                 "default_enabled": True,
                 "enabled": False,
                 "notes": None,
@@ -59,7 +59,7 @@ class TestWorkflowSchedules:
             resp = await ac.get("/api/admin/schedules")
         assert resp.status_code == 200
         data = resp.json()
-        assert data[0]["schedule_id"] == "persona_scheduler"
+        assert data[0]["schedule_id"] == "session_cleanup"
         assert data[0]["enabled"] is False
 
     @pytest.mark.asyncio

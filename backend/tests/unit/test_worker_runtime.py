@@ -11,12 +11,9 @@ from app.worker_runtime import (
     init_worker_credentials,
 )
 from app.workflows.automation_clock import automation_clock_task
-from app.workflows.automation_persona import automation_persona_job_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
-from app.workflows.persona_heartbeat import persona_heartbeat_task
-from app.workflows.persona_scheduler import persona_scheduler_task
 from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
     data_retention_task,
@@ -33,7 +30,6 @@ from app.workflows.summary import session_summary_task
 def test_agent_workflows_match_long_lived_agent_runtime() -> None:
     assert (
         completion_task,
-        persona_heartbeat_task,
         agent_wake_task,
     ) == AGENT_WORKFLOWS
 
@@ -41,8 +37,6 @@ def test_agent_workflows_match_long_lived_agent_runtime() -> None:
 def test_ops_workflows_match_maintenance_runtime() -> None:
     assert (
         automation_clock_task,
-        automation_persona_job_task,
-        persona_scheduler_task,
         session_cleanup_task,
         tier_optimizer_task,
         memory_cleanup_task,

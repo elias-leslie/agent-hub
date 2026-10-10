@@ -19,7 +19,6 @@ async def test_legacy_import_registers_generic_definitions_but_no_neri_automatio
     db.get.return_value = None
     with (
         patch.object(automations, "SCHEDULE_DEFINITIONS", ()),
-        patch("app.workflows._heartbeat_redis.get_last_run_info", new=AsyncMock(return_value=None)),
     ):
         await automations.import_agent_hub_legacy(db)
         await automations.import_agent_hub_legacy(db)

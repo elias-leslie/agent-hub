@@ -18,7 +18,6 @@ from app.models import (
     AutomationProfile,
     AutomationProfileRevision,
     AutomationRun,
-    PersonaScheduledJob,
 )
 from app.models.client import check_project_access
 from app.services import automations as service
@@ -97,21 +96,12 @@ def _actor(request: Request) -> str:
 
 
 def _definition(row: AutomationDefinition) -> dict[str, Any]:
-    config_schema = row.config_schema
-    if row.workflow_key == "agent-hub.persona_heartbeat":
-        config_schema = {
-            **config_schema,
-            "properties": {
-                key: value for key, value in config_schema.get("properties", {}).items()
-                if key != "execution_state"
-            },
-        }
     return {
         "workflow_key": row.workflow_key, "version": row.version,
         "owner_project_id": row.owner_project_id, "label": row.label,
         "description": row.description, "dispatch_kind": row.dispatch_kind,
         "dispatch_target": row.dispatch_target,
-        "config_schema": config_schema, "policy_schema": row.policy_schema,
+        "config_schema": row.config_schema, "policy_schema": row.policy_schema,
         "default_schedule": row.default_schedule, "default_enabled": row.default_enabled,
         "manual_when_disabled": row.manual_when_disabled,
         "manual_advances_cursor": row.manual_advances_cursor,
@@ -147,15 +137,12 @@ async def _profile(db: AsyncSession, row: AutomationProfile) -> dict[str, Any]:
         AutomationRun.profile_id == row.id,
         AutomationRun.created_at > (row.last_reviewed_at or datetime.min.replace(tzinfo=UTC)),
     ))
-    config = row.config or {}
-    if row.workflow_key == "agent-hub.persona_heartbeat":
-        config = {key: value for key, value in config.items() if key != "execution_state"}
     return {
         "id": row.id, "project_id": row.project_id, "subject_id": row.subject_id,
         "workflow_key": row.workflow_key, "definition_version": row.definition_version,
         "label": row.label, "owner_project_id": definition.owner_project_id,
         "schedule_type": row.schedule_type, "schedule_value": row.schedule_value,
-        "schedule_timezone": row.schedule_timezone, "config": config,
+        "schedule_timezone": row.schedule_timezone, "config": row.config or {},
         "enabled": row.enabled, "effective_enabled": not gates or gates == ["legacy_clock_owner"],
         "gate_reasons": gates, "clock_owner": row.clock_owner,
         "next_run_at": row.next_run_at, "last_run_at": row.last_run_at,
@@ -220,7 +207,6 @@ async def validate_profile(
     except KeyError:
         return _invalid("unknown workflow")
     try:
-        service.reject_persona_runtime_config_write(definition.workflow_key, payload)
         normalized = service.validate_profile_payload(full, definition)
         if not payload.get("id"):
             service.ensure_future_one_time(normalized, datetime.now(UTC))
@@ -419,7 +405,6 @@ async def import_profile(
     await _require_project_owner(request, payload.project_id)
     try:
         definition = await service.get_definition(db, payload.workflow_key)
-        service.reject_persona_runtime_config_write(definition.workflow_key, payload.model_dump())
         data = service.validate_profile_payload(payload.model_dump(), definition)
     except (KeyError, service.AutomationValidationError) as exc:
         raise _bad_command(exc) from exc
@@ -491,11 +476,6 @@ async def cutover_profile(
         if service.policy_sync_pending(policy):
             raise HTTPException(status_code=409, detail="Jobinator shared quota policy awaits owner sync")
     row.clock_owner = "central"
-    if row.project_id == "agent-hub" and row.source_ref and row.source_ref.startswith("persona:"):
-        job = await db.get(PersonaScheduledJob, row.source_ref.split(":", 1)[1])
-        if job is not None:
-            job.enabled = False
-            job.next_run_at = None
     if payload.next_run_at is not None:
         row.next_run_at = payload.next_run_at
     elif row.project_id == "agent-hub" and row.source_ref and row.source_ref.startswith("static:"):

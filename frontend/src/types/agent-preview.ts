@@ -1,4 +1,4 @@
-export type PreviewTaskType = 'chat' | 'heartbeat' | 'wake' | 'review'
+export type PreviewTaskType = 'chat' | 'review'
 
 export interface AgentPreviewSection {
   label: string

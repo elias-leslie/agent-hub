@@ -8,8 +8,9 @@ const preview: AgentPreview = {
   slug: 'persona',
   name: 'Persona',
   combined_prompt: '<system>system only</system>',
-  full_context: '<system>system only</system>\n\n<task>Do the heartbeat</task>',
-  memory_query: 'heartbeat project state',
+  full_context:
+    '<system>system only</system>\n\n<task>Review this outcome</task>',
+  memory_query: 'review project state',
   memory_debug: {
     total_tokens: 1800,
     tier_counts: { L1: 2, L2: 1 },
@@ -32,10 +33,10 @@ const preview: AgentPreview = {
   guardrail_count: 1,
   mandate_uuids: ['12345678'],
   guardrail_uuids: ['87654321'],
-  task_type: 'heartbeat',
+  task_type: 'review',
   phase: null,
   project_id: 'agent-hub',
-  task_prompt: 'Do the heartbeat',
+  task_prompt: 'Review this outcome',
   sections: [
     {
       label: 'Platform Context',
@@ -53,12 +54,12 @@ const preview: AgentPreview = {
     {
       label: 'Task Prompt',
       source_kind: 'task_prompt',
-      source_id: 'heartbeat',
+      source_id: 'review',
       placement: 'user',
       content_hash: 'beef5678',
       chars: 17,
       estimated_tokens: 4,
-      content: 'Do the heartbeat',
+      content: 'Review this outcome',
       role: null,
       priority: null,
       updated_at: null,
@@ -77,7 +78,7 @@ describe('AgentPreviewPanel', () => {
     render(
       <AgentPreviewPanel
         preview={preview}
-        previewMode="heartbeat"
+        previewMode="review"
         scenario={scenario}
         projectOptions={[{ id: 'agent-hub', name: 'Agent Hub' }]}
         showPreview={true}
@@ -92,11 +93,13 @@ describe('AgentPreviewPanel', () => {
 
     expect(screen.getByText('Runtime Preview')).toBeInTheDocument()
     expect(screen.getByLabelText('Project Scope')).toBeInTheDocument()
+    expect(screen.getByLabelText('Completion Content')).toBeInTheDocument()
     expect(
-      screen.getByText(
-        'Heartbeat preview builds the task prompt from live heartbeat inputs; only project and phase hints matter here.',
-      ),
-    ).toBeInTheDocument()
+      screen.queryByRole('option', { name: 'Heartbeat' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: 'Wake' }),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Render Tiers')).toBeInTheDocument()
     expect(screen.getByText('L1 2')).toBeInTheDocument()
     expect(screen.getByText('Chars Saved')).toBeInTheDocument()

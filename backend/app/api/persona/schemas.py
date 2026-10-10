@@ -1,14 +1,6 @@
 """Pydantic schemas for the persona API."""
 
 from app.api.persona.schema_activity import ActivityEventPreview, ActivityResponse, ActivitySession
-from app.api.persona.schema_automations import (
-    PersonaAutomationCreate,
-    PersonaAutomationResponse,
-    PersonaAutomationTriggerResponse,
-    PersonaAutomationUpdate,
-    PersonaImprovementScheduleResponse,
-    PersonaImprovementScheduleUpdate,
-)
 from app.api.persona.schema_core import (
     PersonaLimits,
     PersonaPersonalityResponse,
@@ -16,20 +8,6 @@ from app.api.persona.schema_core import (
     PersonaResponse,
     PersonaUpdate,
     PersonaUserProfile,
-)
-from app.api.persona.schema_improvement import (
-    PersonaHeartbeatFieldOverview,
-    PersonaHeartbeatFieldReviewGate,
-    PersonaHeartbeatFieldRisk,
-    PersonaHeartbeatFieldSession,
-    PersonaHeartbeatFieldTrendPoint,
-    PersonaImprovementDashboardResponse,
-    PersonaImprovementFamilySummary,
-    PersonaImprovementOpenRegression,
-    PersonaImprovementOverview,
-    PersonaImprovementRecentRun,
-    PersonaImprovementScheduleRisk,
-    PersonaImprovementTrendPoint,
 )
 from app.api.persona.schema_stream import (
     PersonaAgentScorecard,
@@ -48,24 +26,6 @@ __all__ = [
     "ActivityResponse",
     "ActivitySession",
     "PersonaAgentScorecard",
-    "PersonaAutomationCreate",
-    "PersonaAutomationResponse",
-    "PersonaAutomationTriggerResponse",
-    "PersonaAutomationUpdate",
-    "PersonaHeartbeatFieldOverview",
-    "PersonaHeartbeatFieldReviewGate",
-    "PersonaHeartbeatFieldRisk",
-    "PersonaHeartbeatFieldSession",
-    "PersonaHeartbeatFieldTrendPoint",
-    "PersonaImprovementDashboardResponse",
-    "PersonaImprovementFamilySummary",
-    "PersonaImprovementOpenRegression",
-    "PersonaImprovementOverview",
-    "PersonaImprovementRecentRun",
-    "PersonaImprovementScheduleResponse",
-    "PersonaImprovementScheduleRisk",
-    "PersonaImprovementScheduleUpdate",
-    "PersonaImprovementTrendPoint",
     "PersonaIssueGroup",
     "PersonaIssueMarker",
     "PersonaLimits",

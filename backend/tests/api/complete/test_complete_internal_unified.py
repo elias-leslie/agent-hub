@@ -319,8 +319,6 @@ async def test_ephemeral_completion_still_loads_canonical_context() -> None:
 @pytest.mark.asyncio
 async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once() -> None:
     """Canonical prepending must not duplicate the agent-specific prompt layer."""
-    from app.workflows._heartbeat_steps import _invoke_complete_internal
-
     owned_prompt_marker = "DISTINCT_OWNED_PERSONA_SYSTEM_PROMPT"
     persona_row_marker = "DISTINCT_NATIVE_PERSONA_ROW_CONTEXT"
     canonical_marker = "DISTINCT_CANONICAL_OPERATOR_CONTEXT"
@@ -357,7 +355,7 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
         mandate = await inject_agent_mandates(
             agent,
             AsyncMock(),
-            task_type="heartbeat",
+            task_type="chat",
         )
 
     assert mandate.system_content.count(owned_prompt_marker) == 1
@@ -386,21 +384,26 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
             patch("app.api.complete.core.resolve_llm_model", return_value=model),
             patch("app.api.complete.core.inject_memory_context", new=inject_mock),
         ):
-            result = await _invoke_complete_internal(
-                None,
+            result = await complete_internal(
                 messages=[
                     {"role": "system", "content": mandate.system_content},
-                    {"role": "user", "content": "heartbeat"},
+                    {"role": "user", "content": "status"},
                 ],
                 model=model.id,
                 provider=model.provider,
                 temperature=0.0,
-                execution_project="agent-hub",
-                heartbeat_session_id="heartbeat:exact-once",
+                project_id="agent-hub",
+                db=None,
+                session_id="persona:exact-once",
+                agent_slug="persona",
+                use_memory=True,
                 memory_config=None,
+                enable_caching=False,
+                skip_cache=True,
                 max_turns=1,
-                thinking_level=None,
-                working_dir=None,
+                task_type="chat",
+                requested_model=model.id,
+                requested_provider=model.provider,
             )
 
         assert result.content == "ack"

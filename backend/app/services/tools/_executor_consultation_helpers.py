@@ -24,8 +24,6 @@ _CONSULTATION_TOOL_BLOCKLIST = frozenset({
     "dispatch_agent",
     "steer_consultation",
     "cancel_consultation",
-    "schedule_job",
-    "cancel_scheduled_job",
     "manage_tasks",
     "manage_backups",
 })

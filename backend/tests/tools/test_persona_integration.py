@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -333,77 +333,6 @@ class TestAllPersonaToolsDispatch:
         assert "APPROVED" in result
 
     @pytest.mark.asyncio
-    async def test_schedule_job_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona()
-        session_fn, mock_db = _mock_async_session(persona)
-        mock_count = MagicMock()
-        mock_count.scalar.return_value = 0
-        mock_db.execute.return_value = mock_count
-        future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-            patch("app.services.automations.import_agent_hub_legacy", new=AsyncMock()),
-            patch(
-                "app.services.automations.create_profile",
-                new=AsyncMock(return_value=MagicMock(
-                    id="profile-1", next_run_at=datetime.fromisoformat(future),
-                )),
-            ),
-        ):
-            result = await executor.dispatch(
-                "schedule_job",
-                {
-                    "name": "Test reminder",
-                    "schedule_type": "at",
-                    "schedule_value": future,
-                    "payload_message": "Check status",
-                },
-            )
-        assert "scheduled" in result.lower() or "error" not in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_list_scheduled_jobs_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona()
-        session_fn, mock_db = _mock_async_session(persona)
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await executor.dispatch("list_scheduled_jobs", {})
-        assert "No scheduled jobs" in result
-
-    @pytest.mark.asyncio
-    async def test_cancel_scheduled_job_dispatches(self, executor: DirectToolExecutor):
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with patch("app.db.async_session", _session):
-            result = await executor.dispatch(
-                "cancel_scheduled_job", {"job_id": "nonexistent"}
-            )
-        assert "not found" in result.lower()
-
-    @pytest.mark.asyncio
     async def test_steer_consultation_dispatches(self, executor: DirectToolExecutor):
         mock_result = MagicMock()
         mock_result.content = "Follow-up response."
@@ -607,14 +536,6 @@ class TestPersonaBashWorkflowGuards:
         assert "No performance logs" in result
 
     @pytest.mark.asyncio
-    async def test_review_improvement_signals_dispatches(self, executor: DirectToolExecutor):
-        executor._registry["review_improvement_signals"] = AsyncMock(
-            return_value="# Improvement Signals\n- persona: friction=2"
-        )
-        result = await executor.dispatch("review_improvement_signals", {})
-        assert "Improvement Signals" in result
-
-    @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self, executor: DirectToolExecutor):
         result = await executor.dispatch("nonexistent_tool", {})
         assert "Unknown tool" in result
@@ -694,12 +615,9 @@ class TestPersonaToolTierExemption:
         "manage_model_config",
         "log_agent_performance",
         "review_agent_performance",
-        "review_improvement_signals",
     ]
 
     SAFE_PERSONA_OPERATIONAL: ClassVar[list[str]] = [
-        "schedule_job",
-        "cancel_scheduled_job",
         "steer_consultation",
         "cancel_consultation",
         "query_sessions",
@@ -1192,7 +1110,7 @@ class TestCrossProjectPathEnforcement:
         """Persona-specific tools (non-file, non-bash) skip cross-project checks."""
         hook = _create_cross_project_permission_hook("persona-sandbox")
 
-        for tool_name in ["read_personality", "schedule_job"]:
+        for tool_name in ["read_personality", "steer_consultation"]:
             call = ToolCall(id="x7", name=tool_name, input={})
             decision = await hook(call)
             assert decision == ToolDecision.ALLOW, f"{tool_name} should not be path-gated"

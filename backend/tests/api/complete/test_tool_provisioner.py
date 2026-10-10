@@ -40,7 +40,7 @@ def test_persona_read_tier_keeps_project_visible_runtime_tools_hot_loaded() -> N
             "read_file",
             "query_sessions",
             "inspect_session",
-            "review_improvement_signals",
+            "review_agent_performance",
             "tool_search",
         },
     )
@@ -64,7 +64,7 @@ def test_persona_full_tier_keeps_project_visible_runtime_tools_hot_loaded() -> N
             "write_file",
             "query_sessions",
             "inspect_session",
-            "review_improvement_signals",
+            "review_agent_performance",
         },
     )
 

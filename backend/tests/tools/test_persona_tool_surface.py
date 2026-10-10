@@ -53,6 +53,6 @@ def test_persona_visible_tool_filter_preserves_project_visible_persona_tools() -
             "read_file",
             "query_sessions",
             "inspect_session",
-            "review_improvement_signals",
+            "review_agent_performance",
         }
     ) == ("read_file",)

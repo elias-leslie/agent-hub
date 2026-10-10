@@ -193,28 +193,3 @@ async def review_agent_performance(
     except Exception as e:
         logger.exception("review_agent_performance failed")
         return f"Error reviewing performance: {e}"
-
-
-async def review_improvement_signals(
-    project_id: str | None = None,
-    primary_agent_slug: str = "persona",
-    days_back: int = 7,
-    include_team: bool = True,
-    max_agents: int = 4,
-    max_references: int = 6,
-) -> str:
-    """Review combined performance, benchmark, and memory signals."""
-    try:
-        from app.services.improvement_signals import build_improvement_signal_digest
-
-        return await build_improvement_signal_digest(
-            project_id=project_id,
-            primary_agent_slug=primary_agent_slug,
-            days_back=days_back,
-            include_team=include_team,
-            max_agents=max_agents,
-            max_reference_items=max_references,
-        )
-    except Exception as e:
-        logger.exception("review_improvement_signals failed")
-        return f"Error reviewing improvement signals: {e}"

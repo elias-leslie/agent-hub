@@ -104,17 +104,17 @@ def filter_reconciled_cleanup_items(
     if not items or not workstream_rows:
         return items
 
-    from app.workflows._heartbeat_workstream import (
-        _classify_workstream_lane,
-        _group_rows_by_lane,
-        _infer_lane_task_id,
+    from app.services.workstream_sessions import (
+        classify_workstream_lane,
+        group_rows_by_lane,
+        infer_lane_task_id,
     )
 
     reconciled_task_keys: set[tuple[str, str]] = set()
-    for (project_id, _lane_key), lane_rows in _group_rows_by_lane(workstream_rows).items():
-        if _classify_workstream_lane(lane_rows) != "reconciled":
+    for (project_id, _lane_key), lane_rows in group_rows_by_lane(workstream_rows).items():
+        if classify_workstream_lane(lane_rows) != "reconciled":
             continue
-        task_id = _infer_lane_task_id(lane_rows)
+        task_id = infer_lane_task_id(lane_rows)
         if task_id:
             reconciled_task_keys.add((project_id, task_id))
 

@@ -95,7 +95,6 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "manage_model_config",
     "log_agent_performance",
     "review_agent_performance",
-    "review_improvement_signals",
     "manage_feedback",
 })
 
@@ -106,10 +105,6 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
 _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_tasks",
     "manage_backups",
-    "schedule_job",
-    "list_scheduled_jobs",
-    "cancel_scheduled_job",
-    "send_push",
     "steer_consultation",
     "list_consultations",
     "cancel_consultation",
@@ -123,9 +118,6 @@ _PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
 
 _SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_backups",
-    "schedule_job",
-    "cancel_scheduled_job",
-    "send_push",
     "steer_consultation",
     "cancel_consultation",
     "query_sessions",

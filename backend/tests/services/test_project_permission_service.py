@@ -751,16 +751,22 @@ class TestPersonaToolSets:
     def test_operational_contains_agency_tools(self):
         for tool in (
             "manage_tasks",
-            "schedule_job",
-            "list_scheduled_jobs",
-            "cancel_scheduled_job",
-            "send_push",
             "steer_consultation",
             "list_consultations",
             "cancel_consultation",
             "inspect_session",
         ):
             assert tool in _PERSONA_OPERATIONAL
+
+    def test_retired_persona_tools_are_not_allowed(self):
+        for tool in (
+            "schedule_job",
+            "list_scheduled_jobs",
+            "cancel_scheduled_job",
+            "send_push",
+            "review_improvement_signals",
+        ):
+            assert tool not in _PERSONA_TOOLS
 
 
 class TestPersonaToolTierExemption:
@@ -790,25 +796,25 @@ class TestPersonaToolTierExemption:
 
     @pytest.mark.asyncio
     async def test_safe_operational_tool_allowed_at_read_tier(self):
-        """Safe persona-ops like scheduling remain tier-exempt at read tier."""
+        """Safe persona-ops like consultation steering remain tier-exempt at read tier."""
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "schedule_job")
+            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
             assert allowed is True
             assert "persona-internal" in reason
 
     @pytest.mark.asyncio
     async def test_operational_tool_allowed_at_legacy_write_tier(self):
-        """schedule_job should tolerate legacy write alias."""
+        """steer_consultation should tolerate legacy write alias."""
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="write",
         ):
-            allowed, reason = await check_tool_allowed("proj", "schedule_job")
+            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
             assert allowed is True
             assert "persona-internal" in reason
 
@@ -869,7 +875,7 @@ class TestPersonaToolTierExemption:
             new_callable=AsyncMock,
             return_value="off",
         ):
-            allowed, reason = await check_tool_allowed("proj", "send_push")
+            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
             assert allowed is False
             assert "off" in reason
 

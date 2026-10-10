@@ -10,39 +10,26 @@ from typing import Any, cast
 from app.db import async_session
 from app.services._persona_crud import get_persona
 from app.services.telegram_delivery import send_configured_report
-from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
 DEFAULT_ST_PATH = "st"
 DEFAULT_WORKDIR = Path.cwd()
 DEFAULT_TITLE = "Jenny operator status report"
 
 
-def persona_status_report_skip_reason(
-    persona: Any | None,
-    *,
-    heartbeat_schedule_enabled: bool,
-) -> str | None:
+def persona_status_report_skip_reason(persona: Any | None) -> str | None:
     if persona is None:
         return "persona_missing"
     if getattr(persona, "execution_state", "active") != "active":
         return "persona_paused"
-    # The daily operator summary is an explicit systemd schedule, independent
-    # of autonomous persona heartbeats. Disabling heartbeat work must not also
-    # disable host/storage intervention notices or the requested daily report.
     return None
 
 
 async def status_report_skip_reason() -> str | None:
     async with async_session() as db:
         persona = await get_persona(db)
-        heartbeat_enabled = await is_workflow_schedule_enabled("persona_heartbeat", db)
-        # Evaluate ORM-backed fields while the session is still open.  The
-        # previous implementation returned a detached/expired Persona and made
-        # the systemd report job fail before it could send anything.
-        return persona_status_report_skip_reason(
-            persona,
-            heartbeat_schedule_enabled=heartbeat_enabled,
-        )
+        # Evaluate ORM-backed fields while the session is still open; a
+        # detached/expired Persona would fail the systemd report job.
+        return persona_status_report_skip_reason(persona)
 
 
 def build_prompt() -> str:
@@ -60,8 +47,7 @@ def build_prompt() -> str:
         "- st -P summitflow backup veeam status\n"
         "- st -P summitflow docker status\n"
         "- db query \"select schedule_id, enabled, updated_at from workflow_schedule_controls order by schedule_id;\"\n"
-        "- db query \"select name, schedule_type, schedule_value, delivery, enabled, last_run_at, next_run_at, run_count from persona_scheduled_jobs order by created_at desc limit 20;\"\n"
-        "- db query \"select name, execution_state, heartbeat_interval_minutes from persona order by id;\"\n"
+        "- db query \"select name, execution_state from persona order by id;\"\n"
         "Return plain text only. Keep it concise but complete enough for Telegram.\n"
         "Sections required: Overall, Host and drives, Backups, Services, Active work, Recurring processes, Gaps, Next moves.\n"
         "For Gaps, include things that should be wired up but are not, stalled automations, missing delivery paths, disabled schedules, and orphaned cleanup debt.\n"

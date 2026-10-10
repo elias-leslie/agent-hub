@@ -34,8 +34,6 @@ interface AgentPreviewPanelProps {
 
 const PREVIEW_MODES: Array<{ value: PreviewTaskType; label: string }> = [
   { value: 'chat', label: 'Chat' },
-  { value: 'heartbeat', label: 'Heartbeat' },
-  { value: 'wake', label: 'Wake' },
   { value: 'review', label: 'Review' },
 ]
 
@@ -75,19 +73,10 @@ function formatNumber(value: number | null | undefined): string {
 
 function getPhaseLabel(mode: PreviewTaskType): string {
   if (mode === 'review') return 'Workstream / Phase'
-  if (mode === 'wake') return 'Wake Phase Hint'
-  if (mode === 'heartbeat') return 'Heartbeat Phase Hint'
   return 'Phase Hint'
 }
 
 function getPromptInputConfig(mode: PreviewTaskType) {
-  if (mode === 'wake') {
-    return {
-      label: 'Wake Task',
-      placeholder: 'Describe the task or reminder that should wake the agent.',
-      helper: 'Used as the wake task text and the preview memory query.',
-    }
-  }
   if (mode === 'review') {
     return {
       label: 'Completion Content',
@@ -117,11 +106,6 @@ function buildWarnings(
   if (mode === 'chat' && !scenario.promptInput.trim()) {
     warnings.push(
       'Chat preview has no user message yet, so the memory query will stay empty.',
-    )
-  }
-  if (mode === 'wake' && !scenario.promptInput.trim()) {
-    warnings.push(
-      'Wake preview will fall back to the backend placeholder task until you add wake text.',
     )
   }
   if (mode === 'review' && !scenario.promptInput.trim()) {
@@ -259,32 +243,23 @@ export function AgentPreviewPanel({
         </label>
       </div>
 
-      {previewMode !== 'heartbeat' ? (
-        <label htmlFor={promptInputId} className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-400">
-            {promptInputConfig.label}
-          </span>
-          <textarea
-            id={promptInputId}
-            aria-label={promptInputConfig.label}
-            value={scenario.promptInput}
-            onChange={(event) =>
-              onScenarioChange({ promptInput: event.target.value })
-            }
-            rows={4}
-            placeholder={promptInputConfig.placeholder}
-            className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
-          />
-          <p className="text-[11px] text-slate-400">
-            {promptInputConfig.helper}
-          </p>
-        </label>
-      ) : (
-        <div className="rounded-lg border border-dashed border-slate-700 px-3 py-2 text-[11px] text-slate-400">
-          Heartbeat preview builds the task prompt from live heartbeat inputs;
-          only project and phase hints matter here.
-        </div>
-      )}
+      <label htmlFor={promptInputId} className="space-y-1.5">
+        <span className="text-xs font-medium text-slate-400">
+          {promptInputConfig.label}
+        </span>
+        <textarea
+          id={promptInputId}
+          aria-label={promptInputConfig.label}
+          value={scenario.promptInput}
+          onChange={(event) =>
+            onScenarioChange({ promptInput: event.target.value })
+          }
+          rows={4}
+          placeholder={promptInputConfig.placeholder}
+          className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
+        />
+        <p className="text-[11px] text-slate-400">{promptInputConfig.helper}</p>
+      </label>
 
       {warnings.length > 0 ? (
         <div className="space-y-2 rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-3">

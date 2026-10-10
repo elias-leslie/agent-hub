@@ -144,25 +144,6 @@ async def _build_task_prompt_preview(
     if task_type in (None, "", "chat"):
         return None
 
-    if task_type == "heartbeat":
-        from app.routing.registry import get_provider_for_model
-        from app.workflows._heartbeat_prompt import build_heartbeat_prompt
-        from app.workflows._heartbeat_redis import get_model_review_status
-
-        model_review_due, model_review_label = await get_model_review_status()
-        provider = get_provider_for_model(agent.primary_model_id)
-        return await build_heartbeat_prompt(
-            model_review_due,
-            model_review_label,
-            target_project_id=project_id,
-            provider=provider,
-        )
-
-    if task_type == "wake":
-        from app.workflows.persona_wake import _build_wake_prompt
-
-        return await _build_wake_prompt(prompt_input or "(preview placeholder task)")
-
     if task_type == "review":
         from app.workflows._completion_review import _build_review_prompt
 
