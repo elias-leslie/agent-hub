@@ -246,39 +246,6 @@ async def test_maintenance_mechanical_repair_is_idempotent_and_rechecks_recurren
 
 
 @pytest.mark.integration
-async def test_background_review_runs_once_and_does_not_retry_uncertain_calls(maintenance_db):
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance import enqueue
-    from app.services.context_maintenance_worker import run_context_maintenance
-    db = maintenance_db
-    _, item_id, source = await maintenance_fixture(db, kind='review_due')
-    reviewer = AsyncMock(return_value=('{"findings": []}', 'catalog-model', 'review-session'))
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        first = await run_context_maintenance(db, batch_limit=10)
-        second = await run_context_maintenance(db, batch_limit=10)
-    assert first['reviewed_count'] == 1 and second['reviewed_count'] == 0
-    reviewer.assert_awaited_once()
-    item = await db.get(ContextMaintenanceItem, item_id)
-    assert item.state == 'resolved' and item.claim_owner is None
-    # A provider failure retains evidence and becomes a handoff; another
-    # scheduled batch must not repeat the same uncertain provider operation.
-    failed_id = await enqueue(db, kind='screening_candidate', sources=[source], context={}, summary='Candidate needs review', recommendation='Check evidence')
-    await db.commit()
-    reviewer.reset_mock(side_effect=True)
-    reviewer.side_effect = RuntimeError('provider unavailable')
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        failed = await run_context_maintenance(db, batch_limit=10)
-        repeated = await run_context_maintenance(db, batch_limit=10)
-    assert failed['reviewed_count'] == 1 and repeated['reviewed_count'] == 0
-    reviewer.assert_awaited_once()
-    assert (await db.get(ContextMaintenanceItem, failed_id)).state == 'superseded'
-    handoffs = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalars())
-    assert len(handoffs) == 1 and handoffs[0].detail['handoff_needed']
-
-
-@pytest.mark.integration
 async def test_evaluation_fixtures_never_create_operational_handoffs(maintenance_db):
     from app.models.context_governance import ContextMaintenanceItem
     from app.services.context_governance import record
@@ -288,60 +255,6 @@ async def test_evaluation_fixtures_never_create_operational_handoffs(maintenance
         'entries': [{'pair': ['case:a', 'case:b'], 'result': {'answers': {'relationship': {'choice': 'conflict'}}}}],
     })
     assert not list((await db.execute(select(ContextMaintenanceItem))).scalars())
-
-
-@pytest.mark.integration
-async def test_revision_hooks_and_grouped_background_review(maintenance_db):
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_worker import run_context_maintenance
-    from app.services.memory._repo_revisions import RevisionRepository
-    from app.services.prompt_service import record_prompt_revision
-
-    db = maintenance_db
-    prompt = Prompt(slug='changed-prompt', name='Changed prompt', content='Keep source attribution.', enabled=True, is_global=True, prompt_type='standard', exclude_agents=[])
-    memory = Memory(content='Observed deployment retained attribution.', name='Observed fact', memory_type='reference', scope='global', tier=3, status='active', token_count=7, metadata_={})
-    db.add_all([prompt, memory])
-    await db.flush()
-    await record_prompt_revision(db, prompt, action='update', changed_by='test')
-    await RevisionRepository().record_revision(db, memory, action='update', changed_by='test')
-    await db.commit()
-    items = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_due'))).scalars())
-    assert len(items) == 2
-    reviewer = AsyncMock(return_value=('{"findings": []}', 'catalog-model', 'review-session'))
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        result = await run_context_maintenance(db, batch_limit=10)
-    assert result['reviewed_count'] == 2 and result['model_calls'] == 1
-    reviewer.assert_awaited_once()
-    # A new revision record without a semantic source change is not new work.
-    await record_prompt_revision(db, prompt, action='update', changed_by='test')
-    await db.commit()
-    assert all(item.state == 'resolved' for item in (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_due'))).scalars())
-
-
-@pytest.mark.integration
-async def test_changed_reviewer_recovers_retained_failure_and_replay_makes_no_calls(maintenance_db):
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_governance import record
-    from app.services.context_maintenance_worker import run_context_maintenance
-
-    db = maintenance_db
-    _, _, source = await maintenance_fixture(db, kind='review_due')
-    await record(db, 'context_review', 'test', {'sources': [source], 'reviewer_identity': 'obsolete-schema',
-        'coverage': {'context': {'consumer_surface': 'codex'}}, 'failure': 'Required rules must be delivered in full'})
-    await db.commit()
-    reviewer = AsyncMock(return_value=('{"findings": []}', 'catalog-model', 'recovered-session'))
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        first = await run_context_maintenance(db, batch_limit=10)
-        second = await run_context_maintenance(db, batch_limit=10)
-    reviewer.assert_awaited_once()
-    assert first['recovery_count'] == 1
-    assert second['model_calls'] == 0
-    failures = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalars())
-    assert failures and all(item.state == 'resolved' for item in failures)
 
 
 @pytest.mark.integration

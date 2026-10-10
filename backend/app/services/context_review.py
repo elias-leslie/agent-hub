@@ -29,7 +29,7 @@ class ContextReviewRequest(BaseModel):
     source_ids: list[str] = Field(default_factory=list)
     include_neighbors: bool = False
     native_snapshots: list[NativeSnapshot] = Field(default_factory=list)
-    mode: Literal["deterministic", "curator", "jev"] = "deterministic"
+    mode: Literal["deterministic", "curator"] = "deterministic"
     dry_run: bool = True
     model_id: str | None = None
 

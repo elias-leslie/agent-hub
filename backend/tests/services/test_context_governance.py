@@ -18,7 +18,6 @@ from app.services.context_governance import (
 )
 from app.services.context_policy import ContextPolicy, policy_match, source_revision
 from app.services.context_review import deterministic_findings
-from app.services.context_screening import screening_identity
 from app.services.runtime_context import CanonicalContextDeliveryRequest, _build_prompt_blocks
 
 
@@ -127,17 +126,6 @@ def test_placement_history_tracks_only_changed_items_including_undo():
     assert changed_placement_source_ids([unrelated, placement], [unrelated]) == ["memory-id"]
 
 
-def test_semantic_cache_ignores_counters_titles_revision_labels_and_display_weights():
-    first = {"source_id": "a", "content": "Use canonical tooling", "policy": {"scope": "global"}, "name": "A"}
-    second = {"source_id": "b", "content": "Use canonical tooling before changes", "policy": {"scope": "global"}}
-    context = {"consumer_surface": "codex", "project_id": "agent-hub"}
-    key, _ = screening_identity(first, second, context, "jev-1.13.0")
-    assert screening_identity({**first, "name": "New name", "loaded_count": 98, "revision": "display-edit"}, second, {**context, "display_weights": [1, 3]}, "jev-1.13.0")[0] == key
-    assert screening_identity({**first, "content": "Never use canonical tooling"}, second, context, "jev-1.13.0")[0] != key
-    assert screening_identity(first, second, {**context, "project_id": "neri"}, "jev-1.13.0")[0] != key
-    assert screening_identity(first, second, context, "jev-1.14.0")[0] != key
-
-
 def test_exact_duplicate_findings_retain_both_passages():
     findings = deterministic_findings([{"source_id": "a", "content": "Use ST"}, {"source_id": "b", "content": "Use  ST"}])
     assert findings[0]["source_ids"] == ["a", "b"]
@@ -233,7 +221,7 @@ async def test_explicit_native_snapshot_is_compared_with_each_selected_source():
     assert result['pairs'] == [['a', 'b'], ['a', 'native:visible'], ['b', 'native:visible']]
 
 
-@pytest.mark.parametrize('mode', ['curator', 'jev'])
+@pytest.mark.parametrize('mode', ['curator'])
 @pytest.mark.asyncio
 async def test_model_context_review_modes_are_retired(mode):
     from app.services.context_review import ContextReviewRequest, run_review

@@ -37,7 +37,8 @@ async def test_retired_routes_return_410_and_manual_routes_remain_registered() -
             "context": {"consumer_surface": "codex"}, "action": "reconcile",
         })
 
-    for response in (memory, curator, jev, reconcile):
+    for response in (memory, curator, reconcile):
         assert response.status_code == 410
         assert "retired" in response.json()["detail"]
+    assert jev.status_code == 422
     db.execute.assert_not_awaited()

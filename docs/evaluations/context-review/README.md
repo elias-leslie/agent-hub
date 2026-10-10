@@ -37,11 +37,10 @@ A subsequent live curator review compared the Safety Directive with the two glob
 
 The [autonomous recovery receipt](autonomous-recovery-receipt.json) retains the later production verification: two validated context reviews, eight successfully reviewed memories, rejected recovery assessments, and one idempotent technical task. The live project had automatic task execution disabled, so queue admission did not mean that task ran. Remaining findings and this execution gate are reported honestly; no autonomous live source edit or new Jev qualification is claimed.
 
-From the repository root, the scripts support a read-only estimate/registration preview unless `--execute` is supplied:
+From the repository root, the native runtime script supports a read-only estimate/registration preview unless `--execute` is supplied. The Jev screening script was retired with the context screening service; its earlier results remain recorded here.
 
 ```sh
-PYTHONPATH=backend backend/.venv/bin/python -m scripts.evaluate_context_review --model jev-1.13.0 --output /tmp/context-screening-estimate.json
 PYTHONPATH=backend backend/.venv/bin/python -m scripts.evaluate_context_runtime --agent coder --output /tmp/context-runtime/results.json
 ```
 
-Use a stable checkout and a new output path for a new executed cohort. Never overwrite earlier adverse results. The native runner resolves its model from the named agent and catalog; the Jev runner checks the catalog's typed capability and window. Neither invents a spending ceiling, retries an uncertain paid judgment, or changes qualification automatically. Full native transcripts stay local alongside the chosen output; inspect them before sharing. A production default would need a new independent held-out evaluation and representative repeated task outcomes, including misses, total costs, latency and operator effort.
+Use a stable checkout and a new output path for a new executed cohort. Never overwrite earlier adverse results. The native runner resolves its model from the named agent and catalog. It does not invent a spending ceiling, retry an uncertain paid judgment, or change qualification automatically. Full native transcripts stay local alongside the chosen output; inspect them before sharing. A production default would need a new independent held-out evaluation and representative repeated task outcomes, including misses, total costs, latency and operator effort.
