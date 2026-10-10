@@ -27,7 +27,7 @@ from .automation import (
     AutomationRun,
 )
 from .base import Base
-from .client import APIKey, Client, ClientControl
+from .client import APIKey, Client
 from .config import Credential
 from .context_governance import (
     ContextJudgment,
@@ -53,10 +53,8 @@ from .native_observation import (
     NativeUserIdentity,
 )
 from .persona import Persona
-from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt, PromptRevision
-from .push_subscription import PushSubscription
 from .runtime_context import RuntimeContextOverride
 from .session import (
     CostLog,
@@ -88,7 +86,6 @@ __all__ = [
     "AutomationRun",
     "Base",
     "Client",
-    "ClientControl",
     "CompactnessPolicy",
     "ContextJudgment",
     "ContextMaintenanceAttention",
@@ -118,11 +115,9 @@ __all__ = [
     "NativeProtocolProfile",
     "NativeUserIdentity",
     "Persona",
-    "PersonaScheduledJob",
     "ProjectPermission",
     "Prompt",
     "PromptRevision",
-    "PushSubscription",
     "RequestLog",
     "RuntimeContextOverride",
     "Session",

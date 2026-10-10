@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -33,10 +33,10 @@ def check_project_access(allowed_projects: str | None, project_id: str) -> bool:
 
 
 class Client(Base):
-    """Registered client for API attribution and rate limiting.
+    """Registered client for API attribution and project access control.
 
     Clients are identified by UUID (X-Client-Id header). No secret verification —
-    Agent Hub binds to localhost only. Rate limits (RPM/TPM) are enforced via Redis.
+    Agent Hub binds to localhost only.
     """
 
     __tablename__ = "clients"
@@ -51,9 +51,6 @@ class Client(Base):
         Enum("active", "suspended", "blocked", name="client_status_enum"),
         default="active",
     )
-    # Rate limiting
-    rate_limit_rpm: Mapped[int] = mapped_column(Integer, default=60)  # Requests per minute
-    rate_limit_tpm: Mapped[int] = mapped_column(Integer, default=100000)  # Tokens per minute
     # Project access control
     allowed_projects: Mapped[str | None] = mapped_column(
         Text, nullable=True
@@ -106,28 +103,3 @@ class APIKey(Base):
     def __repr__(self) -> str:
         return f"<APIKey id={self.id} prefix={self.key_prefix!r} project={self.project_id!r} active={bool(self.is_active)}>"
 
-
-class ClientControl(Base):
-    """Kill switch control for individual clients.
-
-    Used to enable/disable API access for specific client applications.
-    When disabled=True, requests from this client are blocked with 403.
-    """
-
-    __tablename__ = "client_controls"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    client_name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    disabled_by: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )  # User/admin who disabled
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Reason for disabling
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    def __repr__(self) -> str:
-        return f"<ClientControl client={self.client_name!r} enabled={self.enabled}>"
