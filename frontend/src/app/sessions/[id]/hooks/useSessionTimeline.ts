@@ -131,7 +131,8 @@ export function useSessionTimeline(
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = query
   const loadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage()
+    if (hasNextPage && !isFetchingNextPage)
+      void fetchNextPage({ cancelRefetch: false })
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   const toggleType = useCallback((type: string) => {

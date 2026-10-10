@@ -7,6 +7,7 @@ import {
 } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
 import {
+  DEFAULT_KINDS,
   KIND_LABELS,
   type SessionListState,
   SINCE_OPTIONS,
@@ -68,6 +69,17 @@ export function SessionsToolbar({
   onRefresh: () => void
 }) {
   const [query, setQuery] = useState(state.q)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const activeFilters = [
+    state.kinds.length !== DEFAULT_KINDS.length ||
+      state.kinds.some((kind) => !DEFAULT_KINDS.includes(kind)),
+    state.status !== '',
+    state.since !== 'all',
+    state.project !== '',
+    state.model !== '',
+    state.includeSubagents,
+    state.includeBenchmarks,
+  ].filter(Boolean).length
   const lastSent = useRef(state.q)
 
   // Back/forward or "clear filters" changes the URL under the input.
@@ -127,6 +139,19 @@ export function SessionsToolbar({
         </div>
         <button
           type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="sessions-filters"
+          onClick={() => setFiltersOpen((open) => !open)}
+          className={cn(
+            chip,
+            activeFilters ? chipOn : chipOff,
+            'h-8 md:hidden',
+          )}
+        >
+          Filters{activeFilters ? ` (${activeFilters})` : ''}
+        </button>
+        <button
+          type="button"
           onClick={onRefresh}
           aria-label="Refresh sessions"
           title="Refresh (updates every 10s while this tab is visible)"
@@ -138,7 +163,13 @@ export function SessionsToolbar({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div
+        id="sessions-filters"
+        className={cn(
+          'flex-wrap items-center gap-x-3 gap-y-2 md:flex',
+          filtersOpen ? 'flex' : 'hidden',
+        )}
+      >
         <fieldset className="flex flex-wrap items-center gap-1">
           <legend className="sr-only">Kind</legend>
           {SESSION_KINDS.map((kind) => {

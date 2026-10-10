@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     ColumnElement,
     Select,
     String,
@@ -465,6 +466,11 @@ async def fetch_session_facets(db: AsyncSession, filters: SessionListFilters) ->
 # ---------------------------------------------------------------------------
 
 
+# Harness-injected context delivered as user messages (Codex AGENTS.md and
+# <environment_context>, Claude Code <task-notification>, ...); never a title.
+_HARNESS_SCAFFOLD_PATTERN = r"^\s*(# AGENTS\.md instructions|<[a-z][a-z0-9_-]*>)"
+
+
 def normalize_session_title(content: str | None) -> str | None:
     if not content:
         return None
@@ -486,6 +492,7 @@ async def fetch_session_titles(db: AsyncSession, session_ids: Sequence[str]) -> 
                 SessionEvent.session_id.in_(list(session_ids)),
                 SessionEvent.event_type == SessionEventType.USER_MESSAGE,
                 SessionEvent.content.op("~")(r"\S"),
+                ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
             )
             .distinct(SessionEvent.session_id)
             .order_by(SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence)
@@ -614,7 +621,10 @@ async def fetch_session_agent_token_aggregates(
     agent_key = func.coalesce(func.nullif(SessionEvent.agent_id, ""), "_default")
     tokens = func.coalesce(SessionEvent.tokens, 0)
     is_user = SessionEvent.role == "user"
-    first_position = func.min(SessionEvent.turn * 1_000_000_000 + SessionEvent.sequence)
+    # bigint: turn * 1e9 overflows int4 from turn 3 on.
+    first_position = func.min(
+        func.cast(SessionEvent.turn, BigInteger) * 1_000_000_000 + SessionEvent.sequence
+    )
     rows = (
         await db.execute(
             select(

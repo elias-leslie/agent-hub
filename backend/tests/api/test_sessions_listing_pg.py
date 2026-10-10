@@ -363,6 +363,32 @@ async def test_detail_without_events_matches_default_counts(api: httpx.AsyncClie
     assert (await api.get("/api/sessions/missing?include_events=false")).status_code == 404
 
 
+async def test_detail_without_events_handles_late_turns(api: httpx.AsyncClient, pg_db: AsyncSession) -> None:
+    # Regression: the agent ordering key turn * 1e9 overflowed int4 from turn 3.
+    await add_session(pg_db, "long", minutes=1)
+    await add_event(pg_db, "long", 1, 0, "user_message", role="user", content="start", tokens=1)
+    await add_event(pg_db, "long", 40, 7, "assistant_message", role="assistant", content="late", tokens=2, agent_id="coder")
+
+    response = await api.get("/api/sessions/long?include_events=false")
+    assert response.status_code == 200, response.text
+    assert [row["agent_id"] for row in response.json()["agent_token_breakdown"]] == ["default", "coder"]
+
+
+async def test_title_skips_harness_scaffolding(api: httpx.AsyncClient, pg_db: AsyncSession) -> None:
+    await add_session(pg_db, "codex", minutes=1)
+    await add_event(pg_db, "codex", 1, 0, "user_message", role="user", content="# AGENTS.md instructions for /srv/x\n...")
+    await add_event(pg_db, "codex", 1, 1, "user_message", role="user", content="  <environment_context>\n<cwd>/srv</cwd>")
+    await add_event(pg_db, "codex", 1, 2, "user_message", role="user", content="<task-notification>done</task-notification>")
+    await add_event(pg_db, "codex", 2, 0, "user_message", role="user", content="Ship the <b>bold</b> fix")
+    await add_session(pg_db, "only-scaffold", minutes=0)
+    await add_event(pg_db, "only-scaffold", 1, 0, "user_message", role="user", content="<environment_context/>")
+
+    _, body = await list_ids(api)
+    by_id = {item["id"]: item for item in body["sessions"]}
+    assert by_id["codex"]["title"] == "Ship the <b>bold</b> fix"
+    assert by_id["only-scaffold"]["title"] == "<environment_context/>"
+
+
 async def test_events_window_filters_search_and_keyset_both_orders(
     api: httpx.AsyncClient, pg_db: AsyncSession
 ) -> None:

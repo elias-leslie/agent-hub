@@ -35,7 +35,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-[11px] uppercase tracking-[0.12em] text-slate-500">
         {label}
       </dt>
-      <dd className="truncate text-[13px] text-slate-200">{children}</dd>
+      <dd className="break-words text-[13px] text-slate-200">{children}</dd>
     </div>
   )
 }
@@ -292,9 +292,9 @@ function Facts({
           <button
             type="button"
             onClick={() => onFilterModel(filterModel)}
-            className="ml-2 text-[11px] text-sky-300 hover:underline"
+            className="ml-2 rounded border border-slate-800 px-1.5 text-[11px] text-sky-300 hover:border-slate-700 hover:underline"
           >
-            filter
+            filter list
           </button>
         ) : null}
       </Fact>

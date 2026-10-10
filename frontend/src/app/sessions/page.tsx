@@ -93,7 +93,7 @@ function SessionsView() {
           entries.some((entry) => entry.isIntersecting) &&
           !isFetchingNextPage
         ) {
-          void fetchNextPage()
+          void fetchNextPage({ cancelRefetch: false })
         }
       },
       { rootMargin: '600px' },
@@ -213,7 +213,9 @@ function SessionsView() {
                   total={data.total}
                   hasNextPage={hasNextPage}
                   isFetchingNextPage={isFetchingNextPage}
-                  onLoadMore={() => void fetchNextPage()}
+                  onLoadMore={() =>
+                    void fetchNextPage({ cancelRefetch: false })
+                  }
                 />
                 <div ref={sentinelRef} aria-hidden="true" />
               </div>

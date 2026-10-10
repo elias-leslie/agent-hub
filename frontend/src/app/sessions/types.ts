@@ -44,7 +44,7 @@ export const KIND_LABELS: Record<SessionKind, string> = {
 
 export const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: '', label: 'All' },
-  { value: 'running', label: 'Running' },
+  { value: 'running', label: 'Active' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
 ]

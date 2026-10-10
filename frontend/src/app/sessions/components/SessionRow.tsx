@@ -14,9 +14,10 @@ import { StatusCell } from './StatusCell'
 
 /** Column templates shared by the header and rows so they always line up. */
 export function sessionGridClass(compact: boolean) {
+  // Title is the only flexible column; branch appears only on wide screens.
   return compact
-    ? 'md:grid md:grid-cols-[92px_minmax(0,1fr)_120px_96px_44px_104px_72px]'
-    : 'md:grid md:grid-cols-[92px_minmax(0,1fr)_128px_104px_44px_104px_72px] lg:grid-cols-[92px_minmax(0,1fr)_128px_104px_150px_44px_104px_72px_64px] xl:grid-cols-[92px_minmax(0,1fr)_128px_104px_150px_140px_44px_104px_72px_64px]'
+    ? 'md:grid md:grid-cols-[84px_minmax(8rem,1fr)_104px_92px_60px]'
+    : 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_92px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_92px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_92px_60px_60px]'
 }
 
 function absolute(value: string) {
@@ -68,7 +69,7 @@ export const SessionRow = memo(function SessionRow({
       onClick={() => onClick(session.id)}
       onDoubleClick={() => onDoubleClick(session.id)}
       className={cn(
-        'cursor-pointer gap-3 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors md:h-9 md:items-center md:py-0',
+        'cursor-pointer gap-2 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors md:h-9 md:items-center md:py-0',
         sessionGridClass(compact),
         isSelected
           ? 'bg-slate-800/60'
@@ -91,7 +92,7 @@ export const SessionRow = memo(function SessionRow({
           <span className="truncate text-slate-100" title={title}>
             {title}
           </span>
-          {titleIsId ? null : (
+          {titleIsId || compact ? null : (
             <span className="hidden shrink-0 font-mono text-[11px] text-slate-500 sm:inline">
               {shortId}
             </span>
@@ -104,7 +105,7 @@ export const SessionRow = memo(function SessionRow({
         <span className="truncate md:text-[13px] md:text-slate-300">
           {session.project_id}
         </span>
-        <span className="truncate">{source}</span>
+        <span className={cn('truncate', compact && 'md:hidden')}>{source}</span>
         {compact ? null : (
           <span
             className="hidden truncate font-mono text-[12px] text-slate-400 lg:block"
@@ -118,7 +119,7 @@ export const SessionRow = memo(function SessionRow({
         )}
         {compact ? null : (
           <span
-            className="hidden truncate font-mono text-[12px] text-slate-500 xl:block"
+            className="hidden truncate font-mono text-[12px] text-slate-500 2xl:block"
             title={session.current_branch ?? undefined}
           >
             {session.current_branch || '—'}
@@ -128,6 +129,7 @@ export const SessionRow = memo(function SessionRow({
           className={cn(
             'font-mono text-[12px] tabular-nums md:text-right',
             children > 0 ? 'text-slate-300' : 'hidden text-slate-600 md:inline',
+            compact && 'md:hidden',
           )}
           title={
             children > 0
@@ -177,20 +179,22 @@ export function SessionListHeader({ compact }: { compact: boolean }) {
     <div
       aria-hidden="true"
       className={cn(
-        'hidden h-8 items-center gap-3 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
+        'hidden h-8 items-center gap-2 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
         sessionGridClass(compact),
       )}
     >
       <span>Status</span>
       <span>Session</span>
       <span>Project</span>
-      <span>Source</span>
+      {compact ? null : <span>Source</span>}
       {compact ? null : <span className="hidden lg:block">Model</span>}
-      {compact ? null : <span className="hidden xl:block">Branch</span>}
-      <span className="text-right" title="Sub-agents">
-        Sub
-      </span>
-      <span className="text-right">Tokens in/out</span>
+      {compact ? null : <span className="hidden 2xl:block">Branch</span>}
+      {compact ? null : (
+        <span className="text-right" title="Sub-agents">
+          Sub
+        </span>
+      )}
+      <span className="text-right">Tokens</span>
       <span className="text-right">Active</span>
       {compact ? null : (
         <span className="hidden text-right lg:block">Duration</span>

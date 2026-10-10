@@ -73,7 +73,7 @@ export function getSessionDisplayStatus(
   if (storedStatus !== 'active') {
     return {
       key: 'ended',
-      label: 'Ended',
+      label: storedStatus === 'completed' ? 'Completed' : 'Ended',
       rank: 3,
       dotClassName: 'bg-slate-500',
       badgeClassName: 'border-slate-500/45 bg-slate-500/10',
