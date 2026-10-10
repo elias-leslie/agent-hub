@@ -13,7 +13,6 @@ from app.services.tools._ideator_tools import (
     get_ideator_public_tools,
     get_ideator_tools,
 )
-from app.services.tools._notification_tools import SEND_PUSH_TOOL
 from app.services.tools._persona_tools import (
     CANCEL_CONSULTATION_TOOL,
     CANCEL_SCHEDULED_JOB_TOOL,
@@ -89,7 +88,6 @@ __all__ = [
     "SEARCH_PERSONA_HISTORY_TOOL",
     "SEARCH_SCRATCH_CONTEXT_TOOL",
     "SEARCH_WEB_TOOL",
-    "SEND_PUSH_TOOL",
     "STANDARD_TOOLS",
     "START_RESEARCH_TOOL",
     "STEER_CONSULTATION_TOOL",

@@ -39,7 +39,6 @@ SENSITIVE_TOOLS: dict[str, str] = {
     "bash": "high",        # Arbitrary command execution
     "batch_execute": "high",  # Arbitrary command execution
     "write_file": "high",  # File system modification
-    "send_push": "medium", # External communication
 }
 
 

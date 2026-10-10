@@ -557,61 +557,6 @@ class TestSubmitOnboarding:
         assert "Error" in result
 
 
-class TestSendPush:
-    """Tests for send_push tool."""
-
-    @pytest.mark.asyncio
-    async def test_sends_notification(self):
-        from app.services.tools._executor_io import send_push
-
-        mock_db = AsyncMock()
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with (
-            patch("app.db.async_session", _session),
-            patch(
-                "app.services.push_service.send_push",
-                new_callable=AsyncMock,
-                return_value=3,
-            ),
-        ):
-            result = await send_push(
-                title="Alert",
-                body="Something happened",
-                url="https://example.com",
-                severity="warning",
-                tag="test-tag",
-            )
-
-        assert "3 device(s)" in result
-        assert "Alert" in result
-
-    @pytest.mark.asyncio
-    async def test_sends_with_minimal_params(self):
-        from app.services.tools._executor_io import send_push
-
-        mock_db = AsyncMock()
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with (
-            patch("app.db.async_session", _session),
-            patch(
-                "app.services.push_service.send_push",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-        ):
-            result = await send_push(title="Hello", body="World")
-
-        assert "1 device(s)" in result
-
-
 class TestScheduleJob:
     """Persona scheduling writes go through central automation profiles."""
 
@@ -1240,7 +1185,7 @@ class TestManageTasks:
         with (
             _allow_execution_permission_patch(),
             patch(
-                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                "app.services.workstream_sessions.query_recent_workstream_sessions",
                 new=AsyncMock(return_value=[]),
             ),
         ):
@@ -1450,7 +1395,7 @@ class TestManageTasks:
             ]
         )
         with patch(
-            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            "app.services.workstream_sessions.query_recent_workstream_sessions",
             new=AsyncMock(return_value=[]),
         ):
             result = await manage_tasks(
@@ -1478,7 +1423,7 @@ class TestManageTasks:
         )
 
         with patch(
-            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            "app.services.workstream_sessions.query_recent_workstream_sessions",
             new=AsyncMock(
                 return_value=[
                     {
@@ -1521,7 +1466,7 @@ class TestManageTasks:
         )
 
         with patch(
-            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            "app.services.workstream_sessions.query_recent_workstream_sessions",
             new=AsyncMock(
                 return_value=[
                     {
@@ -1567,7 +1512,7 @@ class TestManageTasks:
         with (
             _allow_execution_permission_patch(),
             patch(
-                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                "app.services.workstream_sessions.query_recent_workstream_sessions",
                 new=AsyncMock(
                     return_value=[
                         {

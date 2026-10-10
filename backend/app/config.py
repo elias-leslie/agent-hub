@@ -149,11 +149,6 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    # Web Push (VAPID)
-    vapid_public_key: str = ""
-    vapid_private_key: str = ""
-    vapid_subject: str = "mailto:admin@example.com"
-
     # Optional provider credentials for standalone and Docker installs.
     # These are overlaid into the runtime credential cache at startup so
     # clean installs work without manual dashboard credential entry.

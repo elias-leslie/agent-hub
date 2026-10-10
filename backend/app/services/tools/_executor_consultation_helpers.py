@@ -26,7 +26,6 @@ _CONSULTATION_TOOL_BLOCKLIST = frozenset({
     "cancel_consultation",
     "schedule_job",
     "cancel_scheduled_job",
-    "send_push",
     "manage_tasks",
     "manage_backups",
 })

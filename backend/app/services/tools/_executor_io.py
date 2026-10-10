@@ -1,6 +1,6 @@
 """I/O and orchestration tool implementations for DirectToolExecutor.
 
-Handles push notifications and task orchestration via CLI.
+Handles task orchestration via CLI.
 """
 
 from __future__ import annotations
@@ -35,33 +35,6 @@ _UNKNOWN_ACTIONS = (
     "salvage_orphan/cleanup_all_safe/resolve_conflict/"
     "reconcile/retire_lane/done/abandon/cancel"
 )
-
-
-async def send_push(
-    title: str,
-    body: str,
-    url: str | None = None,
-    severity: str = "info",
-    tag: str | None = None,
-) -> str:
-    """Send to the Agent Hub dashboard principal's application subscriptions."""
-    try:
-        from app.db import async_session
-        from app.services.push_service import send_push as _send_push
-
-        payload: dict[str, str | None] = {"title": title, "body": body}
-        if url:
-            payload["url"] = url
-        if severity:
-            payload["severity"] = severity
-        if tag:
-            payload["tag"] = tag
-        async with async_session() as db:
-            sent = await _send_push(db, payload=payload)
-        return f"Push notification sent to {sent} device(s): {title}"
-    except Exception as e:
-        logger.exception("send_push failed")
-        return f"Error sending push notification: {e}"
 
 
 async def _handle_overview(bash_fn: Callable[..., Awaitable[str]]) -> str:
@@ -212,4 +185,4 @@ async def manage_tasks(
     return _unknown_action_message(action)
 
 
-__all__ = ["_load_task_lane_sessions", "manage_tasks", "send_push"]
+__all__ = ["_load_task_lane_sessions", "manage_tasks"]

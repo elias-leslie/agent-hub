@@ -700,7 +700,6 @@ class TestPersonaToolTierExemption:
     SAFE_PERSONA_OPERATIONAL: ClassVar[list[str]] = [
         "schedule_job",
         "cancel_scheduled_job",
-        "send_push",
         "steer_consultation",
         "cancel_consultation",
         "query_sessions",
@@ -1275,9 +1274,12 @@ class TestDispatchableToolsComplete:
                 f"_PERSONA_TOOLS exemption set and full tier"
             )
 
-    def test_send_push_in_dispatchable(self):
-        """send_push is registered via _model_tool_registry, verify it's dispatchable."""
-        assert "send_push" in DirectToolExecutor.DISPATCHABLE_TOOLS
+    def test_send_push_removed_from_persona_tools(self):
+        """Web push was retired; send_push must not be offered to the persona."""
+        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
+
+        names = {tool.name for tool in PERSONA_EXTRA_TOOLS}
+        assert "send_push" not in names
 
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,6 @@ pip install -e packages/agent-hub-client
 | File | Description |
 |------|-------------|
 | `sdk_example.py` | SDK features: completion, streaming, sessions, vision |
-| `orchestration_example.py` | Canonical clarify -> plan -> execute -> review -> QA workflow |
 
 Callers identify themselves with `client_id` and `request_source` (ST tools load
 them with `st_sdk.credentials.load_credentials()`), and route by `agent_slug`.
