@@ -41,5 +41,8 @@ def test_host_guardian_alert_service_and_timer_templates_exist() -> None:
     assert "__PROJECT_ROOT__" in service
     assert "python -m app.scripts.send_host_guardian_alerts" in service
     assert "Telegram" not in service + timer
-    assert "OnUnitActiveSec=5min" in timer
+    assert "OnCalendar=*:0/5" in timer
+    assert "OnUnitActiveSec" not in timer  # never schedules without a prior run
+    backend = (SYSTEMD_DIR / "agent-hub-backend.service").read_text()
+    assert "Wants=agent-hub-host-guardian-alert.timer" in backend
     assert "Persistent=true" in timer

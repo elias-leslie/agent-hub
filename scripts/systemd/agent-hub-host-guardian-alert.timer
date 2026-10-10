@@ -2,8 +2,8 @@
 Description=Poll durable host guardian transitions for SummitFlow notifications
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=5min
+# Wall-clock schedule: fires every 5 min whether or not the service has run before.
+OnCalendar=*:0/5
 AccuracySec=30s
 Persistent=true
 Unit=agent-hub-host-guardian-alert.service

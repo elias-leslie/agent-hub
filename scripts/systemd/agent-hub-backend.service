@@ -1,6 +1,8 @@
 [Unit]
 Description=agent-hub backend (FastAPI)
 After=network.target
+# Start the host-guardian alert timer with the (enabled) backend so it survives reboots.
+Wants=agent-hub-host-guardian-alert.timer
 
 [Service]
 Type=simple
