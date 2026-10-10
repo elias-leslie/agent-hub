@@ -354,3 +354,125 @@ describe('context tidying', () => {
     expect(entries[0]).toMatchObject({ label: 'agent' })
   })
 })
+
+describe('live verifier regressions', () => {
+  it('reads stdout from Claude Code output JSON that was stored cut off', () => {
+    const [entry] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' },
+        tool_output: { result: '{\n  "stdout": "a.txt\\nb.txt\\nc.t' },
+      }),
+    ])
+    expect(entry.detail).toMatchObject({
+      type: 'output',
+      text: 'a.txt\nb.txt\nc.t',
+    })
+  })
+
+  it('hides a wrapper that also makes incidental calls when Bash shows its command', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        call_id: 'call_multi',
+        tool_input: {
+          raw: 'await tools.clock__curr_time({});text(await tools.exec_command({cmd:"st tools manifest"}))',
+        },
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'exec-9',
+        tool_input: { command: ['/bin/bash', '-lc', 'st tools manifest'] },
+      }),
+    ])
+    expect(entries.map((entry) => entry.summary)).toEqual(['st tools manifest'])
+  })
+
+  it('treats a search that found nothing as an answer, not a failure', () => {
+    const [entry] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'exec-10',
+        tool_input: { command: ['/bin/bash', '-lc', 'rg -n nothing'] },
+      }),
+      ev({
+        event_type: 'tool_result',
+        call_id: 'exec-10',
+        tool_output: {
+          stdout: '',
+          exit_code: 1,
+          status: 'failed',
+          is_error: true,
+        },
+      }),
+    ])
+    expect(entry).toMatchObject({ failed: false, meta: 'no matches' })
+  })
+
+  it('keeps one copy of a Claude Code call recorded by both hook and transcript', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        tool_input: { command: 'git status' },
+        source_timestamp: '2026-10-10T11:57:15Z',
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'toolu_9',
+        tool_input: { command: 'git status' },
+        source_timestamp: '2026-10-10T11:57:16Z',
+      }),
+    ])
+    expect(entries).toHaveLength(1)
+    expect(entries[0].raw[0].call_id).toBe('toolu_9')
+  })
+
+  it('orders entries by their own time', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'assistant_message',
+        content: 'second',
+        source_timestamp: '2026-10-10T22:43:08Z',
+      }),
+      ev({
+        event_type: 'assistant_message',
+        content: 'first',
+        source_timestamp: '2026-10-10T22:41:44Z',
+      }),
+    ])
+    expect(entries.map((entry) => entry.summary)).toEqual(['first', 'second'])
+  })
+
+  it('names calls and web searches inside other exec scripts instead of showing code', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        tool_input: {
+          raw: 'const r=await tools.web__run({search_query:[{"q":"gitlab 19.4 advisory"}]})',
+        },
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'sleep',
+        tool_input: { duration_ms: 30000 },
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'SendMessage',
+        tool_input: { to: 'uds:/run/user/1000/cc-socks/abc123.sock' },
+      }),
+    ])
+    expect(entries.map((entry) => [entry.label, entry.summary])).toEqual([
+      ['searched', 'web: gitlab 19.4 advisory'],
+      ['waited', '30s'],
+      ['messaged', 'local session abc123'],
+    ])
+  })
+})

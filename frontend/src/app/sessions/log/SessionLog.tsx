@@ -146,7 +146,7 @@ const LogRow = memo(function LogRow({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50',
         )}
       >
-        <span className="hidden text-slate-600 sm:block">
+        <span className="hidden text-slate-500 sm:block">
           {clock(entry.at)}
         </span>
         <span
@@ -231,10 +231,10 @@ function ChildRow({
             : 'Open this sub-agent'
         }
       >
-        <span className="hidden text-slate-600 sm:block">
+        <span className="hidden text-slate-500 sm:block">
           {clock(child.created_at)}
         </span>
-        <span className="text-cyan-700 dark:text-cyan-300">
+        <span className="whitespace-nowrap text-cyan-700 dark:text-cyan-300">
           {nestable ? (open ? '▾ ' : '▸ ') : '↗ '}sub-agent
         </span>
         <span className="flex min-w-0 items-baseline gap-2">
@@ -318,10 +318,10 @@ function ChildBatch({
         onClick={() => setOpen((value) => !value)}
         className="grid w-full grid-cols-[4.25rem_minmax(0,1fr)] items-baseline gap-x-2 rounded px-1.5 py-[3px] text-left font-mono text-[12px] leading-5 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50 sm:grid-cols-[4.25rem_4.75rem_minmax(0,1fr)_auto]"
       >
-        <span className="hidden text-slate-600 sm:block">
+        <span className="hidden text-slate-500 sm:block">
           {clock(childrenList[0].created_at)}
         </span>
-        <span className="text-cyan-700 dark:text-cyan-300">
+        <span className="whitespace-nowrap text-cyan-700 dark:text-cyan-300">
           {open ? '▾ ' : '▸ '}started
         </span>
         <span className="truncate text-slate-200">

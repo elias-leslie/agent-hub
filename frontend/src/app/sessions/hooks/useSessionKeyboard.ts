@@ -46,6 +46,15 @@ export function useSessionKeyboard({
       if (event.metaKey || event.ctrlKey || event.altKey) return
 
       if (isEditableTarget(event.target)) {
+        // Esc leaves the expanded session's search and returns to its row.
+        if (
+          event.key === 'Escape' &&
+          (event.target as HTMLElement).dataset.sessionSearch !== undefined
+        ) {
+          ;(event.target as HTMLElement).blur()
+          if (activeId) focusRow(listRef, activeId)
+          return
+        }
         if (event.key === 'Escape' && event.target === searchRef.current) {
           searchRef.current?.blur()
           if (activeId) focusRow(listRef, activeId)
@@ -59,10 +68,12 @@ export function useSessionKeyboard({
         const panel = (event.target as HTMLElement | null)?.closest?.(
           '[data-testid="session-inline"]',
         )
-        const local = panel?.querySelector<HTMLInputElement>(
-          'input[data-session-search]',
-        )
-        if (local && local.offsetParent !== null) local.focus()
+        const local = [
+          ...(panel?.querySelectorAll<HTMLInputElement>(
+            'input[data-session-search]',
+          ) ?? []),
+        ].find((input) => input.offsetParent !== null)
+        if (local) local.focus()
         else searchRef.current?.focus()
         return
       }

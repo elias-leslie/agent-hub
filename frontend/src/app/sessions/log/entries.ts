@@ -73,6 +73,20 @@ function tail(text: string): LogDetail {
   }
 }
 
+/** Pulls a string field out of JSON that was cut off before it closed. */
+function salvageField(text: string, field: string): string | null {
+  const match = new RegExp(`"${field}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(
+    text,
+  )
+  if (!match) return null
+  const body = match[1].replace(/\\(u[0-9a-fA-F]{0,3})?$/, '')
+  try {
+    return JSON.parse(`"${body}"`) as string
+  } catch {
+    return body.replace(/\\n/g, '\n').replace(/\\"/g, '"')
+  }
+}
+
 function parseMaybeJson(value: unknown): unknown {
   if (typeof value !== 'string') return value
   const trimmed = value.trim()
@@ -171,7 +185,17 @@ function readOutput(
   for (const source of sources) {
     if (typeof source.exit_code === 'number') exitCode = source.exit_code
     if (source.is_error === true || source.status === 'failed') failed = true
-    const parsed = parseMaybeJson(source.result)
+    let parsed = parseMaybeJson(source.result)
+    // Long Claude Code outputs are stored cut off, so the JSON never closes.
+    if (
+      typeof parsed === 'string' &&
+      /^\s*\{\s*"(stdout|filePath)"/.test(parsed)
+    ) {
+      const stdout = salvageField(parsed, 'stdout')
+      const stderr = salvageField(parsed, 'stderr')
+      if (stdout !== null || stderr !== null)
+        parsed = { stdout: stdout ?? '', stderr: stderr ?? '' }
+    }
     const body = isObject(parsed) ? parsed : source
     if (isObject(parsed)) structured = parsed
     const pieces = [
@@ -387,6 +411,28 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
         summary: 'running shell',
         failed: false,
       }
+    if (!script.commands.length && script.calls.length) {
+      const query = /"q"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(input.raw)?.[1]
+      if (query && script.calls.some((call) => call.startsWith('web')))
+        return {
+          ...base,
+          label: 'searched',
+          summary: oneLine(`web: ${query}`),
+          detail: outputDetail,
+        }
+      const counts = new Map<string, number>()
+      for (const call of script.calls)
+        counts.set(call, (counts.get(call) ?? 0) + 1)
+      return {
+        ...base,
+        label: 'tool',
+        summary: [...counts]
+          .map(([call, n]) => (n > 1 ? `${call} ×${n}` : call))
+          .join(', '),
+        meta: joinMeta(duration),
+        detail: outputDetail,
+      }
+    }
     if (script.commands.length)
       return {
         ...base,
@@ -405,12 +451,15 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
       const command = bashCommand(input)
       const isSearch = /^(rg|grep|ag|fd|find)\b/.test(command)
       const lines = lineCount(out.text)
+      // rg and grep exit 1 when nothing matched; that is an answer, not a failure.
+      const noMatch = isSearch && out.exitCode === 1 && !out.text.trim()
       return {
         ...base,
+        failed: out.failed && !noMatch,
         label: isSearch ? 'searched' : 'ran',
         summary: oneLine(command || genericSummary(input)),
         meta: joinMeta(
-          exit,
+          noMatch ? 'no matches' : exit,
           duration,
           isSearch && lines ? `${lines} line${lines === 1 ? '' : 's'}` : null,
         ),
@@ -537,12 +586,27 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
     }
     case 'send_message':
     case 'followup_task':
-    case 'SendMessage':
+    case 'SendMessage': {
+      const target =
+        str(input.target) ?? str(input.to) ?? str(input.recipient) ?? 'agent'
       return {
         ...base,
         label: 'messaged',
-        summary:
-          str(input.target) ?? str(input.to) ?? str(input.recipient) ?? 'agent',
+        summary: target.startsWith('uds:')
+          ? `local session ${
+              target
+                .split('/')
+                .pop()
+                ?.replace(/\.sock$/, '') ?? ''
+            }`
+          : agentName(target),
+      }
+    }
+    case 'sleep':
+      return {
+        ...base,
+        label: 'waited',
+        summary: formatDuration(Number(input.duration_ms)) ?? 'sleep',
       }
     case 'Skill':
       return { ...base, label: 'skill', summary: str(input.skill) ?? '' }
@@ -559,8 +623,11 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
           : genericSummary(input)
       return {
         ...base,
-        label: name.length > 9 ? `${name.slice(0, 8)}…` : name,
-        summary: summary || name,
+        label: name.length > 9 ? 'tool' : name,
+        summary:
+          name.length > 9
+            ? [name, summary].filter(Boolean).join(' · ')
+            : summary || name,
         meta: joinMeta(exit, duration),
         detail: outputDetail,
       }
@@ -674,10 +741,11 @@ export function buildLogEntries(
       continue
     }
     const script = parseExecScript(raw)
-    const onlyCommands =
-      script.calls.length > 0 &&
-      script.calls.every((call) => call === 'exec_command')
-    if (!onlyCommands || script.patch) continue
+    // Incidental calls (clock reads and the like) don't make it more than a mirror.
+    const runsCommands =
+      script.calls.includes('exec_command') && script.commands.length > 0
+    if (!runsCommands || script.patch || script.calls.includes('write_stdin'))
+      continue
     if (
       wrapperIds.has(key) ||
       script.commands.every((cmd) => bashCommands.has(cmd))
@@ -685,10 +753,40 @@ export function buildLogEntries(
       hiddenWrappers.add(key)
   }
 
+  // Claude Code hooks and transcript sync can both record one call: the same
+  // tool and input seconds apart, one of them without a call_id. Keep one.
+  const duplicates = new Set<string>()
+  const recent = new Map<string, TimelineEvent>()
+  for (const event of events) {
+    if (
+      event.event_type !== 'tool_use' ||
+      WRAPPER_TOOLS.has(event.tool_name ?? '')
+    )
+      continue
+    const signature = `${event.tool_name}\u0000${JSON.stringify(event.tool_input)}`
+    const at = Date.parse(event.source_timestamp ?? event.created_at)
+    const prior = recent.get(signature)
+    const priorAt = prior
+      ? Date.parse(prior.source_timestamp ?? prior.created_at)
+      : Number.NaN
+    if (
+      prior &&
+      Math.abs(at - priorAt) <= 5000 &&
+      (!prior.call_id || !event.call_id)
+    ) {
+      // Prefer the copy that carries a call_id (it pairs with its result).
+      duplicates.add(prior.call_id ? event.id : prior.id)
+      if (!prior.call_id) recent.set(signature, event)
+      continue
+    }
+    recent.set(signature, event)
+  }
+
   const entries: LogEntry[] = []
   for (const event of events) {
     const type = event.event_type
     if (SKIPPED_TYPES.has(type)) continue
+    if (duplicates.has(event.id)) continue
     const text = event.content ?? ''
 
     if (type === 'tool_use') {
@@ -704,6 +802,23 @@ export function buildLogEntries(
       if (/^Script completed/.test(text)) continue
       // Result whose call is outside the loaded window or unrecorded.
       const out = readOutput(null, event)
+      const parsedResult = parseMaybeJson(out.text || text)
+      if (isObject(parsedResult)) {
+        const task = str(parsedResult.task_name)
+        entries.push({
+          ...textEntry(
+            event,
+            'tool',
+            'result',
+            task
+              ? `sub-agent ${agentName(task)}`
+              : genericSummary(parsedResult) || 'tool result',
+            out.failed,
+          ),
+          detail: { type: 'text', text: JSON.stringify(parsedResult, null, 2) },
+        })
+        continue
+      }
       entries.push({
         ...textEntry(
           event,
@@ -862,7 +977,21 @@ export function buildLogEntries(
     if (text.trim())
       entries.push(textEntry(event, 'context', type.slice(0, 9), text))
   }
-  return tidyContext(entries, options.fromStart ?? false)
+  return tidyContext(byTime(entries), options.fromStart ?? false)
+}
+
+/**
+ * Orders entries by their own time. Long commands are recorded when they
+ * finish but stamped with their start, so recorded order can run backwards.
+ */
+function byTime(entries: LogEntry[]): LogEntry[] {
+  return entries
+    .map((entry, index) => ({ entry, index, at: Date.parse(entry.at) }))
+    .sort((a, b) => {
+      if (Number.isNaN(a.at) || Number.isNaN(b.at)) return a.index - b.index
+      return a.at - b.at || a.index - b.index
+    })
+    .map(({ entry }) => entry)
 }
 
 function contextName(text: string): string {

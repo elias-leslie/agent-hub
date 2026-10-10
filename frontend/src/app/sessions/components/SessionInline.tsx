@@ -269,7 +269,7 @@ export function SessionInline({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search this session"
-              className="w-36 rounded-md lg:w-48 border border-slate-800 bg-slate-950 py-0.5 pl-6 pr-2 text-[12px] text-slate-200 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
+              className="w-36 rounded-md border lg:w-48 border-slate-800 bg-slate-950 py-0.5 pl-6 pr-2 text-[12px] text-slate-200 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
             />
           </label>
           <ToggleButton
@@ -296,6 +296,18 @@ export function SessionInline({
             <X className="h-4 w-4" />
           </button>
         </div>
+        <label className="relative flex items-center sm:hidden">
+          <Search className="pointer-events-none absolute left-2 h-3 w-3 text-slate-500" />
+          <span className="sr-only">Search this session</span>
+          <input
+            data-session-search
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search this session"
+            className="w-full rounded-md border border-slate-800 bg-slate-950 py-1 pl-6 pr-2 text-[13px] text-slate-200 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
+          />
+        </label>
         {source ? (
           <Facts source={source} onFilterModel={onFilterModel} />
         ) : null}
