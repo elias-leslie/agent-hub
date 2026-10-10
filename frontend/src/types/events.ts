@@ -60,6 +60,8 @@ export interface SessionEventsResponse {
   total: number
   max_turn: number
   snapshot?: string
+  /** Keyset cursor for the next window (pass as `after`); null when exhausted. */
+  next_after?: string | null
 }
 
 /**

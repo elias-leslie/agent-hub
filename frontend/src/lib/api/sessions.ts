@@ -127,6 +127,12 @@ export interface Session {
   event_count?: number | null
   total_input_tokens?: number
   total_output_tokens?: number
+  title?: string | null
+  usage_known?: boolean
+  usage_input_tokens?: number | null
+  usage_output_tokens?: number | null
+  usage_cached_input_tokens?: number | null
+  last_active_at?: string | null
 }
 
 export interface SessionListItem {
@@ -165,6 +171,14 @@ export interface SessionListItem {
   event_count?: number | null
   total_input_tokens: number
   total_output_tokens: number
+  child_session_count?: number | null
+  active_child_session_count?: number | null
+  title?: string | null
+  usage_known?: boolean
+  usage_input_tokens?: number | null
+  usage_output_tokens?: number | null
+  usage_cached_input_tokens?: number | null
+  last_active_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -174,6 +188,108 @@ export interface SessionListResponse {
   total: number
   page: number
   page_size: number
+  next_cursor?: string | null
+}
+
+/** Coarse session kinds over the stored session_type (coding = agent | claude_code). */
+export type SessionKind = 'coding' | 'chat' | 'completion' | 'image'
+export const SESSION_KINDS: readonly SessionKind[] = [
+  'coding',
+  'chat',
+  'completion',
+  'image',
+]
+
+export interface SessionListQuery {
+  q?: string
+  kind?: readonly SessionKind[]
+  status?: string
+  since?: string
+  project_id?: string
+  model?: string
+  roots_only?: boolean
+  exclude_benchmarks?: boolean
+  parent_session_id?: string
+  sort_by?: 'last_active' | 'status'
+  sort_direction?: 'asc' | 'desc'
+  cursor?: string
+  page_size?: number
+}
+
+export interface SessionFacets {
+  status: Record<string, number>
+  kind: Record<SessionKind, number>
+  projects: { project_id: string; count: number }[]
+}
+
+export interface SessionEventsSummary {
+  total: number
+  by_type: Record<string, number>
+  first_user_message?: string | null
+  usage_known?: boolean
+  usage_input_tokens?: number | null
+  usage_output_tokens?: number | null
+  usage_cached_input_tokens?: number | null
+}
+
+function sessionListSearchParams(query: SessionListQuery): URLSearchParams {
+  const params = new URLSearchParams()
+  if (query.q) params.set('q', query.q)
+  if (query.kind?.length) params.set('kind', query.kind.join(','))
+  if (query.status) params.set('status', query.status)
+  if (query.since) params.set('since', query.since)
+  if (query.project_id) params.set('project_id', query.project_id)
+  if (query.model) params.set('model', query.model)
+  if (query.roots_only) params.set('roots_only', 'true')
+  if (query.exclude_benchmarks) params.set('exclude_benchmarks', 'true')
+  if (query.parent_session_id)
+    params.set('parent_session_id', query.parent_session_id)
+  if (query.sort_by) params.set('sort_by', query.sort_by)
+  if (query.sort_direction) params.set('sort_direction', query.sort_direction)
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.page_size) params.set('page_size', String(query.page_size))
+  return params
+}
+
+/** Server-filtered, keyset-paged session list. */
+export async function querySessions(
+  query: SessionListQuery,
+): Promise<SessionListResponse> {
+  const response = await fetchApi(
+    `${API_BASE}/sessions?${sessionListSearchParams(query)}`,
+  )
+  if (!response.ok) {
+    throw new Error(`Sessions fetch failed: ${response.status}`)
+  }
+  return response.json()
+}
+
+/** Facet counts for the same filters; each facet ignores its own filter. */
+export async function fetchSessionFacets(
+  query: Omit<
+    SessionListQuery,
+    'cursor' | 'page_size' | 'sort_by' | 'sort_direction'
+  >,
+): Promise<SessionFacets> {
+  const response = await fetchApi(
+    `${API_BASE}/sessions/facets?${sessionListSearchParams(query)}`,
+  )
+  if (!response.ok) {
+    throw new Error(`Session facets fetch failed: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function fetchSessionEventsSummary(
+  sessionId: string,
+): Promise<SessionEventsSummary> {
+  const response = await fetchApi(
+    `${API_BASE}/sessions/${sessionId}/events/summary`,
+  )
+  if (!response.ok) {
+    throw new Error(`Session events summary fetch failed: ${response.status}`)
+  }
+  return response.json()
 }
 
 export async function fetchSessions(params?: {
@@ -215,8 +331,12 @@ export async function fetchSessions(params?: {
   return response.json()
 }
 
-export async function fetchSession(id: string): Promise<Session> {
-  const response = await fetchApi(`${API_BASE}/sessions/${id}`)
+export async function fetchSession(
+  id: string,
+  options?: { includeEvents?: boolean },
+): Promise<Session> {
+  const suffix = options?.includeEvents === false ? '?include_events=false' : ''
+  const response = await fetchApi(`${API_BASE}/sessions/${id}${suffix}`)
   if (!response.ok) {
     throw new Error(`Session fetch failed: ${response.status}`)
   }
@@ -258,10 +378,17 @@ export async function fetchSessionEvents(
     page?: number
     page_size?: number
     snapshot?: string
+    exclude_types?: readonly string[]
+    q?: string
+    after?: string
   },
 ): Promise<SessionEventsResponse> {
   const searchParams = new URLSearchParams()
   if (params?.event_type) searchParams.set('event_type', params.event_type)
+  if (params?.exclude_types?.length)
+    searchParams.set('exclude_types', params.exclude_types.join(','))
+  if (params?.q) searchParams.set('q', params.q)
+  if (params?.after) searchParams.set('after', params.after)
   if (params?.turn !== undefined)
     searchParams.set('turn', params.turn.toString())
   if (params?.page) searchParams.set('page', params.page.toString())
