@@ -4,11 +4,14 @@ import type { StatusResponse } from '@/lib/api/status'
 import { formatCurrency, formatNumber } from '@/lib/formatters'
 
 interface ChartsSectionProps {
+  /** Model calls per day; the same population as the Model calls KPI. */
   requestsByDay: number[]
+  /** Model calls in the period, or undefined while stats load. */
+  requestTotal: number | undefined
+  requestsLoading: boolean
   costByDay: number[]
   totalCosts:
     | {
-        total_requests: number
         total_cost_usd: number
       }
     | undefined
@@ -27,6 +30,8 @@ interface ChartsSectionProps {
 
 export function ChartsSection({
   requestsByDay,
+  requestTotal,
+  requestsLoading,
   costByDay,
   totalCosts,
   dailyLoading,
@@ -44,18 +49,18 @@ export function ChartsSection({
               Request Volume
             </h2>
             <p className="mt-1 text-sm text-slate-300">
-              Demand and spend over the active time window.
+              Model calls per day (POST /api/complete), and metered spend.
             </p>
           </div>
           <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500">
             <span className="flex items-center gap-1.5 rounded-full border border-slate-800/70 bg-slate-900/80 px-2.5 py-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              {formatNumber(totalCosts?.total_requests || 0)} total
+              {requestTotal == null ? '-' : formatNumber(requestTotal)} calls
             </span>
           </div>
         </div>
         <div className="h-40 rounded-2xl border border-slate-800/70 bg-slate-950/55 p-3">
-          {dailyLoading ? (
+          {requestsLoading ? (
             <div className="h-full rounded-xl animate-shimmer" />
           ) : (
             <Sparkline data={requestsByDay} color="emerald" showDot />
@@ -65,14 +70,18 @@ export function ChartsSection({
           <div>
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Daily Spend
+                Metered spend (API-billed calls)
               </span>
               <span className="text-[10px] font-mono text-amber-800 dark:text-amber-300">
-                {formatCurrency(totalCosts?.total_cost_usd || 0)} total
+                {formatCurrency(totalCosts?.total_cost_usd ?? 0)} total
               </span>
             </div>
             <div className="h-20 rounded-2xl border border-slate-800/70 bg-slate-950/55 p-3">
-              <Sparkline data={costByDay} color="amber" showDot />
+              {dailyLoading ? (
+                <div className="h-full rounded-xl animate-shimmer" />
+              ) : (
+                <Sparkline data={costByDay} color="amber" showDot />
+              )}
             </div>
           </div>
           <div className="rounded-2xl border border-slate-800/70 bg-slate-950/55 p-4">

@@ -27,7 +27,9 @@ export default function DashboardPage() {
     sessionsData,
     sessionsLoading,
     dashboardStats,
+    statsLoading,
     requestsByDay,
+    requestTotal,
     costByDay,
     dailyLoading,
     statusLoading,
@@ -70,6 +72,8 @@ export default function DashboardPage() {
 
             <ChartsSection
               requestsByDay={requestsByDay}
+              requestTotal={requestTotal}
+              requestsLoading={statsLoading}
               costByDay={costByDay}
               totalCosts={totalCosts}
               dailyLoading={dailyLoading}
@@ -123,7 +127,7 @@ export default function DashboardPage() {
                   />
                 )}
                 {activeTab === 'health' && (
-                  <HealthTabContent stats={dashboardStats} status={status} />
+                  <HealthTabContent stats={dashboardStats} />
                 )}
               </div>
             </div>

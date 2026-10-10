@@ -77,10 +77,12 @@ export function useDashboardData({ daysRange }: UseDashboardDataOptions) {
     refetchInterval: 30000,
   })
 
-  // Derived data
+  // Derived data. The request chart reads the same model-call population as
+  // the KPIs (dashboard stats), not cost_logs row counts.
   const requestsByDay =
-    dailyCosts?.aggregations.map((a) => a.request_count) || []
-  const costByDay = dailyCosts?.aggregations.map((a) => a.total_cost_usd) || []
+    dashboardStats?.requests_by_day.map((d) => d.requests) ?? []
+  const requestTotal = dashboardStats?.requests.total_requests
+  const costByDay = dailyCosts?.aggregations.map((a) => a.total_cost_usd) ?? []
 
   return {
     activeSessionCount,
@@ -99,6 +101,7 @@ export function useDashboardData({ daysRange }: UseDashboardDataOptions) {
     dashboardStats,
     statsLoading,
     requestsByDay,
+    requestTotal,
     costByDay,
   }
 }

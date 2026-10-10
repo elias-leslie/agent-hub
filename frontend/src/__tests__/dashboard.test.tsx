@@ -125,8 +125,8 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createQueryClientWrapper() })
 
     expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0)
-    expect(screen.getByText('Cost')).toBeInTheDocument()
-    expect(screen.getByText('Requests')).toBeInTheDocument()
+    expect(screen.getByText('Metered spend')).toBeInTheDocument()
+    expect(screen.getByText('Model calls')).toBeInTheDocument()
     expect(screen.getByText('Success')).toBeInTheDocument()
   })
 

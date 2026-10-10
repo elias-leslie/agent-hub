@@ -68,7 +68,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
               )}
             />
           </div>
-          {!health && provider.error && (
+          {provider.error && (
             <p
               className="mt-1 max-w-56 truncate text-[11px] text-slate-400"
               title={provider.error}
@@ -80,8 +80,16 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
             <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
               <span>{formatLatency(health.latency_ms)}</span>
               <span className="text-slate-700">|</span>
-              <span>{(health.availability * 100).toFixed(0)}% avail</span>
+              <span>{(health.availability * 100).toFixed(0)}% ok (24h)</span>
             </div>
+          )}
+          {health && health.consecutive_failures > 0 && health.last_error && (
+            <p
+              className="mt-1 max-w-56 truncate text-[11px] text-amber-400"
+              title={health.last_error}
+            >
+              Last call failed: {health.last_error}
+            </p>
           )}
         </div>
       </div>

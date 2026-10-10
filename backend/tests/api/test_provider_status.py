@@ -29,7 +29,7 @@ async def test_status_lists_provider_ids_with_readiness(two_providers) -> None:
 
 @pytest.mark.asyncio
 async def test_provider_health_reports_no_invented_metrics(two_providers) -> None:
-    response = await dashboard_stats.get_provider_health()
+    response = await dashboard_stats.get_provider_health(db=None)
     assert [(p.provider, p.state, p.latency_ms, p.availability) for p in response.providers] == [
         ("codex", "ready", None, None),
         ("xai", "unavailable", None, None),

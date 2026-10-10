@@ -6,16 +6,22 @@ import { fetchApi, getApiBaseUrl } from '../api-config'
 
 const API_BASE = `${getApiBaseUrl()}/api`
 
+/** Model-call metrics: `POST /api/complete` rows only (buffered and streaming). */
 export interface RequestMetrics {
   total_requests: number
-  avg_latency_ms: number
-  p50_latency_ms: number
-  p95_latency_ms: number
-  success_rate: number
+  avg_latency_ms: number | null
+  p50_latency_ms: number | null
+  p95_latency_ms: number | null
+  /** 0-100; null when the period had no model calls. */
+  success_rate: number | null
   error_count: number
-  timeout_count: number
-  fallback_count: number
-  fallback_success_rate: number
+}
+
+/** Model calls for one UTC day; same population as RequestMetrics. */
+export interface DailyRequestCount {
+  date: string
+  requests: number
+  errors: number
 }
 
 export interface MemoryMetrics {
@@ -24,9 +30,17 @@ export interface MemoryMetrics {
   avg_tokens: number
   total_mandates: number
   total_guardrails: number
+  /** Explicitly selected references. */
   total_references: number
+  /** Passive reference-index entries; kept separate from selected references. */
+  total_reference_index_entries: number
+  total_reference_citations: number
 }
 
+/**
+ * @deprecated The dashboard no longer reports truncations. Kept only while
+ * `lib/api.ts` still re-exports it.
+ */
 export interface TruncationMetrics {
   total_truncations: number
   truncation_rate: number
@@ -44,11 +58,12 @@ export interface DashboardStatsResponse {
   period_start: string
   period_end: string
   requests: RequestMetrics
+  requests_by_day: DailyRequestCount[]
   memory: MemoryMetrics
-  truncations: TruncationMetrics
   by_model: ModelBreakdown[]
   active_sessions: number
   total_sessions: number
+  /** Metered spend: API-billed calls recorded in cost_logs. */
   total_cost_usd: number
   total_tokens: number
 }
@@ -67,8 +82,13 @@ export interface ProviderHealth {
   provider: string
   state: string
   latency_ms: number | null
+  /** Share of recent calls without a provider failure, 0-1. */
   availability: number | null
   consecutive_failures: number
+  /** Completion calls in the last 24 hours. */
+  recent_calls: number
+  /** Provider failures (HTTP 5xx or 429) in the last 24 hours. */
+  recent_failures: number
   last_error: string | null
 }
 
