@@ -1,6 +1,7 @@
 """Sessions API - CRUD operations for conversation sessions."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -17,6 +18,8 @@ from app.api.schemas.sessions import (
     CreateSessionEventResponse,
     SessionCreate,
     SessionEventsResponse,
+    SessionEventsSummaryResponse,
+    SessionFacetsResponse,
     SessionForkRequest,
     SessionForkResponse,
     SessionListResponse,
@@ -34,7 +37,6 @@ from app.services.session_helpers import (
     get_session_with_events,
     list_sessions_with_stats,
     promote_session_branch,
-    query_session_events,
     validate_promotion_eligibility,
 )
 from app.services.session_ingestion import (
@@ -46,7 +48,16 @@ from app.services.session_ingestion import (
     heartbeat_session,
     upsert_session,
 )
+from app.services.session_queries import (
+    SESSION_KIND_TYPES,
+    SESSION_LIST_STATUSES,
+    SessionListFilters,
+    fetch_session_events_summary,
+    fetch_session_facets,
+    query_session_event_window,
+)
 from app.services.session_responses import (
+    apply_session_rollups,
     build_full_session_response,
     build_project_lane_session_ids,
 )
@@ -57,20 +68,16 @@ router = APIRouter()
 # Re-export schemas for backward compatibility
 __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
 
-_SESSION_STORED_STATUSES = {"active", "completed", "failed"}
-_SESSION_STATUS_ALIASES = {"running": "active", "stale": "active", "reapable": "active"}
-_SESSION_LIVE_STATUS_ALIASES = {"stale", "reapable"}
-_SESSION_SORT_FIELDS = {"status", "project", "agent", "time"}
+_SESSION_SORT_FIELDS = {"status", "project", "agent", "time", "last_active"}
 _SESSION_SORT_DIRECTIONS = {"asc", "desc"}
 
 
 def _normalize_session_status_filter(status: str | None) -> str | None:
+    """Return the stored status or live alias; aliases are filtered in SQL."""
     if not status:
         return None
     normalized = status.strip().lower()
-    if normalized in _SESSION_STATUS_ALIASES:
-        return _SESSION_STATUS_ALIASES[normalized]
-    if normalized not in _SESSION_STORED_STATUSES:
+    if normalized not in SESSION_LIST_STATUSES:
         raise HTTPException(status_code=422, detail=f"Unsupported session status: {status}")
     return normalized
 
@@ -88,69 +95,77 @@ def _normalize_session_sort(sort_by: str, sort_direction: str) -> tuple[str, str
     return normalized_sort, normalized_direction
 
 
-def _session_live_activity(session: Any) -> dict[str, Any]:
-    metadata = getattr(session, "provider_metadata", None)
-    if not isinstance(metadata, dict):
-        return {}
-    live_activity = metadata.get("live_activity")
-    return live_activity if isinstance(live_activity, dict) else {}
+def _comma_values(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [value.strip() for value in raw.split(",") if value.strip()]
 
 
-def _session_matches_live_status_alias(session: Any, status: str | None) -> bool:
-    if not status:
-        return True
-    normalized = status.strip().lower()
-    if normalized not in _SESSION_LIVE_STATUS_ALIASES:
-        return True
-    live_activity = _session_live_activity(session)
-    if not live_activity:
-        return False
-    state = str(
-        live_activity.get("lifecycle_state")
-        or live_activity.get("status")
-        or live_activity.get("state")
-        or ""
-    ).lower()
-    if normalized == "reapable":
-        return bool(live_activity.get("reapable")) or state == "reapable"
-    return bool(live_activity.get("is_stale")) or bool(live_activity.get("reapable")) or state in {
-        "reapable",
-        "stale",
-        "stalled",
-    }
+def _normalize_kinds(kind: str | None) -> tuple[str, ...]:
+    kinds = [value.lower() for value in _comma_values(kind)]
+    unknown = [value for value in kinds if value not in SESSION_KIND_TYPES]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unsupported session kind: {', '.join(unknown)}")
+    return tuple(dict.fromkeys(kinds))
 
 
-def _normalize_list_sessions_stats(
-    result: Sequence[Any],
-) -> tuple[
-    list[Any],
-    int,
-    dict[str, int],
-    dict[str, int],
-    dict[str, dict[str, int]],
-    dict[str, int],
-    dict[str, int],
-]:
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
+def _list_filters(
+    *,
+    project_id: str | None,
+    status: str | None,
+    agent_slug: str | None,
+    parent_session_id: str | None,
+    session_type: str | None,
+    external_id: str | None,
+    q: str | None,
+    kind: str | None,
+    since: datetime | None,
+    exclude_benchmarks: bool,
+    model: str | None,
+    roots_only: bool,
+) -> SessionListFilters:
+    return SessionListFilters(
+        project_id=project_id,
+        status=_normalize_session_status_filter(status),
+        agent_slug=agent_slug,
+        session_type=session_type,
+        parent_session_id=parent_session_id,
+        external_id=external_id,
+        q=q.strip() if q and q.strip() else None,
+        kinds=_normalize_kinds(kind),
+        since=_aware(since),
+        exclude_benchmarks=exclude_benchmarks,
+        model=model or None,
+        roots_only=roots_only,
+    )
+
+
+def _normalize_list_sessions_stats(result: Sequence[Any]) -> dict[str, Any]:
     """Support additive session stats fields without breaking older mocks."""
     if len(result) < 5:
         raise ValueError("list_sessions_with_stats returned incomplete result")
 
-    sessions = list(result[0])
-    total = int(result[1])
-    msg_counts = dict(result[2])
-    event_counts = dict(result[3])
-    token_stats = dict(result[4])
-    child_counts = dict(result[5]) if len(result) > 5 else {}
-    active_child_counts = dict(result[6]) if len(result) > 6 else {}
-    return (
-        sessions,
-        total,
-        msg_counts,
-        event_counts,
-        token_stats,
-        child_counts,
-        active_child_counts,
-    )
+    def optional(index: int, default: Any) -> Any:
+        return result[index] if len(result) > index else default
+
+    return {
+        "sessions": list(result[0]),
+        "total": int(result[1]),
+        "msg_counts": dict(result[2]),
+        "event_counts": dict(result[3]),
+        "token_stats": dict(result[4]),
+        "child_counts": dict(optional(5, {})),
+        "active_child_counts": dict(optional(6, {})),
+        "next_cursor": optional(7, None),
+        "titles": dict(optional(8, {})),
+        "usage": dict(optional(9, {})),
+    }
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
@@ -208,17 +223,68 @@ async def heartbeat_existing_session(
     return build_session_response(session)
 
 
+# Registered before /sessions/{session_id} so "facets" is never read as an id.
+@router.get("/sessions/facets", response_model=SessionFacetsResponse)
+async def get_session_facets(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    project_id: Annotated[str | None, Query(description="Filter by project")] = None,
+    status: Annotated[
+        str | None,
+        Query(description="Filter by status: active, completed, failed, or live alias running/stale/reapable"),
+    ] = None,
+    agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
+    parent_session_id: Annotated[str | None, Query(description="Filter by parent session")] = None,
+    session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
+    external_id: Annotated[str | None, Query(description="Filter by linked external work item")] = None,
+    q: Annotated[
+        str | None,
+        Query(description="Search id prefix, summary, external id, branch, agent, project and model"),
+    ] = None,
+    kind: Annotated[
+        str | None,
+        Query(description="Comma list of kinds: coding, chat, completion, image (absent = all)"),
+    ] = None,
+    since: Annotated[datetime | None, Query(description="Only sessions last active at or after this time")] = None,
+    exclude_benchmarks: Annotated[bool, Query(description="Exclude benchmark-attributed sessions")] = False,
+    model: Annotated[str | None, Query(description="Exact requested model")] = None,
+    roots_only: Annotated[bool, Query(description="Only sessions without a parent")] = False,
+) -> SessionFacetsResponse:
+    """Facet counts for the list filters; each facet ignores its own filter."""
+    filters = _list_filters(
+        project_id=project_id,
+        status=status,
+        agent_slug=agent_slug,
+        parent_session_id=parent_session_id,
+        session_type=session_type,
+        external_id=external_id,
+        q=q,
+        kind=kind,
+        since=since,
+        exclude_benchmarks=exclude_benchmarks,
+        model=model,
+        roots_only=roots_only,
+    )
+    return SessionFacetsResponse.model_validate(await fetch_session_facets(db, filters))
+
+
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    include_events: Annotated[
+        bool,
+        Query(description="Load events into messages (false returns SQL-aggregated counts only)"),
+    ] = True,
 ) -> SessionResponse:
-    """Get a session by ID with all events."""
+    """Get a session by ID, with all events unless include_events=false."""
     try:
-        session = await get_session_with_events(db, session_id)
+        if include_events:
+            session = await get_session_with_events(db, session_id)
+        else:
+            session = await get_session_or_404(db, session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    return await build_full_session_response(db, session)
+    return await build_full_session_response(db, session, include_events=include_events)
 
 
 @router.get("/sessions/{session_id}/events", response_model=SessionEventsResponse)
@@ -233,24 +299,67 @@ async def get_session_events(
         str | None,
         Query(description="Stable boundary returned by the first page"),
     ] = None,
+    exclude_types: Annotated[
+        str | None,
+        Query(description="Comma list of event types to exclude"),
+    ] = None,
+    q: Annotated[str | None, Query(description="Search event content and tool name")] = None,
+    after: Annotated[
+        str | None,
+        Query(description="Keyset cursor (next_after) from the previous window; replaces page"),
+    ] = None,
+    order: Annotated[
+        str,
+        Query(pattern="^(asc|desc)$", description="Order by (turn, sequence): asc or desc"),
+    ] = "asc",
 ) -> SessionEventsResponse:
-    """Get session events with filtering and pagination."""
+    """Get session events with filtering and offset or keyset pagination."""
     try:
         await get_session_or_404(db, session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     try:
-        events, total, max_turn, event_snapshot = await query_session_events(
-            db, session_id, event_type, turn, page, page_size, snapshot
+        window = await query_session_event_window(
+            db,
+            session_id,
+            event_type=event_type,
+            turn=turn,
+            page=page,
+            page_size=page_size,
+            snapshot=snapshot,
+            exclude_types=_comma_values(exclude_types),
+            q=q,
+            after=after,
+            order=order,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SessionEventsResponse(
         session_id=session_id,
-        events=build_event_responses(events),
-        total=total,
-        max_turn=max_turn,
-        snapshot=event_snapshot,
+        events=build_event_responses(window.events),
+        total=window.total,
+        max_turn=window.max_turn,
+        snapshot=window.snapshot,
+        next_after=window.next_after,
+    )
+
+
+@router.get("/sessions/{session_id}/events/summary", response_model=SessionEventsSummaryResponse)
+async def get_session_events_summary(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionEventsSummaryResponse:
+    """Grouped event counts, first user message and native usage totals."""
+    try:
+        await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    summary = await fetch_session_events_summary(db, session_id)
+    return SessionEventsSummaryResponse(
+        total=summary.total,
+        by_type=summary.by_type,
+        first_user_message=summary.first_user_message,
+        **summary.usage.as_fields(),
     )
 
 
@@ -324,56 +433,95 @@ async def delete_session(
 async def list_sessions(
     db: Annotated[AsyncSession, Depends(get_db)],
     project_id: Annotated[str | None, Query(description="Filter by project")] = None,
-    status: Annotated[str | None, Query(description="Filter by status")] = None,
+    status: Annotated[
+        str | None,
+        Query(description="Filter by status: active, completed, failed, or live alias running/stale/reapable"),
+    ] = None,
     agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
     parent_session_id: Annotated[str | None, Query(description="Filter by parent session")] = None,
     session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
     external_id: Annotated[str | None, Query(description="Filter by linked external work item")] = None,
-    sort_by: Annotated[str, Query(description="Sort field: status, project, agent, or time")] = "status",
+    q: Annotated[
+        str | None,
+        Query(description="Search id prefix, summary, external id, branch, agent, project and model"),
+    ] = None,
+    kind: Annotated[
+        str | None,
+        Query(description="Comma list of kinds: coding, chat, completion, image (absent = all)"),
+    ] = None,
+    since: Annotated[datetime | None, Query(description="Only sessions last active at or after this time")] = None,
+    exclude_benchmarks: Annotated[bool, Query(description="Exclude benchmark-attributed sessions")] = False,
+    model: Annotated[str | None, Query(description="Exact requested model")] = None,
+    roots_only: Annotated[bool, Query(description="Only sessions without a parent")] = False,
+    sort_by: Annotated[
+        str,
+        Query(description="Sort field: status, project, agent, time, or last_active"),
+    ] = "status",
     sort_direction: Annotated[str, Query(description="Sort direction: asc or desc")] = "asc",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
+    cursor: Annotated[
+        str | None,
+        Query(description="Opaque keyset cursor (next_cursor); when given, page is ignored"),
+    ] = None,
 ) -> SessionListResponse:
-    """List sessions with pagination and filtering."""
-    stored_status = _normalize_session_status_filter(status)
-    normalized_sort, normalized_direction = _normalize_session_sort(sort_by, sort_direction)
-    raw_stats = await list_sessions_with_stats(
-        db,
+    """List sessions with SQL filtering, offset or keyset paging, and batched stats."""
+    filters = _list_filters(
         project_id=project_id,
-        status=stored_status,
+        status=status,
         agent_slug=agent_slug,
-        session_type=session_type,
-        page=page,
-        page_size=page_size,
         parent_session_id=parent_session_id,
+        session_type=session_type,
         external_id=external_id,
-        sort_by=normalized_sort,
-        sort_direction=normalized_direction,
+        q=q,
+        kind=kind,
+        since=since,
+        exclude_benchmarks=exclude_benchmarks,
+        model=model,
+        roots_only=roots_only,
     )
-    sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
-        _normalize_list_sessions_stats(raw_stats)
-    )
-    if status and status.strip().lower() in _SESSION_LIVE_STATUS_ALIASES:
-        sessions = [session for session in sessions if _session_matches_live_status_alias(session, status)]
-        total = len(sessions)
+    normalized_sort, normalized_direction = _normalize_session_sort(sort_by, sort_direction)
+    try:
+        raw_stats = await list_sessions_with_stats(
+            db,
+            page=page,
+            page_size=page_size,
+            sort_by=normalized_sort,
+            sort_direction=normalized_direction,
+            filters=filters,
+            cursor=cursor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    stats = _normalize_list_sessions_stats(raw_stats)
+    sessions = stats["sessions"]
     owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
         db,
         {session.project_id for session in sessions},
     )
+    items = build_session_list_items(
+        sessions,
+        stats["msg_counts"],
+        stats["token_stats"],
+        event_counts=stats["event_counts"],
+        child_counts=stats["child_counts"],
+        active_child_counts=stats["active_child_counts"],
+        owner_session_ids=owner_session_ids,
+        specialist_session_ids=specialist_session_ids,
+    )
+    for session, item in zip(sessions, items, strict=True):
+        apply_session_rollups(
+            item,
+            session,
+            title=stats["titles"].get(session.id),
+            usage=stats["usage"].get(session.id),
+        )
     return SessionListResponse(
-        sessions=build_session_list_items(
-            sessions,
-            msg_counts,
-            token_stats,
-            event_counts=event_counts,
-            child_counts=child_counts,
-            active_child_counts=active_child_counts,
-            owner_session_ids=owner_session_ids,
-            specialist_session_ids=specialist_session_ids,
-        ),
-        total=total,
+        sessions=items,
+        total=stats["total"],
         page=page,
         page_size=page_size,
+        next_cursor=stats["next_cursor"],
     )
 
 

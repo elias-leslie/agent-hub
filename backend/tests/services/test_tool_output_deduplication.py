@@ -30,6 +30,7 @@ from app.services.session_branching import copy_events_to_forked_session
 from app.services.session_ingestion._events import _process_event, _source_event_fingerprint
 from app.services.session_ingestion.adapters.transcript_parsers import parse_transcript_events
 from app.services.session_ingestion.models import NormalizedEvent
+from app.services.session_queries import SessionEventWindow
 from app.services.session_responses import build_event_responses
 from tests.conftest import APITestClient
 
@@ -200,7 +201,8 @@ def test_actual_events_http_response_from_persisted_row(row_db: ORMSession) -> N
 
     app.dependency_overrides[get_db] = override_db
     with patch("app.api.sessions.get_session_or_404", new=AsyncMock()), patch(
-        "app.api.sessions.query_session_events", new=AsyncMock(return_value=([event], 1, 1, "test-snapshot")),
+        "app.api.sessions.query_session_event_window",
+        new=AsyncMock(return_value=SessionEventWindow(events=[event], total=1, max_turn=1, snapshot="test-snapshot")),
     ):
         response = APITestClient(app).get("/api/sessions/session-dedup/events")
     assert response.status_code == 200

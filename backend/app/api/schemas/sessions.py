@@ -274,6 +274,18 @@ class SessionResponse(BaseModel):
     )
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")
+    title: str | None = Field(
+        default=None,
+        description="First user message, whitespace-collapsed, at most 160 characters",
+    )
+    usage_known: bool = Field(default=False, description="Whether native response usage events exist")
+    usage_input_tokens: int | None = Field(default=None, description="Native response input tokens")
+    usage_output_tokens: int | None = Field(default=None, description="Native response output tokens")
+    usage_cached_input_tokens: int | None = Field(default=None, description="Native response cached input tokens")
+    last_active_at: datetime | None = Field(
+        default=None,
+        description="coalesce(last_activity_at, created_at)",
+    )
 
 
 class SessionListItem(BaseModel):
@@ -339,6 +351,18 @@ class SessionListItem(BaseModel):
     )
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")
+    title: str | None = Field(
+        default=None,
+        description="First user message, whitespace-collapsed, at most 160 characters",
+    )
+    usage_known: bool = Field(default=False, description="Whether native response usage events exist")
+    usage_input_tokens: int | None = Field(default=None, description="Native response input tokens")
+    usage_output_tokens: int | None = Field(default=None, description="Native response output tokens")
+    usage_cached_input_tokens: int | None = Field(default=None, description="Native response cached input tokens")
+    last_active_at: datetime | None = Field(
+        default=None,
+        description="coalesce(last_activity_at, created_at)",
+    )
     created_at: datetime
     updated_at: datetime
     status_source: str = Field(
@@ -358,6 +382,23 @@ class SessionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    next_cursor: str | None = Field(
+        default=None,
+        description="Opaque keyset cursor for the next page; null when exhausted",
+    )
+
+
+class SessionFacetProject(BaseModel):
+    project_id: str
+    count: int
+
+
+class SessionFacetsResponse(BaseModel):
+    """Facet counts for the list filters; each facet ignores its own filter."""
+
+    status: dict[str, int]
+    kind: dict[str, int]
+    projects: list[SessionFacetProject]
 
 
 class CloseSessionResponse(BaseModel):
@@ -452,6 +493,22 @@ class SessionEventsResponse(BaseModel):
     total: int = Field(..., description="Total number of events")
     max_turn: int = Field(..., description="Highest turn number in session")
     snapshot: str = Field(..., description="Stable inclusive boundary for paginated reads")
+    next_after: str | None = Field(
+        default=None,
+        description="Keyset cursor (turn, sequence) for the next window; null when exhausted",
+    )
+
+
+class SessionEventsSummaryResponse(BaseModel):
+    """Grouped event counts and native usage for one session."""
+
+    total: int
+    by_type: dict[str, int]
+    first_user_message: str | None = None
+    usage_known: bool = False
+    usage_input_tokens: int | None = None
+    usage_output_tokens: int | None = None
+    usage_cached_input_tokens: int | None = None
 
 
 class CreateSessionEventRequest(BaseModel):

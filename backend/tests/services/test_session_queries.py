@@ -75,3 +75,39 @@ async def test_query_session_events_reuses_fixed_snapshot_without_reanchoring() 
     assert max_turn == 1
     assert returned_snapshot == snapshot
     assert db.execute.await_count == 3
+
+
+def test_benchmark_exclusion_mirrors_attribution_metadata_rule() -> None:
+    from sqlalchemy import select
+    from sqlalchemy.dialects import postgresql
+
+    from app.models import Session
+    from app.services.session_queries import SessionListFilters, session_list_predicates
+
+    predicates = session_list_predicates(SessionListFilters(exclude_benchmarks=True))
+    sql = str(select(Session.id).where(*predicates).compile(dialect=postgresql.dialect()))
+    assert "sessions.provider_metadata ->> " in sql
+    assert "NOT coalesce" in sql
+
+
+def test_title_collapses_whitespace_and_caps_length() -> None:
+    from app.services.session_queries import normalize_session_title
+
+    assert normalize_session_title("  a \n\t b  ") == "a b"
+    assert normalize_session_title("   ") is None
+    assert normalize_session_title(None) is None
+    assert len(normalize_session_title("y" * 500) or "") == 160
+
+
+def test_event_cursor_encodes_order_turn_and_sequence() -> None:
+    from app.services.session_queries import (
+        decode_session_event_cursor,
+        encode_session_event_cursor,
+    )
+
+    cursor = encode_session_event_cursor("desc", 7, 3)
+    assert decode_session_event_cursor(cursor, "desc") == (7, 3)
+    with pytest.raises(ValueError, match="order"):
+        decode_session_event_cursor(cursor, "asc")
+    with pytest.raises(ValueError, match="Invalid"):
+        decode_session_event_cursor("bad", "asc")

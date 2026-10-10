@@ -136,6 +136,7 @@ class TestGetSession:
             },
         }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
+        mock_db_session.last_activity_at = None
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
         # Create mock events (replacing old messages)
@@ -208,6 +209,8 @@ class TestGetSession:
         #   (5) child session count query       — scalars().all() → list[Session]
         #   (6) query_project_ownership         — .all() → list[Row]
         #   (7) query_project_active_specialists — .all() → list[Row]
+        #   (8) fetch_session_titles            — .all() → list[Row]
+        #   (9) fetch_session_usage_rollups     — .all() → list[Row]
         #
         # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
         # StopIteration when _resolve_agent_display_names is invoked more than once — any
@@ -250,8 +253,8 @@ class TestGetSession:
         assert data["context_usage"]["limit_tokens"] == 272000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
-        assert mock_session.execute.call_count == 7, (
-            f"Expected 7 DB queries, got {mock_session.execute.call_count} "
+        assert mock_session.execute.call_count == 9, (
+            f"Expected 9 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
 
@@ -383,6 +386,7 @@ class TestListSessions:
         }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
+        mock_db_session.last_activity_at = None
 
         # Mock count query
         mock_count_result = MagicMock()
@@ -390,7 +394,10 @@ class TestListSessions:
 
         # Mock list query
         mock_list_result = MagicMock()
-        mock_list_result.scalars.return_value.all.return_value = [mock_db_session]
+        # Rows carry the session followed by its sort-key values (rank, activity, created_at, id).
+        mock_list_result.all.return_value = [
+            (mock_db_session, 0, mock_db_session.created_at, mock_db_session.created_at, "session-1")
+        ]
 
         # Mock message count query
         mock_msg_count_result = MagicMock()
@@ -490,12 +497,16 @@ class TestListSessions:
         mock_db_session.provider_metadata = {"cwd": str(checkout)}
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
+        mock_db_session.last_activity_at = None
 
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 1
 
         mock_list_result = MagicMock()
-        mock_list_result.scalars.return_value.all.return_value = [mock_db_session]
+        # Rows carry the session followed by its sort-key values (rank, activity, created_at, id).
+        mock_list_result.all.return_value = [
+            (mock_db_session, 0, mock_db_session.created_at, mock_db_session.created_at, "session-1")
+        ]
 
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 1)]
@@ -571,26 +582,23 @@ class TestListSessions:
 
     @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
     @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
-    def test_list_sessions_status_alias_fetches_active_sessions(
+    def test_list_sessions_status_alias_filters_in_sql(
         self,
         mock_list_sessions: AsyncMock,
         mock_lane_session_ids: AsyncMock,
         client: APITestClient,
     ) -> None:
-        """Test live status aliases never hit the DB enum directly."""
-        active_session = MagicMock()
-        active_session.provider_metadata = {"live_activity": {"lifecycle_state": "waiting_for_model"}}
-        mock_list_sessions.return_value = ([active_session], 1, {}, {}, {})
+        """Live status aliases reach SQL filters so totals are counted before paging."""
+        mock_list_sessions.return_value = ([], 3, {}, {}, {})
         mock_lane_session_ids.return_value = (set(), set())
 
-        response = client.get("/api/sessions?status=stale")
+        response = client.get("/api/sessions?status=Stale")
 
         assert response.status_code == 200
-        assert response.json()["sessions"] == []
-        assert response.json()["total"] == 0
+        assert response.json()["total"] == 3
         await_args = mock_list_sessions.await_args
         assert await_args is not None
-        assert await_args.kwargs["status"] == "active"
+        assert await_args.kwargs["filters"].status == "stale"
 
     def test_list_sessions_rejects_unknown_status(self, client: APITestClient) -> None:
         response = client.get("/api/sessions?status=bogus")
@@ -640,7 +648,7 @@ class TestListSessions:
         mock_list_sessions.assert_awaited_once()
         await_args = mock_list_sessions.await_args
         assert await_args is not None
-        assert await_args.kwargs["external_id"] == "task-12345678"
+        assert await_args.kwargs["filters"].external_id == "task-12345678"
 
     def test_list_sessions_filter_by_agent_slug(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by agent slug."""
@@ -773,3 +781,30 @@ class TestPromoteSession:
         )
 
         assert response.status_code == 404
+
+
+class TestSessionListContractValidation:
+    """Request validation that needs no database."""
+
+    def test_unknown_kind_is_rejected(self, client: APITestClient) -> None:
+        assert client.get("/api/sessions?kind=coding,bogus").status_code == 422
+
+    def test_facets_route_is_not_read_as_session_id(
+        self, client: APITestClient, mock_session: AsyncMock
+    ) -> None:
+        empty = MagicMock()
+        empty.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=empty)
+
+        response = client.get("/api/sessions/facets?kind=coding")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "status": {"active": 0, "completed": 0, "failed": 0, "running": 0},
+            "kind": {"coding": 0, "chat": 0, "completion": 0, "image": 0},
+            "projects": [],
+        }
+        assert mock_session.execute.await_count == 3
+
+    def test_events_order_must_be_asc_or_desc(self, client: APITestClient) -> None:
+        assert client.get("/api/sessions/s-1/events?order=up").status_code == 422
