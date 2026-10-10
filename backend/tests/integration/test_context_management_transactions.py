@@ -92,12 +92,7 @@ async def test_service_scope_move_preserves_content_and_undo_receipt(maintenance
 
 
 @pytest_asyncio.fixture
-async def maintenance_db(monkeypatch):
-    from unittest.mock import AsyncMock
-    # Integration exercises local transactions only; never dispatch a real
-    # implementation task from a fixture's deliberately invalid provider result.
-    monkeypatch.setattr('app.services.context_maintenance.dispatch_technical_work', AsyncMock(return_value={'status': 'queued', 'task_id': 'test-recovery'}))
-    monkeypatch.setattr('app.services.context_maintenance.reconcile_technical_work', AsyncMock(return_value={}))
+async def maintenance_db():
     async with _get_engine().connect() as connection:
         assert (await connection.execute(text('SELECT current_database()'))).scalar() == 'agent_hub_test'
         try:
@@ -113,7 +108,8 @@ def maintenance_context(session="first", project=None):
         capabilities=['bash'], include_memories=False, include_project_index=False, include_tool_capabilities=False, include_continuity=False)
 
 
-async def maintenance_fixture(db, *, policy=None, handoff=False, kind="conflict"):
+async def maintenance_fixture(db, *, policy=None, handoff=False, kind="conflict", detail=None):
+    """Seed a retained maintenance item; new reviews no longer create them."""
     from app.services.context_maintenance import enqueue
     from app.services.context_policy import source_snapshot
     row = Prompt(slug='maintenance-fixture', name='Maintenance fixture', content='Use the existing canonical workflow.',
@@ -121,128 +117,172 @@ async def maintenance_fixture(db, *, policy=None, handoff=False, kind="conflict"
     db.add(row)
     await db.flush()
     source = {**source_snapshot(row), 'revision': source_revision(row)}
-    item_id = await enqueue(db, kind=kind, sources=[source], context={}, summary='Inspect conflicting guidance', recommendation='Compare the current authority.', detail={'handoff_needed': handoff})
+    item_id = await enqueue(db, kind=kind, sources=[source], context={}, summary='Inspect conflicting guidance',
+        recommendation='Compare the current authority.', detail={'handoff_needed': handoff, **(detail or {})})
     await db.commit()
     return row, item_id, source
 
 
+RETIRED_MAINTENANCE_ACTIONS = ('acknowledge', 'claim', 'release', 'recover', 'defer', 'resume', 'dismiss', 'escalate',
+    'reported', 'answer', 'repair', 'apply', 'resolve', 'review', 'reconcile', 'verify_work')
+
+
 @pytest.mark.integration
-async def test_maintenance_dedup_scope_preview_ack_and_claims(maintenance_db):
-    from app.models.context_governance import ContextMaintenanceAttention, ContextMaintenanceItem
-    from app.services.context_maintenance import (
-        acknowledge,
-        attention_summary,
-        enqueue,
-        session_key,
-    )
+async def test_manual_maintenance_lists_and_inspects_retained_items(maintenance_db):
+    from app.services.context_maintenance import enqueue
     from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
+    db = maintenance_db
+    _, item_id, source = await maintenance_fixture(db, policy=ContextPolicy(scope='project', targets=['agent-hub']), handoff=True)
+    background_id = await enqueue(db, kind='review_due', sources=[source], context={}, summary='Background review',
+        recommendation='Review the changed source.')
+    again = await enqueue(db, kind='conflict', sources=[source], context={}, summary='Same evidence',
+        recommendation='Same review', evidence_id='review-2')
+    assert again == item_id
+    await db.commit()
+    context = maintenance_context(project='agent-hub')
+
+    listed = await handle_maintenance(db, MaintenanceRequest(action='list', context=context), 'agent:test')
+    assert [item['id'] for item in listed['items']] == [item_id]
+    assert listed['items'][0]['handoff_needed'] is True and 'sources' not in listed['items'][0]
+    assert listed['background_items'] == 1
+    assert listed['guidance'] is None and listed['guidance_source'] is None
+    assert listed['health']['state'] == 'retired' and listed['health']['schedule_enabled'] is False
+    assert listed['health']['active_counts'] == {'pending': 2}
+    assert listed['attention']['new_relevant'] == 0  # retained items no longer demand startup attention
+    everything = await handle_maintenance(db, MaintenanceRequest(action='list', context=context, include_background=True), 'agent:test')
+    assert {item['id'] for item in everything['items']} == {item_id, background_id}
+
+    other_project = maintenance_context(project='neri')
+    unrelated = await handle_maintenance(db, MaintenanceRequest(action='list', context=other_project, include_background=True), 'agent:test')
+    assert unrelated['items'] == [] and unrelated['background_items'] == 0
+
+    inspected = await handle_maintenance(db, MaintenanceRequest(action='inspect', context=context, item_id=item_id), 'agent:test')
+    assert inspected['item']['id'] == item_id and inspected['item']['version'] == 1
+    assert inspected['item']['sources'][0]['revision'] == source['revision']
+    assert inspected['item']['evidence_ids'] == ['review-2']
+    assert inspected['reviews'] == [] and inspected['history'] == []
+    with pytest.raises(HTTPException) as hidden:
+        await handle_maintenance(db, MaintenanceRequest(action='inspect', context=other_project, item_id=item_id), 'agent:test')
+    assert hidden.value.status_code == 404
+
+
+@pytest.mark.integration
+async def test_delivery_no_longer_injects_maintenance_handoff(maintenance_db):
+    from app.models.context_governance import ContextMaintenanceAttention, ContextMaintenanceItem
+    from app.services.context_maintenance import session_key
     from app.services.runtime_context import build_canonical_context_delivery
     db = maintenance_db
-    _, item_id, source = await maintenance_fixture(db, policy=ContextPolicy(scope='project', targets=['agent-hub']))
+    _, item_id, _ = await maintenance_fixture(db, policy=ContextPolicy(scope='project', targets=['agent-hub']),
+        handoff=True, detail={'technical_blocked': True})
     context = maintenance_context(project='agent-hub')
-    again = await enqueue(db, kind='conflict', sources=[source], context={}, summary='Same evidence', recommendation='Same review', evidence_id='review-2')
-    assert again == item_id
-    assert (await attention_summary(db, context))['new_relevant'] == 0  # background work costs no startup text
-    item = await db.get(ContextMaintenanceItem, item_id)
-    item.detail = {'handoff_needed': True}
-    assert (await attention_summary(db, context))['new_relevant'] == 0  # scheduled semantic recovery owns this
-    item.detail = {'handoff_needed': True, 'technical_blocked': True}
-    await db.flush()
     first = await build_canonical_context_delivery(db, context)
     second = await build_canonical_context_delivery(db, context)
     assert first.status == second.status == 'ok'
     assert first.payload_hash == second.payload_hash
-    assert 'Context maintenance handoff' in first.rendered
-    assert first.maintenance_attention['items'] == {item_id: 1}
+    assert 'Use the existing canonical workflow.' in first.rendered
+    assert 'Context maintenance handoff' not in first.rendered
+    assert first.maintenance_attention == {}
+    assert not any(block.kind == 'context_maintenance' for block in first.blocks)
     assert await db.get(ContextMaintenanceAttention, session_key(context)) is None
-    assert (await attention_summary(db, maintenance_context(project='neri')))['new_relevant'] == 0
-    await acknowledge(db, context, {item_id: 1})
-    assert (await attention_summary(db, context))['new_relevant'] == 0
-    other = maintenance_context(session='second', project='agent-hub')
-    assert (await attention_summary(db, other))['new_relevant'] == 1
-    claimed = await handle_maintenance(db, MaintenanceRequest(action='claim', context=context, item_id=item_id, expected_version=1, reason='Inspect evidence'), 'agent:test')
-    assert claimed['item']['version'] == 2
-    assert (await attention_summary(db, other))['new_relevant'] == 0
-    with pytest.raises(HTTPException) as error:
-        await handle_maintenance(db, MaintenanceRequest(action='claim', context=other, item_id=item_id, expected_version=2, reason='Try competing claim'), 'agent:test')
-    assert error.value.status_code == 409
-    assert 'Another agent' in error.value.detail
-    released = await handle_maintenance(db, MaintenanceRequest(action='release', context=context, item_id=item_id, expected_version=2, reason='Hand off retained evidence'), 'agent:test')
-    assert released['item']['state'] == 'pending'
-    with pytest.raises(HTTPException):
-        await acknowledge(db, context, {item_id: 1})
+    item = await db.get(ContextMaintenanceItem, item_id)
+    assert item.state == 'pending' and item.version == 1
 
 
 @pytest.mark.integration
-async def test_maintenance_owner_question_reporting_and_answer(maintenance_db):
-    from app.services.context_maintenance import attention_summary
+async def test_retired_maintenance_execution_returns_410_without_mutation(maintenance_db):
+    from unittest.mock import patch
+
+    from app.models.context_governance import ContextMaintenanceItem
+    from app.services.context_maintenance import reconcile_maintenance
     from app.services.context_maintenance_actions import (
         MaintenanceRequest,
-        OwnerDecision,
         handle_maintenance,
+        recover_item,
     )
     db = maintenance_db
-    _, item_id, _ = await maintenance_fixture(db, handoff=True)
+    prompt, item_id, source = await maintenance_fixture(db, handoff=True)
     context = maintenance_context()
-    async def action(name, version, **extra):
-        return await handle_maintenance(db, MaintenanceRequest(action=name, context=context, item_id=item_id, expected_version=version, reason='Observed test evidence', **extra), 'agent:test')
-    await action('claim', 1)
-    with pytest.raises(HTTPException):
-        await action('escalate', 2)
-    await action('escalate', 2, evidence='Conflicting owner preferences in retained review', decision=OwnerDecision(question='Which scope is intended?', recommendation='Use project scope.', options=['Project', 'Global']))
-    await action('reported', 3, evidence='Actual conversation message 12 contains the question')
-    await action('release', 4)
-    assert (await attention_summary(db, maintenance_context('second')))['new_relevant'] == 0
-    answered = await handle_maintenance(db, MaintenanceRequest(action='answer', context=maintenance_context('second'), item_id=item_id, expected_version=5, reason='Project', evidence='Operator entered Project in the UI'), 'dashboard:operator', operator=True)
-    assert answered['item']['state'] == 'pending'
-    assert answered['item']['decision']['answer'] == 'Project'
-    assert (await attention_summary(db, maintenance_context('third')))['new_relevant'] == 0
-    curator_context = maintenance_context('curator').model_copy(update={'agent_slug': 'memory-curator'})
-    assert (await attention_summary(db, curator_context))['new_relevant'] == 1
-
-
-@pytest.mark.integration
-async def test_maintenance_rejects_stale_correction_and_retains_supersession(maintenance_db):
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance import reconcile_maintenance
-    from app.services.context_maintenance_actions import MaintenanceRequest, handle_maintenance
-    db = maintenance_db
-    source, item_id, snapshot = await maintenance_fixture(db, handoff=True)
-    context = maintenance_context()
-    await handle_maintenance(db, MaintenanceRequest(action='claim', context=context, item_id=item_id, expected_version=1, reason='Review'), 'agent:test')
-    source.content = 'New owner instruction supersedes the old snapshot.'
-    await db.commit()
-    with pytest.raises(HTTPException) as error:
-        await handle_maintenance(db, MaintenanceRequest(action='apply', context=context, item_id=item_id, expected_version=2, reason='Correct', evidence='Original authority', draft=ContextDraft(context=context, edits=[SourceEdit(source_type='prompt', source_id=source.slug, expected_revision=snapshot['revision'], content='Stale replacement')])), 'agent:test')
-    assert error.value.status_code == 409
-    assert source.content == 'New owner instruction supersedes the old snapshot.'
-    result = await reconcile_maintenance(db)
-    assert result['superseded'] == 1
+    draft = ContextDraft(context=context, edits=[SourceEdit(source_type='prompt', source_id=prompt.slug,
+        expected_revision=source['revision'], content='Must never be saved')])
+    for action in RETIRED_MAINTENANCE_ACTIONS:
+        with pytest.raises(HTTPException) as retired:
+            await handle_maintenance(db, MaintenanceRequest(action=action, context=context, item_id=item_id, expected_version=1,
+                reason='Observed test evidence', evidence='Retained evidence', draft=draft), 'agent:test', operator=True)
+        assert retired.value.status_code == 410, action
+        assert 'retired' in retired.value.detail
+    reviewer = AsyncMock()
+    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
+        for retired_call in (recover_item(db, await db.get(ContextMaintenanceItem, item_id), context), reconcile_maintenance(db)):
+            with pytest.raises(HTTPException) as retired:
+                await retired_call
+            assert retired.value.status_code == 410
+    reviewer.assert_not_awaited()
     item = await db.get(ContextMaintenanceItem, item_id)
-    assert item.state == 'superseded' and item.claim_owner is None
-    due = list((await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_due'))).scalars())
-    assert len(due) == 1 and due[0].sources[0]['revision'] == source_revision(source)
+    assert item.state == 'pending' and item.version == 1 and item.claim_owner is None
+    assert (await get_source(db, 'prompt', prompt.slug)).content == 'Use the existing canonical workflow.'
+    assert not list((await db.execute(select(ContextRecord))).scalars())
 
 
 @pytest.mark.integration
-async def test_maintenance_mechanical_repair_is_idempotent_and_rechecks_recurrence(maintenance_db):
+async def test_manual_routes_inventory_save_undo_and_maintenance(maintenance_db):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api.runtime_context import router as runtime_context_router
+    from app.db import get_db
     from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance import reconcile_maintenance
-    from app.services.memory.budget import count_tokens
+    from app.services.api_key_auth import require_api_key
     db = maintenance_db
-    row = Memory(content='Retain observed decisions.', name='Derived-count fixture', memory_type='reference', scope='global', tier=3, status='active', token_count=999, metadata_={})
-    db.add(row)
-    await db.flush()
-    first = await reconcile_maintenance(db)
-    assert len(first['repaired']) == 1 and first['model_calls'] == 0
-    assert row.token_count == count_tokens(row.content)
-    second = await reconcile_maintenance(db)
-    assert second['repaired'] == []
-    row.token_count = 999
-    await db.flush()
-    third = await reconcile_maintenance(db)
-    assert third['repaired'] == first['repaired']
-    assert (await db.get(ContextMaintenanceItem, first['repaired'][0])).state == 'resolved'
+    prompt, item_id, source = await maintenance_fixture(db, handoff=True)
+    slug = prompt.slug  # rollbacks after rejected requests expire ORM rows
+
+    async def session_override():
+        yield db
+
+    app = FastAPI()
+    app.include_router(runtime_context_router, prefix='/api')
+    app.dependency_overrides[get_db] = session_override
+    app.dependency_overrides[require_api_key] = lambda: None
+    context = maintenance_context().model_dump(mode='json')
+    base = '/api/runtime-context/manage'
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+        inventory_response = await client.post(f'{base}/inventory', json=context)
+        assert inventory_response.status_code == 200
+        listed = {s['source_id']: s for s in inventory_response.json()['sources'] if s['source_type'] == 'prompt'}
+        assert listed[slug]['revision'] == source['revision']
+        assert listed[slug]['state'] == 'included'
+
+        def save_body(revision, content):
+            return {'context': context, 'reason': 'Manual maintenance correction', 'edits': [
+                {'source_type': 'prompt', 'source_id': slug, 'expected_revision': revision, 'content': content}]}
+
+        stale = await client.post(f'{base}/save', json=save_body('stale-revision', 'Stale replacement'))
+        assert stale.status_code == 409
+        assert (await get_source(db, 'prompt', slug)).content == 'Use the existing canonical workflow.'
+
+        saved = await client.post(f'{base}/save', json=save_body(source['revision'], 'Use the corrected canonical workflow.'))
+        assert saved.status_code == 200
+        change_id = saved.json()['change_id']
+        assert (await get_source(db, 'prompt', slug)).content == 'Use the corrected canonical workflow.'
+        change = await db.get(ContextRecord, change_id)
+        assert change.kind == 'change' and change.actor == 'dashboard:operator'
+        # Manual saves are retained history only; they no longer queue curator review work.
+        items = list((await db.execute(select(ContextMaintenanceItem))).scalars())
+        assert [item.id for item in items] == [item_id]
+
+        history_response = await client.get(f'{base}/history', params={'source_id': slug})
+        assert [entry['id'] for entry in history_response.json()] == [change_id]
+
+        maintenance_list = await client.post(f'{base}/maintenance', json={'action': 'list', 'context': context})
+        assert maintenance_list.status_code == 200
+        assert [item['id'] for item in maintenance_list.json()['items']] == [item_id]
+        claim = await client.post(f'{base}/maintenance', json={'action': 'claim', 'context': context, 'item_id': item_id,
+            'expected_version': 1, 'reason': 'Inspect evidence'})
+        assert claim.status_code == 410 and 'retired' in claim.json()['detail']
+
+        undone = await client.post(f'{base}/changes/{change_id}/undo')
+        assert undone.status_code == 200 and undone.json()['change_id'] != change_id
+        assert (await get_source(db, 'prompt', slug)).content == 'Use the existing canonical workflow.'
 
 
 @pytest.mark.integration
@@ -255,119 +295,6 @@ async def test_evaluation_fixtures_never_create_operational_handoffs(maintenance
         'entries': [{'pair': ['case:a', 'case:b'], 'result': {'answers': {'relationship': {'choice': 'conflict'}}}}],
     })
     assert not list((await db.execute(select(ContextMaintenanceItem))).scalars())
-
-
-@pytest.mark.integration
-async def test_semantic_recovery_applies_exact_correction_and_retains_undo(maintenance_db):
-    import json
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_actions import recover_item
-
-    db = maintenance_db
-    prompt, item_id, source = await maintenance_fixture(db, handoff=True, kind='targeting')
-    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Correct clear scope and disclosure errors using canonical history.',
-        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
-    await db.commit()
-    response = {'action': 'apply', 'reason': 'Add a faithful navigation summary without changing the rule.',
-        'authority_passages': {source['source_id']: source['content']},
-        'edits': [{'source_type': 'prompt', 'source_id': source['source_id'], 'expected_revision': source['revision'],
-            'summary': 'Canonical workflow'}]}
-    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
-    item = await db.get(ContextMaintenanceItem, item_id)
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        result = await recover_item(db, item, maintenance_context())
-    assert 'failure' not in result
-    assert item.state == 'resolved'
-    assert prompt.content == source['content']
-    change_id = item.resolution['change_id']
-    assert item.resolution['verification'] == 'canonical_generation'
-    await undo_change(db, change_id, 'test')
-    await db.commit()
-    restored = await get_source(db, 'prompt', source['source_id'])
-    assert isinstance(restored, Prompt)
-    assert restored.description == source['summary']
-
-
-@pytest.mark.integration
-async def test_invalid_recovery_cannot_mutate_or_repeat_inference(maintenance_db):
-    import json
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_actions import recover_item
-
-    db = maintenance_db
-    _, item_id, source = await maintenance_fixture(db, handoff=True)
-    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Preserve authority and exact evidence.',
-        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
-    await db.commit()
-    response = {'action': 'apply', 'reason': 'An unsupported edit', 'authority_passages': {source['source_id']: 'Invented passage'},
-        'edits': [{'source_type': 'prompt', 'source_id': source['source_id'], 'expected_revision': source['revision'], 'content': 'Must never be saved'}]}
-    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        first = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
-        second = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
-    reviewer.assert_awaited_once()
-    assert first['failure'] == 'ValueError' and second['model_calls'] == 0
-    assert (await get_source(db, 'prompt', source['source_id'])).content == source['content']
-    receipts = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance_recovery'))).scalars())
-    assert len(receipts) == 1 and 'Invented passage' in receipts[0].payload['response']
-
-
-@pytest.mark.integration
-async def test_recovery_rejects_edits_outside_maintenance_item_sources(maintenance_db):
-    import json
-    from unittest.mock import AsyncMock, patch
-
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_maintenance_actions import recover_item
-    from app.services.context_policy import ContextPolicy
-
-    db = maintenance_db
-    _, item_id, source = await maintenance_fixture(db, handoff=True)
-    neighbor = Prompt(slug='neighbor-fixture', name='Neighbor fixture', content='Use the existing canonical workflow in this other source.',
-        enabled=True, is_global=True, prompt_type='standard', exclude_agents=[], context_policy=ContextPolicy(scope='global').model_dump())
-    db.add(neighbor)
-    db.add(Prompt(slug='context-maintenance-workflow', name='Maintenance', content='Preserve authority and exact evidence.',
-        enabled=True, is_global=False, prompt_type='standard', exclude_agents=[]))
-    await db.commit()
-    from app.services.context_policy import source_revision
-    response = {'action': 'apply', 'reason': 'Wrong item edit', 'authority_passages': {neighbor.slug: neighbor.content},
-        'edits': [{'source_type': 'prompt', 'source_id': neighbor.slug, 'expected_revision': source_revision(neighbor), 'content': 'Must never be saved'}]}
-    reviewer = AsyncMock(return_value=(json.dumps(response), 'catalog-model', 'recovery-session'))
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        result = await recover_item(db, await db.get(ContextMaintenanceItem, item_id), maintenance_context())
-    reviewer.assert_awaited_once()
-    assert result['failure'] == 'ValueError'
-    assert neighbor.content == 'Use the existing canonical workflow in this other source.'
-    assert (await get_source(db, 'prompt', source['source_id'])).content == source['content']
-    receipts = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance_recovery'))).scalars())
-    assert len(receipts) == 1 and 'neighbor-fixture' in receipts[0].payload['response']
-
-
-@pytest.mark.integration
-async def test_later_review_failure_reopens_resolved_incident_once(maintenance_db):
-    from app.models.context_governance import ContextMaintenanceItem
-    from app.services.context_governance import record
-    db = maintenance_db
-    _, _, source = await maintenance_fixture(db, kind='review_due')
-    packet = {'sources': [source], 'reviewer': {'agent_slug': 'memory-curator'}, 'coverage': {'context': {}}}
-    await record(db, 'context_review', 'test', {**packet, 'failure': 'Original unavailable provider'})
-    item = (await db.execute(select(ContextMaintenanceItem).where(ContextMaintenanceItem.kind == 'review_failed'))).scalar_one()
-    item.detail = {**item.detail, 'technical_work': {'task_id': 'original-repair', 'status': 'completed_pending_revalidation'}}
-    await record(db, 'context_review', 'test', packet)
-    assert item.state == 'resolved'
-    latest = await record(db, 'context_review', 'test', {**packet, 'failure': 'Later provider failure'})
-    assert item.state == 'pending' and item.detail['generation'] == 1
-    assert 'technical_work' not in item.detail and item.detail['handoff_needed']
-    from app.services.context_maintenance import ingest_review
-    await ingest_review(db, await db.get(ContextRecord, latest))
-    assert item.detail['generation'] == 1
-    history = list((await db.execute(select(ContextRecord).where(ContextRecord.kind == 'maintenance'))).scalars())
-    assert any(row.payload.get('action') == 'review_failure_recurred' and
-        row.payload['evidence']['detail']['technical_work']['task_id'] == 'original-repair' for row in history)
 
 
 @pytest.mark.integration
