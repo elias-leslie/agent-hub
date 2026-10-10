@@ -56,6 +56,7 @@ def test_a_sibling_sharing_the_root_prefix_is_outside(tmp_path: Path, monkeypatc
     monkeypatch.setattr(_executor_roots.tempfile, "gettempdir", lambda: str(root / "scratch"))
 
     assert transcript_parsers.contained_transcript_path(str(evil / "t.jsonl")) is None
-    assert transcript_parsers.contained_transcript_path(str(root)) == root.resolve()
+    assert transcript_parsers.contained_transcript_path(str(root)) is None  # a root is not a transcript file
+    assert _executor_roots.contained_working_dir(str(root)) == root.resolve()
     with pytest.raises(ValueError, match="outside"):
         _executor_roots.contained_working_dir(str(evil))

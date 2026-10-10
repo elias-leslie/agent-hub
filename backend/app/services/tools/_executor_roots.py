@@ -76,10 +76,23 @@ def contained_working_dir(working_dir: str) -> Path:
     real = os.path.realpath(working_dir)
     roots = [os.path.realpath(root) for root in _get_known_roots().values()]
     bases = [*roots, os.path.realpath(tempfile.gettempdir())]
-    for base in bases + _linked_worktrees(roots):
-        if real == base or real.startswith(base + os.sep):
-            directory = Path(real)
-            if not directory.is_dir():
-                raise ValueError(f"working_dir {working_dir!r} is not an existing directory")
-            return directory
+    allowed = bases + _linked_worktrees(roots)
+    # Exactly a root: return the trusted configured value, not the caller's.
+    for base in allowed:
+        if base == real:
+            return _existing_directory(Path(base), working_dir)
+    for base in allowed:
+        prefix = base.rstrip(os.sep) + os.sep
+        if not real.startswith(prefix):
+            continue
+        directory = Path(real)
+        if not directory.is_dir():
+            raise ValueError(f"working_dir {working_dir!r} is not an existing directory")
+        return directory
     raise ValueError(f"working_dir {working_dir!r} is outside the known project roots and scratch")
+
+
+def _existing_directory(directory: Path, working_dir: str) -> Path:
+    if not directory.is_dir():
+        raise ValueError(f"working_dir {working_dir!r} is not an existing directory")
+    return directory

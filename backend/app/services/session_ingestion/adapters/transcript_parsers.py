@@ -44,8 +44,10 @@ def contained_transcript_path(transcript_path: str) -> Path | None:
     """Resolve a caller-supplied transcript path, or ``None`` outside the transcript roots."""
     real = os.path.realpath(transcript_path)
     for root in transcript_roots():
-        if real == root or real.startswith(root + os.sep):
-            return Path(real)
+        prefix = root.rstrip(os.sep) + os.sep
+        if not real.startswith(prefix):
+            continue
+        return Path(real)  # a transcript file is never its root directory
     return None
 
 
