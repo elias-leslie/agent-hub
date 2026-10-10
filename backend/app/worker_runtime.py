@@ -28,7 +28,6 @@ from app.workflows.scheduled import (
 )
 from app.workflows.session_reaper import session_reaper_task
 from app.workflows.summary import session_summary_task
-from app.workflows.webhooks import webhook_delivery_task
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,6 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     memory_governance_task,
     feedback_cleanup_task,
     data_retention_task,
-    webhook_delivery_task,
     session_summary_task,
     observation_processing_task,
     model_enrichment_sync_task,

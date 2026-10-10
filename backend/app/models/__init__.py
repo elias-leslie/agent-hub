@@ -28,7 +28,7 @@ from .automation import (
 )
 from .base import Base
 from .client import APIKey, Client, ClientControl
-from .config import Credential, WebhookSubscription
+from .config import Credential
 from .context_governance import (
     ContextJudgment,
     ContextMaintenanceAttention,
@@ -133,6 +133,5 @@ __all__ = [
     "SessionSummarySegment",
     "TruncationEvent",
     "UsageStatLog",
-    "WebhookSubscription",
     "WorkflowScheduleControl",
 ]

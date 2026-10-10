@@ -39,7 +39,6 @@ from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
 from app.api.wake import router as wake_router
-from app.api.webhooks import router as webhooks_router
 from app.api.work_chats import router as work_chats_router
 
 router = APIRouter()
@@ -55,7 +54,6 @@ router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
 router.include_router(sessions_router, tags=["sessions"])
 router.include_router(events_router, tags=["events"])
-router.include_router(webhooks_router)  # Has its own prefix /webhooks and tags
 router.include_router(api_keys_router)  # Has its own tags
 router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
