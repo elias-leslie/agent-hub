@@ -42,7 +42,7 @@
   tool-use/instruction/design scores, plus per-token/image/second pricing).
 - Client registration and access control, per-project permissions, budgets and
   quotas, encrypted credential storage (Fernet at rest), and OAuth (Codex/PKCE).
-- Optional web research, browser, Telegram bot, and voice
+- Optional web research, browser, and voice
   (faster-whisper STT → completion → edge-tts) integrations.
 - A Python SDK (`agent-hub-client`) with sync + async clients for completions,
   SSE streaming, stateful sessions, image generation, and memory operations.
@@ -248,7 +248,7 @@ content.
 
 Agent Hub can boot without provider keys. Dashboards, health checks, sessions,
 and configuration pages remain available. Provider completions, web research,
-push, Telegram, browser, and voice integrations require their corresponding
+push, browser, and voice integrations require their corresponding
 configuration and should fail clearly when absent.
 
 ## License

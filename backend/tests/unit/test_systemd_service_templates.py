@@ -33,21 +33,3 @@ def test_frontend_template_uses_control_group_shutdown() -> None:
     text = (SYSTEMD_DIR / "agent-hub-frontend.service").read_text()
     assert "KillMode=control-group" in text
 
-
-def test_telegram_report_service_and_timer_templates_exist() -> None:
-    service = (SYSTEMD_DIR / "agent-hub-telegram-status-report.service").read_text()
-    timer = (SYSTEMD_DIR / "agent-hub-telegram-status-report.timer").read_text()
-    assert "__PROJECT_ROOT__" in service
-    assert "python -m app.scripts.send_jenny_telegram_status_report" in service
-    assert "--deterministic" in service
-    assert "OnCalendar=*-*-* 08:00:00" in timer
-    assert "Persistent=true" in timer
-
-
-def test_host_guardian_alert_service_and_timer_templates_exist() -> None:
-    service = (SYSTEMD_DIR / "agent-hub-host-guardian-alert.service").read_text()
-    timer = (SYSTEMD_DIR / "agent-hub-host-guardian-alert.timer").read_text()
-    assert "__PROJECT_ROOT__" in service
-    assert "python -m app.scripts.send_host_guardian_alerts" in service
-    assert "OnUnitActiveSec=5min" in timer
-    assert "Persistent=true" in timer

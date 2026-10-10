@@ -15,7 +15,7 @@ Agent Hub is a self-hosted control plane for developers and operators running AI
 
 The repository contains the FastAPI backend, Next.js dashboard, SDKs, shared UI packages, and Hatchet workflows. Configured cloud providers and local OpenAI-compatible endpoints can serve workloads. Anthropic/Claude is catalogued for reference and excluded from workload routing by design; Claude Code instead runs as an external worker (`st claude task`) that launches the official CLI on the owner's subscription login and ingests its transcript.
 
-Provider keys are optional for local UI/API smoke use. Provider completions and optional web, browser, push, Telegram, and voice features need their own configuration and should report unavailable capabilities clearly.
+Provider keys are optional for local UI/API smoke use. Provider completions and optional web, browser, push, and voice features need their own configuration and should report unavailable capabilities clearly.
 
 ## Getting started
 
