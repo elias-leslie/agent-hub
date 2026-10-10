@@ -32,7 +32,6 @@ from .config import Credential
 from .context_governance import (
     ContextJudgment,
     ContextMaintenanceAttention,
-    ContextMaintenanceIngest,
     ContextMaintenanceItem,
     ContextRecord,
 )
@@ -89,7 +88,6 @@ __all__ = [
     "CompactnessPolicy",
     "ContextJudgment",
     "ContextMaintenanceAttention",
-    "ContextMaintenanceIngest",
     "ContextMaintenanceItem",
     "ContextRecord",
     "CostLog",

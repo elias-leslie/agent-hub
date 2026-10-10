@@ -57,11 +57,6 @@ class ContextMaintenanceItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class ContextMaintenanceIngest(Base):
-    __tablename__ = "context_maintenance_ingest"
-    record_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-
-
 class ContextMaintenanceAttention(Base):
     __tablename__ = "context_maintenance_attention"
     session_key: Mapped[str] = mapped_column(String(64), primary_key=True)
