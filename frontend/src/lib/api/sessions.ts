@@ -210,7 +210,8 @@ export interface SessionListQuery {
   roots_only?: boolean
   exclude_benchmarks?: boolean
   parent_session_id?: string
-  sort_by?: 'last_active' | 'status'
+  /** time = coalesce(last_activity_at, updated_at, created_at). */
+  sort_by?: 'last_active' | 'status' | 'time'
   sort_direction?: 'asc' | 'desc'
   cursor?: string
   page_size?: number

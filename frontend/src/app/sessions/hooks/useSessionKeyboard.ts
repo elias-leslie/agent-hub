@@ -17,15 +17,14 @@ function focusRow(listRef: RefObject<HTMLElement | null>, id: string) {
 
 interface UseSessionKeyboardProps {
   ids: readonly string[]
-  /** Row the keyboard acts on; the open preview when one is open. */
+  /** Row the keyboard acts on; the expanded session when one is open. */
   activeId: string | null
-  previewOpen: boolean
+  expanded: boolean
   listRef: RefObject<HTMLElement | null>
   searchRef: RefObject<HTMLInputElement | null>
   onActivate: (id: string) => void
-  onOpenPreview: (id: string) => void
-  onClosePreview: () => void
-  onOpenFull: (id: string) => void
+  onToggle: (id: string) => void
+  onCollapse: () => void
 }
 
 /**
@@ -35,13 +34,12 @@ interface UseSessionKeyboardProps {
 export function useSessionKeyboard({
   ids,
   activeId,
-  previewOpen,
+  expanded,
   listRef,
   searchRef,
   onActivate,
-  onOpenPreview,
-  onClosePreview,
-  onOpenFull,
+  onToggle,
+  onCollapse,
 }: UseSessionKeyboardProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -57,23 +55,32 @@ export function useSessionKeyboard({
 
       if (event.key === '/') {
         event.preventDefault()
-        searchRef.current?.focus()
+        // Inside an expanded session, / searches that session's log.
+        const panel = (event.target as HTMLElement | null)?.closest?.(
+          '[data-testid="session-inline"]',
+        )
+        const local = panel?.querySelector<HTMLInputElement>(
+          'input[data-session-search]',
+        )
+        if (local && local.offsetParent !== null) local.focus()
+        else searchRef.current?.focus()
         return
       }
 
-      if (event.key === 'Escape' && previewOpen) {
+      if (event.key === 'Escape' && expanded) {
         event.preventDefault()
         const id = activeId
-        onClosePreview()
+        onCollapse()
         if (id) requestAnimationFrame(() => focusRow(listRef, id))
         return
       }
 
-      // Only list navigation keys beyond this point; leave buttons and links alone.
+      // Only list navigation keys beyond this point; leave buttons, links and
+      // the expanded session's own controls alone.
       const target = event.target as HTMLElement | null
-      const inList = Boolean(target && listRef.current?.contains(target))
+      const onRow = Boolean(target?.dataset.sessionId)
       const onBody = target === document.body || target === null
-      if (!inList && !onBody) return
+      if (!onRow && !onBody) return
       if (ids.length === 0) return
 
       const index = activeId ? ids.indexOf(activeId) : -1
@@ -98,16 +105,10 @@ export function useSessionKeyboard({
           move(-1)
           break
         case 'Enter':
-          if (activeId && target?.dataset.sessionId) {
-            event.preventDefault()
-            onOpenFull(activeId)
-          }
-          break
         case ' ':
-          if (activeId && (target?.dataset.sessionId || onBody)) {
+          if (activeId) {
             event.preventDefault()
-            if (previewOpen) onClosePreview()
-            else onOpenPreview(activeId)
+            onToggle(activeId)
           }
           break
       }
@@ -119,11 +120,10 @@ export function useSessionKeyboard({
     activeId,
     ids,
     listRef,
+    expanded,
     onActivate,
-    onClosePreview,
-    onOpenFull,
-    onOpenPreview,
-    previewOpen,
+    onCollapse,
+    onToggle,
     searchRef,
   ])
 }

@@ -1,11 +1,10 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import {
+  Fragment,
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,7 +14,7 @@ import { EmptyState } from './components/EmptyState'
 import { ErrorAlert } from './components/ErrorAlert'
 import { InfiniteScrollFooter } from './components/InfiniteScrollFooter'
 import { LoadingState } from './components/LoadingState'
-import { SessionPreview } from './components/SessionPreview'
+import { SessionInline } from './components/SessionInline'
 import { SessionListHeader, SessionRow } from './components/SessionRow'
 import { SessionsToolbar } from './components/SessionsToolbar'
 import { useSessionKeyboard } from './hooks/useSessionKeyboard'
@@ -25,34 +24,18 @@ import {
 } from './hooks/useSessionListState'
 import { useSessionsData } from './hooks/useSessionsData'
 
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false)
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const media = window.matchMedia(query)
-    const sync = () => setMatches(media.matches)
-    sync()
-    media.addEventListener('change', sync)
-    return () => media.removeEventListener('change', sync)
-  }, [query])
-  return matches
-}
+const FOLLOW_DELAY_MS = 250
 
 function SessionsView() {
-  const router = useRouter()
   const { state, update, select, clearFilters } = useSessionListState()
   const data = useSessionsData(state)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const headerRef = useRef<HTMLElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [cursorId, setCursorId] = useState<string | null>(state.selected)
-  const isSplit = useMediaQuery('(min-width: 1280px)')
 
   const selected = state.selected
-  const previewOpen = selected !== null
-  const compactRows = previewOpen && isSplit
+  const expanded = selected !== null
   const ids = useMemo(() => data.sessions.map((s) => s.id), [data.sessions])
   const selectedRow = useMemo(
     () => data.sessions.find((s) => s.id === selected) ?? null,
@@ -68,19 +51,14 @@ function SessionsView() {
   const activeId =
     cursorId && ids.includes(cursorId) ? cursorId : (ids[0] ?? null)
 
-  // Expose the sticky header height so the split preview can sit beneath it.
-  useLayoutEffect(() => {
-    const header = headerRef.current
-    const root = rootRef.current
-    if (!header || !root) return
-    const sync = () =>
-      root.style.setProperty('--sessions-top', `${header.offsetHeight}px`)
-    sync()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(sync)
-    observer.observe(header)
-    return () => observer.disconnect()
-  }, [])
+  // Bring the expanded session's row into view when the selection changes.
+  useEffect(() => {
+    if (!selected) return
+    const node = listRef.current?.querySelector<HTMLElement>(
+      `[data-session-id="${CSS.escape(selected)}"]`,
+    )
+    node?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = data
   useEffect(() => {
@@ -102,40 +80,46 @@ function SessionsView() {
     return () => observer.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
-  const openFull = useCallback(
-    (id: string) => router.push(`/sessions/${id}`),
-    [router],
+  const collapse = useCallback(() => select(null), [select])
+  // While a session is expanded, j/k moves the expansion with the cursor,
+  // debounced so holding a key does not load every session on the way.
+  const followTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (followTimer.current) clearTimeout(followTimer.current)
+    },
+    [],
   )
-  const closePreview = useCallback(() => select(null), [select])
   const activate = useCallback(
     (id: string) => {
       setCursorId(id)
-      if (previewOpen) select(id)
+      if (!expanded) return
+      if (followTimer.current) clearTimeout(followTimer.current)
+      followTimer.current = setTimeout(() => select(id), FOLLOW_DELAY_MS)
     },
-    [previewOpen, select],
-  )
-  const handleRowClick = useCallback(
-    (id: string) => {
-      setCursorId(id)
-      select(id)
-    },
-    [select],
+    [expanded, select],
   )
   const filterModel = useCallback(
     (model: string) => update({ model }),
     [update],
   )
+  const handleRowClick = useCallback(
+    (id: string) => {
+      setCursorId(id)
+      select(id === selected ? null : id)
+    },
+    [select, selected],
+  )
 
   useSessionKeyboard({
     ids,
     activeId,
-    previewOpen,
+    expanded,
     listRef,
     searchRef,
     onActivate: activate,
-    onOpenPreview: select,
-    onClosePreview: closePreview,
-    onOpenFull: openFull,
+    onToggle: (id) => select(id === selected ? null : id),
+    onCollapse: collapse,
   })
 
   const ready = data.hasData && !data.error
@@ -143,9 +127,9 @@ function SessionsView() {
   const filtersAreDefault = isDefaultFilterState(state)
 
   return (
-    <div ref={rootRef} className="page-shell bg-slate-950 text-slate-100">
+    <div className="page-shell bg-slate-950 text-slate-100">
       <div className="page-backdrop bg-slate-950/90" />
-      <header ref={headerRef} className="page-header bg-slate-950/92">
+      <header className="page-header bg-slate-950/92">
         <div className="page-container px-4 py-3 lg:px-8">
           <SessionsToolbar
             state={state}
@@ -160,13 +144,7 @@ function SessionsView() {
       </header>
 
       <main className="relative px-0 md:px-4 lg:px-8">
-        <div
-          className={cn(
-            'page-container',
-            previewOpen &&
-              'xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:gap-4',
-          )}
-        >
+        <div className="page-container">
           <div className="min-w-0 py-3">
             {data.error ? (
               <ErrorAlert
@@ -182,6 +160,20 @@ function SessionsView() {
               />
             ) : null}
 
+            {/* A selection outside the loaded rows (a sub-agent, or filtered out) opens above the list. */}
+            {selected && !selectedRow && !data.isLoading ? (
+              <div className="mb-3 overflow-hidden md:rounded-lg md:border md:border-slate-800">
+                <SessionInline
+                  key={selected}
+                  sessionId={selected}
+                  listRow={null}
+                  onClose={collapse}
+                  onSelect={select}
+                  onFilterModel={filterModel}
+                />
+              </div>
+            ) : null}
+
             {data.sessions.length > 0 ? (
               <div
                 className={cn(
@@ -189,23 +181,31 @@ function SessionsView() {
                   data.isPlaceholder && 'opacity-70',
                 )}
               >
-                <SessionListHeader compact={compactRows} />
+                <SessionListHeader />
                 <div
                   ref={listRef}
-                  role="listbox"
                   aria-label="Sessions"
                   data-testid="session-list"
                 >
                   {data.sessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      isCursor={session.id === activeId}
-                      isSelected={session.id === selected}
-                      compact={compactRows}
-                      onClick={handleRowClick}
-                      onDoubleClick={openFull}
-                    />
+                    <Fragment key={session.id}>
+                      <SessionRow
+                        session={session}
+                        isCursor={session.id === activeId}
+                        isSelected={session.id === selected}
+                        onClick={handleRowClick}
+                      />
+                      {session.id === selected ? (
+                        <SessionInline
+                          key={session.id}
+                          sessionId={session.id}
+                          listRow={session}
+                          onClose={collapse}
+                          onSelect={select}
+                          onFilterModel={filterModel}
+                        />
+                      ) : null}
+                    </Fragment>
                   ))}
                 </div>
                 <InfiniteScrollFooter
@@ -221,25 +221,6 @@ function SessionsView() {
               </div>
             ) : null}
           </div>
-
-          {selected ? (
-            <>
-              <button
-                type="button"
-                aria-label="Close preview"
-                tabIndex={-1}
-                onClick={closePreview}
-                className="fixed inset-0 z-30 hidden bg-black/50 md:block xl:hidden"
-              />
-              <SessionPreview
-                key={selected}
-                sessionId={selected}
-                listRow={selectedRow}
-                onClose={closePreview}
-                onFilterModel={filterModel}
-              />
-            </>
-          ) : null}
         </div>
       </main>
     </div>

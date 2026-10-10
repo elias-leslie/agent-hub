@@ -54,12 +54,6 @@ vi.mock('next/navigation', async () => {
   }
 })
 
-vi.mock('@/components/timeline', () => ({
-  EventTimeline: ({ events }: { events: Array<unknown> }) => (
-    <div data-testid="event-timeline">{events.length} events</div>
-  ),
-}))
-
 vi.mock('@/lib/api/sessions', async (original) => ({
   ...(await original<typeof import('@/lib/api/sessions')>()),
   querySessions: vi.fn(),
@@ -199,30 +193,94 @@ describe('SessionsPage', () => {
     expect(rows[1]).toHaveTextContent('claude code')
   })
 
-  it('opens the preview from a row, pushing sel and fetching without events', async () => {
+  it('expands a row in place, pushing sel and loading its newest log window', async () => {
+    vi.mocked(fetchSessionEvents).mockResolvedValue({
+      session_id: codexRow.id,
+      events: [
+        {
+          id: 'e1',
+          turn: 1,
+          sequence: 1,
+          event_type: 'tool_use',
+          role: null,
+          content: null,
+          tool_name: 'Bash',
+          call_id: 'call-1',
+          tool_input: { command: ['/bin/bash', '-lc', 'pytest -q tests/api'] },
+          tool_output: null,
+          tokens: null,
+          duration_ms: null,
+          model_used: null,
+          agent_id: null,
+          agent_name: null,
+          created_at: '2026-10-10T08:00:00Z',
+        },
+        {
+          id: 'e2',
+          turn: 1,
+          sequence: 2,
+          event_type: 'tool_result',
+          role: null,
+          content: null,
+          tool_name: null,
+          call_id: 'call-1',
+          tool_input: null,
+          tool_output: {
+            stdout: '3 passed',
+            exit_code: 0,
+            status: 'completed',
+          },
+          tokens: null,
+          duration_ms: 3200,
+          model_used: null,
+          agent_id: null,
+          agent_name: null,
+          created_at: '2026-10-10T08:00:04Z',
+        },
+      ],
+      total: 2,
+      max_turn: 1,
+      next_after: null,
+    } as never)
     mount()
     fireEvent.click(await screen.findByText('Fix the dispatcher retry loop'))
     expect(nav.push).toHaveBeenCalledWith(`/sessions?sel=${codexRow.id}`, {
       scroll: false,
     })
-    expect(await screen.findByTestId('session-preview')).toBeInTheDocument()
+    const panel = await screen.findByTestId('session-inline')
+    // The panel sits directly after its row.
+    const row = screen
+      .getAllByTestId('session-row')
+      .find((node) => node.getAttribute('data-session-id') === codexRow.id)
+    expect(row).toHaveAttribute('aria-expanded', 'true')
+    expect(row?.nextElementSibling).toBe(panel)
     expect(fetchSession).toHaveBeenCalledWith(codexRow.id, {
       includeEvents: false,
     })
     expect(fetchSessionEvents).toHaveBeenCalledWith(
       codexRow.id,
-      expect.objectContaining({ order: 'desc', page_size: 20 }),
+      expect.objectContaining({
+        order: 'desc',
+        page_size: 300,
+        exclude_types: expect.arrayContaining([
+          'child_session_update',
+          'thinking',
+        ]),
+      }),
     )
-    const selected = screen
-      .getAllByTestId('session-row')
-      .find((node) => node.getAttribute('aria-selected') === 'true')
-    expect(selected).toHaveAttribute('data-session-id', codexRow.id)
+    expect(await screen.findByText('pytest -q tests/api')).toBeInTheDocument()
+    expect(screen.getByText('exit 0')).toBeInTheDocument()
+    expect(screen.queryByText(/"exit_code"/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Open/ })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse session' }))
+    expect(nav.replace).toHaveBeenLastCalledWith('/sessions', { scroll: false })
   })
 
   it('restores filters and selection from the URL', async () => {
     nav.reset(`q=retry&status=failed&subagents=1&sel=${codexRow.id}`)
     mount()
-    await screen.findByTestId('session-preview')
+    await screen.findByTestId('session-inline')
     expect(querySessions).toHaveBeenCalledWith(
       expect.objectContaining({
         q: 'retry',

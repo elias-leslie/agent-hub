@@ -12,12 +12,10 @@ import {
 } from '../utils'
 import { StatusCell } from './StatusCell'
 
-/** Column templates shared by the header and rows so they always line up. */
-export function sessionGridClass(compact: boolean) {
+/** Column template shared by the header and rows so they always line up. */
+export function sessionGridClass() {
   // Title is the only flexible column; branch appears only on wide screens.
-  return compact
-    ? 'md:grid md:grid-cols-[84px_minmax(8rem,1fr)_104px_112px_60px]'
-    : 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_112px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_112px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_112px_60px_60px]'
+  return 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_112px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_112px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_112px_60px_60px]'
 }
 
 function absolute(value: string) {
@@ -29,19 +27,14 @@ export const SessionRow = memo(function SessionRow({
   session,
   isCursor,
   isSelected,
-  compact,
   onClick,
-  onDoubleClick,
 }: {
   session: SessionListItem
   /** Keyboard cursor; carries the roving tabindex. */
   isCursor: boolean
-  /** Row shown in the open preview. */
+  /** Row whose session is expanded beneath it. */
   isSelected: boolean
-  /** Preview is open beside the list, so the secondary columns are hidden. */
-  compact: boolean
   onClick: (id: string) => void
-  onDoubleClick: (id: string) => void
 }) {
   const title = getSessionTitle(session)
   const shortId = session.id.slice(0, 8)
@@ -59,18 +52,16 @@ export const SessionRow = memo(function SessionRow({
     : identity.effectiveModel
 
   return (
-    // biome-ignore lint/a11y/useFocusableInteractive: roving tabindex; only the cursor row is tabbable
     <div
-      role="option"
-      aria-selected={isSelected}
+      role="button"
+      aria-expanded={isSelected}
       tabIndex={isCursor ? 0 : -1}
       data-session-id={session.id}
       data-testid="session-row"
       onClick={() => onClick(session.id)}
-      onDoubleClick={() => onDoubleClick(session.id)}
       className={cn(
         'cursor-pointer gap-2 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors md:h-9 md:items-center md:py-0',
-        sessionGridClass(compact),
+        sessionGridClass(),
         isSelected
           ? 'bg-slate-800/60'
           : isCursor
@@ -92,7 +83,7 @@ export const SessionRow = memo(function SessionRow({
           <span className="truncate text-slate-100" title={title}>
             {title}
           </span>
-          {titleIsId || compact ? null : (
+          {titleIsId ? null : (
             <span className="hidden shrink-0 font-mono text-[11px] text-slate-500 sm:inline">
               {shortId}
             </span>
@@ -105,31 +96,26 @@ export const SessionRow = memo(function SessionRow({
         <span className="truncate md:text-[13px] md:text-slate-300">
           {session.project_id}
         </span>
-        <span className={cn('truncate', compact && 'md:hidden')}>{source}</span>
-        {compact ? null : (
-          <span
-            className="hidden truncate font-mono text-[12px] text-slate-400 lg:block"
-            title={modelTitle}
-          >
-            {identity.effectiveModel}
-            {identity.fallbackUsed ? (
-              <span className="ml-1 text-amber-300/80">fallback</span>
-            ) : null}
-          </span>
-        )}
-        {compact ? null : (
-          <span
-            className="hidden truncate font-mono text-[12px] text-slate-500 2xl:block"
-            title={session.current_branch ?? undefined}
-          >
-            {session.current_branch || '—'}
-          </span>
-        )}
+        <span className="truncate">{source}</span>
+        <span
+          className="hidden truncate font-mono text-[12px] text-slate-400 lg:block"
+          title={modelTitle}
+        >
+          {identity.effectiveModel}
+          {identity.fallbackUsed ? (
+            <span className="ml-1 text-amber-300/80">fallback</span>
+          ) : null}
+        </span>
+        <span
+          className="hidden truncate font-mono text-[12px] text-slate-500 2xl:block"
+          title={session.current_branch ?? undefined}
+        >
+          {session.current_branch || '—'}
+        </span>
         <span
           className={cn(
             'font-mono text-[12px] tabular-nums md:text-right',
             children > 0 ? 'text-slate-300' : 'hidden text-slate-600 md:inline',
-            compact && 'md:hidden',
           )}
           title={
             children > 0
@@ -161,44 +147,38 @@ export const SessionRow = memo(function SessionRow({
         >
           {formatRelativeTime(lastActive)}
         </span>
-        {compact ? null : (
-          <span
-            className="hidden font-mono text-[12px] tabular-nums text-slate-500 md:text-right lg:block"
-            title={`Started ${absolute(session.created_at)}`}
-          >
-            {formatDurationMs(durationMs)}
-          </span>
-        )}
+        <span
+          className="hidden font-mono text-[12px] tabular-nums text-slate-500 md:text-right lg:block"
+          title={`Started ${absolute(session.created_at)}`}
+        >
+          {formatDurationMs(durationMs)}
+        </span>
       </div>
     </div>
   )
 })
 
-export function SessionListHeader({ compact }: { compact: boolean }) {
+export function SessionListHeader() {
   return (
     <div
       aria-hidden="true"
       className={cn(
         'hidden h-8 items-center gap-2 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
-        sessionGridClass(compact),
+        sessionGridClass(),
       )}
     >
       <span>Status</span>
       <span>Session</span>
       <span>Project</span>
-      {compact ? null : <span>Source</span>}
-      {compact ? null : <span className="hidden lg:block">Model</span>}
-      {compact ? null : <span className="hidden 2xl:block">Branch</span>}
-      {compact ? null : (
-        <span className="text-right" title="Sub-agents">
-          Sub
-        </span>
-      )}
+      <span>Source</span>
+      <span className="hidden lg:block">Model</span>
+      <span className="hidden 2xl:block">Branch</span>
+      <span className="text-right" title="Sub-agents">
+        Sub
+      </span>
       <span className="text-right">Tokens</span>
       <span className="text-right">Active</span>
-      {compact ? null : (
-        <span className="hidden text-right lg:block">Duration</span>
-      )}
+      <span className="hidden text-right lg:block">Duration</span>
     </div>
   )
 }

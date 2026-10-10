@@ -38,7 +38,7 @@ export function SessionsTabContent({
       {sessions.slice(0, 6).map((session) => (
         <a
           key={session.id}
-          href={`/sessions/${session.id}`}
+          href={`/sessions?sel=${session.id}`}
           className="flex items-center justify-between p-2.5 rounded-md hover:bg-slate-800/50 transition-colors group"
         >
           <div className="flex items-center gap-3 min-w-0">
