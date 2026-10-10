@@ -288,9 +288,9 @@ class ProviderHealthInfo(BaseModel):
 
     provider: str
     state: str
-    latency_ms: float
-    availability: float
-    consecutive_failures: int
+    latency_ms: float | None = None
+    availability: float | None = None
+    consecutive_failures: int = 0
     last_error: str | None
 
 
@@ -302,19 +302,14 @@ class ProviderHealthResponse(BaseModel):
 
 @router.get("/provider-health", response_model=ProviderHealthResponse)
 async def get_provider_health() -> ProviderHealthResponse:
-    """Get passive provider health for registered pi-mono providers."""
-    from app.llm.api_registry import get_api_providers
+    """Readiness of each routing provider; no latency or availability is measured."""
+    from app.api.health_logic import provider_statuses
 
-    providers = [
+    return ProviderHealthResponse(providers=[
         ProviderHealthInfo(
-            provider=str(provider.api),
-            state="healthy",
-            latency_ms=0.0,
-            availability=100.0,
-            consecutive_failures=0,
-            last_error=None,
+            provider=status.name,
+            state="ready" if status.available else "unavailable",
+            last_error=status.error,
         )
-        for provider in get_api_providers()
-    ]
-
-    return ProviderHealthResponse(providers=providers)
+        for status in await provider_statuses()
+    ])

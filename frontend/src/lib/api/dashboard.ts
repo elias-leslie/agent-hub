@@ -66,8 +66,8 @@ export async function fetchDashboardStats(
 export interface ProviderHealth {
   provider: string
   state: string
-  latency_ms: number
-  availability: number
+  latency_ms: number | null
+  availability: number | null
   consecutive_failures: number
   last_error: string | null
 }

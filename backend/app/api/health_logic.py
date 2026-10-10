@@ -13,13 +13,20 @@ from app.api.health_schemas import (
 logger = logging.getLogger(__name__)
 
 
-async def check_provider_health(_api: str) -> bool:
-    """Return passive OK for registered pi-mono providers.
+async def provider_statuses() -> list[ProviderStatus]:
+    """Readiness of each routing provider, by the same check routing runs before a call.
 
-    The legacy active prober belonged to the retired text-adapter subsystem.
-    Provider calls now fail at request time through the unified stream surface.
+    Agent Hub stores no runtime health metrics, so ``health`` stays empty rather
+    than reporting invented latency or availability.
     """
-    return True
+    from app.routing.availability import provider_unavailable_reason
+    from app.routing.registry import list_workload_providers
+
+    statuses = []
+    for provider in list_workload_providers():
+        reason = await provider_unavailable_reason(provider)
+        statuses.append(ProviderStatus(name=provider, available=reason is None, configured=reason is None, error=reason))
+    return statuses
 
 
 async def _check_database(db: AsyncSession) -> str:
@@ -40,18 +47,8 @@ def _get_circuit_breaker_info() -> tuple[dict[str, CircuitBreakerStatus] | None,
 
 async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
     """Internal function to fetch fresh status data."""
-    from app.llm.api_registry import get_api_providers
-
     db_status = await _check_database(db)
-
-    providers = [
-        ProviderStatus(
-            name=str(provider.api),
-            available=await check_provider_health(str(provider.api)),
-            configured=True,
-        )
-        for provider in get_api_providers()
-    ]
+    providers = await provider_statuses()
 
     circuit_breakers, thrashing_events, circuit_trips = _get_circuit_breaker_info()
 

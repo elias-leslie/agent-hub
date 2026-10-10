@@ -9,10 +9,15 @@ import { cn } from '@/lib/utils'
 
 export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
   const health = provider.health
-  const state =
-    health?.state || (provider.available ? 'healthy' : 'unavailable')
+  const state = health?.state || (provider.available ? 'ready' : 'unavailable')
 
   const stateConfig = {
+    ready: {
+      color: 'text-emerald-500',
+      bg: 'bg-emerald-500/10',
+      label: 'Ready',
+      dot: 'bg-emerald-500',
+    },
     healthy: {
       color: 'text-emerald-500',
       bg: 'bg-emerald-500/10',
@@ -28,7 +33,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
     unavailable: {
       color: 'text-red-500',
       bg: 'bg-red-500/10',
-      label: 'Down',
+      label: 'Unavailable',
       dot: 'bg-red-500',
     },
     unknown: {
@@ -62,6 +67,14 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
               )}
             />
           </div>
+          {!health && provider.error && (
+            <p
+              className="mt-1 max-w-56 truncate text-[11px] text-slate-400"
+              title={provider.error}
+            >
+              {provider.error}
+            </p>
+          )}
           {health && (
             <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
               <span>{formatLatency(health.latency_ms)}</span>

@@ -118,7 +118,7 @@ export function ChartsSection({
             Provider Health
           </h2>
           <p className="mt-1 text-sm text-slate-300">
-            Availability and latency across configured providers.
+            Whether each provider can take requests on this host.
           </p>
         </div>
         <div className="space-y-2.5">
@@ -127,7 +127,7 @@ export function ChartsSection({
               <div className="h-18 rounded-2xl animate-shimmer" />
               <div className="h-18 rounded-2xl animate-shimmer" />
             </>
-          ) : status?.providers ? (
+          ) : status?.providers?.length ? (
             status.providers.map((provider) => (
               <ProviderStatusCard key={provider.name} provider={provider} />
             ))

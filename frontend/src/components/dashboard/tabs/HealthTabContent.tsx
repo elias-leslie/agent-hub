@@ -13,9 +13,11 @@ import { cn } from '@/lib/utils'
 // ─────────────────────────────────────────────────────────────────────────────
 
 function stateColor(state: string) {
-  if (state === 'healthy') return 'bg-emerald-500/10 text-emerald-400'
+  if (state === 'healthy' || state === 'ready')
+    return 'bg-emerald-500/10 text-emerald-400'
   if (state === 'degraded') return 'bg-amber-500/10 text-amber-400'
-  if (state === 'down') return 'bg-red-500/10 text-red-400 animate-pulse'
+  if (state === 'down' || state === 'unavailable')
+    return 'bg-red-500/10 text-red-400 animate-pulse'
   return 'bg-slate-500/10 text-slate-400'
 }
 
@@ -85,13 +87,13 @@ function ProviderHealthPanel() {
           <div className="grid grid-cols-2 gap-2 text-center">
             <div>
               <p className="text-xs font-mono font-bold text-slate-200">
-                {formatLatency(p.latency_ms)}
+                {p.latency_ms == null ? '—' : formatLatency(p.latency_ms)}
               </p>
               <p className="text-[8px] text-slate-500 uppercase">Latency</p>
             </div>
             <div>
               <p className="text-xs font-mono font-bold text-slate-200">
-                {p.availability.toFixed(1)}%
+                {p.availability == null ? '—' : `${p.availability.toFixed(1)}%`}
               </p>
               <p className="text-[8px] text-slate-500 uppercase">Avail</p>
             </div>

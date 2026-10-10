@@ -25,6 +25,11 @@ async def route_unavailable_reason(model: str) -> str | None:
     provider = get_provider_for_model(resolved)
     if provider == UNKNOWN_PROVIDER:
         return f"{resolved} is not in the model catalog"
+    return await provider_unavailable_reason(provider)
+
+
+async def provider_unavailable_reason(provider: str) -> str | None:
+    """Return why ``provider`` cannot take requests on this host, or ``None`` if it can."""
     if provider in _KEYLESS_PROVIDERS:
         return None
     if provider == "claude":
@@ -36,4 +41,4 @@ async def route_unavailable_reason(model: str) -> str | None:
     return None
 
 
-__all__ = ["route_unavailable_reason"]
+__all__ = ["provider_unavailable_reason", "route_unavailable_reason"]
