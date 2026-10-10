@@ -205,6 +205,33 @@ async def test_native_receipts_reconcile_rollout_without_duplicate_commands(isol
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_rollout_registration_replay_is_idempotent_after_transcript_removal(isolated_native_db, tmp_path):
+    """Regression: the collector re-registers the rollout source every sync.
+
+    Once the local transcript was gone, the replay re-ran provenance against the
+    missing file and returned 409 transcript_session_identity_mismatch.
+    """
+    factory = isolated_native_db
+    thread = str(uuid4())
+    path = tmp_path / "replayed.jsonl"
+    path.write_text(_record("session_meta", {"id": thread}))
+    async with factory() as db:
+        session = Session(id=thread, project_id="agent-hub", provider="codex", model="codex/unknown", status="active", session_type="agent", provider_metadata={"transcript_path": str(path)})
+        db.add(session)
+        await db.commit()
+        rollout = NativeSourceRegistration(namespace="replay-fixture", source_kind="rollout", producer_id="summitflow/codex-session-sync", epoch="rollout", collector_id="summitflow", provider_version=SUPPORTED_VERSION, schema_fingerprint=protocol_contract()[0], thread_id=thread, transcript_path=str(path), reconcile_existing_rollout=True)
+        first = await register_native_source(db, session, rollout)
+        path.unlink()
+        replay = await register_native_source(db, session, rollout)
+        assert (replay.source_id, replay.authenticity) == (first.source_id, "local_verified")
+        # A changed registration for the same producer epoch still conflicts.
+        with pytest.raises(SessionIngestionConflict) as conflict:
+            await register_native_source(db, session, rollout.model_copy(update={"collector_id": "other"}))
+        assert conflict.value.code == "transcript_session_identity_mismatch"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_concurrent_receipts_have_one_entity_and_contiguous_server_position(isolated_native_db):
     factory = isolated_native_db
     thread = str(uuid4())

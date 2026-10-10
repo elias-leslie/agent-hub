@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,8 +59,35 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return deduped
 
 
+# Columns read by the transcript checks below without an explicit await.
+_TRANSCRIPT_RECONCILE_COLUMNS = frozenset({"provider_metadata", "provider", "model", "models_used"})
+
+
+def _session_if_loaded(session: Session | None) -> Session | None:
+    """Return ``session`` only when reading its columns cannot trigger lazy IO.
+
+    A rollback (for example the duplicate-event path in
+    ``_store_single_implicit_event``) expires every ORM instance even with
+    ``expire_on_commit=False``. Touching an expired column then issues a
+    synchronous refresh outside the greenlet and raises ``MissingGreenlet``.
+    Callers that get ``None`` back must re-select the row with ``await``.
+    """
+    if session is None:
+        return None
+    state = sa_inspect(session, raiseerr=False)
+    if state is None or not (state.persistent or state.detached):
+        return session
+    if state.expired or not _TRANSCRIPT_RECONCILE_COLUMNS.isdisjoint(state.unloaded):
+        return None
+    return session
+
+
 def _is_transcript_backed_session(session: Session | None) -> bool:
-    """Return whether a session carries transcript metadata."""
+    """Return whether a session carries transcript metadata.
+
+    Pass only a loaded session (see ``_session_if_loaded``); an expired row
+    would lazy-load ``provider_metadata`` outside the async greenlet.
+    """
     if session is None or not isinstance(session.provider_metadata, dict):
         return False
     transcript_path = session.provider_metadata.get("transcript_path")

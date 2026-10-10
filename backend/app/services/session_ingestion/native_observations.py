@@ -43,6 +43,13 @@ from .native_models import (
 from .service import SessionIngestionConflict
 
 
+def _public_registration(registration: dict[str, Any]) -> dict[str, Any]:
+    """Normalize registration evidence for replay comparison (server keys start with ``_``)."""
+    return NativeSourceRegistration.model_validate(
+        {key: value for key, value in registration.items() if not key.startswith("_")}
+    ).model_dump(mode="json")
+
+
 async def register_native_source(
     db: AsyncSession, session: Session, request: NativeSourceRegistration,
 ) -> NativeSourceReceipt:
@@ -56,24 +63,34 @@ async def register_native_source(
     if previous_namespace is not None and previous_namespace != request.namespace:
         raise SessionIngestionConflict("native_namespace_immutable", "The verified native namespace cannot change.")
     authenticity = "collector_attested"
-    if request.source_kind == "rollout":
-        from ._native_provenance import validate_native_provenance
-
-        if not request.transcript_path or request.transcript_path != metadata.get("transcript_path"):
-            raise SessionIngestionConflict("native_source_path_mismatch", "Rollout registration requires the exact registered local path.")
-        validate_native_provenance(session.id, session.project_id, session.parent_session_id, metadata, transcript_path=request.transcript_path)
-        authenticity = "local_verified"
-    elif request.transcript_path is not None or request.reconcile_existing_rollout:
-        raise SessionIngestionConflict("native_source_path_invalid", "App Server sources cannot claim local reread provenance.")
     registration = request.model_dump(mode="json")
-    qualified_profile = await db.get(NativeProtocolProfile, request.provider_version)
-    if qualified_profile and qualified_profile.schema_fingerprint == request.schema_fingerprint:
-        registration["_protocol_profile_version"] = qualified_profile.reference_profile_version
     # Include the execution binding so epochs cannot alias across child sessions.
     identity = [session.id, request.namespace, request.source_kind, request.producer_id, request.epoch]
     if request.generation:
         identity.append(request.generation)
     source_id = json_digest(identity)
+    if request.source_kind == "rollout":
+        from ._native_provenance import validate_native_provenance
+
+        if not request.transcript_path or request.transcript_path != metadata.get("transcript_path"):
+            raise SessionIngestionConflict("native_source_path_mismatch", "Rollout registration requires the exact registered local path.")
+        # SummitFlow's collector re-registers the rollout source on every sync.
+        # An exact replay of a source that was verified at first registration is
+        # idempotent; re-reading the transcript would turn a since-deleted local
+        # file into a spurious 409 (transcript_session_identity_mismatch).
+        replayed = await db.get(NativeObservationSource, source_id)
+        if replayed is None or _public_registration(replayed.registration) != _public_registration(registration):
+            await asyncio.to_thread(
+                validate_native_provenance,
+                session.id, session.project_id, session.parent_session_id, metadata,
+                transcript_path=request.transcript_path,
+            )
+        authenticity = "local_verified"
+    elif request.transcript_path is not None or request.reconcile_existing_rollout:
+        raise SessionIngestionConflict("native_source_path_invalid", "App Server sources cannot claim local reread provenance.")
+    qualified_profile = await db.get(NativeProtocolProfile, request.provider_version)
+    if qualified_profile and qualified_profile.schema_fingerprint == request.schema_fingerprint:
+        registration["_protocol_profile_version"] = qualified_profile.reference_profile_version
     if request.generation:
         previous = await db.get(NativeObservationSource, request.predecessor_source_id) if request.predecessor_source_id else None
         if previous is None or previous.session_id != session.id or any(previous.registration.get(key) != registration.get(key) for key in ("namespace", "source_kind", "producer_id", "epoch")) or previous.registration.get("generation", 0) + 1 != request.generation:
@@ -82,7 +99,9 @@ async def register_native_source(
         raise SessionIngestionConflict("native_source_generation_mismatch", "The initial generation cannot name a predecessor.")
     source = await db.get(NativeObservationSource, source_id)
     new_source = source is None
-    if source is not None and NativeSourceRegistration.model_validate({key: value for key, value in source.registration.items() if not key.startswith("_")}).model_dump(mode="json") != {key: value for key, value in registration.items() if not key.startswith("_")}:
+    if source is not None and _public_registration(source.registration) != _public_registration(registration):
+        # Expected, not idempotent: the same producer epoch must not change its
+        # registration evidence. Exact replays fall through and return the receipt.
         raise SessionIngestionConflict("native_source_registration_conflict", "An existing producer epoch has different registration evidence.")
     if source is None:
         if request.source_kind == "rollout":

@@ -432,6 +432,88 @@ async def test_append_normalized_events_reconciles_transcript_backed_session_mod
     assert db.commit.await_count == 1
 
 
+def _transcript_session(session_id: str) -> Session:
+    session = Session(
+        id=session_id,
+        project_id="agent-hub",
+        provider="claude",
+        model="opus-4-6",
+        status="active",
+        session_type="claude_code",
+        provider_metadata={"transcript_path": f"/tmp/{session_id}.jsonl"},
+        models_used=["opus-4-6"],
+        providers_used=["claude"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    return session
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_append_normalized_events_does_not_lazy_load_session_expired_by_rollback() -> None:
+    """Regression: a duplicate implicit event rolls back and expires the session.
+
+    Reading ``provider_metadata`` afterwards used to issue a sync lazy load
+    (``MissingGreenlet`` -> HTTP 500 on POST /api/sessions/{id}/events).
+    """
+    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.orm import Session as OrmSession
+    from sqlalchemy.orm import make_transient_to_detached
+
+    from app.services.event_storage import get_sequencer
+
+    session_id = "session-expired-after-rollback"
+    session = _transcript_session(session_id)
+    make_transient_to_detached(session)
+    unbound = OrmSession()
+    unbound.add(session)  # persistent in a session with no bind: any lazy load raises
+
+    fresh = _transcript_session(session_id)
+    db = AsyncMock()
+    db.rollback = AsyncMock(side_effect=lambda: unbound.expire(session))
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: fresh),
+            MagicMock(all=lambda: [("claude-sonnet-5-5", None)]),
+        ]
+    )
+
+    stored = MagicMock(id="evt-retried", turn=2, sequence=8)
+    with (
+        patch(
+            "app.services.session_ingestion._events.store_event",
+            new_callable=AsyncMock,
+            side_effect=[IntegrityError("insert", {}, Exception("uq_session_turn_sequence")), stored],
+        ) as mock_store,
+        patch("app.services.session_ingestion._events.lock_session_event_ingestion", new_callable=AsyncMock),
+        patch("app.services.session_ingestion._events.get_max_turn", new_callable=AsyncMock, return_value=2),
+        patch("app.services.session_ingestion._events.get_max_sequence", new_callable=AsyncMock, return_value=7),
+    ):
+        result = await append_normalized_events(
+            db=db,
+            session_id=session_id,
+            request=AppendNormalizedEventsRequest(
+                events=[NormalizedEvent(event_type="tool_use", tool_name="Bash")]
+            ),
+            session=session,
+        )
+
+    # The colliding implicit event is retried with DB-derived numbering, not dropped.
+    assert (result.events_appended, result.events_skipped) == (1, 0)
+    assert result.event_ids == ["evt-retried"]
+    retry = mock_store.await_args_list[1].kwargs
+    assert (retry["turn"], retry["sequence"], retry["session"]) == (2, 8, None)
+    assert get_sequencer().get_turn_sequence(session_id) == (2, 9)
+    # The rolled-back instance was never touched again (still fully expired).
+    assert "provider_metadata" in sa_inspect(session).expired_attributes
+    # Reconciliation re-selected the row with await instead of lazy loading it.
+    assert db.execute.await_count == 2
+    assert fresh.model == "claude-sonnet-5-5"
+    assert fresh.models_used == ["claude-sonnet-5-5"]
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_upsert_session_create_sets_timestamps_without_refresh() -> None:

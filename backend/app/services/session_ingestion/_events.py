@@ -14,6 +14,7 @@ from app.models.session import SessionEvent
 from app.services.event_storage import (
     get_max_sequence,
     get_max_turn,
+    get_sequencer,
     lock_session_event_ingestion,
     store_event,
 )
@@ -158,16 +159,15 @@ async def _store_single_implicit_event(
     except IntegrityError:
         if not commit:
             raise
+        # An implicit event has no identity of its own, so a uq_session_turn_sequence
+        # collision means the in-process sequencer is stale (another path stored
+        # explicit turn/sequence pairs), not a replay. Retry once under the
+        # session lock with DB-derived numbering instead of dropping the event.
+        # The rollback expired ``session``; pass None so nothing lazy-loads it.
         await db.rollback()
-        current_turn = await get_max_turn(db, session_id) or 1
-        current_seq = await get_max_sequence(db, session_id, current_turn)
-        return AppendNormalizedEventsResult(
-            session_id=session_id,
-            events_appended=0,
-            events_skipped=1,
-            last_turn=current_turn,
-            last_sequence=current_seq,
-        )
+        result = await _store_events_general(db, session_id, [event], None, commit=True)
+        get_sequencer().set_turn(session_id, result.last_turn, result.last_sequence)
+        return result
 
 
 async def _process_event(

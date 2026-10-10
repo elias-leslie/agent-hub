@@ -24,6 +24,7 @@ from ._service_helpers import (
     _merge_metadata,
     _reconcile_transcript_session_models,
     _reconcile_transcript_session_scope,
+    _session_if_loaded,
     _update_existing_session,
     _validate_external_id,
 )
@@ -225,6 +226,9 @@ async def append_normalized_events(
             last_turn=current_turn or 1,
             last_sequence=current_sequence,
         )
+    # Decide before storing: the duplicate-event path rolls back, which expires
+    # ``session`` and makes any later column read a sync lazy load.
+    transcript_backed = _is_transcript_backed_session(_session_if_loaded(session))
     result: AppendNormalizedEventsResult
     if len(request.events) == 1:
         event = request.events[0]
@@ -239,8 +243,10 @@ async def append_normalized_events(
     else:
         result = await _store_events_general(db, session_id, request.events, session, commit=commit)
 
-    if _is_transcript_backed_session(session):
-        await _reconcile_transcript_session_models(db, session_id, session=session)
+    if transcript_backed:
+        await _reconcile_transcript_session_models(
+            db, session_id, session=_session_if_loaded(session),
+        )
     return result
 
 
