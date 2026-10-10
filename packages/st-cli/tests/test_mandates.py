@@ -60,3 +60,18 @@ def test_without_contract_detects_surface_and_prints_full_text(monkeypatch: pyte
 
     assert calls[0]["json"]["consumer_surface"] == "codex"
     assert output == DELIVERY["rendered"]
+
+
+def test_compact_output_prints_bloat_warning_only_when_over_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(module._CONTRACT_ENV, raising=False)
+    assert "CONTEXT_WARN" not in _invoke(monkeypatch)[0]
+    big = {**DELIVERY, "estimated_tokens": 9_000}
+
+    def fake_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        return big
+
+    monkeypatch.setattr(module, "agent_hub_request", fake_request)
+    app = typer.Typer()
+    app.command()(module.mandates)
+    output = CliRunner().invoke(app, []).output
+    assert output.rstrip().endswith("CONTEXT_WARN:total=9000tok>budget=3000")

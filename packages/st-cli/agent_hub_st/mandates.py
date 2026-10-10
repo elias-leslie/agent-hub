@@ -24,6 +24,8 @@ from st_sdk.context import OutputContext
 from st_sdk.output import output_json
 from st_sdk.usage import usage
 
+from ._token_utils import estimate_tokens
+from .context_budget import context_warnings
 from .memory_api import agent_hub_request
 
 _DELIVER_PATH = "/api/runtime-context/deliver"
@@ -92,6 +94,7 @@ def mandates(
         "POST", _DELIVER_PATH, json=_request(surface, injected), tool_name="st mandates", internal=True, retries=2,
     )
     blocks = _blocks(delivery)
+    warnings = context_warnings(delivery.get("blocks") or [], delivery.get("estimated_tokens"))
     injected_hash = (injected or {}).get("payload_hash")
     match = None if not injected_hash or surface else injected_hash == delivery.get("payload_hash")
     if full:
@@ -102,7 +105,7 @@ def mandates(
             "items": blocks, "count": len(blocks), "status": delivery.get("status"),
             "estimated_tokens": delivery.get("estimated_tokens"), "payload_hash": delivery.get("payload_hash"),
             "rendered_bytes": len((delivery.get("rendered") or "").encode()),
-            "injected_hash": injected_hash, "injected_match": match,
+            "injected_hash": injected_hash, "injected_match": match, "warnings": warnings,
         })
         return
     for block in blocks:
@@ -113,3 +116,21 @@ def mandates(
         f"|bytes={len((delivery.get('rendered') or '').encode())}|hash={str(delivery.get('payload_hash'))[:12]}"
         f"|injected={injected_state}"
     )
+    for warning in warnings:
+        print(warning)
+
+
+def delivery_warnings(focus: str | None = None, candidate: str | None = None) -> list[str]:
+    """Audit the current surface's delivery; ``candidate`` replaces the focus block's text."""
+    delivery = agent_hub_request(
+        "POST", _DELIVER_PATH, json=_request(None, None), tool_name="st prompt", internal=True, retries=2,
+    )
+    blocks = [dict(block) for block in delivery.get("blocks") or [] if isinstance(block, dict)]
+    total = delivery.get("estimated_tokens")
+    if candidate is not None and focus:
+        for block in blocks:
+            if block.get("block_id") == focus:
+                old = int(block.get("estimated_tokens") or 0)
+                block["content"], block["estimated_tokens"] = candidate, estimate_tokens(candidate)
+                total = (total or 0) - old + block["estimated_tokens"]
+    return context_warnings(blocks, total, focus=focus)

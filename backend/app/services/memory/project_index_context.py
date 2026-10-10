@@ -29,9 +29,21 @@ def _read_project_index(project_id: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def _compact_page(entry: Any) -> str:
+    """Drop a ``(label)`` that only repeats the path's tail, e.g. ``/git (git)``."""
+    text = str(entry)
+    path, sep, label = text.partition(" (")
+    label = label.removesuffix(")")
+    if sep and (path == "/" or path.rstrip("/").endswith(f"/{label}")):
+        return path
+    return text
+
+
 def _copy_compact_value(key: str, value: Any) -> Any:
     if key == "services" and isinstance(value, dict):
         return {subkey: subvalue for subkey, subvalue in value.items() if subkey != "infrastructure"}
+    if key == "pages" and isinstance(value, list):
+        return ", ".join(_compact_page(entry) for entry in value)
     return value
 
 
@@ -81,7 +93,7 @@ def format_project_index_context(
     )
     if not payload:
         return ""
-    compact_yaml = yaml.safe_dump(payload, default_flow_style=False, sort_keys=False).strip()
+    compact_yaml = yaml.safe_dump(payload, default_flow_style=False, sort_keys=False, width=10_000).strip()
     if not compact_yaml:
         return ""
     return f"<project-index>\n{compact_yaml}\n</project-index>"
