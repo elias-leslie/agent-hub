@@ -1,3 +1,5 @@
+'use client'
+
 import {
   Activity,
   Bot,
@@ -12,6 +14,7 @@ import {
   Shield,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -176,8 +179,18 @@ function NavLink({ item, active, isCollapsed }: NavLinkProps) {
 }
 
 export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
+  const navRef = useRef<HTMLElement>(null)
+
+  // On short screens the nav scrolls; keep the active link visible.
+  useEffect(() => {
+    const active = navRef.current?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    )
+    active?.scrollIntoView({ block: 'nearest' })
+  }, [pathname, isCollapsed])
+
   return (
-    <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
+    <nav ref={navRef} className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
       {NAV_ENTRIES.map((entry) => {
         if (!isNavSection(entry)) {
           return (

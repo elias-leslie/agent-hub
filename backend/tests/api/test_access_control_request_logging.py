@@ -143,3 +143,76 @@ async def test_cache_miss_does_not_stamp_inactive_client() -> None:
 
     assert db.execute.await_count == 1
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_streaming_request_logs_total_latency_on_stream_end() -> None:
+    """Regression: SSE /api/complete rows record total stream latency, not TTFB."""
+    import asyncio
+    import time
+    from collections.abc import AsyncIterator
+
+    from starlette.responses import StreamingResponse
+
+    from app.middleware import access_control_handlers
+
+    async def body() -> AsyncIterator[bytes]:
+        yield b"data: first\n\n"
+        await asyncio.sleep(0.05)
+        yield b"data: last\n\n"
+
+    request = _request(state_session_id="sess-1")
+    call_next = AsyncMock(return_value=StreamingResponse(body(), media_type="text/event-stream"))
+    with (
+        patch(
+            "app.middleware.access_control_handlers.identify_client",
+            new_callable=AsyncMock,
+            return_value=({"id": "client-1"}, None),
+        ),
+        patch("app.middleware.access_control_handlers.set_identified_state"),
+        patch("app.middleware.access_control_handlers.log_request", new_callable=AsyncMock) as log,
+    ):
+        response = await handle_identified_request(request, call_next, "/api/complete", "POST", time.time())
+        log.assert_not_awaited()  # headers returned; stream not consumed yet
+
+        request.state.resolved_model = "model-set-during-stream"
+        chunks = [chunk async for chunk in response.body_iterator]  # type: ignore[attr-defined]
+        await asyncio.gather(*list(access_control_handlers._stream_log_tasks))
+
+    assert chunks == [b"data: first\n\n", b"data: last\n\n"]
+    log.assert_awaited_once()
+    kwargs = log.await_args_list[0].kwargs
+    assert kwargs["latency_ms"] >= 50
+    assert kwargs["model"] == "model-set-during-stream"
+    assert kwargs["session_id"] == "sess-1"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_stream_is_still_logged() -> None:
+    import asyncio
+    from collections.abc import AsyncIterator
+
+    from starlette.responses import StreamingResponse
+
+    from app.middleware import access_control_handlers
+
+    async def body() -> AsyncIterator[bytes]:
+        yield b"data: first\n\n"
+        yield b"data: never-read\n\n"
+
+    call_next = AsyncMock(return_value=StreamingResponse(body(), media_type="text/event-stream"))
+    with (
+        patch(
+            "app.middleware.access_control_handlers.identify_client",
+            new_callable=AsyncMock,
+            return_value=({"id": "client-1"}, None),
+        ),
+        patch("app.middleware.access_control_handlers.set_identified_state"),
+        patch("app.middleware.access_control_handlers.log_request", new_callable=AsyncMock) as log,
+    ):
+        response = await handle_identified_request(_request(), call_next, "/api/complete", "POST", 0.0)
+        iterator = response.body_iterator  # type: ignore[attr-defined]
+        assert await iterator.__anext__() == b"data: first\n\n"
+        await iterator.aclose()  # client disconnect
+        await asyncio.gather(*list(access_control_handlers._stream_log_tasks))
+    log.assert_awaited_once()

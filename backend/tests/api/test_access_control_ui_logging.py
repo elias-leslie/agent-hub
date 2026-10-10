@@ -18,7 +18,12 @@ from app.middleware.access_control import AccessControlMiddleware
 from app.middleware.access_control_paths import INTERNAL_SERVICE_HEADER
 
 _SECRET = "test-internal-secret"
-_INTERNAL = {INTERNAL_SERVICE_HEADER: _SECRET, "X-Client-Id": "dash-client"}
+_INTERNAL = {
+    INTERNAL_SERVICE_HEADER: _SECRET,
+    "X-Client-Id": "dash-client",
+    "X-Request-Source": "agent-hub-dashboard",
+}
+_DASHBOARD_CLIENT = {"id": "dash-client", "display_name": "agent-hub-dashboard"}
 
 
 def _app() -> FastAPI:
@@ -52,7 +57,10 @@ def _app() -> FastAPI:
 
 
 async def _drive(
-    rate: float, calls: list[tuple[str, str]], headers: dict[str, str] | None = None
+    rate: float,
+    calls: list[tuple[str, str]],
+    headers: dict[str, str] | None = None,
+    cached_client: dict[str, Any] | None = _DASHBOARD_CLIENT,
 ) -> list[dict[str, Any]]:
     """Run requests through the middleware and return logged request_logs kwargs."""
     log = AsyncMock()
@@ -60,9 +68,7 @@ async def _drive(
         patch.object(ui_logging.settings, "internal_service_secret", _SECRET),
         patch.object(ui_logging.settings, "dashboard_ui_request_log_sample_rate", rate),
         patch.object(ui_logging, "log_request", log),
-        patch.object(
-            ui_logging, "get_cached_client", AsyncMock(return_value={"id": "dash-client"})
-        ),
+        patch.object(ui_logging, "get_cached_client", AsyncMock(return_value=cached_client)),
     ):
         transport = httpx.ASGITransport(app=_app())
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -178,7 +184,7 @@ async def test_db_error_is_swallowed_and_request_succeeds() -> None:
 async def test_real_log_writer_swallows_db_error() -> None:
     """The shared request_logs writer never raises on session failure."""
     with patch("app.middleware.access_control_logging.async_session", side_effect=RuntimeError("db down")):
-        await ui_logging._write_ui_log(None, "/api/admin/items/{item_id}", "GET", 200, 3)
+        await ui_logging._write_ui_log(None, None, "/api/admin/items/{item_id}", "GET", 200, 3)
 
 
 @pytest.mark.asyncio
@@ -188,9 +194,36 @@ async def test_unregistered_client_id_is_not_attributed() -> None:
         patch.object(ui_logging, "log_request", log),
         patch.object(ui_logging, "get_cached_client", AsyncMock(return_value=None)),
     ):
-        await ui_logging._write_ui_log("unknown", "/api/x", "GET", 200, 1)
+        await ui_logging._write_ui_log("unknown", "summitflow", "/api/x", "GET", 200, 1)
     assert log.await_args is not None
     assert log.await_args.kwargs["client_id"] is None
+    assert log.await_args.kwargs["request_source"] == "internal-service:summitflow"
+
+
+@pytest.mark.asyncio
+async def test_internal_service_caller_is_not_labelled_dashboard_ui() -> None:
+    """Regression: SummitFlow native-sources calls carry the internal header but are not UI."""
+    summitflow = {"id": "sf-client", "display_name": "summitflow"}
+    headers = {INTERNAL_SERVICE_HEADER: _SECRET, "X-Client-Id": "sf-client", "X-Request-Source": "summitflow"}
+    rows = await _drive(1.0, [("GET", "/api/things/1")], headers=headers, cached_client=summitflow)
+    assert [row["request_source"] for row in rows] == ["internal-service:summitflow"]
+    assert rows[0]["client_id"] == "sf-client"
+
+
+@pytest.mark.parametrize(
+    ("client", "header", "expected"),
+    [
+        ({"id": "d", "display_name": "agent-hub-dashboard"}, "agent-hub-dashboard", "agent-hub-dashboard-ui"),
+        (None, "agent-hub-dashboard", "agent-hub-dashboard-ui"),
+        ({"id": "s", "display_name": "summitflow"}, "agent-hub-dashboard", "internal-service:summitflow"),
+        ({"id": "p", "display_name": "portfolio-ai"}, None, "internal-service:portfolio-ai"),
+        (None, "custom-svc", "internal-service:custom-svc"),
+        (None, None, "internal-service:unknown"),
+        (None, "x" * 200, "internal-service:" + "x" * 83),
+    ],
+)
+def test_internal_request_source(client: dict[str, Any] | None, header: str | None, expected: str) -> None:
+    assert ui_logging.internal_request_source(client, header) == expected
 
 
 @pytest.mark.asyncio

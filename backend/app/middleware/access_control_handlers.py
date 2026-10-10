@@ -1,8 +1,10 @@
 """Request handlers for access control middleware."""
 
+import asyncio
 import logging
 import re
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from starlette.requests import Request
@@ -127,28 +129,61 @@ async def handle_identified_request(
     # Process request
     response: Response = await call_next(request)
 
-    # Log successful request
     if not should_log_request(path, response.status_code):
         return response
-    latency_ms = int((time.time() - start_time) * 1000)
-    agent_slug = getattr(request.state, "agent_slug", None)
-    await log_request(
-        client_id=client_id,
-        request_source=request_source,
-        endpoint=path,
-        method=method,
-        status_code=response.status_code,
-        rejection_reason=None,
-        latency_ms=latency_ms,
-        model=getattr(request.state, "resolved_model", None),
-        session_id=request_session_id(request),
-        agent_slug=agent_slug,
-        tool_type=headers["tool_type"],
-        tool_name=headers["tool_name"],
-        source_path=headers["source_path"],
-        timed_out=getattr(request.state, "timed_out", False),
-        used_fallback=getattr(request.state, "used_fallback", False),
-        fallback_model=getattr(request.state, "fallback_model", None),
-    )
 
+    async def _log_identified() -> None:
+        await log_request(
+            client_id=client_id,
+            request_source=request_source,
+            endpoint=path,
+            method=method,
+            status_code=response.status_code,
+            rejection_reason=None,
+            latency_ms=int((time.time() - start_time) * 1000),
+            model=getattr(request.state, "resolved_model", None),
+            session_id=request_session_id(request),
+            agent_slug=getattr(request.state, "agent_slug", None),
+            tool_type=headers["tool_type"],
+            tool_name=headers["tool_name"],
+            source_path=headers["source_path"],
+            timed_out=getattr(request.state, "timed_out", False),
+            used_fallback=getattr(request.state, "used_fallback", False),
+            fallback_model=getattr(request.state, "fallback_model", None),
+        )
+
+    if is_event_stream(response) and hasattr(response, "body_iterator"):
+        # call_next returns once headers are ready; logging now would record
+        # time-to-first-byte. Log on stream end so latency_ms is total latency,
+        # matching non-streaming rows in dashboard model-call metrics.
+        response.body_iterator = _log_on_stream_end(response.body_iterator, _log_identified)
+        return response
+
+    await _log_identified()
     return response
+
+
+def is_event_stream(response: Response) -> bool:
+    """True for SSE responses, whose body streams after call_next returns."""
+    return response.headers.get("content-type", "").startswith("text/event-stream")
+
+
+# Strong references so stream-end log tasks are not garbage-collected mid-flight.
+_stream_log_tasks: set[asyncio.Task[None]] = set()
+
+
+async def _log_on_stream_end(
+    body: AsyncIterator[Any], write_log: Callable[[], Awaitable[None]]
+) -> AsyncIterator[Any]:
+    """Pass the stream through and write its request log once it ends.
+
+    The write is scheduled as a task so it also happens when the client
+    disconnects and the stream is cancelled (no await is possible then).
+    """
+    try:
+        async for chunk in body:
+            yield chunk
+    finally:
+        task = asyncio.create_task(write_log())
+        _stream_log_tasks.add(task)
+        task.add_done_callback(_stream_log_tasks.discard)

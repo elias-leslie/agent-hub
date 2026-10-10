@@ -1,5 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SidebarNav } from '@/components/layout/sidebar-nav'
 
@@ -67,5 +67,27 @@ describe('SidebarNav', () => {
       within(group).getByRole('link', { name: 'Agent context' }),
     ).toHaveAttribute('href', '/runtime-context')
     expect(screen.queryByText('Semantic store')).not.toBeInTheDocument()
+  })
+
+  describe('active link visibility', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('scrolls the active link into view and follows route changes', () => {
+      const scrolled: (string | null)[] = []
+      vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(
+        function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+          expect(options).toEqual({ block: 'nearest' })
+          scrolled.push(this.getAttribute('href'))
+        },
+      )
+
+      const { rerender } = render(
+        <SidebarNav isCollapsed={false} pathname="/runtime-context" />,
+      )
+      expect(scrolled).toEqual(['/runtime-context'])
+
+      rerender(<SidebarNav isCollapsed={false} pathname="/access-control" />)
+      expect(scrolled).toEqual(['/runtime-context', '/access-control'])
+    })
   })
 })

@@ -2,7 +2,10 @@
 
 Requests carrying the internal header skip client identification and were never
 logged, so UI usage was invisible. A sampled fraction is now written to
-``request_logs`` with ``request_source='agent-hub-dashboard-ui'``.
+``request_logs``. Dashboard-client traffic gets ``request_source='agent-hub-dashboard-ui'``;
+other internal service callers (e.g. SummitFlow) get ``internal-service:<client>``,
+where ``<client>`` is the registered client's display name, else the
+``X-Request-Source`` header, else ``unknown``.
 
 Rows record method, route template, status, latency and the dashboard client id
 (when registered). No bodies, headers or secrets. ``model`` and ``agent_slug``
@@ -16,18 +19,23 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.config import settings
 from app.middleware.access_control_auth import get_cached_client
-from app.middleware.access_control_constants import CLIENT_ID_HEADER
+from app.middleware.access_control_constants import CLIENT_ID_HEADER, REQUEST_SOURCE_HEADER
 from app.middleware.access_control_logging import log_request
 
 logger = logging.getLogger(__name__)
 
 UI_REQUEST_SOURCE = "agent-hub-dashboard-ui"
+INTERNAL_SERVICE_SOURCE_PREFIX = "internal-service:"
+# Identity the dashboard frontend sends (frontend/src/lib/api-config.ts).
+DASHBOARD_IDENTITY = "agent-hub-dashboard"
+_REQUEST_SOURCE_MAX_LEN = 100  # request_logs.request_source is String(100)
 DEFAULT_UI_SAMPLE_RATE = 0.1
 
 # Noisy, streaming or already-logged paths. Prefix match.
@@ -88,18 +96,39 @@ def _is_event_stream(response: Response) -> bool:
     return content_type.startswith("text/event-stream")
 
 
+def internal_request_source(
+    client: dict[str, Any] | None, header_request_source: str | None
+) -> str:
+    """request_source for an internal-header request.
+
+    Only the dashboard client is UI traffic. A registered client decides by its
+    display name; an unregistered caller decides by its X-Request-Source header.
+    """
+    header = (header_request_source or "").strip()
+    client_name = str(client.get("display_name") or "").strip() if client else ""
+    identity = client_name or header
+    if identity == DASHBOARD_IDENTITY:
+        return UI_REQUEST_SOURCE
+    label = identity or "unknown"
+    return f"{INTERNAL_SERVICE_SOURCE_PREFIX}{label}"[:_REQUEST_SOURCE_MAX_LEN]
+
+
 async def _write_ui_log(
-    raw_client_id: str | None, endpoint: str, method: str, status_code: int, latency_ms: int
+    raw_client_id: str | None,
+    header_request_source: str | None,
+    endpoint: str,
+    method: str,
+    status_code: int,
+    latency_ms: int,
 ) -> None:
     try:
-        client_id: str | None = None
+        client: dict[str, Any] | None = None
         if raw_client_id:
             # request_logs.client_id is a FK; only attribute registered clients.
             client = await get_cached_client(raw_client_id)
-            client_id = client["id"] if client else None
         await log_request(
-            client_id=client_id,
-            request_source=UI_REQUEST_SOURCE,
+            client_id=client["id"] if client else None,
+            request_source=internal_request_source(client, header_request_source),
             endpoint=endpoint[:200],
             method=method,
             status_code=status_code,
@@ -128,6 +157,7 @@ def schedule_ui_request_log(
         task = asyncio.create_task(
             _write_ui_log(
                 request.headers.get(CLIENT_ID_HEADER),
+                request.headers.get(REQUEST_SOURCE_HEADER),
                 route_template(request),
                 method,
                 response.status_code,

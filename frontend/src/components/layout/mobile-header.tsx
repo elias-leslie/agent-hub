@@ -8,8 +8,13 @@ interface MobileHeaderProps {
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-800/70 bg-slate-950/75 px-4 backdrop-blur-xl lg:hidden">
-      <button onClick={onMenuClick} className="icon-button -ml-1 h-11 w-11">
-        <Menu className="h-5 w-5 text-slate-400" />
+      <button
+        type="button"
+        onClick={onMenuClick}
+        aria-label="Open navigation menu"
+        className="icon-button -ml-1 h-11 w-11"
+      >
+        <Menu aria-hidden="true" className="h-5 w-5 text-slate-400" />
       </button>
 
       <Link href="/dashboard" className="flex items-center gap-2">
