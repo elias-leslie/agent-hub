@@ -1,16 +1,19 @@
-"""Work Chats persistence helpers."""
+"""Session binding persistence for request-level work context and source metadata.
+
+`/api/complete` callers (for example design-tools `st.design.asset.critique`) send
+`work_context`/`source_metadata`; these helpers merge them onto the session row and
+upsert the durable `session_bindings` row.
+"""
 
 from __future__ import annotations
 
-import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ActionRequest, Session, SessionBinding, SessionEventType
-from app.services.event_storage import store_child_session_lifecycle_event
+from app.models import Session, SessionBinding
 
 
 def _dump(value: Any | None) -> dict[str, Any]:
@@ -123,121 +126,4 @@ async def bind_request_context(
         telegram_message_id=source.get("message_id"),
         source_client=source.get("source_client"),
         work_context=context,
-    )
-
-
-async def list_session_bindings(
-    db: AsyncSession,
-    *,
-    project_id: str | None = None,
-    task_id: str | None = None,
-    session_id: str | None = None,
-    pane_id: str | None = None,
-) -> list[SessionBinding]:
-    stmt = select(SessionBinding).order_by(SessionBinding.updated_at.desc())
-    if project_id:
-        stmt = stmt.where(SessionBinding.project_id == project_id)
-    if task_id:
-        stmt = stmt.where(SessionBinding.task_id == task_id)
-    if session_id:
-        stmt = stmt.where(SessionBinding.session_id == session_id)
-    if pane_id:
-        stmt = stmt.where(SessionBinding.pane_id == pane_id)
-    return list((await db.execute(stmt.limit(200))).scalars().all())
-
-
-async def create_action_request(
-    db: AsyncSession,
-    *,
-    session_id: str,
-    prompt: str | None,
-    request_type: str = "blocker",
-    telegram_chat_id: str | None = None,
-    telegram_thread_id: str | None = None,
-    telegram_message_id: str | None = None,
-    source_client: str | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> ActionRequest:
-    join_code = secrets.token_urlsafe(6)
-    request = ActionRequest(
-        session_id=session_id,
-        request_type=request_type,
-        prompt=prompt,
-        telegram_chat_id=telegram_chat_id,
-        telegram_thread_id=telegram_thread_id,
-        telegram_message_id=telegram_message_id,
-        correlation_id=secrets.token_urlsafe(12),
-        join_code=join_code,
-        source_client=source_client,
-        metadata_=metadata or {},
-    )
-    db.add(request)
-    await db.flush()
-    session = await db.get(Session, session_id)
-    if session is not None:
-        await store_child_session_lifecycle_event(
-            db,
-            session,
-            SessionEventType.CHILD_SESSION_BLOCKED,
-            summary=prompt or "Child session blocked on user action",
-        )
-    return request
-
-
-async def list_action_requests(
-    db: AsyncSession,
-    *,
-    session_id: str | None = None,
-    status: str | None = None,
-) -> list[ActionRequest]:
-    stmt = select(ActionRequest).order_by(ActionRequest.created_at.desc())
-    if session_id:
-        stmt = stmt.where(ActionRequest.session_id == session_id)
-    if status:
-        stmt = stmt.where(ActionRequest.status == status)
-    return list((await db.execute(stmt.limit(200))).scalars().all())
-
-
-async def resolve_action_request(
-    db: AsyncSession,
-    request_id: str,
-    *,
-    response_content: str | None,
-) -> ActionRequest:
-    request = await db.get(ActionRequest, request_id)
-    if request is None:
-        raise ValueError(f"Action request not found: {request_id}")
-    request.status = "resolved"
-    request.response_content = response_content
-    request.resolved_at = datetime.now(UTC)
-    await db.flush()
-    return request
-
-
-async def resolve_join_code(db: AsyncSession, code: str) -> SessionBinding | None:
-    """Resolve /join code to a binding via pending action request."""
-    action_request = (
-        await db.execute(
-            select(ActionRequest).where(
-                ActionRequest.join_code == code,
-                ActionRequest.status == "pending",
-            ).limit(1)
-        )
-    ).scalar_one_or_none()
-    if action_request is None:
-        return None
-    binding = (
-        await db.execute(
-            select(SessionBinding).where(SessionBinding.session_id == action_request.session_id).limit(1)
-        )
-    ).scalar_one_or_none()
-    if binding is not None:
-        return binding
-    return await upsert_session_binding(
-        db,
-        session_id=action_request.session_id,
-        surface="telegram",
-        telegram_chat_id=action_request.telegram_chat_id,
-        telegram_thread_id=action_request.telegram_thread_id,
-        source_client="telegram",
     )

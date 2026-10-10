@@ -31,9 +31,9 @@ from app.services.memory.context_resilience import (
     require_successful_context_injection,
 )
 from app.services.response_cache import get_response_cache
+from app.services.session_bindings import bind_request_context
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
-from app.services.work_chats import bind_request_context
 
 from .work_context import inject_work_context_message
 

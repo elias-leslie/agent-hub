@@ -31,8 +31,8 @@ from app.services.memory.context_resilience import (
     build_unexpected_context_failure_notice,
     require_successful_context_injection,
 )
+from app.services.session_bindings import bind_request_context
 from app.services.session_live_activity import mark_session_execution_start
-from app.services.work_chats import bind_request_context
 
 if TYPE_CHECKING:
     from fastapi import Request

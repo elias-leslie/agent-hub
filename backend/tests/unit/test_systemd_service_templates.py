@@ -34,14 +34,6 @@ def test_frontend_template_uses_control_group_shutdown() -> None:
     assert "KillMode=control-group" in text
 
 
-def test_telegram_bot_template_exists_and_points_to_run_script() -> None:
-    text = (SYSTEMD_DIR / "agent-hub-telegram-bot.service").read_text()
-    assert "__PROJECT_ROOT__" in text
-    assert "WorkingDirectory=__PROJECT_ROOT__/backend" in text
-    assert "python -m app.scripts.run_telegram_bot" in text
-    assert "KillMode=control-group" in text
-
-
 def test_telegram_report_service_and_timer_templates_exist() -> None:
     service = (SYSTEMD_DIR / "agent-hub-telegram-status-report.service").read_text()
     timer = (SYSTEMD_DIR / "agent-hub-telegram-status-report.timer").read_text()

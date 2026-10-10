@@ -63,7 +63,6 @@ class TestReconcileFirstPartyClients:
 
         assert changed == [
             "dashboard-client",
-            "agent-hub-telegram-bot",
             "summitflow",
             "portfolio-ai",
             "monkey-fight",
@@ -71,12 +70,11 @@ class TestReconcileFirstPartyClients:
             "portfolio-client",
             "hermes",
         ]
-        assert mock_db.add.call_count == 8
+        assert mock_db.add.call_count == 7
         created_clients = [call.args[0] for call in mock_db.add.call_args_list]
         assert [client.id for client in created_clients] == changed
         assert [client.display_name for client in created_clients] == [
             "agent-hub-dashboard",
-            "agent-hub-telegram-bot",
             "summitflow",
             "portfolio-ai",
             "monkey-fight",
@@ -88,14 +86,12 @@ class TestReconcileFirstPartyClients:
             "internal",
             "internal",
             "internal",
-            "internal",
             "external",
             "internal",
             "internal",
             "external",
         ]
         assert [client.allowed_projects for client in created_clients] == [
-            '["agent-hub"]',
             '["agent-hub"]',
             '["summitflow", "agent-hub"]',
             '["portfolio-ai"]',
@@ -142,7 +138,6 @@ class TestReconcileFirstPartyClients:
             changed = await reconcile_first_party_clients(mock_db)
 
         assert changed == [
-            "agent-hub-telegram-bot",
             "summitflow",
             "portfolio-ai",
             "monkey-fight",
@@ -154,13 +149,12 @@ class TestReconcileFirstPartyClients:
         assert existing.allowed_projects == '["portfolio-ai"]'
         created_clients = [call.args[0].id for call in mock_db.add.call_args_list]
         assert created_clients == [
-            "agent-hub-telegram-bot",
             "summitflow",
             "monkey-fight",
             "hermes",
         ]
         mock_db.commit.assert_awaited_once()
-        assert mock_invalidate_client_cache.call_count == 5
+        assert mock_invalidate_client_cache.call_count == 4
         mock_invalidate_client_cache.assert_any_call("portfolio-ai")
 
     @pytest.mark.asyncio
@@ -191,7 +185,6 @@ class TestReconcileFirstPartyClients:
             changed = await reconcile_first_party_clients(mock_db)
 
         assert changed == [
-            "agent-hub-telegram-bot",
             "summitflow",
             "portfolio-ai",
             "monkey-fight",
