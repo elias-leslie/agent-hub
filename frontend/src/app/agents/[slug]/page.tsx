@@ -35,13 +35,6 @@ export default function AgentEditorPage() {
   const queryClient = useQueryClient()
   const slug = params.slug as string
 
-  // Redirect persona slug to dedicated settings page
-  useEffect(() => {
-    if (slug === 'persona') {
-      router.replace('/persona/settings')
-    }
-  }, [slug, router])
-
   const [formData, setFormData] = useState<Partial<Agent>>({})
   const [hasChanges, setHasChanges] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)

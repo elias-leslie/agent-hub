@@ -44,20 +44,3 @@ export interface Persona {
   version: number
   updated_at: string | null
 }
-
-export interface PersonaUpdate {
-  name?: string
-  personality?: string
-  user_profile?: PersonaUserProfile | null
-  heartbeat_instructions?: string
-  user_context?: string
-  voice_id?: string
-  voice_enabled?: boolean
-  execution_state?: 'active' | 'paused'
-  avatar_url?: string
-  greeting?: string
-  session_reset_mode?: 'off' | 'daily' | 'idle'
-  session_reset_hour?: number
-  session_reset_idle_minutes?: number
-  limits?: PersonaLimits | null
-}
