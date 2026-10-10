@@ -56,21 +56,13 @@ async def upsert_session_binding(
     task_id: str | None = None,
     feedback_id: str | None = None,
     design_id: str | None = None,
-    telegram_chat_id: str | None = None,
-    telegram_thread_id: str | None = None,
-    telegram_message_id: str | None = None,
     source_client: str | None = None,
     work_context: dict[str, Any] | None = None,
 ) -> SessionBinding:
-    """Create or update the durable binding for a Work Chats pane or transport."""
+    """Create or update the durable binding for a Work Chats pane or request surface."""
     stmt = select(SessionBinding).where(SessionBinding.surface == surface)
     if pane_id:
         stmt = stmt.where(SessionBinding.pane_id == pane_id)
-    elif telegram_chat_id:
-        stmt = stmt.where(
-            SessionBinding.telegram_chat_id == telegram_chat_id,
-            SessionBinding.telegram_thread_id == telegram_thread_id,
-        )
     else:
         stmt = stmt.where(
             SessionBinding.session_id == session_id,
@@ -88,9 +80,6 @@ async def upsert_session_binding(
     binding.task_id = task_id
     binding.feedback_id = feedback_id
     binding.design_id = design_id
-    binding.telegram_chat_id = telegram_chat_id
-    binding.telegram_thread_id = telegram_thread_id
-    binding.telegram_message_id = telegram_message_id
     binding.source_client = source_client
     binding.work_context = work_context or {}
     binding.updated_at = datetime.now(UTC)
@@ -121,9 +110,6 @@ async def bind_request_context(
         task_id=context.get("task_id") or session.external_id,
         feedback_id=context.get("feedback_id"),
         design_id=context.get("design_id"),
-        telegram_chat_id=source.get("chat_id"),
-        telegram_thread_id=source.get("thread_id"),
-        telegram_message_id=source.get("message_id"),
         source_client=source.get("source_client"),
         work_context=context,
     )

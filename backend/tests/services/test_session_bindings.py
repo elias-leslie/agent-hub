@@ -184,3 +184,41 @@ async def test_bind_request_context_skips_without_metadata() -> None:
     ) as mock_upsert:
         await bind_request_context(AsyncMock(), session=session, work_context=None, source_metadata=None)
     mock_upsert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bind_request_context_design_tools_write_creates_and_updates_binding() -> None:
+    session = SimpleNamespace(
+        id="session-1", project_id="design-tools", external_id=None, provider_metadata={}
+    )
+    source = {
+        "surface": "st.design.asset.critique",
+        "source_client": "design-tools",
+        "transport": "cli",
+        "chat_id": "chat-1",
+        "message_id": "msg-1",
+    }
+    db = _db_with_existing(None)
+
+    await bind_request_context(
+        db, session=session, work_context={"design_id": "d-1"}, source_metadata=source
+    )
+
+    db.add.assert_called_once()
+    created = db.add.call_args.args[0]
+    assert isinstance(created, SessionBinding)
+    assert created.surface == "st.design.asset.critique"
+    assert created.session_id == "session-1"
+    assert created.design_id == "d-1"
+    assert created.source_client == "design-tools"
+    lookup_sql = str(db.execute.await_args.args[0])
+    assert "chat_id" not in lookup_sql
+    assert "session_bindings.design_id" in lookup_sql
+
+    db = _db_with_existing(created)
+    session.id = "session-2"
+    await bind_request_context(
+        db, session=session, work_context={"design_id": "d-1"}, source_metadata=source
+    )
+    db.add.assert_not_called()
+    assert created.session_id == "session-2"

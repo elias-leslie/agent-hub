@@ -29,9 +29,6 @@ class SessionBinding(Base):
     task_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     feedback_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     design_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    telegram_chat_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    telegram_thread_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    telegram_message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_client: Mapped[str | None] = mapped_column(String(100), nullable=True)
     work_context: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -44,6 +41,5 @@ class SessionBinding(Base):
     __table_args__ = (
         UniqueConstraint("surface", "pane_id", name="uq_session_bindings_surface_pane"),
         Index("ix_session_bindings_task", "project_id", "task_id"),
-        Index("ix_session_bindings_telegram", "telegram_chat_id", "telegram_thread_id"),
     )
 
