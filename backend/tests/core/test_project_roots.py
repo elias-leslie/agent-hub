@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.core import project_roots
 from app.core.project_roots import resolve_project_root, resolve_summitflow_scripts_dir
 
 
@@ -124,3 +126,75 @@ def test_resolve_project_root_rejects_ids_that_escape_or_inject(tmp_path: Path) 
         for project_id in ("../outside", "--help", "a/b", "..", "", "x" * 200):
             assert resolve_project_root(project_id) is None
     run_process.assert_not_called()
+
+
+class _FakeProcess:
+    def __init__(self, *, stdout: bytes = b"", returncode: int = 0, hang: bool = False) -> None:
+        self._stdout = stdout
+        self.returncode = returncode
+        self._hang = hang
+        self.killed = False
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        if self._hang and not self.killed:
+            await asyncio.sleep(3600)
+        return self._stdout, b"boom"
+
+    def kill(self) -> None:
+        self.killed = True
+
+
+def _registry_payload(**roots: str) -> bytes:
+    return json.dumps([{"id": key, "root_path": value} for key, value in roots.items()]).encode()
+
+
+@pytest.fixture
+def fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(project_roots, "_registry_roots", None)
+    monkeypatch.setattr(project_roots, "_registry_loaded_at", 0.0)
+    monkeypatch.setattr(project_roots, "_last_good_roots", None)
+    monkeypatch.setattr(project_roots, "_registry_retry_after", 0.0)
+    monkeypatch.setattr(project_roots, "_REGISTRY_TIMEOUT_SECONDS", 0.01)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("fresh_registry")
+async def test_registry_refresh_timeout_serves_last_good_registry() -> None:
+    good = _FakeProcess(stdout=_registry_payload(**{"agent-hub": "/srv/a"}))
+    hung = _FakeProcess(hang=True)
+    with patch.object(project_roots, "create_process", AsyncMock(side_effect=[good, hung])) as spawn:
+        assert await project_roots.get_registered_project_roots() == {"agent-hub": "/srv/a"}
+        assert await project_roots.get_registered_project_roots(refresh=True) == {"agent-hub": "/srv/a"}
+        assert hung.killed
+        # Within the retry window the stale registry is served without re-spawning st.
+        assert await project_roots.get_registered_project_roots(refresh=True) == {"agent-hub": "/srv/a"}
+    assert spawn.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("fresh_registry")
+async def test_registry_failure_after_invalidate_serves_last_good_then_recovers() -> None:
+    good = _FakeProcess(stdout=_registry_payload(**{"agent-hub": "/srv/a"}))
+    failed = _FakeProcess(returncode=1)
+    newer = _FakeProcess(stdout=_registry_payload(**{"agent-hub": "/srv/a", "neri": "/srv/n"}))
+    with patch.object(project_roots, "create_process", AsyncMock(side_effect=[good, failed, newer])):
+        await project_roots.get_registered_project_roots()
+        project_roots.invalidate_registered_project_roots()
+        assert await project_roots.get_registered_project_roots() == {"agent-hub": "/srv/a"}
+        project_roots.invalidate_registered_project_roots()  # also clears the retry window
+        assert await project_roots.get_registered_project_roots() == {
+            "agent-hub": "/srv/a",
+            "neri": "/srv/n",
+        }
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("fresh_registry")
+async def test_registry_timeout_without_cache_raises() -> None:
+    hung = _FakeProcess(hang=True)
+    with (
+        patch.object(project_roots, "create_process", AsyncMock(return_value=hung)),
+        pytest.raises(project_roots.ProjectRegistryUnavailable, match="timed out"),
+    ):
+        await project_roots.get_registered_project_roots()
+    assert hung.killed

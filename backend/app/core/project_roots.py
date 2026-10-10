@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,91 +22,135 @@ _MANIFEST_NAME = "project.identity.json"
 # path that escapes the canonical workspace root.
 _PROJECT_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 _REGISTRY_CACHE_SECONDS = 300.0
+# After a failed refresh, keep serving the last good registry for this long
+# before trying ``st`` again, so a slow registry does not stall every request.
+_REGISTRY_RETRY_SECONDS = 30.0
+_REGISTRY_TIMEOUT_SECONDS = 5.0
 _registry_roots: dict[str, str] | None = None
 _registry_loaded_at = 0.0
+# Last successfully loaded registry. Unlike ``_registry_roots`` it survives
+# invalidation: it is only the fallback when a refresh times out or fails.
+_last_good_roots: dict[str, str] | None = None
+_registry_retry_after = 0.0
 _registry_lock = asyncio.Lock()
+logger = logging.getLogger(__name__)
 
 
 class ProjectRegistryUnavailable(RuntimeError):
     """The canonical SummitFlow project registry could not be read."""
 
 
-async def get_registered_project_roots(*, refresh: bool = False) -> dict[str, str]:
-    """Return the canonical ``st projects`` registry using async subprocess I/O."""
-    global _registry_loaded_at, _registry_roots
+def _fresh_cached_roots(refresh: bool) -> dict[str, str] | None:
     if (
         not refresh
         and _registry_roots is not None
         and time.monotonic() - _registry_loaded_at < _REGISTRY_CACHE_SECONDS
     ):
         return dict(_registry_roots)
+    if _last_good_roots is not None and time.monotonic() < _registry_retry_after:
+        return dict(_last_good_roots)
+    return None
+
+
+async def get_registered_project_roots(*, refresh: bool = False) -> dict[str, str]:
+    """Return the canonical ``st projects`` registry using async subprocess I/O.
+
+    When a refresh times out or fails, the last good registry is served (and
+    retried after ``_REGISTRY_RETRY_SECONDS``). ``ProjectRegistryUnavailable``
+    is raised only when no registry has ever loaded in this process.
+    """
+    global _registry_retry_after
+    cached = _fresh_cached_roots(refresh)
+    if cached is not None:
+        return cached
+    if _registry_lock.locked() and _last_good_roots is not None:
+        # Another request is already refreshing; don't queue behind it.
+        return dict(_last_good_roots)
 
     async with _registry_lock:
-        if (
-            not refresh
-            and _registry_roots is not None
-            and time.monotonic() - _registry_loaded_at < _REGISTRY_CACHE_SECONDS
-        ):
-            return dict(_registry_roots)
-        process = None
+        cached = _fresh_cached_roots(refresh)
+        if cached is not None:
+            return cached
         try:
-            process_env = dict(os.environ)
-            # Agent Hub's module path contains a top-level ``app`` package that
-            # would shadow SummitFlow's package inside the st executable.
-            process_env.pop("PYTHONPATH", None)
-            process_env.pop("PYTHONHOME", None)
-            process = await create_process(
-                "st",
-                "projects",
-                "list",
-                "-v",
-                env=process_env,
-            )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
-        except TimeoutError as exc:
-            if process is not None:
-                process.kill()
-                await process.communicate()
-            raise ProjectRegistryUnavailable(str(exc)) from exc
-        except OSError as exc:
-            raise ProjectRegistryUnavailable(str(exc)) from exc
-        if process.returncode != 0:
-            detail = stderr.decode(errors="replace").strip()
-            raise ProjectRegistryUnavailable(
-                f"st projects list failed ({process.returncode}): {detail}"
-            )
-        try:
-            payload = json.loads(stdout.decode())
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ProjectRegistryUnavailable("st projects list returned invalid JSON") from exc
-        if not isinstance(payload, list):
-            raise ProjectRegistryUnavailable("st projects list returned a non-list payload")
+            return await _load_registered_project_roots()
+        except ProjectRegistryUnavailable as exc:
+            if _last_good_roots is None:
+                raise
+            _registry_retry_after = time.monotonic() + _REGISTRY_RETRY_SECONDS
+            logger.warning("Serving last good project registry; refresh failed: %s", exc)
+            return dict(_last_good_roots)
 
-        roots: dict[str, str] = {}
-        for item in payload:
-            if not isinstance(item, dict):
-                continue
-            project_id = item.get("id")
-            root_path = item.get("root_path")
-            if not isinstance(project_id, str) or not project_id.strip():
-                continue
-            if not isinstance(root_path, str) or not root_path.strip():
-                continue
-            roots[project_id.strip()] = os.path.realpath(
-                os.path.expanduser(root_path.strip())
-            )
-        if not roots:
-            raise ProjectRegistryUnavailable("st projects list returned no project roots")
-        _registry_roots = roots
-        _registry_loaded_at = time.monotonic()
-        return dict(roots)
+
+async def _load_registered_project_roots() -> dict[str, str]:
+    global _last_good_roots, _registry_loaded_at, _registry_roots
+    process = None
+    try:
+        process_env = dict(os.environ)
+        # Agent Hub's module path contains a top-level ``app`` package that
+        # would shadow SummitFlow's package inside the st executable.
+        process_env.pop("PYTHONPATH", None)
+        process_env.pop("PYTHONHOME", None)
+        process = await create_process(
+            "st",
+            "projects",
+            "list",
+            "-v",
+            env=process_env,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=_REGISTRY_TIMEOUT_SECONDS
+        )
+    except TimeoutError as exc:
+        if process is not None:
+            process.kill()
+            await process.communicate()
+        raise ProjectRegistryUnavailable(
+            f"st projects list timed out after {_REGISTRY_TIMEOUT_SECONDS:g}s"
+        ) from exc
+    except OSError as exc:
+        raise ProjectRegistryUnavailable(str(exc)) from exc
+    if process.returncode != 0:
+        detail = stderr.decode(errors="replace").strip()
+        raise ProjectRegistryUnavailable(
+            f"st projects list failed ({process.returncode}): {detail}"
+        )
+    try:
+        payload = json.loads(stdout.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ProjectRegistryUnavailable("st projects list returned invalid JSON") from exc
+    if not isinstance(payload, list):
+        raise ProjectRegistryUnavailable("st projects list returned a non-list payload")
+
+    roots: dict[str, str] = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        project_id = item.get("id")
+        root_path = item.get("root_path")
+        if not isinstance(project_id, str) or not project_id.strip():
+            continue
+        if not isinstance(root_path, str) or not root_path.strip():
+            continue
+        roots[project_id.strip()] = os.path.realpath(
+            os.path.expanduser(root_path.strip())
+        )
+    if not roots:
+        raise ProjectRegistryUnavailable("st projects list returned no project roots")
+    _registry_roots = roots
+    _last_good_roots = dict(roots)
+    _registry_loaded_at = time.monotonic()
+    return dict(roots)
 
 
 def invalidate_registered_project_roots() -> None:
-    """Clear the async SummitFlow project registry cache."""
-    global _registry_loaded_at, _registry_roots
+    """Force the next lookup to re-read the registry.
+
+    The last good registry is kept only as the fallback for a failed refresh.
+    """
+    global _registry_loaded_at, _registry_retry_after, _registry_roots
     _registry_roots = None
     _registry_loaded_at = 0.0
+    _registry_retry_after = 0.0
 
 
 def is_valid_project_id(project_id: object) -> bool:
@@ -147,10 +192,12 @@ def resolve_project_root(project_id: str) -> Path | None:
             if resolved.exists():
                 return resolved
 
-    workspace_root = _CANONICAL_WORKSPACE_ROOT.resolve()
-    candidate = (workspace_root / project_id).resolve()
-    if candidate.is_relative_to(workspace_root) and candidate.exists():
-        return candidate
+    # Normalize, then require containment under the workspace root, so an id
+    # can never address a path outside it (CodeQL py/path-injection).
+    workspace_root = os.path.realpath(_CANONICAL_WORKSPACE_ROOT)
+    candidate = os.path.realpath(os.path.join(workspace_root, project_id))
+    if candidate.startswith(workspace_root + os.sep) and os.path.exists(candidate):
+        return Path(candidate)
 
     manifest_root = _resolve_manifest_root(project_id)
     if manifest_root is not None:
