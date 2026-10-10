@@ -65,7 +65,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        # Skip exempt paths (truly public: health checks, docs, webhooks, websocket)
+        # Skip exempt paths (truly public: health checks, docs, websocket)
         if is_path_exempt(path):
             return await call_next(request)
 

@@ -24,10 +24,9 @@ EXEMPT_PATHS = frozenset(
 )
 
 # Path prefixes exempt from authentication (no auth, no logging)
-# MINIMAL: Only truly public endpoints or special auth (WebSocket, webhooks)
+# MINIMAL: Only truly public endpoints or special auth (WebSocket, SSE)
 EXEMPT_PREFIXES = (
     "/ws/",  # WebSocket connections (uses different auth model)
-    "/api/webhooks",  # Webhook delivery (uses signature verification)
     "/api/memory/capture/stream",  # SSE stream (BaseHTTPMiddleware buffers streaming responses)
     "/api/push/vapid-key",  # Public VAPID key for browser push subscription
 )

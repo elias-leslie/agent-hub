@@ -1,7 +1,7 @@
 """
 Event publishing service for session activity notifications.
 
-Broadcasts events to WebSocket subscribers and triggers webhook callbacks.
+Broadcasts events to WebSocket subscribers and registered handlers.
 Event types: session_start, message, tool_use, complete, error.
 """
 
@@ -25,7 +25,7 @@ class EventPublisher:
     Publishes session events to WebSocket subscribers and event handlers.
 
     Manages WebSocket subscriptions filtered by session_id and event_type.
-    Handlers can be registered for programmatic event consumption (e.g., webhooks).
+    Handlers can be registered for programmatic event consumption.
     """
 
     _subscriptions: dict[str, WebSocketSubscription] = field(default_factory=dict)
@@ -33,7 +33,7 @@ class EventPublisher:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def add_handler(self, handler: EventHandler) -> None:
-        """Add handler for all events (used by webhook dispatcher)."""
+        """Add handler for all events."""
         self._handlers.append(handler)
 
     def remove_handler(self, handler: EventHandler) -> None:
