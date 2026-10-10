@@ -385,6 +385,7 @@ describe('session detail navigation', () => {
       parent_session_id: PARENT_ID,
       page_size: 50,
       sort_by: 'last_active',
+      sort_direction: 'desc',
       cursor: undefined,
     })
     expect(within(panel).getByText('1.2K in / 300 out')).toBeInTheDocument()

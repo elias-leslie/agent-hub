@@ -31,6 +31,7 @@ export function SubAgentsPanel({
         parent_session_id: parentId,
         page_size: SUB_AGENT_PAGE_SIZE,
         sort_by: 'last_active',
+        sort_direction: 'desc',
         cursor: pageParam || undefined,
       }),
     initialPageParam: '',
