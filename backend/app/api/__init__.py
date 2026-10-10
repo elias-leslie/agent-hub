@@ -4,7 +4,6 @@ from fastapi import APIRouter
 
 from app.api.access_control import router as access_control_router
 from app.api.admin import router as admin_router
-from app.api.admin_telegram import router as admin_telegram_router
 from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
@@ -23,7 +22,6 @@ from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
 from app.api.narration import router as narration_router
-from app.api.notifications import router as notifications_router
 from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.ownership import router as ownership_router
@@ -44,7 +42,6 @@ router.include_router(dashboard_stats_router)  # Has its own prefix /dashboard
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
 router.include_router(admin_router)  # Has its own prefix /admin and tags
 router.include_router(automations_router)
-router.include_router(admin_telegram_router)  # Has its own prefix /admin/telegram and tags
 router.include_router(db_router)  # Has its own prefix /admin/db and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
@@ -66,7 +63,6 @@ router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 router.include_router(ownership_router)
 router.include_router(providers_router)  # Has its own prefix /providers and tags
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
-router.include_router(notifications_router)  # Has its own prefix /notifications and tags
 router.include_router(runtime_context_router)
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)

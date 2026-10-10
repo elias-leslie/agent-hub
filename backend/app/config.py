@@ -100,11 +100,6 @@ class Settings(BaseSettings):
     hermes_request_source: str = "hermes-cli"
     hermes_allowed_projects: tuple[str, ...] = ()  # empty = unrestricted; set per-env via HERMES_ALLOWED_PROJECTS
 
-    # Native Telegram config overrides
-    agent_hub_telegram_bot_token: str = ""
-    agent_hub_telegram_allowed_chat_ids: str = ""
-    agent_hub_telegram_report_chat_id: str = ""
-
     @field_validator("agent_hub_dashboard_client_id", mode="before")
     @classmethod
     def default_dashboard_client_id(cls, v: str | None) -> str:
