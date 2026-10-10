@@ -614,3 +614,51 @@ class TestCodexAuthDeadLog:
         assert importlib.util.find_spec("app.services.telegram_delivery") is None
         assert not hasattr(ce, "_codex_alert_at")
         assert not hasattr(ce, "_alert_codex_auth_dead")
+
+
+class TestCodexAuthDeadNotification:
+    """Codex sign-in failure creates one SummitFlow notification per cooldown window."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_cooldown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import app.api.complete.complete_execution as ce
+
+        monkeypatch.setattr(ce, "_codex_notified_at", None)
+
+    @pytest.mark.asyncio
+    async def test_notifies_once_per_cooldown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import app.api.complete.complete_execution as ce
+        from app.adapters.codex_auth import CodexAuthError
+
+        clock = [1000.0]
+        monkeypatch.setattr("time.monotonic", lambda: clock[0])
+        with patch("app.services.summitflow_notifications.spawn_summitflow_notification") as spawn:
+            ce._log_codex_auth_dead("codex/gpt-5.5", CodexAuthError("Codex token refresh rejected (HTTP 401)"))
+            ce._log_codex_auth_dead("codex/gpt-5.5", CodexAuthError("again"))
+            assert spawn.call_count == 1
+            kwargs = spawn.call_args.kwargs
+            assert kwargs["severity"] == "error"
+            assert "Codex sign-in failed" in kwargs["title"]
+            assert "codex/gpt-5.5" in kwargs["message"]
+            assert kwargs["metadata"]["kind"] == "codex_auth_dead"
+
+            clock[0] += ce._CODEX_NOTIFY_COOLDOWN_S + 1
+            ce._log_codex_auth_dead("codex/gpt-5.5", CodexAuthError("still dead"))
+            assert spawn.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_other_errors_do_not_notify(self) -> None:
+        import app.api.complete.complete_execution as ce
+
+        with patch("app.services.summitflow_notifications.spawn_summitflow_notification") as spawn:
+            ce._log_codex_auth_dead("codex/gpt-5.5", RuntimeError("timeout"))
+        spawn.assert_not_called()
+
+    def test_no_running_loop_skips_without_consuming_cooldown(self) -> None:
+        import app.api.complete.complete_execution as ce
+        from app.adapters.codex_auth import CodexAuthError
+
+        with patch("app.services.summitflow_notifications.spawn_summitflow_notification") as spawn:
+            ce._log_codex_auth_dead("codex/gpt-5.5", CodexAuthError("dead"))
+        spawn.assert_not_called()
+        assert ce._codex_notified_at is None

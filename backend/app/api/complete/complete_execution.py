@@ -34,8 +34,14 @@ _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
 
 
+# Codex auth death fires on every call once the refresh token is burned, so
+# notify at most once per cooldown window per process instead of per request.
+_CODEX_NOTIFY_COOLDOWN_S = 6 * 3600
+_codex_notified_at: float | None = None
+
+
 def _log_codex_auth_dead(model_id: str, error: Exception) -> None:
-    """Log an error when the Codex OAuth chain dies.
+    """Log an error and notify SummitFlow when the Codex OAuth chain dies.
 
     Without this, refresh-token death silently degrades every call to fallback
     models (observed 2026-06: five days of MiniMax answering persona chat).
@@ -49,6 +55,35 @@ def _log_codex_auth_dead(model_id: str, error: Exception) -> None:
         "until re-authenticated (Agent Hub > Settings > LLM Providers > Codex > Re-auth)",
         error,
         model_id,
+    )
+    _notify_codex_auth_dead(model_id, error)
+
+
+def _notify_codex_auth_dead(model_id: str, error: Exception) -> None:
+    """Fire-and-forget one SummitFlow notification per cooldown window."""
+    global _codex_notified_at
+    import time
+
+    now = time.monotonic()
+    if _codex_notified_at is not None and now - _codex_notified_at < _CODEX_NOTIFY_COOLDOWN_S:
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _codex_notified_at = now
+
+    from app.services.summitflow_notifications import spawn_summitflow_notification
+
+    spawn_summitflow_notification(
+        title="Codex sign-in failed: re-authentication needed",
+        message=(
+            f"Codex token refresh is failing ({error}). All {model_id} traffic is running on "
+            "fallback models until re-authenticated.\n"
+            "Fix: Agent Hub > Settings > LLM Providers > Codex > Re-auth."
+        ),
+        severity="error",
+        metadata={"source": "agent-hub", "kind": "codex_auth_dead", "model_id": model_id},
     )
 
 
