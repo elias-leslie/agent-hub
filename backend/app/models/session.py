@@ -182,6 +182,18 @@ class Session(Base):
         Index("ix_sessions_parent", "parent_session_id"),
         Index("ix_sessions_project_heartbeat", "project_id", "last_heartbeat_at"),
         Index("ix_sessions_status_last_activity", "status", "last_activity_at"),
+        # Last-active keyset order used by the sessions list (migration d1f7b3a5c9e2).
+        Index(
+            "ix_sessions_last_active",
+            text("(coalesce(last_activity_at, created_at)) DESC"),
+            text("id DESC"),
+        ),
+        Index(
+            "ix_sessions_project_last_active",
+            "project_id",
+            text("(coalesce(last_activity_at, created_at)) DESC"),
+            text("id DESC"),
+        ),
     )
 
     def __repr__(self) -> str:
@@ -375,6 +387,7 @@ class SessionEvent(Base):
         Index("ix_session_events_type", "event_type"),
         Index("ix_session_events_tool", "tool_name"),
         Index("ix_session_events_call_id", "session_id", "call_id"),
+        Index("ix_session_events_session_type", "session_id", "event_type"),
         Index(
             "uq_session_events_source_event", "session_id", "source_event_id",
             unique=True, postgresql_where=text("source_event_id IS NOT NULL"),

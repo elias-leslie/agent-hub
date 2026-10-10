@@ -225,10 +225,11 @@ export function getSessionSourceLabel(
   return `${session.provider} ${getSessionKindLabel(session.session_type)}`
 }
 
+/** Matches the server's coalesce(last_activity_at, created_at); updated_at is bulk-touched. */
 export function getSessionLastActive(
-  session: Pick<SessionListItem, 'last_active_at' | 'updated_at'>,
+  session: Pick<SessionListItem, 'last_active_at' | 'created_at'>,
 ): string {
-  return session.last_active_at || session.updated_at
+  return session.last_active_at || session.created_at
 }
 
 type UsageSource = Pick<
