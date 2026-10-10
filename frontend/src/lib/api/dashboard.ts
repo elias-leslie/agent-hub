@@ -37,16 +37,6 @@ export interface MemoryMetrics {
   total_reference_citations: number
 }
 
-/**
- * @deprecated The dashboard no longer reports truncations. Kept only while
- * `lib/api.ts` still re-exports it.
- */
-export interface TruncationMetrics {
-  total_truncations: number
-  truncation_rate: number
-  avg_output_tokens: number
-}
-
 export interface ModelBreakdown {
   model: string
   avg_latency_ms: number

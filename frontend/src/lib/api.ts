@@ -81,7 +81,6 @@ export type {
   MemoryMetrics,
   ModelBreakdown,
   RequestMetrics,
-  TruncationMetrics,
 } from './api/dashboard'
 export { fetchDashboardStats } from './api/dashboard'
 // Re-export all monitoring-related exports
