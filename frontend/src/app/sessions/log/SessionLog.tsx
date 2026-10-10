@@ -36,14 +36,14 @@ function absolute(value: string): string {
 }
 
 const LABEL_TONE: Record<string, string> = {
-  prompt: 'text-sky-300',
-  agent: 'text-violet-300',
+  prompt: 'text-sky-700 dark:text-sky-300',
+  agent: 'text-violet-700 dark:text-violet-300',
   context: 'text-slate-500',
   tool: 'text-slate-400',
-  error: 'text-rose-300',
-  thinking: 'text-amber-300/80',
+  error: 'text-rose-700 dark:text-rose-300',
+  thinking: 'text-amber-700 dark:text-amber-300/80',
   usage: 'text-slate-500',
-  memory: 'text-emerald-300/80',
+  memory: 'text-emerald-700 dark:text-emerald-300/80',
 }
 
 function MetaText({ meta, failed }: { meta?: string; failed?: boolean }) {
@@ -55,13 +55,13 @@ function MetaText({ meta, failed }: { meta?: string; failed?: boolean }) {
         const key = `${index}:${part}`
         if (/^\+\d+$/.test(part))
           return (
-            <span key={key} className="text-emerald-300">
+            <span key={key} className="text-emerald-700 dark:text-emerald-300">
               {part}
             </span>
           )
         if (/^−\d+$/.test(part))
           return (
-            <span key={key} className="text-rose-300">
+            <span key={key} className="text-rose-700 dark:text-rose-300">
               {part}
             </span>
           )
@@ -71,8 +71,8 @@ function MetaText({ meta, failed }: { meta?: string; failed?: boolean }) {
               key={key}
               className={
                 part === 'exit 0' && !failed
-                  ? 'text-emerald-300/90'
-                  : 'text-rose-300'
+                  ? 'text-emerald-700 dark:text-emerald-300/90'
+                  : 'text-rose-700 dark:text-rose-300'
               }
             >
               {part}
@@ -93,8 +93,10 @@ function DetailBlock({ detail }: { detail: LogDetail }) {
             key={index}
             className={cn(
               'block px-2',
-              line.startsWith('+') && 'bg-emerald-500/10 text-emerald-200',
-              line.startsWith('-') && 'bg-rose-500/10 text-rose-200',
+              line.startsWith('+') &&
+                'bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
+              line.startsWith('-') &&
+                'bg-rose-500/10 text-rose-700 dark:text-rose-200',
             )}
           >
             {line || ' '}
@@ -150,7 +152,9 @@ const LogRow = memo(function LogRow({
         <span
           className={cn(
             'truncate',
-            entry.failed ? 'text-rose-300' : LABEL_TONE[entry.kind],
+            entry.failed
+              ? 'text-rose-700 dark:text-rose-300'
+              : LABEL_TONE[entry.kind],
           )}
         >
           {entry.label}
@@ -230,7 +234,7 @@ function ChildRow({
         <span className="hidden text-slate-600 sm:block">
           {clock(child.created_at)}
         </span>
-        <span className="text-cyan-300">
+        <span className="text-cyan-700 dark:text-cyan-300">
           {nestable ? (open ? '▾ ' : '▸ ') : '↗ '}sub-agent
         </span>
         <span className="flex min-w-0 items-baseline gap-2">
@@ -317,7 +321,9 @@ function ChildBatch({
         <span className="hidden text-slate-600 sm:block">
           {clock(childrenList[0].created_at)}
         </span>
-        <span className="text-cyan-300">{open ? '▾ ' : '▸ '}started</span>
+        <span className="text-cyan-700 dark:text-cyan-300">
+          {open ? '▾ ' : '▸ '}started
+        </span>
         <span className="truncate text-slate-200">
           {childrenList.length} sub-agents
           <span className="text-slate-500">
@@ -346,7 +352,7 @@ function ChildBatch({
             <button
               type="button"
               onClick={() => setShown((value) => value + CHILD_BATCH_PAGE)}
-              className="ml-1.5 mt-1 rounded border border-slate-800 px-2 py-0.5 font-mono text-[12px] text-sky-300 hover:bg-slate-900"
+              className="ml-1.5 mt-1 rounded border border-slate-800 px-2 py-0.5 font-mono text-[12px] text-sky-700 dark:text-sky-300 hover:bg-slate-900"
             >
               Show {Math.min(CHILD_BATCH_PAGE, childrenList.length - shown)}{' '}
               more of {childrenList.length - shown}
@@ -369,7 +375,9 @@ function Note({
     <div
       className={cn(
         'flex flex-wrap items-center gap-2 px-1.5 py-1.5 text-[12px]',
-        tone === 'error' ? 'text-rose-200' : 'text-slate-500',
+        tone === 'error'
+          ? 'text-rose-700 dark:text-rose-200'
+          : 'text-slate-500',
       )}
     >
       {children}
@@ -506,7 +514,7 @@ export function SessionLog({
             type="button"
             onClick={loadEarlier}
             disabled={log.loadingEarlier || !log.hasEarlier}
-            className="rounded border border-slate-800 px-2 py-0.5 font-mono text-sky-300 hover:bg-slate-900 disabled:text-slate-500"
+            className="rounded border border-slate-800 px-2 py-0.5 font-mono text-sky-700 dark:text-sky-300 hover:bg-slate-900 disabled:text-slate-500"
           >
             {log.loadingEarlier ? 'Loading…' : 'Load earlier'}
           </button>
@@ -517,7 +525,9 @@ export function SessionLog({
             {heldBack > 0 ? ` · ${heldBack} sub-agents started earlier` : ''}
           </span>
           {log.loadEarlierFailed ? (
-            <span className="text-rose-300">Loading failed; try again.</span>
+            <span className="text-rose-700 dark:text-rose-300">
+              Loading failed; try again.
+            </span>
           ) : null}
         </Note>
       ) : null}

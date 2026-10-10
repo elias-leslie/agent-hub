@@ -108,7 +108,7 @@ function Facts({
           <button
             type="button"
             onClick={() => onFilterModel(filterModel)}
-            className="ml-1.5 text-[11px] text-sky-300 hover:underline"
+            className="ml-1.5 text-[11px] text-sky-700 dark:text-sky-300 hover:underline"
             title="Show only sessions that requested this model"
           >
             filter
@@ -157,7 +157,7 @@ function LiveLine({ session }: { session: Session }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
       {isLive && live?.current_tool_name ? (
-        <span className="font-mono text-sky-300">
+        <span className="font-mono text-sky-700 dark:text-sky-300">
           now: {live.current_tool_name}
         </span>
       ) : null}
@@ -172,7 +172,7 @@ function LiveLine({ session }: { session: Session }) {
       {warnings.map((note) => (
         <span
           key={note}
-          className="rounded border border-amber-900/40 bg-amber-950/15 px-1.5 font-mono text-[11px] text-amber-200/90"
+          className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 font-mono text-[11px] text-amber-800 dark:text-amber-200/90"
         >
           {note}
         </span>
@@ -229,11 +229,13 @@ export function SessionInline({
             <ArrowLeft className="h-4 w-4" />
           </button>
           {source ? (
-            <StatusCell
-              status={status}
-              liveActivity={source.live_activity}
-              showLabel
-            />
+            <span className="shrink-0">
+              <StatusCell
+                status={status}
+                liveActivity={source.live_activity}
+                showLabel
+              />
+            </span>
           ) : null}
           <h2
             className="min-w-0 truncate text-[13px] font-semibold text-slate-100"
@@ -252,7 +254,7 @@ export function SessionInline({
             <button
               type="button"
               onClick={() => onSelect(session.parent_session_id as string)}
-              className="hidden shrink-0 text-[12px] text-sky-300 hover:underline sm:inline"
+              className="hidden shrink-0 text-[12px] text-sky-700 dark:text-sky-300 hover:underline sm:inline"
             >
               parent ↗
             </button>
@@ -308,7 +310,7 @@ export function SessionInline({
         ) : null}
         {session ? <LiveLine session={session} /> : null}
         {detail.error && !session ? (
-          <div className="flex items-center gap-2 text-[12px] text-rose-200">
+          <div className="flex items-center gap-2 text-[12px] text-rose-700 dark:text-rose-200">
             <span>Session details failed to load.</span>
             <button
               type="button"
