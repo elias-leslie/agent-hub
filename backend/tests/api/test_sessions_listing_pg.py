@@ -386,8 +386,18 @@ async def test_title_skips_harness_scaffolding(api: httpx.AsyncClient, pg_db: As
     await add_session(pg_db, "only-scaffold", minutes=0)
     await add_event(pg_db, "only-scaffold", 1, 0, "user_message", role="user", content="<environment_context/>")
 
+    await add_session(pg_db, "child", minutes=0)
+    child = await pg_db.get(Session, "child")
+    assert child is not None
+    child.provider_metadata = {
+        "external_identity": {"agent_path": "/root/st_context_dedup", "display_identity": "Laplace the 2nd"}
+    }
+    await pg_db.flush()
+    await add_event(pg_db, "child", 1, 0, "user_message", role="user", content="Message Type: NEW_TASK")
+
     _, body = await list_ids(api)
     by_id = {item["id"]: item for item in body["sessions"]}
+    assert by_id["child"]["title"] == "st_context_dedup · Laplace the 2nd"
     assert by_id["codex"]["title"] == "Ship the <b>bold</b> fix"
     assert by_id["only-scaffold"]["title"] == "<environment_context/>"
 

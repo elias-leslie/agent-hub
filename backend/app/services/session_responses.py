@@ -107,6 +107,19 @@ async def build_project_lane_session_ids(
     return owner_session_ids, specialist_session_ids
 
 
+def identity_title(session: Session) -> str | None:
+    """Sub-agent task path and display name when the transcript has no usable prompt."""
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    identity = metadata.get("external_identity")
+    if not isinstance(identity, dict):
+        return None
+    agent_path = identity.get("agent_path")
+    task = agent_path.rsplit("/", 1)[-1] if isinstance(agent_path, str) and agent_path != "/root" else ""
+    display = identity.get("display_identity")
+    parts = [part for part in (task, display if isinstance(display, str) else "") if part.strip()]
+    return " · ".join(parts) or None
+
+
 def apply_session_rollups(
     item: SessionListItem | SessionResponse,
     session: Session,
@@ -116,7 +129,7 @@ def apply_session_rollups(
 ) -> SessionListItem | SessionResponse:
     """Attach title, native usage and last-active fields to a built response."""
     rollup = usage or SessionUsageRollup()
-    item.title = title
+    item.title = title or identity_title(session)
     item.usage_known = rollup.known
     item.usage_input_tokens = rollup.input_tokens
     item.usage_output_tokens = rollup.output_tokens
