@@ -301,9 +301,10 @@ export function SessionInline({
         ) : null}
         {!listRow && session ? (
           <div className="text-[12px] text-slate-500">
-            Not in the list with the current filters
+            Not among the rows loaded below; it may be filtered out or further
+            down
             {session.parent_session_id
-              ? ' (sub-agent sessions are hidden unless Include sub-agents is on)'
+              ? ' (sub-agents are listed only with Include sub-agents on)'
               : ''}
             .
           </div>

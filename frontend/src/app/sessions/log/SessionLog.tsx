@@ -417,7 +417,13 @@ export function SessionLog({
   const children = useSessionChildren(sessionId, childCount, activeChildren)
   const [open, setOpen] = useState<Set<string>>(() => new Set())
 
-  const entries = useMemo(() => buildLogEntries(log.events), [log.events])
+  const entries = useMemo(
+    () =>
+      buildLogEntries(log.events, {
+        fromStart: !log.hasEarlier && !log.appliedSearch,
+      }),
+    [log.events, log.hasEarlier, log.appliedSearch],
+  )
   const childList = children.data?.children ?? []
   const searching = log.appliedSearch.length > 0
   const { items, heldBack } = useMemo(

@@ -324,3 +324,33 @@ describe('interleave', () => {
     expect(items.some((item) => item.type === 'children')).toBe(false)
   })
 })
+
+describe('context tidying', () => {
+  const events = () => [
+    ev({
+      event_type: 'assistant_message',
+      content: '## Safety Directive\n# Safety and autonomy',
+    }),
+    ev({
+      event_type: 'assistant_message',
+      content: '<skills_instructions>\n## Skills\n</skills_instructions>',
+    }),
+    ev({ event_type: 'user_message', content: 'Resume the triage' }),
+    ev({ event_type: 'assistant_message', content: 'Starting now.' }),
+  ]
+
+  it('treats assistant messages before the first prompt as merged context when the log starts at the beginning', () => {
+    const entries = buildLogEntries(events(), { fromStart: true })
+    expect(entries.map((entry) => [entry.label, entry.summary])).toEqual([
+      ['context', 'injected: Safety Directive, skills instructions'],
+      ['you', 'Resume the triage'],
+      ['agent', 'Starting now.'],
+    ])
+    expect(entries[0].raw).toHaveLength(2)
+  })
+
+  it('leaves agent messages alone when earlier history is not loaded', () => {
+    const entries = buildLogEntries(events())
+    expect(entries[0]).toMatchObject({ label: 'agent' })
+  })
+})

@@ -643,7 +643,10 @@ function resultKey(event: TimelineEvent): string | null {
 }
 
 /** Builds log entries from events in chronological order. */
-export function buildLogEntries(events: readonly TimelineEvent[]): LogEntry[] {
+export function buildLogEntries(
+  events: readonly TimelineEvent[],
+  options: { fromStart?: boolean } = {},
+): LogEntry[] {
   const uses = new Map<string, TimelineEvent>()
   const results = new Map<string, TimelineEvent>()
   const wrapperIds = new Set<string>()
@@ -859,5 +862,64 @@ export function buildLogEntries(events: readonly TimelineEvent[]): LogEntry[] {
     if (text.trim())
       entries.push(textEntry(event, 'context', type.slice(0, 9), text))
   }
-  return entries
+  return tidyContext(entries, options.fromStart ?? false)
+}
+
+function contextName(text: string): string {
+  const scaffold = scaffoldName(text)
+  if (scaffold) return scaffold
+  const first = text
+    .trim()
+    .split('\n')[0]
+    .replace(/^#+\s*/, '')
+  return oneLine(first, 40)
+}
+
+/**
+ * Harnesses record their own instructions as assistant messages before the
+ * first prompt; agents never speak first, so when the log starts at the
+ * beginning those become context. Consecutive context lines then merge.
+ */
+function tidyContext(entries: LogEntry[], fromStart: boolean): LogEntry[] {
+  let seenPrompt = !fromStart
+  const relabelled = entries.map((entry) => {
+    if (entry.kind === 'prompt') seenPrompt = true
+    if (seenPrompt || entry.kind !== 'agent') return entry
+    const text = entry.raw[0]?.content ?? entry.summary
+    return {
+      ...entry,
+      kind: 'context' as const,
+      label: 'context',
+      summary: `injected: ${contextName(text)}`,
+      detail: { type: 'text' as const, text: text.trim() },
+    }
+  })
+
+  const merged: LogEntry[] = []
+  for (const entry of relabelled) {
+    const last = merged[merged.length - 1]
+    if (
+      last &&
+      last.kind === 'context' &&
+      entry.kind === 'context' &&
+      last.label === 'context' &&
+      entry.label === 'context' &&
+      last.turn === entry.turn
+    ) {
+      const names = entry.summary.replace(/^injected: /, '')
+      const detailText = [last.detail, entry.detail]
+        .map((detail) => (detail?.type === 'text' ? detail.text : ''))
+        .filter(Boolean)
+        .join('\n\n────────\n\n')
+      merged[merged.length - 1] = {
+        ...last,
+        summary: `${last.summary}, ${names}`,
+        detail: detailText ? { type: 'text', text: detailText } : last.detail,
+        raw: [...last.raw, ...entry.raw],
+      }
+      continue
+    }
+    merged.push(entry)
+  }
+  return merged
 }
