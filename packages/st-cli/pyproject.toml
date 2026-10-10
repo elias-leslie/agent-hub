@@ -9,7 +9,7 @@ description = "Agent Hub-owned commands and client helpers for SummitFlow ST"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "agent-hub-client==0.5.0",
+    "agent-hub-client==0.6.0",
     "httpx>=0.28.0",
     "PyYAML>=6.0.0",
     "summitflow-st-sdk==0.1.0",
