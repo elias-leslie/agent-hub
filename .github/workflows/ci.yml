@@ -143,7 +143,7 @@ jobs:
           pnpm --dir packages/passport-client pack --pack-destination "$RUNNER_TEMP/package-artifacts"
           pnpm --dir packages/chat-ui pack --pack-destination "$RUNNER_TEMP/package-artifacts"
           pnpm --filter @summitflow/notes-ui build
-          node packages/pack-smoke.mjs "$RUNNER_TEMP/package-artifacts/agent-hub-chat-ui-0.1.0.tgz" "$RUNNER_TEMP/package-artifacts/agent-hub-passport-client-0.1.0.tgz"
+          node packages/pack-smoke.mjs "$RUNNER_TEMP"/package-artifacts/agent-hub-chat-ui-*.tgz "$RUNNER_TEMP"/package-artifacts/agent-hub-passport-client-*.tgz
       - name: Lint frontend
         run: pnpm --filter frontend lint
       - name: Typecheck frontend
