@@ -50,7 +50,6 @@ RESULT_SHAPE_ALLOWLIST = {
     (APP / "models" / "session.py", "NativeContinuationTurn"),
     (APP / "services" / "analytics" / "models.py", "CostLogExportRow"),
     (APP / "services" / "completion" / "types.py", "CompletionServiceResult"),
-    (APP / "services" / "orchestration" / "subagent_models.py", "SubagentResult"),
     (APP / "services" / "response_cache" / "models.py", "CachedResponse"),
 }
 TOOL_FILE_ALLOWLIST = {
@@ -63,7 +62,6 @@ CANONICAL_PREINJECTION_ALLOWLIST = {
     APP / "api" / "complete" / "execution.py",
     APP / "services" / "agent_routing_completion.py",
     APP / "services" / "completion" / "service.py",
-    APP / "services" / "orchestration" / "subagent_executor.py",
     APP / "workflows" / "completion.py",
 }
 

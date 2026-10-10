@@ -64,6 +64,7 @@ class ClientStatsResponse(BaseModel):
     suspended_clients: int
     blocked_clients: int
     blocked_requests_today: int
+    unknown_client_requests_today: int
     total_requests_today: int
 
 

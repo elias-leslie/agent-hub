@@ -81,6 +81,19 @@ export async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
   return data.requests || []
 }
 
+export interface RequestBlockStats {
+  blocked_requests_today: number
+  unknown_client_requests_today: number
+  total_requests_today: number
+}
+
+// Counts come from request_logs since 00:00 UTC (see /api/access-control/stats).
+export async function fetchRequestBlockStats(): Promise<RequestBlockStats> {
+  const res = await fetchApi('/api/access-control/stats')
+  if (!res.ok) throw new Error('Failed to fetch request block stats')
+  return res.json()
+}
+
 export async function fetchSessionHotspots(
   hours = 24,
   limit = 5,

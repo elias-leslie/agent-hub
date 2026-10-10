@@ -161,3 +161,50 @@ class TestSessionHotspots:
         body = resp.json()
         assert body["totals"]["rate_limit_fallback_sessions"] == 3
         assert body["repeated_workloads"][0]["project_id"] == "summitflow"
+
+
+class TestRemovedBlockedRequests:
+    @pytest.mark.asyncio
+    async def test_blocked_requests_route_is_gone(self, client):
+        ac, _ = client
+        resp = await ac.get("/api/admin/blocked-requests")
+        assert resp.status_code == 404
+
+
+class TestClearEndpointsHideExceptionText:
+    """Redis failures are logged server-side; clients get a generic message."""
+
+    SECRET = "redis://user:hunter2@internal-host:6379 refused"
+
+    def _failing_redis(self, method: str) -> AsyncMock:
+        redis = AsyncMock()
+        getattr(redis, method).side_effect = RuntimeError(self.SECRET)
+        return redis
+
+    @pytest.mark.asyncio
+    async def test_clear_unknown_callers_error_is_generic(self, client, caplog):
+        ac, _ = client
+        with patch(
+            "app.api.admin.get_admin_redis",
+            AsyncMock(return_value=self._failing_redis("hlen")),
+        ):
+            resp = await ac.delete("/api/admin/unknown-callers")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"cleared": 0, "message": "Failed to clear unknown callers"}
+        assert self.SECRET not in resp.text
+        assert self.SECRET in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_clear_request_audit_error_is_generic(self, client, caplog):
+        ac, _ = client
+        with patch(
+            "app.api.admin.get_admin_redis",
+            AsyncMock(return_value=self._failing_redis("llen")),
+        ):
+            resp = await ac.delete("/api/admin/request-audit")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"cleared": 0, "message": "Failed to clear audit log"}
+        assert self.SECRET not in resp.text
+        assert self.SECRET in caplog.text

@@ -5,23 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class BlockedRequestLog(BaseModel):
-    """A log entry for a blocked request."""
-
-    timestamp: datetime
-    client_name: str | None
-    source_path: str | None
-    block_reason: str
-    endpoint: str
-
-
-class BlockedRequestsResponse(BaseModel):
-    """Response for blocked requests log."""
-
-    requests: list[BlockedRequestLog]
-    total: int
-
-
 class RequestAuditLog(BaseModel):
     """A log entry for any API request (for visibility)."""
 

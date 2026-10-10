@@ -38,7 +38,7 @@ async def get_stats(
     )
     blocked_clients = blocked_result.scalar() or 0
 
-    # Count requests today
+    # Count requests since 00:00 UTC today
     today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     total_requests_result = await db.execute(
@@ -46,6 +46,9 @@ async def get_stats(
     )
     total_requests_today = total_requests_result.scalar() or 0
 
+    # "Blocked" means the access-control middleware rejected the request, which
+    # it records as a non-null rejection_reason. Endpoint-level 4xx responses
+    # are logged with rejection_reason NULL and are not counted here.
     blocked_requests_result = await db.execute(
         select(func.count())
         .select_from(RequestLog)
@@ -56,11 +59,22 @@ async def get_stats(
     )
     blocked_requests_today = blocked_requests_result.scalar() or 0
 
+    unknown_client_result = await db.execute(
+        select(func.count())
+        .select_from(RequestLog)
+        .where(
+            RequestLog.created_at >= today_start,
+            RequestLog.rejection_reason == "client_not_found",
+        )
+    )
+    unknown_client_requests_today = unknown_client_result.scalar() or 0
+
     return ClientStatsResponse(
         total_clients=total_clients,
         active_clients=active_clients,
         suspended_clients=suspended_clients,
         blocked_clients=blocked_clients,
         blocked_requests_today=blocked_requests_today,
+        unknown_client_requests_today=unknown_client_requests_today,
         total_requests_today=total_requests_today,
     )

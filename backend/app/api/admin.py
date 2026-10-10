@@ -11,19 +11,15 @@ from app.db import get_db
 
 from .admin_handlers import (
     process_audit_requests,
-    process_blocked_requests,
     process_unknown_callers,
 )
 from .admin_redis import (
     MAX_AUDIT_LOG_SIZE,
-    MAX_BLOCKED_LOG_SIZE,
     REDIS_KEY_AUDIT_LOG,
-    REDIS_KEY_BLOCKED_REQUESTS,
     REDIS_KEY_UNKNOWN_CALLERS,
     get_admin_redis,
 )
 from .admin_schemas import (
-    BlockedRequestsResponse,
     RequestAuditResponse,
     SessionHotspotsResponse,
     UnknownCallersResponse,
@@ -52,27 +48,7 @@ async def update_workflow_schedule(schedule_id: str) -> None:
     raise automation_moved()
 
 
-# Blocked requests log endpoint
-@router.get("/blocked-requests", response_model=BlockedRequestsResponse)
-async def get_blocked_requests(
-    limit: int = Query(default=100, ge=1, le=1000, description="Max entries to return"),
-    client_name: str | None = Query(default=None, description="Filter by client"),
-) -> BlockedRequestsResponse:
-    """Get recent blocked request log entries."""
-    redis = await get_admin_redis()
-    if redis is None:
-        return BlockedRequestsResponse(requests=[], total=0)
-
-    try:
-        raw_entries = await redis.lrange(REDIS_KEY_BLOCKED_REQUESTS, 0, MAX_BLOCKED_LOG_SIZE - 1)
-        requests = process_blocked_requests(raw_entries, client_name, limit)
-        return BlockedRequestsResponse(requests=requests, total=len(requests))
-    except Exception as e:
-        logger.warning(f"Failed to read blocked requests from Redis: {e}")
-        return BlockedRequestsResponse(requests=[], total=0)
-
-
-# Request audit log endpoint (ALL requests, not just blocked)
+# Request audit log endpoint
 @router.get("/request-audit", response_model=RequestAuditResponse)
 async def get_request_audit(
     limit: int = Query(default=100, ge=1, le=1000, description="Max entries to return"),
@@ -153,9 +129,9 @@ async def clear_unknown_callers() -> dict[str, Any]:
         count = await redis.hlen(REDIS_KEY_UNKNOWN_CALLERS)
         await redis.delete(REDIS_KEY_UNKNOWN_CALLERS)
         return {"cleared": count, "message": f"Cleared {count} unknown caller entries"}
-    except Exception as e:
-        logger.warning(f"Failed to clear unknown callers from Redis: {e}")
-        return {"cleared": 0, "message": f"Error: {e}"}
+    except Exception:
+        logger.warning("Failed to clear unknown callers from Redis", exc_info=True)
+        return {"cleared": 0, "message": "Failed to clear unknown callers"}
 
 
 @router.delete("/request-audit")
@@ -173,6 +149,6 @@ async def clear_request_audit() -> dict[str, Any]:
         count = await redis.llen(REDIS_KEY_AUDIT_LOG)
         await redis.delete(REDIS_KEY_AUDIT_LOG)
         return {"cleared": count, "message": f"Cleared {count} audit log entries"}
-    except Exception as e:
-        logger.warning(f"Failed to clear audit log from Redis: {e}")
-        return {"cleared": 0, "message": f"Error: {e}"}
+    except Exception:
+        logger.warning("Failed to clear audit log from Redis", exc_info=True)
+        return {"cleared": 0, "message": "Failed to clear audit log"}

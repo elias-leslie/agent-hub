@@ -15,12 +15,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Redis keys for admin state (multi-worker safe)
-REDIS_KEY_BLOCKED_REQUESTS = "ah:admin:blocked_requests"  # List (LPUSH/LRANGE)
 REDIS_KEY_AUDIT_LOG = "ah:admin:audit_log"  # List (LPUSH/LRANGE)
 REDIS_KEY_UNKNOWN_CALLERS = "ah:admin:unknown_callers"  # Hash (HSET/HGETALL)
 
 # Max entries in logs
-MAX_BLOCKED_LOG_SIZE = 1000
 MAX_AUDIT_LOG_SIZE = 2000
 
 # TTL for log entries (24 hours - logs auto-expire)
@@ -77,40 +75,6 @@ def _deserialize_entry(data: str) -> dict[str, Any]:
     if "last_seen" in entry and entry["last_seen"] and isinstance(entry["last_seen"], str):
         entry["last_seen"] = datetime.fromisoformat(entry["last_seen"])
     return entry
-
-
-async def log_blocked_request(
-    client_name: str | None,
-    source_path: str | None,
-    block_reason: str,
-    endpoint: str,
-) -> None:
-    """Log a blocked request for admin visibility.
-
-    Uses Redis LIST for multi-worker safe storage.
-    """
-    redis = await get_admin_redis()
-    if redis is None:
-        logger.warning("Redis unavailable, skipping blocked request log")
-        return
-
-    entry = {
-        "timestamp": datetime.now(UTC),
-        "client_name": client_name,
-        "source_path": source_path,
-        "block_reason": block_reason,
-        "endpoint": endpoint,
-    }
-
-    try:
-        # LPUSH adds to head of list (newest first)
-        await redis.lpush(REDIS_KEY_BLOCKED_REQUESTS, await _serialize_entry(entry))
-        # LTRIM keeps only the most recent entries
-        await redis.ltrim(REDIS_KEY_BLOCKED_REQUESTS, 0, MAX_BLOCKED_LOG_SIZE - 1)
-        # Set TTL on first entry (refreshed with each LPUSH)
-        await redis.expire(REDIS_KEY_BLOCKED_REQUESTS, LOG_TTL_SECONDS)
-    except Exception as e:
-        logger.warning(f"Failed to log blocked request to Redis: {e}")
 
 
 async def log_request_audit(

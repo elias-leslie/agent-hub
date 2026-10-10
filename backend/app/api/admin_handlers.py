@@ -4,29 +4,9 @@ from typing import Any
 
 from .admin_redis import _deserialize_entry
 from .admin_schemas import (
-    BlockedRequestLog,
     RequestAuditLog,
     UnknownCallerStats,
 )
-
-
-def process_blocked_requests(
-    raw_entries: list[str], client_name: str | None = None, limit: int = 100
-) -> list[BlockedRequestLog]:
-    """Process blocked request entries from Redis."""
-    requests = [_deserialize_entry(e) for e in raw_entries]
-    if client_name:
-        requests = [r for r in requests if r.get("client_name") == client_name]
-    return [
-        BlockedRequestLog(
-            timestamp=r["timestamp"],
-            client_name=r.get("client_name"),
-            source_path=r.get("source_path"),
-            block_reason=r["block_reason"],
-            endpoint=r["endpoint"],
-        )
-        for r in requests[:limit]
-    ]
 
 
 def process_audit_requests(

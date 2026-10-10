@@ -2,20 +2,15 @@
 
 import { AlertTriangle, RefreshCw, Shield, Zap } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useToastActions } from '@/components/error/toast'
-import {
-  type BlockedRequest,
-  fetchBlockedRequests,
-  fetchSessionHotspots,
-  type SessionHotspots,
-} from '@/lib/api'
+import { fetchSessionHotspots, type SessionHotspots } from '@/lib/api'
+import { fetchRequestBlockStats, type RequestBlockStats } from '@/lib/api/admin'
 import { cn } from '@/lib/utils'
-import { BlockedRequestsTable } from './components/BlockedRequestsTable'
 import { SessionHotspotsPanel } from './components/SessionHotspotsPanel'
 
 export default function AdminPage() {
-  const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([])
+  const [blockStats, setBlockStats] = useState<RequestBlockStats | null>(null)
   const [hotspots, setHotspots] = useState<SessionHotspots | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -25,10 +20,10 @@ export default function AdminPage() {
     setIsRefreshing(true)
     try {
       const [b, h] = await Promise.all([
-        fetchBlockedRequests(),
+        fetchRequestBlockStats(),
         fetchSessionHotspots(),
       ])
-      setBlockedRequests(b)
+      setBlockStats(b)
       setHotspots(h)
     } catch {
       toast.error('Failed to refresh', 'Could not load admin data')
@@ -44,16 +39,8 @@ export default function AdminPage() {
     return () => clearInterval(interval)
   }, [refresh])
 
-  const todayBlocked = useMemo(() => {
-    const today = new Date().toDateString()
-    return blockedRequests.filter(
-      (r) => new Date(r.timestamp).toDateString() === today,
-    ).length
-  }, [blockedRequests])
-
-  const unknownAttempts = useMemo(() => {
-    return blockedRequests.filter((r) => r.client_name === '<unknown>').length
-  }, [blockedRequests])
+  const todayBlocked = blockStats?.blocked_requests_today ?? null
+  const unknownAttempts = blockStats?.unknown_client_requests_today ?? 0
 
   return (
     <div className="page-shell">
@@ -101,7 +88,7 @@ export default function AdminPage() {
               <span className="text-sm text-amber-400/80">Blocked Today</span>
             </div>
             <div className="text-3xl font-bold text-amber-400 tabular-nums">
-              {todayBlocked}
+              {todayBlocked ?? '—'}
             </div>
           </div>
 
@@ -142,7 +129,7 @@ export default function AdminPage() {
                 unknownAttempts > 0 ? 'text-red-400' : 'text-slate-500',
               )}
             >
-              {unknownAttempts}
+              {blockStats ? unknownAttempts : '—'}
             </div>
           </div>
         </div>
@@ -159,25 +146,6 @@ export default function AdminPage() {
           <Link href="/automations" className="button-secondary">
             Open Automations
           </Link>
-        </section>
-
-        {/* Blocked Requests Section - Full Width */}
-        <section>
-          <div className="flex items-center gap-3 mb-4">
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
-            <h2 className="text-lg font-semibold text-slate-100">
-              Blocked Requests
-            </h2>
-            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-              {blockedRequests.length} total
-            </span>
-          </div>
-          <BlockedRequestsTable
-            requests={blockedRequests}
-            isLoading={isLoading}
-            onRefresh={refresh}
-            isRefreshing={isRefreshing}
-          />
         </section>
       </main>
     </div>
