@@ -12,6 +12,33 @@ const STATIC_ASSETS = [
   '/icons/icon-512.png',
 ];
 
+// True when a fetch was redirected to a Cloudflare Access login host.
+// Compares the parsed hostname, not a substring of the whole URL.
+function isCloudflareAccessRedirect(response) {
+  if (!response.redirected || !response.url) {
+    return false;
+  }
+  let hostname;
+  try {
+    hostname = new URL(response.url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return hostname === 'cloudflareaccess.com' || hostname.endsWith('.cloudflareaccess.com');
+}
+
+// Only same-origin clients may control the worker lifecycle.
+function isSameOriginClient(source) {
+  if (!source || typeof source.url !== 'string') {
+    return false;
+  }
+  try {
+    return new URL(source.url).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -107,7 +134,7 @@ self.addEventListener('fetch', (event) => {
         fetch(request, { credentials: 'same-origin' })
           .then((response) => {
             // Skip caching if redirected to CF Access (CORS issue)
-            if (response.redirected && response.url.includes('cloudflareaccess.com')) {
+            if (isCloudflareAccessRedirect(response)) {
               return;
             }
             if (response.ok) {
@@ -126,7 +153,7 @@ self.addEventListener('fetch', (event) => {
       return fetch(request, { credentials: 'same-origin' })
         .then((response) => {
           // Skip caching if redirected to CF Access
-          if (response.redirected && response.url.includes('cloudflareaccess.com')) {
+          if (isCloudflareAccessRedirect(response)) {
             return response;
           }
           // Cache successful responses for static assets
@@ -149,6 +176,9 @@ self.addEventListener('fetch', (event) => {
 
 // Message handler for cache control
 self.addEventListener('message', (event) => {
+  if (!isSameOriginClient(event.source)) {
+    return;
+  }
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }

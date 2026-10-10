@@ -54,7 +54,14 @@ def generate_api_key() -> tuple[str, str]:
 
 
 def hash_api_key(api_key: str) -> str:
-    """Hash an API key for lookup."""
+    """Hash an API key for lookup.
+
+    SHA-256 is deliberate: keys are 256-bit ``secrets.token_urlsafe`` tokens,
+    not user-chosen passwords, so a slow KDF adds no brute-force resistance,
+    and the deterministic digest is the indexed lookup column. Changing the
+    format would invalidate every stored key.
+    """
+    # codeql[py/weak-sensitive-data-hashing]
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 

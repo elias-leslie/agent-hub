@@ -22,8 +22,13 @@ class EpisodeValidator:
         r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
     )
     TASK_EXECUTION_LOG_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?i)\b(subtask\s+[a-z0-9-].*\battempts?\b|merge of task\s+[a-z0-9-]+|task-[a-z0-9]{6,})\b"
+        r"(?i)\b(merge of task\s+[a-z0-9-]+|task-[a-z0-9]{6,})\b"
     )
+    # ``subtask <id> ... attempt(s)`` on one line is matched in two linear steps
+    # (see ``_has_subtask_attempt_log``) rather than ``subtask\s+[a-z0-9-].*\battempts?``,
+    # which rescans to end of line from every ``subtask`` token (quadratic).
+    SUBTASK_START_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?i)\bsubtask\s+[a-z0-9-]")
+    ATTEMPTS_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?i)\battempts?\b")
     DOCUMENT_ARTIFACT_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?i)(document pattern for this household|source document:\s|^question:\s|^answer:\s)"
     )
@@ -83,11 +88,36 @@ class EpisodeValidator:
         )
 
     @classmethod
+    def _has_subtask_attempt_log(cls, content: str) -> bool:
+        """Return True when ``subtask <id>`` is followed by ``attempt(s)`` on the same line.
+
+        Equivalent to ``\\bsubtask\\s+[a-z0-9-].*\\battempts?\\b`` (``.`` stops at
+        newlines, ``\\s+`` may cross them). Each line tail is scanned for
+        ``attempts`` at most once, so the check stays linear.
+        """
+        checked_until = -1
+        position = 0
+        while (start := cls.SUBTASK_START_PATTERN.search(content, position)) is not None:
+            tail_start = start.end()
+            # The id character may begin the next "subtask" token, so resume just past this start.
+            position = start.start() + 1
+            if tail_start <= checked_until:
+                # Same line tail as an earlier candidate, already known to lack "attempts".
+                continue
+            line_end = content.find("\n", tail_start)
+            if line_end < 0:
+                line_end = len(content)
+            if cls.ATTEMPTS_PATTERN.search(content, tail_start, line_end):
+                return True
+            checked_until = line_end
+        return False
+
+    @classmethod
     def _detect_non_reusable_patterns(cls, content: str) -> list[str]:
         detected: list[str] = []
         if cls.HEARTBEAT_JOURNAL_PATTERN.search(content):
             detected.append("heartbeat journal")
-        if cls.TASK_EXECUTION_LOG_PATTERN.search(content):
+        if cls.TASK_EXECUTION_LOG_PATTERN.search(content) or cls._has_subtask_attempt_log(content):
             detected.append("task execution log")
         if cls.DOCUMENT_ARTIFACT_PATTERN.search(content):
             detected.append("document-specific artifact")
