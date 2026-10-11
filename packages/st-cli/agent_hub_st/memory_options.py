@@ -263,6 +263,7 @@ CursorOpt = Annotated[
 # UUID options
 UUIDsArg = Annotated[list[str], typer.Argument(help="Episode UUID(s) to retrieve")]
 UUIDsDeleteArg = Annotated[list[str], typer.Argument(help="Episode UUID(s) to delete")]
+UUIDsArchiveArg = Annotated[list[str], typer.Argument(help="Episode UUID(s) to archive or restore")]
 UUIDArg = Annotated[str, typer.Argument(help="Episode UUID (full or 8-char prefix)")]
 RevisionArg = Annotated[str, typer.Argument(help="Revision UUID to restore to")]
 UUIDsOptArg = Annotated[

@@ -85,6 +85,7 @@ from .memory_options import (
     UUIDArg,
     UUIDsArg,
     UUIDsBatchArg,
+    UUIDsArchiveArg,
     UUIDsDeleteArg,
     UUIDsOptArg,
     WriteScopeOpt,
@@ -320,7 +321,7 @@ def delete(uuids: UUIDsDeleteArg, change_reason: ChangeReasonOpt = None) -> None
     precautions=("reversible; prefer over delete; merge facts into the canonical row first",),
 )
 def archive(
-    uuids: UUIDsDeleteArg,
+    uuids: UUIDsArchiveArg,
     restore: Annotated[bool, typer.Option("--restore", help="Reactivate archived episodes")] = False,
     change_reason: ChangeReasonOpt = None,
 ) -> None:
