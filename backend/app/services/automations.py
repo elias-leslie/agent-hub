@@ -29,8 +29,6 @@ logger = logging.getLogger(__name__)
 # Deployment-owned callback routes. Origins come only from the registered project's
 # local .index.yaml; callers cannot supply an execution URL through a profile.
 EXTERNAL_WORKFLOWS: tuple[tuple[str, str, str, str, dict], ...] = (
-    ("summitflow/work_pickup", "summitflow", "Work pickup", "cancel_in_progress", {"type": "every", "value": "900000", "timezone": "UTC"}),
-    ("summitflow/task_generation", "summitflow", "Task generation", "cancel_in_progress", {"type": "every", "value": "3600000", "timezone": "UTC"}),
     ("summitflow/browser_workflow", "summitflow", "Browser workflow", "cancel_newest", {}),
     ("portfolio-ai/jenny_daily_household_maintenance", "portfolio-ai", "Daily household maintenance", "cancel_in_progress", {"type": "cron", "value": "15 13 * * *", "timezone": "UTC"}),
     ("portfolio-ai/jenny_daily_operator", "portfolio-ai", "Daily operator", "cancel_in_progress", {"type": "cron", "value": "15 22 * * 1-5", "timezone": "UTC"}),
@@ -61,24 +59,6 @@ class PolicyConfig(BaseModel):
     cooldown_seconds: int | None = Field(default=None, ge=0)
     allowed_hours: list[int] | None = None
     filters: dict = Field(default_factory=dict)
-    autonomous_max_concurrent: int | None = Field(default=None, ge=1)
-    autonomous_max_tasks_per_day: int | None = Field(default=None, ge=1)
-    autonomous_cooldown_minutes: int | None = Field(default=None, ge=0)
-    autonomous_allowed_types: list[str] | None = None
-    autonomous_external_origins: list[str] | None = None
-    autonomous_start_hour: int | None = Field(default=None, ge=0, le=23)
-    autonomous_end_hour: int | None = Field(default=None, ge=0, le=24)
-    autonomous_auto_merge_tiers: list[int] | None = None
-    autonomous_max_self_fix_attempts: int | None = Field(default=None, ge=0)
-    autonomous_max_supervisor_attempts: int | None = Field(default=None, ge=0)
-    autonomous_max_extensions: int | None = Field(default=None, ge=0)
-    autonomous_require_review: bool | None = None
-    quality_gate_tools: list[str] | None = None
-    quality_gate_mode: str | None = None
-    quality_gate_fix_enabled: bool | None = None
-    autonomous_task_types: list[str] | None = None
-    autonomous_enabled: bool | None = None
-    routine_upkeep_enabled: bool | None = None
     screening_cap: int | None = Field(default=None, ge=0)
     classification_cap: int | None = Field(default=None, ge=0)
 
@@ -87,14 +67,7 @@ def policy_schema_for(project_id: str) -> dict:
     schema = PolicyConfig.model_json_schema()
     schema["properties"] = {
         key: value for key, value in schema.get("properties", {}).items()
-        if (
-            (
-                project_id == "summitflow"
-                or (not key.startswith(("autonomous_", "quality_gate_"))
-                    and key != "routine_upkeep_enabled")
-            )
-            and (project_id == "jobinator-4000" or key not in {"screening_cap", "classification_cap"})
-        )
+        if project_id == "jobinator-4000" or key not in {"screening_cap", "classification_cap"}
     }
     return schema
 
@@ -115,10 +88,6 @@ def external_config_schema(workflow_key: str) -> dict:
             "required": ["workflow"],
             "additionalProperties": False,
         }
-    if workflow_key == "summitflow/task_generation":
-        return {"type": "object", "properties": {"upkeep_batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
-    if workflow_key == "summitflow/work_pickup":
-        return {"type": "object", "properties": {"batch_limit": {"type": "integer", "minimum": 1}}, "additionalProperties": False}
     if workflow_key.startswith("jobinator-4000/"):
         properties: dict = {"limit": {"type": ["integer", "null"], "minimum": 1}}
         if workflow_key == "jobinator-4000/nightly_screen":
@@ -135,17 +104,6 @@ def policy_sync_pending(policy: AutomationProjectPolicy) -> bool:
         and {"screening_cap", "classification_cap"}.issubset(policy.config or {})
         and policy.sync_revision < policy.revision
     )
-
-
-def policy_profile_gate_reasons(
-    workflow_key: str, policy: AutomationProjectPolicy,
-) -> list[str]:
-    config = policy.config or {}
-    if workflow_key == "summitflow/work_pickup" and config.get("autonomous_enabled") is False:
-        return ["autonomous_disabled"]
-    if workflow_key == "summitflow/task_generation" and config.get("routine_upkeep_enabled") is False:
-        return ["routine_upkeep_disabled"]
-    return []
 
 
 def effective_gate_reasons(
@@ -447,7 +405,6 @@ async def admit_run(
         manual=trigger == "manual", manual_when_disabled=definition.manual_when_disabled,
     )
     reasons.extend(await _policy_gate_reasons(db, policy, now))
-    reasons.extend(policy_profile_gate_reasons(profile.workflow_key, policy))
     if profile.workflow_key == "summitflow/browser_workflow":
         # A human handoff is still active. Serialize against the profile lock
         # held above so a new occurrence never supersedes its owned session.
@@ -507,10 +464,8 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 config_schema=external_config_schema(key),
                 policy_schema=policy_schema_for(project_id),
                 default_schedule=default_schedule, default_enabled=key != "summitflow/browser_workflow",
-                manual_when_disabled=key in {
-                    "summitflow/task_generation", "summitflow/browser_workflow", "portfolio-ai/jenny_weekly_price_check"
-                },
-                manual_advances_cursor=key == "summitflow/task_generation",
+                manual_when_disabled=key in {"summitflow/browser_workflow", "portfolio-ai/jenny_weekly_price_check"},
+                manual_advances_cursor=False,
                 overlap_strategy=overlap,
             ))
     for schedule in SCHEDULE_DEFINITIONS:

@@ -14,10 +14,8 @@ from app.services.automations import (
     effective_gate_reasons,
     ensure_future_one_time,
     occurrence_key,
-    policy_profile_gate_reasons,
     policy_schema_for,
     update_policy,
-    validate_policy_config,
     validate_profile_payload,
 )
 
@@ -32,7 +30,7 @@ def test_portfolio_weekly_learning_has_a_canonical_schedule_definition():
 @pytest.mark.asyncio
 async def test_new_profile_defaults_disabled_even_when_definition_defaults_enabled():
     payload = ProfileCreate(
-        project_id="summitflow", workflow_key="summitflow/work_pickup",
+        project_id="portfolio-ai", workflow_key="portfolio-ai/retrain_ml",
         schedule_type="every", schedule_value="900000",
     )
     assert payload.enabled is False
@@ -42,9 +40,9 @@ async def test_new_profile_defaults_disabled_even_when_definition_defaults_enabl
     db = AsyncMock()
     db.add = MagicMock()
     definition = SimpleNamespace(
-        workflow_key="summitflow/work_pickup", owner_project_id="summitflow",
-        version=1, label="Work pickup", default_enabled=True,
-        config_schema={"type": "object"}, dispatch_target="/automations/dispatch/work_pickup",
+        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
+        version=1, label="Retrain ML", default_enabled=True,
+        config_schema={"type": "object"}, dispatch_target="/automations/dispatch/retrain_ml",
     )
     with patch("app.services.automations.get_definition", new_callable=AsyncMock, return_value=definition):
         profile = await create_profile(db, payload.model_dump(exclude={"enabled"}), changed_by="test")
@@ -118,12 +116,12 @@ async def test_create_profile_rejects_past_one_time_before_adding_owner_or_profi
     db = AsyncMock()
     db.add = MagicMock()
     definition = SimpleNamespace(
-        workflow_key="summitflow/work_pickup", owner_project_id="summitflow",
-        version=1, label="Work pickup", dispatch_target="/automations/dispatch/work_pickup",
+        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
+        version=1, label="Retrain ML", dispatch_target="/automations/dispatch/retrain_ml",
         config_schema={"type": "object"},
     )
     payload = {
-        "project_id": "summitflow", "workflow_key": "summitflow/work_pickup",
+        "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/retrain_ml",
         "schedule_type": "at", "schedule_value": "2026-03-05T12:00:00Z",
     }
     with (
@@ -136,39 +134,24 @@ async def test_create_profile_rejects_past_one_time_before_adding_owner_or_profi
 
 def test_summitflow_owned_profile_can_target_another_project():
     definition = SimpleNamespace(
-        owner_project_id="summitflow", workflow_key="summitflow/work_pickup",
+        owner_project_id="summitflow", workflow_key="summitflow/browser_workflow",
         config_schema={"type": "object", "properties": {"batch_limit": {"type": "integer"}}},
     )
     value = validate_profile_payload({
-        "project_id": "agent-hub", "workflow_key": "summitflow/work_pickup",
+        "project_id": "agent-hub", "workflow_key": "summitflow/browser_workflow",
         "schedule_type": "every", "schedule_value": "1800000", "config": {"batch_limit": 5},
     }, definition)
     assert value["project_id"] == "agent-hub"
 
 
-def test_summitflow_workflow_gates_do_not_disable_unrelated_project_routines():
-    policy = SimpleNamespace(config={"autonomous_enabled": False, "routine_upkeep_enabled": True})
-    assert policy_profile_gate_reasons("summitflow/work_pickup", policy) == ["autonomous_disabled"]
-    assert policy_profile_gate_reasons("summitflow/task_generation", policy) == []
-    assert policy_profile_gate_reasons("portfolio-ai/retrain_ml", policy) == []
-
-
-def test_existing_summitflow_policy_values_keep_their_types():
-    config = validate_policy_config({
-        "autonomous_end_hour": 24,
-        "autonomous_auto_merge_tiers": [1, 2],
-        "autonomous_max_tasks_per_day": None,
-        "quality_gate_tools": ["ruff", "types"],
-    })
-    assert config["autonomous_end_hour"] == 24
-    assert config["autonomous_auto_merge_tiers"] == [1, 2]
-    assert config["quality_gate_tools"] == ["ruff", "types"]
-    assert "filters" not in config
+def test_retired_summitflow_policy_keys_are_not_in_the_catalog():
+    for project in ("summitflow", "agent-hub", "portfolio-ai"):
+        properties = policy_schema_for(project)["properties"]
+        assert not any(key.startswith(("autonomous_", "quality_gate_")) for key in properties)
+        assert "routine_upkeep_enabled" not in properties
 
 
 def test_policy_catalog_only_shows_owner_specific_fields_for_its_project():
-    assert "autonomous_max_concurrent" in policy_schema_for("summitflow")["properties"]
-    assert "autonomous_max_concurrent" not in policy_schema_for("neri")["properties"]
     assert "daily_limit" in policy_schema_for("neri")["properties"]
     assert "screening_cap" in policy_schema_for("jobinator-4000")["properties"]
     assert "classification_cap" in policy_schema_for("jobinator-4000")["properties"]

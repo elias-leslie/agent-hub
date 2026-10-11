@@ -26,7 +26,10 @@ async def test_legacy_import_registers_generic_definitions_but_no_neri_automatio
     rows = [call.args[0] for call in db.add.call_args_list]
     definitions = [row for row in rows if isinstance(row, AutomationDefinition)]
     assert any(row.workflow_key == "portfolio-ai/retrain_ml" for row in definitions)
-    assert any(row.workflow_key == "summitflow/work_pickup" for row in definitions)
+    assert any(row.workflow_key == "summitflow/browser_workflow" for row in definitions)
+    retired = {"summitflow/work_pickup", "summitflow/task_generation"}
+    assert not any(row.workflow_key in retired for row in definitions)
+    assert not any(key in retired for key, *_ in automations.EXTERNAL_WORKFLOWS)
     assert all(row.owner_project_id != "neri" for row in definitions)
     assert not any(isinstance(row, AutomationProfile) and row.project_id == "neri" for row in rows)
     assert not any(isinstance(row, AutomationProjectPolicy) and row.project_id == "neri" for row in rows)

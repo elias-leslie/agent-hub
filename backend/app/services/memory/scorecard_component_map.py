@@ -250,7 +250,6 @@ TOOL_TO_COMPONENT: dict[str, str] = {
     "st jj": "sf.cli",
     "st vcs": "sf.cli",
     "st check": "sf.dt",
-    "st autocode": "sf.workflows",
     "st memory": "sf.cli.memory",
     "st search": "sf.search",
     "st graph": "sf.graph",
