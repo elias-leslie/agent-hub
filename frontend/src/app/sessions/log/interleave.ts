@@ -52,10 +52,12 @@ export function interleave(
       })
   }
 
+  // Entries are in time order; copies recorded by different capture paths
+  // can carry different turn numbers, so separators only move forward.
   let lastTurn: number | null = null
   for (const entry of entries) {
     flushUntil(time(entry.at) - 1)
-    if (entry.turn !== lastTurn) {
+    if (lastTurn === null || entry.turn > lastTurn) {
       items.push({
         type: 'turn',
         key: `turn:${entry.id}`,

@@ -476,3 +476,94 @@ describe('live verifier regressions', () => {
     ])
   })
 })
+
+describe('live verifier regressions, round 2', () => {
+  it('hides a wrapper that polls alongside a mirrored command', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        call_id: 'call_poll2',
+        tool_input: {
+          raw: 'text(await tools.exec_command({cmd:"sed -n 1,180p a.py"}));await tools.write_stdin({session_id:3,chars:""})',
+        },
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'exec-11',
+        tool_input: { command: ['/bin/bash', '-lc', 'sed -n 1,180p a.py'] },
+      }),
+    ])
+    expect(entries.map((entry) => entry.summary)).toEqual([
+      'sed -n 1,180p a.py',
+    ])
+  })
+
+  it('keeps a web search that runs beside commands, with the query unescaped', () => {
+    const [entry] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        tool_input: {
+          raw: 'await Promise.all([tools.web__run({search_query:[{"q":"site:wordpress.org \\"7.1.3\\""}]}), tools.exec_command({cmd:"ls"})])',
+        },
+      }),
+    ])
+    expect(entry).toMatchObject({
+      label: 'searched',
+      summary: 'web: site:wordpress.org "7.1.3"',
+      meta: '+1 command',
+    })
+  })
+
+  it('collapses hook and transcript copies whose inputs differ in incidental fields', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        turn: 12,
+        tool_input: { command: 'st service wait abc' },
+        source_timestamp: '2026-10-10T11:57:15Z',
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        turn: 17,
+        call_id: 'toolu_x',
+        tool_input: { command: 'st service wait abc', timeout: 600000 },
+        source_timestamp: '2026-10-10T11:57:16Z',
+      }),
+    ])
+    expect(entries).toHaveLength(1)
+  })
+
+  it('only moves turn separators forward', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'assistant_message',
+        content: 'a',
+        turn: 17,
+        source_timestamp: '2026-10-10T11:00:00Z',
+      }),
+      ev({
+        event_type: 'assistant_message',
+        content: 'b',
+        turn: 12,
+        source_timestamp: '2026-10-10T11:00:01Z',
+      }),
+      ev({
+        event_type: 'assistant_message',
+        content: 'c',
+        turn: 18,
+        source_timestamp: '2026-10-10T11:00:02Z',
+      }),
+    ])
+    const { items } = interleave(entries, [], false)
+    expect(
+      items
+        .filter((item) => item.type === 'turn')
+        .map((item) => (item.type === 'turn' ? item.turn : 0)),
+    ).toEqual([17, 18])
+  })
+})

@@ -344,6 +344,8 @@ interface ExecScript {
   calls: string[]
   commands: string[]
   patch: string | null
+  /** First web search query, when the script searches the web. */
+  webQuery: string | null
 }
 
 /** Reads which tools a Codex exec wrapper script calls. */
@@ -367,7 +369,16 @@ export function parseExecScript(raw: string): ExecScript {
       patch = literal.slice(1, -1).replace(/\\n/g, '\n')
     }
   }
-  return { calls, commands, patch }
+  let webQuery: string | null = null
+  const q = /"q"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(raw)?.[1]
+  if (q && calls.some((call) => call.startsWith('web'))) {
+    try {
+      webQuery = JSON.parse(q) as string
+    } catch {
+      webQuery = q.slice(1, -1)
+    }
+  }
+  return { calls, commands, patch, webQuery }
 }
 
 function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
@@ -411,15 +422,17 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
         summary: 'running shell',
         failed: false,
       }
+    if (script.webQuery)
+      return {
+        ...base,
+        label: 'searched',
+        summary: oneLine(`web: ${script.webQuery}`),
+        meta: script.commands.length
+          ? `+${script.commands.length} command${script.commands.length === 1 ? '' : 's'}`
+          : undefined,
+        detail: outputDetail,
+      }
     if (!script.commands.length && script.calls.length) {
-      const query = /"q"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(input.raw)?.[1]
-      if (query && script.calls.some((call) => call.startsWith('web')))
-        return {
-          ...base,
-          label: 'searched',
-          summary: oneLine(`web: ${query}`),
-          detail: outputDetail,
-        }
       const counts = new Map<string, number>()
       for (const call of script.calls)
         counts.set(call, (counts.get(call) ?? 0) + 1)
@@ -744,8 +757,8 @@ export function buildLogEntries(
     // Incidental calls (clock reads and the like) don't make it more than a mirror.
     const runsCommands =
       script.calls.includes('exec_command') && script.commands.length > 0
-    if (!runsCommands || script.patch || script.calls.includes('write_stdin'))
-      continue
+    // Polling (write_stdin) and clock reads add nothing; a web search does.
+    if (!runsCommands || script.patch || script.webQuery) continue
     if (
       wrapperIds.has(key) ||
       script.commands.every((cmd) => bashCommands.has(cmd))
@@ -763,7 +776,17 @@ export function buildLogEntries(
       WRAPPER_TOOLS.has(event.tool_name ?? '')
     )
       continue
-    const signature = `${event.tool_name}\u0000${JSON.stringify(event.tool_input)}`
+    const input = isObject(event.tool_input) ? event.tool_input : {}
+    // Copies differ in incidental fields (timeout, description), so compare
+    // what identifies the call.
+    const key =
+      str(input.command) ??
+      str(input.file_path) ??
+      str(input.pattern) ??
+      str(input.url) ??
+      str(input.query) ??
+      JSON.stringify(input)
+    const signature = `${event.tool_name}\u0000${key}`
     const at = Date.parse(event.source_timestamp ?? event.created_at)
     const prior = recent.get(signature)
     const priorAt = prior
