@@ -87,7 +87,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-hub-client", path = "../docker/workspace-packages/agent_hub_client-0.7.0-py3-none-any.whl" },
-    { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.2.1-py3-none-any.whl" },
+    { name = "agent-hub-st", path = "../docker/workspace-packages/agent_hub_st-0.2.2-py3-none-any.whl" },
     { name = "alembic", specifier = ">=1.16.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
@@ -125,7 +125,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "summitflow-st-sdk", path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" },
+    { name = "summitflow-st-sdk", path = "../docker/workspace-packages/summitflow_st_sdk-0.1.1-py3-none-any.whl" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "trafilatura", specifier = ">=2.0.0" },
@@ -161,8 +161,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "agent-hub-st"
-version = "0.2.1"
-source = { path = "../docker/workspace-packages/agent_hub_st-0.2.1-py3-none-any.whl" }
+version = "0.2.2"
+source = { path = "../docker/workspace-packages/agent_hub_st-0.2.2-py3-none-any.whl" }
 dependencies = [
     { name = "agent-hub-client" },
     { name = "httpx" },
@@ -171,7 +171,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { filename = "agent_hub_st-0.2.1-py3-none-any.whl", hash = "sha256:2a1eff69b3fb8cdaee101ef77be74525c8f3b2ac36012fb2de11ab6f1f3aa962" },
+    { filename = "agent_hub_st-0.2.2-py3-none-any.whl", hash = "sha256:46183576b8d6476f545f927253132f3d81436c8a5bcb87a61672d9ecc4fd5336" },
 ]
 
 [package.metadata]
@@ -179,7 +179,7 @@ requires-dist = [
     { name = "agent-hub-client", specifier = "==0.7.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "summitflow-st-sdk", specifier = "==0.1.0" },
+    { name = "summitflow-st-sdk", specifier = ">=0.1.0,<0.2" },
     { name = "typer", specifier = ">=0.15.0" },
 ]
 
@@ -2830,15 +2830,15 @@ wheels = [
 
 [[package]]
 name = "summitflow-st-sdk"
-version = "0.1.0"
-source = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
+version = "0.1.1"
+source = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.1-py3-none-any.whl" }
 dependencies = [
     { name = "httpx" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
 wheels = [
-    { filename = "summitflow_st_sdk-0.1.0-py3-none-any.whl", hash = "sha256:01f4c599038929e6a6720d1ddee388aabf572d9f3d98432a190a75bb1d1ab19a" },
+    { filename = "summitflow_st_sdk-0.1.1-py3-none-any.whl", hash = "sha256:eb53c8014788fdb7d7dad0e51bf9e96fbba705bcc747646f196cc6c17bcafa5b" },
 ]
 
 [package.metadata]

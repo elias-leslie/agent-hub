@@ -8,12 +8,14 @@ from st_sdk.usage import collect_usage_specs
 from agent_hub_st.memory import app
 
 SURFACES = ("st.memory.save", "st.memory.search", "st.memory.update")
+# Archive is on-demand reference guidance, not a mandate surface.
+ALL_SURFACES = {*SURFACES, "st.memory.archive"}
 
 
 def test_memory_usage_specs_expose_authoring_workflow() -> None:
     specs = collect_usage_specs(app)
 
-    assert {spec.surface for spec in specs} == set(SURFACES)
+    assert {spec.surface for spec in specs} == ALL_SURFACES
     assert all(spec.on_demand == "memory authoring" for spec in specs)
     assert all(spec.to_dict()["on_demand"] == "memory authoring" for spec in specs)
 

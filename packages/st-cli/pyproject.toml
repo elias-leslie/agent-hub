@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-hub-st"
-version = "0.2.1"
+version = "0.2.2"
 description = "Agent Hub-owned commands and client helpers for SummitFlow ST"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,7 +12,7 @@ dependencies = [
     "agent-hub-client==0.7.0",
     "httpx>=0.28.0",
     "PyYAML>=6.0.0",
-    "summitflow-st-sdk==0.1.0",
+    "summitflow-st-sdk>=0.1.0,<0.2",
     "typer>=0.15.0",
 ]
 
@@ -21,7 +21,7 @@ agent-hub-st = "agent_hub_st.__main__:main"
 
 [tool.uv.sources]
 agent-hub-client = { path = "../agent-hub-client" }
-summitflow-st-sdk = { path = "../../docker/workspace-packages/summitflow_st_sdk-0.1.0-py3-none-any.whl" }
+summitflow-st-sdk = { path = "../../docker/workspace-packages/summitflow_st_sdk-0.1.1-py3-none-any.whl" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_hub_st"]
