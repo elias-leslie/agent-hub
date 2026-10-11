@@ -1345,3 +1345,51 @@ class TestCheckToolAllowedFailClosed:
             allowed, reason = await check_tool_allowed("proj", "bash")
             assert allowed is False
             assert "permission check error" in reason
+
+
+class TestRegistryDrivenAccess:
+    @pytest.mark.asyncio
+    async def test_newly_registered_project_is_reconciled_without_restart(self, monkeypatch):
+        from contextlib import asynccontextmanager
+
+        from app.services import project_permission_service as service
+
+        monkeypatch.setattr(service, "_reconciled_registry", None)
+        registry = {"summitflow": "/p/summitflow"}
+        reconcile = AsyncMock(return_value=["client-summitflow"])
+        db = AsyncMock()
+
+        @asynccontextmanager
+        async def session():
+            yield db
+
+        with (
+            patch("app.core.project_roots.get_registered_project_roots", AsyncMock(side_effect=lambda: dict(registry))),
+            patch("app.db.async_session", session),
+            patch.object(service, "reconcile_registered_project_access", reconcile),
+        ):
+            assert await service.reconcile_access_if_registry_changed() == ["client-summitflow"]
+            assert await service.reconcile_access_if_registry_changed() == []
+            registry["new-project"] = "/p/new-project"
+            await service.reconcile_access_if_registry_changed()
+
+        assert [call.args[1] for call in reconcile.await_args_list] == [
+            ["summitflow"],
+            ["new-project", "summitflow"],
+        ]
+
+    @pytest.mark.asyncio
+    async def test_middleware_rereads_a_reconciled_summitflow_client(self):
+        from app.middleware import access_control_handler_helpers as helpers
+
+        stale = {"id": "c1", "display_name": "summitflow", "allowed_projects": '["summitflow"]'}
+        fresh = {**stale, "allowed_projects": '["summitflow", "new-project"]'}
+        other = {"id": "c2", "display_name": "vantage", "allowed_projects": '["vantage"]'}
+        reconcile = AsyncMock(return_value=["c1"])
+        with (
+            patch("app.services.project_permission_service.reconcile_access_if_registry_changed", reconcile),
+            patch.object(helpers, "get_cached_client", AsyncMock(return_value=fresh)),
+        ):
+            assert await helpers._with_current_registry_access("c1", stale) == fresh
+            assert await helpers._with_current_registry_access("c2", other) == other
+        reconcile.assert_awaited_once()

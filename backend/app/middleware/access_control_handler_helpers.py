@@ -120,7 +120,27 @@ async def identify_client(
     if status_error is not None:
         return None, status_error
 
+    client_data = await _with_current_registry_access(client_id, client_data)
     return client_data, None
+
+
+async def _with_current_registry_access(client_id: str, client_data: dict[str, Any]) -> dict[str, Any]:
+    """Pick up newly registered projects for SummitFlow-owned clients without a restart."""
+    from app.services.project_permission_service import (
+        is_registry_synced_client,
+        reconcile_access_if_registry_changed,
+    )
+
+    if not is_registry_synced_client(client_data.get("display_name")):
+        return client_data
+    try:
+        changed = await reconcile_access_if_registry_changed()
+    except Exception as exc:  # access stays as stored; never fail the request on repair
+        logger.warning("Registry access reconciliation failed: %s", exc)
+        return client_data
+    if client_id in changed:
+        return await get_cached_client(client_id) or client_data
+    return client_data
 
 
 def set_identified_state(request: Request, client_data: dict[str, Any], request_source: str | None) -> None:

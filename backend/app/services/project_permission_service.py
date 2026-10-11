@@ -309,7 +309,7 @@ def _parse_allowed_projects_json(allowed_projects: str | None) -> list[str]:
 
 def _should_sync_registered_project_access(client: Client) -> bool:
     """Return whether this client should mirror SummitFlow-managed projects."""
-    return client.display_name.strip().lower() in _SUMMITFLOW_SYNC_CLIENTS
+    return is_registry_synced_client(client.display_name)
 
 
 async def _sync_registered_project_access(
@@ -383,6 +383,37 @@ async def reconcile_registered_project_access(
             invalidate_client_cache(client_id)
 
     return changed_client_ids
+
+
+_reconciled_registry: frozenset[str] | None = None
+
+
+def is_registry_synced_client(display_name: str | None) -> bool:
+    """Return whether a client's project access follows the SummitFlow registry."""
+    return (display_name or "").strip().lower() in _SUMMITFLOW_SYNC_CLIENTS
+
+
+async def reconcile_access_if_registry_changed() -> list[str]:
+    """Re-run access reconciliation when the cached project registry changed.
+
+    The registry is read through ``get_registered_project_roots`` (short TTL
+    cache, last good copy on failure), so this is cheap per request and a
+    newly registered SummitFlow project is allowed without a restart.
+    """
+    global _reconciled_registry
+    from app.core.project_roots import ProjectRegistryUnavailable, get_registered_project_roots
+    from app.db import async_session  # lazy import to avoid cycles
+
+    try:
+        registered = frozenset(await get_registered_project_roots())
+    except ProjectRegistryUnavailable:
+        return []
+    if registered == _reconciled_registry:
+        return []
+    async with async_session() as db:
+        changed = await reconcile_registered_project_access(db, sorted(registered))
+    _reconciled_registry = registered
+    return changed
 
 
 def _coerce_tier(tier: str) -> str:
