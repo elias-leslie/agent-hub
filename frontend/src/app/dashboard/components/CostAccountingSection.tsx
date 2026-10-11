@@ -290,7 +290,10 @@ export function CostAccountingSection({ daysRange }: { daysRange: number }) {
   })
 
   return (
-    <div className="panel-surface col-span-12 p-5 lg:p-6">
+    <div
+      id="subscription-costs"
+      className="panel-surface col-span-12 scroll-mt-4 p-5 lg:p-6"
+    >
       <div className="mb-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           Subscription costs
