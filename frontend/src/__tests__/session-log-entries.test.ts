@@ -567,3 +567,96 @@ describe('live verifier regressions, round 2', () => {
     ).toEqual([17, 18])
   })
 })
+
+describe('live verifier regressions, round 3', () => {
+  it('pairs a hook copy stamped at completion with its transcript copy', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        turn: 12,
+        tool_input: { command: 'st service rebuild neri --detach' },
+        created_at: '2026-10-09T15:56:40Z',
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        turn: 17,
+        call_id: 'toolu_r',
+        tool_input: {
+          command: 'st service rebuild neri --detach',
+          timeout: 600000,
+        },
+        source_timestamp: '2026-10-09T15:54:14Z',
+      }),
+    ])
+    expect(entries).toHaveLength(1)
+  })
+
+  it('pairs a hook copy whose long input was cut at 500 characters', () => {
+    const command = `st commit -m "${'x'.repeat(600)}"`
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        tool_input: { command: command.slice(0, 500) },
+        created_at: '2026-10-09T15:54:12Z',
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'toolu_c',
+        tool_input: { command },
+        source_timestamp: '2026-10-09T15:54:09Z',
+      }),
+    ])
+    expect(entries).toHaveLength(1)
+  })
+
+  it('keeps genuine reruns of one command, each with its own copy', () => {
+    const run = (at: string, id: string | null) =>
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: id,
+        tool_input: { command: 'st check' },
+        ...(id ? { source_timestamp: at } : { created_at: at }),
+      })
+    const entries = buildLogEntries([
+      run('2026-10-09T10:00:00Z', 'toolu_1'),
+      run('2026-10-09T10:00:05Z', null),
+      run('2026-10-09T10:10:00Z', 'toolu_2'),
+      run('2026-10-09T10:10:05Z', null),
+    ])
+    expect(entries).toHaveLength(2)
+  })
+
+  it('reads web queries with bare keys and names opened pages', () => {
+    const [search] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        tool_input: {
+          raw: 'await tools.web__run({search_query:[{q:"Codex CLI resume"}]})',
+        },
+      }),
+    ])
+    expect(search).toMatchObject({
+      label: 'searched',
+      summary: 'web: Codex CLI resume',
+    })
+    const [open] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        tool_input: {
+          raw: 'await tools.web__run({open:[{ref_id:"https://example.com/a"}]})',
+        },
+      }),
+    ])
+    expect(open).toMatchObject({
+      label: 'fetched',
+      summary: 'https://example.com/a',
+    })
+  })
+})

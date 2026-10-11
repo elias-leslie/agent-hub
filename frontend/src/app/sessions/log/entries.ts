@@ -346,6 +346,8 @@ interface ExecScript {
   patch: string | null
   /** First web search query, when the script searches the web. */
   webQuery: string | null
+  /** Page a web call opens, when it opens one rather than searching. */
+  webOpen: string | null
 }
 
 /** Reads which tools a Codex exec wrapper script calls. */
@@ -369,16 +371,22 @@ export function parseExecScript(raw: string): ExecScript {
       patch = literal.slice(1, -1).replace(/\\n/g, '\n')
     }
   }
-  let webQuery: string | null = null
-  const q = /"q"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(raw)?.[1]
-  if (q && calls.some((call) => call.startsWith('web'))) {
+  const usesWeb = calls.some((call) => call.startsWith('web'))
+  // Keys may be quoted or bare: {"q":"..."} or {q:"..."}.
+  const literalAfter = (key: string) => {
+    const match = new RegExp(
+      `(?:"${key}"|\\b${key})\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`,
+    ).exec(raw)?.[1]
+    if (!match) return null
     try {
-      webQuery = JSON.parse(q) as string
+      return JSON.parse(match) as string
     } catch {
-      webQuery = q.slice(1, -1)
+      return match.slice(1, -1)
     }
   }
-  return { calls, commands, patch, webQuery }
+  const webQuery = usesWeb ? literalAfter('q') : null
+  const webOpen = usesWeb && !webQuery ? literalAfter('ref_id') : null
+  return { calls, commands, patch, webQuery, webOpen }
 }
 
 function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
@@ -427,6 +435,16 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
         ...base,
         label: 'searched',
         summary: oneLine(`web: ${script.webQuery}`),
+        meta: script.commands.length
+          ? `+${script.commands.length} command${script.commands.length === 1 ? '' : 's'}`
+          : undefined,
+        detail: outputDetail,
+      }
+    if (script.webOpen)
+      return {
+        ...base,
+        label: 'fetched',
+        summary: oneLine(script.webOpen),
         meta: script.commands.length
           ? `+${script.commands.length} command${script.commands.length === 1 ? '' : 's'}`
           : undefined,
@@ -714,6 +732,13 @@ const SKIPPED_TYPES = new Set([
   'usage_counter',
 ])
 
+/** Hooks store at most this many characters of a tool input field. */
+const HOOK_INPUT_LIMIT = 500
+/** A hook copy is stamped at completion: up to this long after the start. */
+const DUPLICATE_LAG_MS = 30 * 60_000
+/** Clock skew allowed the other way. */
+const DUPLICATE_LEAD_MS = 5_000
+
 const WRAPPER_TOOLS = new Set(['exec', 'exec_command'])
 
 function resultKey(event: TimelineEvent): string | null {
@@ -758,7 +783,8 @@ export function buildLogEntries(
     const runsCommands =
       script.calls.includes('exec_command') && script.commands.length > 0
     // Polling (write_stdin) and clock reads add nothing; a web search does.
-    if (!runsCommands || script.patch || script.webQuery) continue
+    if (!runsCommands || script.patch || script.webQuery || script.webOpen)
+      continue
     if (
       wrapperIds.has(key) ||
       script.commands.every((cmd) => bashCommands.has(cmd))
@@ -766,43 +792,56 @@ export function buildLogEntries(
       hiddenWrappers.add(key)
   }
 
-  // Claude Code hooks and transcript sync can both record one call: the same
-  // tool and input seconds apart, one of them without a call_id. Keep one.
+  // Claude Code hooks and transcript sync can both record one call. The hook
+  // copy has no call_id, is stamped when the call finished and keeps only the
+  // first 500 characters of a long input; the transcript copy has the call_id
+  // and the start time, and may add incidental fields (timeout, description).
+  // Pair each hook copy with the nearest unpaired transcript copy and keep the
+  // transcript copy, which pairs with its result.
   const duplicates = new Set<string>()
-  const recent = new Map<string, TimelineEvent>()
-  for (const event of events) {
-    if (
-      event.event_type !== 'tool_use' ||
-      WRAPPER_TOOLS.has(event.tool_name ?? '')
-    )
-      continue
+  const callKey = (event: TimelineEvent) => {
     const input = isObject(event.tool_input) ? event.tool_input : {}
-    // Copies differ in incidental fields (timeout, description), so compare
-    // what identifies the call.
-    const key =
+    return (
       str(input.command) ??
       str(input.file_path) ??
       str(input.pattern) ??
       str(input.url) ??
       str(input.query) ??
       JSON.stringify(input)
-    const signature = `${event.tool_name}\u0000${key}`
-    const at = Date.parse(event.source_timestamp ?? event.created_at)
-    const prior = recent.get(signature)
-    const priorAt = prior
-      ? Date.parse(prior.source_timestamp ?? prior.created_at)
-      : Number.NaN
-    if (
-      prior &&
-      Math.abs(at - priorAt) <= 5000 &&
-      (!prior.call_id || !event.call_id)
-    ) {
-      // Prefer the copy that carries a call_id (it pairs with its result).
-      duplicates.add(prior.call_id ? event.id : prior.id)
-      if (!prior.call_id) recent.set(signature, event)
-      continue
+    )
+  }
+  const sameCall = (a: string, b: string) =>
+    a === b ||
+    (a.length >= HOOK_INPUT_LIMIT && b.startsWith(a)) ||
+    (b.length >= HOOK_INPUT_LIMIT && a.startsWith(b))
+  const stamped = events
+    .filter(
+      (event) =>
+        event.event_type === 'tool_use' &&
+        !WRAPPER_TOOLS.has(event.tool_name ?? ''),
+    )
+    .map((event) => ({
+      event,
+      key: callKey(event),
+      at: Date.parse(event.source_timestamp ?? event.created_at),
+    }))
+  const transcript = stamped.filter((item) => item.event.call_id)
+  const paired = new Set<string>()
+  for (const hook of stamped) {
+    if (hook.event.call_id) continue
+    let best: (typeof transcript)[number] | null = null
+    for (const copy of transcript) {
+      if (paired.has(copy.event.id)) continue
+      if (copy.event.tool_name !== hook.event.tool_name) continue
+      const lag = hook.at - copy.at
+      if (lag < -DUPLICATE_LEAD_MS || lag > DUPLICATE_LAG_MS) continue
+      if (!sameCall(hook.key, copy.key)) continue
+      if (!best || Math.abs(lag) < Math.abs(hook.at - best.at)) best = copy
     }
-    recent.set(signature, event)
+    if (best) {
+      paired.add(best.event.id)
+      duplicates.add(hook.event.id)
+    }
   }
 
   const entries: LogEntry[] = []
