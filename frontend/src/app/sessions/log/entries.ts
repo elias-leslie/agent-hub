@@ -348,6 +348,9 @@ interface ExecScript {
   webQuery: string | null
   /** Page a web call opens, when it opens one rather than searching. */
   webOpen: string | null
+  /** Further queries or pages beyond the one named. */
+  webMore: number
+  usesWeb: boolean
 }
 
 /** Reads which tools a Codex exec wrapper script calls. */
@@ -372,21 +375,50 @@ export function parseExecScript(raw: string): ExecScript {
     }
   }
   const usesWeb = calls.some((call) => call.startsWith('web'))
-  // Keys may be quoted or bare: {"q":"..."} or {q:"..."}.
-  const literalAfter = (key: string) => {
-    const match = new RegExp(
-      `(?:"${key}"|\\b${key})\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`,
-    ).exec(raw)?.[1]
-    if (!match) return null
-    try {
-      return JSON.parse(match) as string
-    } catch {
-      return match.slice(1, -1)
-    }
-  }
-  const webQuery = usesWeb ? literalAfter('q') : null
-  const webOpen = usesWeb && !webQuery ? literalAfter('ref_id') : null
-  return { calls, commands, patch, webQuery, webOpen }
+  // Keys may be quoted or bare and strings single or double quoted:
+  // {"q":"..."}, {q:"..."} or {q:'...'}.
+  const literalsAfter = (key: string) =>
+    [
+      ...raw.matchAll(
+        new RegExp(
+          `(?:["']${key}["']|\\b${key})\\s*:\\s*("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')`,
+          'g',
+        ),
+      ),
+    ].map((m) => {
+      const literal = m[1]
+      if (literal.startsWith('"')) {
+        try {
+          return JSON.parse(literal) as string
+        } catch {
+          // fall through to the plain slice
+        }
+      }
+      return literal.slice(1, -1).replace(/\\(.)/g, '$1')
+    })
+  const queries = usesWeb ? literalsAfter('q') : []
+  const opens = usesWeb ? literalsAfter('ref_id') : []
+  const webQuery = queries[0] ?? null
+  const webOpen = webQuery ? null : (opens[0] ?? null)
+  const webMore = webQuery ? queries.length - 1 : Math.max(opens.length - 1, 0)
+  return { calls, commands, patch, usesWeb, webQuery, webOpen, webMore }
+}
+
+function plural(n: number, one: string, many: string) {
+  return `+${n} ${n === 1 ? one : many}`
+}
+
+function webMeta(script: ExecScript, unit: 'quer' | 'page') {
+  const parts: string[] = []
+  if (script.webMore)
+    parts.push(
+      unit === 'quer'
+        ? plural(script.webMore, 'query', 'queries')
+        : plural(script.webMore, 'page', 'pages'),
+    )
+  if (script.commands.length)
+    parts.push(plural(script.commands.length, 'command', 'commands'))
+  return parts.length ? parts.join(' · ') : undefined
 }
 
 function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
@@ -435,9 +467,7 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
         ...base,
         label: 'searched',
         summary: oneLine(`web: ${script.webQuery}`),
-        meta: script.commands.length
-          ? `+${script.commands.length} command${script.commands.length === 1 ? '' : 's'}`
-          : undefined,
+        meta: webMeta(script, 'quer'),
         detail: outputDetail,
       }
     if (script.webOpen)
@@ -445,9 +475,7 @@ function toolEntry(use: TimelineEvent, result: TimelineEvent | null): LogEntry {
         ...base,
         label: 'fetched',
         summary: oneLine(script.webOpen),
-        meta: script.commands.length
-          ? `+${script.commands.length} command${script.commands.length === 1 ? '' : 's'}`
-          : undefined,
+        meta: webMeta(script, 'page'),
         detail: outputDetail,
       }
     if (!script.commands.length && script.calls.length) {
@@ -783,8 +811,7 @@ export function buildLogEntries(
     const runsCommands =
       script.calls.includes('exec_command') && script.commands.length > 0
     // Polling (write_stdin) and clock reads add nothing; a web search does.
-    if (!runsCommands || script.patch || script.webQuery || script.webOpen)
-      continue
+    if (!runsCommands || script.patch || script.usesWeb) continue
     if (
       wrapperIds.has(key) ||
       script.commands.every((cmd) => bashCommands.has(cmd))

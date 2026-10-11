@@ -660,3 +660,49 @@ describe('live verifier regressions, round 3', () => {
     })
   })
 })
+
+describe('live verifier regressions, round 4', () => {
+  it('keeps a single-quoted web search that runs beside a mirrored command', () => {
+    const entries = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        call_id: 'call_web',
+        tool_input: {
+          raw: `text(await tools.exec_command({cmd:"sed -n 1,100p a.txt"}));await tools.web__run({search_query:[{q:'site.hackerone.com/owncloud "break"'}]})`,
+        },
+      }),
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'Bash',
+        call_id: 'exec-2',
+        tool_input: {
+          command: ['/bin/bash', '-lc', 'sed -n 1,100p a.txt'],
+          wrapper_candidate_call_id: 'call_web',
+        },
+      }),
+    ])
+    expect(entries.map((entry) => entry.summary)).toEqual([
+      'web: site.hackerone.com/owncloud "break"',
+      'sed -n 1,100p a.txt',
+    ])
+    expect(entries[0].meta).toBe('+1 command')
+  })
+
+  it('counts further pages a web call opens', () => {
+    const [entry] = buildLogEntries([
+      ev({
+        event_type: 'tool_use',
+        tool_name: 'exec',
+        tool_input: {
+          raw: 'await tools.web__run({open:[{ref_id:"https://a.example"},{ref_id:"https://b.example"},{ref_id:"https://c.example"}]})',
+        },
+      }),
+    ])
+    expect(entry).toMatchObject({
+      label: 'fetched',
+      summary: 'https://a.example',
+      meta: '+2 pages',
+    })
+  })
+})
