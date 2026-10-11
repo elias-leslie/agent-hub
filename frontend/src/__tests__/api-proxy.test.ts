@@ -1,17 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/api-config', () => ({
-  buildInternalHeaders: () => ({ 'X-Client-Id': 'agent-hub-dashboard' }),
+  buildInternalHeaders: () => ({
+    'X-Client-Id': 'agent-hub-dashboard',
+    'X-Agent-Hub-Internal': 'test-secret',
+  }),
   getApiBaseUrl: () => 'http://backend.test',
 }))
 
-import { PUT } from '@/app/api/proxy/[...path]/route'
+import { GET, POST, PUT } from '@/app/api/proxy/[...path]/route'
 
 afterEach(() => vi.unstubAllGlobals())
 
+const me = (isOwner: boolean) => Response.json({ is_owner: isOwner })
+const ctx = (path: string[]) => ({ params: Promise.resolve({ path }) })
+
 describe('dashboard proxy project scope', () => {
   it('preserves the selected project when saving overrides', async () => {
-    const fetch = vi.fn().mockResolvedValue(Response.json({ overrides: [] }))
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(me(true))
+      .mockResolvedValueOnce(Response.json({ overrides: [] }))
     vi.stubGlobal('fetch', fetch)
     const response = await PUT(
       new Request(
@@ -25,14 +34,10 @@ describe('dashboard proxy project scope', () => {
           body: JSON.stringify({ overrides: [] }),
         },
       ),
-      {
-        params: Promise.resolve({
-          path: ['runtime-context', 'agent_startup', 'overrides'],
-        }),
-      },
+      ctx(['runtime-context', 'agent_startup', 'overrides']),
     )
     expect(response.status).toBe(200)
-    expect(fetch.mock.calls[0][0]).toBe(
+    expect(fetch.mock.calls[1][0]).toBe(
       'http://backend.test/api/runtime-context/agent_startup/overrides?project_id=ominull',
     )
   })
@@ -45,13 +50,65 @@ describe('dashboard proxy project scope', () => {
         'http://dashboard.test/api/runtime-context/agent_startup/overrides',
         { method: 'PUT' },
       ),
-      {
-        params: Promise.resolve({
-          path: ['runtime-context', 'agent_startup', 'overrides'],
-        }),
-      },
+      ctx(['runtime-context', 'agent_startup', 'overrides']),
     )
     expect(response.status).toBe(401)
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('dashboard proxy caller identity', () => {
+  it('forwards the Access identity and refuses a non-owner before adding the secret', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(me(false))
+    vi.stubGlobal('fetch', fetch)
+    const response = await GET(
+      new Request('http://localhost:3003/api/proxy/sessions', {
+        headers: {
+          'cf-access-jwt-assertion': 'jwt-1',
+          cookie: 'CF_Authorization=jwt-1',
+          'x-forwarded-host': 'agent.summitflow.dev',
+        },
+      }),
+      ctx(['sessions']),
+    )
+    expect(response.status).toBe(403)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('http://backend.test/api/auth/me')
+    const headers = init.headers as Headers
+    expect(headers.get('Cf-Access-Jwt-Assertion')).toBe('jwt-1')
+    expect(headers.get('Cookie')).toBe('CF_Authorization=jwt-1')
+    expect(headers.get('X-Forwarded-Host')).toBe('agent.summitflow.dev')
+    expect(headers.get('X-Agent-Hub-Internal')).toBeNull()
+  })
+
+  it('proxies an owner with the internal secret', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(me(true))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+    vi.stubGlobal('fetch', fetch)
+    const response = await GET(
+      new Request('http://localhost:3003/api/proxy/sessions?limit=5'),
+      ctx(['sessions']),
+    )
+    expect(response.status).toBe(200)
+    const [url, init] = fetch.mock.calls[1]
+    expect(url).toBe('http://backend.test/api/sessions?limit=5')
+    expect(init.headers['X-Agent-Hub-Internal']).toBe('test-secret')
+  })
+
+  it('returns 503 when the identity check cannot run', async () => {
+    const fetch = vi.fn().mockRejectedValueOnce(new Error('down'))
+    vi.stubGlobal('fetch', fetch)
+    const response = await POST(
+      new Request('http://localhost:3003/api/proxy/complete', {
+        method: 'POST',
+        body: '{}',
+      }),
+      ctx(['complete']),
+    )
+    expect(response.status).toBe(503)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

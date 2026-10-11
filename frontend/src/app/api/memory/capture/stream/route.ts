@@ -2,10 +2,13 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 import { buildInternalHeaders, getApiBaseUrl } from '@/lib/api-config'
+import { requireOwner } from '@/lib/proxy-identity'
 
 const BACKEND_URL = `${getApiBaseUrl()}/api/memory/capture/stream`
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  const denied = await requireOwner(request)
+  if (denied) return denied
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
     ...buildInternalHeaders(),

@@ -10,6 +10,7 @@
  */
 
 import { buildInternalHeaders, getApiBaseUrl } from '@/lib/api-config'
+import { requireOwner } from '@/lib/proxy-identity'
 
 const SSE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-cache, no-transform',
@@ -69,9 +70,20 @@ function dashboardProxyGuard(
   )
 }
 
+/**
+ * The proxy adds the internal service secret, so only an owner may use it:
+ * the backend resolves the caller from the forwarded Access identity and host.
+ */
+async function proxyGuard(
+  request: Request,
+  path: string[],
+): Promise<Response | null> {
+  return dashboardProxyGuard(request, path) ?? (await requireOwner(request))
+}
+
 export async function GET(request: Request, { params }: RouteContext) {
   const { path } = await params
-  const guard = dashboardProxyGuard(request, path)
+  const guard = await proxyGuard(request, path)
   if (guard) return guard
   const url = buildUpstreamUrl(
     path,
@@ -89,7 +101,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { path } = await params
-  const guard = dashboardProxyGuard(request, path)
+  const guard = await proxyGuard(request, path)
   if (guard) return guard
   const url = buildUpstreamUrl(path)
   const body = await request.text()
@@ -111,7 +123,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
 export async function PUT(request: Request, { params }: RouteContext) {
   const { path } = await params
-  const guard = dashboardProxyGuard(request, path)
+  const guard = await proxyGuard(request, path)
   if (guard) return guard
   const url = buildUpstreamUrl(
     path,
@@ -134,7 +146,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   const { path } = await params
-  const guard = dashboardProxyGuard(request, path)
+  const guard = await proxyGuard(request, path)
   if (guard) return guard
   const url = buildUpstreamUrl(path)
   const body = await request.text()
@@ -154,7 +166,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   const { path } = await params
-  const guard = dashboardProxyGuard(request, path)
+  const guard = await proxyGuard(request, path)
   if (guard) return guard
   const url = buildUpstreamUrl(
     path,

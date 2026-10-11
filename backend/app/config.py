@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     agent_hub_encryption_key: str = ""  # Fernet key for credential encryption
     agent_hub_secret_key: str = ""  # Session secret
     internal_service_secret: str = ""  # Internal service auth (set via env)
+
+    # Cloudflare Access identity for the dashboard proxy. The AUD is the
+    # agent.summitflow.dev Access application's tag (each app has its own).
+    cloudflare_access_team_domain: str = ""
+    agent_hub_cf_access_aud: str = ""
+    agent_hub_owner_emails: str = Field(
+        default="", validation_alias=AliasChoices("AGENT_HUB_OWNER_EMAILS", "SUMMITFLOW_OWNER_EMAILS")
+    )
     dashboard_ui_request_log_sample_rate: float = 0.1  # Fraction of internal-header UI requests logged to request_logs
 
     # First-party client registrations for standalone and companion installs

@@ -19,6 +19,7 @@ EXEMPT_PATHS = frozenset(
         "/redoc",
         "/api/health",
         "/api/status",
+        "/api/auth/me",  # Caller identity for the dashboard proxy (no secrets)
         "/favicon.ico",
     ]
 )

@@ -1,0 +1,106 @@
+"""Resolve the dashboard caller's real identity for the frontend proxy.
+
+The Next.js proxy reaches this backend over loopback and adds the internal
+service secret, so the backend cannot tell callers apart by connection. The
+proxy forwards the caller's Cloudflare Access assertion, cookie and original
+host instead, and asks ``/api/auth/me`` whether that caller is an owner before
+it adds the secret.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import lru_cache
+from ipaddress import ip_address
+from typing import Any
+
+import jwt
+from fastapi import HTTPException, Request
+from jwt import PyJWKClient, PyJWTError
+
+from app.config import settings
+
+
+@dataclass(frozen=True)
+class Caller:
+    email: str | None
+    is_owner: bool
+    is_local_bypass: bool = False
+
+
+def resolve_caller(request: Request) -> Caller:
+    """Owner when Access proves an owner email, or for a local-network host without Access."""
+    token = (
+        request.headers.get("Cf-Access-Jwt-Assertion", "").strip()
+        or request.cookies.get("CF_Authorization", "").strip()
+    )
+    if token:
+        email = _email_from_access_token(token)
+        return Caller(email=email, is_owner=email in _owner_emails())
+    hostnames = _request_hostnames(request)
+    if hostnames and all(_is_local_hostname(name) for name in hostnames):
+        return Caller(email=None, is_owner=True, is_local_bypass=True)
+    return Caller(email=None, is_owner=False)
+
+
+def _owner_emails() -> set[str]:
+    return {e.strip().lower() for e in settings.agent_hub_owner_emails.split(",") if e.strip()}
+
+
+def _request_hostnames(request: Request) -> set[str]:
+    names: set[str] = set()
+    for value in (request.headers.get("host"), request.headers.get("x-forwarded-host")):
+        if not value:
+            continue
+        first = value.split(",", 1)[0].strip().lower()
+        if first.startswith("[") and "]" in first:
+            first = first[1 : first.index("]")]
+        elif first.count(":") == 1:
+            first = first.rsplit(":", 1)[0]
+        if first:
+            names.add(first)
+    return names
+
+
+def _is_local_hostname(hostname: str) -> bool:
+    # Loopback, or a LAN address literal (the managed browser VM reaches the
+    # dashboard by the host's LAN IP). Public names such as the Access-protected
+    # hostname always carry an Access assertion and never take this path.
+    if hostname == "localhost":
+        return True
+    try:
+        address = ip_address(hostname)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private
+
+
+def _email_from_access_token(token: str) -> str:
+    team = settings.cloudflare_access_team_domain.strip().removeprefix("https://").rstrip("/")
+    aud = settings.agent_hub_cf_access_aud.strip()
+    if not team or not aud:
+        raise HTTPException(status_code=503, detail="Cloudflare Access is not configured")
+    try:
+        key = _jwk_client(team).get_signing_key_from_jwt(token)
+        payload = jwt.decode(token, key.key, algorithms=["RS256"], audience=aud, issuer=f"https://{team}")
+    except PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid Cloudflare Access token") from exc
+    email = _payload_email(payload)
+    if not email:
+        raise HTTPException(status_code=401, detail="Cloudflare Access token has no email")
+    return email.strip().lower()
+
+
+def _payload_email(payload: dict[str, Any]) -> str | None:
+    value = payload.get("email")
+    if isinstance(value, str) and "@" in value:
+        return value
+    identity = payload.get("identity")
+    if isinstance(identity, dict) and isinstance(identity.get("email"), str):
+        return identity["email"]
+    return None
+
+
+@lru_cache(maxsize=4)
+def _jwk_client(team: str) -> PyJWKClient:
+    return PyJWKClient(f"https://{team}/cdn-cgi/access/certs", cache_keys=True)
