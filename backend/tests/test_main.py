@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.project_roots import ProjectRegistryUnavailable
 from app.main import _startup
 
 
@@ -72,6 +73,10 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
         new_callable=AsyncMock,
         return_value=["client-1", "client-2"],
     ) as mock_reconcile, patch(
+        "app.main.get_registered_project_roots",
+        new_callable=AsyncMock,
+        return_value={"aico": "/srv/workspaces/projects/aico"},
+    ), patch(
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
@@ -84,7 +89,7 @@ async def test_startup_reconciles_registered_project_access(caplog: pytest.LogCa
     mock_bootstrap_default_agents.assert_awaited_once_with(mock_db)
     mock_reconcile_agent_models.assert_awaited_once_with(mock_db)
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
-    mock_reconcile.assert_awaited_once_with(mock_db)
+    mock_reconcile.assert_awaited_once_with(mock_db, ["aico"])
     assert "Loaded 1 env-backed credential override(s): openai:api_key" in caplog.text
     assert "LLM API providers registered: openai-completions" in caplog.text
     assert "Seeded 39 default agent(s) for a fresh database" in caplog.text
@@ -140,6 +145,10 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
         new_callable=AsyncMock,
         side_effect=RuntimeError("boom"),
     ) as mock_reconcile, patch(
+        "app.main.get_registered_project_roots",
+        new_callable=AsyncMock,
+        side_effect=ProjectRegistryUnavailable("st missing"),
+    ), patch(
         "app.constants.projects.refresh_project_ids_cache",
         new_callable=AsyncMock,
         return_value=["agent-hub"],
@@ -151,7 +160,7 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     mock_bootstrap_default_agents.assert_awaited_once_with(mock_db)
     mock_reconcile_agent_models.assert_awaited_once_with(mock_db)
     mock_reconcile_first_party.assert_awaited_once_with(mock_db)
-    mock_reconcile.assert_awaited_once_with(mock_db)
+    mock_reconcile.assert_awaited_once_with(mock_db, None)
     assert "No env-backed credential overrides configured" in caplog.text
     assert "LLM API providers registered: openai-completions" in caplog.text
     assert "Failed default agent bootstrap at startup: seed boom" in caplog.text

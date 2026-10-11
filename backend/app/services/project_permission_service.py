@@ -336,8 +336,15 @@ async def _sync_registered_project_access(
     return changed_client_ids
 
 
-async def reconcile_registered_project_access(db: AsyncSession) -> list[str]:
-    """Repair SummitFlow-owned client access against current project permissions."""
+async def reconcile_registered_project_access(
+    db: AsyncSession, registered_project_ids: list[str] | None = None
+) -> list[str]:
+    """Repair SummitFlow-owned client access against permissions and the project registry.
+
+    Every project in the SummitFlow registry is allowed unless its permission
+    row is ``off``; projects that never got a permission row would otherwise be
+    missing from the hand-grown list and their session ingestion would 403.
+    """
     permission_result = await db.execute(
         select(ProjectPermission).order_by(ProjectPermission.project_id)
     )
@@ -348,6 +355,9 @@ async def reconcile_registered_project_access(db: AsyncSession) -> list[str]:
         for perm in permissions
         if normalize_permission_tier(str(perm.permission_tier)) != "off"
     ]
+    for project_id in sorted(set(registered_project_ids or ()) - set(managed_project_ids)):
+        managed_project_ids.append(project_id)
+        enabled_project_ids.append(project_id)
 
     client_result = await db.execute(select(Client))
     clients = list(client_result.scalars().all())

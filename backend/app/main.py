@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import router
 from app.config import settings
+from app.core.project_roots import ProjectRegistryUnavailable, get_registered_project_roots
 from app.db import async_session
 from app.exception_handlers import setup_exception_handlers
 from app.llm import ensure_builtin_providers_registered
@@ -154,8 +155,15 @@ async def _startup() -> None:
         logger.warning("Failed automation registry import at startup: %s", e)
 
     try:
+        try:
+            registered_project_ids = list(await get_registered_project_roots())
+        except ProjectRegistryUnavailable as exc:
+            logger.warning("Project registry unavailable for access reconciliation: %s", exc)
+            registered_project_ids = None
         async with async_session() as db:
-            changed_client_ids = await reconcile_registered_project_access(db)
+            changed_client_ids = await reconcile_registered_project_access(
+                db, registered_project_ids
+            )
         if changed_client_ids:
             logger.warning(
                 "Reconciled registered project access for %d SummitFlow-owned client(s): %s",

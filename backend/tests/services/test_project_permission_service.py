@@ -396,6 +396,31 @@ class TestReconcileRegisteredProjectAccess:
         assert mock_invalidate.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_registered_projects_without_a_permission_row_are_allowed(self):
+        # aico was registered in SummitFlow but never got a permission row, so the
+        # SummitFlow client's hand-grown list lacked it and session upserts 403'd.
+        permissions = [_make_permission("summitflow", "full"), _make_permission("old-project", "off")]
+        summitflow_client = MagicMock()
+        summitflow_client.id = "client-summitflow"
+        summitflow_client.display_name = "summitflow"
+        summitflow_client.allowed_projects = '["summitflow"]'
+
+        permission_result = MagicMock()
+        permission_result.scalars.return_value.all.return_value = permissions
+        client_result = MagicMock()
+        client_result.scalars.return_value.all.return_value = [summitflow_client]
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = [permission_result, client_result]
+
+        with patch("app.services.project_permission_service.invalidate_client_cache"):
+            changed = await reconcile_registered_project_access(
+                mock_db, ["summitflow", "aico", "tether", "old-project"]
+            )
+
+        assert changed == ["client-summitflow"]
+        assert summitflow_client.allowed_projects == '["summitflow", "aico", "tether"]'
+
+    @pytest.mark.asyncio
     async def test_noops_when_registered_access_is_aligned(self):
         permissions = [
             _make_permission("agent-hub", "read"),
