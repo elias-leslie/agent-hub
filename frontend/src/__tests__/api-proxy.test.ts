@@ -66,7 +66,7 @@ describe('dashboard proxy caller identity', () => {
         headers: {
           'cf-access-jwt-assertion': 'jwt-1',
           cookie: 'CF_Authorization=jwt-1',
-          'x-forwarded-host': 'agent.summitflow.dev',
+          'x-agent-hub-client-address': '203.0.113.5',
         },
       }),
       ctx(['sessions']),
@@ -78,7 +78,7 @@ describe('dashboard proxy caller identity', () => {
     const headers = init.headers as Headers
     expect(headers.get('Cf-Access-Jwt-Assertion')).toBe('jwt-1')
     expect(headers.get('Cookie')).toBe('CF_Authorization=jwt-1')
-    expect(headers.get('X-Forwarded-Host')).toBe('agent.summitflow.dev')
+    expect(headers.get('X-Agent-Hub-Client-Address')).toBe('203.0.113.5')
     expect(headers.get('X-Agent-Hub-Internal')).toBeNull()
   })
 
@@ -96,6 +96,20 @@ describe('dashboard proxy caller identity', () => {
     const [url, init] = fetch.mock.calls[1]
     expect(url).toBe('http://backend.test/api/sessions?limit=5')
     expect(init.headers['X-Agent-Hub-Internal']).toBe('test-secret')
+  })
+
+  it('marks a request without a stamped client address as unknown', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(me(false))
+    vi.stubGlobal('fetch', fetch)
+    await GET(
+      new Request('http://localhost:3003/api/proxy/sessions', {
+        headers: { host: 'localhost', 'x-forwarded-for': '127.0.0.1' },
+      }),
+      ctx(['sessions']),
+    )
+    const headers = fetch.mock.calls[0][1].headers as Headers
+    expect(headers.get('X-Agent-Hub-Client-Address')).toBe('unknown')
+    expect(headers.get('X-Forwarded-Host')).toBeNull()
   })
 
   it('returns 503 when the identity check cannot run', async () => {

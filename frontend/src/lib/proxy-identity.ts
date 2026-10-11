@@ -5,7 +5,8 @@ import { getApiBaseUrl } from '@/lib/api-config'
  *
  * The proxy reaches the backend over loopback and adds the internal service
  * secret, so the backend must judge the real caller: forward the Cloudflare
- * Access assertion, the cookie and the original host.
+ * Access assertion, the cookie and the client address that server.mjs stamped
+ * from the TCP peer (clients cannot set it; Host is never trusted).
  */
 export function setIdentityHeaders(
   request: Request,
@@ -13,11 +14,12 @@ export function setIdentityHeaders(
 ): Headers {
   const jwt = request.headers.get('cf-access-jwt-assertion')
   const cookie = request.headers.get('cookie')
-  const host =
-    request.headers.get('x-forwarded-host') ?? request.headers.get('host')
   if (jwt) headers.set('Cf-Access-Jwt-Assertion', jwt)
   if (cookie) headers.set('Cookie', cookie)
-  if (host) headers.set('X-Forwarded-Host', host)
+  headers.set(
+    'X-Agent-Hub-Client-Address',
+    request.headers.get('x-agent-hub-client-address') || 'unknown',
+  )
   return headers
 }
 

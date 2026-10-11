@@ -2,9 +2,10 @@
 
 The Next.js proxy reaches this backend over loopback and adds the internal
 service secret, so the backend cannot tell callers apart by connection. The
-proxy forwards the caller's Cloudflare Access assertion, cookie and original
-host instead, and asks ``/api/auth/me`` whether that caller is an owner before
-it adds the secret.
+proxy forwards the caller's Cloudflare Access assertion, cookie and the client
+address its server stamped from the TCP peer instead, and asks
+``/api/auth/me`` whether that caller is an owner before it adds the secret.
+Host and X-Forwarded-* headers are never trusted here.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from fastapi import HTTPException, Request
 from jwt import PyJWKClient, PyJWTError
 
 from app.config import settings
+
+CLIENT_ADDRESS_HEADER = "X-Agent-Hub-Client-Address"
 
 
 @dataclass(frozen=True)
@@ -37,8 +40,7 @@ def resolve_caller(request: Request) -> Caller:
     if token:
         email = _email_from_access_token(token)
         return Caller(email=email, is_owner=email in _owner_emails())
-    hostnames = _request_hostnames(request)
-    if hostnames and all(_is_local_hostname(name) for name in hostnames):
+    if _is_local_address(_client_address(request)):
         return Caller(email=None, is_owner=True, is_local_bypass=True)
     return Caller(email=None, is_owner=False)
 
@@ -47,29 +49,25 @@ def _owner_emails() -> set[str]:
     return {e.strip().lower() for e in settings.agent_hub_owner_emails.split(",") if e.strip()}
 
 
-def _request_hostnames(request: Request) -> set[str]:
-    names: set[str] = set()
-    for value in (request.headers.get("host"), request.headers.get("x-forwarded-host")):
-        if not value:
-            continue
-        first = value.split(",", 1)[0].strip().lower()
-        if first.startswith("[") and "]" in first:
-            first = first[1 : first.index("]")]
-        elif first.count(":") == 1:
-            first = first.rsplit(":", 1)[0]
-        if first:
-            names.add(first)
-    return names
+def _client_address(request: Request) -> str:
+    """The caller's network address, never derived from Host or X-Forwarded-*.
+
+    The backend listens on loopback only. The dashboard proxy forwards the
+    address its server stamped from the TCP peer; any other caller is judged
+    by its own peer address.
+    """
+    forwarded = request.headers.get(CLIENT_ADDRESS_HEADER)
+    if forwarded is not None:
+        return forwarded.strip()
+    return request.client.host if request.client else ""
 
 
-def _is_local_hostname(hostname: str) -> bool:
-    # Loopback, or a LAN address literal (the managed browser VM reaches the
-    # dashboard by the host's LAN IP). Public names such as the Access-protected
-    # hostname always carry an Access assertion and never take this path.
-    if hostname == "localhost":
-        return True
+def _is_local_address(value: str) -> bool:
+    # Loopback, or a LAN peer (the managed browser VM reaches the dashboard by
+    # the host's LAN IP). Access-protected public traffic always carries an
+    # assertion and arrives with the internet client's address.
     try:
-        address = ip_address(hostname)
+        address = ip_address(value.removeprefix("::ffff:"))
     except ValueError:
         return False
     return address.is_loopback or address.is_private
