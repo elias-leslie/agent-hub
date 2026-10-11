@@ -10,6 +10,7 @@ from app.api.api_keys import router as api_keys_router
 from app.api.auth import router as auth_router
 from app.api.automations import router as automations_router
 from app.api.complete import router as complete_router
+from app.api.cost_ingest import router as cost_ingest_router
 from app.api.credentials import router as credentials_router
 from app.api.dashboard_stats import router as dashboard_stats_router
 from app.api.db import router as db_router
@@ -41,6 +42,7 @@ router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
 router.include_router(analytics_router)  # Has its own prefix /analytics
 router.include_router(subscription_accounting_router)  # /analytics/costs/accounting, /analytics/subscriptions/*
+router.include_router(cost_ingest_router)  # POST /analytics/costs/ingest (external metered spend)
 router.include_router(dashboard_stats_router)  # Has its own prefix /dashboard
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
 router.include_router(admin_router)  # Has its own prefix /admin and tags
