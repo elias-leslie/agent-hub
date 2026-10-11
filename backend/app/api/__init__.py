@@ -34,11 +34,13 @@ from app.api.providers import router as providers_router
 from app.api.runtime_context import router as runtime_context_router
 from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
+from app.api.subscription_accounting import router as subscription_accounting_router
 from app.api.tasks import router as tasks_router
 
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
 router.include_router(analytics_router)  # Has its own prefix /analytics
+router.include_router(subscription_accounting_router)  # /analytics/costs/accounting, /analytics/subscriptions/*
 router.include_router(dashboard_stats_router)  # Has its own prefix /dashboard
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
 router.include_router(admin_router)  # Has its own prefix /admin and tags

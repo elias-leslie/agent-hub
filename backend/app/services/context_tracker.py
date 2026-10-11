@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog
+from app.services.subscription_accounting.rates import subscription_call_value
 from app.services.token_counter import get_context_limit
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,16 @@ logger = logging.getLogger(__name__)
 CONTEXT_WARNING_THRESHOLD = 50  # Note: useful for tracking
 CONTEXT_HIGH_THRESHOLD = 75  # Warning
 CONTEXT_CRITICAL_THRESHOLD = 90  # Critical warning
+
+
+async def _codex_in_credit_mode(db: AsyncSession) -> bool:
+    from app.services.subscription_accounting import codex_in_credit_mode
+
+    try:
+        return await codex_in_credit_mode(db)
+    except Exception:
+        logger.debug("codex credit-mode lookup failed", exc_info=True)
+        return False
 
 
 @dataclass
@@ -54,19 +65,35 @@ async def log_token_usage(
         model: Model used
         input_tokens: Input token count
         output_tokens: Output token count
-        cost_usd: Estimated cost in USD
+        cost_usd: Marginal cash cost in USD (recorded as 0 on Claude/Codex subscription routes)
         cache_read_tokens: Provider prefix-cache read tokens (discounted input)
         cache_write_tokens: Provider prefix-cache creation/write tokens
         compression_stats: Optional Headroom tool-result compression aggregate
             (``blocks_compressed``/``tokens_before``/``tokens_after``)
     """
     stats = compression_stats or {}
+    value = subscription_call_value(
+        model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read=cache_read_tokens,
+        cache_write=cache_write_tokens,
+    )
+    credits_used = None
+    if value is not None:
+        # Subscription route: $0 marginal; list-price value is API-equivalent, not spend.
+        cost_usd = 0.0
+        if value.credit_rate_credits and await _codex_in_credit_mode(db):
+            credits_used = value.credit_rate_credits
     cost_log = CostLog(
         session_id=session_id,
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost_usd,
+        billing_mode=value.billing_mode if value else "metered",
+        api_equiv_usd=value.api_equiv_usd if value else None,
+        credits_used=credits_used,
         cache_read_tokens=cache_read_tokens,
         cache_write_tokens=cache_write_tokens,
         compression_blocks=int(stats.get("blocks_compressed", 0)),

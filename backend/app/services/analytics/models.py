@@ -16,8 +16,10 @@ class CostAggregation(BaseModel):
     total_tokens: int = Field(..., description="Total tokens (input + output)")
     input_tokens: int = Field(..., description="Total input tokens")
     output_tokens: int = Field(..., description="Total output tokens")
-    total_cost_usd: float = Field(..., description="Total estimated cost in USD")
+    total_cost_usd: float = Field(..., description="Marginal cash cost in USD (subscription calls are $0)")
     request_count: int = Field(..., description="Number of requests")
+    api_equiv_usd: float = Field(0.0, description="API-equivalent value at list price; value received, not spend")
+    credits_used: float = Field(0.0, description="Codex credits drawn")
 
 
 class TruncationAggregation(BaseModel):

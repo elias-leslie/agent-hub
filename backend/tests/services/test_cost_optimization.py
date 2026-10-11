@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID
-from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_3_5_FLASH
 from app.services.llm_messages import CacheMetrics
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.response_cache.cache_key import generate_cache_key
@@ -29,6 +29,9 @@ from app.services.token_counter import (
 # ============================================================================
 # Step 1: Benchmark - 100 similar requests with/without caching
 # ============================================================================
+
+# Prompt-caching discounts apply to per-token (metered) models; Claude/Codex run on subscriptions.
+METERED_MODEL = GEMINI_3_5_FLASH
 
 
 class TestCachingBenchmark:
@@ -63,7 +66,7 @@ class TestCachingBenchmark:
         uncached_cost = estimate_cost(
             input_tokens=input_tokens * 100,
             output_tokens=output_tokens * 100,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=0,
         )
 
@@ -94,7 +97,7 @@ class TestCachingBenchmark:
         first_request_cost = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=0,
         )
 
@@ -105,7 +108,7 @@ class TestCachingBenchmark:
         subsequent_costs = estimate_cost(
             input_tokens=input_tokens * 99,
             output_tokens=output_tokens * 99,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=cached_tokens_per_request * 99,
         )
 
@@ -115,7 +118,7 @@ class TestCachingBenchmark:
         uncached_cost = estimate_cost(
             input_tokens=input_tokens * 100,
             output_tokens=output_tokens * 100,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=0,
         )
 
@@ -140,7 +143,7 @@ class TestCachingBenchmark:
         single_cost = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
         )
 
         # With response caching: only pay for first request
@@ -177,7 +180,7 @@ class TestPromptCachingCostReduction:
         first_request = estimate_cost(
             input_tokens=large_prompt_tokens + 100,  # prompt + user message
             output_tokens=500,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=0,
         )
 
@@ -185,7 +188,7 @@ class TestPromptCachingCostReduction:
         cached_request = estimate_cost(
             input_tokens=large_prompt_tokens + 100,
             output_tokens=500,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=large_prompt_tokens,  # All system tokens cached
         )
 
@@ -219,7 +222,7 @@ class TestPromptCachingCostReduction:
             cost = estimate_cost(
                 input_tokens=context_tokens,
                 output_tokens=output_per_turn,
-                model=CLAUDE_SONNET,
+                model=METERED_MODEL,
                 cached_input_tokens=0,
             )
             uncached_total += cost.total_cost_usd
@@ -233,7 +236,7 @@ class TestPromptCachingCostReduction:
             cost = estimate_cost(
                 input_tokens=context_tokens,
                 output_tokens=output_per_turn,
-                model=CLAUDE_SONNET,
+                model=METERED_MODEL,
                 cached_input_tokens=cached_tokens,
             )
             cached_total += cost.total_cost_usd
@@ -245,7 +248,7 @@ class TestPromptCachingCostReduction:
 
     def test_cached_input_uses_the_catalog_cache_read_price(self):
         """Verify cached input tokens are billed at the catalog cache-read price."""
-        model = CLAUDE_SONNET
+        model = METERED_MODEL
         tokens = 1_000_000
 
         # Regular input cost
@@ -595,14 +598,14 @@ class TestCostSavingsMetrics:
         baseline = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
         )
 
         # With 80% cached
         with_cache = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             cached_input_tokens=int(input_tokens * 0.8),
         )
 
@@ -624,7 +627,7 @@ class TestCostSavingsMetrics:
 
         estimate = estimate_request(
             messages=messages,
-            model=CLAUDE_SONNET,
+            model=METERED_MODEL,
             max_tokens=4096,
         )
 

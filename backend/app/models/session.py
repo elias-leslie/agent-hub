@@ -276,7 +276,16 @@ class CostLog(Base):
     compression_blocks: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     compression_tokens_before: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     compression_tokens_after: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Marginal cash cost. Subscription calls inside included limits are $0.
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # metered | subscription | local. Subscription rows carry list-price value in api_equiv_usd.
+    billing_mode: Mapped[str] = mapped_column(String(16), default="metered", server_default="metered")
+    # API-equivalent value (tokens x list price). Value received, never spend.
+    api_equiv_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Codex credits drawn by this call (only when included limits were exhausted).
+    credits_used: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Set when a row's accounting was corrected after the fact (what changed and why).
+    cost_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

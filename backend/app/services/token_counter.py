@@ -13,6 +13,7 @@ import tiktoken
 
 from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry
 from app.constants.models import DEFAULT_GEMINI_MODEL
+from app.services.subscription_accounting.rates import subscription_call_value
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,9 @@ class CostBreakdown:
     output_cost_usd: float
     cached_input_cost_usd: float
     total_cost_usd: float
+    # metered | subscription. Subscription calls are $0 marginal; their list-price value is api_equiv_usd.
+    billing_mode: str = "metered"
+    api_equiv_usd: float | None = None
 
 
 def _get_encoding() -> tiktoken.Encoding:
@@ -144,7 +148,10 @@ def estimate_cost(
     model: str,
     cached_input_tokens: int = 0,
 ) -> CostBreakdown:
-    """Calculate cost for a request.
+    """Calculate the marginal cash cost of a request.
+
+    Claude and Codex run on flat subscriptions: their marginal cost is $0 and the list-price value is
+    returned as api_equiv_usd instead (never spend).
 
     Args:
         input_tokens: Number of input tokens
@@ -155,6 +162,12 @@ def estimate_cost(
     Returns:
         Cost breakdown in USD
     """
+    value = subscription_call_value(
+        model, input_tokens=input_tokens - cached_input_tokens, output_tokens=output_tokens,
+        cache_read=cached_input_tokens,
+    )
+    if value is not None:
+        return CostBreakdown(0.0, 0.0, 0.0, 0.0, billing_mode="subscription", api_equiv_usd=value.api_equiv_usd)
     entry = _get_model_entry(model)
     cost = entry.cost
 

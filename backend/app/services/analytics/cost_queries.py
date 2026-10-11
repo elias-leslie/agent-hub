@@ -57,6 +57,8 @@ def _build_cost_aggregation_select() -> list[Any]:
         func.sum(CostLog.output_tokens).label("output_tokens"),
         func.sum(CostLog.cost_usd).label("total_cost"),
         func.count(CostLog.id).label("request_count"),
+        func.sum(CostLog.api_equiv_usd).label("api_equiv"),
+        func.sum(CostLog.credits_used).label("credits"),
     ]
 
 
@@ -69,6 +71,8 @@ def _row_to_cost_aggregation(row: Any, default_key: str = "unknown") -> CostAggr
         output_tokens=int(getattr(row, "output_tokens", 0) or 0),
         total_cost_usd=float(getattr(row, "total_cost", 0.0) or 0.0),
         request_count=int(getattr(row, "request_count", 0) or 0),
+        api_equiv_usd=float(getattr(row, "api_equiv", 0.0) or 0.0),
+        credits_used=float(getattr(row, "credits", 0.0) or 0.0),
     )
 
 
@@ -128,6 +132,8 @@ async def aggregate_costs_by_session_type(
             output_tokens=int(row.output_tokens or 0),
             total_cost_usd=float(row.total_cost or 0.0),
             request_count=int(row.request_count or 0),
+            api_equiv_usd=float(row.api_equiv or 0.0),
+            credits_used=float(row.credits or 0.0),
         )
         for row in result.all()
     ]

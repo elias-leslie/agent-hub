@@ -65,42 +65,51 @@ class TestCountMessageTokens:
 class TestEstimateCost:
     """Tests for cost estimation."""
 
-    def test_claude_sonnet_cost(self):
-        """Test Claude Sonnet pricing."""
+    def test_claude_is_subscription_zero_cash_with_api_equivalent(self):
+        """Claude runs on the Claude Code subscription: $0 marginal, list price kept as API-equivalent."""
         cost = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=1_000_000,
             model=CLAUDE_SONNET,
         )
         price = MODEL_CATALOG_BY_ID[CLAUDE_SONNET].cost
-        assert cost.input_cost_usd == price.input_per_m
-        assert cost.output_cost_usd == price.output_per_m
-        assert cost.total_cost_usd == price.input_per_m + price.output_per_m
+        assert cost.total_cost_usd == 0.0
+        assert cost.billing_mode == "subscription"
+        assert cost.api_equiv_usd == price.input_per_m + price.output_per_m
 
-    def test_claude_haiku_cost(self):
-        """Test Claude Haiku pricing (cheaper)."""
+    def test_metered_model_cost(self):
+        """Per-token models bill catalog list price."""
         cost = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=1_000_000,
-            model=CLAUDE_HAIKU,
+            model=DEFAULT_GEMINI_MODEL,
         )
-        price = MODEL_CATALOG_BY_ID[CLAUDE_HAIKU].cost
+        price = MODEL_CATALOG_BY_ID[DEFAULT_GEMINI_MODEL].cost
         assert cost.input_cost_usd == price.input_per_m
         assert cost.output_cost_usd == price.output_per_m
         assert cost.total_cost_usd == price.input_per_m + price.output_per_m
+        assert cost.billing_mode == "metered"
+
+    def test_claude_haiku_api_equivalent(self):
+        """Haiku is cheaper than Sonnet in API-equivalent value."""
+        haiku = estimate_cost(input_tokens=1_000_000, output_tokens=1_000_000, model=CLAUDE_HAIKU)
+        sonnet = estimate_cost(input_tokens=1_000_000, output_tokens=1_000_000, model=CLAUDE_SONNET)
+        assert haiku.total_cost_usd == 0.0
+        assert haiku.api_equiv_usd is not None and sonnet.api_equiv_usd is not None
+        assert haiku.api_equiv_usd < sonnet.api_equiv_usd
 
     def test_cached_input_discount(self):
         """Test cached input tokens cost less."""
         without_cache = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=100_000,
-            model=CLAUDE_SONNET,
+            model=DEFAULT_GEMINI_MODEL,
             cached_input_tokens=0,
         )
         with_cache = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=100_000,
-            model=CLAUDE_SONNET,
+            model=DEFAULT_GEMINI_MODEL,
             cached_input_tokens=900_000,  # 90% cached
         )
         assert with_cache.total_cost_usd < without_cache.total_cost_usd
@@ -120,7 +129,7 @@ class TestEstimateRequest:
         assert estimate.input_tokens > 0
         assert estimate.estimated_output_tokens > 0
         assert estimate.total_tokens == estimate.input_tokens + estimate.estimated_output_tokens
-        assert estimate.estimated_cost_usd > 0
+        assert estimate.estimated_cost_usd == 0.0  # Claude subscription: $0 marginal
         assert estimate.context_usage_percent < 1.0  # Small message
 
     def test_context_warning_high_usage(self):

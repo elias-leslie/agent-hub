@@ -63,6 +63,13 @@ from .session import (
     SessionEventType,
     SessionSummarySegment,
 )
+from .subscription_accounting import (
+    CreditLot,
+    SubscriptionPlan,
+    SubscriptionUsageCursor,
+    SubscriptionUsageDaily,
+    SubscriptionUsageSnapshot,
+)
 from .telemetry import RequestLog, TruncationEvent
 from .work_chat import SessionBinding
 from .workflow_schedule_control import WorkflowScheduleControl
@@ -92,6 +99,7 @@ __all__ = [
     "ContextRecord",
     "CostLog",
     "Credential",
+    "CreditLot",
     "FeedbackItem",
     "FeedbackVote",
     "Memory",
@@ -123,6 +131,10 @@ __all__ = [
     "SessionEvent",
     "SessionEventType",
     "SessionSummarySegment",
+    "SubscriptionPlan",
+    "SubscriptionUsageCursor",
+    "SubscriptionUsageDaily",
+    "SubscriptionUsageSnapshot",
     "TruncationEvent",
     "UsageStatLog",
     "WorkflowScheduleControl",

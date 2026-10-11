@@ -77,6 +77,8 @@ async def get_costs(
     return CostAggregationResponse(
         aggregations=aggregations,
         total_cost_usd=sum(a.total_cost_usd for a in aggregations),
+        total_api_equiv_usd=sum(a.api_equiv_usd for a in aggregations),
+        total_credits_used=sum(a.credits_used for a in aggregations),
         total_tokens=sum(a.total_tokens for a in aggregations),
         total_requests=sum(a.request_count for a in aggregations),
     )

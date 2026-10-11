@@ -42,7 +42,9 @@ class CostAggregationResponse(BaseModel):
     """Response for cost aggregation endpoint."""
 
     aggregations: list[CostAggregation] = Field(..., description="Aggregated cost data")
-    total_cost_usd: float = Field(..., description="Grand total cost")
+    total_cost_usd: float = Field(..., description="Grand total marginal cash cost (subscription calls are $0)")
+    total_api_equiv_usd: float = Field(0.0, description="API-equivalent value at list price; not spend")
+    total_credits_used: float = Field(0.0, description="Codex credits drawn")
     total_tokens: int = Field(..., description="Grand total tokens")
     total_requests: int = Field(..., description="Total request count")
 

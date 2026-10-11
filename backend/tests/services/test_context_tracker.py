@@ -50,7 +50,10 @@ class TestLogTokenUsage:
         assert cost_log.model == CLAUDE_SONNET
         assert cost_log.input_tokens == 1000
         assert cost_log.output_tokens == 500
-        assert cost_log.cost_usd == 0.015
+        # Claude runs on the subscription: $0 cash, list price kept as API-equivalent.
+        assert cost_log.cost_usd == 0.0
+        assert cost_log.billing_mode == "subscription"
+        assert cost_log.api_equiv_usd == pytest.approx((1000 * 2.0 + 500 * 10.0) / 1e6)
 
 
 class TestGetSessionTokenTotals:
