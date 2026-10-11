@@ -632,11 +632,6 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         thinking_level="medium",
         temperature=0.3,
     )
-    heartbeat_prompt = SimpleNamespace(
-        slug="persona-heartbeat-instructions",
-        content="Focus on cleanup first",
-        updated_at=datetime.fromisoformat("2026-03-11T12:00:00+00:00"),
-    )
     supervisor_agent = SimpleNamespace(
         slug="supervisor",
         version=3,
@@ -659,7 +654,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         memory_uuid="mem-uuid-001",
     )
     mock_db = AsyncMock()
-    mock_db.scalar = AsyncMock(side_effect=[memory_revision, 5, persona, heartbeat_prompt, supervisor_agent])
+    mock_db.scalar = AsyncMock(side_effect=[memory_revision, 5, persona, supervisor_agent])
 
     from contextlib import asynccontextmanager
 
@@ -742,7 +737,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
     assert snapshot["generated_context"]["tool_capabilities"]["content_hash"] is not None
     assert len(snapshot["generated_context"]["descriptors"]) == 2
     assert snapshot["preview_summary"]["total_estimated_tokens"] == 1234
-    assert snapshot["heartbeat_prompt"]["slug"] == "persona-heartbeat-instructions"
+    assert "heartbeat_prompt" not in snapshot
     assert snapshot["completion_reviewer"]["agent_slug"] == "supervisor"
     assert snapshot["completion_reviewer"]["primary_model_id"] == "claude-opus-4-6"
     assert snapshot["persona_documents"]["user_profile"]["field_count"] == 2

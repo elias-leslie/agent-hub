@@ -27,7 +27,6 @@ from app.services.prompt_catalog import (
     COMPLETION_REVIEW_PROMPT_SLUG,
     COMPLETION_REVIEW_RULES_PROMPT_SLUG,
     PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
-    PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
     PERSONA_WAKE_GUIDANCE_PROMPT_SLUG,
 )
 from app.services.runtime_prompt_stack import collect_runtime_prompt_sections
@@ -197,18 +196,6 @@ async def _capture_persona_snapshot(db: AsyncSession, agent: Agent) -> dict[str,
                 "field_count": len(persona.user_profile or {}),
             },
             "onboarding_phase": persona.onboarding_phase,
-        }
-
-    prompt = await db.scalar(
-        select(Prompt).where(Prompt.slug == PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
-    )
-    if prompt is not None:
-        _text = prompt.content or ""
-        snapshot["heartbeat_prompt"] = {
-            "slug": prompt.slug,
-            "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-            "content_hash": _content_hash(_text),
-            "content_length": len(_text),
         }
 
     reviewer_agent = await db.scalar(select(Agent).where(Agent.slug == "supervisor"))

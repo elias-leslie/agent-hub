@@ -360,7 +360,6 @@ def get_runtime_excluded_prompt_roles(
             [
                 "persona-personality",
                 "persona-user-context",
-                "heartbeat-instructions",
             ]
         )
     return excluded

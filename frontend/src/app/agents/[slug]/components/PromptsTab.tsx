@@ -40,7 +40,6 @@ interface PromptsTabProps {
 
 const PERSONA_WORKFLOW_PROMPT_SLUGS = [
   'persona-focus-harness',
-  'persona-heartbeat-orchestrator',
   'persona-wake-guidance',
   'persona-onboarding-bootstrap',
   'persona-onboarding-continuation',
