@@ -101,6 +101,9 @@ class UpdateEpisodeRequest(BaseModel):
         None,
         description="Updated injection tier (mandate/guardrail/reference/archive)",
     )
+    status: Literal["active", "archived"] | None = Field(
+        None, description="Lifecycle status; archived episodes are never injected (reversible)"
+    )
     change_reason: str | None = Field(None, description="Why this episode was updated")
 
 

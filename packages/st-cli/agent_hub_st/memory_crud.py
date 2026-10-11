@@ -276,6 +276,25 @@ def delete_impl(uuids: list[str], *, change_reason: str | None = None) -> None:
     typer.echo(f"\nDeleted: {result.get('deleted', 0)}, Failed: {result.get('failed', 0)}")
 
 
+def archive_impl(uuids: list[str], *, restore: bool = False, change_reason: str | None = None) -> None:
+    status = "active" if restore else "archived"
+    failed = 0
+    for uuid in uuids:
+        payload: dict[str, object] = {"status": status}
+        if change_reason:
+            payload["change_reason"] = change_reason
+        result = agent_hub_request(
+            "PATCH", MEMORY_EPISODE_PATH.format(uuid=uuid), json=payload, tool_name="st memory archive",
+        )
+        if result.get("success"):
+            typer.echo(f"{status}: {uuid[:8]}")
+        else:
+            failed += 1
+            typer.echo(f"Failed: {uuid[:8]} - {result.get('detail', 'Unknown error')}")
+    if failed:
+        raise typer.Exit(1)
+
+
 def _delete_single(uuid: str, *, change_reason: str | None = None) -> None:
     result = agent_hub_request(
         "DELETE", MEMORY_EPISODE_PATH.format(uuid=uuid),

@@ -190,13 +190,16 @@ async def handle_update_episode(
     from ._memory_episodes_helpers import build_episode_updates
     from .memory_schemas import UpdateEpisodeResponse
 
-    if request.content is None and request.injection_tier is None:
+    if request.content is None and request.injection_tier is None and request.status is None:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     repo = get_memory_repository()
 
     try:
         updates, messages = await build_episode_updates(full_uuid, request, repo)
+        if request.status is not None:
+            updates["status"] = request.status
+            messages.append(f"status={request.status}")
         warnings = updates.pop("style_warnings", [])
         update_kwargs = dict(updates)
         update_kwargs["changed_by"] = "api"

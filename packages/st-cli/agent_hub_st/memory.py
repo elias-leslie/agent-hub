@@ -313,6 +313,25 @@ def delete(uuids: UUIDsDeleteArg, change_reason: ChangeReasonOpt = None) -> None
 
 @app.command()
 @usage(
+    surface="st.memory.archive",
+    cmd="st memory archive <uuid>... [--restore] --change-reason TEXT",
+    when="retiring superseded or duplicate memory",
+    on_demand="memory authoring",
+    precautions=("reversible; prefer over delete; merge facts into the canonical row first",),
+)
+def archive(
+    uuids: UUIDsDeleteArg,
+    restore: Annotated[bool, typer.Option("--restore", help="Reactivate archived episodes")] = False,
+    change_reason: ChangeReasonOpt = None,
+) -> None:
+    """Archive (or --restore) episodes; archived episodes are never injected."""
+    from .memory_crud import archive_impl
+
+    archive_impl(uuids, restore=restore, change_reason=change_reason)
+
+
+@app.command()
+@usage(
     surface="st.memory.update",
     cmd="st memory update <uuid> [--scope project --scope-id <id> --preview]",
     when="correcting memory content or targeting",

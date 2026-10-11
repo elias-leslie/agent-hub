@@ -172,6 +172,27 @@ class TestUpdateEpisodeEndpoint:
         )
 
     @pytest.mark.asyncio
+    async def test_update_episode_status_only_archives(
+        self, client: AsyncClient
+    ):
+        mock_repo = AsyncMock()
+        mock_repo.update = AsyncMock(return_value=True)
+
+        with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
+            response = await client.patch(
+                "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                json={"status": "archived", "change_reason": "duplicate"},
+            )
+
+        assert response.status_code == 200
+        mock_repo.update.assert_awaited_once_with(
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            status="archived",
+            changed_by="api",
+            change_reason="duplicate",
+        )
+
+    @pytest.mark.asyncio
     async def test_update_episode_forwards_change_reason(
         self, client: AsyncClient
     ):
