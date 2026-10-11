@@ -197,6 +197,7 @@ async def handle_update_episode(
 
     try:
         updates, messages = await build_episode_updates(full_uuid, request, repo)
+        warnings = updates.pop("style_warnings", [])
         update_kwargs = dict(updates)
         update_kwargs["changed_by"] = "api"
         if request.change_reason is not None:
@@ -216,6 +217,7 @@ async def handle_update_episode(
             injection_tier=request.injection_tier.value if request.injection_tier is not None else None,
             message=f"Updated: {', '.join(messages)}",
             version=version,
+            style_warnings=warnings,
         )
     except HTTPException:
         raise

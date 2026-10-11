@@ -45,6 +45,7 @@ class PromptResponse(BaseModel):
     deletion_locked: bool = False
     created_at: datetime
     updated_at: datetime
+    style_warnings: list[str] = Field(default_factory=list)
 
 
 class PromptListResponse(BaseModel):

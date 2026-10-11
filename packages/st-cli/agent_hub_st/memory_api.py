@@ -72,7 +72,11 @@ def _check_response(response: httpx.Response, agent_hub_url: str) -> dict[str, A
         raise typer.Exit(1) from None
     if response.status_code == 204:
         return {"success": True}
-    return cast(dict[str, Any], response.json())
+    body = response.json()
+    if isinstance(body, dict):
+        for warning in body.get("style_warnings") or ():
+            typer.echo(f"STYLE_WARN: {warning}", err=True)
+    return cast(dict[str, Any], body)
 
 
 def _sleep_backoff(attempt: int) -> None:

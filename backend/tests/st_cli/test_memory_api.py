@@ -53,3 +53,13 @@ def test_agent_hub_request_retries_connect_error_then_succeeds() -> None:
     assert result == {"status": "ok"}
     assert client.get.call_count == 2
     mock_sleep.assert_called_once()
+
+
+def test_check_response_echoes_style_warnings_to_stderr(capsys) -> None:
+    from agent_hub_st.memory_api import _check_response
+
+    response = Mock(status_code=200)
+    response.json.return_value = {"uuid": "u1", "style_warnings": ["padding: please"]}
+
+    assert _check_response(response, "http://hub")["uuid"] == "u1"
+    assert capsys.readouterr().err == "STYLE_WARN: padding: please\n"

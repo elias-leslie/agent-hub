@@ -248,12 +248,15 @@ async def api_save_learning(
       -d '{"content": "**Async DB**: Use async methods for DB operations.", "injection_tier": "reference"}'
     ```
     """
+    from app.services.context_style import style_warnings
     from app.services.memory.episode_validation import EpisodeValidationError
 
     scope, scope_id = scope_params
 
     try:
-        return await handle_save_learning(request, scope, scope_id)
+        result = await handle_save_learning(request, scope, scope_id)
+        result.style_warnings = style_warnings(request.content)
+        return result
     except HTTPException:
         raise
     except EpisodeValidationError as e:
@@ -263,9 +266,9 @@ async def api_save_learning(
                 "error": "validation_error",
                 "message": e.message,
                 "details": [{"message": pattern} for pattern in e.detected_patterns],
-                "hint": "Store short reusable knowledge in memory, with a 10-40 character summary. "
-                "Keep operational journals in task/session records and long explanations in the wiki. "
-                "Reusable instructions belong in Agent Hub prompts.",
+                "hint": "Memory: short reusable agent-only knowledge, terse imperative, 10-40 char summary. "
+                "Operational journals: task/session records; long explanations: wiki. "
+                "Reusable instructions: Agent Hub prompts.",
             },
         ) from e
     except Exception as e:

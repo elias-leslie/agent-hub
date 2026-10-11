@@ -1,0 +1,41 @@
+"""Deterministic, advisory style check for agent-only context (owner directive 2026-10-11).
+
+Prompts, memories and generated blocks are read only by agents: terse imperative
+rules, no human-facing filler. Warnings never block a write; they are returned to
+the writer and surfaced by context-governance deterministic findings.
+"""
+from __future__ import annotations
+
+import re
+
+from app.services.memory.budget import count_tokens
+
+AUTHORING_HINT = (
+    "Agent-only context: terse imperative rules; no filler, hedging or restated headings; "
+    "keep every condition, command, path and number."
+)
+
+PADDING = re.compile(
+    r"(?i)\b(please|it is (?:important|essential|crucial) (?:to|that)|make sure (?:to|that)|be sure to|"
+    r"in order to|keep in mind|note that|remember to|don't forget|feel free|as mentioned|"
+    r"it should be noted|as an ai|i hope|happy to help)\b"
+)
+GROWTH_RATIO = 1.25
+GROWTH_MIN_TOKENS = 30
+
+
+def style_warnings(content: str | None, previous: str | None = None) -> list[str]:
+    """Return short warnings for padding phrases and large token growth."""
+    if not content:
+        return []
+    warnings: list[str] = []
+    found = sorted({m.group(0).lower() for m in PADDING.finditer(content)})
+    if found:
+        warnings.append(f"padding: {', '.join(found)}")
+    if previous:
+        before, after = count_tokens(previous), count_tokens(content)
+        if after - before >= GROWTH_MIN_TOKENS and after > before * GROWTH_RATIO:
+            warnings.append(f"token growth: {before}->{after}")
+    if warnings:
+        warnings.append(AUTHORING_HINT)
+    return warnings

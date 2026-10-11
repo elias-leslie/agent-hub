@@ -28,6 +28,7 @@ from app.api.schemas.prompt_schemas import (
 from app.db import get_db
 from app.services.agent_service import get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
+from app.services.context_style import style_warnings
 from app.services.prompt_service import (
     assign_prompt,
     create_prompt,
@@ -156,7 +157,9 @@ async def create_prompt_endpoint(
         exclude_agents=request.exclude_agents,
         changed_by="api",
     )
-    return _prompt_to_response(prompt)
+    response = _prompt_to_response(prompt)
+    response.style_warnings = style_warnings(request.content)
+    return response
 
 
 @router.get("/{slug}", response_model=PromptResponse)
@@ -180,6 +183,8 @@ async def update_prompt_endpoint(
 ) -> PromptResponse:
     update_data = request.model_dump(exclude_unset=True)
     change_reason = update_data.pop("change_reason", None)
+    previous = await get_prompt_by_slug(db, slug) if update_data.get("content") else None
+    previous_content = previous.content if previous else None
     updated = await update_prompt(
         db,
         slug,
@@ -190,7 +195,10 @@ async def update_prompt_endpoint(
     if not updated:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
     await _invalidate_owned_agent_cache(updated)
-    return _prompt_to_response(updated)
+    response = _prompt_to_response(updated)
+    if previous_content is not None:
+        response.style_warnings = style_warnings(updated.content, previous_content)
+    return response
 
 
 @router.get("/{slug}/revisions", response_model=PromptRevisionListResponse)

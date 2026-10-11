@@ -141,3 +141,4 @@ class SaveLearningResponse(BaseModel):
         None, description="UUID of reinforced learning if duplicate"
     )
     message: str
+    style_warnings: list[str] = Field(default_factory=list, description="Advisory agent-only style findings")

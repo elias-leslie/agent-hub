@@ -42,6 +42,7 @@ app = typer.Typer(help="Prompt management (Agent Hub)")
         "run st prompt measure before and after edits",
         "keep prompts in DB; never duplicate as checked-in markdown",
         "goal-first; ordered workflow only when order matters",
+        "agent-only text: terse imperative, no filler; heed STYLE_WARN",
     ),
     task_types=("config", "prompt-tuning"),
     tier="mandate",

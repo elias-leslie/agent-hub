@@ -194,6 +194,7 @@ def status(
         "choose explicit scope: project-specific → -s project --scope-id <id>; global only for cross-project knowledge",
         "use ST for agent memory writes; reusable instructions belong in scoped DB prompts",
         "verify success on save; revisions are immutable",
+        "agent-only text: terse imperative, no filler; heed STYLE_WARN",
     ),
     tier="mandate",
 )

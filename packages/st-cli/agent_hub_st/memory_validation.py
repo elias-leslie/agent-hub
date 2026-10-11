@@ -35,7 +35,7 @@ Example:
     "A timeout could indicate packet loss; compare successful requests before claiming a cause."
 
 Summary: 10-40 characters. Content: non-empty text or Markdown.
-Keep short, reusable knowledge in memory; put long explanations in the linked wiki.
+Agent-only text: terse imperative, no filler; keep conditions, commands, paths. Long explanations: wiki.
 Reusable cross-surface instructions belong in Agent Hub prompts.
 """
 

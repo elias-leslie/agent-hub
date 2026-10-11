@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.context_governance import SourceEdit, inventory, record
 from app.services.context_policy import ContextPolicy, policy_match, semantic_hash
+from app.services.context_style import AUTHORING_HINT, PADDING
 from app.services.memory.budget import count_tokens
 from app.services.runtime_context import CanonicalContextDeliveryRequest
 
@@ -102,6 +103,11 @@ def deterministic_findings(sources: list[dict[str, Any]]) -> list[dict[str, Any]
             findings.append(ReviewFinding(kind="targeting", source_ids=[source["source_id"]], passages={source["source_id"]: source["content"]},
                 explanation="A shortened format is requested without an approved summary.", uncertainty="Full content remains the fallback.",
                 remedy="Write and review a summary or choose full format.").model_dump())
+        padding = PADDING.search(source.get("content") or "")
+        if padding:
+            findings.append(ReviewFinding(kind="unnecessary", source_ids=[source["source_id"]], passages={source["source_id"]: padding.group(0)},
+                explanation="Padding phrase in agent-only context.", uncertainty="Phrase may be quoted or load-bearing.",
+                remedy=AUTHORING_HINT).model_dump())
     return findings
 
 

@@ -112,6 +112,7 @@ class UpdateEpisodeResponse(BaseModel):
     injection_tier: str | None = None
     message: str
     version: int | None = None
+    style_warnings: list[str] = Field(default_factory=list)
 
 
 class UpdateEpisodePropertiesRequest(BaseModel):
