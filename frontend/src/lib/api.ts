@@ -31,12 +31,20 @@ export {
 } from './api/agents'
 // Re-export all analytics-related exports
 export type {
+  CostAccountingResponse,
   CostAggregation,
   CostAggregationResponse,
+  CostAlert,
+  CreditLotState,
+  ProviderUtilization,
   TruncationAggregation,
   TruncationMetricsResponse,
 } from './api/analytics'
-export { fetchCosts, fetchTruncations } from './api/analytics'
+export {
+  fetchCostAccounting,
+  fetchCosts,
+  fetchTruncations,
+} from './api/analytics'
 // Re-export all budget-related exports
 export type {
   BudgetSettingsUpdate,

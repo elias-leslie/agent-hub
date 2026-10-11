@@ -123,7 +123,7 @@ export function AnalyticsTabContent({
         <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">
           <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
             <Layers className="h-3 w-3 text-amber-500" />
-            Cost by Project
+            Metered spend by project
           </h4>
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={160}>
@@ -159,7 +159,7 @@ export function AnalyticsTabContent({
             </ResponsiveContainer>
           ) : (
             <div className="h-40 flex items-center justify-center text-slate-500 text-xs font-mono">
-              NO COST DATA
+              NO METERED SPEND
             </div>
           )}
         </div>

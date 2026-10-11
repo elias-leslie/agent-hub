@@ -7,6 +7,7 @@ import { createQueryClientWrapper } from './test-utils'
 vi.mock('@/lib/api', () => ({
   fetchStatus: vi.fn(),
   fetchCosts: vi.fn(),
+  fetchCostAccounting: vi.fn(() => new Promise(() => {})),
 }))
 
 import { fetchCosts, fetchStatus } from '@/lib/api'
