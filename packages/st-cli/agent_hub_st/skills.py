@@ -253,6 +253,13 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str, list[str]]:
         return {}, parts[2], [f"YAML parsing error in frontmatter: {e}"]
 
 
+# Mirrors Agent Hub app.services.context_style.PADDING (owner directive 2026-10-11).
+_PADDING = re.compile(
+    r"(?i)\b(please|it is (?:important|essential|crucial) (?:to|that)|make sure (?:to|that)|be sure to|"
+    r"in order to|keep in mind|note that|remember to|don't forget|feel free|as mentioned)\b"
+)
+
+
 def _audit_single_skill(skill_dir: Path, auto_fix: bool = False) -> dict[str, Any]:
     """Audit a single skill directory for frontmatter, link integrity, scripts, and progressive disclosure."""
     errors: list[str] = []
@@ -365,6 +372,11 @@ def _audit_single_skill(skill_dir: Path, auto_fix: bool = False) -> dict[str, An
     if len(repeated_s) >= 2:
         warnings.append(f"Found {len(repeated_s)} duplicate sentence/rule statements inside SKILL.md. Recommend deduplicating.")
         bloat_notes.append(f"{len(repeated_s)} repeated sentences")
+
+    padding = sorted({phrase.lower() for phrase in _PADDING.findall(clean_body)})
+    if padding:
+        warnings.append(f"Padding phrases ({', '.join(padding)}); agent-only text: terse imperative, no filler.")
+        bloat_notes.append("padding")
 
     status = "fail" if errors else ("warn" if warnings else "ok")
     return {

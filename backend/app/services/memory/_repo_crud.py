@@ -15,6 +15,7 @@ from app.models.memory_unified import Memory
 
 from ._repo_helpers import TIER_MAP, to_dict
 from ._repo_revisions import RevisionRepository
+from .budget import count_tokens
 from .fingerprint import content_fingerprint
 from .memory_utils import parse_group_id
 
@@ -78,11 +79,12 @@ def _build_memory(**kwargs: Any) -> Memory:
 
 
 def _normalize_update_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Rename metadata and auto-fill content fingerprint / tier mapping."""
+    """Rename metadata; derive fingerprint, token count and tier from inputs."""
     if "metadata" in kwargs:
         kwargs["metadata_"] = kwargs.pop("metadata")
-    if "content" in kwargs and "content_fingerprint" not in kwargs:
-        kwargs["content_fingerprint"] = content_fingerprint(str(kwargs["content"]))
+    if "content" in kwargs:
+        kwargs.setdefault("content_fingerprint", content_fingerprint(str(kwargs["content"])))
+        kwargs["token_count"] = count_tokens(str(kwargs["content"]))
     if "injection_tier" in kwargs:
         kwargs["tier"] = TIER_MAP.get(kwargs.pop("injection_tier"), 3)
     return kwargs

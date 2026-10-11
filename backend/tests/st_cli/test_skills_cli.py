@@ -613,3 +613,16 @@ def _import_source(tmp_path: Path) -> Path:
         "---\nname: new-skill\ndescription: Use for isolated canonical skill import tests.\n---\n\nTest skill.\n"
     )
     return imported
+
+
+def test_audit_flags_padding_outside_code(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "pad"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: pad\ndescription: Use for padding checks.\n---\n\n"
+        "Please run the audit. `make sure to` quote is ignored.\n",
+        encoding="utf-8",
+    )
+    res = skills._audit_single_skill(skill_dir)
+    assert "padding" in res["bloat_notes"]
+    assert any("Padding phrases (please)" in w for w in res["warnings"])

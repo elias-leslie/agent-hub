@@ -28,3 +28,15 @@ def test_review_flags_padding_with_verbatim_passage() -> None:
     findings = deterministic_findings(sources)
     assert [(f["kind"], f["passages"]) for f in findings] == [("unnecessary", {"p1": "Note that"})]
     assert deterministic_findings([{"source_id": "p2", "content": "Rebuild after edits.", "policy": None}]) == []
+
+
+def test_memory_content_update_recomputes_token_count_and_fingerprint() -> None:
+    from app.services.memory._repo_crud import _normalize_update_kwargs
+    from app.services.memory.budget import count_tokens
+    from app.services.memory.fingerprint import content_fingerprint
+
+    content = "Run st check before commit."
+    kwargs = _normalize_update_kwargs({"content": content, "token_count": 999})
+    assert kwargs["token_count"] == count_tokens(content)
+    assert kwargs["content_fingerprint"] == content_fingerprint(content)
+    assert "token_count" not in _normalize_update_kwargs({"injection_tier": "reference"})

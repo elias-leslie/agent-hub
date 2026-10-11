@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import async_session
 from app.models.memory_unified import Memory, MemoryRevision
 
+from .budget import count_tokens
+from .fingerprint import content_fingerprint
+
 
 class RevisionRepository:
     """Handles immutable revision snapshots and revision lookup."""
@@ -224,7 +227,8 @@ class RevisionRepository:
                 "display_order": revision.display_order,
                 "trigger_task_types": list(revision.trigger_task_types or []),
                 "trigger_phases": list(revision.trigger_phases or []),
-                "token_count": revision.token_count,
+                "token_count": count_tokens(revision.content),
+                "content_fingerprint": content_fingerprint(revision.content),
                 "status": revision.status,
                 "metadata_": dict(revision.metadata_ or {}),
                 "valid_at": revision.valid_at,
