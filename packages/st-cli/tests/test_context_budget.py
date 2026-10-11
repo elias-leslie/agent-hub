@@ -46,3 +46,10 @@ def test_duplicate_detection_ignores_code_formatting() -> None:
     ]
     warnings = context_warnings(blocks)
     assert len(warnings) == 1 and warnings[0].startswith("CONTEXT_WARN:duplicate prompt:a~prompt:b")
+
+
+def test_total_warning_names_measured_scope() -> None:
+    blocks = [_block("prompt:a", "x", TOTAL_BUDGET + 1)]
+    assert context_warnings(blocks, scope="agent-hub")[0] == (
+        f"CONTEXT_WARN:total={TOTAL_BUDGET + 1}tok>budget={TOTAL_BUDGET} scope=agent-hub"
+    )

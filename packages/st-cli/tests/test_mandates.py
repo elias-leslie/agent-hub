@@ -74,4 +74,5 @@ def test_compact_output_prints_bloat_warning_only_when_over_budget(monkeypatch: 
     app = typer.Typer()
     app.command()(module.mandates)
     output = CliRunner().invoke(app, []).output
-    assert output.rstrip().endswith("CONTEXT_WARN:total=9000tok>budget=3000")
+    assert output.rstrip().endswith("CONTEXT_WARN:total=9000tok>budget=3000 scope=global")
+    assert "CONTEXT:ok|scope=global|" in output

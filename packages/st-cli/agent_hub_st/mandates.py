@@ -64,6 +64,12 @@ def _request(surface: str | None, injected: dict[str, Any] | None) -> dict[str, 
     return body
 
 
+def _scope(delivery: dict[str, Any]) -> str:
+    """Project the delivery was computed for; ``global`` outside a registered project."""
+    meta = delivery.get("metadata")
+    return str((meta.get("project_id") if isinstance(meta, dict) else None) or "global")
+
+
 def _blocks(delivery: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {key: block.get(key) for key in ("block_id", "kind", "title", "estimated_tokens")}
@@ -94,7 +100,8 @@ def mandates(
         "POST", _DELIVER_PATH, json=_request(surface, injected), tool_name="st mandates", internal=True, retries=2,
     )
     blocks = _blocks(delivery)
-    warnings = context_warnings(delivery.get("blocks") or [], delivery.get("estimated_tokens"))
+    scope = _scope(delivery)
+    warnings = context_warnings(delivery.get("blocks") or [], delivery.get("estimated_tokens"), scope=scope)
     injected_hash = (injected or {}).get("payload_hash")
     match = None if not injected_hash or surface else injected_hash == delivery.get("payload_hash")
     if full:
@@ -102,7 +109,7 @@ def mandates(
         return
     if not out.is_compact:
         output_json({
-            "items": blocks, "count": len(blocks), "status": delivery.get("status"),
+            "items": blocks, "count": len(blocks), "status": delivery.get("status"), "scope": scope,
             "estimated_tokens": delivery.get("estimated_tokens"), "payload_hash": delivery.get("payload_hash"),
             "rendered_bytes": len((delivery.get("rendered") or "").encode()),
             "injected_hash": injected_hash, "injected_match": match, "warnings": warnings,
@@ -112,7 +119,7 @@ def mandates(
         print(f"{block['block_id']} {block['kind']} tokens={block['estimated_tokens']} {block['title']}")
     injected_state = "none" if match is None else ("match" if match else "differs")
     print(
-        f"CONTEXT:{delivery.get('status')}|blocks={len(blocks)}|tokens={delivery.get('estimated_tokens')}"
+        f"CONTEXT:{delivery.get('status')}|scope={scope}|blocks={len(blocks)}|tokens={delivery.get('estimated_tokens')}"
         f"|bytes={len((delivery.get('rendered') or '').encode())}|hash={str(delivery.get('payload_hash'))[:12]}"
         f"|injected={injected_state}"
     )
@@ -133,4 +140,4 @@ def delivery_warnings(focus: str | None = None, candidate: str | None = None) ->
                 old = int(block.get("estimated_tokens") or 0)
                 block["content"], block["estimated_tokens"] = candidate, estimate_tokens(candidate)
                 total = (total or 0) - old + block["estimated_tokens"]
-    return context_warnings(blocks, total, focus=focus)
+    return context_warnings(blocks, total, focus=focus, scope=_scope(delivery))

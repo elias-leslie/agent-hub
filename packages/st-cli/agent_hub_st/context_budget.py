@@ -32,13 +32,21 @@ def _budget(block: dict[str, Any]) -> int:
 
 
 def context_warnings(
-    blocks: list[dict[str, Any]], total_tokens: int | None = None, *, focus: str | None = None
+    blocks: list[dict[str, Any]],
+    total_tokens: int | None = None,
+    *,
+    focus: str | None = None,
+    scope: str | None = None,
 ) -> list[str]:
-    """Return warning lines; ``focus`` limits block-level findings to one block id."""
+    """Return warning lines; ``focus`` limits block-level findings to one block id.
+
+    ``scope`` names the measured delivery (project id or ``global``): the total
+    depends on which project's prompts, index and continuity the cwd selects.
+    """
     warnings: list[str] = []
     total = total_tokens if total_tokens is not None else sum(int(b.get("estimated_tokens") or 0) for b in blocks)
     if total > TOTAL_BUDGET:
-        warnings.append(f"CONTEXT_WARN:total={total}tok>budget={TOTAL_BUDGET}")
+        warnings.append(f"CONTEXT_WARN:total={total}tok>budget={TOTAL_BUDGET}" + (f" scope={scope}" if scope else ""))
     seen: dict[tuple[str, ...], str] = {}
     for block in blocks:
         block_id = str(block.get("block_id") or "?")
