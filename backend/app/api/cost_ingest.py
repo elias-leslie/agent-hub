@@ -153,8 +153,7 @@ async def ingest_cost(
         response.status_code = 200
         return dup
     http_request.state.session_id = session_id  # request_logs attribution
-    logger.info("cost ingest: project=%s provider=%s model=%s billing=%s cost=%.6f",
-                body.project_id, body.provider, body.model, body.billing_kind, log.cost_usd)
+    logger.info("cost ingest: recorded session %s", session_id)
     return CostIngestResponse(status="created", session_id=session_id, cost_log_id=log.id,
                               billing_kind=log.billing_mode, cost_usd=float(log.cost_usd))
 
