@@ -86,8 +86,8 @@ async def test_sends_dedupe_key_and_accepts_204(monkeypatch: pytest.MonkeyPatch)
     _install_transport(monkeypatch, handler)
 
     ok = await sfn.create_summitflow_notification(
-        title="t", message="m", severity="error", dedupe_key="host-guardian:warning"
+        title="t", message="m", severity="error", dedupe_key="agent-run:failed"
     )
 
     assert ok is True
-    assert json.loads(seen[0].content)["dedupe_key"] == "host-guardian:warning"
+    assert json.loads(seen[0].content)["dedupe_key"] == "agent-run:failed"

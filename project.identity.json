@@ -21,12 +21,10 @@
     "backend": "agent-hub-backend.service",
     "frontend": "agent-hub-frontend.service",
     "default_workers": [
-      "agent-hub-hatchet-ops-worker.service",
-      "agent-hub-host-guardian-alert.timer"
+      "agent-hub-hatchet-ops-worker.service"
     ],
     "optional_workers": [
-      "agent-hub-hatchet-agent-worker.service",
-      "agent-hub-host-guardian-alert.service"
+      "agent-hub-hatchet-agent-worker.service"
     ]
   },
   "hosts": {
