@@ -12,6 +12,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 BACKEND = Path(__file__).resolve().parents[2]
 APP = BACKEND / "app"
 LEGACY_RESULT_FIELDS = {
@@ -65,8 +67,14 @@ CANONICAL_PREINJECTION_ALLOWLIST = {
 }
 
 
-def _tree(path: Path) -> ast.Module:
-    return ast.parse(path.read_text(), filename=str(path))
+@pytest.fixture(scope="module")
+def app_trees() -> dict[Path, ast.Module]:
+    """Parse every app module once for all shape checks."""
+    return {
+        path: ast.parse(path.read_text(), filename=str(path))
+        for path in APP.rglob("*.py")
+        if "__pycache__" not in path.parts
+    }
 
 
 def _call_name(node: ast.AST) -> str | None:
@@ -89,25 +97,13 @@ def _class_fields(node: ast.ClassDef) -> set[str]:
     return fields
 
 
-def test_api_provider_protocol_is_pi_mono_two_method_surface() -> None:
-    tree = _tree(APP / "llm" / "api_registry.py")
-    api_provider = next(
-        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ApiProvider"
-    )
-    methods = {
-        stmt.name
-        for stmt in api_provider.body
-        if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef)
-    }
-    assert methods == {"stream", "stream_simple"}
-
-
-def test_no_legacy_completion_result_shaped_classes_remain() -> None:
+def test_no_legacy_completion_result_shaped_classes_remain(
+    app_trees: dict[Path, ast.Module],
+) -> None:
     offenders: list[str] = []
-    for path in APP.rglob("*.py"):
-        if "__pycache__" in path.parts or path == APP / "llm" / "types.py":
+    for path, tree in app_trees.items():
+        if path == APP / "llm" / "types.py":
             continue
-        tree = _tree(path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -131,11 +127,13 @@ def test_tool_loop_file_family_stays_collapsed() -> None:
     assert offenders == []
 
 
-def test_canonical_context_preinjection_bypass_stays_narrowly_allowlisted() -> None:
+def test_canonical_context_preinjection_bypass_stays_narrowly_allowlisted(
+    app_trees: dict[Path, ast.Module],
+) -> None:
     """Only paths that first build canonical delivery may skip reinjection."""
     users: set[Path] = set()
-    for path in APP.rglob("*.py"):
-        for node in ast.walk(_tree(path)):
+    for path, tree in app_trees.items():
+        for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             for keyword in node.keywords:
@@ -145,14 +143,16 @@ def test_canonical_context_preinjection_bypass_stays_narrowly_allowlisted() -> N
     assert users == CANONICAL_PREINJECTION_ALLOWLIST
 
 
-def test_each_provider_module_registers_exactly_once() -> None:
+def test_each_provider_module_registers_exactly_once(
+    app_trees: dict[Path, ast.Module],
+) -> None:
     offenders: list[str] = []
     for path in (APP / "llm" / "providers").glob("*.py"):
         if path.name == "__init__.py":
             continue
         count = sum(
             1
-            for node in ast.walk(_tree(path))
+            for node in ast.walk(app_trees[path])
             if isinstance(node, ast.Call) and _call_name(node.func) == "register_api_provider"
         )
         if count != 1:

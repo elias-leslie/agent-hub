@@ -442,11 +442,15 @@ class TestPersonaBashWorkflowGuards:
         assert "blocked for workflow policy" not in result.lower()
 
     @pytest.mark.asyncio
-    async def test_manage_tasks_dispatches(self, executor: DirectToolExecutor):
-        # manage_tasks requires bash_fn bound via _model_tool_registry
-        result = await executor.dispatch("manage_tasks", {"action": "overview"})
-        # Will attempt real st CLI call — just verify it dispatches without "Unknown tool"
+    async def test_manage_tasks_dispatches(self, tmp_path: Path):
+        # manage_tasks is bound to the executor's bash at registry build time.
+        fake_bash = AsyncMock(return_value="st overview output")
+        with patch.object(DirectToolExecutor, "bash", fake_bash):
+            executor = DirectToolExecutor(str(tmp_path), project_id="persona-sandbox")
+            result = await executor.dispatch("manage_tasks", {"action": "overview"})
         assert "Unknown tool" not in result
+        fake_bash.assert_awaited()
+        assert any("st " in str(call.args[0]) for call in fake_bash.await_args_list)
 
     @pytest.mark.asyncio
     async def test_manage_model_config_dispatches(self, executor: DirectToolExecutor):
