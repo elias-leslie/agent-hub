@@ -121,7 +121,7 @@ async def update_memory_settings(
     reference_index_enabled: bool | None = None,
     continuity_enabled: bool | None = None,
     continuity_max_sessions: int | None = None,
-    active_variant: str | None | object = _UNSET,
+    active_variant: str | object | None = _UNSET,
 ) -> MemorySettingsDTO:
     """Upsert memory settings (creates the row if it doesn't exist).
 

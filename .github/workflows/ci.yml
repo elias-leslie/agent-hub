@@ -66,7 +66,9 @@ jobs:
         # test ERRORs. Build the schema first.
         run: uv run alembic upgrade head
       - name: Test backend
-        run: uv run pytest -m "not private_context"
+        # --run-integration: also run the real-Postgres tests against the migrated
+        # agent_hub_test service database above.
+        run: uv run pytest --run-integration -m "not private_context"
       - name: Build backend package
         run: uv build
 
@@ -87,6 +89,8 @@ jobs:
         run: .venv/bin/pytest
 
   private-context-integration:
+    # Dependabot runs get no deploy-key secrets; a skipped job satisfies the required check.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     env:
       # Required at app import; adapter tests use isolated subprocess fixtures, not DB I/O.
@@ -124,7 +128,7 @@ jobs:
         with:
           node-version: 24
       - name: Test private context adapters
-        run: uv run pytest tests/integrations/test_context_delivery_adapters.py -m private_context --no-cov
+        run: uv run pytest tests/integrations/test_context_delivery_adapters.py -m private_context
 
   frontend:
     runs-on: ubuntu-24.04

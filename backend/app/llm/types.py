@@ -126,7 +126,7 @@ class ProviderResponse:
 # Payload/response callback aliases. Async or sync; payloads may be replaced
 # by returning a value (return ``None`` to keep the payload unchanged).
 PayloadCallback = Callable[[Any, "Model[Any]"], Any | Awaitable[Any] | None]
-ResponseCallback = Callable[[ProviderResponse, "Model[Any]"], None | Awaitable[None]]
+ResponseCallback = Callable[[ProviderResponse, "Model[Any]"], Awaitable[None] | None]
 
 
 @dataclass(slots=True)

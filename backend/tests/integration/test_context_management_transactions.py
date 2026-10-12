@@ -348,8 +348,11 @@ async def test_atomic_preview_save_stale_undo_and_memory_identity():
                 scoped = Prompt(slug=f'scoped-test-{suffix}', name='Scoped export fixture', content='Scoped instructions.', enabled=True, is_global=False, prompt_type='standard', exclude_agents=[], context_policy=ContextPolicy(scope='project', targets=['security-research']).model_dump())
                 db.add_all([row, scoped, memory])
                 await db.flush()
-                from scripts.export_seeds import export_seeds
-                exported = await export_seeds(db)
+                from unittest.mock import patch
+
+                from scripts.export_seeds import PUBLIC_PROMPT_SLUGS, export_seeds
+                with patch('scripts.export_seeds.PUBLIC_PROMPT_SLUGS', PUBLIC_PROMPT_SLUGS | {scoped.slug}):
+                    exported = await export_seeds(db)
                 assert any(p['slug'] == scoped.slug and p['context_policy']['targets'] == ['security-research'] for p in exported['prompts'])
                 prompt_id, memory_id = row.slug, str(memory.id)
                 context = CanonicalContextDeliveryRequest(consumer_surface='codex', include_memories=False, include_project_index=False, include_tool_capabilities=False, include_continuity=False)

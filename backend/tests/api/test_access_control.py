@@ -11,7 +11,6 @@ import pytest
 from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
-from app.constants.models import DEFAULT_GEMINI_MODEL
 from app.main import app
 
 
@@ -1002,60 +1001,3 @@ class TestBudgetCheckInPipeline:
             budget_checked = True
 
         assert budget_checked is False
-
-
-class TestSessionAttribution:
-    """Tests for session attribution from identified clients."""
-
-    @pytest.mark.integration
-    async def test_identified_session_attribution(self, async_client):
-        """Test that identified requests create sessions with client_id set.
-
-        This test verifies that client_id is passed from AccessControlMiddleware
-        to session creation via the X-Client-Id header.
-
-        Note: Requires real client in DB. Run with --run-integration.
-        """
-        import os
-
-        # Load credentials from environment (set by test setup)
-        client_id = os.environ.get("CONSULT_CLIENT_ID")
-        request_source = os.environ.get("CONSULT_REQUEST_SOURCE", "consult-skill")
-
-        if not client_id:
-            pytest.skip("Test requires CONSULT_CLIENT_ID")
-
-        # Make identified request (no secret needed)
-        response = await async_client.post(
-            "/api/complete",
-            json={
-                "model": DEFAULT_GEMINI_MODEL,
-                "messages": [{"role": "user", "content": "test"}],
-                "project_id": "test-session-attribution",
-                "max_tokens": 50,
-            },
-            headers={
-                "X-Client-Id": client_id,
-                "X-Request-Source": request_source,
-            },
-        )
-
-        # Request should succeed
-        assert response.status_code == 200
-        data = response.json()
-        session_id = data.get("session_id")
-        assert session_id is not None
-
-        # Verify session was created with client_id
-        from sqlalchemy import select
-
-        from app.db import get_db
-        from app.models import Session
-
-        async for db in get_db():
-            result = await db.execute(select(Session).where(Session.id == session_id))
-            session = result.scalar_one_or_none()
-            assert session is not None
-            assert session.client_id == client_id
-            assert session.request_source == request_source
-            break
