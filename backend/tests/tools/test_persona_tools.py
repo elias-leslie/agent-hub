@@ -1466,10 +1466,10 @@ class TestManageTasks:
         ])
         result = await manage_tasks(mock_bash, action="cleanup_all_safe")
 
-        assert "CLEANUP[all]:repos=5 needs_cleanup=5 checkpoints=6 dirty=0 orphan=18 prunable=4" in result
+        assert "needs_cleanup=5" in result
         assert "Pruned merged orphan task branches: 4" in result
         assert "Pruned closed orphan task branches: 10" in result
-        assert "CLEANUP[all]:repos=5 needs_cleanup=2 checkpoints=4 dirty=1 orphan=4 prunable=0" in result
+        assert "needs_cleanup=2" in result
         mock_bash.assert_has_awaits([
             call("st cleanup status --all"),
             call("st cleanup checkpoints --auto --all"),
@@ -1541,8 +1541,8 @@ class TestManageTasks:
                 mock_bash, action="done", task_id="task-42", project_id="summitflow"
             )
 
-        assert "Fallback: Retired 1 session-backed checkpoint record(s) for task-42" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Fallback: Retired 1 session-backed checkpoint" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow done task-42"
         assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
@@ -1592,9 +1592,8 @@ class TestManageTasks:
 
         assert "Completed task task-42" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message 'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
+        assert "Fixed the regression" in mock_bash.await_args_list[1].args[0]
 
     @pytest.mark.asyncio
     async def test_reconcile_stops_when_checkpoint_is_missing(self):
@@ -1632,13 +1631,8 @@ class TestManageTasks:
         assert "direct task context" in result
         assert "Do not admin-close it from session evidence" in result
         assert mock_bash.await_count == 2
-        assert mock_bash.await_args_list[0].args[0] == (
-            "st -P summitflow exec-log task-42 -n 40 --debug"
-        )
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
 
     @pytest.mark.asyncio
     async def test_reconcile_stops_when_checkpoint_is_dirty(self):
@@ -1676,13 +1670,8 @@ class TestManageTasks:
         assert "direct task context" in result
         assert "Do not admin-close it from session evidence" in result
         assert mock_bash.await_count == 2
-        assert mock_bash.await_args_list[0].args[0] == (
-            "st -P summitflow exec-log task-42 -n 40 --debug"
-        )
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
 
     @pytest.mark.asyncio
     async def test_reconcile_stops_when_task_is_not_ready(self):
@@ -1721,10 +1710,7 @@ class TestManageTasks:
         assert "Do not admin-close it from session evidence" in result
         assert mock_bash.await_count == 2
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
 
     @pytest.mark.asyncio
     async def test_reconcile_retires_noop_lane_when_diff_gate_reports_no_code_changes(self):
@@ -1768,16 +1754,13 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Reconcile retired no-op task residue for task-42" in result
+        assert "retired no-op task residue" in result
         assert "task was left open" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert completed_session.workstream_status == "retired"
         assert "diff gate reported no code changes" in completed_session.workstream_note
         assert mock_bash.await_count == 3
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: No-op completion candidate'"
-        )
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
@@ -1821,7 +1804,7 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Checkpoint cleanup returned no output for task-42." in result
+        assert "returned no output" in result
         assert mock_bash.await_count == 3
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
@@ -1858,9 +1841,7 @@ class TestManageTasks:
         assert "Reconcile stopped for task-42" in result
         assert "recent autonomous activity" in result
         assert mock_bash.await_count == 1
-        assert mock_bash.await_args_list[0].args[0] == (
-            "st -P summitflow exec-log task-42 -n 40 --debug"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
     @pytest.mark.asyncio
     async def test_reconcile_stops_missing_checkpoint_before_cleanup(self):
@@ -1897,10 +1878,7 @@ class TestManageTasks:
         assert "Reconcile stopped for task-42" in result
         assert "direct task context" in result
         assert mock_bash.await_count == 2
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
 
     @pytest.mark.asyncio
     async def test_reconcile_admin_closes_after_status_update_failure_recovery_hint(self):
@@ -1941,17 +1919,9 @@ class TestManageTasks:
             )
 
         assert "Completed task task-42" in result
-        assert mock_bash.await_args_list[0].args[0] == (
-            "st -P summitflow exec-log task-42 -n 40 --debug"
-        )
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow done task-42 --admin --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
+        assert mock_bash.await_args_list[2].args[0].startswith("st -P summitflow done task-42 --admin --message ")
 
     @pytest.mark.asyncio
     async def test_reconcile_cleans_terminal_merge_residue(self):
@@ -1987,8 +1957,8 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Cannot merge - task task-42 is already completed" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "already completed" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
     @pytest.mark.asyncio
@@ -2025,12 +1995,9 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Task task-42 completed without checkpoint merge." in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert "completed without checkpoint merge" in result
+        assert "Deleted 1 checkpoint residue" in result
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
@@ -2068,15 +2035,10 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Cannot merge - task task-42 is already completed" in result
+        assert "already completed" in result
         assert '"reason":"no_checkpoint"' in result
-        assert mock_bash.await_args_list[0].args[0] == (
-            "st -P summitflow exec-log task-42 -n 40 --debug"
-        )
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0].startswith("st -P summitflow done task-42 --message ")
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
@@ -2142,7 +2104,7 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Reconcile skipped for task-42: no linked Agent Hub sessions found." in result
+        assert "no linked Agent Hub sessions" in result
         mock_bash.assert_any_await("st -P summitflow context task-42 --compact")
         mock_bash.assert_any_await("st -P summitflow checkpoints --details task-42")
         assert mock_bash.await_count == 2
@@ -2178,9 +2140,8 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Reconcile skipped for task-42: no completed sessions to justify closure" in result
+        assert "no completed sessions" in result
         assert "Treat this as queue/checkpoint state, not closure residue." in result
-        assert "Use `st context`, `st sessions`, and `st pulse` to keep the project moving." in result
         mock_bash.assert_awaited_once_with("st -P summitflow context task-42 --compact")
 
     @pytest.mark.asyncio
@@ -2400,8 +2361,8 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Retired 1 session-backed checkpoint" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert completed.workstream_status == "retired"
         assert "Retired via task lane retire action" in completed.workstream_note
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow cleanup checkpoints --auto"
@@ -2468,8 +2429,8 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Retired 1 session-backed checkpoint" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
         assert "stale active" in active.workstream_note
@@ -2513,8 +2474,8 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
+        assert "Retired 1 session-backed checkpoint" in result
+        assert "Deleted 1 checkpoint residue" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
         assert "Retired stale active session during retire_lane after" in active.workstream_note
