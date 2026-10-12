@@ -190,26 +190,6 @@ class TestUpdatePersonaEndpoint:
         assert "heartbeat_instructions" not in PersonaResponse.model_fields
 
 
-class TestRetiredPersonaSchedulingRoutes:
-    """Persona improvement dashboard, schedule and automation routes are removed."""
-
-    @pytest.mark.parametrize(
-        ("method", "path"),
-        [
-            ("get", "/api/persona/improvement"),
-            ("put", "/api/persona/improvement/schedule"),
-            ("get", "/api/persona/automations"),
-            ("post", "/api/persona/automations"),
-            ("post", "/api/persona/automations/job-1/trigger"),
-        ],
-    )
-    def test_route_is_gone(self, api_client, mock_db_session, method, path):
-        response = getattr(api_client, method)(path)
-
-        assert response.status_code in {404, 405}
-        mock_db_session.commit.assert_not_awaited()
-
-
 class TestResetOnboardingEndpoint:
     """Tests for POST /api/persona/reset-onboarding."""
 

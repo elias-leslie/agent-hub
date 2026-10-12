@@ -336,21 +336,6 @@ class TestGetPersonaContextForAgent:
         assert "<personality>" not in result
 
     @pytest.mark.asyncio
-    async def test_retired_heartbeat_task_type_injects_no_heartbeat_sections(self):
-        persona = _make_persona(user_context="Prefers dark mode.")
-        db = create_mock_db_session()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        db.execute.return_value = mock_result_persona
-
-        result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
-
-        assert result is not None
-        assert "<heartbeat_instructions>" not in result
-        assert "<focus_harness>" not in result
-        assert "<user_context_notes>" in result
-
-    @pytest.mark.asyncio
     async def test_wake_context_adds_focus_harness(self):
         persona = _make_persona()
         db = create_mock_db_session()

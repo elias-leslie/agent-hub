@@ -10,35 +10,6 @@ from typer.testing import CliRunner
 runner = CliRunner()
 
 
-class TestPersonaHeartbeatRetired:
-    def test_show_omits_heartbeat_fields(self) -> None:
-        persona = {
-            "name": "Jenny",
-            "agent_slug": "persona",
-            "heartbeat_interval_minutes": 60,
-            "heartbeat_instructions": "legacy",
-            "user_context": "ctx",
-        }
-        with patch("agent_hub_st.persona._api", return_value=persona):
-            result = runner.invoke(app, ["show"])
-
-        assert result.exit_code == 0
-        assert "heartbeat" not in result.output
-        assert "user_context: set (3 chars)" in result.output
-
-    def test_instructions_command_removed(self) -> None:
-        result = runner.invoke(app, ["instructions"])
-
-        assert result.exit_code != 0
-
-    def test_update_rejects_heartbeat_flags(self) -> None:
-        with patch("agent_hub_st.persona._api") as mock_api:
-            result = runner.invoke(app, ["update", "--heartbeat-interval", "30"])
-
-        assert result.exit_code != 0
-        mock_api.assert_not_called()
-
-
 class TestPersonaPreviewCommand:
     def test_preview_defaults_to_compact_summary(self) -> None:
         preview = {

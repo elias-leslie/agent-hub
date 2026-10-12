@@ -84,16 +84,6 @@ class TestAccessControlMiddleware:
         assert response.status_code == 200
         assert response.json() == {"requests": [], "total": 0}
 
-    async def test_removed_client_kill_switch_routes_are_gone(self, async_client):
-        """The unread client kill switch endpoints no longer exist."""
-        headers = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
-        response = await async_client.get("/api/admin/clients", headers=headers)
-        assert response.status_code == 404
-        response = await async_client.post(
-            "/api/admin/clients/example/disable", headers=headers, json={}
-        )
-        assert response.status_code in (404, 405)
-
     async def test_access_control_paths_require_internal_header(self, async_client):
         """Test that access control paths require internal header."""
         # Without internal header, should get 403

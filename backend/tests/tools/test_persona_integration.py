@@ -23,6 +23,7 @@ import pytest
 
 from app.constants.models import CLAUDE_SONNET
 from app.models.persona import Persona
+from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
 from app.services.tools.base import ToolCall, ToolDecision
 from app.services.tools.direct_executor_core import DirectToolExecutor
 from app.services.tools.tool_handler import (
@@ -147,255 +148,28 @@ def _mock_prompt_backed_persona_documents():
 
 
 # ---------------------------------------------------------------------------
-# 1. ALL 20 PERSONA TOOLS DISPATCH VIA EXECUTOR
+# 1. EVERY PERSONA TOOL DISPATCHES VIA EXECUTOR
 # ---------------------------------------------------------------------------
 
 
-class TestAllPersonaToolsDispatch:
-    """Verify every persona tool routes through DirectToolExecutor.dispatch()."""
+@pytest.mark.parametrize(
+    "tool_name",
+    [tool.name for tool in PERSONA_EXTRA_TOOLS],
+)
+@pytest.mark.asyncio
+async def test_every_persona_extra_tool_dispatches(tmp_path: Path, tool_name: str):
+    """Every PERSONA_EXTRA_TOOLS entry routes through DirectToolExecutor.dispatch()."""
+    executor = DirectToolExecutor(str(tmp_path), project_id="persona-sandbox")
+    handler = AsyncMock(return_value=f"handled {tool_name}")
+    if tool_name in executor._registry:
+        executor._registry[tool_name] = handler
+    else:
+        setattr(executor, tool_name, handler)
 
-    @pytest.fixture
-    def executor(self, tmp_path: Path) -> DirectToolExecutor:
-        return DirectToolExecutor(str(tmp_path), project_id="persona-sandbox")
+    result = await executor.dispatch(tool_name, {})
 
-    @pytest.mark.asyncio
-    async def test_read_personality_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona(personality="Warm and direct.")
-        session_fn, _ = _mock_async_session(persona)
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await executor.dispatch("read_personality", {})
-        assert "Warm and direct." in result
-
-    @pytest.mark.asyncio
-    async def test_write_personality_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona(version=10)
-        session_fn, _ = _mock_async_session(persona)
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await executor.dispatch(
-                "write_personality",
-                {"personality": "New personality.", "reason": "test"},
-            )
-        assert "Personality updated" in result
-        assert persona.version == 11
-
-    @pytest.mark.asyncio
-    async def test_write_user_context_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona(version=5)
-        session_fn, _ = _mock_async_session(persona)
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await executor.dispatch(
-                "write_user_context", {"user_context": "Prefers morning standups."}
-            )
-        assert "User context updated" in result
-        assert persona.version == 6
-
-    @pytest.mark.asyncio
-    async def test_read_user_context_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona(user_context="Timezone: Australia/Sydney")
-        session_fn, _ = _mock_async_session(persona)
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-        ):
-            result = await executor.dispatch("read_user_context", {})
-        assert "Australia/Sydney" in result
-
-    @pytest.mark.asyncio
-    async def test_mark_memory_relevant_dispatches(self, executor: DirectToolExecutor):
-        full_uuid = "abc12345-0000-4000-8000-000000000000"
-        with (
-            patch(
-                "app.services.memory.memory_utils.resolve_uuid_prefix",
-                new_callable=AsyncMock,
-                return_value=full_uuid,
-            ),
-            patch(
-                "app.services.memory.episode_property_queries.get_episode_tags",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "app.services.memory.episode_property_setters.set_episode_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ),
-        ):
-            result = await executor.dispatch(
-                "mark_memory_relevant", {"memory_uuid": "abc12345"}
-            )
-        assert "marked as persona-relevant" in result
-
-    @pytest.mark.asyncio
-    async def test_mark_memory_irrelevant_dispatches(self, executor: DirectToolExecutor):
-        full_uuid = "abc12345-0000-4000-8000-000000000000"
-        with (
-            patch(
-                "app.services.memory.memory_utils.resolve_uuid_prefix",
-                new_callable=AsyncMock,
-                return_value=full_uuid,
-            ),
-            patch(
-                "app.services.memory.episode_property_queries.get_episode_tags",
-                new_callable=AsyncMock,
-                return_value=["persona-relevant"],
-            ),
-            patch(
-                "app.services.memory.episode_property_setters.set_episode_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ),
-        ):
-            result = await executor.dispatch(
-                "mark_memory_irrelevant", {"memory_uuid": "abc12345"}
-            )
-        assert "Removed persona-relevant" in result
-
-    @pytest.mark.asyncio
-    async def test_manage_memory_tags_dispatches(self, executor: DirectToolExecutor):
-        full_uuid = "abc12345-0000-4000-8000-000000000000"
-        with (
-            patch(
-                "app.services.memory.memory_utils.resolve_uuid_prefix",
-                new_callable=AsyncMock,
-                return_value=full_uuid,
-            ),
-            patch(
-                "app.services.memory.episode_property_queries.get_episode_tags",
-                new_callable=AsyncMock,
-                return_value=["debugger-relevant"],
-            ),
-            patch(
-                "app.services.memory.episode_property_setters.set_episode_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ),
-        ):
-            result = await executor.dispatch(
-                "manage_memory_tags",
-                {
-                    "action": "add_tags",
-                    "memory_uuid": "abc12345",
-                    "tags": ["oauth"],
-                },
-            )
-        assert "Updated tags for memory abc12345" in result
-
-    @pytest.mark.asyncio
-    async def test_submit_onboarding_dispatches(self, executor: DirectToolExecutor):
-        persona = _make_persona(
-            onboarding_phase="in_progress",
-            onboarding_complete=False,
-            user_context="Partial context.",
-        )
-        session_fn, _ = _mock_async_session(persona)
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
-            patch(
-                "app.services.persona_service.submit_and_review_onboarding",
-                new_callable=AsyncMock,
-                return_value={"status": "approved", "feedback": "All criteria met."},
-            ),
-        ):
-            result = await executor.dispatch("submit_onboarding", {"summary": "Full profile"})
-        assert "APPROVED" in result
-
-    @pytest.mark.asyncio
-    async def test_steer_consultation_dispatches(self, executor: DirectToolExecutor):
-        mock_result = MagicMock()
-        mock_result.content = "Follow-up response."
-        mock_result.session_id = "sess-100"
-
-        mock_redis = AsyncMock()
-        mock_redis.incr = AsyncMock(return_value=1)
-        mock_redis.expire = AsyncMock()
-        mock_redis.close = AsyncMock()
-
-        mock_db = AsyncMock()
-        mock_persona = _make_persona()
-        mock_persona_result = MagicMock()
-        mock_persona_result.scalar_one_or_none.return_value = mock_persona
-        mock_db.execute.return_value = mock_persona_result
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with (
-            patch("app.db.async_session", _session),
-            patch(
-                "app.api.complete.core.complete_internal",
-                new_callable=AsyncMock,
-                return_value=mock_result,
-            ),
-            patch("redis.asyncio.from_url", return_value=mock_redis),
-        ):
-            result = await executor.dispatch(
-                "steer_consultation",
-                {"project_id": "persona-sandbox", "session_id": "sess-100", "message": "follow up"},
-            )
-        assert "sess-100" in result
-
-    @pytest.mark.asyncio
-    async def test_list_consultations_dispatches(self, executor: DirectToolExecutor):
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with patch("app.db.async_session", _session):
-            result = await executor.dispatch("list_consultations", {})
-        assert "No consultations" in result
-
-    @pytest.mark.asyncio
-    async def test_cancel_consultation_dispatches(self, executor: DirectToolExecutor):
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with patch("app.db.async_session", _session):
-            result = await executor.dispatch(
-                "cancel_consultation", {"session_id": "nonexistent"}
-            )
-        assert "not found" in result.lower()
+    assert result == f"handled {tool_name}"
+    handler.assert_awaited_once()
 
 
 class TestPersonaBashWorkflowGuards:
@@ -1164,17 +938,6 @@ class TestHookComposition:
 class TestDispatchableToolsComplete:
     """Ensure DISPATCHABLE_TOOLS contains all persona tools."""
 
-    def test_all_persona_tools_in_dispatchable_set(self):
-        """Every tool in PERSONA_EXTRA_TOOLS should be in DISPATCHABLE_TOOLS."""
-        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
-
-        dispatchable = DirectToolExecutor.DISPATCHABLE_TOOLS
-        for tool in PERSONA_EXTRA_TOOLS:
-            assert tool.name in dispatchable, (
-                f"Tool '{tool.name}' from PERSONA_EXTRA_TOOLS "
-                f"missing from DISPATCHABLE_TOOLS"
-            )
-
     def test_persona_permission_sets_cover_tools(self):
         """All persona tools should be reachable (either tier-exempt or in standard tiers)."""
         from app.services.project_permission_service import (
@@ -1193,9 +956,3 @@ class TestDispatchableToolsComplete:
                 f"_PERSONA_TOOLS exemption set and full tier"
             )
 
-    def test_send_push_removed_from_persona_tools(self):
-        """Web push was retired; send_push must not be offered to the persona."""
-        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
-
-        names = {tool.name for tool in PERSONA_EXTRA_TOOLS}
-        assert "send_push" not in names

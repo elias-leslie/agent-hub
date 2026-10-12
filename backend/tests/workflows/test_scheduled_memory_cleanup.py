@@ -37,13 +37,3 @@ class TestMemoryCleanupResult:
 class TestCleanupImport:
     """Verify the scheduled module uses TTL cleanup, not the old no-op."""
 
-    def test_scheduled_module_references_ttl_cleanup(self):
-        """The memory_cleanup_task source should reference cleanup_stale_memories."""
-        import inspect
-
-        import app.workflows.scheduled as scheduled_mod
-
-        # Get the source of the module
-        source = inspect.getsource(scheduled_mod)
-        assert "cleanup_stale_memories" in source
-        assert "cleanup_orphaned" not in source

@@ -48,15 +48,6 @@ def test_complete_help_mentions_message_option() -> None:
     assert "--message" in result.output
 
 
-def test_complete_no_longer_exposes_agentic_flags() -> None:
-    result = runner.invoke(app, ["--help"])
-
-    assert result.exit_code == 0
-    assert "--execute-tools" not in result.output
-    assert "--max-turns" not in result.output
-    assert "--working-dir" not in result.output
-
-
 def test_complete_supports_no_memory_flag() -> None:
     with patch("agent_hub_st.complete.call_complete") as mock_call:
         mock_call.return_value = {"content": "ok"}

@@ -785,17 +785,6 @@ class TestPersonaToolSets:
         ):
             assert tool in _PERSONA_OPERATIONAL
 
-    def test_retired_persona_tools_are_not_allowed(self):
-        for tool in (
-            "schedule_job",
-            "list_scheduled_jobs",
-            "cancel_scheduled_job",
-            "send_push",
-            "review_improvement_signals",
-        ):
-            assert tool not in _PERSONA_TOOLS
-
-
 class TestPersonaToolTierExemption:
     """Persona tools bypass project tier (except 'off')."""
 

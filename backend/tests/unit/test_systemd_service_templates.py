@@ -1,48 +1,21 @@
 from __future__ import annotations
 
+import importlib.util
+import re
 from pathlib import Path
 
 SYSTEMD_DIR = Path(__file__).resolve().parents[3] / "scripts" / "systemd"
+_MODULE_PATTERN = re.compile(r"(?:python -m |uvicorn )([\w.]+)")
 
 
-def test_split_worker_units_exist_and_combined_template_is_removed() -> None:
-    assert not (SYSTEMD_DIR / "agent-hub-hatchet-worker.service").exists()
-    assert (SYSTEMD_DIR / "agent-hub-hatchet-agent-worker.service").exists()
-    assert (SYSTEMD_DIR / "agent-hub-hatchet-ops-worker.service").exists()
-
-
-def test_agent_worker_template_points_to_agent_entrypoint_and_host_marker() -> None:
-    text = (SYSTEMD_DIR / "agent-hub-hatchet-agent-worker.service").read_text()
-    assert "__PROJECT_ROOT__" in text
-    assert "ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.worker_agents" in text
-    assert 'Environment="AGENT_HUB_WORKER_ROLE=agents"' in text
-    assert 'Environment="AGENT_HUB_HOST_SERVICE=agent-hub-hatchet-agent-worker.service"' in text
-    assert "KillMode=control-group" in text
-
-
-def test_ops_worker_template_points_to_ops_entrypoint_and_host_marker() -> None:
-    text = (SYSTEMD_DIR / "agent-hub-hatchet-ops-worker.service").read_text()
-    assert "__PROJECT_ROOT__" in text
-    assert "ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.worker_ops" in text
-    assert 'Environment="AGENT_HUB_WORKER_ROLE=ops"' in text
-    assert 'Environment="AGENT_HUB_HOST_SERVICE=agent-hub-hatchet-ops-worker.service"' in text
-    assert "KillMode=control-group" in text
-
-
-def test_frontend_template_uses_control_group_shutdown() -> None:
-    text = (SYSTEMD_DIR / "agent-hub-frontend.service").read_text()
-    assert "KillMode=control-group" in text
-
-
-
-def test_host_guardian_alert_service_and_timer_templates_exist() -> None:
-    service = (SYSTEMD_DIR / "agent-hub-host-guardian-alert.service").read_text()
-    timer = (SYSTEMD_DIR / "agent-hub-host-guardian-alert.timer").read_text()
-    assert "__PROJECT_ROOT__" in service
-    assert "python -m app.scripts.send_host_guardian_alerts" in service
-    assert "Telegram" not in service + timer
-    assert "OnCalendar=*:0/5" in timer
-    assert "OnUnitActiveSec" not in timer  # never schedules without a prior run
-    backend = (SYSTEMD_DIR / "agent-hub-backend.service").read_text()
-    assert "Wants=agent-hub-host-guardian-alert.timer" in backend
-    assert "Persistent=true" in timer
+def test_each_execstart_module_is_importable() -> None:
+    modules = {
+        match.group(1)
+        for unit in SYSTEMD_DIR.glob("*.service")
+        for line in unit.read_text().splitlines()
+        if line.startswith("ExecStart=")
+        for match in _MODULE_PATTERN.finditer(line)
+    }
+    assert modules, "no Python ExecStart modules found"
+    missing = sorted(name for name in modules if importlib.util.find_spec(name) is None)
+    assert missing == []

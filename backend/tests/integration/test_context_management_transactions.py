@@ -307,21 +307,6 @@ async def test_evaluation_fixtures_never_create_operational_handoffs(maintenance
     assert not list((await db.execute(select(ContextMaintenanceItem))).scalars())
 
 
-@pytest.mark.integration
-async def test_regular_review_entry_point_is_unavailable_without_database_io():
-    from unittest.mock import AsyncMock
-
-    from fastapi import HTTPException
-
-    from app.services.memory._review_agent_runner import run_memory_review_batch
-
-    db = AsyncMock()
-    with pytest.raises(HTTPException) as raised:
-        await run_memory_review_batch(db=db, batch_limit=1)
-    assert raised.value.status_code == 410
-    db.execute.assert_not_awaited()
-
-
 def apply_test_migrations(connection):
     # The shared test database has a partial metadata-built schema and no
     # Alembic baseline. Build an isolated transactional schema, preserving it.

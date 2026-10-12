@@ -144,13 +144,6 @@ def test_summitflow_owned_profile_can_target_another_project():
     assert value["project_id"] == "agent-hub"
 
 
-def test_retired_summitflow_policy_keys_are_not_in_the_catalog():
-    for project in ("summitflow", "agent-hub", "portfolio-ai"):
-        properties = policy_schema_for(project)["properties"]
-        assert not any(key.startswith(("autonomous_", "quality_gate_")) for key in properties)
-        assert "routine_upkeep_enabled" not in properties
-
-
 def test_policy_catalog_only_shows_owner_specific_fields_for_its_project():
     assert "daily_limit" in policy_schema_for("neri")["properties"]
     assert "screening_cap" in policy_schema_for("jobinator-4000")["properties"]

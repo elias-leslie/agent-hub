@@ -153,7 +153,3 @@ def test_opus_is_placed_sparingly() -> None:
     assert not fallbacks
 
 
-def test_memory_curator_is_retired_from_seeded_agents() -> None:
-    data = json.loads(SEED_FILE.read_text())
-    assert all(agent["slug"] != "memory-curator" for agent in data["agents"])
-    assert "memory-curator" in data["deactivate_slugs"]

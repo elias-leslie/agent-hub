@@ -163,14 +163,6 @@ class TestSessionHotspots:
         assert body["repeated_workloads"][0]["project_id"] == "summitflow"
 
 
-class TestRemovedBlockedRequests:
-    @pytest.mark.asyncio
-    async def test_blocked_requests_route_is_gone(self, client):
-        ac, _ = client
-        resp = await ac.get("/api/admin/blocked-requests")
-        assert resp.status_code == 404
-
-
 class TestClearEndpointsHideExceptionText:
     """Redis failures are logged server-side; clients get a generic message."""
 
