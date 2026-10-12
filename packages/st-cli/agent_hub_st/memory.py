@@ -193,7 +193,7 @@ def status(
     on_demand="memory authoring",
     precautions=(
         "choose explicit scope: project-specific → -s project --scope-id <id>; global only for cross-project knowledge",
-        "use ST for agent memory writes; reusable instructions belong in scoped DB prompts; tool how-to → ST surface or failure-hook hint, not memory",
+        "use ST for agent memory writes; reusable instructions belong in scoped DB prompts; tool how-to → ST surface/hook hint",
         "verify success on save; revisions are immutable",
         "agent-only text: terse imperative, no filler; heed STYLE_WARN",
     ),
