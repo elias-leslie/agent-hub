@@ -3,7 +3,7 @@
 Revision ID: f3a4b5c6d7e8
 Revises: e2f3a4b5c6d7
 
-Stage 4 of docs/audits/2026-10-value-audit-plan.md. Pulse, webhooks, web push,
+Stage 4 of the October 2026 value audit. Pulse, webhooks, web push,
 client kill-switch controls, persona scheduled jobs and action requests lost
 their last readers in Stages 2-3. Their rows were archived with pg_dump and
 test-restored before this ran (backups/2026-10-cleanup/MANIFEST.json); data is

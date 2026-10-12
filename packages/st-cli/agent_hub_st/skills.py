@@ -306,7 +306,9 @@ def _audit_single_skill(skill_dir: Path, auto_fix: bool = False) -> dict[str, An
 
     # Check for hardcoded harness paths that break cross-harness neutrality
     if skill_dir.name != "zzskills":
-        for forbidden in ["~/.claude", "~/.codex", "~/.gemini", "/home/kasadis/.claude", "/home/kasadis/.codex", "/home/kasadis/.gemini"]:
+        home = str(Path.home())
+        harness_dirs = (".claude", ".codex", ".gemini")
+        for forbidden in [*(f"~/{d}" for d in harness_dirs), *(f"{home}/{d}" for d in harness_dirs)]:
             if forbidden in raw_content:
                 warnings.append(f"Hardcoded harness path found: '{forbidden}' (use relative '_shared/...' or neutral commands)")
 

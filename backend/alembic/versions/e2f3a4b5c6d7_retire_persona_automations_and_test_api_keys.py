@@ -4,7 +4,7 @@ Revision ID: e2f3a4b5c6d7
 Revises: d1e2f3a4b5c6
 
 The persona heartbeat, scheduler and job workflows were removed in Stage 3 of
-docs/audits/2026-10-value-audit-plan.md. This deletes their automation
+the October 2026 value audit. This deletes their automation
 definitions, profiles (revisions cascade) and schedule controls, and
 deactivates the 127 never-used test API keys. The sibling .json file holds the
 exact preimage: upgrade refuses to run unless the identifying rows still match

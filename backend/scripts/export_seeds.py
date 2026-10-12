@@ -4,6 +4,11 @@ One-way sync: DB (source of truth) → seed file (for new installs).
 Run with: python -m scripts.export_seeds
 
 This is the ONLY way seed_data.json should be updated. Never edit it by hand.
+
+The seed file is published with the repository, so the export is limited to the
+general-purpose agents and prompts in PUBLIC_AGENT_SLUGS and PUBLIC_PROMPT_SLUGS.
+Deployment-specific agents and prompts stay in the database (and its backups);
+add a slug here only when its exported content is fit to publish.
 """
 
 import asyncio
@@ -35,6 +40,23 @@ AGENT_EXPORT_FIELDS = [
 ]
 
 DEACTIVATE_SLUGS = ["auditor", "memory-curator"]
+
+PUBLIC_AGENT_SLUGS = frozenset({
+    "analyst", "chat", "coder", "committee-router-v1", "committee-synthesizer-v1",
+    "complexity-assessor", "context-compactor", "critic", "debugger", "designer",
+    "equity-analyst", "explorer", "git-agent", "image-gen", "investment-committee",
+    "learning-extractor", "market-pulse-scout", "memory-rater", "note-formatter",
+    "note-titler", "optimizer", "persona", "planner", "prompt-builder",
+    "provider-liveness-probe", "reasoner", "refactor", "researcher", "reviewer",
+    "risk-manager", "specifier", "summarizer", "supervisor", "test-writer", "tester",
+    "triager", "ui-mockup-designer", "ux-polisher", "validator", "verifier",
+    "voice-responder", "worker",
+})
+PUBLIC_PROMPT_SLUGS = frozenset({
+    "coding-golden-rule", "graphify-workspace-map", "jenny-autonomy-policy",
+    "narration-tags", "persona-agent-routing-catalog", "persona-safety",
+    "workspace-search-discipline",
+})
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
 
 PROMPT_EXPORT_FIELDS = [
@@ -79,10 +101,12 @@ def _normalized_seed_payload(seed_data: dict) -> dict:
 
 
 async def export_seeds(db: AsyncSession) -> dict:
-    """Export all active agents and their prompts to a seed-compatible structure."""
+    """Export the public active agents and their prompts to a seed-compatible structure."""
     # Fetch all active agents
     result = await db.execute(
-        select(Agent).where(Agent.is_active.is_(True)).order_by(Agent.slug)
+        select(Agent)
+        .where(Agent.is_active.is_(True), Agent.slug.in_(PUBLIC_AGENT_SLUGS))
+        .order_by(Agent.slug)
     )
     agents = list(result.scalars().all())
 
@@ -124,6 +148,7 @@ async def export_seeds(db: AsyncSession) -> dict:
         )
     )
     prompt_slugs.update(global_prompt_result.scalars().all())
+    prompt_slugs &= PUBLIC_PROMPT_SLUGS
 
     prompt_dicts = []
     if prompt_slugs:

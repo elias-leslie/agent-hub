@@ -90,3 +90,16 @@ def test_serialize_prompt_preserves_owner_slug() -> None:
     assert exported["slug"] == "persona-agent-routing-catalog"
     assert exported["owner_agent_slug"] == "persona"
     assert exported["is_global"] is True
+
+
+def test_published_seed_contains_only_public_slugs() -> None:
+    import json
+
+    from scripts.export_seeds import PUBLIC_AGENT_SLUGS, PUBLIC_PROMPT_SLUGS, SEED_FILE
+
+    data = json.loads(SEED_FILE.read_text())
+    assert {agent["slug"] for agent in data["agents"]} <= PUBLIC_AGENT_SLUGS
+    assert {prompt["slug"] for prompt in data["prompts"]} <= PUBLIC_PROMPT_SLUGS
+    for assignment in data["agent_prompt_assignments"]:
+        assert assignment["agent_slug"] in PUBLIC_AGENT_SLUGS
+        assert assignment["prompt_slug"] in PUBLIC_PROMPT_SLUGS

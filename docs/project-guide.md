@@ -22,16 +22,20 @@
   into completions, with citation tracking.
 - Stateful sessions with full history, branching, ingestion, LLM-generated
   summaries, and token accounting.
-- Named agents/personas with version history, per-agent model routing, a
-  benchmark dashboard, and a self-improving persona ("Jenny") heartbeat.
+- Named agents/personas with version history, per-agent model routing, and a
+  benchmark dashboard. Agents can dispatch background agent runs ("wakes"),
+  each in its own session.
+- Memory archive: an episode can be archived and restored. Archived episodes
+  stay stored but are never injected into context.
 - A DB-backed prompts catalog with revisions/restore and per-agent assignments.
 
 **Orchestration and tools**
 
-- Multi-agent orchestration: staged workflow (clarify → plan → execute → review →
-  QA), maker-checker, chain, parallel fan-out, sub-agents, code-review, and a
-  committee/roundtable.
-- Server-side tool execution with an agentic tool loop: shell, file read/write/edit,
+- An agentic tool loop in `/api/complete` that can delegate work to other agents
+  as child sessions, plus a committee roundtable endpoint
+  (`/api/orchestration/committee`) that runs several agents on one question
+  and synthesizes their views.
+- Server-side tool execution inside that loop: shell, file read/write/edit,
   precision code search, and web search/research/fetch (backed by SearXNG and a
   CDP browser).
 
@@ -40,16 +44,28 @@
 - Cost/latency telemetry, request logs, truncation events, analytics, and
   operator dashboards over a 6-axis model catalog (coding/reasoning/planning/
   tool-use/instruction/design scores, plus per-token/image/second pricing).
-- Client registration and access control, per-project permissions, budgets and
-  quotas, encrypted credential storage (Fernet at rest), and OAuth (Codex/PKCE).
+- Cost accounting that separates metered spend from subscription plans
+  (Claude/Codex plan cost, plan limits, Codex credits, and API-equivalent
+  value), plus `POST /api/analytics/costs/ingest` so external clients can
+  record model calls they paid for outside Agent Hub. Ingest is idempotent per
+  key and does not count against the project's completion budget.
+- Context governance: one selector and renderer decide what prompts and memory
+  reach Claude Code, Codex, Pi, Google's Antigravity CLI, MCP clients and
+  internal agents. Operators can preview the exact delivered context, save
+  edits with revision checks, and undo a saved batch. See
+  [context governance](architecture/context-governance.md).
+- Client registration and access control, per-project permissions, per-project
+  daily/monthly cost budgets, per-agent hourly request and daily token limits,
+  encrypted credential storage (Fernet at rest), and OAuth (Codex/PKCE).
 - Optional web research, browser, and voice
   (faster-whisper STT → completion → edge-tts) integrations.
 - A Python SDK (`agent-hub-client`) with sync + async clients for completions,
   SSE streaming, stateful sessions, image generation, and memory operations.
 
-Under the hood: ~36 API routers, multi-provider image/completion adapters, and
-15 Hatchet background workflows (session summaries, memory governance, model
-catalog enrichment, persona heartbeat, retention, and more).
+Under the hood: 33 API routers, multi-provider image/completion adapters, and
+13 Hatchet background workflows (agentic completions, background agent wakes,
+session summaries and reaping, memory governance and cleanup, model catalog
+enrichment, data retention, and more).
 
 The target user is a developer or operator running their own agent
 infrastructure, not a hosted SaaS user.
@@ -183,7 +199,7 @@ agent-hub/
 ├── examples/           SDK usage examples
 ├── docker-compose.yml  Standalone local Docker stack
 ├── scripts/            Bootstrap and service helpers
-└── docs/screenshots/   Public-safe UI screenshots
+└── docs/               Guides, architecture notes, and evaluations
 ```
 
 ## SDK
@@ -232,8 +248,9 @@ curl -fsS http://localhost:3003/ >/dev/null
 
 ## Screenshots
 
-The checked-in screenshots use safe demo/empty data and were inspected before
-public release. To refresh them, start the local frontend and run:
+The animation in the README shows the dashboard before the October 2026
+redesign. To capture current screenshots, start a local instance with an empty
+database and run (images are written to `docs/screenshots/` by default):
 
 ```bash
 cd frontend
@@ -248,7 +265,7 @@ content.
 
 Agent Hub can boot without provider keys. Dashboards, health checks, sessions,
 and configuration pages remain available. Provider completions, web research,
-push, browser, and voice integrations require their corresponding
+browser, and voice integrations require their corresponding
 configuration and should fail clearly when absent.
 
 ## License

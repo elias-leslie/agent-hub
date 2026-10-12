@@ -3,8 +3,7 @@
 Revision ID: a7c3e9f1b2d4
 Revises: f3a4b5c6d7e8
 
-Stage 6 of docs/audits/2026-10-value-audit-plan.md (owner retired Telegram on
-2026-10-10). Drops session_bindings.telegram_chat_id/thread_id/message_id and
+Stage 6 of the October 2026 value audit (Telegram retired on 2026-10-10). Drops session_bindings.telegram_chat_id/thread_id/message_id and
 their two indexes (every row was NULL) and deletes the encrypted
 _system_telegram_bot credential rows. Upgrade is idempotent.
 
