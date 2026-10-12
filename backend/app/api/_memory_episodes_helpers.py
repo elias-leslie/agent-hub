@@ -197,7 +197,7 @@ async def _build_content_update(
         replace_existing=True,
     )
     messages.append("content")
-    from app.services.context_style import style_warnings
+    from app.services.context_style import memory_style_warnings
 
-    updates["style_warnings"] = style_warnings(request.content, existing_episode.get("content"))
+    updates["style_warnings"] = memory_style_warnings(request.content, existing_episode.get("content"))
     return updates, messages

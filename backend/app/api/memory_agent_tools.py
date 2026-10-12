@@ -248,14 +248,14 @@ async def api_save_learning(
       -d '{"content": "**Async DB**: Use async methods for DB operations.", "injection_tier": "reference"}'
     ```
     """
-    from app.services.context_style import style_warnings
+    from app.services.context_style import memory_style_warnings
     from app.services.memory.episode_validation import EpisodeValidationError
 
     scope, scope_id = scope_params
 
     try:
         result = await handle_save_learning(request, scope, scope_id)
-        result.style_warnings = style_warnings(request.content)
+        result.style_warnings = memory_style_warnings(request.content)
         return result
     except HTTPException:
         raise

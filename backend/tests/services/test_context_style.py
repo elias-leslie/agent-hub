@@ -40,3 +40,14 @@ def test_memory_content_update_recomputes_token_count_and_fingerprint() -> None:
     assert kwargs["token_count"] == count_tokens(content)
     assert kwargs["content_fingerprint"] == content_fingerprint(content)
     assert "token_count" not in _normalize_update_kwargs({"injection_tier": "reference"})
+
+
+def test_memory_command_howto_warns_once_two_flagged_commands_appear() -> None:
+    from app.services.context_style import memory_style_warnings
+
+    howto = ("Default gh token 403s. Run `nightshift elevate request github-admin --reason '<why>' --wait`, "
+             "then `nightshift elevate run github-admin -- gh ...`; `nightshift elevate status`.")
+    warnings = memory_style_warnings(howto)
+    assert warnings[0].startswith("tool how-to (2 commands): register an ST surface")
+    assert memory_style_warnings("Use `st check --quick`, not raw pytest; `pyproject.toml` owns config.") == []
+    assert style_warnings(howto) == []  # prompts keep the shared style check only

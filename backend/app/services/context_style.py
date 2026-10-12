@@ -20,6 +20,10 @@ PADDING = re.compile(
     r"in order to|keep in mind|note that|remember to|don't forget|feel free|as mentioned|"
     r"it should be noted|as an ai|i hope|happy to help)\b"
 )
+CODE_SPAN = re.compile(r"`([^`\n]+)`")
+COMMAND_HEAD = re.compile(r"[a-z][\w.-]*\s")
+COMMAND_FLAG = re.compile(r"(?:^|\s)--?(?:[A-Za-z]|\s|$)")
+HOWTO_MIN_COMMANDS = 2
 GROWTH_RATIO = 1.25
 GROWTH_MIN_TOKENS = 30
 
@@ -38,4 +42,14 @@ def style_warnings(content: str | None, previous: str | None = None) -> list[str
             warnings.append(f"token growth: {before}->{after}")
     if warnings:
         warnings.append(AUTHORING_HINT)
+    return warnings
+
+
+def memory_style_warnings(content: str | None, previous: str | None = None) -> list[str]:
+    """style_warnings plus a tool how-to nudge: commands belong in ST surfaces, not memory."""
+    warnings = style_warnings(content, previous)
+    commands = [span for span in CODE_SPAN.findall(content or "")
+                if COMMAND_HEAD.match(span) and COMMAND_FLAG.search(span)]
+    if len(commands) >= HOWTO_MIN_COMMANDS:
+        warnings.insert(0, f"tool how-to ({len(commands)} commands): register an ST surface or failure-hook hint, not memory")
     return warnings
