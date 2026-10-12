@@ -20,6 +20,7 @@ from __future__ import annotations
 # PRODUCTION DATABASE GUARD - MUST RUN BEFORE ANY APP IMPORTS
 # =============================================================================
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -103,6 +104,26 @@ def pytest_configure(config: pytest.Config) -> None:
         pytest.exit(
             "BLOCKED: Cannot run integration tests against production database", returncode=1
         )
+
+    # Keep the disposable test database at head so new migrations never need a
+    # manual step before integration tests run. Controller only under xdist.
+    if (
+        config.getoption("--run-integration", default=False)
+        and "_test" in os.environ.get("AGENT_HUB_DB_URL", "")
+        and not hasattr(config, "workerinput")
+    ):
+        migrated = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if migrated.returncode:
+            pytest.exit(
+                f"alembic upgrade head failed on the test database:\n{migrated.stderr[-2000:]}",
+                returncode=1,
+            )
 
     # Register markers
     config.addinivalue_line(
