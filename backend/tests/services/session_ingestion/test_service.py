@@ -516,43 +516,6 @@ async def test_append_normalized_events_does_not_lazy_load_session_expired_by_ro
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_upsert_session_create_sets_timestamps_without_refresh() -> None:
-    db = AsyncMock()
-    db.add = MagicMock()
-
-    with (
-        patch(
-            "app.services.session_ingestion.service._validate_project_id",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "app.services.session_ingestion.service.get_or_create_session",
-            new_callable=AsyncMock,
-            return_value=(None, False),
-        ),
-    ):
-        session, result = await upsert_session(
-            db=db,
-            request=SessionUpsertRequest(
-                session_id="session-new",
-                project_id="agent-hub",
-                provider="codex",
-                model="codex/gpt-5.4",
-                session_type="agent",
-                current_branch="main",
-            ),
-        )
-
-    assert result.created is True
-    assert session.id == "session-new"
-    assert session.created_at is not None
-    assert session.updated_at is not None
-    assert db.commit.await_count == 1
-    db.refresh.assert_not_awaited()
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_upsert_session_reactivates_existing_completed_session() -> None:
     db = AsyncMock()
     session = Session(

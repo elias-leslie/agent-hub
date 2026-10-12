@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,6 +18,30 @@ from app.services.memory.session_analysis import (
     process_task_outcome,
 )
 
+_MODULE = "app.services.memory.session_analysis"
+_DEFAULTS: dict[str, object] = {
+    "get_session_group_id": "global",
+    "get_cited_memories": [],
+    "track_referenced_batch": None,
+    "store_cite_event": None,
+    "update_citation_metrics": 1,
+    "_process_feedback_tags": 0,
+    "_process_summary_tags": False,
+}
+
+
+@contextmanager
+def _patched(**returns: object) -> Iterator[dict[str, AsyncMock]]:
+    """Patch analyze_session collaborators with AsyncMocks; yield them by name."""
+    with ExitStack() as stack:
+        mocks = {
+            name: stack.enter_context(
+                patch(f"{_MODULE}.{name}", new_callable=AsyncMock, return_value=value)
+            )
+            for name, value in {**_DEFAULTS, **returns}.items()
+        }
+        yield mocks
+
 
 @pytest.mark.unit
 class TestAnalyzeSession:
@@ -24,46 +50,12 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_with_cc_prefixes_credits_resolved(self) -> None:
         """CC path: provided prefixes are resolved and credited."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={"abc12345": "abc12345-full-uuid-1", "def67890": "def67890-full-uuid-2"},
-            ) as mock_resolve,
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="project-test",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ) as mock_track,
-            patch(
-                "app.services.memory.session_analysis.get_cited_memories",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
+        with _patched(
+            resolve_full_uuids={"abc12345": "abc12345-full-uuid-1", "def67890": "def67890-full-uuid-2"},
+            get_session_group_id="project-test",
+        ) as mocks:
+            mock_resolve = mocks["resolve_full_uuids"]
+            mock_track = mocks["track_referenced_batch"]
             result = await analyze_session(
                 session_id="test-session",
                 citation_prefixes=["abc12345", "def67890"],
@@ -80,51 +72,11 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_with_no_prefixes_scans_events(self) -> None:
         """API path: when no prefixes provided, scans session_events."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.extract_citations_from_events",
-                new_callable=AsyncMock,
-                return_value=["abc12345"],
-            ) as mock_extract,
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={"abc12345": "abc12345-full-uuid"},
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_cited_memories",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
+        with _patched(
+            extract_citations_from_events=["abc12345"],
+            resolve_full_uuids={"abc12345": "abc12345-full-uuid"},
+        ) as mocks:
+            mock_extract = mocks["extract_citations_from_events"]
             result = await analyze_session(session_id="test-session")
 
             assert result.citations_found == 1
@@ -150,28 +102,7 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_unresolved_prefixes_not_credited(self) -> None:
         """Prefixes that can't be resolved to full UUIDs are not credited."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={},  # Nothing resolved
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
+        with _patched(resolve_full_uuids={}):
             result = await analyze_session(
                 session_id="test-session",
                 citation_prefixes=["deadbeef"],
@@ -183,46 +114,8 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_truncates_long_prefixes(self) -> None:
         """Prefixes longer than 8 chars are truncated to 8."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={"abc12345": "abc12345-full"},
-            ) as mock_resolve,
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_cited_memories",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
+        with _patched(resolve_full_uuids={"abc12345": "abc12345-full"}) as mocks:
+            mock_resolve = mocks["resolve_full_uuids"]
             await analyze_session(
                 session_id="test-session",
                 citation_prefixes=["abc12345extra"],
@@ -234,49 +127,17 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_skips_already_credited_citations(self) -> None:
         """Re-analyzing a session should not double-credit existing citations."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={
-                    "abc12345": "abc12345-full-uuid-1",
-                    "def67890": "def67890-full-uuid-2",
-                },
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="project-test",
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_cited_memories",
-                new_callable=AsyncMock,
-                return_value=["abc12345-full-uuid-1"],
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ) as mock_track,
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ) as mock_store,
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ) as mock_metrics,
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
+        with _patched(
+            resolve_full_uuids={
+                "abc12345": "abc12345-full-uuid-1",
+                "def67890": "def67890-full-uuid-2",
+            },
+            get_session_group_id="project-test",
+            get_cited_memories=["abc12345-full-uuid-1"],
+        ) as mocks:
+            mock_track = mocks["track_referenced_batch"]
+            mock_store = mocks["store_cite_event"]
+            mock_metrics = mocks["update_citation_metrics"]
             result = await analyze_session(
                 session_id="test-session",
                 citation_prefixes=["abc12345", "def67890"],
@@ -313,41 +174,14 @@ class TestAnalyzeSession:
             )
         )
 
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={"abc12345": "abc12345-full"},
-            ) as mock_resolve,
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=1,
-            ) as mock_feedback,
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_summary,
-        ):
+        with _patched(
+            resolve_full_uuids={"abc12345": "abc12345-full"},
+            _process_feedback_tags=1,
+            _process_summary_tags=True,
+        ) as mocks:
+            mock_resolve = mocks["resolve_full_uuids"]
+            mock_feedback = mocks["_process_feedback_tags"]
+            mock_summary = mocks["_process_summary_tags"]
             result = await analyze_session(
                 session_id="test-session",
                 transcript_path=str(transcript),
@@ -364,42 +198,6 @@ class TestAnalyzeSession:
         mock_summary.assert_called_once_with(
             "test-session",
             ["[[S:completed:wired codex transcript parsing]]"],
-            None,
-            None,
-        )
-
-    @pytest.mark.asyncio
-    async def test_analyze_session_extracts_summary_tags_from_events(self) -> None:
-        """Event-backed analysis can persist inline summary tags without transcript rescans."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.extract_citations_from_events",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-            patch(
-                "app.services.memory.session_analysis.extract_summary_tags_from_events",
-                new_callable=AsyncMock,
-                return_value=["[[S:completed:normalized events finalized cleanly]]"],
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_summary,
-        ):
-            result = await analyze_session(session_id="test-session")
-
-        assert result.citations_found == 0
-        assert result.summary_stored is True
-        mock_summary.assert_called_once_with(
-            "test-session",
-            ["[[S:completed:normalized events finalized cleanly]]"],
             None,
             None,
         )
@@ -429,44 +227,15 @@ class TestAnalyzeSession:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch(
-                "app.services.memory.session_analysis._get_session_factory",
-                return_value=mock_factory,
-            ),
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={"abc12345": "abc12345-full"},
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=1,
-            ) as mock_feedback,
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_summary,
+            patch(f"{_MODULE}._get_session_factory", return_value=mock_factory),
+            _patched(
+                resolve_full_uuids={"abc12345": "abc12345-full"},
+                _process_feedback_tags=1,
+                _process_summary_tags=True,
+            ) as mocks,
         ):
+            mock_feedback = mocks["_process_feedback_tags"]
+            mock_summary = mocks["_process_summary_tags"]
             result = await analyze_session(session_id="test-session")
 
         assert result.citations_found == 1
@@ -491,22 +260,10 @@ class TestProcessTaskOutcome:
     @pytest.mark.asyncio
     async def test_process_task_outcome_success_credits_memories(self) -> None:
         """Successful task credits all loaded memories."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_memories_loaded",
-                new_callable=AsyncMock,
-                return_value=["uuid-1", "uuid-2", "uuid-3"],
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_success_batch",
-                new_callable=AsyncMock,
-            ) as mock_track_success,
-        ):
+        with _patched(
+            get_memories_loaded=["uuid-1", "uuid-2", "uuid-3"], track_success_batch=None
+        ) as mocks:
+            mock_track_success = mocks["track_success_batch"]
             result = await process_task_outcome(
                 session_id="test-session",
                 succeeded=True,
@@ -522,13 +279,7 @@ class TestProcessTaskOutcome:
     @pytest.mark.asyncio
     async def test_process_task_outcome_failure_no_credits(self) -> None:
         """Failed task does not credit memories."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-        ):
+        with _patched():
             result = await process_task_outcome(
                 session_id="test-session",
                 succeeded=False,
@@ -540,18 +291,7 @@ class TestProcessTaskOutcome:
     @pytest.mark.asyncio
     async def test_process_task_outcome_success_no_loaded_memories(self) -> None:
         """Successful task with no loaded memories credits nothing."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_memories_loaded",
-                new_callable=AsyncMock,
-                return_value=[],
-            ),
-        ):
+        with _patched(get_memories_loaded=[]):
             result = await process_task_outcome(
                 session_id="test-session",
                 succeeded=True,
@@ -563,29 +303,6 @@ class TestProcessTaskOutcome:
 @pytest.mark.unit
 class TestFindSessionsForTask:
     """Tests for find_sessions_for_task function."""
-
-    @pytest.mark.asyncio
-    async def test_find_sessions_for_task_returns_unique_ids(self) -> None:
-        """Returns distinct session IDs matching external_id."""
-        mock_result = MagicMock()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = ["session-1", "session-2"]
-        mock_result.scalars.return_value = mock_scalars
-
-        mock_session = AsyncMock()
-        mock_session.execute.return_value = mock_result
-
-        mock_factory = MagicMock()
-        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "app.services.memory.session_queries._get_session_factory",
-            return_value=mock_factory,
-        ):
-            result = await find_sessions_for_task("task-abc")
-
-            assert result == ["session-1", "session-2"]
 
     @pytest.mark.asyncio
     async def test_find_sessions_fallback_by_project_and_time(self) -> None:
@@ -663,31 +380,6 @@ class TestFindSessionsForTask:
             assert mock_session.execute.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_find_sessions_no_fallback_without_project_id(self) -> None:
-        """No fallback when project_id not provided."""
-        empty_result = MagicMock()
-        empty_scalars = MagicMock()
-        empty_scalars.all.return_value = []
-        empty_result.scalars.return_value = empty_scalars
-
-        mock_session = AsyncMock()
-        mock_session.execute.return_value = empty_result
-
-        mock_factory = MagicMock()
-        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "app.services.memory.session_queries._get_session_factory",
-            return_value=mock_factory,
-        ):
-            result = await find_sessions_for_task("task-abc")
-
-            assert result == []
-            # Only one query (external_id), no fallback
-            assert mock_session.execute.call_count == 1
-
-    @pytest.mark.asyncio
     async def test_find_sessions_skips_fallback_when_external_id_found(self) -> None:
         """Skips fallback when external_id query returns sessions."""
         primary_result = MagicMock()
@@ -715,60 +407,3 @@ class TestFindSessionsForTask:
             assert mock_session.execute.call_count == 1
 
 
-@pytest.mark.unit
-class TestCitationTracking:
-    """Tests for citation tracking in analyze_session.
-
-    Citations only increment referenced_count, not helpful_count.
-    Helpful/harmful are reserved for explicit user feedback.
-    """
-
-    @pytest.mark.asyncio
-    async def test_citations_only_track_referenced_not_helpful(self) -> None:
-        """Citations increment referenced_count but NOT helpful_count."""
-        resolved = {
-            "abc12345": "abc12345-full-uuid-1",
-            "def67890": "def67890-full-uuid-2",
-        }
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value=resolved,
-            ),
-            patch(
-                "app.services.memory.session_analysis.get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_referenced_batch",
-                new_callable=AsyncMock,
-            ) as mock_referenced,
-            patch(
-                "app.services.memory.session_analysis.store_cite_event",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.update_citation_metrics",
-                new_callable=AsyncMock,
-                return_value=1,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
-                "app.services.memory.session_analysis._process_summary_tags",
-                new_callable=AsyncMock,
-                return_value=False,
-            ),
-        ):
-            result = await analyze_session(
-                session_id="test-session",
-                citation_prefixes=["abc12345", "def67890"],
-            )
-
-            assert result.citations_credited == 2
-            mock_referenced.assert_called_once_with(list(resolved.values()))

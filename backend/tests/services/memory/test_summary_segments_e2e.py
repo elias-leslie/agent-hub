@@ -1,6 +1,7 @@
 """E2E integration tests for the summary segment pipeline.
 
-Tests the full flow: summary generation → segment storage → continuity context retrieval.
+Tests the flow from summary generation to segment storage; continuity rendering of
+segments is covered in test_continuity_injection.py.
 Uses mocked DB and LLM to avoid production dependencies.
 
 Per [G:8a45b8a8]: uses 'test-project', no production project IDs.
@@ -8,13 +9,11 @@ Per [G:8a45b8a8]: uses 'test-project', no production project IDs.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.memory.continuity_injector import build_continuity_context
 from app.services.memory.summary_generator import SessionSummary, generate_session_summary
 from app.services.memory.summary_llm import LLMAnalysisResult
 from app.services.memory.summary_transcript import (
@@ -208,109 +207,6 @@ class TestSummarySegmentE2E:
         # Session columns reflect LATEST summary (overwritten)
         assert mock_session.summary_oneliner == "Afternoon: completed auth tests"
 
-    @pytest.mark.asyncio
-    async def test_segments_appear_in_continuity_context(self) -> None:
-        """Segments from generation pipeline appear in continuity context output."""
-        now = datetime.now(UTC)
-
-        # Simulate two segments for the same session
-        seg1 = MagicMock()
-        seg1.session_id = "test-session-1"
-        seg1.agent_slug = "coder"
-        seg1.summary_oneliner = "Morning: auth scaffolding"
-        seg1.summary_outcome = "completed"
-        seg1.summary_branch = "main"
-        seg1.summary_git_digest = "feat: auth scaffold"
-        seg1.created_at = now - timedelta(hours=5)
-
-        seg2 = MagicMock()
-        seg2.session_id = "test-session-1"
-        seg2.agent_slug = "coder"
-        seg2.summary_oneliner = "Afternoon: auth tests"
-        seg2.summary_outcome = "completed"
-        seg2.summary_branch = "main"
-        seg2.summary_git_digest = "test: auth tests"
-        seg2.created_at = now - timedelta(hours=1)
-
-        mock_db = AsyncMock()
-        seg_result = MagicMock()
-        seg_result.all.return_value = [seg2, seg1]  # desc order
-        leg_result = MagicMock()
-        leg_result.all.return_value = []
-        cross_project_result = MagicMock()
-        cross_project_result.all.return_value = []
-        active_sessions_result = MagicMock()
-        active_sessions_result.all.return_value = []
-        mock_db.execute = AsyncMock(
-            side_effect=[seg_result, leg_result, cross_project_result, active_sessions_result]
-        )
-
-        mock_factory = MagicMock()
-        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "app.services.memory.continuity_injector._get_session_factory",
-            return_value=mock_factory,
-        ):
-            ctx = await build_continuity_context(project_id="test-project")
-
-        assert ctx.session_count == 2
-        assert "## Recent Activity" in ctx.markdown
-        # Both work periods appear as separate entries
-        assert "Morning: auth scaffolding" in ctx.markdown
-        assert "Afternoon: auth tests" in ctx.markdown
-        # Most recent first
-        lines = ctx.markdown.split("\n")
-        activity_lines = [ln for ln in lines if ln.startswith("- [")]
-        assert "Afternoon" in activity_lines[0]
-        assert "Morning" in activity_lines[1]
-
-    @pytest.mark.asyncio
-    async def test_backwards_compat_pre_migration_sessions(self) -> None:
-        """Sessions with summary columns but no segments still appear via fallback."""
-        now = datetime.now(UTC)
-
-        # No segments exist
-        mock_db = AsyncMock()
-        seg_result = MagicMock()
-        seg_result.all.return_value = []
-
-        # Legacy session with summary columns
-        legacy_row = MagicMock()
-        legacy_row.id = "old-session-1"
-        legacy_row.agent_slug = "refactor"
-        legacy_row.summary_oneliner = "Pre-migration refactoring work"
-        legacy_row.summary_outcome = "completed"
-        legacy_row.summary_branch = "main"
-        legacy_row.summary_git_digest = None
-        legacy_row.created_at = now - timedelta(hours=3)
-
-        leg_result = MagicMock()
-        leg_result.all.return_value = [legacy_row]
-
-        cross_project_result = MagicMock()
-        cross_project_result.all.return_value = []
-        active_sessions_result = MagicMock()
-        active_sessions_result.all.return_value = []
-        mock_db.execute = AsyncMock(
-            side_effect=[seg_result, leg_result, cross_project_result, active_sessions_result]
-        )
-
-        mock_factory = MagicMock()
-        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "app.services.memory.continuity_injector._get_session_factory",
-            return_value=mock_factory,
-        ):
-            ctx = await build_continuity_context(project_id="test-project")
-
-        assert ctx.session_count == 1
-        assert "Pre-migration refactoring work" in ctx.markdown
-
-
 @pytest.mark.unit
 class TestRecencyBiasedTranscriptE2E:
     """E2E test for recency-biased transcript producing relevant summaries."""
@@ -356,33 +252,20 @@ class TestRecencyBiasedTranscriptE2E:
 
 
 @pytest.mark.unit
-class TestSessionCloseNoDispatch:
-    """Tests that session close does NOT dispatch async summarizer.
-
-    Inline [[S:...]] tags are the sole summary mechanism (Feb 2026).
-    """
+class TestSessionClose:
+    """close_session_if_active marks active sessions completed exactly once."""
 
     @pytest.mark.asyncio
-    async def test_close_does_not_dispatch_summary(self) -> None:
-        """Closing an active session does not dispatch any summary task."""
-        mock_session = MagicMock()
-        mock_session.id = "agent-session-1"
-        mock_session.status = "active"
-        mock_session.agent_slug = "coder"
-        mock_session.summary_oneliner = None
+    async def test_close_marks_active_session_completed(self) -> None:
+        session = MagicMock()
+        session.status = "active"
+        db = AsyncMock()
 
-        mock_db = AsyncMock()
-        mock_db.commit = AsyncMock()
+        status, message = await close_session_if_active(db, session)
 
-        with patch(
-            "app.workflows.summary.session_summary_task",
-        ) as mock_task:
-            mock_task.aio_run_no_wait = AsyncMock()
-            status, message = await close_session_if_active(mock_db, mock_session)
-
-        assert status == "completed"
-        assert message == "Session closed successfully"
-        mock_task.aio_run_no_wait.assert_not_called()
+        assert (status, message) == ("completed", "Session closed successfully")
+        assert session.status == "completed"
+        db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_close_already_completed(self) -> None:
@@ -395,3 +278,4 @@ class TestSessionCloseNoDispatch:
         status, _ = await close_session_if_active(mock_db, mock_session)
 
         assert status == "completed"
+        mock_db.commit.assert_not_awaited()

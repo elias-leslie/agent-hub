@@ -25,11 +25,6 @@ def _mock_execute_result(value):
     return SimpleNamespace(scalar_one_or_none=lambda: value)
 
 
-def assert_prompt_contains_all(prompt: str, substrings: list[str]) -> None:
-    for substring in substrings:
-        assert substring in prompt, f"Expected prompt to contain: {substring!r}"
-
-
 def _await_kwargs(mock: AsyncMock) -> dict[str, Any]:
     await_args = mock.await_args
     assert await_args is not None
@@ -37,77 +32,15 @@ def _await_kwargs(mock: AsyncMock) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_build_wake_prompt_includes_current_st_guidance():
-    guidance = "\n".join(
-        [
-            "st ready-all",
-            "st ready --limit N",
-            "st sessions list --status <status> --limit N",
-            "st session-events <session_id>",
-            "st session-events -T task-123 --page-size 100",
-            "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`",
-            "Do not use `--session` with `st session-events`",
-            "Never pass `st sessions list` output `session_id` values to `st session-events`",
-            "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
-            "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
-            "do not inspect `/home/testuser//.local/share/st/checkpoints/...`",
-            "If a snapshot metadata file includes a `working_dir` outside the current repo root, treat it as metadata only",
-            "Treat task ids as opaque",
-            "do not strip the `task-` prefix",
-            "Example: `st done <task-id>` has no `--note` flag",
-            "start with the concrete task context, current diff/status, and the files or commands named in the task/prompt",
-            "inspect those first and only widen the search if that targeted path is insufficient",
-            "Prefer `dt -q -d` as the first validation pass from the repo root",
-            "use paths relative to that directory",
-            "For `read_file`, use repo-relative paths or fully expanded absolute paths",
-            "Do not use shell shortcuts like `~` inside `read_file` paths",
-            "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
-            "If `git branch` or snapshot metadata shows a task branch already attached to another checkout",
-            "Do not `git checkout` that branch in the current checkout just to inspect it",
-            "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
-            'When completing a task with a note, use `st done <task-id> --message "..."`',
-            "Avoid exploratory `--help` calls unless a known-good command above still fails.",
-        ]
-    )
+async def test_build_wake_prompt_appends_task_to_stored_guidance():
     with patch(
         "app.services.persona_prompt_service.get_persona_wake_guidance",
-        new=AsyncMock(return_value=guidance),
+        new=AsyncMock(return_value="Wake guidance\nst ready-all"),
     ):
         prompt = await _build_wake_prompt("Investigate the current task branch.")
 
-    assert_prompt_contains_all(
-        prompt,
-        [
-            "st ready-all",
-            "st ready --limit N",
-            "st sessions list --status <status> --limit N",
-            "st session-events <session_id>",
-            "st session-events -T task-123 --page-size 100",
-            "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`",
-            "Do not use `--session` with `st session-events`",
-            "Never pass `st sessions list` output `session_id` values to `st session-events`",
-            "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
-            "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
-            "do not inspect `/home/testuser//.local/share/st/checkpoints/...`",
-            "If a snapshot metadata file includes a `working_dir` outside the current repo root, treat it as metadata only",
-            "Treat task ids as opaque",
-            "do not strip the `task-` prefix",
-            "Example: `st done <task-id>` has no `--note` flag",
-            "start with the concrete task context, current diff/status, and the files or commands named in the task/prompt",
-            "inspect those first and only widen the search if that targeted path is insufficient",
-            "Prefer `dt -q -d` as the first validation pass from the repo root",
-            "use paths relative to that directory",
-            "For `read_file`, use repo-relative paths or fully expanded absolute paths",
-            "Do not use shell shortcuts like `~` inside `read_file` paths",
-            "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
-            "If `git branch` or snapshot metadata shows a task branch already attached to another checkout",
-            "Do not `git checkout` that branch in the current checkout just to inspect it",
-            "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
-            'When completing a task with a note, use `st done <task-id> --message "..."`',
-            "Avoid exploratory `--help` calls unless a known-good command above still fails.",
-            "Task:\nInvestigate the current task branch.",
-        ],
-    )
+    assert "st ready-all" in prompt
+    assert prompt.index("st ready-all") < prompt.index("Task:\nInvestigate the current task branch.")
 
 
 @pytest.mark.asyncio
@@ -192,69 +125,6 @@ async def test_agent_wake_stores_summary_for_completed_session():
 
 
 @pytest.mark.asyncio
-async def test_agent_wake_forwards_parent_session_id():
-    mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
-    complete_result = SimpleNamespace(
-        status="success",
-        turns=2,
-        tool_calls_count=1,
-        error=None,
-        session_id="sess-wake-2",
-        content="Recovered stale task state.",
-    )
-    mock_perm = SimpleNamespace(permission_tier="full")
-    mock_persona = SimpleNamespace(limits=None)
-
-    with (
-        patch("app.db.async_session", _mock_async_session(mock_db)),
-        patch(
-            "app.services.persona_prompt_service.get_persona_wake_guidance",
-            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
-        ),
-        patch(
-            "app.services.project_permission_service.get_project_permission",
-            new_callable=AsyncMock,
-            return_value=mock_perm,
-        ),
-        patch(
-            "app.services.persona_service.get_persona",
-            new_callable=AsyncMock,
-            return_value=mock_persona,
-        ),
-        patch("app.services._persona_crud.get_persona_limit", return_value=500),
-        patch(
-            "app.api.complete.core.complete_internal",
-            new_callable=AsyncMock,
-            return_value=complete_result,
-        ) as mock_complete,
-        patch(
-            "app.workflows.persona_wake.ensure_session_summary",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-        patch(
-            "app.workflows.persona_wake.log_agent_performance",
-            new_callable=AsyncMock,
-        ),
-        ):
-            await agent_wake_task.aio_mock_run(
-            WakeInput(
-                agent_slug="debugger",
-                model="codex/gpt-5.4",
-                provider="codex",
-                prompt="Advance recovery.",
-                project_id="summitflow",
-                event_type="dispatch",
-                parent_session_id="parent-session-456",
-            )
-        )
-
-    complete_kwargs = _await_kwargs(mock_complete)
-    assert complete_kwargs["parent_session_id"] == "parent-session-456"
-
-
-@pytest.mark.asyncio
 async def test_agent_wake_forwards_lane_metadata():
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
@@ -311,10 +181,12 @@ async def test_agent_wake_forwards_lane_metadata():
                 event_type="dispatch_task",
                 current_branch="task-12345678/main",
                 working_dir="/tmp/lanes/task-12345678",
+                parent_session_id="parent-session-456",
             )
         )
 
     complete_kwargs = _await_kwargs(mock_complete)
+    assert complete_kwargs["parent_session_id"] == "parent-session-456"
     assert complete_kwargs["external_id"] == "wake-step:mock-step-run-id"
     assert complete_kwargs["current_branch"] == "task-12345678/main"
     assert complete_kwargs["working_dir"] == "/tmp/lanes/task-12345678"

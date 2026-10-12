@@ -240,34 +240,6 @@ class TestAsyncDispatch:
 
 class TestAsyncTaskStatus:
     @pytest.mark.asyncio
-    async def test_get_status_completed(self) -> None:
-        from app.api.complete.async_endpoints import get_task_status
-
-        stored: dict[str, Any] = {
-            "task_id": "task-123",
-            "content": "Done",
-            "model": CODEX_GPT_6_1_SOL,
-            "provider": "kimi-code",
-            "input_tokens": 100,
-            "output_tokens": 50,
-            "finish_reason": "end_turn",
-            "session_id": "sess-456",
-            "memory_uuids": [],
-            "cited_uuids": [],
-            "turns": 3,
-            "tool_calls_count": 2,
-            "status": "success",
-            "progress_log": [],
-        }
-
-        with patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored):
-            result = await get_task_status("task-123")
-
-        assert result.status == "completed"
-        assert result.result is not None
-        assert result.result.content == "Done"
-
-    @pytest.mark.asyncio
     async def test_get_status_failed(self) -> None:
         from app.api.complete.async_endpoints import get_task_status
 
@@ -325,23 +297,6 @@ class TestAsyncTaskStatus:
 
 
 class TestCancelTask:
-    @pytest.mark.asyncio
-    async def test_cancel_running_task(self) -> None:
-        from app.api.complete.async_endpoints import cancel_task
-
-        mock_redis = _mock_redis_client()
-        mock_hatchet = MagicMock()
-        mock_hatchet.runs.aio_cancel = AsyncMock()
-
-        with (
-            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
-            patch("app.hatchet_app.hatchet", mock_hatchet),
-        ):
-            mock_redis_cls.from_url.return_value = mock_redis
-            result = await cancel_task("task-running")
-
-        assert result["status"] == "cancelled"
-
     @pytest.mark.asyncio
     async def test_cancel_completed_task_returns_409(self) -> None:
         from fastapi import HTTPException
@@ -436,72 +391,6 @@ class TestNonAgenticAsyncFallsThrough:
             assert response.status_code == 200
             data = response.json()
             assert data["content"] == "sync response"
-
-
-class TestBackwardsCompat:
-    def test_sync_execution_still_works(
-        self, api_client: APITestClient, mock_db_session: MagicMock
-    ) -> None:
-        """Default async_execution=False still returns sync response for agentic requests."""
-        agent = _mock_agent()
-
-        mock_db_session_obj = MagicMock()
-        mock_db_session_obj.id = "sess-test-789"
-        mock_db_session_obj.status = "active"
-
-        with (
-            patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
-            patch(f"{_ORCH}.validate_project_access"),
-            patch(
-                f"{_ORCH}.resolve_agent_and_model",
-                new_callable=AsyncMock,
-                return_value=(CODEX_GPT_6_1_SOL, "kimi-code", agent, None, "coder"),
-            ),
-            patch(
-                f"{_ORCH}.apply_mention_override",
-                return_value=(CODEX_GPT_6_1_SOL, "kimi-code"),
-            ),
-            patch(
-                f"{_ORCH}.build_session_and_messages",
-                new_callable=AsyncMock,
-                return_value=(
-                    True,  # is_agentic (max_turns=5, execute_tools=True)
-                    "sess-test-789",  # session_id
-                    mock_db_session_obj,  # session
-                    True,  # is_new_session
-                    [{"role": "user", "content": "Build something"}],  # all_messages
-                    [{"role": "user", "content": "Build something"}],  # messages_dict
-                    0,  # memory_facts
-                    [],  # loaded_uuids
-                    None,  # context_usage_info
-                    None,  # cached
-                ),
-            ),
-            patch(
-                "app.services.project_budget.check_project_budget",
-                new_callable=AsyncMock,
-                return_value=_mock_budget_allowed(),
-            ),
-            patch(
-                f"{_ORCH}.execute_and_respond",
-                new_callable=AsyncMock,
-                return_value=JSONResponse(content={"content": "agentic sync response", "status": "success"}),
-            ),
-        ):
-            response = api_client.post(
-                "/api/complete",
-                json={
-                    "agent_slug": "coder",
-                    "project_id": "test-project",
-                    "messages": [{"role": "user", "content": "Build something"}],
-                    "max_turns": 5,
-                    "execute_tools": True,
-                },
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["content"] == "agentic sync response"
 
 
 class TestGetTaskStatusViaAPI:

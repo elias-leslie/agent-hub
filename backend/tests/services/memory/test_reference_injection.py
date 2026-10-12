@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -19,6 +21,8 @@ from app.services.memory.memory_models import MemoryApplicability
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
+_BUILDER = "app.services.memory.context_builder"
+
 
 def _reference_result(uuid: str, content: str, score: float = 0.72) -> MemorySearchResult:
     return MemorySearchResult(
@@ -30,6 +34,17 @@ def _reference_result(uuid: str, content: str, score: float = 0.72) -> MemorySea
         facts=[content],
         scope=MemoryScope.PROJECT,
     )
+
+
+@contextmanager
+def _context_sources(*, episodes: object, references: object, settings: object) -> Iterator[None]:
+    """Fake the three data sources build_progressive_context reads."""
+    with (
+        patch(f"{_BUILDER}.fetch_all_episodes", new=episodes),
+        patch(f"{_BUILDER}.get_query_relevant_references_as_search_results", new=references),
+        patch(f"{_BUILDER}.get_memory_settings", new=settings),
+    ):
+        yield
 
 
 class TestReferenceInjection:
@@ -88,26 +103,17 @@ class TestReferenceInjection:
             continuity_max_sessions=5,
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=AsyncMock(
+                return_value=[
+                    _reference_result(
+                        "f2ae2668-da26-46e1-b499-ffac6141e377",
+                        "**Session Surfaces**: Use st sessions ownership for normalized lane truth.",
+                    ).model_dump()
+                ]
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(
-                    return_value=[
-                        _reference_result(
-                            "f2ae2668-da26-46e1-b499-ffac6141e377",
-                            "**Session Surfaces**: Use st sessions ownership for normalized lane truth.",
-                        ).model_dump()
-                    ]
-                ),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Why does st sessions ownership differ from st sessions list -s active?",
@@ -134,46 +140,37 @@ class TestReferenceInjection:
             continuity_max_sessions=5,
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(
-                    return_value=(
-                        [],
-                        [],
-                        [
-                            MemorySearchResult(
-                                uuid="persona-targeted",
-                                content="Use st persona first for persona work.",
-                                summary="Persona CLI first",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=1.0,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                                applicability=MemoryApplicability(agent_slugs=["persona"]),
-                            ),
-                            MemorySearchResult(
-                                uuid="legacy-tagged",
-                                content="Use debugger-only workflow.",
-                                summary="Debugger reference",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=0.8,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                                tags=["debugger-relevant"],
-                            ),
-                        ],
-                    )
-                ),
+        with _context_sources(
+            episodes=AsyncMock(
+                return_value=(
+                    [],
+                    [],
+                    [
+                        MemorySearchResult(
+                            uuid="persona-targeted",
+                            content="Use st persona first for persona work.",
+                            summary="Persona CLI first",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=1.0,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                            applicability=MemoryApplicability(agent_slugs=["persona"]),
+                        ),
+                        MemorySearchResult(
+                            uuid="legacy-tagged",
+                            content="Use debugger-only workflow.",
+                            summary="Debugger reference",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=0.8,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                            tags=["debugger-relevant"],
+                        ),
+                    ],
+                )
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="persona tooling",
@@ -216,45 +213,36 @@ class TestReferenceInjection:
             continuity_max_sessions=5,
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(
-                    return_value=(
-                        [
-                            MemorySearchResult(
-                                uuid="mandate-uuid",
-                                content="Use AsyncAgentHubClient for Agent Hub completions.",
-                                summary="Use AsyncAgentHubClient",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=1.0,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                            )
-                        ],
-                        [
-                            MemorySearchResult(
-                                uuid="guardrail-uuid",
-                                content=long_guardrail,
-                                summary="Preserve auth middleware",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=0.9,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                            )
-                        ],
-                        [],
-                    )
-                ),
+        with _context_sources(
+            episodes=AsyncMock(
+                return_value=(
+                    [
+                        MemorySearchResult(
+                            uuid="mandate-uuid",
+                            content="Use AsyncAgentHubClient for Agent Hub completions.",
+                            summary="Use AsyncAgentHubClient",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=1.0,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                        )
+                    ],
+                    [
+                        MemorySearchResult(
+                            uuid="guardrail-uuid",
+                            content=long_guardrail,
+                            summary="Preserve auth middleware",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=0.9,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                        )
+                    ],
+                    [],
+                )
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="How should Agent Hub completions call the SDK?",
@@ -278,35 +266,26 @@ class TestReferenceInjection:
         )
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(
-                    return_value=(
-                        [
-                            MemorySearchResult(
-                                uuid="mandate-uuid",
-                                content=long_mandate,
-                                summary="Keep durable instructions canonical and compact.",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=1.0,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                            )
-                        ],
-                        [],
-                        [],
-                    )
-                ),
+        with _context_sources(
+            episodes=AsyncMock(
+                return_value=(
+                    [
+                        MemorySearchResult(
+                            uuid="mandate-uuid",
+                            content=long_mandate,
+                            summary="Keep durable instructions canonical and compact.",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=1.0,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                        )
+                    ],
+                    [],
+                    [],
+                )
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Unrelated query that should not force expansion.",
@@ -320,48 +299,39 @@ class TestReferenceInjection:
     async def test_build_progressive_context_codex_startup_promotes_tagged_items(self) -> None:
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(
-                    return_value=(
-                        [
-                            MemorySearchResult(
-                                uuid="later-uuid",
-                                content=(
-                                    "Keep startup guidance concise, verify commands against the live environment, "
-                                    "and avoid acting on a summary when the full rule text could change behavior."
-                                ),
-                                summary="Generic startup guidance.",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=0.8,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
+        with _context_sources(
+            episodes=AsyncMock(
+                return_value=(
+                    [
+                        MemorySearchResult(
+                            uuid="later-uuid",
+                            content=(
+                                "Keep startup guidance concise, verify commands against the live environment, "
+                                "and avoid acting on a summary when the full rule text could change behavior."
                             ),
-                            MemorySearchResult(
-                                uuid="critical-uuid",
-                                content="Use st memory get before acting when a summary could change behavior.",
-                                summary="Expand exact rules first.",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=0.6,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                                tags=[CODEX_STARTUP_FULL_TAG],
-                            ),
-                        ],
-                        [],
-                        [],
-                    )
-                ),
+                            summary="Generic startup guidance.",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=0.8,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                        ),
+                        MemorySearchResult(
+                            uuid="critical-uuid",
+                            content="Use st memory get before acting when a summary could change behavior.",
+                            summary="Expand exact rules first.",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=0.6,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                            tags=[CODEX_STARTUP_FULL_TAG],
+                        ),
+                    ],
+                    [],
+                    [],
+                )
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="General startup guidance.",
@@ -382,35 +352,26 @@ class TestReferenceInjection:
     async def test_build_progressive_context_operator_uses_generic_policy_summary_reason(self) -> None:
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(
-                    return_value=(
-                        [
-                            MemorySearchResult(
-                                uuid="operator-uuid",
-                                content="Use preview before explaining effective prompt.",
-                                summary="Prompt preview first.",
-                                source=MemorySource.SYSTEM,
-                                relevance_score=0.8,
-                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
-                                facts=[],
-                            )
-                        ],
-                        [],
-                        [],
-                    )
-                ),
+        with _context_sources(
+            episodes=AsyncMock(
+                return_value=(
+                    [
+                        MemorySearchResult(
+                            uuid="operator-uuid",
+                            content="Use preview before explaining effective prompt.",
+                            summary="Prompt preview first.",
+                            source=MemorySource.SYSTEM,
+                            relevance_score=0.8,
+                            created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                            facts=[],
+                        )
+                    ],
+                    [],
+                    [],
+                )
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Explain prompt preview flow.",
@@ -450,19 +411,10 @@ class TestReferenceInjection:
             for idx in range(10)
         ]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=(mandates, guardrails, [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=(mandates, guardrails, [])),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="General startup guidance.",
@@ -505,19 +457,10 @@ class TestReferenceInjection:
             for idx in range(8)
         ]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=(mandates, guardrails, [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=(mandates, guardrails, [])),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Fix one failing backend test.",
@@ -559,19 +502,10 @@ class TestReferenceInjection:
             for idx in range(8)
         ]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=(mandates, guardrails, [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=(mandates, guardrails, [])),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Review prompt routing.",
@@ -612,19 +546,10 @@ class TestReferenceInjection:
             for idx in range(4)
         ]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=(mandates, [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=(mandates, [], [])),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="General chat.",
@@ -663,19 +588,10 @@ class TestReferenceInjection:
             for idx in range(10)
         ]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=(mandates, [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=(mandates, [], [])),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Run quality gates.",
@@ -704,21 +620,12 @@ class TestReferenceInjection:
         frontend_payload["context_kind"] = "capability"
         frontend_payload["trigger_task_types"] = ["frontend"]
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=AsyncMock(
+                return_value=[targeted_payload, frontend_payload]
             ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(
-                    return_value=[targeted_payload, frontend_payload]
-                ),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Answer user question about feature",
@@ -742,19 +649,10 @@ class TestReferenceInjection:
         )
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [existing])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[existing.model_dump(), new.model_dump()]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [existing])),
+            references=AsyncMock(return_value=[existing.model_dump(), new.model_dump()]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Show specialist overlap in st context",
@@ -779,19 +677,10 @@ class TestReferenceInjection:
             ]
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=selector,
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=selector,
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Run the heartbeat now and review dynamic sections.",
@@ -818,19 +707,10 @@ class TestReferenceInjection:
             ]
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=selector,
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=selector,
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Run the heartbeat now and review dynamic sections.",
@@ -858,19 +738,10 @@ class TestReferenceInjection:
             ]
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=selector,
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=selector,
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Inspect agent preview and command surfaces before broad search.",
@@ -899,19 +770,10 @@ class TestReferenceInjection:
             ]
         )
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=selector,
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [])),
+            references=selector,
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Say ok.",
@@ -932,19 +794,10 @@ class TestReferenceInjection:
         )
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], [auto_reference])),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[auto_reference.model_dump()]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], [auto_reference])),
+            references=AsyncMock(return_value=[auto_reference.model_dump()]),
+            settings=AsyncMock(return_value=settings),
         ):
             context = await build_progressive_context(
                 query="Show specialist overlap in st context",
@@ -966,19 +819,10 @@ class TestReferenceInjection:
         ]
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], refs)),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], refs)),
+            references=AsyncMock(return_value=[]),
+            settings=AsyncMock(return_value=settings),
         ):
             minimal = await build_progressive_context(
                 query="reference selection",
@@ -1029,19 +873,10 @@ class TestReferenceInjection:
 
         selector = AsyncMock(return_value=[])
 
-        with (
-            patch(
-                "app.services.memory.context_builder.fetch_all_episodes",
-                new=AsyncMock(return_value=([], [], refs)),
-            ),
-            patch(
-                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
-                new=selector,
-            ),
-            patch(
-                "app.services.memory.context_builder.get_memory_settings",
-                new=AsyncMock(return_value=settings),
-            ),
+        with _context_sources(
+            episodes=AsyncMock(return_value=([], [], refs)),
+            references=selector,
+            settings=AsyncMock(return_value=settings),
         ):
             minimal = await build_progressive_context(
                 query="wake benchmark reference scoring",
