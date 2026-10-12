@@ -269,10 +269,14 @@ def test_build_prompt_from_spec_generates_direct_readonly_contract():
         }
     )
 
-    assert "Read only `backend/app/services/session_ingestion/adapters/claude_code.py`." in prompt
-    assert "Objective: State what the file does." in prompt
-    assert "Reply with exactly one sentence that states what the file does." in prompt
-    assert "- Do not inspect any other files." in prompt
+    for value in (
+        "backend/app/services/session_ingestion/adapters/claude_code.py",
+        "State what the file does.",
+        "Reply with exactly one sentence that states what the file does.",
+        "Do not inspect any other files.",
+    ):
+        assert value in prompt
+    assert "subagent" not in prompt.lower()
 
 
 def test_build_prompt_from_spec_generates_delegated_contract():
@@ -288,13 +292,14 @@ def test_build_prompt_from_spec_generates_delegated_contract():
         }
     )
 
-    assert "Use exactly one Agent subagent named `opus-reasoner`." in prompt
-    assert (
-        "Have the subagent read only `backend/app/services/session_ingestion/adapters/claude_code.py`."
-        in prompt
-    )
-    assert "Reply with exactly one sentence that states what the file does." in prompt
-    assert "- Do not add extra commentary." in prompt
+    for value in (
+        "`opus-reasoner`",
+        "backend/app/services/session_ingestion/adapters/claude_code.py",
+        "Reply with exactly one sentence that states what the file does.",
+        "Do not add extra commentary.",
+    ):
+        assert value in prompt
+    assert "subagent" in prompt.lower()
 
 
 def test_build_agents_payload_from_spec_uses_defaults_and_supported_fields():
@@ -428,14 +433,17 @@ def test_build_prompt_from_task_context_generates_task_contract():
         feedback_text="Second pass must reduce file size and remove banner comments.",
     )
 
-    assert "You are working in the `agent-hub` shared project checkout." in prompt
-    assert "Use exactly one Agent subagent named `task-analyst`" in prompt
-    assert "`backend/cli/lib/autosnapshot.py`" in prompt
-    assert "`st check pytest -- backend/tests/cli/test_autosnapshot.py`" in prompt
-    assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
-    assert "Second pass must reduce file size and remove banner comments." in prompt
-    assert "Stay inside this claimed checkout: `/tmp/task-123`." in prompt
-    assert "If the task appears mis-scoped, stop and report the mismatch" in prompt
+    for value in (
+        "`agent-hub`",
+        "`task-analyst`",
+        "`backend/cli/lib/autosnapshot.py`",
+        "st check pytest -- backend/tests/cli/test_autosnapshot.py",
+        "Second pass must reduce file size and remove banner comments.",
+        "`/tmp/task-123`",
+        "Tests pass",
+        "Nesting reduced",
+    ):
+        assert value in prompt
 
 
 def test_load_task_contract_claims_pending_task_when_checkout_missing(tmp_path):

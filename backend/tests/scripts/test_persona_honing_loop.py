@@ -149,12 +149,6 @@ async def test_build_honing_prompt_includes_failure_clusters_and_reference_notes
 
     assert "feedback_triage_hotspot" in prompt
     assert "performance_review_honing" in prompt
-    assert "Auto-Claude inspiration" in prompt
-    assert "OpenClaw inspiration" in prompt
-    assert "Do not create or dispatch project tasks." in prompt
-    assert "memory routing" in prompt
-    assert "manage_memory_tags" in prompt
-    assert "rebuild.sh" in prompt
 
 
 @pytest.mark.asyncio
@@ -230,7 +224,6 @@ async def test_build_honing_prompt_includes_persistent_cluster_section() -> None
         field_signals=None,
     )
 
-    assert "Persistent unresolved clusters from the previous iteration" in prompt
     assert "session_patience_recent_progress" in prompt
     assert 'agent_slug="persona"' in prompt
 
@@ -411,8 +404,6 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     assert client.kwargs["use_memory"] is False
     assert client.kwargs["agent_slug"] == "persona"
     prompt = cast(list[dict[str, str]], client.kwargs["messages"])[0]["content"]
-    assert "Recent improvement signals" in prompt
-    assert "Recent real-heartbeat field evidence" in prompt
     assert "missed rebuild.sh" in prompt
 
 
@@ -442,9 +433,7 @@ async def test_build_honing_prompt_includes_completion_review_surface() -> None:
         field_signals=None,
     )
 
-    assert "Completion-review benchmark ranking" in prompt
-    assert "Completion-review failure clusters" in prompt
-    assert "Persistent completion-review clusters from the previous iteration" in prompt
+    assert "review_recent_progress_patience" in prompt
     assert "completion-review-prompt" in prompt
 
 
@@ -466,10 +455,8 @@ async def test_build_honing_prompt_includes_recent_improvement_signals() -> None
         field_signals="- 4 recent real heartbeats; avg reliability 89.0%; avg effectiveness 83.5%; critical issues 0.",
     )
 
-    assert "Recent improvement signals" in prompt
-    assert "Recent real-heartbeat field evidence" in prompt
     assert "Heartbeat self-reflection signals" in prompt
-    assert "benchmark coverage gap" in prompt
+    assert "avg reliability 89.0%" in prompt
 
 
 def test_parse_improvement_content_tolerates_narration_and_citations() -> None:

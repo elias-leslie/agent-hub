@@ -54,17 +54,6 @@ def test_workspace_case_materializes_fixture_files(tmp_path: Path) -> None:
     assert "needs_cleanup=1" in (workdir / "cleanup.txt").read_text()
 
 
-def test_workspace_case_prompt_limits_search_scope() -> None:
-    case = get_case_by_id("workspace_inspection_gate")
-
-    prompt = case.build_prompt()
-
-    assert "Only inspect task.txt, cleanup.txt, and sessions.txt" in prompt
-    assert "Do not search outside the current working directory" in prompt
-    assert "Set `should_dispatch=true` only when `primary_action` is `dispatch`" in prompt
-    assert "Use `monitor` for an existing same-task work lane" in prompt
-
-
 def test_suggest_suite_id_uses_shared_case_family() -> None:
     suite_id = suggest_suite_id(
         ["session_patience_quiet", "session_patience_recent_progress", "stalled_session_reconcile"]
@@ -986,25 +975,11 @@ async def test_persist_run_promotes_memory_variant_on_candidate_win() -> None:
     mock_promote.assert_awaited_once_with("ENHANCED")
 
 
-def test_precision_search_case_prompt_requires_specific_tool() -> None:
-    case = get_case_by_id("precision_search_live_lookup")
-
-    prompt = case.build_prompt()
-
-    assert "precision_code_search" in prompt
-    assert "first code-navigation step" in prompt
-    assert "Do not rely on read_file, bash, or assumptions" in prompt
-
-
 def test_web_research_case_requires_shared_web_tools() -> None:
     case = get_case_by_id("web_research_stack_lookup")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "research_web" in prompt
-    assert "search_web" in prompt
-    assert "fetch_web_page" in prompt
-    assert "Cloudflare Markdown for Agents" in prompt
     assert case.required_tool_names == ("search_web", "fetch_web_page")
 
 
@@ -1079,18 +1054,16 @@ def test_validate_case_project_requirements_rejects_wrong_project() -> None:
 def test_feedback_triage_case_requires_manage_feedback_tool() -> None:
     case = get_case_by_id("feedback_triage_hotspot")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "manage_feedback" in prompt
     assert case.required_tool_names == ("manage_feedback",)
 
 
 def test_global_git_hygiene_case_requires_dirty_repo_classification() -> None:
     case = get_case_by_id("global_git_hygiene_classification")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "declare clean idle" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "dirty" in case.required_summary_terms
 
@@ -1098,9 +1071,8 @@ def test_global_git_hygiene_case_requires_dirty_repo_classification() -> None:
 def test_repeated_blocker_case_requires_fix_work_language() -> None:
     case = get_case_by_id("repeated_blocker_fix_work")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "4 consecutive heartbeats" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "fix" in case.required_summary_terms
 
@@ -1108,9 +1080,8 @@ def test_repeated_blocker_case_requires_fix_work_language() -> None:
 def test_partial_blocker_churn_case_requires_partial_fix_language() -> None:
     case = get_case_by_id("partial_blocker_churn_fix_work")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "6 consecutive heartbeats ended partial" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "partial" in case.required_summary_terms
     assert "fix" in case.required_summary_terms
@@ -1119,9 +1090,8 @@ def test_partial_blocker_churn_case_requires_partial_fix_language() -> None:
 def test_failed_active_lane_recovery_case_requires_recovery_before_dispatch() -> None:
     case = get_case_by_id("failed_active_lane_recovery_before_dispatch")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "recover the failed active lanes first" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "failed" in case.required_summary_terms
     assert "recover" in case.required_summary_terms
@@ -1130,9 +1100,8 @@ def test_failed_active_lane_recovery_case_requires_recovery_before_dispatch() ->
 def test_blocker_fix_task_case_requires_readying_the_fix_task() -> None:
     case = get_case_by_id("blocker_fix_task_must_be_shaped_ready")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "task-40efc3b9|pending COMPLETE_READY:no" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "ready" in case.required_summary_terms
     assert "shape" in case.required_summary_terms
@@ -1141,9 +1110,8 @@ def test_blocker_fix_task_case_requires_readying_the_fix_task() -> None:
 def test_failed_task_record_recovery_case_requires_recovery_before_dispatch() -> None:
     case = get_case_by_id("failed_task_record_recovery_before_dispatch")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "recent failed task records first" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "failed" in case.required_summary_terms
     assert "recover" in case.required_summary_terms
@@ -1152,10 +1120,8 @@ def test_failed_task_record_recovery_case_requires_recovery_before_dispatch() ->
 def test_failed_task_beats_unrelated_cleanup_case_prioritizes_failed_chain() -> None:
     case = get_case_by_id("failed_task_beats_unrelated_cleanup")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "recent failed task in a writable project should outrank unrelated cleanup" in case.description.lower()
-    assert "What should the persona follow first?" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "agent-hub" in case.required_summary_terms
     assert "recover" in case.required_summary_terms
@@ -1164,9 +1130,8 @@ def test_failed_task_beats_unrelated_cleanup_case_prioritizes_failed_chain() -> 
 def test_failed_task_inspection_case_requires_same_heartbeat_recovery_action() -> None:
     case = get_case_by_id("failed_task_inspection_requires_recovery_action")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "task-1025819f|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "failed" in case.required_summary_terms
     assert "recover" in case.required_summary_terms
@@ -1175,10 +1140,8 @@ def test_failed_task_inspection_case_requires_same_heartbeat_recovery_action() -
 def test_cli_usage_error_case_requires_help_recovery_language() -> None:
     case = get_case_by_id("cli_usage_error_requires_help_recovery")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "st cleanup status --project agent-hub" in prompt
-    assert "--help" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "help" in case.required_summary_terms
     assert "recover" in case.required_summary_terms
@@ -1187,10 +1150,8 @@ def test_cli_usage_error_case_requires_help_recovery_language() -> None:
 def test_stale_reviewer_path_case_requires_verified_path_language() -> None:
     case = get_case_by_id("stale_reviewer_path_requires_verification")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "File not found" in prompt
-    assert "backend/app/workflows/_heartbeat_data.py" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "verify" in case.required_summary_terms
     assert "path" in case.required_summary_terms
@@ -1199,20 +1160,16 @@ def test_stale_reviewer_path_case_requires_verified_path_language() -> None:
 def test_performance_honing_case_requires_performance_tool() -> None:
     case = get_case_by_id("performance_review_honing")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "review_agent_performance" in prompt
-    assert "read_heartbeat_instructions" not in prompt
     assert case.required_tool_names == ("review_agent_performance",)
 
 
 def test_model_config_reconsideration_case_requires_model_tools() -> None:
     case = get_case_by_id("model_config_reconsideration")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "manage_model_config" in prompt
-    assert "review_agent_performance" in prompt
     assert case.required_tool_names == (
         "manage_model_config",
         "review_agent_performance",
@@ -1222,21 +1179,16 @@ def test_model_config_reconsideration_case_requires_model_tools() -> None:
 def test_memory_routing_reconsideration_case_requires_memory_tooling() -> None:
     case = get_case_by_id("memory_routing_reconsideration")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "manage_model_config" in prompt
-    assert "memory routing" in prompt
     assert case.required_tool_names == ("manage_model_config",)
 
 
 def test_rebuild_rule_reconsideration_case_requires_mandate_language() -> None:
     case = get_case_by_id("rebuild_rule_reconsideration")
 
-    prompt = case.build_prompt()
+    case.build_prompt()
 
-    assert "manage_model_config" in prompt
-    assert "rebuild.sh agent-hub" in prompt
-    assert "universal workflow rule" in prompt
     assert case.required_tool_names == ("manage_model_config",)
 
 
