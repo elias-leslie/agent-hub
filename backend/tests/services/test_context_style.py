@@ -51,3 +51,15 @@ def test_memory_command_howto_warns_once_two_flagged_commands_appear() -> None:
     assert warnings[0].startswith("tool how-to (2 commands): register an ST surface")
     assert memory_style_warnings("Use `st check --quick`, not raw pytest; `pyproject.toml` owns config.") == []
     assert style_warnings(howto) == []  # prompts keep the shared style check only
+
+
+def test_command_detection_uses_tokens_and_stays_fast_on_long_spans() -> None:
+    from app.services.context_style import _looks_like_command
+
+    assert _looks_like_command("st check --quick")
+    assert _looks_like_command("gh pr view -w")
+    assert _looks_like_command("git diff -- path")
+    assert not _looks_like_command("pyproject.toml")
+    assert not _looks_like_command("Run --quick")  # head must be lowercase
+    assert not _looks_like_command("st ---x -1")
+    assert not _looks_like_command("a" * 50_000 + " b")  # CodeQL py/polynomial-redos input shape
