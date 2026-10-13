@@ -12,7 +12,7 @@ Environment="NODE_ENV=production"
 Environment="PORT=3003"
 Environment="AGENT_HUB_API_URL=http://localhost:8003"
 Environment="SUMMITFLOW_API_URL=http://localhost:8001"
-ExecStart=/bin/bash -lc "pnpm start --hostname 0.0.0.0 --port 3003"
+ExecStart=/bin/bash -lc "pnpm start --hostname 127.0.0.1 --port 3003"
 TimeoutStopSec=10
 KillMode=control-group
 Restart=always
