@@ -177,10 +177,13 @@ async def test_manual_maintenance_lists_and_inspects_retained_items(maintenance_
 
 
 @pytest.mark.integration
-async def test_delivery_no_longer_injects_maintenance_handoff(maintenance_db):
+async def test_delivery_no_longer_injects_maintenance_handoff(maintenance_db, monkeypatch):
     from app.models.context_governance import ContextMaintenanceAttention, ContextMaintenanceItem
     from app.services.context_maintenance import session_key
     from app.services.runtime_context import build_canonical_context_delivery
+    # CI has no `st`; delivery reads the SummitFlow project registry through it.
+    monkeypatch.setattr('app.core.project_roots.get_registered_project_roots',
+                        AsyncMock(return_value={'agent-hub': '/srv/workspaces/projects/agent-hub'}))
     db = maintenance_db
     _, item_id, _ = await maintenance_fixture(db, policy=ContextPolicy(scope='project', targets=['agent-hub']),
         handoff=True, detail={'technical_blocked': True})

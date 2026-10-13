@@ -411,11 +411,13 @@ class TestReferenceInjection:
             for idx in range(10)
         ]
 
+        # Pin the policy row: the process-wide policy cache may hold another test's DB rows.
         with _context_sources(
             episodes=AsyncMock(return_value=(mandates, guardrails, [])),
             references=AsyncMock(return_value=[]),
             settings=AsyncMock(return_value=settings),
-        ):
+        ), patch("app.services.memory.context_profiles._ensure_policy_cache",
+                 new=AsyncMock(return_value={"agent_startup": (28, 6, None)})):
             context = await build_progressive_context(
                 query="General startup guidance.",
                 scope=MemoryScope.GLOBAL,
