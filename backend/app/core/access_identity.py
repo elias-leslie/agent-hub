@@ -32,7 +32,7 @@ class Caller:
 
 
 def resolve_caller(request: Request) -> Caller:
-    """Owner when Access proves an owner email, or for a local-network host without Access."""
+    """Owner when Access proves an owner email, or for a loopback caller (this host) without Access."""
     token = (
         request.headers.get("Cf-Access-Jwt-Assertion", "").strip()
         or request.cookies.get("CF_Authorization", "").strip()
@@ -63,14 +63,17 @@ def _client_address(request: Request) -> str:
 
 
 def _is_local_address(value: str) -> bool:
-    # Loopback, or a LAN peer (the managed browser VM reaches the dashboard by
-    # the host's LAN IP). Access-protected public traffic always carries an
-    # assertion and arrives with the internet client's address.
+    # Loopback only: processes on this host (cloudflared, Caddy for local
+    # clients, agents). LAN peers are not trusted without Access: lab and
+    # guest devices share private ranges, and nothing legitimate reaches the
+    # dashboard by the LAN IP (owner decision 2026-10-13). Access-protected
+    # public traffic always carries an assertion and arrives with the internet
+    # client's address.
     try:
         address = ip_address(value.removeprefix("::ffff:"))
     except ValueError:
         return False
-    return address.is_loopback or address.is_private
+    return address.is_loopback
 
 
 def _email_from_access_token(token: str) -> str:

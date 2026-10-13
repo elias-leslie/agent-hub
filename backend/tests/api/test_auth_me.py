@@ -40,11 +40,19 @@ async def test_direct_non_local_peer_is_not_owner_whatever_its_host() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "192.168.86.128", "::ffff:10.0.0.4"])
-async def test_loopback_and_lan_clients_keep_owner_access(address: str) -> None:
+@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "::ffff:127.0.0.1"])
+async def test_loopback_clients_keep_owner_access(address: str) -> None:
     status, body = await _me({"Host": "agent.summitflow.dev", "X-Agent-Hub-Client-Address": address})
     assert status == 200
     assert body == {"email": None, "is_owner": True, "is_local_bypass": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("address", ["192.168.86.128", "192.168.86.234", "10.20.0.102", "::ffff:10.0.0.4", "192.168.87.20"])
+async def test_lan_clients_without_access_are_not_owner(address: str) -> None:
+    status, body = await _me({"Host": "agent.summitflow.dev", "X-Agent-Hub-Client-Address": address})
+    assert status == 200
+    assert body["is_owner"] is False and body["is_local_bypass"] is False
 
 
 @pytest.mark.asyncio
