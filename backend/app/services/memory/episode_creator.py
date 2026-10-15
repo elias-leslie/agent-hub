@@ -16,6 +16,8 @@ import os
 from datetime import UTC, datetime
 from functools import lru_cache
 
+from app.services.secret_redaction import redact_secrets
+
 from .budget import count_tokens
 from .dedup import find_exact_duplicate
 from .embedder import EmbedderService, get_embedder
@@ -137,6 +139,8 @@ async def create_episode_internal(
     change_reason: str | None,
 ) -> CreateResult:
     """Internal implementation of episode creation."""
+    # Stored text is redacted on flush; dedup and compact_content must see the same text.
+    content = redact_secrets(content)[0]
     if (result := validate_content(content, config)) is not None:
         return result
 

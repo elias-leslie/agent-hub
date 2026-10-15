@@ -46,8 +46,8 @@ SAMPLES = {
 }
 
 
-def _migration():
-    path = Path(__file__).resolve().parents[3] / "alembic/versions/b6850500dbfd_redact_secrets_in_session_events.py"
+def _migration(name: str = "b6850500dbfd_redact_secrets_in_session_events"):
+    path = Path(__file__).resolve().parents[3] / f"alembic/versions/{name}.py"
     spec = importlib.util.spec_from_file_location("secret_redaction_migration", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -170,6 +170,78 @@ def test_memory_revision_listener_redacts_and_rehashes() -> None:
     assert revision.content_hash == hashlib.sha256(revision.content.encode()).hexdigest()
 
 
+def _strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in _strings(item)]
+    if isinstance(value, list):
+        return [text for item in value for text in _strings(item)]
+    return []
+
+
+def test_memory_listeners_redact_metadata_change_reason_and_tags() -> None:
+    # compact_content is what context injection prefers over content.
+    token = SAMPLES["github_token"]
+    metadata = {"compact_content": f"Use {token}", "enrichment": {"topics": [token.lower()], "action_items": [f"fix {token}"]}}
+    memory = Memory(content="clean", name=None, summary=None, source_description=None,
+                    tags=[f"t-{token}"], metadata_=metadata)
+    _redact_memory(None, None, memory)
+    assert memory.metadata_ == {
+        "compact_content": "Use [REDACTED:github_token]",
+        "enrichment": {"topics": ["[REDACTED:github_token]"], "action_items": ["fix [REDACTED:github_token]"]},
+    }
+    assert memory.tags == ["t-[REDACTED:github_token]"]
+    revision = MemoryRevision(content="clean", content_hash="h", name=None, summary=None, source_description=None,
+                              change_reason=f"rotated {token}", metadata_=metadata)
+    _redact_memory_revision(None, None, revision)
+    assert revision.change_reason == "rotated [REDACTED:github_token]"
+    assert revision.content_hash == "h"  # content unchanged
+    assert not any("A1b2C3d4" in text for text in _strings(revision.metadata_))
+    clean = {"compact_content": "fine", "enrichment": {"topics": ["fine"]}}
+    untouched = Memory(content="clean", metadata_=clean)
+    _redact_memory(None, None, untouched)
+    assert untouched.metadata_ is clean  # unchanged JSON is not rewritten
+
+
+def test_enrichment_never_keeps_credential_fragments() -> None:
+    from app.services.memory.enrichment import enrich_memory_content
+
+    token = SAMPLES["github_token"]
+    # Truncation (summary at 120, action items at 180) would cut the token below the floor's
+    # length, and topics are lowercased; pads put the token across each cut.
+    for pad in (100, 150):
+        content = f"Fix {'x' * pad} {token} token\nfix the mirror with {token}"
+        enrichment = enrich_memory_content(content, source="agent")
+        stored = [enrichment.summary or "", *_strings(enrichment.metadata)]
+        assert not any("a1b2c3d4" in text.lower() for text in stored), pad
+        assert stored[-1] == "fix the mirror with [REDACTED:github_token]"
+        assert enrichment.sensitivity_tier == "confidential"  # judged on the original text
+
+
+@pytest.mark.asyncio
+async def test_creator_stores_no_credential_in_content_or_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.memory import episode_creator
+    from app.services.memory.ingestion_config import LEARNING
+
+    monkeypatch.setattr(episode_creator, "find_exact_duplicate", AsyncMock(return_value=None))
+    repo = MagicMock()
+    repo.create = AsyncMock(return_value=SimpleNamespace(id="m1"))
+    embedder = MagicMock()
+    embedder.embed = AsyncMock(return_value=None)
+    raw = f"**Mirror Token**: The mirror pushes with {SAMPLES['github_token']} from the vault."
+    result = await episode_creator.create_episode_internal(
+        repo, embedder, "project-agent-hub", raw, "n", LEARNING, None, episode_creator.datetime.now(episode_creator.UTC),
+        None, None, None, None, None, None, "normal", "test", None,
+    )
+    assert result.success, result.validation_error
+    assert repo.create.await_args and embedder.embed.await_args
+    stored = repo.create.await_args.kwargs
+    assert stored["metadata"]["compact_content"] == raw.replace(SAMPLES["github_token"], "[REDACTED:github_token]")
+    assert not any("A1b2C3d4" in text for text in _strings(stored))
+    assert embedder.embed.await_args.args[0] == stored["content"]
+
+
 @pytest.mark.asyncio
 async def test_embedder_never_sends_a_secret() -> None:
     client = MagicMock()
@@ -190,6 +262,10 @@ def test_migration_candidate_regex_preselects_every_floor_match(secret: str) -> 
     candidate = re.compile(_migration().CANDIDATE_REGEX)
     assert candidate.search(secret)
     assert candidate.search(json.dumps({"o": secret}))
+
+
+def test_memory_migration_uses_the_same_candidate_superset() -> None:
+    assert _migration("d3a9c1f47e20_redact_secrets_in_memory_rows").CANDIDATE_REGEX == _migration().CANDIDATE_REGEX
 
 
 def test_migration_redacts_nested_json_and_reports_kinds() -> None:
@@ -249,6 +325,123 @@ async def test_migration_rewrites_only_matching_rows_on_postgres() -> None:
         assert rows[ids[2]] == fixtures[2]
         assert rows[ids[3]] == fixtures[3]
         assert migration.redact_rows(connection) == ([], {})
+
+    try:
+        async with engine.connect() as connection:
+            await connection.run_sync(verify)
+            await connection.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_memory_metadata_is_redacted_on_postgres_flush() -> None:
+    import uuid
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db import _get_engine
+    from app.models import Base
+    from app.services.memory.repository import MemoryRepository
+
+    def isolated_schema(connection) -> None:
+        # Same pattern as the context-management integration tests: a throwaway schema, rolled back.
+        schema = "secret_floor_test_" + uuid.uuid4().hex
+        with Operations.context(MigrationContext.configure(connection)):
+            from alembic import op
+
+            op.execute(f'CREATE SCHEMA "{schema}"')
+            op.execute(f'SET LOCAL search_path TO "{schema}", public')
+            for table in Base.metadata.sorted_tables:
+                op.create_table(table.name, *(column._copy() for column in table.columns))
+
+    token = SAMPLES["github_token"]
+    async with _get_engine().connect() as connection:
+        assert (await connection.execute(text("SELECT current_database()"))).scalar() == "agent_hub_test"
+        try:
+            await connection.run_sync(isolated_schema)
+            async with AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint") as db:
+                memory = await MemoryRepository().create(
+                    content="Mirror pushes use the vault token.", memory_type="episode", scope="project",
+                    scope_id="agent-hub", group_id="project-agent-hub", tags=["mirror"],
+                    metadata={"compact_content": f"Use {token}", "enrichment": {"topics": [token.lower()]}},
+                    change_reason=f"saved {token}", db=db,
+                )
+                memory.metadata_ = {**memory.metadata_, "compact_content": f"edited {token}"}  # governance-style edit
+                await db.flush()
+                pattern = {"p": "gh[pousr]_[A-Za-z0-9]{36}"}
+                hits = await db.execute(text(
+                    "SELECT (SELECT count(*) FROM memories WHERE metadata::text ~ :p OR content ~ :p)"
+                    " + (SELECT count(*) FROM memory_revisions WHERE metadata::text ~ :p OR change_reason ~ :p)"
+                ), pattern)
+                assert hits.scalar() == 0
+                stored = await db.execute(text("SELECT metadata->>'compact_content' FROM memories"))
+                assert stored.scalar_one() == "edited [REDACTED:github_token]"
+        finally:
+            await connection.rollback()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_memory_migration_rewrites_only_matching_rows_on_postgres() -> None:
+    import os
+
+    import sqlalchemy as sa
+    from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    url = os.environ.get("TEST_AGENT_HUB_DB_URL")
+    if not url:
+        pytest.skip("TEST_AGENT_HUB_DB_URL is required for PostgreSQL migration validation")
+    parsed_url = sa.make_url(url)
+    assert parsed_url.database == "agent_hub_test", "Only the explicit test database is allowed"
+    engine = create_async_engine(parsed_url.set(drivername="postgresql+asyncpg"))
+    migration = _migration("d3a9c1f47e20_redact_secrets_in_memory_rows")
+    token = SAMPLES["github_token"]
+    mem_ids = ["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"]
+
+    def verify(connection: sa.Connection) -> None:
+        # Connection-local temporary tables shadow the application's tables; everything rolls back.
+        text_columns = [sa.Column(name, sa.Text) for name in ("content", "name", "summary", "source_description")]
+        memories = sa.Table(
+            "memories", sa.MetaData(), sa.Column("id", UUID(as_uuid=False), primary_key=True), *text_columns,
+            sa.Column("content_fingerprint", sa.String), sa.Column("tags", ARRAY(sa.String)),
+            sa.Column("metadata", JSONB(none_as_null=True)), prefixes=["TEMPORARY"],
+        )
+        revisions = sa.Table(
+            "memory_revisions", sa.MetaData(), sa.Column("id", sa.String, primary_key=True),
+            *(column._copy() for column in text_columns), sa.Column("change_reason", sa.Text),
+            sa.Column("content_hash", sa.String), sa.Column("tags", ARRAY(sa.String)),
+            sa.Column("metadata", JSONB(none_as_null=True)), prefixes=["TEMPORARY"],
+        )
+        memories.create(connection)
+        revisions.create(connection)
+        blank = {"name": None, "summary": None, "source_description": None, "tags": []}
+        connection.execute(memories.insert(), [
+            {"id": mem_ids[0], "content": f"use {token}", "content_fingerprint": "old", **blank, "metadata": {}},
+            {"id": mem_ids[1], "content": "clean", "content_fingerprint": "keep", **blank, "metadata": {"compact_content": "clean"}},
+        ])
+        connection.execute(revisions.insert(), [
+            {"id": "r1", "content": "clean", "content_hash": "keep", "change_reason": None, **blank,
+             "metadata": {"compact_content": f"Use {token}", "compact_status": "source_ready"}},
+            {"id": "r2", "content": "clean", "content_hash": "keep", "change_reason": "Episode added", **blank, "metadata": {}},
+        ])
+        changed, totals = migration.redact_rows(connection)
+        assert changed == {"memories": mem_ids[:1], "memory_revisions": ["r1"]}
+        assert totals == {"github_token": 2}
+        mem = {row["id"]: dict(row) for row in connection.execute(sa.select(memories)).mappings()}
+        assert mem[mem_ids[0]]["content"] == "use [REDACTED:github_token]"
+        assert mem[mem_ids[0]]["content_fingerprint"] == content_fingerprint("use [REDACTED:github_token]")
+        assert mem[mem_ids[1]]["content_fingerprint"] == "keep"
+        rev = {row["id"]: dict(row) for row in connection.execute(sa.select(revisions)).mappings()}
+        assert rev["r1"]["metadata"] == {"compact_content": "Use [REDACTED:github_token]", "compact_status": "source_ready"}
+        assert rev["r1"]["content_hash"] == "keep"  # content itself was clean
+        assert rev["r2"]["change_reason"] == "Episode added"
+        assert migration.redact_rows(connection) == ({"memories": [], "memory_revisions": []}, {})
 
     try:
         async with engine.connect() as connection:

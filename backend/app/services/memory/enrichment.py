@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.services.secret_redaction import redact_secrets
+
 from .budget import count_tokens
 
 _ACTION_RE = re.compile(
@@ -98,6 +100,10 @@ def enrich_memory_content(
     summary: str | None = None,
 ) -> MemoryEnrichment:
     """Return compact deterministic enrichment for a memory candidate."""
+    sensitivity_tier = _sensitivity_tier(content)
+    # Topics are lowercased and action items/summary truncated, which would
+    # leave credential fragments the storage floor can no longer recognise.
+    content, _ = redact_secrets(content)
     topics = _extract_topics(content)
     action_items = _extract_action_items(content)
     token_count = count_tokens(content)
@@ -120,7 +126,7 @@ def enrich_memory_content(
     }
     return MemoryEnrichment(
         summary=resolved_summary,
-        sensitivity_tier=_sensitivity_tier(content),
+        sensitivity_tier=sensitivity_tier,
         importance=importance,
         quality_score=round(quality_score, 2),
         topics=topics,
