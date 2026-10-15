@@ -29,5 +29,7 @@ def print_persona(persona: dict[str, Any]) -> None:
     print(f"  session_reset={mode}{detail}")
     print(f"  personality_v{persona.get('version', 0)}: {preview}")
     print(f"  user_context: {field_status(persona, 'user_context')}")
+    for key, value in (persona.get("user_profile") or {}).items():
+        print(f"  user_profile.{key}: {value}")
     if persona.get("onboarding_phase"):
         print(f"  onboarding_phase: {persona['onboarding_phase']}")

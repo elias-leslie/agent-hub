@@ -121,3 +121,12 @@ class TestPersonaUpdateProfile:
         result = runner.invoke(app, ["update", "--profile", "communication_style"])
 
         assert result.exit_code == 1
+
+
+def test_show_lists_user_profile_fields() -> None:
+    persona = {"name": "Jenny", "user_profile": {"communication_style": "Plain prose."}}
+    with patch("agent_hub_st.persona_api.get_persona", return_value=persona):
+        result = runner.invoke(app, ["show"])
+
+    assert result.exit_code == 0
+    assert "user_profile.communication_style: Plain prose." in result.output
