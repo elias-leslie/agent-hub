@@ -46,13 +46,13 @@ TABLES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _table(name: str, id_type: Any) -> sa.TableClause:
+def _table(name: str) -> sa.TableClause:
     columns = [sa.column(column, sa.Text) for column in _TEXT]
     if name == "memories":
         columns.append(sa.column("content_fingerprint", sa.String))
     else:
         columns += [sa.column("change_reason", sa.Text), sa.column("content_hash", sa.String)]
-    return sa.table(name, sa.column("id", id_type), sa.column("tags", ARRAY(sa.String)),
+    return sa.table(name, sa.column("id", UUID(as_uuid=False)), sa.column("tags", ARRAY(sa.String)),
                     sa.column("metadata", JSONB), *columns)
 
 
@@ -73,7 +73,7 @@ def redact_rows(bind: sa.Connection) -> tuple[dict[str, list[str]], Counter[str]
     changed: dict[str, list[str]] = {}
     totals: Counter[str] = Counter()
     for name, columns in TABLES.items():
-        table = _table(name, UUID(as_uuid=False) if name == "memories" else sa.String)
+        table = _table(name)
         as_text = {
             "tags": sa.func.array_to_string(table.c.tags, " "),
             "metadata": sa.cast(table.c.metadata, sa.Text),

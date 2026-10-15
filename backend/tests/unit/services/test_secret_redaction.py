@@ -403,6 +403,7 @@ async def test_memory_migration_rewrites_only_matching_rows_on_postgres() -> Non
     migration = _migration("d3a9c1f47e20_redact_secrets_in_memory_rows")
     token = SAMPLES["github_token"]
     mem_ids = ["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"]
+    r1, r2 = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000a2"
 
     def verify(connection: sa.Connection) -> None:
         # Connection-local temporary tables shadow the application's tables; everything rolls back.
@@ -413,7 +414,7 @@ async def test_memory_migration_rewrites_only_matching_rows_on_postgres() -> Non
             sa.Column("metadata", JSONB(none_as_null=True)), prefixes=["TEMPORARY"],
         )
         revisions = sa.Table(
-            "memory_revisions", sa.MetaData(), sa.Column("id", sa.String, primary_key=True),
+            "memory_revisions", sa.MetaData(), sa.Column("id", UUID(as_uuid=False), primary_key=True),
             *(column._copy() for column in text_columns), sa.Column("change_reason", sa.Text),
             sa.Column("content_hash", sa.String), sa.Column("tags", ARRAY(sa.String)),
             sa.Column("metadata", JSONB(none_as_null=True)), prefixes=["TEMPORARY"],
@@ -426,21 +427,21 @@ async def test_memory_migration_rewrites_only_matching_rows_on_postgres() -> Non
             {"id": mem_ids[1], "content": "clean", "content_fingerprint": "keep", **blank, "metadata": {"compact_content": "clean"}},
         ])
         connection.execute(revisions.insert(), [
-            {"id": "r1", "content": "clean", "content_hash": "keep", "change_reason": None, **blank,
+            {"id": r1, "content": "clean", "content_hash": "keep", "change_reason": None, **blank,
              "metadata": {"compact_content": f"Use {token}", "compact_status": "source_ready"}},
-            {"id": "r2", "content": "clean", "content_hash": "keep", "change_reason": "Episode added", **blank, "metadata": {}},
+            {"id": r2, "content": "clean", "content_hash": "keep", "change_reason": "Episode added", **blank, "metadata": {}},
         ])
         changed, totals = migration.redact_rows(connection)
-        assert changed == {"memories": mem_ids[:1], "memory_revisions": ["r1"]}
+        assert changed == {"memories": mem_ids[:1], "memory_revisions": [r1]}
         assert totals == {"github_token": 2}
         mem = {row["id"]: dict(row) for row in connection.execute(sa.select(memories)).mappings()}
         assert mem[mem_ids[0]]["content"] == "use [REDACTED:github_token]"
         assert mem[mem_ids[0]]["content_fingerprint"] == content_fingerprint("use [REDACTED:github_token]")
         assert mem[mem_ids[1]]["content_fingerprint"] == "keep"
         rev = {row["id"]: dict(row) for row in connection.execute(sa.select(revisions)).mappings()}
-        assert rev["r1"]["metadata"] == {"compact_content": "Use [REDACTED:github_token]", "compact_status": "source_ready"}
-        assert rev["r1"]["content_hash"] == "keep"  # content itself was clean
-        assert rev["r2"]["change_reason"] == "Episode added"
+        assert rev[r1]["metadata"] == {"compact_content": "Use [REDACTED:github_token]", "compact_status": "source_ready"}
+        assert rev[r1]["content_hash"] == "keep"  # content itself was clean
+        assert rev[r2]["change_reason"] == "Episode added"
         assert migration.redact_rows(connection) == ({"memories": [], "memory_revisions": []}, {})
 
     try:
