@@ -298,15 +298,7 @@ async def test_verify_work_endpoint_is_retired_for_authenticated_project() -> No
         generation=2,
     )
     with pytest.raises(HTTPException) as raised:
-        await handle_maintenance(
-            db,
-            request,
-            actor="api:sf-key",
-            caller_service_client={
-                "id": "summitflow",
-                "allowed_projects": '["summitflow", "agent-hub"]',
-            },
-        )
+        await handle_maintenance(db, request, actor="api:sf-key")
 
     assert raised.value.status_code == 410
     db.execute.assert_not_awaited()
@@ -330,12 +322,7 @@ async def test_unscoped_caller_cannot_cross_context_verify_work() -> None:
         "app.services.context_maintenance_actions.relevant_items",
         new=AsyncMock(return_value=[visible_row]),
     ) as relevant, pytest.raises(HTTPException) as raised:
-        await handle_maintenance(
-            db,
-            request,
-            actor="api:other",
-            caller_service_client={"id": "other", "allowed_projects": '["other"]'},
-        )
+        await handle_maintenance(db, request, actor="api:other")
 
     assert raised.value.status_code == 410
     relevant.assert_not_awaited()

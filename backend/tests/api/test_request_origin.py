@@ -96,3 +96,60 @@ async def test_anonymous_agent_write_must_identify() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/agents", json={})
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("prefix", ["/api/models", "/api/voice", "/api/memory/episodes", "/api/memory/search", "/api/dashboard"])
+def test_every_bypass_prefix_is_read_only(prefix: str) -> None:
+    assert is_auth_bypass_path(f"{prefix}/x", "GET")
+    assert is_auth_bypass_path(f"{prefix}/x", "HEAD")
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        assert not is_auth_bypass_path(f"{prefix}/x", method)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("POST", "/api/models/sync", None),
+        ("POST", "/api/voice/tts", {"text": "hi"}),
+        ("POST", "/api/memory/episodes/bulk-tag", {"uuids": ["x"], "add_tags": ["t"]}),
+        ("POST", "/api/memory/episodes/bulk-render-mode", {"uuids": ["x"], "render_mode": "full"}),
+        ("PUT", "/api/memory/episodes/12345678/tags", {"tags": ["t"]}),
+        ("POST", "/api/memory/episodes/12345678/rating", {"rating": "helpful"}),
+    ],
+)
+async def test_anonymous_writes_under_bypass_prefixes_must_identify(method: str, path: str, body: object) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.request(method, path, json=body)
+    assert response.status_code == 400
+
+
+async def test_wrong_internal_secret_is_not_internal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starlette.requests import Request
+
+    from app.middleware import access_control_paths
+
+    monkeypatch.setattr(access_control_paths.settings, "internal_service_secret", "s3cret")
+
+    def request(value: str | None) -> Request:
+        headers = [] if value is None else [(b"x-agent-hub-internal", value.encode())]
+        return Request({"type": "http", "method": "GET", "path": "/", "headers": headers})
+
+    assert access_control_paths.is_internal_request(request("s3cret"))
+    for value in (None, "", "s3cre", "s3cret ", "S3CRET"):
+        assert not access_control_paths.is_internal_request(request(value))
+
+
+def test_voice_assistant_mode_needs_the_internal_secret() -> None:
+    client = TestClient(app, base_url="http://localhost")
+    with (
+        pytest.raises(WebSocketDisconnect) as closed,
+        client.websocket_connect("/api/voice/ws?user_id=u&app=agent-hub&mode=assistant") as ws,
+    ):
+        ws.receive_text()
+    assert closed.value.code == 1008
+
+
+def test_voice_transcribe_mode_still_connects() -> None:
+    client = TestClient(app, base_url="http://localhost")
+    with client.websocket_connect("/api/voice/ws?user_id=u&app=agent-hub&mode=transcribe") as ws:
+        ws.close()

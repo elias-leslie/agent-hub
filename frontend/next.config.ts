@@ -41,10 +41,11 @@ const nextConfig: NextConfig = {
           source: '/api/events',
           destination: `${AGENT_HUB_API_URL}/api/events`,
         },
-        // WebSocket: voice transcription
+        // WebSocket: voice transcription. Other /api/voice routes (voices,
+        // TTS) go through the auth proxy like every other API call.
         {
-          source: '/api/voice/:path*',
-          destination: `${AGENT_HUB_API_URL}/api/voice/:path*`,
+          source: '/api/voice/ws',
+          destination: `${AGENT_HUB_API_URL}/api/voice/ws`,
         },
       ],
       // afterFiles: existing file-based routes (e.g. /api/memory/*) resolve first,

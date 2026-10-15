@@ -83,3 +83,27 @@ def test_tool_output_detection_is_linear_on_long_lines() -> None:
     start = time.perf_counter()
     EpisodeValidator.looks_like_tool_output(content)
     assert time.perf_counter() - start < 1.0
+
+
+@pytest.mark.parametrize(
+    ("added", "pattern"),
+    [
+        ("## Heartbeat: 03:00 all quiet", "heartbeat journal"),
+        ("Merge of task task-abc123 landed", "task execution log"),
+        ("subtask 2.1 took 3 attempts", "task execution log"),
+        ("[Session summary: fixed the thing]", "session summary"),
+    ],
+)
+def test_update_cannot_add_operational_log_lines(added: str, pattern: str) -> None:
+    previous = "**Deploy**: rebuild with the managed path."
+    with pytest.raises(EpisodeValidationError) as raised:
+        EpisodeValidator.validate_update(f"{previous}\n{added}", previous=previous, tier="reference")
+    assert pattern in raised.value.detected_patterns
+
+
+def test_update_may_keep_a_match_it_already_had() -> None:
+    # Older memories that already match a detector stay editable; only added lines count.
+    previous = "**Rule**: see task-abc123 for the incident.\nKeep it short."
+    EpisodeValidator.validate_update(
+        "**Rule**: see task-abc123 for the incident.\nKeep it shorter.", previous=previous, tier="reference"
+    )

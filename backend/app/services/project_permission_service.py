@@ -324,7 +324,8 @@ async def _sync_registered_project_access(
             continue
         current_projects = _parse_allowed_projects_json(client.allowed_projects)
         has_project = project_id in current_projects
-        if enabled and not has_project:
+        unregistered = _reconciled_registry is not None and project_id not in _reconciled_registry
+        if enabled and not has_project and not unregistered:
             current_projects.append(project_id)
             client.allowed_projects = json.dumps(current_projects)
             changed_client_ids.append(str(client.id))
@@ -344,6 +345,8 @@ async def reconcile_registered_project_access(
     Every project in the SummitFlow registry is allowed unless its permission
     row is ``off``; projects that never got a permission row would otherwise be
     missing from the hand-grown list and their session ingestion would 403.
+    With a known registry the list is exactly that set; without one (registry
+    unavailable) the current list is only adjusted, never trimmed.
     """
     permission_result = await db.execute(
         select(ProjectPermission).order_by(ProjectPermission.project_id)
@@ -358,6 +361,13 @@ async def reconcile_registered_project_access(
     for project_id in sorted(set(registered_project_ids or ()) - set(managed_project_ids)):
         managed_project_ids.append(project_id)
         enabled_project_ids.append(project_id)
+    registry_known = bool(registered_project_ids)
+    if registry_known:
+        # SummitFlow only calls for registered projects: grant exactly those (unless
+        # off) and drop everything else the list picked up over time.
+        registered = set(registered_project_ids or ())
+        managed_project_ids = [project_id for project_id in managed_project_ids if project_id in registered]
+        enabled_project_ids = [project_id for project_id in enabled_project_ids if project_id in registered]
 
     client_result = await db.execute(select(Client))
     clients = list(client_result.scalars().all())
@@ -367,10 +377,10 @@ async def reconcile_registered_project_access(
         if not _should_sync_registered_project_access(client):
             continue
         current_projects = _parse_allowed_projects_json(client.allowed_projects)
-        desired_projects = _merge_synced_allowed_projects(
-            current_projects,
-            managed_project_ids,
-            enabled_project_ids,
+        desired_projects = (
+            list(enabled_project_ids)
+            if registry_known
+            else _merge_synced_allowed_projects(current_projects, managed_project_ids, enabled_project_ids)
         )
         if desired_projects == current_projects:
             continue

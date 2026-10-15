@@ -247,6 +247,14 @@ def clear_db_cache() -> Generator[None]:
 
 
 @pytest.fixture(autouse=True)
+def clear_request_actor() -> None:
+    """Middleware tests bind a request actor in the test's context; start each test without one."""
+    from app.core import request_actor
+
+    request_actor._actor.set(None)
+
+
+@pytest.fixture(autouse=True)
 def allow_test_transcript_roots(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Let transcript fixtures under pytest's temp directory pass the root guard."""
     monkeypatch.setenv("AGENT_HUB_TRANSCRIPT_ROOTS", str(tmp_path_factory.getbasetemp()))
@@ -349,6 +357,8 @@ def create_mock_db_session() -> AsyncMock:
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
     mock_session.close = AsyncMock()
+    # Session.info is where after-commit work (global context notes) is queued.
+    mock_session.sync_session = MagicMock(info={})
 
     # refresh sets common timestamp fields like the real database would
     async def mock_refresh(obj: Any) -> None:

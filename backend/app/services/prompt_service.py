@@ -10,7 +10,13 @@ from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.request_actor import attribute
 from app.models.prompt import AgentPrompt, Prompt, PromptRevision
+from app.services.global_context_notes import (
+    GlobalContextNote,
+    flag_changes,
+    queue_global_context_note,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +55,15 @@ async def record_prompt_revision(
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> PromptRevision:
-    """Persist an immutable revision snapshot for one prompt state."""
+    """Persist an immutable revision snapshot for one prompt state.
+
+    A change to a global prompt (or one that stops being global) queues one
+    Nightshift note with the diff against the previous revision.
+    """
+    previous = (await db.execute(
+        select(PromptRevision).where(PromptRevision.prompt_id == prompt.id)
+        .order_by(PromptRevision.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
     revision = PromptRevision(
         prompt_id=prompt.id,
         prompt_slug=prompt.slug,
@@ -66,11 +80,23 @@ async def record_prompt_revision(
         prompt_type=prompt.prompt_type,
         deletion_locked=prompt.deletion_locked,
         content_hash=_prompt_content_hash(prompt.content),
-        changed_by=changed_by,
+        changed_by=attribute(changed_by),
         change_reason=change_reason,
     )
     db.add(revision)
     await db.flush()
+    if prompt.is_global or (previous is not None and previous.is_global):
+        switches = {"enabled": prompt.enabled, "is_global": prompt.is_global, "exclude_agents": list(prompt.exclude_agents or [])}
+        queue_global_context_note(db, GlobalContextNote(
+            kind="Global prompt", name=prompt.slug, action=action, changed_by=revision.changed_by,
+            before=previous.content if previous is not None else None,
+            after=None if action == "delete" else prompt.content, reason=change_reason,
+            flags=flag_changes(
+                None if previous is None else {"enabled": previous.enabled, "is_global": previous.is_global,
+                                               "exclude_agents": list(previous.exclude_agents or [])},
+                switches,
+            ),
+        ))
     return revision
 
 

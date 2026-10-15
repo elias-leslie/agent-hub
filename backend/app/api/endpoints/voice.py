@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from app.middleware.access_control_paths import is_internal_request
 from app.services.completion import CompletionSource, complete_with_memory
 from app.services.voice.connection_manager import manager
 from app.services.voice.stt import stt_service
@@ -430,6 +431,12 @@ async def websocket_endpoint(
     session_id: str = Query(None, description="Optional Session ID"),
     mode: str = Query("assistant", description="Mode: 'assistant' (full) or 'transcribe' (transcript only)"),
 ) -> None:
+    if mode != MODE_TRANSCRIBE and not is_internal_request(websocket):
+        # Assistant mode runs an LLM and stores each turn as memory under the
+        # caller-chosen user_id, so only a verified internal service may use it.
+        # The dashboard only transcribes.
+        await websocket.close(code=1008)
+        return
     ws_id = id(websocket)
     state = RecordingState(client_id=user_id)
     recording_states[ws_id] = state

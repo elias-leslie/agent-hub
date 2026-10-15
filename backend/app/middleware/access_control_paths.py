@@ -3,7 +3,9 @@
 Defines which endpoints are exempt from authentication, require internal headers, etc.
 """
 
-from starlette.requests import Request
+from hmac import compare_digest
+
+from starlette.requests import HTTPConnection
 
 from app.config import settings
 
@@ -31,22 +33,18 @@ EXEMPT_PREFIXES = (
     "/api/memory/capture/stream",  # SSE stream (BaseHTTPMiddleware buffers streaming responses)
 )
 
-# Path prefixes that bypass auth but still log requests
-# For internal tools that don't need access control overhead but want telemetry
+# Path prefixes whose GET/HEAD reads bypass identification but still log requests.
+# Writes under them (agent edits, memory tags and ratings, model sync, TTS) need
+# the internal header or a client id like every other write, so they are attributed.
 AUTH_BYPASS_PREFIXES = (
     "/api/dashboard",  # Dashboard stats (frontend only, no LLM costs)
-    "/api/memory/search",  # Memory search (read-only)
-    "/api/memory/episodes",  # Memory episode listing (read-only)
-    "/api/memory/entities",  # Memory entity listing (read-only)
-    "/api/agents",  # Agent discovery (reads only, see READ_ONLY_BYPASS_PREFIXES)
-    "/api/models",  # Model catalog (read-only static data, no LLM costs)
-    # Voice currently uses caller-supplied WebSocket identity. Assistant mode
-    # can invoke an LLM, so deployments must keep this on a trusted boundary.
-    "/api/voice",
+    "/api/memory/search",  # Memory search
+    "/api/memory/episodes",  # Memory episode listing
+    "/api/memory/entities",  # Memory entity listing
+    "/api/agents",  # Agent discovery
+    "/api/models",  # Model catalog (static data, no LLM costs)
+    "/api/voice",  # Voice list (the WebSocket is outside this HTTP middleware)
 )
-
-# Bypass prefixes where only reads skip identification; writes need the internal header or a client id
-READ_ONLY_BYPASS_PREFIXES = ("/api/agents",)
 _READ_METHODS = frozenset({"GET", "HEAD"})
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)
@@ -71,8 +69,8 @@ def is_path_exempt(path: str) -> bool:
 
 
 def is_auth_bypass_path(path: str, method: str = "GET") -> bool:
-    """Check if path bypasses auth but still logs requests."""
-    if method not in _READ_METHODS and any(path.startswith(prefix) for prefix in READ_ONLY_BYPASS_PREFIXES):
+    """Check if path bypasses auth but still logs requests (reads only)."""
+    if method not in _READ_METHODS:
         return False
     return any(path.startswith(prefix) for prefix in AUTH_BYPASS_PREFIXES)
 
@@ -82,9 +80,11 @@ def is_internal_only_path(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in INTERNAL_ONLY_PREFIXES)
 
 
-def is_internal_request(request: Request) -> bool:
-    """Check if request is from agent-hub internal dashboard."""
+def is_internal_request(request: HTTPConnection) -> bool:
+    """Check if a request or WebSocket carries the internal service secret."""
     if not settings.internal_service_secret:
         return False
     internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
-    return internal_header == settings.internal_service_secret
+    if internal_header is None:
+        return False
+    return compare_digest(internal_header.encode(), settings.internal_service_secret.encode())

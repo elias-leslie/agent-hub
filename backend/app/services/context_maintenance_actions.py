@@ -5,7 +5,7 @@ recovery decision schema is retained; automatic recovery is retired.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any, Literal, TypedDict, cast
 
 from fastapi import HTTPException
@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.client import check_project_access
 from app.models.context_governance import ContextMaintenanceItem, ContextRecord
 from app.models.memory_unified import Memory
 from app.models.runtime_context import RuntimeContextOverride
@@ -122,35 +121,11 @@ async def handle_maintenance(
     actor: str,
     *,
     operator: bool = False,
-    caller_service_client: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if request.action not in {"list", "inspect"}:
         from app.services.curator_retirement import curator_unavailable
 
         curator_unavailable()
-    if request.action == "verify_work":
-        authorized = (
-            caller_service_client is not None
-            and request.context.project_id == "agent-hub"
-            and check_project_access(caller_service_client.get("allowed_projects"), "agent-hub")
-        )
-        if not authorized:
-            raise HTTPException(404, "Maintenance item is not applicable to this context")
-        statement = select(ContextMaintenanceItem).where(
-            ContextMaintenanceItem.id == request.item_id
-        ).execution_options(populate_existing=True)
-        row = (await db.execute(statement)).scalar_one_or_none()
-        if row is None:
-            raise HTTPException(404, "Maintenance item was not found")
-        return cast(dict[str, Any], await verify_work_product(
-            db,
-            row,
-            task_id=request.task_id,
-            external_request_key=request.external_request_key,
-            external_payload_digest=request.external_payload_digest,
-            generation=request.generation,
-        ))
-
     visible = await relevant_items(db, request.context, include_closed=request.include_closed or request.action == "inspect")
     if request.action == "list":
         listed = [row for row in visible if request.include_background or request.include_closed or request.context.agent_slug == "memory-curator"

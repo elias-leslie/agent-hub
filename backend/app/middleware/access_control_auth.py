@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import HTTPException, Request
 from sqlalchemy import select, update
 
+from app.config import settings
 from app.db import async_session
 from app.models import Client
 
@@ -82,7 +83,7 @@ async def require_service_client(request: Request) -> dict[str, Any]:
     """Verify the existing service secret and resolve its registered client binding.
 
     Ordinary X-Client-Id middleware is identification only. This stronger seam is
-    used for scoped push and private receipt recovery, not human authentication.
+    used for memory scope moves and private receipt recovery, not human authentication.
     """
     from app.middleware.access_control_constants import CLIENT_ID_HEADER
     from app.middleware.access_control_paths import is_internal_request
@@ -96,6 +97,16 @@ async def require_service_client(request: Request) -> dict[str, Any]:
     if client is None or client.get("status") != "active":
         raise HTTPException(status_code=403, detail="Service client is not active.")
     return client
+
+
+def is_admin_client(client: dict[str, Any]) -> bool:
+    """Agent Hub administration is an explicit grant by client id.
+
+    Holding project ``agent-hub`` in ``allowed_projects`` grants nothing: registry
+    sync adds every project to SummitFlow-owned clients.
+    """
+    granted = {settings.summitflow_client_id, *settings.agent_hub_admin_client_ids} - {""}
+    return str(client.get("id") or "") in granted
 
 
 def detect_tool_type(source_client: str | None) -> str:

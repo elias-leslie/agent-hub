@@ -421,6 +421,49 @@ class TestReconcileRegisteredProjectAccess:
         assert summitflow_client.allowed_projects == '["summitflow", "aico", "tether"]'
 
     @pytest.mark.asyncio
+    async def test_known_registry_trims_projects_summitflow_never_calls(self):
+        # The list only ever grew: test fixtures, retired projects and permission rows
+        # of unregistered projects stayed forever. A known registry is the whole list.
+        permissions = [_make_permission("summitflow", "full"), _make_permission("test1", "full"),
+                       _make_permission("neri", "off")]
+        summitflow_client = MagicMock()
+        summitflow_client.id = "client-summitflow"
+        summitflow_client.display_name = "summitflow"
+        summitflow_client.allowed_projects = '["summitflow", "agent-hub", "test1", "fydor", "neri", "st-cli"]'
+
+        permission_result = MagicMock()
+        permission_result.scalars.return_value.all.return_value = permissions
+        client_result = MagicMock()
+        client_result.scalars.return_value.all.return_value = [summitflow_client]
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = [permission_result, client_result]
+
+        with patch("app.services.project_permission_service.invalidate_client_cache"):
+            changed = await reconcile_registered_project_access(mock_db, ["summitflow", "agent-hub", "neri"])
+
+        assert changed == ["client-summitflow"]
+        assert summitflow_client.allowed_projects == '["summitflow", "agent-hub"]'
+
+    @pytest.mark.asyncio
+    async def test_empty_registry_never_empties_the_list(self):
+        summitflow_client = MagicMock()
+        summitflow_client.id = "client-summitflow"
+        summitflow_client.display_name = "summitflow"
+        summitflow_client.allowed_projects = '["summitflow", "agent-hub"]'
+        permission_result = MagicMock()
+        permission_result.scalars.return_value.all.return_value = [_make_permission("summitflow", "full")]
+        client_result = MagicMock()
+        client_result.scalars.return_value.all.return_value = [summitflow_client]
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = [permission_result, client_result]
+
+        with patch("app.services.project_permission_service.invalidate_client_cache"):
+            changed = await reconcile_registered_project_access(mock_db, [])
+
+        assert changed == []
+        assert summitflow_client.allowed_projects == '["summitflow", "agent-hub"]'
+
+    @pytest.mark.asyncio
     async def test_noops_when_registered_access_is_aligned(self):
         permissions = [
             _make_permission("agent-hub", "read"),

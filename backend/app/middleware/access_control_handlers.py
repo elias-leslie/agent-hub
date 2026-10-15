@@ -10,6 +10,7 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.request_actor import bind_request_actor
 from app.middleware.access_control_auth import detect_tool_type
 from app.middleware.access_control_constants import (
     CLIENT_ID_HEADER,
@@ -55,6 +56,11 @@ def set_internal_state(request: Request) -> None:
     request.state.allowed_projects = None  # Internal = unrestricted
     request.state.request_source = "agent-hub-dashboard"
     request.state.is_internal = True
+    bind_request_actor(
+        client_id=request.headers.get(CLIENT_ID_HEADER),
+        request_source=request.headers.get(REQUEST_SOURCE_HEADER) or "agent-hub-dashboard",
+        internal=True,
+    )
 
 
 async def handle_auth_bypass(
@@ -75,6 +81,7 @@ async def handle_auth_bypass(
     request.state.allowed_projects = None  # Auth-bypass paths have no project scoping
     request.state.request_source = request_source or "auth-bypass"
     request.state.is_internal = False
+    bind_request_actor(client_id=client_id, request_source=request.state.request_source, internal=False)
 
     # Process request
     response: Response = await call_next(request)

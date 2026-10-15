@@ -10,6 +10,7 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.request_actor import bind_request_actor
 from app.middleware.access_control_auth import (
     detect_tool_type,
     get_cached_client,
@@ -150,3 +151,4 @@ def set_identified_state(request: Request, client_data: dict[str, Any], request_
     request.state.allowed_projects = client_data.get("allowed_projects")
     request.state.request_source = request_source
     request.state.is_internal = False
+    bind_request_actor(client_id=client_data["id"], request_source=request_source, internal=False)

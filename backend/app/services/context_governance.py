@@ -15,6 +15,7 @@ from sqlalchemy import String, cast, select
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.middleware.access_control_auth import is_admin_client
 from app.models.client import check_project_access
 from app.models.context_governance import ContextRecord
 from app.models.memory_unified import Memory
@@ -467,10 +468,12 @@ def _authorize(client: dict[str, Any], before_scope: str, before_id: str | None,
         and projects is not None and check_project_access(projects, target_id or "")
     ):
         raise HTTPException(403, "Service clients may edit scope within their allowed project only")
-    if kind == "internal" and projects is not None:
-        if (before_scope != target_scope or before_id != target_id or
-            before_scope in {"global", "agent"}) and not check_project_access(projects, "agent-hub"):
-            raise HTTPException(403, "Scope moves require Agent Hub administration access")
+    if kind != "internal":
+        return
+    moves_scope = before_scope != target_scope or before_id != target_id or before_scope in {"global", "agent"}
+    if moves_scope and not is_admin_client(client):
+        raise HTTPException(403, "Scope moves require Agent Hub administration access")
+    if projects is not None:
         for scope, scope_id in ((before_scope, before_id), (target_scope, target_id)):
             if scope == "project" and not check_project_access(projects, scope_id or ""):
                 raise HTTPException(403, "Project is outside this client's allowed projects")

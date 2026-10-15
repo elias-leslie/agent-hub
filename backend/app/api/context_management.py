@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,20 +97,9 @@ async def review(request: ContextReviewRequest, db: DB, auth: Auth = None):
 
 
 @router.post("/maintenance")
-async def maintenance(request: MaintenanceRequest, http_request: Request, db: DB, auth: Auth = None):
+async def maintenance(request: MaintenanceRequest, db: DB, auth: Auth = None):
     try:
-        service_client = None
-        if request.action == "verify_work":
-            from app.middleware.access_control_auth import require_service_client
-
-            service_client = await require_service_client(http_request)
-        return await handle_maintenance(
-            db,
-            request,
-            actor(auth),
-            operator=auth is None,
-            caller_service_client=service_client,
-        )
+        return await handle_maintenance(db, request, actor(auth), operator=auth is None)
     except Exception:
         await db.rollback()
         raise

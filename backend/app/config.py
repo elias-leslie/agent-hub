@@ -104,9 +104,9 @@ class Settings(BaseSettings):
     jobinator_client_id: str = "ea338be9-55b1-4aa6-921e-6493014f6f8e"
     neri_client_id: str = "5de295c8-c426-447f-a6f9-7cb522df5fbc"
     monkey_fight_client_id: str = ""
-    hermes_client_id: str = "hermes"
-    hermes_request_source: str = "hermes-cli"
-    hermes_allowed_projects: tuple[str, ...] = ()  # empty = unrestricted; set per-env via HERMES_ALLOWED_PROJECTS
+    # Clients allowed to move context between scopes (into or out of global or an
+    # agent, or across projects). summitflow_client_id (SummitFlow and st) always is.
+    agent_hub_admin_client_ids: tuple[str, ...] = ()
 
     @field_validator("agent_hub_dashboard_client_id", mode="before")
     @classmethod

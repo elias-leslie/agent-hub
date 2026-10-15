@@ -9,8 +9,14 @@ from datetime import UTC, datetime
 from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_actor import attribute
 from app.db import async_session
 from app.models.memory_unified import Memory, MemoryRevision
+from app.services.global_context_notes import (
+    GlobalContextNote,
+    flag_changes,
+    queue_global_context_note,
+)
 
 from .budget import count_tokens
 from .fingerprint import content_fingerprint
@@ -33,7 +39,15 @@ class RevisionRepository:
         change_reason: str | None = None,
         version: int | None = None,
     ) -> MemoryRevision:
-        """Persist an immutable snapshot for one memory state."""
+        """Persist an immutable snapshot for one memory state.
+
+        A change to a global-scope mandate (or one that stops being one) queues
+        one Nightshift note with the diff against the previous revision.
+        """
+        previous = (await db.execute(
+            select(MemoryRevision).where(MemoryRevision.memory_id == memory.id)
+            .order_by(MemoryRevision.version.desc(), MemoryRevision.created_at.desc()).limit(1)
+        )).scalar_one_or_none()
         revision = MemoryRevision(
             memory_id=memory.id,
             memory_uuid=str(memory.id),
@@ -62,11 +76,23 @@ class RevisionRepository:
             metadata_=dict(memory.metadata_ or {}),
             valid_at=memory.valid_at,
             content_hash=self._content_hash(memory.content),
-            changed_by=changed_by,
+            changed_by=attribute(changed_by),
             change_reason=change_reason,
         )
         db.add(revision)
         await db.flush()
+        was_global_mandate = previous is not None and previous.scope == "global" and previous.tier == 1
+        if (memory.scope == "global" and memory.tier == 1) or was_global_mandate:
+            queue_global_context_note(db, GlobalContextNote(
+                kind="Global mandate memory", name=f"{memory.summary or memory.name} ({str(memory.id)[:8]})", action=action,
+                changed_by=revision.changed_by,
+                before=previous.content if previous is not None else None,
+                after=None if action == "delete" else memory.content, reason=change_reason,
+                flags=flag_changes(
+                    None if previous is None else {"scope": previous.scope, "tier": previous.tier, "status": previous.status},
+                    {"scope": memory.scope, "tier": memory.tier, "status": memory.status},
+                ),
+            ))
         return revision
 
     async def list_revisions(

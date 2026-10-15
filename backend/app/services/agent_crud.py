@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_actor import attribute
 from app.models import Agent, AgentVersion
 
 
@@ -112,7 +113,7 @@ async def create_version_record(
         agent_id=agent_id,
         version=version,
         config_snapshot=config_snapshot,
-        changed_by=changed_by,
+        changed_by=attribute(changed_by),
         change_reason=change_reason,
     )
     db.add(version_record)

@@ -59,12 +59,30 @@ def test_scope_client_cannot_cross_its_boundary(client, before, target, status):
 
 
 def test_scope_client_accepts_authorized_transition():
-    _authorize(CLIENT, "global", None, "project", "learn-o-tron")
-    scoped_internal = {"client_type": "internal", "allowed_projects": '["agent-hub", "learn-o-tron", "other"]'}
-    _authorize(scoped_internal, "global", None, "project", "learn-o-tron")
-    _authorize(scoped_internal, "project", "other", "project", "learn-o-tron")
+    admin = {"id": "sf-client", "client_type": "internal", "allowed_projects": '["agent-hub", "learn-o-tron", "other"]'}
+    with patch("app.middleware.access_control_auth.settings.summitflow_client_id", "sf-client"):
+        _authorize(admin, "global", None, "project", "learn-o-tron")
+        _authorize(admin, "project", "other", "project", "learn-o-tron")
+    with patch("app.middleware.access_control_auth.settings.agent_hub_admin_client_ids", ("internal-1",)):
+        _authorize(CLIENT, "global", None, "project", "learn-o-tron")
     _authorize({"client_type": "service", "allowed_projects": '["learn-o-tron"]'},
                "project", "learn-o-tron", "project", "learn-o-tron")
+    _authorize({"id": "x", "client_type": "internal", "allowed_projects": '["learn-o-tron"]'},
+               "project", "learn-o-tron", "project", "learn-o-tron")
+
+
+@pytest.mark.parametrize("client", [
+    # Guessable or stale ids that hold project agent-hub, or unrestricted, are not administrators.
+    {"id": "summitflow", "client_type": "internal", "allowed_projects": '["summitflow", "agent-hub", "learn-o-tron"]'},
+    {"id": "agent-hub-telegram-bot", "client_type": "internal", "allowed_projects": '["agent-hub"]'},
+    {"id": "internal-1", "client_type": "internal", "allowed_projects": None},
+])
+def test_agent_hub_project_access_is_not_admin(client):
+    with (patch("app.middleware.access_control_auth.settings.summitflow_client_id", "sf-client"),
+          pytest.raises(HTTPException) as error):
+        _authorize(client, "global", None, "project", "learn-o-tron")
+    assert error.value.status_code == 403
+    assert "administration" in error.value.detail
 
 
 @pytest.mark.parametrize("changes", [

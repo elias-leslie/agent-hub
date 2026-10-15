@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.models import Client
+from app.services.project_permission_service import is_registry_synced_client
 
 
 @dataclass(frozen=True)
@@ -69,12 +70,6 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
         ("agent-hub",),
     )
     add(
-        "summitflow",
-        "summitflow",
-        "internal",
-        ("summitflow", "agent-hub"),
-    )
-    add(
         "portfolio-ai",
         "portfolio-ai",
         "internal",
@@ -104,18 +99,6 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
         "external",
         ("monkey-fight",),
     )
-    # Hermes: terminal/CLI agent companion. Empty allowed_projects (None)
-    # means it can read/write across all projects — Hermes is a generic
-    # tool, not a project-siloed service. scope_id at the call site
-    # (profile:<name>) keeps the data properly partitioned.
-    if settings.hermes_client_id:
-        add(
-            settings.hermes_client_id,
-            "hermes",
-            "external",
-            tuple(settings.hermes_allowed_projects) if settings.hermes_allowed_projects else None,
-        )
-
     return specs
 
 
@@ -132,12 +115,9 @@ async def reconcile_first_party_clients(db: AsyncSession) -> list[str]:
         current_projects = (
             _parse_allowed_projects(client.allowed_projects) if client is not None else None
         )
-        if (
-            spec.display_name == "summitflow"
-            and desired_projects is not None
-            and current_projects is not None
-        ):
-            desired_projects = list(dict.fromkeys([*desired_projects, *current_projects]))
+        if client is not None and is_registry_synced_client(spec.display_name):
+            # Registry sync owns this list (registered projects); seed it only on insert.
+            desired_projects = current_projects
         desired_allowed_projects = (
             json.dumps(desired_projects) if desired_projects is not None else None
         )

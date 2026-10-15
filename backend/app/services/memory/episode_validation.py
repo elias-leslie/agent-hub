@@ -118,13 +118,21 @@ class EpisodeValidator:
 
     @classmethod
     def validate_update(cls, content: str, *, previous: str | None, tier: str) -> None:
-        """Reject updates that turn a memory into a tool-output or transcript dump."""
+        """Reject updates that turn a memory into a log, a tool-output dump or a balloon.
+
+        The reusability detectors run only on lines the update adds, so an older
+        memory that already matches one can still be edited.
+        """
         if cls.looks_like_tool_output(content):
             raise EpisodeValidationError(
                 message="Update looks like pasted tool output or a transcript. Write the reusable "
                 "rule itself; keep raw output in task/session records.",
                 detected_patterns=["tool output transcript"],
             )
+        kept = set((previous or "").splitlines())
+        added = "\n".join(line for line in content.splitlines() if line not in kept)
+        if added:
+            cls.validate_reusability(added)
         if tier in cls.COMPACT_TIERS and previous:
             growth = len(content) - len(previous)
             if growth > cls.COMPACT_GROWTH_MIN_CHARS and len(content) > cls.COMPACT_GROWTH_FACTOR * len(previous):
