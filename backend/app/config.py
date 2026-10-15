@@ -106,6 +106,8 @@ class Settings(BaseSettings):
     monkey_fight_client_id: str = ""
     # Clients allowed to move context between scopes (into or out of global or an
     # agent, or across projects). summitflow_client_id (SummitFlow and st) always is.
+    # Correctness guard only: client ids are caller-asserted behind the shared
+    # internal secret (see is_admin_client).
     agent_hub_admin_client_ids: tuple[str, ...] = ()
 
     @field_validator("agent_hub_dashboard_client_id", mode="before")

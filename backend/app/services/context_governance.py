@@ -15,6 +15,7 @@ from sqlalchemy import String, cast, select
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_actor import attribute
 from app.middleware.access_control_auth import is_admin_client
 from app.models.client import check_project_access
 from app.models.context_governance import ContextRecord
@@ -30,6 +31,7 @@ from app.services.context_policy import (
     source_revision,
     source_snapshot,
 )
+from app.services.global_context_notes import queue_exclusion_notes
 from app.services.memory.budget import count_tokens
 from app.services.runtime_context import (
     CanonicalContextDeliveryRequest,
@@ -323,6 +325,10 @@ async def apply_draft(db: AsyncSession, draft: ContextDraft, actor: str, *, prev
     result["changes"] = changes
     if not preview:
         recorded_before_placements = before_placements if original_placements is None else original_placements
+        await queue_exclusion_notes(
+            db, consumer_profile=draft.context.consumer_profile, project_id=draft.context.project_id,
+            before=recorded_before_placements, after=result["placements"], changed_by=attribute(actor),
+        )
         result["change_id"] = await record(db, "change", actor, {
             "reason": draft.reason, "changes": changes, "context": draft.context.model_dump(mode="json"),
             "placement_source_ids": changed_placement_source_ids(recorded_before_placements, result["placements"]),

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_actor import current_request_actor
 from app.models.memory_unified import Memory
 from app.models.prompt import Prompt
 from app.models.runtime_context import (
@@ -27,6 +28,7 @@ from app.services.context_policy import (
     source_policy,
     source_revision,
 )
+from app.services.global_context_notes import queue_exclusion_notes
 from app.services.memory.applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
@@ -434,6 +436,11 @@ async def replace_runtime_context_overrides(
 ) -> list[RuntimeContextOverrideResponse]:
     await lock_placement_layer(db, consumer_profile, project_id)
     overrides = await _filter_live_override_items(db, overrides)
+    previous = await _load_override_rows(
+        db, consumer_profile=consumer_profile, project_id=project_id, include_inherited=False
+    )
+    before = [{"source_type": r.source_type, "source_id": r.source_id, "mode": r.mode, "enabled": r.enabled}
+              for r in previous]
     await db.execute(
         delete(RuntimeContextOverride).where(
             RuntimeContextOverride.consumer_profile == consumer_profile,
@@ -457,6 +464,10 @@ async def replace_runtime_context_overrides(
         )
         db.add(row)
         rows.append(row)
+    await queue_exclusion_notes(
+        db, consumer_profile=consumer_profile, project_id=project_id, before=before,
+        after=[item.model_dump() for item in overrides], changed_by=current_request_actor(),
+    )
     await db.commit()
     for row in rows:
         await db.refresh(row)

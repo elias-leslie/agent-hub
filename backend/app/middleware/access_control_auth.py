@@ -100,10 +100,17 @@ async def require_service_client(request: Request) -> dict[str, Any]:
 
 
 def is_admin_client(client: dict[str, Any]) -> bool:
-    """Agent Hub administration is an explicit grant by client id.
+    """Whether this client is on the scope-move admin list (a correctness guard, not a boundary).
 
     Holding project ``agent-hub`` in ``allowed_projects`` grants nothing: registry
-    sync adds every project to SummitFlow-owned clients.
+    sync adds every project to SummitFlow-owned clients. The client id comes from
+    the caller's X-Client-Id header once the shared internal secret matches, so any
+    holder of that secret can name an admin client: the secret is the boundary.
+    This list only keeps honest callers to their lane. The dashboard's context
+    editor (/api/runtime-context/manage/save) changes scope without it. Changes to
+    global prompts and global mandate memories, including moves into or out of
+    global and exclusions, are reported to the owner instead
+    (app.services.global_context_notes).
     """
     granted = {settings.summitflow_client_id, *settings.agent_hub_admin_client_ids} - {""}
     return str(client.get("id") or "") in granted

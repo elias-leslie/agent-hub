@@ -388,3 +388,65 @@ async def test_atomic_preview_save_stale_undo_and_memory_identity():
                 await apply_draft(db, ContextDraft(context=context, placements=[PlacementEdit(source_type='prompt',source_id='deleted-prompt',mode='inherit')],expected_placement_revision=baseline['placement_revision']), 'test', preview=False)
         finally:
             await connection.rollback()
+
+
+@pytest.mark.integration
+async def test_excluding_global_context_is_noted_after_commit_and_never_after_rollback(maintenance_db, monkeypatch):
+    """Excluding a global guardrail for every project (overrides or the editor) tells the owner; a rollback does not."""
+    import asyncio
+
+    from app.services import global_context_notes
+    from app.services.runtime_context import (
+        RuntimeContextOverridePayload,
+        replace_runtime_context_overrides,
+    )
+
+    sent = []
+
+    async def fake_send(note):
+        sent.append(note)
+
+    monkeypatch.setattr(global_context_notes, 'send_note', fake_send)
+    # CI has no `st`; delivery reads the SummitFlow project registry through it.
+    monkeypatch.setattr('app.core.project_roots.get_registered_project_roots',
+                        AsyncMock(return_value={'agent-hub': '/srv/workspaces/projects/agent-hub'}))
+    db = maintenance_db
+    guardrail = Prompt(slug='exclusion-note-guardrail', name='Guardrail', content='Never expose secrets.',
+                       enabled=True, is_global=True, prompt_type='global_guardrail', exclude_agents=[],
+                       context_policy=ContextPolicy(scope='global').model_dump())
+    plain = Prompt(slug='exclusion-note-plain', name='Plain', content='Project advice.', enabled=True,
+                   is_global=False, prompt_type='standard', exclude_agents=[],
+                   context_policy=ContextPolicy(scope='project', targets=['agent-hub']).model_dump())
+    db.add_all([guardrail, plain])
+    await db.commit()
+
+    def excluded(*slugs):
+        return [RuntimeContextOverridePayload(source_type='prompt', source_id=slug, mode='exclude') for slug in slugs]
+
+    await replace_runtime_context_overrides(db, consumer_profile='codex', project_id=None,
+                                            overrides=excluded('exclusion-note-guardrail', 'exclusion-note-plain'))
+    await asyncio.gather(*list(global_context_notes._tasks))
+    assert [(n.title, n.name, n.excluded_from) for n in sent] == [
+        ('Global prompt excluded', 'exclusion-note-guardrail', 'codex context in every project')]
+
+    # Replacing the layer with the same exclusion is not a new exclusion.
+    await replace_runtime_context_overrides(db, consumer_profile='codex', project_id=None,
+                                            overrides=excluded('exclusion-note-guardrail'))
+    await asyncio.gather(*list(global_context_notes._tasks))
+    assert len(sent) == 1
+
+    context = maintenance_context(project='agent-hub')
+    placements = await inventory(db, context)
+    draft = ContextDraft(context=context, expected_placement_revision=placements['placement_revision'],
+                         placements=[PlacementEdit(source_type='prompt', source_id='exclusion-note-guardrail', mode='exclude')])
+    await apply_draft(db, draft, 'dashboard:operator', preview=False)
+    await db.rollback()
+    await asyncio.gather(*list(global_context_notes._tasks))
+    assert len(sent) == 1
+
+    await apply_draft(db, draft, 'dashboard:operator', preview=False)
+    await db.commit()
+    await asyncio.gather(*list(global_context_notes._tasks))
+    assert len(sent) == 2
+    assert sent[1].excluded_from == 'agent_startup context in project agent-hub'
+    assert sent[1].changed_by == 'dashboard:operator'

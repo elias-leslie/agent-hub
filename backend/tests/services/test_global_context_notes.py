@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextvars
 from types import SimpleNamespace
@@ -216,3 +217,85 @@ def test_actor_bound_in_middleware_reaches_the_endpoint(monkeypatch: pytest.Monk
             "/api/whoami", headers={"X-Agent-Hub-Internal": "s3cret", "X-Client-Id": "c1", "X-Request-Source": "st-cli"}
         )
     assert response.json() == {"actor": "internal:c1/st-cli", "attributed": "internal:c1/st-cli"}
+
+
+async def test_send_note_ends_options_before_the_message() -> None:
+    """A summary like '--key=x' must stay the message, not become an option that drops the note."""
+    process = MagicMock(returncode=0)
+    process.communicate = AsyncMock(return_value=(None, b""))
+    note = GlobalContextNote(kind="Global mandate memory", name="--key=x (12345678)", action="update",
+                             changed_by="c", before="a", after="b")
+    with (patch.object(global_context_notes.shutil, "which", return_value="/bin/nightshift"),
+          patch.object(global_context_notes, "create_process", AsyncMock(return_value=process)) as create):
+        await global_context_notes.send_note(note)
+
+    assert create.await_args is not None
+    args = create.await_args.args
+    assert args[-2:] == ("--", note.message())
+    assert note.message().startswith("--key=x")
+    parser = argparse.ArgumentParser()  # same shape as `nightshift push`
+    for option in ("--severity", "--title", "--key", "--cooldown", "--open"):
+        parser.add_argument(option)
+    parser.add_argument("message")
+    assert parser.parse_args(list(args[2:])).message == note.message()
+
+
+def _db_returning(rows: list[object]) -> MagicMock:
+    db = create_mock_db_session()
+    db.execute.return_value.scalars.return_value = rows
+    db.sync_session = Session()
+    return db
+
+
+def _placement(source_id: str, mode: str = "exclude", enabled: bool = True, source_type: str = "prompt") -> dict[str, Any]:
+    return {"source_type": source_type, "source_id": source_id, "mode": mode, "enabled": enabled}
+
+
+async def test_excluding_a_global_prompt_for_every_project_is_noted_once() -> None:
+    db = _db_returning([_prompt()])
+    await global_context_notes.queue_exclusion_notes(
+        cast(AsyncSession, db), consumer_profile="codex", project_id=None, before=[_placement("other", "include")],
+        after=[_placement("safety-directive"), _placement("other", "include")], changed_by="internal:c1/st-cli",
+    )
+
+    (note,) = db.sync_session.info["global_context_notes"]
+    assert note.title == "Global prompt excluded"
+    assert note.key == "agent-hub.global-context.prompt.safety-directive"
+    assert note.message() == ("safety-directive was excluded from codex context in every project by internal:c1/st-cli. "
+                              "Those agents no longer receive it.")
+
+
+async def test_exclusion_notes_name_the_project_and_global_mandate_memories() -> None:
+    db = _db_returning([_memory()])
+    await global_context_notes.queue_exclusion_notes(
+        cast(AsyncSession, db), consumer_profile="claude_code", project_id="neri", before=[],
+        after=[_placement("12345678-0000-0000-0000-000000000000", source_type="memory")], changed_by=None,
+    )
+    (note,) = db.sync_session.info["global_context_notes"]
+    assert note.title == "Global mandate memory excluded"
+    assert note.message().startswith("No sudo (12345678) was excluded from claude_code context in project neri by an "
+                                     "unidentified caller.")
+
+
+async def test_unchanged_disabled_or_included_placements_send_nothing() -> None:
+    db = _db_returning([_prompt()])
+    await global_context_notes.queue_exclusion_notes(
+        cast(AsyncSession, db), consumer_profile="codex", project_id=None,
+        before=[_placement("safety-directive")],
+        after=[_placement("safety-directive"), _placement("a", enabled=False), _placement("b", "include"),
+               _placement("not-a-uuid", source_type="memory")],
+        changed_by="c",
+    )
+    db.execute.assert_not_called()
+    assert "global_context_notes" not in db.sync_session.info
+
+
+async def test_exclusion_query_keeps_only_global_prompts() -> None:
+    db = _db_returning([])
+    await global_context_notes.queue_exclusion_notes(
+        cast(AsyncSession, db), consumer_profile="codex", project_id=None, before=[],
+        after=[_placement("project-only-prompt")], changed_by="c",
+    )
+    statement = str(db.execute.await_args.args[0])
+    assert "prompts.is_global IS true OR prompts.prompt_type IN" in statement
+    assert "global_context_notes" not in db.sync_session.info
