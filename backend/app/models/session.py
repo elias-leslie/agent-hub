@@ -17,11 +17,14 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    inspect,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.services.secret_redaction import redact_text, redact_value
 
 from .base import Base
 from .field_lengths import EXTERNAL_ID_MAX_LENGTH
@@ -358,6 +361,21 @@ class SessionEvent(Base):
         # Bulk ORM replacement must not resurrect the previous canonical output.
         return [(cls._tool_output, value), (cls.tool_output_from_content, False)]
 
+    def redact_secrets(self) -> None:
+        """Apply the secret floor to stored text; assigns only on a match.
+
+        Reads loaded values only: an unloaded column is not being written, and a
+        lazy load inside a flush listener would need IO.
+        """
+        loaded = inspect(self).dict
+        for attr, redact in (("content", redact_text), ("tool_input", redact_value), ("_tool_output", redact_value)):
+            if attr not in loaded:
+                continue
+            value = loaded[attr]
+            redacted = redact(value)
+            if redacted is not value and redacted != value:
+                setattr(self, attr, redacted)
+
     def compact_tool_output(self) -> None:
         """Keep exact duplicate tool-result text once, without mutating callers."""
         if (
@@ -409,8 +427,11 @@ class SessionEvent(Base):
 
 @event.listens_for(SessionEvent, "before_insert")
 @event.listens_for(SessionEvent, "before_update")
-def _compact_session_event_tool_output(_mapper, _connection, target: SessionEvent) -> None:
-    # Covers direct ORM writes such as branching as well as shared event storage.
+def _redact_and_compact_session_event(_mapper, _connection, target: SessionEvent) -> None:
+    # Covers direct ORM writes such as branching as well as shared event storage
+    # and session ingestion. Redaction runs first so compaction still sees equal
+    # content and output.
+    target.redact_secrets()
     target.compact_tool_output()
 
 

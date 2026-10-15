@@ -203,6 +203,8 @@ async def capture_observation(
             "Privacy filter stripped %d private tag(s) from observation",
             content_stats["private_tags_stripped"],
         )
+    if content_stats["secrets_redacted"] > 0:
+        logger.info("Secret floor redacted %d credential(s) from observation", content_stats["secrets_redacted"])
 
     now = datetime.now(UTC)
     episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"

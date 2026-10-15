@@ -24,6 +24,7 @@ from app.constants.models import GEMINI_EMBEDDING
 from app.llm.api_key_pool import mark_key_failure, mark_key_success, ordered_keys
 from app.llm.env_api_keys import get_env_api_keys
 from app.services.llm_errors import AuthenticationError
+from app.services.secret_redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -121,11 +122,13 @@ class EmbedderService:
         redundant Gemini API calls for repeated queries within a session.
 
         Args:
-            text: Text to embed (will be truncated if too long)
+            text: Text to embed (will be truncated if too long); secrets are
+                redacted first so no credential reaches the embedding API
 
         Returns:
             768-dimensional float vector
         """
+        text = redact_secrets(text)[0]
         cached = self._cache.get(text)
         if cached is not None:
             self._cache.move_to_end(text)
@@ -158,6 +161,7 @@ class EmbedderService:
         """
         if not texts:
             return []
+        texts = [redact_secrets(text)[0] for text in texts]
         result = await self._with_failover(
             lambda client: client.aio.models.embed_content(
                 model=self.model,

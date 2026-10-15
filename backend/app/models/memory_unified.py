@@ -6,6 +6,7 @@ Tables:
 
 from __future__ import annotations
 
+import hashlib
 import uuid as _uuid
 from datetime import datetime
 
@@ -19,12 +20,15 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    event,
     func,
+    inspect,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.services.memory_utility_score import calculate_memory_utility_score
+from app.services.secret_redaction import redact_text
 
 from .base import Base
 
@@ -227,6 +231,41 @@ class MemoryRevision(Base):
     memory: Mapped[Memory | None] = relationship("Memory", back_populates="revisions", lazy="raise")
 
     __table_args__ = ()
+
+
+_REDACTED_TEXT_FIELDS = ("content", "name", "summary", "source_description")
+
+
+def _redact_text_fields(target: Memory | MemoryRevision) -> bool:
+    """Apply the secret floor to stored text; True when content changed."""
+    content_changed = False
+    loaded = inspect(target).dict  # unloaded columns are not being written
+    for attr in _REDACTED_TEXT_FIELDS:
+        if attr not in loaded:
+            continue
+        value = loaded[attr]
+        redacted = redact_text(value)
+        if redacted != value:
+            setattr(target, attr, redacted)
+            content_changed = content_changed or attr == "content"
+    return content_changed
+
+
+@event.listens_for(Memory, "before_insert")
+@event.listens_for(Memory, "before_update")
+def _redact_memory(_mapper, _connection, target: Memory) -> None:
+    # Every memory write path (episodes, learnings, observations, governance
+    # edits) flushes through here; dedup must see the stored text.
+    if _redact_text_fields(target):
+        from app.services.memory.fingerprint import content_fingerprint
+
+        target.content_fingerprint = content_fingerprint(target.content)
+
+
+@event.listens_for(MemoryRevision, "before_insert")
+def _redact_memory_revision(_mapper, _connection, target: MemoryRevision) -> None:
+    if _redact_text_fields(target):
+        target.content_hash = hashlib.sha256(target.content.encode("utf-8")).hexdigest()
 
 
 class MemoryReviewRun(Base):

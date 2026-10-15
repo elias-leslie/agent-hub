@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.secret_redaction import redact_secrets
+
 
 def _strip_tagged(content: str, tag: str, replacement: str) -> tuple[str, int]:
     """Replace each ``<tag>...</tag>`` span (non-greedy, non-overlapping).
@@ -41,8 +43,10 @@ def strip_memory_tags(content: str) -> tuple[str, int]:
 def apply_privacy_filter(content: str) -> tuple[str, dict[str, int]]:
     filtered, private_count = strip_private_tags(content)
     filtered, memory_count = strip_memory_tags(filtered)
+    filtered, secret_counts = redact_secrets(filtered)
     stats = {
         "private_tags_stripped": private_count,
         "memory_tags_stripped": memory_count,
+        "secrets_redacted": sum(secret_counts.values()),
     }
     return filtered, stats

@@ -141,6 +141,8 @@ def _build_session_event(
         message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
         source_event_id=s(source_event_id), source_timestamp=source_timestamp, usage=s(usage),
     )
+    # Redact before narration and live activity read the event, not only at flush.
+    event.redact_secrets()
     event.compact_tool_output()
     return event
 

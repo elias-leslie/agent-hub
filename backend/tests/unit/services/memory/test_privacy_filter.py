@@ -155,4 +155,4 @@ class TestLinearScan:
         result, stats = apply_privacy_filter(content)
         assert time.monotonic() - started < 1.0
         assert result == content
-        assert stats == {"private_tags_stripped": 0, "memory_tags_stripped": 0}
+        assert stats == {"private_tags_stripped": 0, "memory_tags_stripped": 0, "secrets_redacted": 0}
