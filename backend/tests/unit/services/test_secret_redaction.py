@@ -22,7 +22,14 @@ from app.models.memory_unified import (
     _redact_memory,
     _redact_memory_revision,
 )
-from app.models.session import SessionEvent, _redact_and_compact_session_event
+from app.models.session import (
+    Session,
+    SessionEvent,
+    SessionSummarySegment,
+    _redact_and_compact_session_event,
+    _redact_session,
+    _redact_summary_segment,
+)
 from app.services.event_storage import _build_session_event
 from app.services.memory.embedder import EmbedderService
 from app.services.memory.fingerprint import content_fingerprint
@@ -149,6 +156,37 @@ def test_session_event_flush_listener_covers_direct_orm_writes() -> None:
     assert event.content is None
     assert event.tool_input == {"env": {"KEY": "[REDACTED:stripe_live_key]"}}
     assert event.tool_output == {"meta": ["[REDACTED:stripe_live_key]"]}
+
+
+def test_session_heartbeat_never_stores_a_credential() -> None:
+    from app.services.session_live_activity import apply_live_activity_heartbeat
+
+    token = SAMPLES["github_token"]
+    session = Session(id="s", project_id="p", provider="claude", model="m", provider_metadata={"sdk": "kept"},
+                      workstream_note=f"rotate {token}", summary_oneliner=f"used {token}", summary_git_digest=token)
+    apply_live_activity_heartbeat(
+        session, heartbeat_at="2026-10-15T23:00:00+00:00", phase="running_tool", status="active",
+        summary=f"calling gh with {token}", current_tool_name="Bash",
+        current_command=f"GH_TOKEN={token} gh api /user", last_event_type="tool_use",
+    )
+    _redact_session(None, None, session)
+    assert session.provider_metadata is not None
+    live = session.provider_metadata["live_activity"]
+    assert live["current_command"] == "GH_TOKEN=[REDACTED:github_token] gh api /user"
+    assert live["last_command"] == "GH_TOKEN=[REDACTED:github_token] gh api /user"
+    assert live["summary"] == "calling gh with [REDACTED:github_token]"
+    assert session.provider_metadata["sdk"] == "kept"
+    assert session.workstream_note == "rotate [REDACTED:github_token]"
+    assert session.summary_oneliner == "used [REDACTED:github_token]"
+    assert session.summary_git_digest == "[REDACTED:github_token]"
+    clean = {"live_activity": {"current_command": "git status"}}
+    untouched = Session(id="c", project_id="p", provider="claude", model="m", provider_metadata=clean)
+    _redact_session(None, None, untouched)
+    assert untouched.provider_metadata is clean  # unchanged JSON is not rewritten
+    segment = SessionSummarySegment(session_id="s", summary_oneliner=f"key {token}", summary_git_digest=None)
+    _redact_summary_segment(None, None, segment)
+    assert segment.summary_oneliner == "key [REDACTED:github_token]"
+    assert segment.summary_git_digest is None
 
 
 def test_memory_flush_listener_redacts_and_refreshes_fingerprint() -> None:
@@ -381,6 +419,57 @@ async def test_memory_metadata_is_redacted_on_postgres_flush() -> None:
                 assert hits.scalar() == 0
                 stored = await db.execute(text("SELECT metadata->>'compact_content' FROM memories"))
                 assert stored.scalar_one() == "edited [REDACTED:github_token]"
+        finally:
+            await connection.rollback()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_session_heartbeat_is_redacted_on_postgres_flush() -> None:
+    import uuid
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db import _get_engine
+    from app.models import Base
+    from app.services.session_live_activity import apply_live_activity_heartbeat
+
+    def isolated_schema(connection) -> None:
+        schema = "secret_floor_test_" + uuid.uuid4().hex
+        with Operations.context(MigrationContext.configure(connection)):
+            from alembic import op
+
+            op.execute(f'CREATE SCHEMA "{schema}"')
+            op.execute(f'SET LOCAL search_path TO "{schema}", public')
+            for table in Base.metadata.sorted_tables:
+                op.create_table(table.name, *(column._copy() for column in table.columns))
+
+    token = SAMPLES["github_token"]
+    async with _get_engine().connect() as connection:
+        assert (await connection.execute(text("SELECT current_database()"))).scalar() == "agent_hub_test"
+        try:
+            await connection.run_sync(isolated_schema)
+            async with AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint") as db:
+                session = Session(id=str(uuid.uuid4()), project_id="agent-hub", provider="claude", model="m",
+                                  session_type="claude_code", summary_oneliner=f"used {token}")
+                db.add(session)
+                await db.flush()
+                apply_live_activity_heartbeat(  # the update path a hook heartbeat takes
+                    session, heartbeat_at="2026-10-15T23:00:00+00:00", summary=f"with {token}",
+                    current_command=f"GH_TOKEN={token} gh api /user",
+                )
+                await db.flush()
+                hits = await db.execute(text(
+                    "SELECT count(*) FROM sessions WHERE row_to_json(sessions)::text ~ :p"
+                ), {"p": "gh[pousr]_[A-Za-z0-9]{36}"})
+                assert hits.scalar() == 0
+                stored = await db.execute(text(
+                    "SELECT provider_metadata->'live_activity'->>'last_command' FROM sessions"
+                ))
+                assert stored.scalar_one() == "GH_TOKEN=[REDACTED:github_token] gh api /user"
         finally:
             await connection.rollback()
 
