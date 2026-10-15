@@ -177,6 +177,11 @@ async def _build_content_update(
             request.content,
             tier=effective_tier,
         )
+        EpisodeValidator.validate_update(
+            request.content,
+            previous=existing_episode.get("content"),
+            tier=effective_tier,
+        )
     except EpisodeValidationError as e:
         raise HTTPException(
             status_code=422,

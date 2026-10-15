@@ -35,6 +35,22 @@ class EpisodeValidator:
     SESSION_SUMMARY_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?im)^\[session summary:"
     )
+    # Line shapes of pasted tool output (tracebacks, shell sessions, test runners,
+    # st status tags). Matched per line from the line start, so each stays linear.
+    TOOL_OUTPUT_LINE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"Traceback \(most recent call last\):"
+        r'|\s*File "[^"\n]*", line \d+'
+        r"|(?:\$|>>>|\u276f) \S"
+        r"|(?:FAILED|PASSED|ERROR) \S+::"
+        r"|E {2,}\S"
+        r"|=+ [^=\n]*\b(?:passed|failed|errors?)\b"
+        r"|[A-Z][A-Z_]+(?:\[\d+\])?:(?:OK|FAIL|PASS|SKIP|ERROR|BLOCKED)\b"
+    )
+    TOOL_OUTPUT_MIN_LINES: ClassVar[int] = 3
+    # A compact high-tier memory that suddenly balloons is almost always a dump.
+    COMPACT_TIERS: ClassVar[frozenset[str]] = frozenset({"mandate", "guardrail"})
+    COMPACT_GROWTH_FACTOR: ClassVar[int] = 3
+    COMPACT_GROWTH_MIN_CHARS: ClassVar[int] = 1000
 
 
     @classmethod
@@ -88,6 +104,37 @@ class EpisodeValidator:
         )
 
     @classmethod
+    def looks_like_tool_output(cls, content: str) -> bool:
+        """Return True when content carries pasted terminal/tool transcript lines."""
+        if "\x1b[" in content:
+            return True
+        hits = 0
+        for line in content.splitlines():
+            if cls.TOOL_OUTPUT_LINE_PATTERN.match(line):
+                hits += 1
+                if hits >= cls.TOOL_OUTPUT_MIN_LINES:
+                    return True
+        return False
+
+    @classmethod
+    def validate_update(cls, content: str, *, previous: str | None, tier: str) -> None:
+        """Reject updates that turn a memory into a tool-output or transcript dump."""
+        if cls.looks_like_tool_output(content):
+            raise EpisodeValidationError(
+                message="Update looks like pasted tool output or a transcript. Write the reusable "
+                "rule itself; keep raw output in task/session records.",
+                detected_patterns=["tool output transcript"],
+            )
+        if tier in cls.COMPACT_TIERS and previous:
+            growth = len(content) - len(previous)
+            if growth > cls.COMPACT_GROWTH_MIN_CHARS and len(content) > cls.COMPACT_GROWTH_FACTOR * len(previous):
+                raise EpisodeValidationError(
+                    message=f"Update grows a compact {tier} memory from {len(previous)} to {len(content)} "
+                    "chars. Keep it terse, or move the explanation to the wiki.",
+                    detected_patterns=["compact memory growth"],
+                )
+
+    @classmethod
     def _has_subtask_attempt_log(cls, content: str) -> bool:
         """Return True when ``subtask <id>`` is followed by ``attempt(s)`` on the same line.
 
@@ -123,6 +170,8 @@ class EpisodeValidator:
             detected.append("document-specific artifact")
         if cls.SESSION_SUMMARY_PATTERN.search(content):
             detected.append("session summary")
+        if cls.looks_like_tool_output(content):
+            detected.append("tool output transcript")
         return detected
 
     @classmethod
