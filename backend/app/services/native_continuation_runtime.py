@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from app.adapters.codex_auth import CodexCredentials
+from app.llm.model_resolver import upstream_model_id
 from app.services.codex_credentials import ensure_fresh_codex_credentials
 from app.utils.safe_subprocess import create_process
 
@@ -676,7 +677,7 @@ class NativeRuntimeManager:
                     "native_auth_unavailable",
                     "Native continuation did not accept Agent Hub authentication.",
                 )
-            native_model = key.model.removeprefix("codex/")
+            native_model = upstream_model_id(key.model, "codex")
             thread = await protocol.request(
                 "thread/start",
                 {

@@ -41,7 +41,7 @@ CODEX_GPT_6_LUNA = "codex/gpt-6-luna"
 CODEX_GPT_5_6_SOL = "codex/gpt-5.6-sol"
 CODEX_GPT_5_6_TERRA = "codex/gpt-5.6-terra"
 CODEX_GPT_5_6_LUNA = "codex/gpt-5.6-luna"
-CODEX_GPT_DAYBREAK_BLUE = "codex/gpt-daybreak-blue-latest"
+CODEX_GPT_5_6_SOL_DAYBREAK_BLUE = "codex/gpt-5.6-sol-daybreak-blue"
 
 # xAI models (Direct)
 XAI_GROK_4_3 = "xai/grok-4.3"

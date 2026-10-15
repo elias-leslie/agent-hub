@@ -237,7 +237,7 @@ def _key(**changes: object) -> NativeRuntimeKey:
         "controller_generation": "controller-1",
         "instruction_hash": "a" * 64,
         "tool_policy_hash": NATIVE_TOOL_POLICY_HASH,
-        "model": "codex/gpt-daybreak-blue-latest",
+        "model": "codex/gpt-5.6-sol-daybreak-blue",
         "reasoning_effort": "xhigh",
     }
     values.update(changes)
@@ -315,7 +315,7 @@ async def test_manager_reuses_one_runtime_for_snapshot_then_delta() -> None:
             answer_text='{"step":1}',
             thread_id="thread-1",
             turn_id="turn-1",
-            observed_model="gpt-daybreak-blue-latest",
+            observed_model="gpt-5.6-sol",
             usage=NativeTurnUsage(input_tokens=10, output_tokens=2, known=True),
             runtime="test",
         ),
@@ -323,7 +323,7 @@ async def test_manager_reuses_one_runtime_for_snapshot_then_delta() -> None:
             answer_text='{"step":2}',
             thread_id="thread-1",
             turn_id="turn-2",
-            observed_model="gpt-daybreak-blue-latest",
+            observed_model="gpt-5.6-sol",
             usage=NativeTurnUsage(input_tokens=4, output_tokens=2, known=True),
             runtime="test",
         ),

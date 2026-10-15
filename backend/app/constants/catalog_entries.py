@@ -30,12 +30,12 @@ from app.constants.models import (
     CLAUDE_SONNET,
     CODEX_GPT_5_6_LUNA,
     CODEX_GPT_5_6_SOL,
+    CODEX_GPT_5_6_SOL_DAYBREAK_BLUE,
     CODEX_GPT_5_6_TERRA,
     CODEX_GPT_6_1_SOL,
     CODEX_GPT_6_ASTRA,
     CODEX_GPT_6_LUNA,
     CODEX_GPT_6_SOL,
-    CODEX_GPT_DAYBREAK_BLUE,
     GEMINI_2_5_FLASH,
     GEMINI_2_5_FLASH_LITE,
     GEMINI_3_1_FLASH_LITE,
@@ -294,15 +294,16 @@ MODEL_CATALOG: list[ModelEntry] = [
         availability="codex_oauth_subscription; verified_2026-10-09",
     ),
     ModelEntry(
-        id=CODEX_GPT_DAYBREAK_BLUE, alias="codex-daybreak", name="GPT Daybreak Blue",
+        id=CODEX_GPT_5_6_SOL_DAYBREAK_BLUE, alias="codex-daybreak", name="GPT Daybreak Blue",
         hint="Defensive cybersecurity (Daybreak Blue access program)", provider="codex",
         scores=ModelScores(coding=99, reasoning=99, planning=92, tool_use=93, instruction=95, design=86),
         cost=ModelCost(0.00, 0.00), context_window=272_000, speed_tier="medium",
         capabilities=_CODEX_CAPABILITIES, knowledge_cutoff="2026-02-16", family="gpt",
         availability=(
-            "codex_oauth_subscription; verified_2026-10-09; rolling_alias_no_snapshot; "
-            "needs_access_programs_cyber_daybreak_blue; openai_api_alias_deprecated_snapshot_gpt-5.6-sol"
+            "codex_oauth_subscription; pinned_gpt-5.6-sol; "
+            "needs_access_programs_cyber_daybreak_blue"
         ),
+        upstream_id="gpt-5.6-sol",
         access_programs={"cyber": "daybreak_blue"},
     ),
 

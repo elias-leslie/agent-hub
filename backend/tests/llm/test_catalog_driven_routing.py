@@ -63,7 +63,10 @@ def test_migration_backfills_the_catalog_values() -> None:
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     catalog_upstream_ids = {e.id: e.upstream_id for e in MODEL_CATALOG if e.upstream_id}
-    assert catalog_upstream_ids == migration._UPSTREAM_IDS
+    assert catalog_upstream_ids == {
+        **migration._UPSTREAM_IDS,
+        "codex/gpt-5.6-sol-daybreak-blue": "gpt-5.6-sol",
+    }
     # 43f0a2fd606f later removed some of these models and added Claude 5 rows.
     later = json.loads(
         (_BACKEND / "alembic/versions/43f0a2fd606f_claude_cli_routes_and_codex_successors.json").read_text()
@@ -72,6 +75,8 @@ def test_migration_backfills_the_catalog_values() -> None:
     added = {row["id"] for row in later["new_models"] if row["thinking_level_map"]}
     # b7f1c2d3e4a5 deactivated Fable and dropped it from the seed catalog.
     added -= {"claude-fable-5-1"}
+    removed.add("codex/gpt-daybreak-blue-latest")
+    added.add("codex/gpt-5.6-sol-daybreak-blue")
     assert set(migration._MINIMAL_AS_LOW_MODELS) - removed | added == {
         e.id for e in MODEL_CATALOG if e.capabilities.thinking_level_map
     }
@@ -80,8 +85,12 @@ def test_migration_backfills_the_catalog_values() -> None:
 
 
 def test_codex_request_carries_the_catalog_access_program() -> None:
-    daybreak = resolve_llm_model("codex/gpt-daybreak-blue-latest", "codex")
-    assert _body(daybreak, Context(messages=[]), None)["access_programs"] == {"cyber": "daybreak_blue"}
+    daybreak = resolve_llm_model("codex/gpt-5.6-sol-daybreak-blue", "codex")
+    body = _body(daybreak, Context(messages=[]), None)
+    assert body["model"] == "gpt-5.6-sol"
+    assert body["access_programs"] == {"cyber": "daybreak_blue"}
+    assert upstream_model_id("codex-daybreak", "codex") == "gpt-5.6-sol"
+    assert not any("gpt-daybreak-" in entry.id for entry in MODEL_CATALOG)
     plain = resolve_llm_model("codex/gpt-6.1-sol", "codex")
     assert "access_programs" not in _body(plain, Context(messages=[]), None)
 

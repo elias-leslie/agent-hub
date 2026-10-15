@@ -165,7 +165,7 @@ async def test_native_evidence_mentions_do_not_override_or_mutate_routing() -> N
         )
     )
     resolution = (
-        "codex/gpt-daybreak-blue-latest",
+        "codex/gpt-5.6-sol-daybreak-blue",
         "codex",
         None,
         None,
@@ -189,7 +189,7 @@ async def test_native_evidence_mentions_do_not_override_or_mutate_routing() -> N
     ):
         resolved = await _validate_and_resolve(request, http_request, AsyncMock())
 
-    assert resolved[3:5] == ("codex/gpt-daybreak-blue-latest", "codex")
+    assert resolved[3:5] == ("codex/gpt-5.6-sol-daybreak-blue", "codex")
     assert "@codex/gpt-6-astra" in str(request.messages[0].content)
     mention_override.assert_not_called()
 
@@ -203,7 +203,7 @@ async def test_orchestrator_routes_native_before_transcript_reconstruction() -> 
             "hash",
             "neri-client",
             "neri-lab",
-            "codex/gpt-daybreak-blue-latest",
+            "codex/gpt-5.6-sol-daybreak-blue",
             "codex",
             None,
             None,
@@ -237,6 +237,6 @@ async def test_orchestrator_routes_native_before_transcript_reconstruction() -> 
 
 
 def test_cyber_access_program_defaults_to_the_catalog_requirement() -> None:
-    assert _cyber_access_program(None, "codex/gpt-daybreak-blue-latest") == "daybreakBlue"
+    assert _cyber_access_program(None, "codex/gpt-5.6-sol-daybreak-blue") == "daybreakBlue"
     assert _cyber_access_program(None, "codex/gpt-6.1-sol") is None
     assert _cyber_access_program("standard", "codex/gpt-6.1-sol") == "standard"
