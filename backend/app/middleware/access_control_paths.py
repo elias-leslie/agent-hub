@@ -38,12 +38,16 @@ AUTH_BYPASS_PREFIXES = (
     "/api/memory/search",  # Memory search (read-only)
     "/api/memory/episodes",  # Memory episode listing (read-only)
     "/api/memory/entities",  # Memory entity listing (read-only)
-    "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
+    "/api/agents",  # Agent discovery (reads only, see READ_ONLY_BYPASS_PREFIXES)
     "/api/models",  # Model catalog (read-only static data, no LLM costs)
     # Voice currently uses caller-supplied WebSocket identity. Assistant mode
     # can invoke an LLM, so deployments must keep this on a trusted boundary.
     "/api/voice",
 )
+
+# Bypass prefixes where only reads skip identification; writes need the internal header or a client id
+READ_ONLY_BYPASS_PREFIXES = ("/api/agents",)
+_READ_METHODS = frozenset({"GET", "HEAD"})
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)
 # These bypass full auth but require X-Agent-Hub-Internal header
@@ -66,8 +70,10 @@ def is_path_exempt(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES)
 
 
-def is_auth_bypass_path(path: str) -> bool:
+def is_auth_bypass_path(path: str, method: str = "GET") -> bool:
     """Check if path bypasses auth but still logs requests."""
+    if method not in _READ_METHODS and any(path.startswith(prefix) for prefix in READ_ONLY_BYPASS_PREFIXES):
+        return False
     return any(path.startswith(prefix) for prefix in AUTH_BYPASS_PREFIXES)
 
 

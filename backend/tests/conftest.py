@@ -44,6 +44,8 @@ os.environ.setdefault(
     "dGVzdC1zaWduYXR1cmUtcGFkZGluZyE",
 )
 os.environ.setdefault("HATCHET_CLIENT_TLS_STRATEGY", "none")
+# Test clients send Host "test" / "testserver".
+os.environ["AGENT_HUB_TRUSTED_HOSTS"] = "localhost,127.0.0.1,::1,test,testserver"
 
 # Internal service secret must match TEST_HEADERS for access control bypass.
 # Force override (load_dotenv may have already set a production value).

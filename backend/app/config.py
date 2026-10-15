@@ -133,10 +133,13 @@ class Settings(BaseSettings):
         f"http://localhost:{AGENT_HUB_FRONTEND_PORT}",
     ]
 
-    @field_validator("cors_origins", mode="before")
+    # Host names the backend answers to (AGENT_HUB_TRUSTED_HOSTS); any other Host is refused (DNS rebinding).
+    agent_hub_trusted_hosts: Annotated[list[str], NoDecode] = ["localhost", "127.0.0.1", "::1"]
+
+    @field_validator("cors_origins", "agent_hub_trusted_hosts", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
-        """Parse CORS_ORIGINS from a JSON array, comma-separated string, or list."""
+        """Parse CORS_ORIGINS / AGENT_HUB_TRUSTED_HOSTS from a JSON array, comma-separated string, or list."""
         if isinstance(v, str):
             if v.strip().startswith("["):
                 return [str(origin).strip() for origin in json.loads(v) if str(origin).strip()]

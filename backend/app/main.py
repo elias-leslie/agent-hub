@@ -18,6 +18,7 @@ from app.exception_handlers import setup_exception_handlers
 from app.llm import ensure_builtin_providers_registered
 from app.llm.api_registry import get_api_providers
 from app.middleware.access_control import AccessControlMiddleware
+from app.middleware.request_origin import RequestOriginMiddleware
 from app.services.agent_bootstrap_service import bootstrap_default_agents
 from app.services.agent_model_reconciliation_service import (
     reconcile_agent_models_to_available_providers,
@@ -224,6 +225,13 @@ app.add_middleware(
 
 # Access control middleware for mandatory client authentication
 app.add_middleware(AccessControlMiddleware)
+
+# Outermost: refuse other sites' pages (foreign Host or Origin) before CORS and auth
+app.add_middleware(
+    RequestOriginMiddleware,
+    trusted_hosts=settings.agent_hub_trusted_hosts,
+    allowed_origins=settings.cors_origins,
+)
 
 
 @app.get("/")

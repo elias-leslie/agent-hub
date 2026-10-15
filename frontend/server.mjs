@@ -5,11 +5,13 @@
  * route handlers cannot tell the real TCP peer. This wrapper overwrites
  * x-agent-hub-client-address on every request (HTTP and WebSocket upgrade)
  * from the socket peer before Next.js sees it; the API proxy forwards it and
- * the backend decides local-owner trust from it, never from Host.
+ * the backend decides local-owner trust from it, never from Host. Requests
+ * from other sites (foreign Host or Origin) are refused first.
  */
 import { createServer } from 'node:http'
 import next from 'next'
 import { CLIENT_ADDRESS_HEADER, clientAddress } from './src/lib/client-address.mjs'
+import { allowedOrigins, refusal } from './src/lib/request-guard.mjs'
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name)
@@ -23,16 +25,29 @@ function stamp(req) {
   req.headers[CLIENT_ADDRESS_HEADER] = clientAddress(req.socket.remoteAddress, req.headers)
 }
 
+const origins = allowedOrigins(port)
+
 const app = next({ dev: false, hostname, port })
 const handle = app.getRequestHandler()
 await app.prepare()
 const upgrade = app.getUpgradeHandler()
 
 const server = createServer((req, res) => {
+  const refused = refusal(req, origins)
+  if (refused) {
+    res.writeHead(refused.status, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: refused.error }))
+    return
+  }
   stamp(req)
   handle(req, res)
 })
 server.on('upgrade', (req, socket, head) => {
+  const refused = refusal({ headers: req.headers, upgrade: true }, origins)
+  if (refused) {
+    socket.end(`HTTP/1.1 ${refused.status} ${refused.error}\r\nConnection: close\r\n\r\n`)
+    return
+  }
   stamp(req)
   upgrade(req, socket, head)
 })

@@ -71,7 +71,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Auth bypass paths: skip identification but still log requests
-        if is_auth_bypass_path(path):
+        if is_auth_bypass_path(path, method):
             return await handle_auth_bypass(request, call_next, path, method, start_time)
 
         # Check internal-only paths (dashboard endpoints that require internal header)
