@@ -61,6 +61,7 @@ async def test_service_scope_move_preserves_content_and_undo_receipt(maintenance
         memory_id=str(row.id)[:8], scope="project", scope_id="agent-hub", reason="Correct project targeting",
     )
     client = {"id": "internal-test", "client_type": "internal", "allowed_projects": '["agent-hub"]'}
+    monkeypatch.setattr("app.middleware.access_control_auth.settings.agent_hub_admin_client_ids", ("internal-test",))
     preview = await preview_memory_scope(db, request, client)
     await db.refresh(row)
     assert preview["expected_revision"] == initial_revision
