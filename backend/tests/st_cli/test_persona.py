@@ -89,3 +89,35 @@ class TestPersonaStatusCommand:
 
         assert result.exit_code == 0
         assert result.output.strip() == "Persona: Jenny | Onboarding: complete"
+
+
+class TestPersonaUpdateProfile:
+    def test_profile_field_merges_into_current_profile(self) -> None:
+        current = {"user_profile": {"timezone": "America/New_York", "communication_style": "old"}}
+        saved = {"version": 7, "user_profile": {"timezone": "America/New_York", "communication_style": "Plain prose."}}
+        with (
+            patch("agent_hub_st.persona_api.get_persona", return_value=current),
+            patch("agent_hub_st.persona_api.update_persona", return_value=saved) as update,
+        ):
+            result = runner.invoke(app, ["update", "--profile", "communication_style=Plain prose."])
+
+        assert result.exit_code == 0, result.output
+        update.assert_called_once_with(
+            {"user_profile": {"timezone": "America/New_York", "communication_style": "Plain prose."}}
+        )
+        assert "user_profile.communication_style: Plain prose." in result.output
+
+    def test_unknown_profile_field_fails(self) -> None:
+        with (
+            patch("agent_hub_st.persona_api.get_persona", return_value={"user_profile": None}),
+            patch("agent_hub_st.persona_api.update_persona", return_value={"user_profile": None}),
+        ):
+            result = runner.invoke(app, ["update", "--profile", "favourite_colour=blue"])
+
+        assert result.exit_code == 1
+        assert "favourite_colour" in result.output
+
+    def test_profile_requires_field_equals_text(self) -> None:
+        result = runner.invoke(app, ["update", "--profile", "communication_style"])
+
+        assert result.exit_code == 1

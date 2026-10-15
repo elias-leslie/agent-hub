@@ -62,9 +62,13 @@ def update(
     session_reset_hour: Annotated[int | None, _Opt("--session-reset-hour", help="Hour (0-23) for daily reset")] = None,
     greeting: Annotated[str | None, _Opt("--greeting", help="Greeting message")] = None,
     limits: Annotated[str | None, _Opt("--limits", help="JSON file for limits")] = None,
+    profile: Annotated[
+        list[str] | None,
+        _Opt("--profile", help="user_profile FIELD=TEXT (repeatable; empty TEXT clears), e.g. communication_style=..."),
+    ] = None,
 ) -> None:
     """Update persona fields. Text fields accept file paths."""
-    from .persona_api import update_persona
+    from .persona_api import get_persona, update_persona
 
     fields: dict[str, Any] = {}
     _apply_file_and_scalar_fields(
@@ -73,11 +77,34 @@ def update(
     )
     if limits is not None:
         load_limits_field(fields, limits)
+    profile_updates = _parse_profile_updates(profile or [])
+    if profile_updates:
+        # PUT replaces user_profile wholesale, so merge into the current profile.
+        current = _api(get_persona, "Failed to fetch persona").get("user_profile") or {}
+        fields["user_profile"] = {**current, **profile_updates}
     if not fields:
         output_error("No fields specified. Use --help to see available flags.")
         raise typer.Exit(1)
     result = _api(lambda: update_persona(fields), "Failed to update persona")
-    print_update_result(result, fields)
+    saved = result.get("user_profile") or {}
+    unknown = [key for key, value in profile_updates.items() if value.strip() and key not in saved]
+    if unknown:
+        output_error(f"Unknown user_profile field(s), not saved: {', '.join(unknown)}")
+        raise typer.Exit(1)
+    print_update_result(result, {k: v for k, v in fields.items() if k != "user_profile"} | {
+        f"user_profile.{k}": v for k, v in profile_updates.items()
+    })
+
+
+def _parse_profile_updates(values: list[str]) -> dict[str, str]:
+    updates: dict[str, str] = {}
+    for item in values:
+        key, sep, text = item.partition("=")
+        if not sep or not key.strip():
+            output_error(f"--profile expects FIELD=TEXT, got {item!r}")
+            raise typer.Exit(1)
+        updates[key.strip()] = text
+    return updates
 
 
 @app.command()
