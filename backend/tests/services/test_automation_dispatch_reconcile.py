@@ -10,6 +10,7 @@ from hatchet_sdk.exceptions import FailedTaskRunExceptionGroup
 
 from app.models import AutomationDefinition, AutomationProfile
 from app.services.automation_dispatch import dispatch_run, reconcile_runs
+from app.workflows.scheduled import EmptyInput
 
 
 class BoundDefinition:
@@ -170,6 +171,10 @@ async def test_dispatch_snapshots_owner_definition_before_session_closes():
     assert run.status == "accepted"
     assert run.owner_run_id == "hatchet-1"
     sessions[1].commit.assert_awaited_once()
+    # Typed input matching the tasks' declared EmptyInput: a raw dict logs a
+    # Pydantic serializer warning on every dispatch.
+    sent = task.aio_run_no_wait.await_args.kwargs["input"]
+    assert sent == EmptyInput(automation_run_id="run-1")
 
 
 @pytest.mark.asyncio

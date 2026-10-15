@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from app.hatchet_app import hatchet
+from app.hatchet_app import _install_hatchet_shutdown_404_guard, hatchet
 from app.services.tools.command_guard import warm_shared_command_guard
 from app.worker_diagnostics import install_asyncio_task_dump_signal
 from app.workflows.automation_clock import automation_clock_task
@@ -28,6 +28,10 @@ from app.workflows.session_reaper import session_reaper_task
 from app.workflows.summary import session_summary_task
 
 logger = logging.getLogger(__name__)
+
+# Hatchet runs its action listener in a spawned child that re-imports the worker
+# entry module (and so this module), not get_hatchet(); install the guard here.
+_install_hatchet_shutdown_404_guard()
 
 WorkflowDef = Any
 

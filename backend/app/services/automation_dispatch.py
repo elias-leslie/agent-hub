@@ -124,7 +124,6 @@ async def dispatch_run(run_id: str) -> None:
         dispatch_kind = definition.dispatch_kind
         dispatch_target = definition.dispatch_target
         owner_project_id = definition.owner_project_id
-        manual = run.trigger == "manual"
         if run.status == "accepted" and dispatch_kind != "callback":
             return
         if run.status != "accepted":
@@ -145,10 +144,12 @@ async def dispatch_run(run_id: str) -> None:
 
     try:
         if dispatch_kind == "hatchet":
+            from app.workflows.scheduled import EmptyInput
+
             task = _hatchet_task(dispatch_target)
             try:
                 ref = await task.aio_run_no_wait(
-                    input={"automation_run_id": run_id, "manual": manual},
+                    input=EmptyInput(automation_run_id=run_id),
                     options=TriggerWorkflowOptions(
                         key=run_id,
                         additional_metadata={"automation_run_id": run_id},
