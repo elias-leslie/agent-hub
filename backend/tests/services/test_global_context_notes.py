@@ -114,7 +114,7 @@ async def test_unglobaling_or_disabling_a_global_prompt_is_noted() -> None:
 
 async def test_non_global_prompt_and_metadata_only_edits_send_nothing() -> None:
     db = _db_with_previous(None)
-    await record_prompt_revision(db, _prompt(is_global=False), action="update")
+    await record_prompt_revision(db, _prompt(is_global=False, prompt_type="standard"), action="update")
     assert "global_context_notes" not in db.sync_session.info
 
     same = PromptRevision(content="Never expose secrets.\nAsk first.", is_global=True, enabled=True, exclude_agents=[])
@@ -132,8 +132,14 @@ def _memory(**overrides: Any) -> Memory:
     return memory
 
 
+def _memory_revision(**overrides: Any) -> SimpleNamespace:
+    fields = {"content": "Never run sudo.", "scope": "global", "tier": 1, "status": "active", "applicability": {},
+              "trigger_task_types": [], "trigger_phases": [], "render_mode": None, "metadata_": {}}
+    return SimpleNamespace(**{**fields, **overrides})
+
+
 async def test_global_mandate_memory_change_is_noted_and_demotion_too() -> None:
-    previous = SimpleNamespace(content="Never run sudo.", scope="global", tier=1, status="active")
+    previous = _memory_revision()
     db = _db_with_previous(previous)
     await RevisionRepository().record_revision(db, _memory(tier=3), action="update", changed_by="api")
 
@@ -145,6 +151,57 @@ async def test_global_mandate_memory_change_is_noted_and_demotion_too() -> None:
     db = _db_with_previous(None)
     await RevisionRepository().record_revision(db, _memory(scope="project", scope_id="x"), action="create")
     assert "global_context_notes" not in db.sync_session.info
+
+
+@pytest.mark.parametrize(("change", "flag"), [
+    ({"applicability": {"exclude_consumer_profiles": ["codex"]}},
+     "applicability: {} -> {'exclude_consumer_profiles': ['codex']}"),
+    ({"trigger_task_types": ["bug"]}, "trigger_task_types: [] -> ['bug']"),
+    ({"trigger_phases": ["verify"]}, "trigger_phases: [] -> ['verify']"),
+    ({"render_mode": "summary"}, "render_mode: None -> summary"),
+    ({"metadata_": {"disclosure": {"workflows": ["w"], "activation": "triggered"}}},
+     "disclosure: None -> {'workflows': ['w'], 'activation': 'triggered'}"),
+])
+async def test_retargeting_a_global_mandate_memory_is_noted(change: dict[str, Any], flag: str) -> None:
+    db = _db_with_previous(_memory_revision())
+    await RevisionRepository().record_revision(db, _memory(**change), action="context_edit", changed_by="api")
+
+    (note,) = db.sync_session.info["global_context_notes"]
+    assert note.flags == (flag,)
+    assert db.add.call_args.args[0].render_mode == change.get("render_mode")
+
+    db = _db_with_previous(_memory_revision(**change))
+    await RevisionRepository().record_revision(db, _memory(**change), action="context_edit", changed_by="api")
+    assert "global_context_notes" not in db.sync_session.info
+
+
+@pytest.mark.parametrize(("policy", "flag"), [
+    ({"scope": "global", "applicability": {"exclude_consumer_profiles": ["codex", "claude_code"]}},
+     "policy applicability: {} -> {'exclude_consumer_profiles': ['codex', 'claude_code']}"),
+    ({"scope": "global", "activation": "triggered", "task_types": ["bug"]}, "policy activation: always -> triggered"),
+    ({"scope": "global", "workflows": ["w"]}, "policy workflows: [] -> ['w']"),
+    ({"scope": "project", "targets": ["agent-hub"]}, "policy scope: global -> project"),
+])
+async def test_retargeting_or_triggering_a_global_prompt_is_noted(policy: dict[str, Any], flag: str) -> None:
+    unchanged = {"scope": "global"}
+    db = _db_with_previous(PromptRevision(content="Never expose secrets.\nAsk first.", is_global=True, enabled=True,
+                                          exclude_agents=[], context_policy=unchanged, prompt_type="global_guardrail"))
+    await record_prompt_revision(db, _prompt(context_policy=policy), action="context_edit")
+
+    (note,) = db.sync_session.info["global_context_notes"]
+    assert flag in note.flags
+    assert note.message().startswith("safety-directive was edited by")
+
+
+async def test_a_policy_scoped_global_prompt_counts_as_global() -> None:
+    previous = PromptRevision(content="Rules.", is_global=False, enabled=True, exclude_agents=[],
+                              context_policy={"scope": "global"}, prompt_type="standard")
+    db = _db_with_previous(previous)
+    policy = {"scope": "global", "applicability": {"consumer_profiles": ["dashboard"]}}
+    await record_prompt_revision(db, _prompt(content="Rules.", is_global=False, prompt_type="standard",
+                                             context_policy=policy), action="update")
+    (note,) = db.sync_session.info["global_context_notes"]
+    assert note.flags == ("policy applicability: {} -> {'consumer_profiles': ['dashboard']}",)
 
 
 async def test_notes_go_out_after_commit_and_never_after_rollback() -> None:

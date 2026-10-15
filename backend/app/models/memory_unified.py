@@ -214,6 +214,7 @@ class MemoryRevision(Base):
     trigger_phases: Mapped[list[str]] = mapped_column(
         ARRAY(String), nullable=False, server_default="{}"
     )
+    render_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")

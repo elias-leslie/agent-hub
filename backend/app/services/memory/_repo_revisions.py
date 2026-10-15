@@ -22,6 +22,18 @@ from .budget import count_tokens
 from .fingerprint import content_fingerprint
 
 
+def _delivery_switches(row: Memory | MemoryRevision) -> dict[str, object]:
+    """Everything that decides who receives a memory, when and in what form."""
+    return {
+        "scope": row.scope, "tier": row.tier, "status": row.status,
+        "applicability": dict(row.applicability or {}),
+        "trigger_task_types": list(row.trigger_task_types or []),
+        "trigger_phases": list(row.trigger_phases or []),
+        "render_mode": row.render_mode,
+        "disclosure": (row.metadata_ or {}).get("disclosure"),
+    }
+
+
 class RevisionRepository:
     """Handles immutable revision snapshots and revision lookup."""
 
@@ -42,7 +54,8 @@ class RevisionRepository:
         """Persist an immutable snapshot for one memory state.
 
         A change to a global-scope mandate (or one that stops being one) queues
-        one Nightshift note with the diff against the previous revision.
+        one Nightshift note with the diff against the previous revision,
+        including changes to who receives it, when and in what form.
         """
         previous = (await db.execute(
             select(MemoryRevision).where(MemoryRevision.memory_id == memory.id)
@@ -71,6 +84,7 @@ class RevisionRepository:
             display_order=int(memory.display_order or 50),
             trigger_task_types=list(memory.trigger_task_types or []),
             trigger_phases=list(memory.trigger_phases or []),
+            render_mode=memory.render_mode,
             token_count=memory.token_count,
             status=memory.status,
             metadata_=dict(memory.metadata_ or {}),
@@ -88,10 +102,7 @@ class RevisionRepository:
                 changed_by=revision.changed_by,
                 before=previous.content if previous is not None else None,
                 after=None if action == "delete" else memory.content, reason=change_reason,
-                flags=flag_changes(
-                    None if previous is None else {"scope": previous.scope, "tier": previous.tier, "status": previous.status},
-                    {"scope": memory.scope, "tier": memory.tier, "status": memory.status},
-                ),
+                flags=flag_changes(None if previous is None else _delivery_switches(previous), _delivery_switches(memory)),
             ))
         return revision
 

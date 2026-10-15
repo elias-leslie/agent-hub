@@ -450,3 +450,50 @@ async def test_excluding_global_context_is_noted_after_commit_and_never_after_ro
     assert len(sent) == 2
     assert sent[1].excluded_from == 'agent_startup context in project agent-hub'
     assert sent[1].changed_by == 'dashboard:operator'
+
+
+@pytest.mark.integration
+async def test_retargeting_or_triggering_a_global_guardrail_in_the_editor_is_noted_once(maintenance_db, monkeypatch):
+    """Only a policy change (same content, same switches) still drops the guardrail for some agents: one note each."""
+    import asyncio
+
+    from app.services import global_context_notes
+    from app.services.prompt_service import record_prompt_revision
+
+    sent = []
+
+    async def fake_send(note):
+        sent.append(note)
+
+    monkeypatch.setattr(global_context_notes, 'send_note', fake_send)
+    db = maintenance_db
+    guardrail = Prompt(slug='policy-note-guardrail', name='Guardrail', content='Never expose secrets.',
+                       enabled=True, is_global=True, prompt_type='global_guardrail', exclude_agents=[],
+                       context_policy=ContextPolicy(scope='global').model_dump())
+    db.add(guardrail)
+    await db.flush()
+    await record_prompt_revision(db, guardrail, action='create')
+    await db.commit()
+    await asyncio.gather(*list(global_context_notes._tasks))
+    sent.clear()
+    context = maintenance_context()
+
+    async def save(policy):
+        row = await get_source(db, 'prompt', 'policy-note-guardrail')
+        await apply_draft(db, ContextDraft(context=context, reason='Tidy targeting', edits=[SourceEdit(
+            source_type='prompt', source_id='policy-note-guardrail', expected_revision=source_revision(row),
+            policy=policy)]),
+            'dashboard:operator', preview=False)
+        await db.commit()
+        await asyncio.gather(*list(global_context_notes._tasks))
+
+    await save(ContextPolicy(scope='global', applicability={'exclude_consumer_profiles': ['codex', 'claude_code']}))
+    (note,) = sent
+    assert note.title == 'Global prompt edited' and note.changed_by == 'dashboard:operator'
+    assert any(flag.startswith('policy applicability: {} -> ') and 'claude_code' in flag for flag in note.flags)
+
+    await save(ContextPolicy(scope='global', activation='triggered', task_types=['bug']))
+    assert len(sent) == 2
+    assert 'policy activation: always -> triggered' in sent[1].flags
+    # An unchanged policy sending nothing is covered by the unit tests: here every
+    # revision shares one now() inside the outer test transaction, so "previous" is ambiguous.

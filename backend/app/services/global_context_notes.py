@@ -3,8 +3,10 @@
 Global prompts (the Safety Directive among them) and global-scope mandate
 memories reach every agent. Agents edit them legitimately, about daily, so a
 change is not an ask: it is one info note naming the calling client, with the
-diff. Excluding one of them from a consumer profile through a runtime-context
-placement drops it just as surely, so a new exclusion sends a note too. Notes
+diff, including any change to who receives it, when, or in what form
+(targeting, triggers, workflows, render mode). Excluding one of them from a
+consumer profile through a runtime-context placement drops it just as surely,
+so a new exclusion sends a note too. Notes
 go out after the transaction commits; a rolled-back change sends nothing.
 Sending never fails the write.
 """
@@ -35,7 +37,7 @@ _DIFF_LIMIT = 3000
 _SEND_TIMEOUT_S = 30.0
 _VERBS = {"create": "added", "delete": "deleted", "restore": "restored", "exclude": "excluded"}
 _ALWAYS_SENT = {"create", "delete", "exclude"}
-_GLOBAL_PROMPT_TYPES = ("global_guardrail", "global_mandate")
+GLOBAL_PROMPT_TYPES = ("global_guardrail", "global_mandate")
 _tasks: set[asyncio.Task[None]] = set()
 
 
@@ -172,7 +174,7 @@ async def queue_exclusion_notes(
     if slugs:
         prompts = (await db.execute(select(Prompt).where(
             Prompt.slug.in_(slugs),
-            Prompt.is_global.is_(True) | Prompt.prompt_type.in_(_GLOBAL_PROMPT_TYPES),
+            Prompt.is_global.is_(True) | Prompt.prompt_type.in_(GLOBAL_PROMPT_TYPES),
         ).order_by(Prompt.slug))).scalars()
         notes += [GlobalContextNote(kind="Global prompt", name=p.slug, action="exclude", changed_by=changed_by,
                                     before=None, after=None, excluded_from=where) for p in prompts]
