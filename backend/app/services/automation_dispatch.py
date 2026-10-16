@@ -214,7 +214,7 @@ async def dispatch_run(run_id: str) -> None:
                 return
             row.owner_run_id = owner_run_id
             row.owner_receipt = receipt
-            row.accepted_at = datetime.now(UTC)
+            row.accepted_at = row.accepted_at or datetime.now(UTC)
             terminal = receipt.get("status") if dispatch_kind == "callback" else None
             row.status = terminal if terminal in {"succeeded", "failed", "skipped", "cancelled"} else "accepted"
             owner_error = receipt.get("error") if row.status != "accepted" else None

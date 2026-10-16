@@ -259,3 +259,27 @@ async def test_accepted_callback_receipt_clears_a_transient_dispatch_error():
 
     assert run.status == "accepted"
     assert run.error is None
+
+
+@pytest.mark.asyncio
+async def test_redispatch_keeps_the_first_accepted_at():
+    """accepted_at records when the owner first took the run, not the latest retry."""
+    first = datetime(2026, 10, 15, 6, 1, tzinfo=UTC)
+    run = _callback_run(status="accepted", owner_run_id="run-1", accepted_at=first)
+
+    await _dispatch_callback(run, {"owner_run_id": "run-1", "status": "accepted"})
+    assert run.accepted_at == first
+
+    await _dispatch_callback(run, {"owner_run_id": "run-1", "status": "succeeded"})
+    assert run.status == "succeeded"
+    assert run.accepted_at == first
+
+
+@pytest.mark.asyncio
+async def test_first_acceptance_sets_accepted_at():
+    run = _callback_run()
+
+    await _dispatch_callback(run, {"owner_run_id": "run-1", "status": "accepted"})
+
+    assert run.status == "accepted"
+    assert run.accepted_at is not None
