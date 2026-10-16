@@ -13,10 +13,12 @@ import argparse
 import asyncio
 import contextlib
 import hashlib
+import http.client
 import json
 import os
 import re
 import signal
+import socket
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -31,6 +33,13 @@ DEFAULT_PROVIDER = {
     "codex": "openai",
     "pi": "pi",
 }
+
+
+# Consumer tag for a session whose Aico/A-Term widget Tether marks as a
+# coordinator; coordinator-only memories target it through applicability.
+COORDINATOR_TAG = "aico-coordinator"
+TETHER_TIMEOUT_SECONDS = 1.0
+TETHER_BODY_LIMIT = 1 << 16
 
 
 class ContractError(RuntimeError):
@@ -218,6 +227,15 @@ async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> d
             raise ContractError(f"invalid --metadata {raw!r}; expected KEY=VALUE")
         native_metadata[key.strip()] = value
 
+    consumer_tags = list(args.consumer_tag)
+    # Binding only records the launcher's delivery, so it skips the lookup.
+    if (
+        args.command != "bind"
+        and COORDINATOR_TAG not in consumer_tags
+        and await asyncio.to_thread(_tether_coordinator, native_metadata.get("aico_widget_id"))
+    ):
+        consumer_tags.append(COORDINATOR_TAG)
+
     return {
         "surface": args.surface,
         "cwd": cwd,
@@ -233,12 +251,50 @@ async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> d
         "phase": phase,
         "profile": args.profile,
         "agent_slug": args.agent_slug,
-        "consumer_tags": args.consumer_tag,
+        "consumer_tags": consumer_tags,
         "capabilities": args.capability,
         "hook_event": hook_event,
         "native_metadata": {key: value for key, value in native_metadata.items() if value},
         "workflow_ids": [value.strip() for value in os.getenv("AGENT_HUB_WORKFLOWS", "").split(",") if value.strip()],
     }
+
+
+def _tether_socket() -> str:
+    """Tether's control socket: $TETHER_SOCKET, else the instance socket."""
+    configured = (os.getenv("TETHER_SOCKET") or "").strip()
+    if configured:
+        return configured
+    runtime = os.getenv("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    instance = (os.getenv("TETHER_INSTANCE") or "").strip() or "default"
+    return f"{runtime}/tether/{instance}/control.sock"
+
+
+def _tether_coordinator(widget_id: str | None) -> bool:
+    """True only when Tether's descriptor for this widget says coordinator.
+
+    Any failure (no widget, no Tether, timeout, odd reply) means a plain
+    session, so delivery never waits on or fails because of Tether.
+    """
+    if not widget_id or not re.fullmatch(r"[0-9a-f]{8}", widget_id):
+        return False
+    connection = http.client.HTTPConnection("localhost", timeout=TETHER_TIMEOUT_SECONDS)
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        client.settimeout(TETHER_TIMEOUT_SECONDS)
+        client.connect(_tether_socket())
+        connection.sock = client
+        connection.request("GET", f"/v1/sessions/{widget_id}", headers={"Connection": "close"})
+        response = connection.getresponse()
+        body = response.read(TETHER_BODY_LIMIT + 1)
+        if response.status != 200 or len(body) > TETHER_BODY_LIMIT:
+            return False
+        descriptor = json.loads(body)
+    except (OSError, ValueError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
+        client.close()
+    return isinstance(descriptor, dict) and descriptor.get("id") == widget_id and descriptor.get("coordinator") is True
 
 
 def _hook_request_query(hook: dict[str, Any]) -> str | None:

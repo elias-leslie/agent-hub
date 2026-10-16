@@ -17,6 +17,11 @@ _APPLICABILITY_KEYS = (
     "audience_tags",
     "exclude_audience_tags",
 )
+# Consumer tags that name a session's role rather than a topic. Applicability
+# targeting matches them like any tag, but they never narrow legacy references
+# that rely on ordinary memory tags for routing: a coordinator keeps every
+# reference a plain session gets.
+ROLE_CONSUMER_TAGS = frozenset({"aico-coordinator"})
 _TRIGGER_TASK_TYPE_ALIASES = {
     "testing": "test",
     "tests": "test",
@@ -180,6 +185,11 @@ def normalize_trigger_phases(value: Any) -> list[str]:
             if (identifier := normalize_context_identifier(item))
         )
     )
+
+
+def legacy_routing_tags(tags: list[str] | None) -> list[str]:
+    """Return consumer tags that may route legacy, untargeted references."""
+    return [tag for tag in tags or [] if tag.strip().lower() not in ROLE_CONSUMER_TAGS]
 
 
 def applicability_has_targets(value: MemoryApplicability | dict[str, Any] | None) -> bool:

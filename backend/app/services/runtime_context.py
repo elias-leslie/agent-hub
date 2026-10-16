@@ -33,6 +33,7 @@ from app.services.memory.applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
     applicability_matches,
+    legacy_routing_tags,
     normalize_agent_slug,
     normalize_consumer_surface,
     normalize_context_identifier,
@@ -1738,12 +1739,13 @@ def _forced_memory_item_matches(
         consumer_tags=consumer_tags,
     ):
         return False
+    routing_tags = legacy_routing_tags(consumer_tags)
     return not (
         tier not in {"mandate", "guardrail"}
-        and consumer_tags
+        and routing_tags
         and not applicability_has_targets(item.applicability)
         and not applicability_has_exclusions(item.applicability)
-        and not item_tags.intersection(tag.strip().lower() for tag in consumer_tags)
+        and not item_tags.intersection(tag.strip().lower() for tag in routing_tags)
     )
 
 

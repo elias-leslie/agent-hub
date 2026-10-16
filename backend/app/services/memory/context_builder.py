@@ -16,6 +16,7 @@ from .applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
     applicability_matches,
+    legacy_routing_tags,
     normalize_trigger_phases,
     normalize_trigger_task_types,
 )
@@ -407,6 +408,7 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
     references that still rely on ordinary memory tags for routing.
     """
     audience_tags, exclude_tags = resolve_memory_tags(memory_config)
+    audience_tags = legacy_routing_tags(audience_tags)
     if exclude_tags:
         _map_context_blocks(
             context,
