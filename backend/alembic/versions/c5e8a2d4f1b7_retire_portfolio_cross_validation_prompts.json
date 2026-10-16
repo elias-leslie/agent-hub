@@ -1,0 +1,68 @@
+{
+ "prompt_revision_links": [
+  {
+   "id": "4c8d0a58-6dae-41bc-a8a1-44f0c84d340c",
+   "prompt_id": 101
+  },
+  {
+   "id": "df9c4d14-58c6-4cc2-8944-753970e77adf",
+   "prompt_id": 100
+  }
+ ],
+ "prompts": [
+  {
+   "boot_eligible": false,
+   "content": "Review another agent output.\nReturn valid JSON only.\nJudge facts.\nJudge logic.\nJudge risk.\nJudge confidence fit.\nApprove when output is sound.\nFlag concrete issues when not.\nNo fluff.\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T17:02:01.597819+00:00",
+   "deletion_locked": false,
+   "description": "Cross-validation reviewer system prompt",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 100,
+   "is_global": false,
+   "name": "Portfolio Cross Validation Review System",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-cross-validation-review-system",
+   "updated_at": "2026-04-13T17:02:01.597819+00:00"
+  },
+  {
+   "boot_eligible": false,
+   "content": "Review another agent output.\n\nOriginal output:\n{generator_output}\n\nContext:\n- type: {context_type}\n- symbol: {context_symbol}\n\nCheck:\n- factual accuracy\n- logical consistency\n- risk framing\n- confidence fit\n\nReturn JSON only.\nSchema:\n{{\n  \"approved\": true,\n  \"confidence\": 0.0,\n  \"review_summary\": \"short review\",\n  \"issues_found\": [\"issue\"],\n  \"suggestions\": [\"fix\"],\n  \"disagreement_reasons\": [\"factual\"]\n}}\n\nAllowed disagreement_reasons:\n- factual\n- logical\n- risk_assessment\n- confidence\n- other\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T17:02:02.553737+00:00",
+   "deletion_locked": false,
+   "description": "Cross-validation review prompt template",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 101,
+   "is_global": false,
+   "name": "Portfolio Cross Validation Review Template",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-cross-validation-review-template",
+   "updated_at": "2026-04-13T17:02:02.553737+00:00"
+  }
+ ]
+}
