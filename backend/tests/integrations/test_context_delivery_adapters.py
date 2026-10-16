@@ -8,6 +8,7 @@ import runpy
 import shutil
 import stat
 import sys
+import time
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -982,11 +983,19 @@ def test_claude_sources_do_not_add_parallel_model_context() -> None:
 
 
 def _hook_request_body(log_path: Path, endpoint: str) -> dict[str, object]:
-    for raw in log_path.read_text().splitlines():
-        argv = json.loads(raw)
-        if argv and argv[-1].endswith(endpoint):
-            return json.loads(argv[argv.index("-d") + 1])
-    raise AssertionError(f"hook did not call {endpoint}")
+    # Stop.sh posts from a detached subshell after it returns, so the call can land a moment later.
+    deadline = time.monotonic() + 10
+    while True:
+        for raw in log_path.read_text().splitlines():
+            try:
+                argv = json.loads(raw)
+            except ValueError:
+                continue  # a line still being written
+            if argv and argv[-1].endswith(endpoint):
+                return json.loads(argv[argv.index("-d") + 1])
+        if time.monotonic() > deadline:
+            raise AssertionError(f"hook did not call {endpoint}")
+        time.sleep(0.05)
 
 
 @pytest.mark.asyncio
