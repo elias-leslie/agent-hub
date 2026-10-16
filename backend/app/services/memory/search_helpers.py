@@ -38,6 +38,14 @@ def map_tier_to_category(tier: str | int | None) -> MemoryCategory:
     return _TIER_TO_CATEGORY.get(tier or "", MemoryCategory.REFERENCE)
 
 
+def row_scope(result: dict[str, Any], fallback: MemoryScope) -> MemoryScope:
+    """The memory's own scope; the caller's scope only when the row has none."""
+    try:
+        return MemoryScope(str(result["scope"]))
+    except (KeyError, ValueError):
+        return fallback
+
+
 def build_search_result_from_dict(
     result: dict[str, Any],
     scope: MemoryScope,
@@ -66,7 +74,9 @@ def build_search_result_from_dict(
         relevance_score=get_result_score(result),
         created_at=created_at,
         facts=[content] if content else [],
-        scope=scope,
+        scope=row_scope(result, scope),
+        scope_id=result.get("scope_id"),
+        render_mode=result.get("render_mode"),
         category=category,
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],

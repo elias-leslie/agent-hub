@@ -13,6 +13,7 @@ from .applicability import normalize_applicability, normalize_context_kind
 from .embedder import get_embedder_or_none
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 from .repository import TIER_REVERSE, get_memory_repository
+from .search_helpers import row_scope
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,9 @@ def _create_search_result(
         relevance_score=score,
         created_at=created_dt,
         facts=[content] if content else [],
-        scope=scope,
+        scope=row_scope(result, scope),
+        scope_id=result.get("scope_id"),
+        render_mode=result.get("render_mode"),
         category=_tier_to_category(result),
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],
