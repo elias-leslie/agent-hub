@@ -116,3 +116,15 @@ def test_forced_items_follow_the_same_role_rules() -> None:
     assert _forced(coordinator_only, [COORDINATOR])
     assert _forced(legacy_ref, [COORDINATOR])
     assert not _forced(legacy_ref, [COORDINATOR, "other-topic"])
+
+
+def test_coordinator_bootstrap_pointer_reaches_only_plain_sessions() -> None:
+    """A session is flagged coordinator only after its first lane, and context is
+    computed at launch, so the pointer to the coordinator rules must reach plain
+    sessions (and may skip sessions that already get the full rules)."""
+    bootstrap = _memory("bootstrap", category=MemoryCategory.GUARDRAIL)
+    bootstrap.applicability = MemoryApplicability(exclude_audience_tags=[COORDINATOR])
+    for tags, expected in (([], ["plain", "bootstrap"]), ([COORDINATOR], ["coord", "plain"])):
+        context = _context()
+        context.guardrails.append(bootstrap)
+        assert [item.uuid for item in _filter(context, tags).guardrails] == expected
