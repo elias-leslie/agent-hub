@@ -71,6 +71,18 @@ def upgrade() -> None:
     slugs = _ids(data["prompts"], "slug")
     prompt_ids = _ids(data["prompts"], "id")
 
+    # A database that never held these exact rows (a test or scratch copy) has
+    # nothing to retire; a partial match still refuses below.
+    if not conn.execute(
+        text(
+            "SELECT (SELECT count(*) FROM automation_profiles WHERE id = ANY(:pids))"
+            " + (SELECT count(*) FROM automation_runs WHERE id = ANY(:rids))"
+            " + (SELECT count(*) FROM prompts WHERE id = ANY(:ids) AND slug = ANY(:s))"
+        ),
+        {"pids": profile_ids, "rids": run_ids, "ids": prompt_ids, "s": slugs},
+    ).scalar_one():
+        return
+
     live_profiles = conn.execute(
         text("SELECT id FROM automation_profiles WHERE workflow_key = ANY(:k) ORDER BY id FOR UPDATE"),
         {"k": keys},
