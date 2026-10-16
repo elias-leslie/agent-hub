@@ -191,8 +191,11 @@ class ExternalSessionIdentity(BaseModel):
     )
 
 
-class SessionResponse(BaseModel):
-    """Response body for session operations."""
+class SessionSummaryFields(BaseModel):
+    """Fields shared by session list items and session detail responses.
+
+    Declare a new session field here once; both response models inherit it.
+    """
 
     id: str
     project_id: str
@@ -244,16 +247,6 @@ class SessionResponse(BaseModel):
     observed_read_paths: list[str] = Field(default_factory=list)
     observed_write_paths: list[str] = Field(default_factory=list)
     scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
-    created_at: datetime
-    updated_at: datetime
-    status_source: str = Field(
-        default="session",
-        description="Authority for row/detail status beacon: session or runtime",
-    )
-    status_matches_live: bool = Field(
-        default=True,
-        description="Whether persisted session status matches current runtime status",
-    )
     live_activity: LiveActivityResponse | None = Field(
         default=None, description="Current live execution state"
     )
@@ -261,90 +254,6 @@ class SessionResponse(BaseModel):
         default=None,
         description="Count of persisted user and assistant messages",
     )
-    event_count: int | None = Field(
-        default=None,
-        description="Count of persisted session events",
-    )
-    messages: list[MessageResponse] = Field(default_factory=list)
-    context_usage: ContextUsageResponse | None = Field(
-        default=None, description="Context window usage"
-    )
-    agent_token_breakdown: list[AgentTokenBreakdown] = Field(
-        default_factory=list, description="Token breakdown by agent for multi-agent sessions"
-    )
-    total_input_tokens: int = Field(default=0, description="Total input tokens")
-    total_output_tokens: int = Field(default=0, description="Total output tokens")
-    title: str | None = Field(
-        default=None,
-        description="First user message, whitespace-collapsed, at most 160 characters",
-    )
-    usage_known: bool = Field(default=False, description="Whether native response usage events exist")
-    usage_input_tokens: int | None = Field(default=None, description="Native response input tokens")
-    usage_output_tokens: int | None = Field(default=None, description="Native response output tokens")
-    usage_cached_input_tokens: int | None = Field(default=None, description="Native response cached input tokens")
-    last_active_at: datetime | None = Field(
-        default=None,
-        description="coalesce(last_activity_at, created_at)",
-    )
-
-
-class SessionListItem(BaseModel):
-    """Session item in list response."""
-
-    id: str
-    project_id: str
-    provider: str
-    model: str
-    model_evidence: SessionModelEvidence | None = None
-    requested_provider: str | None = Field(default=None, description="Originally requested provider")
-    requested_model: str | None = Field(default=None, description="Originally requested model")
-    effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")
-    effective_model: str | None = Field(default=None, description="Model that actually executed the session")
-    requested_model_display_name: str | None = Field(default=None, description="Human-readable requested model name")
-    effective_model_display_name: str | None = Field(default=None, description="Human-readable effective model name")
-    fallback_used: bool = Field(default=False, description="Whether execution fell back away from the requested model")
-    fallback_reason: str | None = Field(default=None, description="Why the primary model was abandoned, if known")
-    status: str
-    agent_slug: str | None = Field(default=None, description="Agent that processed this session")
-    session_type: str = Field(default="completion", description="Session type")
-    parent_session_id: str | None = Field(default=None, description="Parent session ID")
-    external_identity: ExternalSessionIdentity | None = Field(
-        default=None,
-        description="Allow-listed external harness/runtime identity",
-    )
-    external_id: str | None = Field(default=None, description="Linked external work item ID")
-    client_id: str | None = Field(default=None, description="Authenticated caller client ID")
-    request_source: str | None = Field(default=None, description="Request source header")
-    source_client: str | None = Field(default=None, description="Logical caller identifier")
-    source_path: str | None = Field(default=None, description="Caller file path")
-    attribution_kind: str | None = Field(default=None, description="High-level workload classification")
-    attribution_label: str | None = Field(default=None, description="UI-friendly workload classification label")
-    attribution_detail: str | None = Field(default=None, description="Source string that drove the workload classification")
-    current_branch: str | None = Field(default=None, description="Git branch associated with the session")
-    working_dir: str | None = Field(default=None, description="Working directory captured for the session")
-    repo_root: str | None = Field(default=None, description="Detected repo root for the session")
-    host: str | None = Field(default=None, description="Origin host for the session")
-    tmux_session_name: str | None = Field(default=None, description="tmux session name when applicable")
-    tmux_pane_id: str | None = Field(default=None, description="tmux pane id when applicable")
-    workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
-    summary_oneliner: str | None = Field(default=None, description="One-line session summary")
-    child_session_count: int | None = Field(
-        default=None,
-        description="Count of persisted child sessions linked by parent_session_id",
-    )
-    active_child_session_count: int | None = Field(
-        default=None,
-        description="Count of child sessions currently considered active from persisted status/live activity",
-    )
-    batch_task_ids: list[str] = Field(default_factory=list, description="Task ids linked to a batch orchestrator session")
-    declared_scope_paths: list[str] = Field(default_factory=list)
-    observed_read_paths: list[str] = Field(default_factory=list)
-    observed_write_paths: list[str] = Field(default_factory=list)
-    scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
-    live_activity: LiveActivityResponse | None = Field(
-        default=None, description="Current live execution state"
-    )
-    message_count: int
     event_count: int | None = Field(
         default=None,
         description="Count of persisted session events",
@@ -373,6 +282,28 @@ class SessionListItem(BaseModel):
         default=True,
         description="Whether persisted session status matches current runtime status",
     )
+
+
+class SessionResponse(SessionSummaryFields):
+    """Response body for session operations."""
+
+    status_source: str = Field(
+        default="session",
+        description="Authority for row/detail status beacon: session or runtime",
+    )
+    messages: list[MessageResponse] = Field(default_factory=list)
+    context_usage: ContextUsageResponse | None = Field(
+        default=None, description="Context window usage"
+    )
+    agent_token_breakdown: list[AgentTokenBreakdown] = Field(
+        default_factory=list, description="Token breakdown by agent for multi-agent sessions"
+    )
+
+
+class SessionListItem(SessionSummaryFields):
+    """Session item in list response."""
+
+    message_count: int
 
 
 class SessionListResponse(BaseModel):

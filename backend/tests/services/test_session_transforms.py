@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 
 from app.models import Session
 from app.models.session import SessionEventType
@@ -403,3 +404,174 @@ def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_dup
     assert messages[1].content == "done"
     assert messages[1].tool_executions is not None
     assert len(messages[1].tool_executions) == 1
+
+
+def _fully_populated_session() -> Session:
+    evidence = {
+        "session_id": "sess-1", "native_session_id": "root", "turn_id": "turn-9",
+        "source": "codex_transcript", "source_path": "/tmp/native.jsonl",
+        "source_generation": "generation", "source_line": 17,
+        "source_timestamp": "2026-09-30T15:00:00Z",
+        "requested_model": "gpt-6.1-sol", "requested_reasoning_effort": "high",
+        "observed_model": "served-alias", "observed_source": "codex.response_item.model",
+        "observed_source_line": 19, "observed_source_timestamp": "2026-09-30T15:01:00Z",
+    }
+    return _session(
+        status="active",
+        agent_slug="ops-agent",
+        parent_session_id="sess-parent",
+        external_id="task-123",
+        client_id="client-1",
+        request_source="summitflow",
+        current_branch="main",
+        workstream_status="active",
+        summary_oneliner="Refactoring session fields",
+        declared_scope_paths=["backend/app/api"],
+        observed_read_paths=["backend/app/services/session_transforms.py", ""],
+        observed_write_paths=["backend/app/api/schemas/sessions.py"],
+        scope_confidence="unknown",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "working_dir": "/srv/workspaces/projects/agent-hub/backend",
+            "host": "davion-sidarli",
+            "tmux_session_name": "aico-1",
+            "tmux_pane_id": "%3",
+            "source_client": "summitflow",
+            "source_path": "backend/app/worker.py",
+            "batch_task_ids": ["task-a", " task-b ", "", 7],
+            "transcript_path": "/tmp/native.jsonl",
+            "model_evidence": evidence,
+            "transcript_ingestion": {"source_health": {"source_generation": "generation"}},
+            "external_identity": {"harness": "codex", "launcher": "aico"},
+            "live_activity": {
+                "phase": "error",
+                "status": "error",
+                "last_event_at": "2026-01-01T00:00:00Z",
+                "last_tool_name": "Bash",
+            },
+        },
+    )
+
+
+def _without_clock_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    live_activity = payload.get("live_activity")
+    if isinstance(live_activity, dict):
+        payload["live_activity"] = {
+            key: value for key, value in live_activity.items() if key != "quiet_for_seconds"
+        }
+    return payload
+
+
+def test_list_item_and_response_agree_on_every_shared_field() -> None:
+    session = _fully_populated_session()
+
+    item = build_session_list_items(
+        [session],
+        {"sess-1": 4},
+        {"sess-1": {"input": 120, "output": 30}},
+        event_counts={"sess-1": 9},
+        child_counts={"sess-1": 3},
+        active_child_counts={"sess-1": 1},
+        owner_session_ids={"sess-1"},
+        specialist_session_ids=set(),
+    )[0]
+    response = build_session_response(
+        session,
+        total_input=120,
+        total_output=30,
+        message_count=4,
+        event_count=9,
+        child_session_count=3,
+        active_child_session_count=1,
+        owner_session_ids={"sess-1"},
+        specialist_session_ids=set(),
+    )
+
+    item_payload = _without_clock_fields(item.model_dump(mode="json"))
+    response_payload = _without_clock_fields(response.model_dump(mode="json"))
+    assert set(item_payload) - set(response_payload) == set()
+    assert set(response_payload) - set(item_payload) == {
+        "messages",
+        "context_usage",
+        "agent_token_breakdown",
+    }
+    assert {key: response_payload[key] for key in item_payload} == item_payload
+    # Every shared field is populated, so the parity check covers real values.
+    assert item_payload["agent_slug"] == "ops-agent"
+    assert item_payload["model_evidence"] is not None
+    assert item_payload["external_identity"] == {
+        "harness": "codex", "launcher": "aico", "display_identity": None,
+        "runtime_session_id": None, "agent_path": None, "aico_session_id": None,
+        "aico_widget_id": None, "aico_project_id": None, "project_mapping_state": None,
+    }
+    assert item_payload["batch_task_ids"] == ["task-a", "task-b"]
+    assert item_payload["observed_read_paths"] == ["backend/app/services/session_transforms.py"]
+    assert item_payload["scope_confidence"] == "declared"
+    assert item_payload["host"] == "davion-sidarli"
+    assert item_payload["working_dir"] == "/srv/workspaces/projects/agent-hub/backend"
+    assert item_payload["attribution_kind"] == "autonomous"
+    assert item_payload["status_source"] == "runtime"
+    assert item_payload["status_matches_live"] is False
+    assert item_payload["live_activity"]["has_owner_lane"] is True
+    assert item_payload["child_session_count"] == 3
+    assert item_payload["total_input_tokens"] == 120
+
+
+def test_list_item_and_response_defaults_for_missing_counts_differ_as_documented() -> None:
+    session = _session()
+
+    item = build_session_list_items([session], {}, {})[0]
+    response = build_session_response(session)
+
+    assert (item.message_count, item.event_count) == (0, 0)
+    assert (response.message_count, response.event_count) == (None, None)
+    assert item.child_session_count is None
+    assert response.child_session_count is None
+
+
+def test_session_list_item_and_response_schemas_share_field_definitions() -> None:
+    from app.api.schemas.sessions import SessionListItem, SessionResponse
+
+    list_schema = SessionListItem.model_json_schema()
+    detail_schema = SessionResponse.model_json_schema()
+    list_props = list_schema["properties"]
+    detail_props = detail_schema["properties"]
+
+    assert set(detail_props) - set(list_props) == {
+        "messages",
+        "context_usage",
+        "agent_token_breakdown",
+    }
+    assert set(list_props) <= set(detail_props)
+    differing = {
+        name for name in list_props if list_props[name] != detail_props[name]
+    }
+    assert differing == {"message_count", "status_source"}
+    assert set(list_schema["required"]) == {
+        "id", "project_id", "provider", "model", "status",
+        "message_count", "created_at", "updated_at",
+    }
+    assert set(detail_schema["required"]) == {
+        "id", "project_id", "provider", "model", "status",
+        "created_at", "updated_at",
+    }
+    assert list_props["message_count"] == {"title": "Message Count", "type": "integer"}
+    assert detail_props["message_count"]["anyOf"] == [{"type": "integer"}, {"type": "null"}]
+    assert detail_props["message_count"]["default"] is None
+    assert list_props["status_source"]["description"] == (
+        "Authority for row status beacon: session or runtime"
+    )
+    assert detail_props["status_source"]["description"] == (
+        "Authority for row/detail status beacon: session or runtime"
+    )
+
+
+def test_session_summary_kwargs_only_names_shared_schema_fields() -> None:
+    # Both models ignore unknown kwargs, so a misspelled helper key would silently fall back to
+    # the field default; pin every helper key to a declared shared field.
+    from app.api.schemas.sessions import SessionSummaryFields
+    from app.services.session_transforms import _session_summary_kwargs
+
+    for session in (_session(), _fully_populated_session()):
+        kwargs = _session_summary_kwargs(session, owner_session_ids=None, specialist_session_ids=None)
+        assert set(kwargs) <= set(SessionSummaryFields.model_fields)
