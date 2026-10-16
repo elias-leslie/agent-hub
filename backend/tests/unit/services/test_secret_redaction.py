@@ -30,7 +30,7 @@ from app.models.session import (
     _redact_session,
     _redact_summary_segment,
 )
-from app.services.event_storage import _build_session_event
+from app.services.event_storage import _build_session_event, _extract_tool_result_content
 from app.services.memory.embedder import EmbedderService
 from app.services.memory.fingerprint import content_fingerprint
 from app.services.memory.privacy_filter import apply_privacy_filter
@@ -95,10 +95,49 @@ def test_bypass_shapes_leave_no_key_material(secret: str) -> None:
     assert "11ABCDEFG0" not in redacted
 
 
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        # Escapes and URL encoding put a letter or digit right before the token (JSON text from
+        # jq -c or an API body, a percent-encoded query); a following '_' or letter must not save it.
+        ("a\\n", ""),
+        ("x\\r\\n", ""),
+        ("\\t", ""),
+        ("\\u0022", "\\u0022"),
+        ("token%3D", "%26a%3D1"),
+        ("", "_x"),
+        ("=", "abc"),
+    ],
+)
+def test_escaped_or_glued_tokens_are_redacted(kind: str, before: str, after: str) -> None:
+    secret = SAMPLES[kind]
+    if after[:1].isalnum() and kind == "aws_access_key":
+        after = after.lower()  # an uppercase run would make it a longer id, not an access key
+    redacted, counts = redact_secrets(f"{before}{secret}{after}")
+    assert counts == {kind: 1}
+    # Token classes that allow '_' or letters take the suffix with them; nothing else is lost.
+    assert redacted.startswith(f"{before}[REDACTED:{kind}]")
+    assert secret not in redacted
+
+
+def test_tool_result_content_is_redacted_before_the_cut() -> None:
+    # A token straddling offset 2000 would leave a fragment shorter than the floor's minimum.
+    for secret in SAMPLES.values():
+        text = "a" * 1985 + " " + secret
+        for output in ({"result": text}, {"stdout": text}):
+            content = _extract_tool_result_content(output)
+            assert content is not None and len(content) <= 2000
+            assert content.startswith("a" * 1985 + " [REDACTED")
+            assert secret[:9] not in content
+
+
 @pytest.mark.parametrize(
     "text",
     [
         f"We detect the {_pem('BEGIN')} header in transcripts.",
+        "id_" + SAMPLES["github_token"],  # inside a longer identifier
+        SAMPLES["aws_access_key"] + "Q",  # 21-character uppercase id
         "ghp_short",
         "lowercase " + SAMPLES["aws_access_key"].lower(),
         "presigned X-Amz-Credential=AS" + SAMPLES["aws_access_key"][2:] + "%2F20261008",

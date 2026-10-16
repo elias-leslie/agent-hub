@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants.models import UNKNOWN_MODEL
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.narration_extraction import extract_narration_from_event
+from app.services.secret_redaction import redact_secrets
 from app.services.session_live_activity import update_live_activity_for_event
 from app.services.session_scope import (
     apply_scope_state,
@@ -497,16 +498,17 @@ def _extract_tool_result_content(output_data: dict[str, Any]) -> str | None:
     """Extract a text summary from tool_output for the content column.
 
     Tries common keys in order: result, content, output, message.
-    Falls back to None if no usable text found.
+    Falls back to None if no usable text found. Redacts before the cut, so a
+    token straddling it cannot leave a fragment the floor no longer matches.
     """
     for key in ("result", "content", "output", "message"):
         val = output_data.get(key)
         if val and isinstance(val, str):
-            return val[:2000]
+            return redact_secrets(val)[0][:2000]
     if len(output_data) == 1:
         val = next(iter(output_data.values()))
         if isinstance(val, str):
-            return val[:2000]
+            return redact_secrets(val)[0][:2000]
     return None
 
 

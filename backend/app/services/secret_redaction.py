@@ -13,6 +13,11 @@ from typing import Any
 
 _KEY_BODY = r"[A-Za-z0-9+/=\s\\:,.\-]"
 
+# Where a token may start: not right after a letter, digit or underscore, except
+# after an escape that leaves one there (``\\n``/``\\r``/``\\t`` or ``\\u0022``
+# in JSON text, ``%3D`` in a URL). A token inside a longer identifier stays.
+_START = r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=%[0-9A-Fa-f]{2}))"
+
 SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     # A whole PEM block when its END line is present, else the header and the
     # base64 lines that follow it (also as escaped ``\\n`` inside JSON text).
@@ -23,12 +28,14 @@ SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
         rf"(?:{_KEY_BODY}{{0,8192}}?-----END [A-Z0-9 ]{{0,40}}PRIVATE KEY(?: BLOCK)?-----"
         r"|(?:(?:\s|\\[nr])+[A-Za-z0-9+/=]{40,})+)"
     ),
-    "aws_access_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    "github_token": re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b"),
-    "gitlab_token": re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,255}"),
-    "slack_token": re.compile(r"\bxox[abposr]-[A-Za-z0-9\-]{10,255}"),
-    "anthropic_key": re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,255}"),
-    "stripe_live_key": re.compile(r"\b[rs]k_live_[A-Za-z0-9]{20,255}\b"),
+    "aws_access_key": re.compile(rf"{_START}AKIA[0-9A-Z]{{16}}(?![0-9A-Z])"),
+    "github_token": re.compile(
+        rf"{_START}(?:gh[pousr]_[A-Za-z0-9]{{36,255}}|github_pat_[A-Za-z0-9_]{{22,255}})"
+    ),
+    "gitlab_token": re.compile(rf"{_START}glpat-[A-Za-z0-9_\-]{{20,255}}"),
+    "slack_token": re.compile(rf"{_START}xox[abposr]-[A-Za-z0-9\-]{{10,255}}"),
+    "anthropic_key": re.compile(rf"{_START}sk-ant-[A-Za-z0-9_\-]{{20,255}}"),
+    "stripe_live_key": re.compile(rf"{_START}[rs]k_live_[A-Za-z0-9]{{20,255}}"),
 }
 
 
