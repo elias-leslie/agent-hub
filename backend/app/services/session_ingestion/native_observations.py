@@ -21,6 +21,7 @@ from app.models import (
     Session,
 )
 from app.services.event_storage import lock_session_event_ingestion
+from app.services.secret_redaction import redact_value
 
 from .adapters._event_builders import _native_shell_command
 from .app_server_observations import (
@@ -164,7 +165,8 @@ def _command(observation: NativeObservation) -> tuple[str, dict[str, Any]] | Non
             canonical["cwd"] = unquote(parsed_cwd.path)
     # Combined API output and individual rollout streams have different fidelity.
     # Retain both as evidence instead of using rendered text for identity or equality.
-    return status, canonical
+    # The stored entity holds the redacted command, so compare against the same form.
+    return status, redact_value(canonical)
 
 
 async def _issue(db: AsyncSession, source_id: str, observation: NativeObservation, code: str) -> None:
@@ -523,7 +525,7 @@ async def prepare_rollout_source_generation(db: AsyncSession, session: Session, 
             rotate = True
             break
         retained = await db.get(NativeObservationReceipt, (previous.id, position))
-        if retained and retained.observation.get("source_reference") != raw.source_reference:
+        if retained and retained.observation.get("source_reference") != redact_value(raw.source_reference):  # stored form is redacted
             rotate = True
             break
     if not rotate:

@@ -3,10 +3,10 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, event, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base
+from .base import Base, redact_loaded
 
 
 class NativeObservationSource(Base):
@@ -56,6 +56,27 @@ class NativeObservationIssue(Base):
     code: Mapped[str] = mapped_column(String(100))
     observation: Mapped[dict[str, Any]] = mapped_column(JSON)
 
+
+
+# Native observations carry the raw command and its stdout/stderr/aggregatedOutput.
+# Hashes and issue ids are computed over the raw payload before storage, so replay
+# and conflict detection still compare like with like.
+@event.listens_for(NativeCommandEntity, "before_insert")
+@event.listens_for(NativeCommandEntity, "before_update")
+def _redact_command_entity(_mapper, _connection, target: NativeCommandEntity) -> None:
+    redact_loaded(target, ("command",))
+
+
+@event.listens_for(NativeObservationReceipt, "before_insert")
+@event.listens_for(NativeObservationReceipt, "before_update")
+def _redact_observation_receipt(_mapper, _connection, target: NativeObservationReceipt) -> None:
+    redact_loaded(target, ("observation", "normalized"))
+
+
+@event.listens_for(NativeObservationIssue, "before_insert")
+@event.listens_for(NativeObservationIssue, "before_update")
+def _redact_observation_issue(_mapper, _connection, target: NativeObservationIssue) -> None:
+    redact_loaded(target, ("observation",))
 
 class NativeProtocolProfile(Base):
     __tablename__ = "native_protocol_profiles"

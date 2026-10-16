@@ -919,3 +919,35 @@ def test_accepted_owner_gate_uses_host_checkout_and_exact_runtime_source(monkeyp
     receipt_path.unlink()
     with pytest.raises(ValueError, match="unavailable or invalid"):
         _canonical_gate(backend)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_native_receipts_entities_and_issues_store_no_credential(isolated_native_db, tmp_path):
+    # Built at runtime so no literal token sits in the repo.
+    token = "gh" + "p_" + "N4tiveObs" * 4
+    command = f"GH_TOKEN={token} gh api /user"
+    async with isolated_native_db() as db:
+        session, source, _ = await _managed_fixture(db, tmp_path)
+        started = _observation(session.id, 1, status="running", command=command)
+        completed = _observation(session.id, 2, command=command)
+        completed.payload["params"]["item"]["aggregatedOutput"] = f"token: {token}\n"
+        first = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[started, completed]))
+        # The stored entity holds the redacted command; the later receipt compares equal to it.
+        assert [d.disposition for d in first.dispositions] == ["accounted", "reconciled"]
+        # Hashes are over the raw payload, so a lost acknowledgement still replays.
+        replay = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[started, completed]))
+        assert [d.disposition for d in replay.dispositions] == ["replayed", "replayed"]
+        direct = NativeObservation(position=3, thread_id=session.id, turn_id="turn-proof", item_id="claim", origin="live", identity_quality="durable", kind="command_execution", payload={"item": {"type": "commandExecution", "id": "claim", "command": command, "aggregatedOutput": token, "status": "completed"}})
+        issue = await ingest_native_observations(db, session, source.source_id, NativeObservationBatch(observations=[direct]))
+        assert issue.dispositions[0].issue_code == "unverified_app_server_evidence"
+        await db.commit()
+        for table in ("native_observation_receipts", "native_observation_issues", "native_command_entities", "session_events"):
+            leaked = (await db.execute(sa.text(f"SELECT count(*) FROM {table} t WHERE strpos(row_to_json(t)::text, :fragment) > 0"), {"fragment": token[4:20]})).scalar_one()
+            assert leaked == 0, table
+        receipt = await db.get(NativeObservationReceipt, (source.source_id, 2))
+        assert receipt.observation["payload"]["params"]["item"]["aggregatedOutput"] == "token: [REDACTED:github_token]\n"
+        entity = (await db.execute(sa.select(NativeCommandEntity))).scalar_one()
+        assert entity.command["command"] == "GH_TOKEN=[REDACTED:github_token] gh api /user"
+        stored_issue = (await db.execute(sa.select(NativeObservationIssue))).scalar_one()
+        assert stored_issue.observation["payload"]["item"]["aggregatedOutput"] == "[REDACTED:github_token]"

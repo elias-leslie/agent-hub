@@ -22,6 +22,14 @@ from app.models.memory_unified import (
     _redact_memory,
     _redact_memory_revision,
 )
+from app.models.native_observation import (
+    NativeCommandEntity,
+    NativeObservationIssue,
+    NativeObservationReceipt,
+    _redact_command_entity,
+    _redact_observation_issue,
+    _redact_observation_receipt,
+)
 from app.models.session import (
     Session,
     SessionEvent,
@@ -108,6 +116,21 @@ def test_bypass_shapes_leave_no_key_material(secret: str) -> None:
         ("token%3D", "%26a%3D1"),
         ("", "_x"),
         ("=", "abc"),
+        # Rarer escapes: \x22, \f, \v, \0, octal \042, \U00000022 and a double-encoded %253D.
+        ("a\\x22", ""),
+        ("a\\f", ""),
+        ("a\\v", ""),
+        ("a\\0", ""),
+        ("a\\042", ""),
+        ("a\\U00000022", ""),
+        ("token%253D", ""),
+        # Terminal colour codes end in a letter: grep --color=always, raw or JSON-escaped.
+        ("\x1b[32m", "\x1b[0m"),
+        ("\x1b[1m", ""),
+        (":\x1b[01;31m\x1b[K", "\x1b[m\x1b[K"),
+        ("a\\u001b[0m", ""),
+        ("a\\x1b[31m", ""),
+        ("a\\033[1;32m", ""),
     ],
 )
 def test_escaped_or_glued_tokens_are_redacted(kind: str, before: str, after: str) -> None:
@@ -227,6 +250,28 @@ def test_session_heartbeat_never_stores_a_credential() -> None:
     assert segment.summary_oneliner == "key [REDACTED:github_token]"
     assert segment.summary_git_digest is None
 
+
+
+def test_native_observation_listeners_never_store_a_credential() -> None:
+    # Codex native receipts keep the raw command and its stdout/stderr/aggregatedOutput.
+    token = SAMPLES["github_token"]
+    item = {"command": f"GH_TOKEN={token} gh api /user", "aggregatedOutput": f"\x1b[32m{token}\x1b[0m", "stdout": token}
+    receipt = NativeObservationReceipt(source_id="s", position=1, payload_hash="h", observation={"payload": {"item": item}},
+                                       normalized={"kind": "command_execution", "note": token}, disposition="accounted")
+    _redact_observation_receipt(None, None, receipt)
+    issue = NativeObservationIssue(id="i", source_id="s", position=1, code="c", observation={"payload": {"item": item}})
+    _redact_observation_issue(None, None, issue)
+    entity = NativeCommandEntity(id="e", session_id="s", namespace="n", thread_id="t", turn_id="u", item_id="i",
+                                 status="completed", command={"command": item["command"], "cwd": "/tmp"})
+    _redact_command_entity(None, None, entity)
+    for stored in (receipt.observation, receipt.normalized, issue.observation, entity.command):
+        assert all(token not in text for text in _strings(stored))
+    assert receipt.observation["payload"]["item"]["aggregatedOutput"] == "\x1b[32m[REDACTED:github_token]\x1b[0m"
+    assert entity.command == {"command": "GH_TOKEN=[REDACTED:github_token] gh api /user", "cwd": "/tmp"}
+    clean = {"payload": {"item": {"command": "git status"}}}
+    untouched = NativeObservationReceipt(source_id="s", position=2, payload_hash="h", observation=clean, normalized=None, disposition="retained")
+    _redact_observation_receipt(None, None, untouched)
+    assert untouched.observation is clean and untouched.normalized is None  # unchanged JSON is not rewritten
 
 def test_memory_flush_listener_redacts_and_refreshes_fingerprint() -> None:
     raw = f"Use token {SAMPLES['gitlab_token']} for the mirror"

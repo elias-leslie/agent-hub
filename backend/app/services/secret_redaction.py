@@ -14,9 +14,15 @@ from typing import Any
 _KEY_BODY = r"[A-Za-z0-9+/=\s\\:,.\-]"
 
 # Where a token may start: not right after a letter, digit or underscore, except
-# after an escape that leaves one there (``\\n``/``\\r``/``\\t`` or ``\\u0022``
-# in JSON text, ``%3D`` in a URL). A token inside a longer identifier stays.
-_START = r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=%[0-9A-Fa-f]{2}))"
+# after an escape that leaves one there: ``\\n``, ``\\x22``, ``\\u0022``, ``\\042``
+# in JSON or quoted text, ``%3D`` (or ``%253D``) in a URL. A token inside a longer
+# identifier stays. A terminal color code before a token (``grep --color``,
+# raw or JSON-escaped) is consumed as ``esc`` and put back in the replacement.
+_START = (
+    r"(?:(?<![A-Za-z0-9_])|(?<=\\[nrtfv0])|(?<=\\[0-7]{3})|(?<=\\x[0-9A-Fa-f]{2})"
+    r"|(?<=\\u[0-9A-Fa-f]{4})|(?<=\\U[0-9A-Fa-f]{8})|(?<=%[0-9A-Fa-f]{2})|(?<=%25[0-9A-Fa-f]{2})"
+    r"|(?P<esc>(?:\x1b|\\u001[bB]|\\x1[bB]|\\033|\\e)\[[0-?]{0,20}[ -/]{0,2}[@-~]))"
+)
 
 SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     # A whole PEM block when its END line is present, else the header and the
@@ -43,7 +49,8 @@ def redact_secrets(text: str) -> tuple[str, dict[str, int]]:
     """Replace each secret match with ``[REDACTED:<kind>]``; return counts per kind."""
     counts: dict[str, int] = {}
     for kind, pattern in SECRET_PATTERNS.items():
-        text, hits = pattern.subn(f"[REDACTED:{kind}]", text)
+        tag = f"[REDACTED:{kind}]"
+        text, hits = pattern.subn(lambda match, tag=tag: (match.groupdict().get("esc") or "") + tag, text)
         if hits:
             counts[kind] = hits
     return text, counts

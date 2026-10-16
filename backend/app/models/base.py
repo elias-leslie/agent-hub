@@ -1,7 +1,9 @@
 """Base SQLAlchemy model class."""
 
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, inspect
 from sqlalchemy.orm import DeclarativeBase
+
+from app.services.secret_redaction import redact_value
 
 # SQLAlchemy naming convention for constraints
 # This ensures all constraints have deterministic, predictable names
@@ -18,3 +20,14 @@ class Base(DeclarativeBase):
     """Base class for all models."""
 
     metadata = MetaData(naming_convention=naming_convention)
+
+
+def redact_loaded(target: Base, fields: tuple[str, ...]) -> None:
+    """Apply the secret floor to loaded columns in a flush listener; assigns only on a match."""
+    loaded = inspect(target).dict  # unloaded columns are not being written
+    for attr in fields:
+        if attr in loaded:
+            value = loaded[attr]
+            redacted = redact_value(value)  # same object when nothing matched
+            if redacted is not value:
+                setattr(target, attr, redacted)

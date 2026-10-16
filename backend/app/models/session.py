@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.services.secret_redaction import redact_text, redact_value
 
-from .base import Base
+from .base import Base, redact_loaded
 from .field_lengths import EXTERNAL_ID_MAX_LENGTH
 
 
@@ -439,23 +439,12 @@ _SESSION_REDACTED_FIELDS = ("provider_metadata", "workstream_note", "summary_one
 _SEGMENT_REDACTED_FIELDS = ("summary_oneliner", "summary_git_digest")
 
 
-def _redact_loaded(target: Base, fields: tuple[str, ...]) -> None:
-    """Apply the secret floor to loaded columns; assigns only on a match."""
-    loaded = inspect(target).dict  # unloaded columns are not being written
-    for attr in fields:
-        if attr in loaded:
-            value = loaded[attr]
-            redacted = redact_value(value)  # same object when nothing matched
-            if redacted is not value:
-                setattr(target, attr, redacted)
-
-
 @event.listens_for(Session, "before_insert")
 @event.listens_for(Session, "before_update")
 def _redact_session(_mapper, _connection, target: Session) -> None:
     # Heartbeats store the hook's current/last shell command and summary in
     # provider_metadata.live_activity; summaries and workstream notes are free text.
-    _redact_loaded(target, _SESSION_REDACTED_FIELDS)
+    redact_loaded(target, _SESSION_REDACTED_FIELDS)
 
 
 class SessionSummarySegment(Base):
@@ -491,4 +480,4 @@ class SessionSummarySegment(Base):
 @event.listens_for(SessionSummarySegment, "before_insert")
 @event.listens_for(SessionSummarySegment, "before_update")
 def _redact_summary_segment(_mapper, _connection, target: SessionSummarySegment) -> None:
-    _redact_loaded(target, _SEGMENT_REDACTED_FIELDS)
+    redact_loaded(target, _SEGMENT_REDACTED_FIELDS)
