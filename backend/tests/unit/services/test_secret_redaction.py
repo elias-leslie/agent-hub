@@ -141,6 +141,10 @@ def test_bypass_shapes_leave_no_key_material(secret: str) -> None:
         ("5;255m", ""),
         ("a\x9b1;31m", ""),
         ("x\\a", ""),
+        # JSON inside JSON doubles the backslash; the 8-bit CSI written out.
+        ("a\\\\u001b[38;2;255;255;255;48;2;0;0;0m", ""),
+        ("a\\u009b1;31m", ""),
+        ("a\\x9b1m", ""),
     ],
 )
 def test_escaped_or_glued_tokens_are_redacted(kind: str, before: str, after: str) -> None:
@@ -180,6 +184,46 @@ def test_tokens_cut_apart_by_colour_codes_are_redacted(kind: str, cut: int) -> N
     ]
     for text, expected in shapes:
         assert redact_secrets(text) == (expected, {kind: 1})
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize(
+    "code",
+    [
+        "\\\\u001b[0m",  # JSON inside JSON
+        "\\" * 15 + "u001b[0m",  # four levels in
+        "\\" * 63 + "u001b[0m",
+        "\\\\x1b[1;31m",
+        "\\\\e[0m",
+        "\\u009b1m",  # the 8-bit CSI, written out
+        "\\x9b1m",
+        "\\x9B38;2;255;255;255;48;2;0;0;0m",
+        "\\2331m",
+        "\\\\u009b0m",
+    ],
+)
+def test_tokens_cut_by_escaped_codes_are_redacted(kind: str, code: str) -> None:
+    secret = SAMPLES[kind]
+    for cut in (5, 9):
+        redacted, counts = redact_secrets(f"x {secret[:cut]}{code}{secret[cut:]} y")
+        assert (redacted, counts) == (f"x [REDACTED:{kind}]{code} y", {kind: 1})
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+def test_tokens_cut_by_codes_in_nested_json_are_redacted(kind: str) -> None:
+    # A transcript of a tool result that already held JSON-escaped colour codes, dumped again.
+    secret = SAMPLES[kind]
+    for raw in (
+        f"f:\x1b[1;31m{secret[:6]}\x1b[0m{secret[6:]}",
+        f"f:\\u001b[1;31m{secret[:6]}\\u001b[0m{secret[6:]}",
+        f"f:\x9b31m{secret[:6]}\x9b0m{secret[6:]}",
+    ):
+        text = raw
+        for _level in range(6):
+            text = json.dumps(text)
+            redacted, counts = redact_secrets(text)
+            assert counts == {kind: 1}, text
+            assert secret[6:] not in redacted and secret[:6] not in redacted
 
 
 @pytest.mark.parametrize("first", sorted(set(SAMPLES) - {"private_key"}))
@@ -254,7 +298,12 @@ def test_patterns_stay_linear_on_hostile_input() -> None:
     redact_secrets(hostile)
     assert time.monotonic() - started < 2
     # Codes of any length and many codes: an unterminated 400 KB parameter run, then 50,000 cut points.
-    for hostile in ("\x1b[" + "1;" * 200_000 + SAMPLES["github_token"], ("a\x1b[1mghp_\x1b[0m") * 50_000):
+    for hostile in (
+        "\x1b[" + "1;" * 200_000 + SAMPLES["github_token"],
+        ("a\x1b[1mghp_\x1b[0m") * 50_000,
+        "\\" * 400_000 + SAMPLES["github_token"],  # backslash runs with no introducer
+        ("\\" * 15 + "u009b") * 20_000,
+    ):
         started = time.monotonic()
         redact_secrets(hostile)
         assert time.monotonic() - started < 2

@@ -16,12 +16,19 @@ from typing import Any
 
 _KEY_BODY = r"[A-Za-z0-9+/=\s\\:,.\-]"
 
-# Escape introducers, raw or written out in JSON or quoted text.
-_ESC = r"(?:\x1b|\\u001[bB]|\\x1[bB]|\\033|\\e)"
+# Escape introducers, raw or written out in JSON or quoted text. The written-out
+# forms take the whole run of backslashes before them: each level of JSON nesting
+# adds more (three two levels in, 15 four levels in), and a code that leaves a
+# stray backslash behind would still cut a token. A match starts only at the
+# first backslash of a run, so each run is scanned once: linear.
+_ESCAPED = r"(?<!\\)\\+"
+_ESC = rf"(?:\x1b|{_ESCAPED}(?:u001[bB]|x1[bB]|033|e))"
+# The 8-bit CSI, raw or written out.
+_C1_CSI = rf"(?:\x9b|{_ESCAPED}(?:u009[bB]|x9[bB]|233))"
 # A terminal control sequence (colour, erase) of any length: a combined truecolor
 # SGR runs past 20 parameter bytes. The three byte classes are disjoint, so a scan
 # from each introducer stops at the first byte that fits none: linear.
-_CSI = rf"(?:{_ESC}\[|\x9b)[0-?]*[ -/]*[@-~]"
+_CSI = rf"(?:{_ESC}\[|{_C1_CSI})[0-?]*[ -/]*[@-~]"
 _TERMINAL_CODE = re.compile(_CSI)
 _TOKEN_SPAN = 320  # longest prefixed token below: an 11-character prefix and 255 body characters
 
