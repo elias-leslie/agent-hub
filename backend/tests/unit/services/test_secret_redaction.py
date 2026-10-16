@@ -131,6 +131,16 @@ def test_bypass_shapes_leave_no_key_material(secret: str) -> None:
         ("a\\u001b[0m", ""),
         ("a\\x1b[31m", ""),
         ("a\\033[1;32m", ""),
+        # A combined truecolor code runs past 20 parameter bytes; two codes back to back; the tail
+        # of a code whose start sat in the previous chunk; the 8-bit CSI; an OSC 8 link's escaped BEL.
+        ("\x1b[38;2;255;255;255;48;2;0;0;0m", "\x1b[0m"),
+        ("a\x1b[38;2;255;255;255;48;2;0;0;0;1;3;4;9m", ""),
+        ("a\\u001b[38;2;255;255;255;48;2;0;0;0m", ""),
+        ("a\\e[38;5;196;48;5;232;1;4m", ""),
+        ("\x1b[38;2;255;255;255m\x1b[48;2;0;0;0m", "\x1b[39;49m"),
+        ("5;255m", ""),
+        ("a\x9b1;31m", ""),
+        ("x\\a", ""),
     ],
 )
 def test_escaped_or_glued_tokens_are_redacted(kind: str, before: str, after: str) -> None:
@@ -142,6 +152,43 @@ def test_escaped_or_glued_tokens_are_redacted(kind: str, before: str, after: str
     # Token classes that allow '_' or letters take the suffix with them; nothing else is lost.
     assert redacted.startswith(f"{before}[REDACTED:{kind}]")
     assert secret not in redacted
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+def test_tokens_in_osc8_hyperlinks_are_redacted(kind: str) -> None:
+    secret = SAMPLES[kind]
+    raw = f"\x1b]8;;https://x.example/?t={secret}\x1b\\{secret}\x1b]8;;\x1b\\ \x1b]8;id=1;{secret}\x07{secret}\x1b]8;;\x07"
+    for text in (raw, json.dumps(raw)):
+        redacted, counts = redact_secrets(text)
+        assert counts == {kind: 4}
+        assert secret not in redacted
+    redacted, _ = redact_secrets(raw)
+    assert redacted.startswith(f"\x1b]8;;https://x.example/?t=[REDACTED:{kind}]\x1b\\[REDACTED:{kind}]\x1b]8;;\x1b\\")
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize("cut", [5, 9, 14])
+def test_tokens_cut_apart_by_colour_codes_are_redacted(kind: str, cut: int) -> None:
+    # rg or grep --color=always highlights the searched part of a token; the codes stay, the token goes.
+    secret = SAMPLES[kind]
+    head, tail = secret[:cut], secret[cut:]
+    shapes = [
+        (f"f:\x1b[0m\x1b[1m\x1b[31m{head}\x1b[0m{tail} x", f"f:\x1b[0m\x1b[1m\x1b[31m[REDACTED:{kind}]\x1b[0m x"),
+        (f"\x1b[01;31m\x1b[K{head}\x1b[m\x1b[K{tail}", f"\x1b[01;31m\x1b[K[REDACTED:{kind}]\x1b[m\x1b[K"),
+        (f"a\x1b[1m{head}\x1b[38;2;255;255;255;48;2;0;0;0m{tail}", f"a\x1b[1m[REDACTED:{kind}]\x1b[38;2;255;255;255;48;2;0;0;0m"),
+        (f"=\\u001b[1m{head}\\u001b[0m{tail}", f"=\\u001b[1m[REDACTED:{kind}]\\u001b[0m"),
+    ]
+    for text, expected in shapes:
+        assert redact_secrets(text) == (expected, {kind: 1})
+
+
+def test_coloured_diff_of_a_key_file_is_redacted() -> None:
+    lines = SAMPLES["private_key"].split("\n")
+    diff = "\x1b[1mdiff --git a/k b/k\x1b[m\n" + "".join(f"\x1b[32m+{line}\x1b[m\n" for line in lines)
+    redacted, counts = redact_secrets(diff)
+    assert counts == {"private_key": 1}
+    assert "MIIEvQIBADAN" not in redacted
+    assert redacted.startswith("\x1b[1mdiff --git a/k b/k\x1b[m\n\x1b[32m+[REDACTED:private_key]\x1b[m\x1b[32m")
 
 
 def test_tool_result_content_is_redacted_before_the_cut() -> None:
@@ -166,6 +213,8 @@ def test_tool_result_content_is_redacted_before_the_cut() -> None:
         "presigned X-Amz-Credential=AS" + SAMPLES["aws_access_key"][2:] + "%2F20261008",
         "sk_test_" + "51HaBcDeFgHiJkLmNoPqRsTu",
         "plain prose with sk-ant- but nothing after it",
+        "id_" + SAMPLES["github_token"][:6] + "\x1b[0m" + SAMPLES["github_token"][6:],  # cut, still inside an identifier
+        "\x1b[38;2;255;255;255;48;2;0;0;0mghp_short\x1b[0m",
     ],
 )
 def test_near_misses_are_left_alone(text: str) -> None:
@@ -177,6 +226,11 @@ def test_patterns_stay_linear_on_hostile_input() -> None:
     started = time.monotonic()
     redact_secrets(hostile)
     assert time.monotonic() - started < 2
+    # Codes of any length and many codes: an unterminated 400 KB parameter run, then 50,000 cut points.
+    for hostile in ("\x1b[" + "1;" * 200_000 + SAMPLES["github_token"], ("a\x1b[1mghp_\x1b[0m") * 50_000):
+        started = time.monotonic()
+        redact_secrets(hostile)
+        assert time.monotonic() - started < 2
 
 
 def test_redact_value_walks_json_and_keeps_clean_objects() -> None:
