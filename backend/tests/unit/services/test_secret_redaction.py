@@ -210,6 +210,56 @@ def test_tokens_cut_by_escaped_codes_are_redacted(kind: str, code: str) -> None:
 
 
 @pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize(
+    "code",
+    [
+        "\x1b[1m\x1b(B\x1b[m",  # terminfo sgr0, what $(tput sgr0) writes
+        "\x1b(B",
+        "\x1b7",
+        "\x1b=",
+        "\x1b]8;;file:///x\x1b\\",  # an OSC 8 link opening inside the token
+        "\x1b]8;id=1;https://x.example/a\x07",
+        "\x1b]8;;\x1b\\",  # and closing
+        "\x1b]0;title\x1b\\",
+        "\x1b]2;title\x07\x1b[0m",
+        "\x9d8;;x\x9c",
+        "\x1b\\",  # a stray ST
+    ],
+)
+def test_tokens_cut_by_other_escapes_are_redacted(kind: str, code: str) -> None:
+    # Each JSON level writes the codes out with more backslashes; the floor must take all of them.
+    secret = SAMPLES[kind]
+    shapes = [(f"x {secret[:cut]}{code}{secret[cut:]} y", f"x [REDACTED:{kind}]{code} y") for cut in (5, 9)]
+    # A whole token right after the code: ESC ( B and ESC 7 leave a letter or digit before it.
+    shapes.append((f"x {code}{secret} y", f"x {code}[REDACTED:{kind}] y"))
+    for text, expected in shapes:
+        for _level in range(5):
+            assert redact_secrets(text) == (expected, {kind: 1}), text
+            text, expected = json.dumps(text), json.dumps(expected)
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
+def test_token_inside_an_osc8_link_cut_by_its_open_and_close_is_redacted(kind: str) -> None:
+    secret = SAMPLES[kind]
+    raw = f"see {secret[:6]}\x1b]8;;file:///k\x1b\\{secret[6:12]}\x1b]8;;\x1b\\{secret[12:]}\x1b[0m."
+    want = f"see [REDACTED:{kind}]\x1b]8;;file:///k\x1b\\\x1b]8;;\x1b\\\x1b[0m."
+    for _level in range(4):
+        assert redact_secrets(raw) == (want, {kind: 1})
+        raw, want = json.dumps(raw), json.dumps(want)
+
+
+def test_written_out_terminator_keeps_the_next_codes_backslashes() -> None:
+    # ST then a colour code, written out: the OSC must take only its own backslashes.
+    secret = SAMPLES["github_token"]
+    raw = f"{secret[:7]}\x1b]8;;x\x1b\\\x1b[1m{secret[7:]}\x1b]8;;x\x07\x1b(B{secret}"
+    want = "[REDACTED:github_token]\x1b]8;;x\x1b\\\x1b[1m\x1b]8;;x\x07\x1b(B[REDACTED:github_token]"
+    for _level in range(4):
+        redacted, counts = redact_secrets(raw)
+        assert (redacted, counts) == (want, {"github_token": 2})
+        raw, want = json.dumps(raw), json.dumps(want)
+
+
+@pytest.mark.parametrize("kind", sorted(set(SAMPLES) - {"private_key"}))
 def test_tokens_cut_by_codes_in_nested_json_are_redacted(kind: str) -> None:
     # A transcript of a tool result that already held JSON-escaped colour codes, dumped again.
     secret = SAMPLES[kind]
@@ -286,6 +336,9 @@ def test_tool_result_content_is_redacted_before_the_cut() -> None:
         "plain prose with sk-ant- but nothing after it",
         "id_" + SAMPLES["github_token"][:6] + "\x1b[0m" + SAMPLES["github_token"][6:],  # cut, still inside an identifier
         "\x1b[38;2;255;255;255;48;2;0;0;0mghp_short\x1b[0m",
+        "id_" + SAMPLES["github_token"][:6] + "\x1b(B" + SAMPLES["github_token"][6:],
+        "\x1b]8;;file:///ghp_short\x1b\\ghp_\x1b(Bshort\x1b7",
+        "C:\\\\every\\\\ghp_" + "\\\\eA" * 12,  # written-out \e followed by text, no token
     ],
 )
 def test_near_misses_are_left_alone(text: str) -> None:
@@ -303,6 +356,12 @@ def test_patterns_stay_linear_on_hostile_input() -> None:
         ("a\x1b[1mghp_\x1b[0m") * 50_000,
         "\\" * 400_000 + SAMPLES["github_token"],  # backslash runs with no introducer
         ("\\" * 15 + "u009b") * 20_000,
+        "\x1b]" * 200_000,  # OSC openings with no terminator
+        "\x1b]" + "a" * 400_000 + SAMPLES["github_token"],
+        ("\\\\u001b]8;;" + "x" * 2000) * 200,
+        ("\\" * 15 + "u001b]") * 20_000,
+        "\x1b" + " " * 400_000,  # an nF escape that never ends
+        ("ghp_AA\x1b(B" + "A" * 34) * 10_000,
     ):
         started = time.monotonic()
         redact_secrets(hostile)

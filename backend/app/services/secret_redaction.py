@@ -22,14 +22,35 @@ _KEY_BODY = r"[A-Za-z0-9+/=\s\\:,.\-]"
 # stray backslash behind would still cut a token. A match starts only at the
 # first backslash of a run, so each run is scanned once: linear.
 _ESCAPED = r"(?<!\\)\\+"
-_ESC = rf"(?:\x1b|{_ESCAPED}(?:u001[bB]|x1[bB]|033|e))"
+_ESC_NAME = r"(?:u001[bB]|x1[bB]|033|e)"
+_ESC = rf"(?:\x1b|{_ESCAPED}{_ESC_NAME})"
 # The 8-bit CSI, raw or written out.
 _C1_CSI = rf"(?:\x9b|{_ESCAPED}(?:u009[bB]|x9[bB]|233))"
 # A terminal control sequence (colour, erase) of any length: a combined truecolor
 # SGR runs past 20 parameter bytes. The three byte classes are disjoint, so a scan
 # from each introducer stops at the first byte that fits none: linear.
 _CSI = rf"(?:{_ESC}\[|{_C1_CSI})[0-?]*[ -/]*[@-~]"
-_TERMINAL_CODE = re.compile(_CSI)
+# Every other escape a token can be cut by, removed only by the split-token pass:
+# OSC (an OSC 8 link, a window title) up to its BEL or ST with a bounded body, and
+# two-byte and nF escapes (ESC 7, ESC =, terminfo's sgr0 ESC ( B). Written out, a
+# code's BEL and ST carry the same run of backslashes as its ESC (the ST's own
+# backslash twice over), matched by back-reference. An ST written out ends in a
+# backslash, so the next code written out right after it starts mid-run; the
+# match runs on through such codes instead. Each body class excludes the byte
+# that starts the next introducer: linear.
+_OSC_BODY = r"{0,2048}"
+_WRITTEN = (
+    rf"(?:{_ESC_NAME}\[|u009[bB]|x9[bB]|233)[0-?]*[ -/]*[@-~]"
+    rf"|(?:{_ESC_NAME}\]|u009[dD]|x9[dD]|235)[^\x07\x1b\\]{_OSC_BODY}"
+    rf"(?P=w)(?:u0007|x07|007|a|u009[cC]|x9[cC]|234|{_ESC_NAME}(?P=w)(?P=w))"
+    rf"|{_ESC_NAME}(?:(?P=w)(?P=w)|[ -/]*[0-\[\]-~])"
+)
+_OTHER_CODE = (
+    rf"(?:\x1b\]|\x9d)[^\x07\x1b\x9c]{_OSC_BODY}(?:\x07|\x9c|\x1b\\)"
+    r"|\x1b[ -/]*[0-~]"
+    rf"|(?<!\\)(?P<w>\\+)(?:{_WRITTEN})(?:(?<=\\)(?P=w)(?:{_WRITTEN}))*"
+)
+_TERMINAL_CODE = re.compile(rf"{_CSI}|{_OTHER_CODE}")
 _TOKEN_SPAN = 320  # longest prefixed token below: an 11-character prefix and 255 body characters
 
 # Where a token may start: not right after a letter, digit or underscore, except
@@ -86,7 +107,8 @@ def _redact_split_tokens(text: str, counts: dict[str, int]) -> str:
     The floor runs on the text with every code removed; a match that spanned a
     code is replaced in the original, and the codes inside it are kept after the
     tag so the terminal state is unchanged. Matches no code cuts are left to the
-    plain pass.
+    plain pass, except a token right after a code: ``ESC ( B`` or ``ESC 7``
+    leaves a letter or digit the plain pass reads as part of an identifier.
     """
     codes = list(_TERMINAL_CODE.finditer(text))
     if not codes:
@@ -122,6 +144,7 @@ def _redact_split_tokens(text: str, counts: dict[str, int]) -> str:
     ]
     bounds = [0, *heads, len(stripped)]
     spans: list[tuple[int, int, str]] = []
+    code_ends = {code.end() for code in codes}
     for kind, pattern in SECRET_PATTERNS.items():
         matches = [(match, 0) for lo, hi in pairwise(bounds) for match in pattern.finditer(stripped, lo, hi)]
         if kind != "private_key":
@@ -133,7 +156,8 @@ def _redact_split_tokens(text: str, counts: dict[str, int]) -> str:
             token_start = offset + (match.end("esc") if match.groupdict().get("esc") else match.start())
             token_end = offset + match.end()
             start, end = to_orig(token_start), to_orig(token_end - 1) + 1
-            if end - start > token_end - token_start:  # a code sits inside the token
+            # A code sits inside the token, or the token starts right after one.
+            if end - start > token_end - token_start or start in code_ends:
                 spans.append((start, end, kind))
     if not spans:
         return text
