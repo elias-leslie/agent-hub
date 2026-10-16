@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import bisect
 import re
+from itertools import pairwise
 from typing import Any
 
 _KEY_BODY = r"[A-Za-z0-9+/=\s\\:,.\-]"
@@ -56,6 +57,7 @@ SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     "anthropic_key": re.compile(rf"{_START}sk-ant-[A-Za-z0-9_\-]{{20,255}}"),
     "stripe_live_key": re.compile(rf"{_START}[rs]k_live_[A-Za-z0-9]{{20,255}}"),
 }
+_PREFIXED = [pattern for kind, pattern in SECRET_PATTERNS.items() if kind != "private_key"]
 
 
 def redact_secrets(text: str) -> tuple[str, dict[str, int]]:
@@ -103,11 +105,23 @@ def _redact_split_tokens(text: str, counts: dict[str, int]) -> str:
 
     # A removed code still marks where a token may start, even after a letter.
     glued = [at for at in kept_at[1:] if stripped[at - 1].isalnum() or stripped[at - 1] == "_"]
+    # A code with a whole token right after it ends whatever came before: without
+    # the code, the token before would run on into this one's prefix (``ghp``,
+    # ``sk``) and leave its body behind. Matches stay inside these segments.
+    heads = [
+        at
+        for at in kept_at[1:]
+        if any(pattern.match(stripped[at : at + _TOKEN_SPAN]) for pattern in _PREFIXED)
+    ]
+    bounds = [0, *heads, len(stripped)]
     spans: list[tuple[int, int, str]] = []
     for kind, pattern in SECRET_PATTERNS.items():
-        matches = [(match, 0) for match in pattern.finditer(stripped)]
+        matches = [(match, 0) for lo, hi in pairwise(bounds) for match in pattern.finditer(stripped, lo, hi)]
         if kind != "private_key":
-            matches += [(match, at) for at in glued if (match := pattern.match(stripped[at : at + _TOKEN_SPAN]))]
+            for at in glued:
+                hi = min(at + _TOKEN_SPAN, bounds[bisect.bisect_right(bounds, at)])
+                if match := pattern.match(stripped[at:hi]):
+                    matches.append((match, at))
         for match, offset in matches:
             token_start = offset + (match.end("esc") if match.groupdict().get("esc") else match.start())
             token_end = offset + match.end()

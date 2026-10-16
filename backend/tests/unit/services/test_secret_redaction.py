@@ -182,6 +182,33 @@ def test_tokens_cut_apart_by_colour_codes_are_redacted(kind: str, cut: int) -> N
         assert redact_secrets(text) == (expected, {kind: 1})
 
 
+@pytest.mark.parametrize("first", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize("second", sorted(set(SAMPLES) - {"private_key"}))
+@pytest.mark.parametrize("sep", ["\x1b[0m", "\x1b[0m\x1b[1m\x1b[31m", "\\u001b[0m"])
+def test_adjacent_tokens_split_by_a_code_are_both_redacted(first: str, second: str, sep: str) -> None:
+    # With the code removed, the first token's body would run on into the second one's prefix
+    # (ghp, sk, github) and the split pass would leave the second body in the clear.
+    one, two = SAMPLES[first], SAMPLES[second].replace("A1b2", "Q7r8").replace("51Ha", "77Zq")
+    redacted, counts = redact_secrets(f"f:\x1b[1m\x1b[31m{one}{sep}{two}\x1b[0m x")
+    assert redacted == f"f:\x1b[1m\x1b[31m[REDACTED:{first}]{sep}[REDACTED:{second}]\x1b[0m x"
+    assert sum(counts.values()) == 2
+
+
+def test_adjacent_tokens_each_split_by_highlighting_are_both_redacted() -> None:
+    one, two = "ghp_" + "A" * 36, "ghp_" + "B" * 36
+    text = f"{one[:8]}\x1b[31m{one[8:]}\x1b[0m{two[:6]}\x1b[31m{two[6:]}\x1b[0m"
+    redacted, counts = redact_secrets(text)
+    assert redacted == "[REDACTED:github_token]\x1b[31m\x1b[0m[REDACTED:github_token]\x1b[31m\x1b[0m"
+    assert counts == {"github_token": 2}
+
+
+def test_key_body_then_a_code_then_a_token_redacts_both() -> None:
+    text = _pem("BEGIN") + "\n" + PEM_BODY + "\x1b[0m" + SAMPLES["github_token"]
+    redacted, counts = redact_secrets(text)
+    assert counts == {"private_key": 1, "github_token": 1}
+    assert redacted.endswith("\x1b[0m[REDACTED:github_token]")
+
+
 def test_coloured_diff_of_a_key_file_is_redacted() -> None:
     lines = SAMPLES["private_key"].split("\n")
     diff = "\x1b[1mdiff --git a/k b/k\x1b[m\n" + "".join(f"\x1b[32m+{line}\x1b[m\n" for line in lines)
