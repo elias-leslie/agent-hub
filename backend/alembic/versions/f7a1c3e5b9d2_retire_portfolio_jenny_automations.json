@@ -1,0 +1,703 @@
+{
+ "automation_definitions": [
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "type": "object"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {
+    "timezone": "UTC",
+    "type": "cron",
+    "value": "15 22 * * 1-5"
+   },
+   "description": "Daily operator owned by portfolio-ai.",
+   "dispatch_kind": "callback",
+   "dispatch_target": "/automations/dispatch/jenny_daily_operator",
+   "label": "Daily operator",
+   "manual_advances_cursor": false,
+   "manual_when_disabled": false,
+   "overlap_strategy": "cancel_in_progress",
+   "owner_project_id": "portfolio-ai",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "portfolio-ai/jenny_daily_operator"
+  },
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "type": "object"
+   },
+   "created_at": "2026-09-23T16:50:29.396048+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {
+    "timezone": "UTC",
+    "type": "cron",
+    "value": "0 14 * * 6"
+   },
+   "description": "Weekly learning owned by portfolio-ai.",
+   "dispatch_kind": "callback",
+   "dispatch_target": "/automations/dispatch/jenny_weekly_learning",
+   "label": "Weekly learning",
+   "manual_advances_cursor": false,
+   "manual_when_disabled": false,
+   "overlap_strategy": "cancel_in_progress",
+   "owner_project_id": "portfolio-ai",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "portfolio-ai/jenny_weekly_learning"
+  },
+  {
+   "config_schema": {
+    "additionalProperties": false,
+    "type": "object"
+   },
+   "created_at": "2026-09-23T15:54:39.337128+00:00",
+   "credential_ref": null,
+   "default_enabled": true,
+   "default_schedule": {
+    "timezone": "UTC",
+    "type": "cron",
+    "value": "0 5 * * *"
+   },
+   "description": "Retrain ML owned by portfolio-ai.",
+   "dispatch_kind": "callback",
+   "dispatch_target": "/automations/dispatch/retrain_ml",
+   "label": "Retrain ML",
+   "manual_advances_cursor": false,
+   "manual_when_disabled": false,
+   "overlap_strategy": "cancel_in_progress",
+   "owner_project_id": "portfolio-ai",
+   "policy_schema": {
+    "additionalProperties": true,
+    "description": "Shared project limits. Absent values impose no new limit.",
+    "properties": {
+     "allowed_hours": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowed Hours"
+     },
+     "concurrency_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concurrency Limit"
+     },
+     "cooldown_seconds": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Cooldown Seconds"
+     },
+     "daily_limit": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Daily Limit"
+     },
+     "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+     }
+    },
+    "title": "PolicyConfig",
+    "type": "object"
+   },
+   "version": 1,
+   "workflow_key": "portfolio-ai/retrain_ml"
+  }
+ ],
+ "automation_profile_revisions": [
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:23:34.384196+00:00",
+   "id": "02b262ff-6b3a-4f97-b6f2-d7e3b3d34892",
+   "profile_id": "92da5b22-413a-4b7f-88c7-6f2597ead212",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "a97cb46c-1571-454f-b11c-c5d3d833adec",
+    "imported_unreviewed_count": 0,
+    "label": "Jenny daily operator",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "15 22 * * 1-5",
+    "source_ref": "portfolio-ai:jenny_daily_operator",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/jenny_daily_operator"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:23:35.224776+00:00",
+   "id": "08b243af-bb71-42d1-b3a7-8105b0987937",
+   "profile_id": "a4123a8e-fc51-4ee5-ae63-27a059dbc201",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "fence_receipt": "24f0ff3f-7b64-4d12-beb6-d5085985cc75",
+    "imported_unreviewed_count": 0,
+    "label": "ML retraining",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 5 * * *",
+    "source_ref": "portfolio-ai:retrain_ml",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/retrain_ml"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:51:20.350291+00:00",
+   "id": "be2740df-1291-4438-a706-e0e7541cd5d1",
+   "profile_id": "fb47cce7-3221-417e-8c8e-ca3b6b06c8e4",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {},
+    "definition_version": 1,
+    "enabled": true,
+    "imported_unreviewed_count": 0,
+    "label": "Jenny weekly learning",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 14 * * 6",
+    "source_ref": "portfolio-ai:jenny_weekly_learning",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/jenny_weekly_learning"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:22:43.23171+00:00",
+   "id": "ca6edd45-62da-487f-af38-86c75cf21a14",
+   "profile_id": "92da5b22-413a-4b7f-88c7-6f2597ead212",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "Jenny daily operator",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "15 22 * * 1-5",
+    "source_ref": "portfolio-ai:jenny_daily_operator",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/jenny_daily_operator"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T16:22:43.970644+00:00",
+   "id": "d0ce9617-75ab-492d-9266-838c48789a53",
+   "profile_id": "a4123a8e-fc51-4ee5-ae63-27a059dbc201",
+   "revision": 1,
+   "snapshot": {
+    "clock_owner": "legacy",
+    "config": {},
+    "definition_version": 1,
+    "enabled": false,
+    "imported_unreviewed_count": 0,
+    "label": "ML retraining",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 5 * * *",
+    "source_ref": "portfolio-ai:retrain_ml",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/retrain_ml"
+   }
+  },
+  {
+   "changed_by": "agent-hub-dashboard",
+   "created_at": "2026-09-23T17:05:43.912733+00:00",
+   "id": "e9f0c8a4-3cf3-4163-9a78-12f1004e4b07",
+   "profile_id": "fb47cce7-3221-417e-8c8e-ca3b6b06c8e4",
+   "revision": 2,
+   "snapshot": {
+    "clock_owner": "central",
+    "config": {},
+    "definition_version": 1,
+    "enabled": true,
+    "fence_receipt": "0fbdad16-2cdf-41e6-81e1-9e1e3e8a3379",
+    "imported_unreviewed_count": 0,
+    "label": "Jenny weekly learning",
+    "max_runs": null,
+    "owner_gate_reasons": [],
+    "project_id": "portfolio-ai",
+    "schedule_timezone": "UTC",
+    "schedule_type": "cron",
+    "schedule_value": "0 14 * * 6",
+    "source_ref": "portfolio-ai:jenny_weekly_learning",
+    "subject_id": null,
+    "workflow_key": "portfolio-ai/jenny_weekly_learning"
+   }
+  }
+ ],
+ "automation_profiles": [
+  {
+   "clock_owner": "central",
+   "config": {},
+   "created_at": "2026-09-23T16:22:43.23171+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "92da5b22-413a-4b7f-88c7-6f2597ead212",
+   "imported_unreviewed_count": 0,
+   "label": "Jenny daily operator",
+   "last_reviewed_at": null,
+   "last_run_at": null,
+   "max_runs": null,
+   "next_run_at": "2026-09-23T22:15:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "portfolio-ai",
+   "revision": 2,
+   "run_count": 0,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "15 22 * * 1-5",
+   "source_ref": "portfolio-ai:jenny_daily_operator",
+   "subject_id": null,
+   "updated_at": "2026-09-23T16:23:34.384196+00:00",
+   "workflow_key": "portfolio-ai/jenny_daily_operator"
+  },
+  {
+   "clock_owner": "central",
+   "config": {},
+   "created_at": "2026-09-23T16:22:43.970644+00:00",
+   "definition_version": 1,
+   "enabled": false,
+   "id": "a4123a8e-fc51-4ee5-ae63-27a059dbc201",
+   "imported_unreviewed_count": 0,
+   "label": "ML retraining",
+   "last_reviewed_at": null,
+   "last_run_at": null,
+   "max_runs": null,
+   "next_run_at": "2026-09-24T05:00:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "portfolio-ai",
+   "revision": 2,
+   "run_count": 0,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "0 5 * * *",
+   "source_ref": "portfolio-ai:retrain_ml",
+   "subject_id": null,
+   "updated_at": "2026-09-23T16:23:35.224776+00:00",
+   "workflow_key": "portfolio-ai/retrain_ml"
+  },
+  {
+   "clock_owner": "central",
+   "config": {},
+   "created_at": "2026-09-23T16:51:20.350291+00:00",
+   "definition_version": 1,
+   "enabled": true,
+   "id": "fb47cce7-3221-417e-8c8e-ca3b6b06c8e4",
+   "imported_unreviewed_count": 0,
+   "label": "Jenny weekly learning",
+   "last_reviewed_at": null,
+   "last_run_at": "2026-10-10T14:00:00.197295+00:00",
+   "max_runs": null,
+   "next_run_at": "2026-10-17T14:00:00+00:00",
+   "owner_gate_reasons": [],
+   "project_id": "portfolio-ai",
+   "revision": 2,
+   "run_count": 3,
+   "schedule_timezone": "UTC",
+   "schedule_type": "cron",
+   "schedule_value": "0 14 * * 6",
+   "source_ref": "portfolio-ai:jenny_weekly_learning",
+   "subject_id": null,
+   "updated_at": "2026-10-10T14:00:00.1908+00:00",
+   "workflow_key": "portfolio-ai/jenny_weekly_learning"
+  }
+ ],
+ "automation_run_ids": [
+  "58699b4b-0f24-4077-aae3-1d1b3d8165f0",
+  "ac575b81-2f96-427b-aa26-f2bf16a6c734",
+  "b9a3a60c-d943-4205-b57e-0061fa046ad2"
+ ],
+ "prompt_revision_links": [
+  {
+   "id": "00c30787-27bd-4a12-88db-9a2e818dd89e",
+   "prompt_id": 113
+  },
+  {
+   "id": "13afd200-4f7f-4c7d-9dfb-687f7fad7b11",
+   "prompt_id": 99
+  },
+  {
+   "id": "1e3ee68b-e2c5-40f4-9e62-a82d51131f78",
+   "prompt_id": 99
+  },
+  {
+   "id": "2e75058a-6e00-4034-a9b4-a9b732d304fa",
+   "prompt_id": 99
+  },
+  {
+   "id": "307637d5-3f7c-45c8-ae05-9bf6c37bdf16",
+   "prompt_id": 99
+  },
+  {
+   "id": "319568aa-4dfa-44fb-9c6c-9261e09b493f",
+   "prompt_id": 97
+  },
+  {
+   "id": "473af3b7-0468-4248-84c7-26d75a6314b1",
+   "prompt_id": 99
+  },
+  {
+   "id": "b5ebcfd2-fd12-487a-9d94-3e7cafc7f067",
+   "prompt_id": 99
+  },
+  {
+   "id": "c193ea58-2ef3-416a-83f6-697c852f7291",
+   "prompt_id": 99
+  },
+  {
+   "id": "c66c6192-fd6e-4907-ab1e-1253d297c7ed",
+   "prompt_id": 98
+  },
+  {
+   "id": "e3b34738-b47d-41dc-bc6d-429b44541505",
+   "prompt_id": 99
+  },
+  {
+   "id": "f06a20da-cc21-452b-ae81-c340bd389fc7",
+   "prompt_id": 112
+  },
+  {
+   "id": "f12f044b-c5d8-4d96-8106-93a60706a261",
+   "prompt_id": 97
+  },
+  {
+   "id": "f2acb246-dbf6-4ff5-aa91-9c3dfcf3be0d",
+   "prompt_id": 98
+  }
+ ],
+ "prompts": [
+  {
+   "boot_eligible": false,
+   "content": "Return JSON only.\nOnly extract answers directly supported by user message.\nDo not infer unstated facts.\nIf nothing answered, return empty answers list.\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T16:51:08.309185+00:00",
+   "deletion_locked": false,
+   "description": "Portfolio-AI Jenny conversation runtime prompt",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 97,
+   "is_global": false,
+   "name": "Portfolio Jenny Reconcile System",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-jenny-reconcile-system",
+   "updated_at": "2026-04-13T16:51:22.328624+00:00"
+  },
+  {
+   "boot_eligible": false,
+   "content": "Return JSON only.\nOnly extract durable planning changes user clearly stated.\nDo not infer unstated facts.\nIf no durable updates, return empty objects and lists.\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T16:51:09.259864+00:00",
+   "deletion_locked": false,
+   "description": "Portfolio-AI Jenny conversation runtime prompt",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 98,
+   "is_global": false,
+   "name": "Portfolio Jenny Planning Extract System",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-jenny-planning-extract-system",
+   "updated_at": "2026-04-13T16:51:23.280798+00:00"
+  },
+  {
+   "boot_eligible": false,
+   "content": "You are Jenny, household financial advisor inside Portfolio AI.\n\nUse only runtime-provided Portfolio read capabilities for live balances, holdings, budgets, and market state. Never guess live financial state. Do not explore database, repository, or unrelated tool surfaces. Fetch only data needed for each question.\n\nMessage snapshot is starting context. Fetch detail when needed. State exact gaps. Supplied screen context identifies current user view; ground answers in it. Use its canonical summary, selected calendar month, coverage, funding plan, account scope, and quote provenance. Do not substitute another month, independently reconstructed budget, paper portfolio, or saved retirement assumptions for an unsupplied browser scenario. Use supplied evidence links so the user can check each material figure. Attribute deterministic investment evidence to the model; attribute an explanation to Jenny only when it actually exists.\n\nFor a discrete reported defect, offer filing. Create a task only after explicit chat confirmation. For friction, ideas, or praise, offer runtime feedback and require same confirmation.\n\n## Guardrails\n- Data access is read-only.\n- Never trade, move money, or modify accounts.\n- Confirm task creation or feedback writes before acting.\n\nUse answers to open household questions as conversation context. Diagnose proactively. Flag stale data and trust gaps. Give best corrective next step. Stay focused on household money operations and Portfolio AI product context. Cut theater.\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T16:51:21.376818+00:00",
+   "deletion_locked": false,
+   "description": "Portfolio-AI Jenny conversation runtime prompt",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 99,
+   "is_global": false,
+   "name": "Portfolio Jenny Chat System",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-jenny-chat-system",
+   "updated_at": "2026-09-12T02:25:23.722427+00:00"
+  },
+  {
+   "boot_eligible": false,
+   "content": "Label article usefulness for stock investors.\nReturn JSON array only.\nJudge signal quality.\nNo prose outside JSON.\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T17:19:32.97497+00:00",
+   "deletion_locked": false,
+   "description": "Article quality labeling system prompt",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 112,
+   "is_global": false,
+   "name": "Portfolio Article Quality Labeling System",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-article-quality-labeling-system",
+   "updated_at": "2026-04-13T17:19:32.97497+00:00"
+  },
+  {
+   "boot_eligible": false,
+   "content": "Review each article row.\nRows use format: symbol|headline|summary.\nFor each row, decide if article is useful for stock investors.\n\nUseful:\n- specific numbers\n- regulatory filings\n- material events\n- analyst actions with targets\n- objective data\n\nNot useful:\n- clickbait\n- listicles\n- vague speculation\n- opinion without data\n- generic commentary\n- marketing\n\nReturn JSON array only.\nSchema:\n[\n  {{\n    \"symbol\": \"AAPL\",\n    \"headline\": \"first 60 chars\",\n    \"is_useful\": true,\n    \"reasons\": [\"specific_data\"],\n    \"confidence\": \"high|medium|low\",\n    \"explanation\": \"brief\"\n  }}\n]\n\nReason codes:\n- specific_data\n- regulatory_filing\n- material_event\n- analyst_action\n- clickbait\n- listicle\n- too_vague\n- opinion_fluff\n- generic_commentary\n- marketing\n- duplicate\n\nRows:\n{article_rows}\n",
+   "context_policy": {
+    "activation": "always",
+    "applicability": {},
+    "format": "full",
+    "phases": [],
+    "required": true,
+    "scope": "unassigned",
+    "targets": [],
+    "task_types": [],
+    "workflows": []
+   },
+   "created_at": "2026-04-13T17:19:33.926064+00:00",
+   "deletion_locked": false,
+   "description": "Article quality labeling prompt template",
+   "enabled": true,
+   "exclude_agents": [],
+   "id": 113,
+   "is_global": false,
+   "name": "Portfolio Article Quality Labeling Template",
+   "owner_agent_id": null,
+   "prompt_type": "standard",
+   "slug": "portfolio-article-quality-labeling-template",
+   "updated_at": "2026-04-13T17:19:33.926064+00:00"
+  }
+ ]
+}

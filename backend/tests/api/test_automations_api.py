@@ -75,8 +75,8 @@ async def test_owner_cannot_import_another_projects_profile():
                 headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
             ) as client:
                 response = await client.post("/api/automations/profiles/import", json={
-                    "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/retrain_ml",
-                    "source_ref": "portfolio:retrain", "schedule_type": "cron",
+                    "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/jenny_weekly_price_check",
+                    "source_ref": "portfolio:price_check", "schedule_type": "cron",
                     "schedule_value": "0 5 * * *", "schedule_timezone": "UTC", "enabled": True,
                 })
         assert response.status_code == 403
@@ -95,8 +95,8 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
         yield db
 
     definition = SimpleNamespace(
-        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
-        version=1, label="Retrain ML",
+        workflow_key="portfolio-ai/jenny_weekly_price_check", owner_project_id="portfolio-ai",
+        version=1, label="Weekly price check",
         config_schema={"type": "object", "additionalProperties": False},
     )
     app.dependency_overrides[get_db] = override_db
@@ -111,8 +111,8 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
                 headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
             ) as client:
                 response = await client.post("/api/automations/profiles/import", json={
-                    "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/retrain_ml",
-                    "source_ref": "portfolio:retrain", "schedule_type": "every",
+                    "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/jenny_weekly_price_check",
+                    "source_ref": "portfolio:price_check", "schedule_type": "every",
                     "schedule_value": "300000", "schedule_timezone": "UTC",
                     "config": {}, "enabled": False,
                     "next_run_at": "2026-09-23T15:30:00Z",
@@ -134,11 +134,11 @@ async def test_owner_import_preserves_cursor_gates_and_legacy_clock():
 @pytest.mark.asyncio
 async def test_cutover_requires_owner_fence_and_preserves_imported_cursor():
     row = AutomationProfile(
-        id="profile-1", project_id="portfolio-ai", workflow_key="portfolio-ai/retrain_ml",
-        definition_version=1, label="Retrain ML", schedule_type="every",
+        id="profile-1", project_id="portfolio-ai", workflow_key="portfolio-ai/jenny_weekly_price_check",
+        definition_version=1, label="Weekly price check", schedule_type="every",
         schedule_value="300000", schedule_timezone="UTC", config={},
         enabled=True, clock_owner="legacy", owner_gate_reasons=[],
-        source_ref="portfolio:retrain", revision=3,
+        source_ref="portfolio:price_check", revision=3,
         imported_unreviewed_count=0,
     )
     db = AsyncMock()

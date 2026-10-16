@@ -89,8 +89,8 @@ def test_import_preserves_owner_state_and_legacy_clock(tmp_path: Path) -> None:
     path = tmp_path / "owner.json"
     payload = {
         "project_id": "portfolio-ai",
-        "workflow_key": "portfolio-ai/retrain_ml",
-        "source_ref": "portfolio:retrain",
+        "workflow_key": "portfolio-ai/jenny_weekly_price_check",
+        "source_ref": "portfolio:price_check",
         "schedule_type": "every",
         "schedule_value": "300000",
         "enabled": True,

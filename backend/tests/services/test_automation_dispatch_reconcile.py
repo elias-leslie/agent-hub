@@ -201,7 +201,7 @@ async def test_reconcile_records_a_cancelled_hatchet_run_as_cancelled():
 
 def _callback_run(**overrides):
     fields = dict(
-        id="run-1", profile_id="profile-1", workflow_key="portfolio-ai/retrain_ml",
+        id="run-1", profile_id="profile-1", workflow_key="portfolio-ai/jenny_weekly_price_check",
         definition_version=1, profile_revision=2, status="admitted",
         occurrence_key="scheduled:profile-1:2026-10-15T06:00:00Z", trigger="scheduled",
         scheduled_for=datetime(2026, 10, 15, 6, 0, tzinfo=UTC),

@@ -20,17 +20,23 @@ from app.services.automations import (
 )
 
 
-def test_portfolio_weekly_learning_has_a_canonical_schedule_definition():
-    matches = [row for row in EXTERNAL_WORKFLOWS if row[0] == "portfolio-ai/jenny_weekly_learning"]
-    assert len(matches) == 1
-    assert matches[0][1] == "portfolio-ai"
-    assert matches[0][4] == {"type": "cron", "value": "0 14 * * 6", "timezone": "UTC"}
+def test_portfolio_seeds_only_its_live_workflows():
+    portfolio = {row[0]: row for row in EXTERNAL_WORKFLOWS if row[1] == "portfolio-ai"}
+    # The Jenny investing routines and the ML retrain are retired; a seed would
+    # recreate their definitions on the next legacy import.
+    assert set(portfolio) == {
+        "portfolio-ai/jenny_daily_household_maintenance",
+        "portfolio-ai/jenny_weekly_price_check",
+    }
+    assert portfolio["portfolio-ai/jenny_daily_household_maintenance"][4] == {
+        "type": "cron", "value": "15 13 * * *", "timezone": "UTC",
+    }
 
 
 @pytest.mark.asyncio
 async def test_new_profile_defaults_disabled_even_when_definition_defaults_enabled():
     payload = ProfileCreate(
-        project_id="portfolio-ai", workflow_key="portfolio-ai/retrain_ml",
+        project_id="portfolio-ai", workflow_key="portfolio-ai/jenny_weekly_price_check",
         schedule_type="every", schedule_value="900000",
     )
     assert payload.enabled is False
@@ -40,9 +46,9 @@ async def test_new_profile_defaults_disabled_even_when_definition_defaults_enabl
     db = AsyncMock()
     db.add = MagicMock()
     definition = SimpleNamespace(
-        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
-        version=1, label="Retrain ML", default_enabled=True,
-        config_schema={"type": "object"}, dispatch_target="/automations/dispatch/retrain_ml",
+        workflow_key="portfolio-ai/jenny_weekly_price_check", owner_project_id="portfolio-ai",
+        version=1, label="Weekly price check", default_enabled=True,
+        config_schema={"type": "object"}, dispatch_target="/automations/dispatch/jenny_weekly_price_check",
     )
     with patch("app.services.automations.get_definition", new_callable=AsyncMock, return_value=definition):
         profile = await create_profile(db, payload.model_dump(exclude={"enabled"}), changed_by="test")
@@ -116,12 +122,12 @@ async def test_create_profile_rejects_past_one_time_before_adding_owner_or_profi
     db = AsyncMock()
     db.add = MagicMock()
     definition = SimpleNamespace(
-        workflow_key="portfolio-ai/retrain_ml", owner_project_id="portfolio-ai",
-        version=1, label="Retrain ML", dispatch_target="/automations/dispatch/retrain_ml",
+        workflow_key="portfolio-ai/jenny_weekly_price_check", owner_project_id="portfolio-ai",
+        version=1, label="Weekly price check", dispatch_target="/automations/dispatch/jenny_weekly_price_check",
         config_schema={"type": "object"},
     )
     payload = {
-        "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/retrain_ml",
+        "project_id": "portfolio-ai", "workflow_key": "portfolio-ai/jenny_weekly_price_check",
         "schedule_type": "at", "schedule_value": "2026-03-05T12:00:00Z",
     }
     with (
