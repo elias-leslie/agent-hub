@@ -7,10 +7,9 @@ Verifies, without hitting any real network, that:
 3. The :class:`AssistantMessageEventStream` queueing + result-resolution works.
 4. The tool-loop drives a fake provider through one tool round trip
    and emits the expected ``ToolRunStart`` / ``ToolRunComplete`` events.
-5. The SSE writer turns a mixed event stream into wire chunks matching
-   the immutable contract in
-   ``backend/tasks/agent-framework-convergence/downstream-consumers.md``
-   Section 6.
+
+The SSE wire contract for these events is pinned on the live streaming
+translator in ``tests/api/complete/test_streaming_events.py``.
 
 These are deliberately offline smoke tests. The "real Anthropic API"
 smoke test referenced in ``CONTINUATION.md`` item 13 lives separately
@@ -24,7 +23,6 @@ from typing import Any
 
 import pytest
 
-from app.api.complete.sse_writer import SseWriter, write_events
 from app.llm import tool_loop
 from app.llm.api_registry import get_api_provider
 from app.llm.event_stream import AssistantMessageEventStream
@@ -373,71 +371,6 @@ async def test_tool_loop_leaves_results_raw_when_flag_off(monkeypatch: pytest.Mo
     assert isinstance(block, TextContent)
     assert block.text.lstrip().startswith("[{")  # still raw JSON
     assert sink == {}
-
-
-@pytest.mark.asyncio
-async def test_sse_writer_emits_contract_events() -> None:
-    """SSE writer surfaces the 9-event downstream contract correctly."""
-
-    model = _claude_model()
-    msg_tool = AssistantMessage(
-        content=[ToolCall(id="toolu_1", name="echo", arguments={"text": "x"})],
-        api=model.api,
-        provider=model.provider,
-        model=model.id,
-        usage=Usage(input=10, output=2, total_tokens=12),
-        stop_reason="toolUse",
-        timestamp=0,
-    )
-    msg_done = AssistantMessage(
-        content=[TextContent(text="hi")],
-        api=model.api,
-        provider=model.provider,
-        model=model.id,
-        usage=Usage(input=12, output=1, total_tokens=13),
-        stop_reason="stop",
-        timestamp=0,
-    )
-
-    tool_block = msg_tool.content[0]
-    assert isinstance(tool_block, ToolCall)
-
-    async def stream_events():
-        yield TextDeltaEvent(content_index=0, delta="hi", partial=msg_done)
-        yield ToolCallEndEvent(content_index=0, tool_call=tool_block, partial=msg_tool)
-        yield tool_loop.ToolRunStart(tool_call=tool_block)
-        yield tool_loop.ToolRunComplete(
-            tool_call=tool_block,
-            result=ToolResultMessage(
-                tool_call_id="toolu_1",
-                tool_name="echo",
-                content=[TextContent(text="x")],
-                is_error=False,
-                timestamp=0,
-            ),
-        )
-        yield DoneEvent(reason="stop", message=msg_done)
-
-    writer = SseWriter(session_id="sess-1")
-    chunks: list[dict[str, Any]] = []
-    async for raw in write_events(stream_events(), writer):
-        assert raw.startswith("data: ")
-        assert raw.endswith("\n\n")
-        chunks.append(json.loads(raw[len("data: ") : -2]))
-
-    types = [c["type"] for c in chunks]
-    assert types == ["content", "tool_use", "tool_start", "tool_result", "done"]
-    assert chunks[0]["content"] == "hi"
-    assert chunks[1]["tool_id"] == "toolu_1"
-    assert chunks[1]["tool_name"] == "echo"
-    assert chunks[2]["tool_id"] == "toolu_1"
-    assert chunks[3]["tool_status"] == "complete"
-    assert chunks[3]["tool_result"] == "x"
-    assert chunks[4]["finish_reason"] == "stop"
-    assert chunks[4]["session_id"] == "sess-1"
-    # seq is monotonic.
-    seqs = [c["seq"] for c in chunks]
-    assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
 
 
 @pytest.mark.asyncio

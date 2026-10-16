@@ -11,10 +11,10 @@ Collapses ``complete_orchestrator.py`` + ``complete_execution.py``
    :class:`backend.app.llm.types.Model`.
 2. Calls :func:`backend.app.llm.stream.stream` for the simple path, or
    :func:`backend.app.llm.tool_loop.run` when ``execute_tools=True``.
-3. Translates the resulting :class:`AssistantMessageEvent` stream
-   into either a :class:`CompletionResponse` (non-streaming) or the
-   immutable SSE wire protocol via
-   :class:`backend.app.api.complete.sse_writer.SseWriter`.
+3. Returns an :class:`OrchestratorResult` (non-streaming) or yields the
+   resulting :class:`AssistantMessageEvent` stream, which
+   :func:`backend.app.api.complete.streaming._emit_events` translates into
+   the immutable SSE wire protocol.
 
 The orchestrator is intentionally thin: it does **not** know about
 sessions, routing, memory injection, cost persistence, or async
@@ -44,7 +44,6 @@ from app.llm.types import (
     Message,
     Model,
     SimpleStreamOptions,
-    StopReason,
     TextContent,
     ThinkingLevel,
     Tool,
@@ -262,8 +261,8 @@ async def run_completion_stream(
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.
 
-    The HTTP route handler wraps this with
-    :func:`backend.app.api.complete.sse_writer.write_events` to emit
+    The HTTP streaming path wraps this with
+    :func:`backend.app.api.complete.streaming._emit_events` to emit
     SSE chunks matching the immutable downstream contract.
     """
 
@@ -286,20 +285,9 @@ async def run_completion_stream(
         yield event
 
 
-def stop_reason_to_finish_reason(stop_reason: StopReason) -> str:
-    """Surface the locked StopReason enum as the wire ``finish_reason`` string.
-
-    The HTTP boundary keeps a wider vocabulary for backward compatibility;
-    internal events use the 5-value enum (D2).
-    """
-
-    return stop_reason
-
-
 __all__ = [
     "OrchestratorResult",
     "build_context_from_messages",
     "run_completion",
     "run_completion_stream",
-    "stop_reason_to_finish_reason",
 ]

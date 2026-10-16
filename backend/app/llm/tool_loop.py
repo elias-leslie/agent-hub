@@ -16,8 +16,9 @@ caller-supplied async ``run_tool`` callback (the agent-hub
 ``backend/app/services/tools/`` registry plugs in here), and yields a
 mixed stream of ``AssistantMessageEvent | ToolRunEvent``.
 
-The HTTP ``POST /api/complete`` path (``execute_tools=True``) wraps this
-loop with the SSE writer in ``backend/app/api/complete/sse_writer.py``.
+The HTTP ``POST /api/complete`` streaming path (``execute_tools=True``)
+translates this loop's events into SSE in
+``backend/app/api/complete/streaming.py`` (``_emit_events``).
 """
 
 from __future__ import annotations

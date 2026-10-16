@@ -3,7 +3,7 @@
 These tests exercise the wire-format and lifecycle contract of
 ``stream_completion`` after the Phase 4 cluster B migration, where the
 HTTP streaming path drives ``orchestrator.run_completion_stream``
-through ``sse_writer``. They do not hit any real service.
+through ``streaming._emit_events``. They do not hit any real service.
 """
 
 from __future__ import annotations

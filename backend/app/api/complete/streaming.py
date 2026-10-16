@@ -2,8 +2,9 @@
 
 Phase 4 cluster B (per ``CONTINUATION.md``): the HTTP streaming path now
 drives :func:`backend.app.api.complete.orchestrator.run_completion_stream`
-and translates the resulting universal events into the immutable SSE wire
-protocol via :class:`backend.app.api.complete.sse_writer.SseWriter`.
+and :func:`_emit_events` translates the resulting universal events into the
+immutable SSE wire protocol, writing each chunk with
+:class:`backend.app.api.complete.sse_writer.SseWriter`.
 
 The DB-side persistence (``save_messages_to_db``, citation tracking,
 one-shot session cleanup, routing-decision close-out, project cost
@@ -36,7 +37,6 @@ from app.llm.types import (
     AssistantMessage,
     DoneEvent,
     ErrorEvent,
-    StopReason,
     TextDeltaEvent,
     ThinkingDeltaEvent,
     ToolCallEndEvent,
@@ -68,12 +68,6 @@ class _EarlyStreamProviderError(RuntimeError):
 
 # Re-export private alias used historically as _StreamContext
 _StreamContext = StreamContext
-
-
-
-
-def _finish_reason(stop_reason: StopReason) -> str:
-    return stop_reason
 
 
 async def _log_stream_cost(
@@ -164,7 +158,7 @@ async def _persist_and_build_done_sse(
 
     extras: dict[str, object] = {
         "cost_usd": cost.total_cost_usd,
-        "finish_reason": _finish_reason(message.stop_reason),
+        "finish_reason": message.stop_reason,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "model": ctx.model,
