@@ -12,13 +12,11 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.api.complete.sse_writer import SseWriter
 from app.api.complete.streaming import _attach_routing, _emit_events
-from app.api.complete.streaming_context import StreamContext
 from app.constants.models import CLAUDE_SONNET
 from app.llm import tool_loop
 from app.llm.tool_loop import ToolLoopEvent
@@ -33,14 +31,7 @@ from app.llm.types import (
     ToolResultMessage,
     Usage,
 )
-
-
-def _ctx(session_id: str) -> StreamContext:
-    return StreamContext(
-        session_id=session_id, model=CLAUDE_SONNET, provider="claude", agent_used=None,
-        model_used=None, fallback_used=False, user_messages=None, stream_start=0.0,
-        is_new_session=False, is_one_shot=False,
-    )
+from tests.api.stream_test_support import make_stream_ctx, patched_done_persistence
 
 
 def _message(content: list[Any], stop_reason: StopReason, usage: Usage) -> AssistantMessage:
@@ -56,15 +47,11 @@ def _message(content: list[Any], stop_reason: StopReason, usage: Usage) -> Assis
 
 
 async def _emit(events: AsyncIterator[ToolLoopEvent], session_id: str) -> list[dict[str, Any]]:
-    ctx = _ctx(session_id)
+    ctx = make_stream_ctx(session_id)
     writer = SseWriter(session_id=session_id)
     _attach_routing(writer, ctx)
     chunks: list[dict[str, Any]] = []
-    with (
-        patch("app.api.complete.streaming_persistence.save_messages_to_db", AsyncMock()),
-        patch("app.api.complete.streaming_persistence._track_citations", AsyncMock()),
-        patch("app.api.complete.streaming._log_stream_cost", AsyncMock()),
-    ):
+    with patched_done_persistence():
         async for raw in _emit_events(events, writer, ctx, [""]):
             assert raw.startswith("data: ")
             assert raw.endswith("\n\n")

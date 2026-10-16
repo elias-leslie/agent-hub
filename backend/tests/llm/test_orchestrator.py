@@ -8,7 +8,6 @@ before the HTTP route flip in Phase 3.6.
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -19,8 +18,6 @@ from app.api.complete.orchestrator import (
 )
 from app.api.complete.sse_writer import SseWriter
 from app.api.complete.streaming import _emit_events
-from app.api.complete.streaming_context import StreamContext
-from app.constants.models import CLAUDE_SONNET
 from app.llm.providers.faux import (
     faux_assistant_message,
     faux_tool_call,
@@ -35,6 +32,7 @@ from app.llm.types import (
     ToolResultMessage,
     UserMessage,
 )
+from tests.api.stream_test_support import make_stream_ctx, patched_done_persistence
 
 
 def test_build_context_from_messages_decodes_string_and_blocks() -> None:
@@ -150,18 +148,10 @@ async def test_run_completion_stream_yields_events_for_sse_writer() -> None:
         assert model is not None
         context = Context(messages=[UserMessage(content="hi", timestamp=0)])
 
-        ctx = StreamContext(
-            session_id="sess-x", model=CLAUDE_SONNET, provider="claude", agent_used=None,
-            model_used=None, fallback_used=False, user_messages=None, stream_start=0.0,
-            is_new_session=False, is_one_shot=False,
-        )
+        ctx = make_stream_ctx("sess-x")
         writer = SseWriter(session_id="sess-x")
         chunks: list[str] = []
-        with (
-            patch("app.api.complete.streaming_persistence.save_messages_to_db", AsyncMock()),
-            patch("app.api.complete.streaming_persistence._track_citations", AsyncMock()),
-            patch("app.api.complete.streaming._log_stream_cost", AsyncMock()),
-        ):
+        with patched_done_persistence():
             async for chunk in _emit_events(
                 run_completion_stream(model, context, options=SimpleStreamOptions()),
                 writer,

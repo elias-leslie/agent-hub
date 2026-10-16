@@ -31,6 +31,7 @@ from app.llm.types import (
     Usage,
 )
 from app.services.llm_messages import Message
+from tests.api.stream_test_support import patched_done_persistence
 
 
 def _partial_message() -> AssistantMessage:
@@ -123,24 +124,6 @@ class TestStreamingChunk:
         assert chunk.fallback_used is True
 
 
-def _patch_persistence():
-    """Patch the DB-side persistence helpers stream_completion calls on done."""
-    return (
-        patch(
-            "app.api.complete.streaming_persistence.save_messages_to_db",
-            new=AsyncMock(),
-        ),
-        patch(
-            "app.api.complete.streaming_persistence._track_citations",
-            new=AsyncMock(),
-        ),
-        patch(
-            "app.api.complete.streaming_persistence.close_one_shot_session",
-            new=AsyncMock(),
-        ),
-    )
-
-
 class TestStreamCompletionGenerator:
     """Tests for stream_completion's wire-format contract."""
 
@@ -150,9 +133,8 @@ class TestStreamCompletionGenerator:
             yield TextDeltaEvent(content_index=0, delta="Hello", partial=_partial_message())
             yield _done_event()
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -176,9 +158,8 @@ class TestStreamCompletionGenerator:
             yield TextDeltaEvent(content_index=0, delta=" world", partial=_partial_message())
             yield _done_event(input_tokens=5, output_tokens=3)
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -199,9 +180,8 @@ class TestStreamCompletionGenerator:
         async def mock_stream(*_args: object, **_kwargs: object):
             yield _done_event()
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             async for _chunk in stream_completion(
@@ -223,9 +203,8 @@ class TestStreamCompletionGenerator:
         async def mock_stream(*_args: object, **_kwargs: object):
             yield _done_event(finish_reason="stop", input_tokens=10, output_tokens=5)
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -265,9 +244,8 @@ class TestStreamCompletionGenerator:
             yield TextDeltaEvent(content_index=0, delta="Answer", partial=_partial_message())
             yield _done_event()
 
-        save, citations, close = _patch_persistence()
         with (
-            save as save_mock, citations, close,
+            patched_done_persistence() as persistence,
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
             patch("app.api.complete.streaming.build_direct_tool_runner", return_value=AsyncMock()),
         ):
@@ -285,16 +263,15 @@ class TestStreamCompletionGenerator:
 
         done_chunks = [c for c in chunks if '"type": "done"' in c]
         assert len(done_chunks) == 1
-        assert save_mock.await_count == 1
+        assert persistence.save_messages_to_db.await_count == 1
 
     @pytest.mark.asyncio
     async def test_error_handling(self) -> None:
         async def mock_stream(*_args: object, **_kwargs: object):
             yield _error_event("API error occurred")
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -334,11 +311,8 @@ class TestStreamCompletionGenerator:
                 output_tokens=4,
             )
 
-        save, citations, close = _patch_persistence()
         with (
-            save as mock_save,
-            citations,
-            close,
+            patched_done_persistence() as persistence,
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -367,7 +341,7 @@ class TestStreamCompletionGenerator:
         assert done["model_used"] == GEMINI_2_5_FLASH
         assert done["fallback_used"] is True
         assert "quota exhausted" in done["fallback_reason"]
-        assert mock_save.await_args.kwargs["model"] == GEMINI_2_5_FLASH
+        assert persistence.save_messages_to_db.await_args.kwargs["model"] == GEMINI_2_5_FLASH
 
     @pytest.mark.asyncio
     async def test_provider_error_after_visible_output_does_not_replay_on_fallback(self) -> None:
@@ -382,11 +356,8 @@ class TestStreamCompletionGenerator:
                 provider="gemini",
             )
 
-        save, citations, close = _patch_persistence()
         with (
-            save,
-            citations,
-            close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
@@ -413,9 +384,8 @@ class TestStreamCompletionGenerator:
         async def mock_stream(*_args: object, **_kwargs: object):
             yield _done_event()
 
-        save, citations, close = _patch_persistence()
         with (
-            save, citations, close,
+            patched_done_persistence(),
             patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
         ):
             chunks = []
