@@ -53,6 +53,7 @@ class ToolCall:
     input: dict[str, Any]
     caller: ToolCaller = field(default_factory=lambda: ToolCaller(type="direct"))
     original_id: str | None = None  # Original ID before normalization (for debugging)
+    notes: list[str] = field(default_factory=list)  # Pre-hook context lines prepended to the output
 
 
 @dataclass

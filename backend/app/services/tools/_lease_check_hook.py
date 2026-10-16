@@ -1,26 +1,21 @@
-"""Lease-check permission hook for the tool handler.
+"""Lease-check hook for the tool handler.
 
 Bridges Agent Hub's DirectToolExecutor write paths into SummitFlow's
-file-lease coordination primitive (`st lease`). When another agent holds
-a lease covering the target path, the hook denies the write so two
-agents can't race on the same file.
+advisory edit leases (`st lease --check`), the same check the harness edit
+hook runs: it claims the path for this agent and reports overlap.
 
-Enforcement:
-    write_file / edit_file → DENY when `st lease --check <path>` exits 2
-    bash                   → ALLOW always (opaque commands; impractical
-                             to scan reliably)
+    write_file / edit_file → `st lease --check <path>`:
+        exit 0 + "WARNING: ..." (another agent's lease) → ALLOW, warning
+                                 prepended to the tool output as context
+        exit 2 + "BLOCKED: ..." (live acceptance/deploy) → DENY
     everything else        → ALLOW
 
-The lease check runs `st lease --check <resolved_path>` as a subprocess
-with cwd=project_root and a short timeout. AGENT_HUB_SESSION_ID and
-AGENT_HUB_AGENT_SLUG flow through inherited env so `st lease` can
-identify the agent and refresh the holder's heartbeat for matching
-same-agent leases.
+The check runs with cwd=project_root and a short timeout.
+AGENT_HUB_SESSION_ID and AGENT_HUB_AGENT_SLUG flow through inherited env so
+`st lease` can identify the agent.
 
-Fail-open: missing `st` binary, missing project root, subprocess error,
-or timeout all return ALLOW. The lease is a coordination convenience,
-not a security boundary — failing closed would block all writes when
-SummitFlow is offline.
+Fail-open: missing `st` binary, missing project root, subprocess error, or
+timeout all return ALLOW. Leases are coordination, not a security boundary.
 """
 
 from __future__ import annotations
@@ -45,7 +40,9 @@ def _resolve_path(path: str, project_root: Path) -> Path:
     return (project_root / target).resolve(strict=False)
 
 
-async def _run_lease_check(resolved_path: Path, project_root: Path) -> ToolDecision:
+async def _run_lease_check(
+    resolved_path: Path, project_root: Path, tool_call: ToolCall
+) -> ToolDecision:
     st_binary = shutil.which("st")
     if st_binary is None:
         return ToolDecision.ALLOW
@@ -71,15 +68,17 @@ async def _run_lease_check(resolved_path: Path, project_root: Path) -> ToolDecis
         logger.warning("lease check timed out for %s", resolved_path)
         return ToolDecision.ALLOW
 
+    message = stderr.decode("utf-8", errors="replace").strip()
     if proc.returncode == 2:
-        message = stderr.decode("utf-8", errors="replace").strip()
-        logger.info("Lease DENY: %s (%s)", resolved_path, message or "held by another agent")
+        logger.info("Lease DENY: %s (%s)", resolved_path, message or "live acceptance/deploy")
         return ToolDecision.DENY
+    if message.startswith("WARNING:"):
+        tool_call.notes.append(message)
     return ToolDecision.ALLOW
 
 
 def create_lease_check_hook(project_id: str) -> PreToolUseHook:
-    """Return a pre-hook that blocks writes covered by another agent's lease."""
+    """Return a pre-hook that warns on another agent's lease and blocks under a live op."""
     from app.services.tools._executor_roots import KNOWN_ROOTS
 
     async def _hook(tool_call: ToolCall) -> ToolDecision:
@@ -101,7 +100,7 @@ def create_lease_check_hook(project_id: str) -> PreToolUseHook:
             project_root = Path(root)
 
             resolved = _resolve_path(str(raw_path), project_root)
-            return await _run_lease_check(resolved, project_root)
+            return await _run_lease_check(resolved, project_root, tool_call)
         except Exception as exc:
             logger.warning(
                 "Lease hook error for %s on %s: %s — allowing",

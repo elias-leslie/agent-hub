@@ -149,10 +149,11 @@ class DirectToolHandler(ToolHandler):
         except Exception as e:
             output = f"Tool execution error: {e}"
 
+        is_error = output.startswith("Error:") or output.startswith("Unknown tool:")
         return ToolResult(
             tool_use_id=tool_use_id,
-            content=output,
-            is_error=output.startswith("Error:") or output.startswith("Unknown tool:"),
+            content="\n".join([*call.notes, output]),
+            is_error=is_error,
             duration_ms=int((time.monotonic() - start) * 1000),
         )
 

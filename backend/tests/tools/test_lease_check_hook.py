@@ -64,11 +64,11 @@ async def test_lease_check_allows_when_no_holder(project_id):
 
 
 @pytest.mark.asyncio
-async def test_lease_check_denies_when_held(project_id):
+async def test_lease_check_denies_under_live_op(project_id):
     pid, root = project_id
     hook = create_lease_check_hook(pid)
 
-    _, fake_exec = await _exec_factory(2, stderr=b"BLOCKED: app.py held by cc:abc123")
+    _, fake_exec = await _exec_factory(2, stderr=b"BLOCKED: acceptance running in summitflow")
     with patch("shutil.which", return_value="/usr/bin/st"), \
          patch("app.services.tools._lease_check_hook.create_process", side_effect=fake_exec):
         decision = await hook(ToolCall(
@@ -77,6 +77,21 @@ async def test_lease_check_denies_when_held(project_id):
         ))
 
     assert decision == ToolDecision.DENY
+
+
+@pytest.mark.asyncio
+async def test_lease_check_warns_and_allows_on_foreign_lease(project_id):
+    pid, root = project_id
+    hook = create_lease_check_hook(pid)
+    call = ToolCall(id="2w", name="edit_file", input={"file_path": str(root / "app.py")})
+
+    _, fake_exec = await _exec_factory(0, stderr=b"WARNING: app.py leased by cc:abc123\n")
+    with patch("shutil.which", return_value="/usr/bin/st"), \
+         patch("app.services.tools._lease_check_hook.create_process", side_effect=fake_exec):
+        decision = await hook(call)
+
+    assert decision == ToolDecision.ALLOW
+    assert call.notes == ["WARNING: app.py leased by cc:abc123"]
 
 
 @pytest.mark.asyncio

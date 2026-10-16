@@ -193,3 +193,18 @@ class TestDirectToolHandlerPermissionFailClosed:
         result = await handler.execute(tool_call)
         # Should NOT have permission denial message
         assert "denied by permission policy" not in result.content
+
+    @pytest.mark.asyncio
+    async def test_execute_prepends_hook_notes_to_output(self):
+        """A pre-hook's notes (e.g. a lease warning) reach the model ahead of the output."""
+
+        async def _warning_hook(tool_call: ToolCall) -> ToolDecision:
+            tool_call.notes.append("WARNING: file.txt leased by cc:abc123")
+            return ToolDecision.ALLOW
+
+        handler = DirectToolHandler(working_dir="/tmp", pre_hook=_warning_hook)
+        result = await handler.execute(
+            ToolCall(id="test-id", name="read_file", input={"path": "/nonexistent/file.txt"})
+        )
+
+        assert result.content.startswith("WARNING: file.txt leased by cc:abc123\n")
