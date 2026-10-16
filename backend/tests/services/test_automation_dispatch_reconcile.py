@@ -197,3 +197,65 @@ async def test_reconcile_records_a_cancelled_hatchet_run_as_cancelled():
 
     assert settled == 1
     assert run.status == "cancelled"
+
+
+def _callback_run(**overrides):
+    fields = dict(
+        id="run-1", profile_id="profile-1", workflow_key="portfolio-ai/retrain_ml",
+        definition_version=1, profile_revision=2, status="admitted",
+        occurrence_key="scheduled:profile-1:2026-10-15T06:00:00Z", trigger="scheduled",
+        scheduled_for=datetime(2026, 10, 15, 6, 0, tzinfo=UTC),
+        created_at=datetime(2026, 10, 15, 6, 0, tzinfo=UTC),
+        config_snapshot={}, policy_snapshot={}, owner_run_id=None, owner_receipt=None,
+        accepted_at=None, completed_at=None, error=None,
+    )
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
+
+
+async def _dispatch_callback(run, receipt: dict) -> None:
+    definition = SimpleNamespace(
+        dispatch_kind="callback", dispatch_target="/automations/dispatch",
+        owner_project_id="portfolio-ai",
+    )
+    sessions = [
+        DispatchSession(run=run, definition=definition, profile=SimpleNamespace(project_id="portfolio-ai")),
+        DispatchSession(run=run),
+    ]
+    response = MagicMock(raise_for_status=MagicMock(), json=MagicMock(return_value=receipt))
+    client = MagicMock(post=AsyncMock(return_value=response))
+    client_cm = MagicMock(
+        __aenter__=AsyncMock(return_value=client), __aexit__=AsyncMock(return_value=None),
+    )
+    with (
+        patch("app.services.automation_dispatch.async_session", side_effect=sessions),
+        patch("app.services.automation_dispatch._owner_api_base", return_value="http://127.0.0.1:8000"),
+        patch("app.services.automation_dispatch.httpx.AsyncClient", return_value=client_cm),
+        patch("app.services.automation_dispatch.settings", SimpleNamespace(internal_service_secret="s")),
+    ):
+        await dispatch_run(run.id)
+
+
+@pytest.mark.asyncio
+async def test_terminal_callback_receipt_keeps_the_owner_error_text():
+    """The owner's reason for a failed run must survive settling it."""
+    run = _callback_run(status="accepted", owner_run_id="run-1", error="earlier transient")
+
+    await _dispatch_callback(run, {
+        "owner_run_id": "run-1", "status": "failed",
+        "error": "owner run lost: no result within 6 hours of dispatch",
+    })
+
+    assert run.status == "failed"
+    assert run.completed_at is not None
+    assert run.error == "owner run lost: no result within 6 hours of dispatch"
+
+
+@pytest.mark.asyncio
+async def test_accepted_callback_receipt_clears_a_transient_dispatch_error():
+    run = _callback_run(status="accepted", owner_run_id="run-1", error="connect timeout")
+
+    await _dispatch_callback(run, {"owner_run_id": "run-1", "status": "accepted"})
+
+    assert run.status == "accepted"
+    assert run.error is None
