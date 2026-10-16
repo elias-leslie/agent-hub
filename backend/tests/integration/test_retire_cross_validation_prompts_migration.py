@@ -81,6 +81,10 @@ def _verify_migration(conn) -> None:
         with pytest.raises(RuntimeError, match="differ from the recorded preimage"):
             migration.upgrade()
         conn.execute(sa.text("UPDATE prompts SET content = left(content, -1) WHERE id = :id"), {"id": system_id})
+        conn.execute(sa.text("UPDATE prompts SET enabled = NOT enabled WHERE id = :id"), {"id": system_id})
+        with pytest.raises(RuntimeError, match="differ from the recorded preimage"):
+            migration.upgrade()
+        conn.execute(sa.text("UPDATE prompts SET enabled = NOT enabled WHERE id = :id"), {"id": system_id})
         conn.execute(sa.text("INSERT INTO agent_prompts VALUES (1, :id)"), {"id": system_id})
         with pytest.raises(RuntimeError, match="assigned to an agent"):
             migration.upgrade()

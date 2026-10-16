@@ -57,7 +57,15 @@ def upgrade() -> None:
     ).all()
     if not live_prompts:
         return  # already gone (or never seeded here): nothing to retire
-    if sorted(tuple(row) for row in live_prompts) != recorded:
+    if sorted(tuple(row) for row in live_prompts) != recorded or not conn.execute(
+        text(
+            "SELECT (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM prompts p WHERE p.id = ANY(:ids))"
+            " IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id)"
+            " FROM json_populate_recordset(NULL::prompts, CAST(:rows AS json)) r)"
+        ),
+        {"ids": prompt_ids, "rows": json.dumps(data["prompts"])},
+    ).scalar_one():
+        # Every column must match, so downgrade restores exactly what upgrade deleted.
         raise RuntimeError("retired cross-validation prompts differ from the recorded preimage")
     live_links = conn.execute(
         text("SELECT CAST(id AS text), prompt_id FROM prompt_revisions WHERE prompt_id = ANY(:ids) FOR UPDATE"),
