@@ -5,13 +5,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.models import Client
-from app.services.project_permission_service import is_registry_synced_client
 
 
 @dataclass(frozen=True)
@@ -26,18 +24,6 @@ class FirstPartyClientSpec:
 
 def _clean_client_id(value: str) -> str:
     return value.strip()
-
-
-def _parse_allowed_projects(value: str | None) -> list[str] | None:
-    if value is None:
-        return None
-    try:
-        parsed = json.loads(value)
-    except (TypeError, json.JSONDecodeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    return [str(item) for item in parsed]
 
 
 def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
@@ -70,18 +56,6 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
         ("agent-hub",),
     )
     add(
-        "portfolio-ai",
-        "portfolio-ai",
-        "internal",
-        ("portfolio-ai",),
-    )
-    add(
-        "monkey-fight",
-        "monkey-fight",
-        "external",
-        ("monkey-fight",),
-    )
-    add(
         settings.summitflow_client_id,
         "summitflow",
         "internal",
@@ -103,58 +77,36 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
 
 
 async def reconcile_first_party_clients(db: AsyncSession) -> list[str]:
-    """Ensure configured first-party client IDs exist with the expected shape."""
-    changed_client_ids: list[str] = []
+    """Insert configured first-party client IDs that are missing.
 
+    Existing registrations are left alone: the dashboard (and, for SummitFlow,
+    registry sync) owns their name, type and project list after the first insert.
+    """
+    inserted: list[str] = []
     for spec in _iter_first_party_client_specs():
-        result = await db.execute(select(Client).where(Client.id == spec.client_id))
-        client = result.scalar_one_or_none()
-        desired_projects = (
-            list(spec.allowed_projects) if spec.allowed_projects is not None else None
-        )
-        current_projects = (
-            _parse_allowed_projects(client.allowed_projects) if client is not None else None
-        )
-        if client is not None and is_registry_synced_client(spec.display_name):
-            # Registry sync owns this list (registered projects); seed it only on insert.
-            desired_projects = current_projects
-        desired_allowed_projects = (
-            json.dumps(desired_projects) if desired_projects is not None else None
-        )
-
-        if client is None:
-            db.add(
-                Client(
-                    id=spec.client_id,
-                    display_name=spec.display_name,
-                    client_type=spec.client_type,
-                    status="active",
-                    allowed_projects=desired_allowed_projects,
-                )
-            )
-            changed_client_ids.append(spec.client_id)
+        if await db.get(Client, spec.client_id) is not None:
             continue
+        db.add(
+            Client(
+                id=spec.client_id,
+                display_name=spec.display_name,
+                client_type=spec.client_type,
+                status="active",
+                allowed_projects=(
+                    json.dumps(list(spec.allowed_projects))
+                    if spec.allowed_projects is not None
+                    else None
+                ),
+            )
+        )
+        inserted.append(spec.client_id)
 
-        updated = False
-        if client.display_name != spec.display_name:
-            client.display_name = spec.display_name
-            updated = True
-        if client.client_type != spec.client_type:
-            client.client_type = spec.client_type
-            updated = True
-        if current_projects != desired_projects:
-            client.allowed_projects = desired_allowed_projects
-            updated = True
-
-        if updated:
-            changed_client_ids.append(spec.client_id)
-
-    if changed_client_ids:
+    if inserted:
         await db.commit()
-        for client_id in changed_client_ids:
+        for client_id in inserted:
             invalidate_client_cache(client_id)
 
-    return changed_client_ids
+    return inserted
 
 
 async def seed_automation_owner_clients(db: AsyncSession) -> list[str]:
