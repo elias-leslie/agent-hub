@@ -116,10 +116,8 @@ async def _run_improvement_pass(
     working_root: Path,
 ) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
     """Prompt the persona to improve itself based on benchmark failures."""
-    from app.services.persona_improvement import build_persona_heartbeat_field_digest
-
     improvement_signals = await _load_recent_improvement_signals(project_id)
-    field_signals = await build_persona_heartbeat_field_digest()
+    field_signals = ""  # heartbeat field evidence is retired with the persona heartbeat
     prompt = await _build_improvement_prompt(
         run=run, iteration=iteration, previous_clusters=previous_clusters,
         review_run=review_run, previous_review_clusters=previous_review_clusters,

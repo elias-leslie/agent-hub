@@ -374,10 +374,6 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
             "scripts.persona_honing._experiment._load_recent_improvement_signals",
             new=AsyncMock(return_value="## Repeated issues\n- persona [2x]: missed rebuild.sh"),
         ),
-        patch(
-            "app.services.persona_improvement.build_persona_heartbeat_field_digest",
-            new=AsyncMock(return_value="- 3 recent real heartbeats; avg reliability 90.0%; critical issues 0."),
-        ),
     ):
         session_id, content, tools, parsed = await _run_improvement_pass(
             client=client,
@@ -510,10 +506,6 @@ async def test_run_decision_review_uses_freeform_completion_and_parses_json() ->
             "scripts.persona_honing._experiment.render_persona_improvement_decision_review_prompt",
             new=AsyncMock(return_value="review prompt"),
         ),
-        patch(
-            "app.services.persona_improvement.build_persona_heartbeat_field_digest",
-            new=AsyncMock(return_value="- 4 recent real heartbeats; avg reliability 100.0%."),
-        ),
     ):
         result = await _run_decision_review(
             client=client,
@@ -631,10 +623,6 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             new=AsyncMock(return_value={"decision": "rollback", "decision_reason": "candidate_underperforms_baseline"}),
         ),
         patch(
-            "scripts.persona_honing._experiment._load_field_snapshot",
-            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
-        ),
-        patch(
             "scripts.persona_honing._experiment._persist_final_experiment_decision",
             new=AsyncMock(),
         ),
@@ -701,10 +689,6 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
         patch(
             "scripts.persona_honing._experiment.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(return_value={"decision": "promote", "decision_reason": "candidate_outperforms_baseline"}),
-        ),
-        patch(
-            "scripts.persona_honing._experiment._load_field_snapshot",
-            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
         ),
         patch(
             "scripts.persona_honing._experiment._persist_final_experiment_decision",
@@ -806,10 +790,6 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
                     {"decision": "rollback", "decision_reason": "completion_review_regression"},
                 ]
             ),
-        ),
-        patch(
-            "scripts.persona_honing._experiment._load_field_snapshot",
-            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
         ),
         patch(
             "scripts.persona_honing._experiment._persist_final_experiment_decision",

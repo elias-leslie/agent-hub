@@ -41,7 +41,7 @@ from scripts.persona_honing._response import (
     parse_decision_review_content,
     parse_improvement_content,
 )
-from scripts.persona_honing._signals import _load_field_snapshot, _load_recent_improvement_signals
+from scripts.persona_honing._signals import _load_recent_improvement_signals
 from scripts.persona_honing._state import _restore_persona_mutable_state
 from scripts.run_persona_model_benchmark import derive_suite_id
 
@@ -80,10 +80,8 @@ async def _run_improvement_pass(
     working_root: Path,
 ) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
     """Prompt the persona to improve itself based on benchmark failures."""
-    from app.services.persona_improvement import build_persona_heartbeat_field_digest
-
     improvement_signals = await _load_recent_improvement_signals(project_id)
-    field_signals = await build_persona_heartbeat_field_digest()
+    field_signals = ""  # heartbeat field evidence is retired with the persona heartbeat
     prompt = await _build_improvement_prompt(
         run=run,
         iteration=iteration,
@@ -132,14 +130,12 @@ async def _run_decision_review(
     record: PersonaHoningIteration,
 ) -> dict[str, Any]:
     """Run the supervisor review prompt for a honing experiment decision."""
-    from app.services.persona_improvement import build_persona_heartbeat_field_digest
-
     prompt = await render_persona_improvement_decision_review_prompt(
         proposed_decision=proposed_decision,
         proposed_reason=proposed_reason,
         experiment_summary_block=_format_experiment_summary_block(experiment_summary),
         completion_review_block=_format_experiment_summary_block(review_summary),
-        field_signals_block=await build_persona_heartbeat_field_digest(),
+        field_signals_block="",
         improvement_summary_block=_format_improvement_summary_block(record),
     )
     try:
@@ -332,12 +328,6 @@ async def _run_iteration(
     baseline_config = await _get_config_snapshot(cfg["agent_slug"], cfg["benchmark_task_type"])
     suite_name = suite_id or derive_suite_id(cfg["case_ids"])
     record = _build_iteration_record(iteration, benchmark_run, report_path, loop_state, review_run=review_run)
-    field_snapshot = await _load_field_snapshot()
-    record.field_snapshot = {
-        "overview": dict(field_snapshot.get("overview") or {}),
-        "review_gate": dict(field_snapshot.get("review_gate") or {}),
-        "risks": list(field_snapshot.get("risks") or [])[:3],
-    }
     persist_kw: dict[str, Any] = dict(
         record=record, benchmark_run=benchmark_run, config_snapshot=baseline_config,
         suite_name=suite_name, agent_slug=cfg["agent_slug"], use_memory=cfg["use_memory"],

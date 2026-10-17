@@ -1,95 +1,16 @@
-"""Memory helpfulness rating for session analysis.
+"""Loaded-memory selection for the summary workflow's combined helpfulness rating.
 
-After a session ends, rates which injected memories were actually helpful
-vs harmful based on the session transcript. Assessments are stored separately from user feedback, citations and delivery evidence.
-
-Called from the Hatchet summary workflow after summary generation.
+The summary workflow rates loaded memories inside its own LLM call; this module only
+bounds and fetches the memories it rates.
 """
 
 from __future__ import annotations
-
-import logging
-from dataclasses import dataclass
-
-from .memory_rater_helpers import _parse_ratings, build_rating_prompt, call_llm_for_ratings
-from .session_queries import get_memories_loaded
-
-logger = logging.getLogger(__name__)
 
 # Only rate sessions with enough loaded memories to be meaningful
 MIN_MEMORIES_TO_RATE = 3
 
 # Cap memories sent to LLM to control token cost
 MAX_MEMORIES_TO_RATE = 30
-
-
-@dataclass
-class RatingResult:
-    """Result of memory rating for a session."""
-
-    session_id: str
-    memories_rated: int
-    helpful_count: int
-    harmful_count: int
-    neutral_count: int
-
-
-async def rate_session_memories(session_id: str, transcript: str) -> RatingResult:
-    """Rate loaded memories for helpfulness based on session transcript.
-
-    Steps:
-    1. Get loaded memory UUIDs from injection metrics
-    2. Fetch memory content from PostgreSQL via MemoryRepository
-    3. Ask LLM to rate each as helpful/neutral/harmful
-    4. Retain attributed assessment evidence without changing legacy utility counters
-
-    Args:
-        session_id: Session to rate memories for
-        transcript: Condensed session transcript
-
-    Returns:
-        RatingResult with counts
-    """
-    empty = RatingResult(session_id=session_id, memories_rated=0,
-                         helpful_count=0, harmful_count=0, neutral_count=0)
-    loaded_uuids = await get_memories_loaded(session_id)
-    if len(loaded_uuids) < MIN_MEMORIES_TO_RATE:
-        logger.debug("Session %s: only %d loaded memories, skipping rating",
-                     session_id, len(loaded_uuids))
-        return empty
-    memory_contents = await _fetch_memory_contents(loaded_uuids[:MAX_MEMORIES_TO_RATE])
-    if not memory_contents:
-        return empty
-    ratings = await _rate_via_llm(session_id, transcript, memory_contents)
-    if not ratings:
-        return empty
-    helpful = [u for u, r in ratings.items() if r == "helpful"]
-    harmful = [u for u, r in ratings.items() if r == "harmful"]
-    # A model assessment is evidence with an actor, not an observed user outcome.
-    # Legacy utility counters mixed citations and ratings, so new ratings are separate.
-    import hashlib
-
-    from app.db import async_session
-    from app.services.context_governance import record
-    async with async_session() as db:
-        for source_id, rating in ratings.items():
-            await record(db, "feedback", "agent:memory-rater", {
-                "source_type": "memory", "source_id": source_id,
-                "source_revision": "sha256:" + hashlib.sha256(memory_contents[source_id].encode()).hexdigest(),
-                "revision_basis": "rated content; exact delivery revision unavailable",
-                "session_id": session_id, "turn_id": None, "signal": "agent-rated",
-                "assessment": {"helpful": "useful", "harmful": "conflicting"}.get(rating, "unknown"),
-                "evidence": "Retrospective automated assessment of a condensed session transcript",
-                "transcript_sha256": hashlib.sha256(transcript.encode()).hexdigest(),
-                "delivery_verified": False,
-            })
-        await db.commit()
-    neutral_count = len(ratings) - len(helpful) - len(harmful)
-    logger.info("Session %s: rated %d memories (helpful=%d, harmful=%d, neutral=%d)",
-                session_id, len(ratings), len(helpful), len(harmful), neutral_count)
-    return RatingResult(session_id=session_id, memories_rated=len(ratings),
-                        helpful_count=len(helpful), harmful_count=len(harmful),
-                        neutral_count=neutral_count)
 
 
 async def _fetch_memory_contents(uuids: list[str]) -> dict[str, str]:
@@ -103,28 +24,3 @@ async def _fetch_memory_contents(uuids: list[str]) -> dict[str, str]:
     repo = get_memory_repository()
     batch = await repo.batch_get(uuids)
     return {uuid: data["content"] for uuid, data in batch.items() if data.get("content")}
-
-
-async def _rate_via_llm(
-    session_id: str,
-    transcript: str,
-    memory_contents: dict[str, str],
-) -> dict[str, str]:
-    """Rate memories via Agent Hub's completion pipeline.
-
-    Routes through ``complete_internal`` using the ``memory-rater`` agent so
-    that model/temperature come from agent config and tokens are tracked.
-
-    Returns:
-        Dict mapping UUID to rating ("helpful", "harmful", or "neutral")
-    """
-    try:
-        prompt = build_rating_prompt(memory_contents, transcript)
-        text = await call_llm_for_ratings(session_id, prompt)
-        if not text:
-            logger.warning("LLM returned empty rating response for session %s", session_id)
-            return {}
-        return _parse_ratings(text, memory_contents)
-    except Exception as e:
-        logger.warning("Memory rating LLM call failed for session %s: %s", session_id, e)
-        return {}

@@ -81,14 +81,12 @@ async def _run_decision_review(
     field_snapshot: dict[str, Any] | None,
     record: PersonaHoningIteration,
 ) -> dict[str, Any]:
-    from app.services.persona_improvement import build_persona_heartbeat_field_digest
-
     prompt = await render_persona_improvement_decision_review_prompt(
         proposed_decision=proposed_decision,
         proposed_reason=proposed_reason,
         experiment_summary_block=_format_experiment_summary_block(experiment_summary),
         completion_review_block=_format_experiment_summary_block(review_summary),
-        field_signals_block=await build_persona_heartbeat_field_digest(),
+        field_signals_block="",
         improvement_summary_block=_format_improvement_summary_block(record),
     )
     try:
@@ -133,7 +131,7 @@ async def _determine_final_experiment_decision(
     raw_decision = str(experiment_summary.get("decision") or "hold")
     raw_reason = str(experiment_summary.get("decision_reason") or "no_clear_winner")
     review_decision = str(review_summary.get("decision")) if review_summary is not None else None
-    if review_decision == "rollback":
+    if review_summary is not None and review_decision == "rollback":
         review_reason = str(review_summary.get("decision_reason") or "completion_review_regression")
         return "rollback", review_reason, "completion_review", None
     if not _needs_supervisor_review(
