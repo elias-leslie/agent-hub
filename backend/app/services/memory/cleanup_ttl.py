@@ -13,22 +13,14 @@ from .retirement import retire_stale_archives
 logger = logging.getLogger(__name__)
 
 
-async def cleanup_stale_memories(
-    driver: Any = None,
-    group_id: str = "",
-    ttl_days: int = 30,
-) -> dict[str, Any]:
+async def cleanup_stale_memories() -> dict[str, Any]:
     """Clean up stale memories via graduated retirement.
 
-    Args:
-        driver: Ignored (kept for backward-compat signature).
-        group_id: Ignored (retirement is global).
-        ttl_days: Ignored (retirement uses its own 180-day threshold).
+    Retirement is global and uses its own threshold (``retirement.RETIREMENT_DAYS``).
 
     Returns:
         Dict with cleanup results: retired count, skipped, and reason.
     """
-    del driver
     try:
         result = await retire_stale_archives()
         retired = result.get("retired", 0)

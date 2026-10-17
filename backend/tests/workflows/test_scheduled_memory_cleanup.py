@@ -37,3 +37,16 @@ class TestMemoryCleanupResult:
 class TestCleanupImport:
     """Verify the scheduled module uses TTL cleanup, not the old no-op."""
 
+
+    async def test_cleanup_uses_retirement_threshold_only(self):
+        """The scheduled cleanup takes no TTL: retirement's own threshold decides what is stale."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.memory.cleanup_ttl import cleanup_stale_memories
+
+        retire = AsyncMock(return_value={"retired": 2, "skipped": False, "reason": ""})
+        with patch("app.services.memory.cleanup_ttl.retire_stale_archives", retire):
+            result = await cleanup_stale_memories()
+
+        retire.assert_awaited_once_with()
+        assert result == {"deleted": 0, "retired": 2, "skipped": False, "reason": ""}

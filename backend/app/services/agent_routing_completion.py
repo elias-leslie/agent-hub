@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.routing.availability import route_unavailable_reason
-from app.routing.registry import is_workload_provider, list_providers
+from app.routing.registry import is_workload_provider
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.llm_errors import (
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 _COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.TimeoutError)
 _DEFAULT_RATE_LIMIT_COOLDOWN = 60.0
 _UNSUPPORTED_NATIVE_THINKING_PROVIDERS = {"openai", "openrouter", "zhipu", "minimax", "xai"}
-_RATE_LIMIT_BREAKER = CircuitBreakerManager(list_providers())
+_RATE_LIMIT_BREAKER = CircuitBreakerManager()
 
 
 def record_provider_failure(_provider: str, _error: str, _latency_ms: float | None = None) -> None:

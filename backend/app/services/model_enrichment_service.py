@@ -45,15 +45,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ARIMXYER_INDEX_SCALE = 57.0
-_LIVEBENCH_REASONING_TASKS = [
-    "zebra_puzzle", "spatial", "connections", "consecutive_events",
-    "logic_with_navigation", "theory_of_mind",
-]
-_LIVEBENCH_IF_TASKS = [
-    "paraphrase", "story_generation", "summarize", "simplify",
-]
-
 # Re-export private helpers used by callers or tests
 __all__ = [
     "_bare_model_id",

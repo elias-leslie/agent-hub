@@ -161,7 +161,7 @@ async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
         return _disabled_schedule_result("memory_cleanup")
 
     # Step 1: Graduated retirement (replaces hard delete)
-    cleanup_data = await cleanup_stale_memories(ttl_days=90)
+    cleanup_data = await cleanup_stale_memories()
 
     # Step 2: Redundancy detection and consolidation
     redundancy_data: dict[str, Any] = {"consolidated": 0, "suggestions": 0}

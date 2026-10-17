@@ -50,7 +50,7 @@ def _isolate_agent_routing_circuit_breaker(monkeypatch: pytest.MonkeyPatch) -> N
     )
     monkeypatch.setattr(
         "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
-        CircuitBreakerManager(["gemini", "codex", "xai", "test"]),
+        CircuitBreakerManager(),
     )
 
 
@@ -590,7 +590,7 @@ class TestCompleteWithFallback:
             ),
             patch(
                 "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
-                new=CircuitBreakerManager(["codex", "gemini"]),
+                new=CircuitBreakerManager(),
             ),
             patch(
                 "app.api.complete.core.complete_internal",
@@ -630,7 +630,7 @@ class TestCompleteWithFallback:
                 )
             return fallback_internal
 
-        breaker = CircuitBreakerManager(["gemini"])
+        breaker = CircuitBreakerManager()
         with (
             patch(
                 "app.services.circuit_breaker.get_redis_client",
@@ -700,7 +700,7 @@ class TestCompleteWithFallback:
             ),
             patch(
                 "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
-                new=CircuitBreakerManager(["codex"]),
+                new=CircuitBreakerManager(),
             ),
             patch(
                 "app.api.complete.core.complete_internal",

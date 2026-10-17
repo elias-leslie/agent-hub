@@ -74,13 +74,8 @@ async def get_redis_client() -> "AsyncRedis[str] | None":
 class CircuitBreakerManager:
     """Manages circuit breaker state for providers."""
 
-    def __init__(self, provider_chain: list[str]):
-        """Initialize circuit breaker manager.
-
-        Args:
-            provider_chain: List of provider names to manage.
-        """
-        self._provider_chain = provider_chain
+    def __init__(self) -> None:
+        """Track any provider lazily, so providers added to the catalog later get a breaker too."""
         self._circuit_state: dict[str, CircuitBreakerState] = {}
 
     def _get_circuit_state(self, provider: str) -> CircuitBreakerState:
@@ -271,16 +266,3 @@ class CircuitBreakerManager:
             await self._save_circuit_state_to_redis(
                 provider, CircuitBreakerState(), redis
             )
-
-    def get_circuit_status(self) -> dict[str, dict[str, str | int | float | None]]:
-        """Get current circuit breaker status for all providers."""
-        status = {}
-        for provider in self._provider_chain:
-            state = self._get_circuit_state(provider)
-            status[provider] = {
-                "state": state.state.value,
-                "consecutive_failures": state.consecutive_failures,
-                "last_error_signature": state.last_error_signature,
-                "cooldown_until": state.cooldown_until,
-            }
-        return status
