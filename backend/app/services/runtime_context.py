@@ -217,6 +217,7 @@ class CanonicalContextDeliveryRequest(BaseModel):
     continuity_max_sessions: int | None = Field(None, ge=1)
     continuity_cross_project: bool = False
     continuity_live_sessions: bool = False
+    # Accepted for older clients and ignored: retrieval always uses the BASELINE config.
     variant: str | None = Field(None, max_length=100)
     client_metadata: dict[str, str] = Field(default_factory=dict)
 
@@ -555,7 +556,6 @@ async def _select_runtime_context(
     exclude_memory_uuids: list[str],
     include_project_index: bool,
     include_tool_capabilities: bool,
-    variant: str | None,
     delivery_request: CanonicalContextDeliveryRequest | None = None,
 ) -> _RuntimeContextSelection:
     """Select and order prompts/memory once for previews and real delivery."""
@@ -608,7 +608,6 @@ async def _select_runtime_context(
             include_reference_index=include_reference_index,
             exclude_tags=exclude_tags,
             exclude_memory_uuids=exclude_memory_uuids,
-            variant=variant,
             overrides=overrides,
             override_by_key=override_by_key,
             excluded=excluded_keys,
@@ -725,7 +724,6 @@ async def build_canonical_context_delivery(
             exclude_memory_uuids=effective_request.exclude_memory_uuids,
             include_project_index=effective_request.include_project_index,
             include_tool_capabilities=effective_request.include_tool_capabilities,
-            variant=effective_request.variant,
             delivery_request=effective_request,
         )
 
@@ -1451,7 +1449,6 @@ async def _build_memory_blocks(
     include_reference_index: bool,
     exclude_tags: list[str],
     exclude_memory_uuids: list[str],
-    variant: str | None,
     overrides: list[_ResolvedOverride],
     override_by_key: dict[tuple[str, str], _ResolvedOverride],
     excluded: set[tuple[str, str]],
@@ -1482,7 +1479,6 @@ async def _build_memory_blocks(
         consumer_profile=consumer_profile,
         consumer_agent_slug=agent_slug,
         consumer_tags=consumer_tags,
-        variant=variant,
         preserve_required_policy=True,
         db=db,
     )

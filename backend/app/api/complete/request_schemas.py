@@ -226,7 +226,7 @@ class CompletionRequest(BaseModel):
     memory_variant_override: str | None = Field(
         default=None,
         max_length=32,
-        description="Optional memory injection variant override for experiments (e.g., BASELINE, MINIMAL).",
+        description="Ignored; memory retrieval always uses the BASELINE config.",
     )
     task_type: str | None = Field(
         default=None,

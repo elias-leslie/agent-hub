@@ -260,21 +260,6 @@ class TestMemoryInjectionMetrics:
         assert metrics["total_tokens"] == 850
         assert metrics["variant"] == "BASELINE"
 
-    @pytest.mark.asyncio
-    async def test_variant_logged_in_metrics(self):
-        """Test: Variant (A/B test group) is captured in metrics."""
-        from app.services.memory.variants import assign_variant
-
-        # Deterministic assignment
-        task_id = "task-12345"
-        project_id = "project-67890"
-
-        variant1 = assign_variant(external_id=task_id, project_id=project_id)
-        variant2 = assign_variant(external_id=task_id, project_id=project_id)
-
-        # Same input should give same variant (deterministic)
-        assert variant1 == variant2
-
 
 class TestEndToEndAgenticFlow:
     """End-to-end tests simulating full SummitFlow → Agent Hub flow."""

@@ -9,7 +9,12 @@ from app.services.memory.scoring import (
     calculate_usage_effectiveness,
     score_memory,
 )
-from app.services.memory.variants import BASELINE_CONFIG, MINIMAL_CONFIG
+from app.services.memory.variants import (
+    BASELINE_CONFIG,
+    MemoryVariant,
+    ScoringWeights,
+    VariantConfig,
+)
 
 
 class TestCalculateRecencyDecay:
@@ -184,12 +189,14 @@ class TestScoreMemory:
             confidence=60.0,
         )
 
+        semantic_heavy = VariantConfig(
+            variant=MemoryVariant.BASELINE,
+            scoring_weights=ScoringWeights(semantic=0.6, usage=0.2, confidence=0.15, recency=0.05),
+        )
         baseline = score_memory(input_data, BASELINE_CONFIG)
-        minimal = score_memory(input_data, MINIMAL_CONFIG)
+        reweighted = score_memory(input_data, semantic_heavy)
 
-        # MINIMAL has higher threshold, so might not pass
-        # and different weight distribution
-        assert baseline.final_score != minimal.final_score
+        assert baseline.final_score != reweighted.final_score
 
 
 

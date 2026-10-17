@@ -22,12 +22,12 @@ class TestMemorySettingsDTO:
             enabled=True,
             budget_enabled=True,
             total_budget=3500,
-            active_variant="ENHANCED",
+            active_variant="BASELINE",
         )
         assert dto.enabled is True
         assert dto.budget_enabled is True
         assert dto.total_budget == 3500
-        assert dto.active_variant == "ENHANCED"
+        assert dto.active_variant == "BASELINE"
 
     def test_disabled_settings(self):
         """Test DTO with disabled memory."""
@@ -59,7 +59,7 @@ class TestGetMemorySettings:
         mock_settings = MagicMock()
         mock_settings.enabled = False
         mock_settings.total_budget = 5000
-        mock_settings.active_variant = "AGGRESSIVE"
+        mock_settings.active_variant = "BASELINE"
 
         mock_session = AsyncMock()
         mock_result = MagicMock()
@@ -70,7 +70,7 @@ class TestGetMemorySettings:
 
         assert result.enabled is False
         assert result.total_budget == 5000
-        assert result.active_variant == "AGGRESSIVE"
+        assert result.active_variant == "BASELINE"
 
 
 class TestUpdateMemorySettings:
@@ -107,14 +107,14 @@ class TestUpdateMemorySettings:
             db=mock_session,
             enabled=True,
             total_budget=3000,
-            active_variant="ENHANCED",
+            active_variant="BASELINE",
         )
 
         # Verify the settings object was created with correct values
         assert captured_settings is not None
         assert captured_settings.enabled is True
         assert captured_settings.total_budget == 3000
-        assert captured_settings.active_variant == "ENHANCED"
+        assert captured_settings.active_variant == "BASELINE"
 
     @pytest.mark.asyncio
     async def test_update_settings_updates_existing_settings(self):
@@ -136,13 +136,13 @@ class TestUpdateMemorySettings:
             db=mock_session,
             enabled=False,
             total_budget=4000,
-            active_variant="MINIMAL",
+            active_variant="BASELINE",
         )
 
         # Verify settings were updated
         assert mock_settings.enabled is False
         assert mock_settings.total_budget == 4000
-        assert mock_settings.active_variant == "MINIMAL"
+        assert mock_settings.active_variant == "BASELINE"
 
     @pytest.mark.asyncio
     async def test_partial_update_enabled_only(self):

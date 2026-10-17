@@ -173,7 +173,7 @@ async def test_memory_on_demand_index_scope_and_explicit_full_content(include_gl
     with (patch('app.services.runtime_context.build_progressive_context', new=AsyncMock(return_value=ProgressiveContext())),
           patch('app.services.runtime_context._fetch_forced_memory_items', new=AsyncMock(return_value=[])),
           patch('app.services.runtime_context._load_memory_source_revisions', new=AsyncMock(return_value={}))):
-        blocks = await _build_memory_blocks(db, consumer_profile='agent_startup', consumer_surface='codex', agent_slug=None, consumer_tags=[], project_id=None, query='startup', task_type=None, phase=None, include_global=include_global, include_mandates=True, include_guardrails=True, include_references=True, include_reference_index=True, exclude_tags=[], exclude_memory_uuids=[], variant=None, overrides=[], override_by_key={}, excluded=set(), delivery_request=request)
+        blocks = await _build_memory_blocks(db, consumer_profile='agent_startup', consumer_surface='codex', agent_slug=None, consumer_tags=[], project_id=None, query='startup', task_type=None, phase=None, include_global=include_global, include_mandates=True, include_guardrails=True, include_references=True, include_reference_index=True, exclude_tags=[], exclude_memory_uuids=[], overrides=[], override_by_key={}, excluded=set(), delivery_request=request)
     if expected is None:
         assert blocks == []
     elif expected == 'index':

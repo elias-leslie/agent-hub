@@ -1,18 +1,13 @@
-"""Tests for A/B variant system."""
+"""Tests for the memory injection scoring config (BASELINE only)."""
 
 import pytest
 
 from app.services.memory.variants import (
-    AGGRESSIVE_CONFIG,
     BASELINE_CONFIG,
-    ENHANCED_CONFIG,
-    MINIMAL_CONFIG,
-    VARIANT_CONFIGS,
     MemoryVariant,
     RecencyConfig,
     ScoringWeights,
     TierMultipliers,
-    assign_variant,
     get_variant_config,
 )
 
@@ -20,12 +15,9 @@ from app.services.memory.variants import (
 class TestMemoryVariant:
     """Tests for MemoryVariant enum."""
 
-    def test_all_variants_defined(self):
-        """Test all expected variants exist."""
-        assert MemoryVariant.BASELINE.value == "BASELINE"
-        assert MemoryVariant.ENHANCED.value == "ENHANCED"
-        assert MemoryVariant.MINIMAL.value == "MINIMAL"
-        assert MemoryVariant.AGGRESSIVE.value == "AGGRESSIVE"
+    def test_only_baseline_is_defined(self):
+        """The retired A/B variants are gone; BASELINE is the only config."""
+        assert [variant.value for variant in MemoryVariant] == ["BASELINE"]
 
     def test_variant_is_string_enum(self):
         """Test variants are string-compatible."""
@@ -107,152 +99,5 @@ class TestVariantConfig:
         assert config.max_reference_items == 6
         assert config.max_query_selected_references == 3
 
-    def test_enhanced_config(self):
-        """Test ENHANCED variant config has higher semantic weight."""
-        config = ENHANCED_CONFIG
-        assert config.variant == MemoryVariant.ENHANCED
-        assert config.scoring_weights.semantic > BASELINE_CONFIG.scoring_weights.semantic
-        assert config.min_relevance_threshold > BASELINE_CONFIG.min_relevance_threshold
-
-    def test_minimal_config(self):
-        """Test MINIMAL variant config has highest threshold."""
-        config = MINIMAL_CONFIG
-        assert config.variant == MemoryVariant.MINIMAL
-        assert config.min_relevance_threshold == 0.50
-        assert config.min_relevance_threshold > ENHANCED_CONFIG.min_relevance_threshold
-        assert config.max_reference_items == 2
-        assert config.max_query_selected_references == 1
-
-    def test_aggressive_config(self):
-        """Test AGGRESSIVE variant config has lowest threshold."""
-        config = AGGRESSIVE_CONFIG
-        assert config.variant == MemoryVariant.AGGRESSIVE
-        assert config.min_relevance_threshold == 0.25
-        assert config.min_relevance_threshold < BASELINE_CONFIG.min_relevance_threshold
-        assert config.max_reference_items == 8
-        assert config.max_query_selected_references == 5
-
-    def test_all_configs_in_variant_configs_dict(self):
-        """Test all variants have configs in VARIANT_CONFIGS."""
-        for variant in MemoryVariant:
-            assert variant in VARIANT_CONFIGS
-            assert VARIANT_CONFIGS[variant].variant == variant
-
-    def test_get_variant_config_defaults_to_baseline(self):
-        config = get_variant_config()
-        assert config is BASELINE_CONFIG
-
-    def test_get_variant_config_accepts_string(self):
-        config = get_variant_config("MINIMAL")
-        assert config is MINIMAL_CONFIG
-
-
-
-class TestAssignVariant:
-    """Tests for assign_variant function."""
-
-    def test_determinism_same_inputs(self):
-        """Test same inputs produce same variant (determinism)."""
-        v1 = assign_variant(external_id="task-123", project_id="summitflow")
-        v2 = assign_variant(external_id="task-123", project_id="summitflow")
-        v3 = assign_variant(external_id="task-123", project_id="summitflow")
-
-        assert v1 == v2 == v3
-
-    def test_different_inputs_can_differ(self):
-        """Test different inputs can produce different variants."""
-        # Generate many variants to verify distribution works
-        variants_seen = set()
-        for i in range(1000):
-            v = assign_variant(external_id=f"task-{i}", project_id="test")
-            variants_seen.add(v)
-
-        # Should see at least 3 different variants with 1000 samples
-        assert len(variants_seen) >= 3
-
-    def test_override_takes_precedence(self):
-        """Test variant_override bypasses hash assignment."""
-        v = assign_variant(
-            external_id="task-123",
-            project_id="summitflow",
-            variant_override=MemoryVariant.AGGRESSIVE,
-        )
-        assert v == MemoryVariant.AGGRESSIVE
-
-    def test_override_string(self):
-        """Test variant_override works with string."""
-        v = assign_variant(
-            external_id="task-123",
-            variant_override="ENHANCED",
-        )
-        assert v == MemoryVariant.ENHANCED
-
-    def test_active_variant_takes_precedence_before_hash_assignment(self):
-        """Configured active variant should win when no explicit override is present."""
-        v = assign_variant(
-            external_id="task-123",
-            project_id="summitflow",
-            active_variant="MINIMAL",
-        )
-        assert v == MemoryVariant.MINIMAL
-
-    def test_invalid_active_variant_falls_back_to_hash_assignment(self):
-        """Invalid active variant should not block deterministic fallback assignment."""
-        baseline = assign_variant(external_id="task-123", project_id="summitflow")
-        v = assign_variant(
-            external_id="task-123",
-            project_id="summitflow",
-            active_variant="INVALID",
-        )
-        assert v == baseline
-
-    def test_invalid_override_fallback(self):
-        """Test invalid override falls back to BASELINE."""
-        v = assign_variant(
-            external_id="task-123",
-            variant_override="INVALID",
-        )
-        assert v == MemoryVariant.BASELINE
-
-    def test_no_identifiers_default_baseline(self):
-        """Test no identifiers defaults to BASELINE."""
-        v = assign_variant()
-        assert v == MemoryVariant.BASELINE
-
-    def test_only_external_id(self):
-        """Test works with only external_id."""
-        v = assign_variant(external_id="task-456")
-        assert isinstance(v, MemoryVariant)
-
-    def test_only_project_id(self):
-        """Test works with only project_id."""
-        v = assign_variant(project_id="agent-hub")
-        assert isinstance(v, MemoryVariant)
-
-
-class TestVariantDistribution:
-    """Tests for variant bucket distribution."""
-
-    def test_approximate_distribution(self):
-        """Test variant distribution is approximately correct over many samples."""
-        counts = {v: 0 for v in MemoryVariant}
-
-        # Generate 10000 samples
-        for i in range(10000):
-            v = assign_variant(external_id=f"task-{i}", project_id=f"proj-{i % 100}")
-            counts[v] += 1
-
-        # Expected: 50% BASELINE, 30% ENHANCED, 10% MINIMAL, 10% AGGRESSIVE
-        # Allow 10% margin of error due to hash distribution variance
-        total = sum(counts.values())
-
-        baseline_pct = counts[MemoryVariant.BASELINE] / total * 100
-        enhanced_pct = counts[MemoryVariant.ENHANCED] / total * 100
-        minimal_pct = counts[MemoryVariant.MINIMAL] / total * 100
-        aggressive_pct = counts[MemoryVariant.AGGRESSIVE] / total * 100
-
-        # Relaxed bounds - hash-based distribution has variance
-        assert 40 <= baseline_pct <= 60, f"BASELINE: {baseline_pct}%"
-        assert 20 <= enhanced_pct <= 40, f"ENHANCED: {enhanced_pct}%"
-        assert 3 <= minimal_pct <= 20, f"MINIMAL: {minimal_pct}%"
-        assert 3 <= aggressive_pct <= 20, f"AGGRESSIVE: {aggressive_pct}%"
+    def test_get_variant_config_is_baseline(self):
+        assert get_variant_config() is BASELINE_CONFIG

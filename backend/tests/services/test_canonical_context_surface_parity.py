@@ -149,14 +149,6 @@ async def test_internal_preview_progressive_and_mcp_preserve_block_hash_parity()
             return_value=_async_session_cm(),
         ),
         patch(
-            "app.api.memory_agent_handlers.get_memory_settings",
-            new=AsyncMock(return_value=settings),
-        ),
-        patch(
-            "app.api.memory_agent_handlers.assign_variant",
-            return_value="BASELINE",
-        ),
-        patch(
             "app.api.memory_agent_handlers.build_canonical_context_delivery",
             new=AsyncMock(return_value=delivery),
         ),

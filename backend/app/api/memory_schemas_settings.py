@@ -13,7 +13,7 @@ class SettingsResponse(BaseModel):
     continuity_max_sessions: int = Field(5, description="Max sessions in Recent Activity")
     active_variant: MemoryVariant | None = Field(
         None,
-        description="Production default memory variant (null falls back to deterministic assignment)",
+        description="Memory variant; BASELINE is the only config and null means BASELINE",
     )
 
 
@@ -27,7 +27,7 @@ class SettingsUpdateRequest(BaseModel):
     )
     active_variant: MemoryVariant | None = Field(
         None,
-        description="Production default memory variant. Send null to clear.",
+        description="Memory variant; BASELINE is the only config. Send null to clear.",
     )
 
 

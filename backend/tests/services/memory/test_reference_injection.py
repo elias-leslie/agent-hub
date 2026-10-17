@@ -812,41 +812,7 @@ class TestReferenceInjection:
         assert context.debug_info["reference_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_build_progressive_context_applies_variant_reference_limits(self) -> None:
-        refs = [
-            _reference_result("ref-1-0000-0000-0000-000000000001", "**Ref 1**", 0.45),
-            _reference_result("ref-2-0000-0000-0000-000000000002", "**Ref 2**", 0.82),
-            _reference_result("ref-3-0000-0000-0000-000000000003", "**Ref 3**", 0.71),
-            _reference_result("ref-4-0000-0000-0000-000000000004", "**Ref 4**", 0.93),
-        ]
-        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
-
-        with _context_sources(
-            episodes=AsyncMock(return_value=([], [], refs)),
-            references=AsyncMock(return_value=[]),
-            settings=AsyncMock(return_value=settings),
-        ):
-            minimal = await build_progressive_context(
-                query="reference selection",
-                scope=MemoryScope.PROJECT,
-                scope_id="agent-hub",
-                variant="MINIMAL",
-            )
-            aggressive = await build_progressive_context(
-                query="reference selection",
-                scope=MemoryScope.PROJECT,
-                scope_id="agent-hub",
-                variant="AGGRESSIVE",
-            )
-
-        assert [item.uuid for item in minimal.reference] == [
-            "ref-4-0000-0000-0000-000000000004",
-            "ref-2-0000-0000-0000-000000000002",
-        ]
-        assert [item.uuid for item in aggressive.reference] == [item.uuid for item in refs]
-
-    @pytest.mark.asyncio
-    async def test_build_progressive_context_scores_wake_references_by_variant(self) -> None:
+    async def test_build_progressive_context_scores_wake_references_with_baseline(self) -> None:
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
         refs = [
             MemorySearchResult(
@@ -880,27 +846,16 @@ class TestReferenceInjection:
             references=selector,
             settings=AsyncMock(return_value=settings),
         ):
-            minimal = await build_progressive_context(
+            context = await build_progressive_context(
                 query="wake benchmark reference scoring",
                 scope=MemoryScope.PROJECT,
                 scope_id="agent-hub",
                 task_type="wake",
-                variant="MINIMAL",
-            )
-            aggressive = await build_progressive_context(
-                query="wake benchmark reference scoring",
-                scope=MemoryScope.PROJECT,
-                scope_id="agent-hub",
-                task_type="wake",
-                variant="AGGRESSIVE",
             )
 
-        assert selector.await_count == 2
-        assert [item.uuid for item in minimal.reference] == ["high-score-ref"]
-        assert [item.uuid for item in aggressive.reference] == [
-            "high-score-ref",
-            "borderline-ref",
-        ]
+        assert selector.await_count == 1
+        assert [item.uuid for item in context.reference] == ["high-score-ref", "borderline-ref"]
+        assert context.debug_info["variant"] == "BASELINE"
 
     def test_format_progressive_context_renders_selected_references_without_passive_index(self) -> None:
         context = SimpleNamespace(

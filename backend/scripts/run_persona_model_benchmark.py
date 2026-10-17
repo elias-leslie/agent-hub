@@ -213,14 +213,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
     parser.add_argument("--use-memory", action="store_true", help="Enable persona memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
-    parser.add_argument("--memory-variant-override", choices=("BASELINE", "ENHANCED", "MINIMAL", "AGGRESSIVE"), help="Override the memory injection variant for controlled benchmark experiments")
     parser.add_argument("--task-type", default=_DEFAULT_TASK_TYPE, choices=("wake",), help="Agent task type to benchmark")
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
     parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
     parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")
     parser.add_argument("--experiment-hypothesis", help="Short hypothesis being tested")
     parser.add_argument("--min-runs-per-cohort", type=int, default=3, help="Minimum repeated runs required before experiment decisions can promote or rollback")
-    parser.add_argument("--promote-on-win", action="store_true", help="When the candidate cohort wins an experiment, promote its memory variant to production")
     parser.add_argument("--no-persist", action="store_true", help="Skip saving results to the benchmark history tables")
     parser.add_argument("--dry-run", action="store_true", help="Print roster and exit")
     return parser
@@ -263,7 +261,6 @@ async def main() -> None:
         keep_workdirs=args.keep_workdirs, base_url=args.base_url,
         client_id=args.client_id, use_memory=args.use_memory,
         memory_group_id=args.memory_group_id,
-        memory_variant_override=args.memory_variant_override,
         task_type=args.task_type,
     )
     suite_id = args.suite_id or derive_suite_id(case_ids)

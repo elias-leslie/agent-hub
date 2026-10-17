@@ -155,9 +155,3 @@ async def update_memory_settings(
     )
     return _orm_to_dto(settings)
 
-
-async def set_active_memory_variant(active_variant: str | None) -> MemorySettingsDTO:
-    """Set or clear the globally active memory variant."""
-    async with async_session() as session:
-        return await update_memory_settings(session, active_variant=active_variant)
-    return _defaults_dto()

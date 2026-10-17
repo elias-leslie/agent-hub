@@ -15,8 +15,7 @@ from app.services.memory.context_resilience import (
     run_with_memory_retries,
 )
 from app.services.memory.service import MemoryScope
-from app.services.memory.settings import get_memory_settings
-from app.services.memory.variants import assign_variant
+from app.services.memory.variants import MemoryVariant
 from app.services.runtime_context import (
     CanonicalContextDeliveryRequest,
     build_canonical_context_delivery,
@@ -132,14 +131,8 @@ async def _build_progressive_context_response_once(
         scope_id if scope == MemoryScope.PROJECT else None
     )
     async with async_session() as db:
-        settings = await get_memory_settings(db)
-        assigned_variant = assign_variant(
-            external_id=external_id,
-            project_id=effective_project_id,
-            variant_override=variant_override,
-            active_variant=settings.active_variant,
-        )
-        variant = getattr(assigned_variant, "value", str(assigned_variant))
+        del variant_override  # accepted from older callers; retrieval always uses BASELINE
+        variant = MemoryVariant.BASELINE.value
         delivery = require_canonical_context(
             await build_canonical_context_delivery(
                 db,

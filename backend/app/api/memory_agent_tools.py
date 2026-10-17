@@ -130,15 +130,15 @@ async def get_progressive_context(
     ] = True,
     variant: Annotated[
         str | None,
-        Query(description="A/B variant override (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)"),
+        Query(description="Ignored; retrieval always uses the BASELINE config"),
     ] = None,
     external_id: Annotated[
         str | None,
-        Query(description="External ID for deterministic variant assignment and metrics correlation"),
+        Query(description="External ID for metrics correlation"),
     ] = None,
     project_id: Annotated[
         str | None,
-        Query(description="Project ID for deterministic variant assignment"),
+        Query(description="Project ID for metrics correlation"),
     ] = None,
     session_id: Annotated[
         str | None,

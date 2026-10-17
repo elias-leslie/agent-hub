@@ -28,7 +28,7 @@ from .failure_reporting import MemoryFailureReport, report_memory_failure
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import MemoryScope
 from .settings import get_memory_settings
-from .variants import assign_variant
+from .variants import MemoryVariant
 
 logger = logging.getLogger(__name__)
 
@@ -177,13 +177,8 @@ async def _build_delivery(
     )
 
     settings = await get_memory_settings(db)
-    resolved_variant = assign_variant(
-        external_id=external_id,
-        project_id=project_id or scope_id,
-        variant_override=variant,
-        active_variant=settings.active_variant,
-    )
-    variant_value = getattr(resolved_variant, "value", str(resolved_variant))
+    del variant  # accepted from older callers; retrieval always uses BASELINE
+    variant_value = MemoryVariant.BASELINE.value
     include_mandates, include_guardrails, include_references = (
         resolve_memory_config_includes(memory_config)
     )

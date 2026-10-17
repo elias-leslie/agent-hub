@@ -28,7 +28,7 @@ async def get_memory_metrics(
     ] = "day",
     variant_filter: Annotated[
         str | None,
-        Query(description="Filter by variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)"),
+        Query(description="Filter by recorded variant label (older rows may carry retired labels)"),
     ] = None,
     project_id_filter: Annotated[
         str | None,

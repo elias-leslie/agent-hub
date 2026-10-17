@@ -22,7 +22,7 @@ from app.services.agent_benchmark_service import (
     memory_state_descriptor,
     summarize_benchmark_experiment,
 )
-from app.services.persona_improvement import build_persona_improvement_metadata
+from scripts.persona_benchmark_persistence import build_persona_improvement_metadata
 
 
 def _make_run(

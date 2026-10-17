@@ -915,66 +915,6 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     assert response_format["type"] == "json_object"
 
 
-@pytest.mark.asyncio
-async def test_persist_run_promotes_memory_variant_on_candidate_win() -> None:
-    from scripts.persona_benchmark_eval import PersonaBenchmarkRun
-    from scripts.persona_benchmark_persistence import _persist_run
-    from scripts.run_persona_model_benchmark import _build_parser, derive_suite_id
-
-    attempt = PersonaBenchmarkAttempt(
-        model_id="codex/gpt-5.4",
-        case_id="ready_task_dispatch",
-        run_number=1,
-        latency_ms=100,
-        composite_score=100.0,
-        correctness_score=1.0,
-        passed=True,
-        total_tokens=50,
-        turns=1,
-        tool_calls_count=0,
-        used_tool_names=[],
-    )
-    run = PersonaBenchmarkRun(
-        benchmark_id="bench-1",
-        project_id="agent-hub",
-        models=["codex/gpt-5.4"],
-        case_ids=["ready_task_dispatch"],
-        runs_per_case=1,
-        started_at="2026-03-11T00:00:00+00:00",
-        completed_at="2026-03-11T00:01:00+00:00",
-        attempts=[attempt],
-        summaries=summarize_attempts([attempt]),
-    )
-    args = _build_parser().parse_args([
-        "--experiment-key", "memory-exp-1",
-        "--experiment-cohort", "candidate",
-        "--memory-variant-override", "ENHANCED",
-        "--promote-on-win",
-    ])
-
-    with (
-        patch(
-            "scripts.persona_benchmark_persistence.capture_benchmark_config_snapshot",
-            new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
-        ),
-        patch(
-            "scripts.persona_benchmark_persistence.persist_benchmark_payload",
-            new=AsyncMock(return_value="run-1"),
-        ),
-        patch(
-            "scripts.persona_benchmark_persistence.get_benchmark_experiment_summary_by_key",
-            new=AsyncMock(return_value={"decision": "promote", "name": "exp", "decision_reason": "candidate_outperforms_baseline", "baseline": {"run_count": 3, "avg_score": 80.0, "avg_pass_rate": 50.0}, "candidate": {"run_count": 3, "avg_score": 95.0, "avg_pass_rate": 80.0}, "score_delta": {"mean_delta": 15.0, "ci_low": 5.0, "ci_high": 20.0}, "pass_rate_delta": {"mean_delta": 30.0, "ci_low": 10.0, "ci_high": 40.0}}),
-        ),
-        patch(
-            "scripts.persona_benchmark_persistence.set_active_memory_variant",
-            new=AsyncMock(),
-        ) as mock_promote,
-    ):
-        await _persist_run(run, args, derive_suite_id(["ready_task_dispatch"]))
-
-    mock_promote.assert_awaited_once_with("ENHANCED")
-
-
 def test_web_research_case_requires_shared_web_tools() -> None:
     case = get_case_by_id("web_research_stack_lookup")
 

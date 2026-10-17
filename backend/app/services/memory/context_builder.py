@@ -542,14 +542,13 @@ def _limit_policy_item_count(
 def _apply_reference_variant_scoring(
     items: list[MemorySearchResult],
     query: str,
-    variant: str | None,
     consumer_profile: str | None,
 ) -> list[MemorySearchResult]:
-    """Rescore references with the live variant config before limit/cap selection."""
+    """Rescore references with the scoring config before limit/cap selection."""
     if not items:
         return items
 
-    variant_config = get_variant_config(variant)
+    variant_config = get_variant_config()
     priority_tags = priority_tags_for_profile(consumer_profile)
     scored: list[MemorySearchResult] = []
     now = datetime.now(UTC)
@@ -604,7 +603,6 @@ def _finalize_context(
     task_type: str | None,
     phase: str | None,
     consumer_profile: str | None,
-    variant: str | None,
 ) -> None:
     """Set token totals, debug_info, and emit a compact observability line."""
     plan_debug = build_memory_plan_debug(
@@ -626,7 +624,7 @@ def _finalize_context(
         "task_type": task_type,
         "phase": phase,
         "consumer_profile": consumer_profile or "agent_runtime",
-        "variant": get_variant_config(variant).variant.value,
+        "variant": get_variant_config().variant.value,
         **plan_debug,
     }
     logger.info(
@@ -791,7 +789,6 @@ def _build_scopes_to_query(
 async def _apply_priority_and_limits(
     context: ProgressiveContext,
     query: str,
-    variant: str | None,
     variant_config: Any,
     consumer_profile: str | None,
     memory_config: dict[str, Any] | None,
@@ -806,7 +803,7 @@ async def _apply_priority_and_limits(
         context.reference_index, variant_config.max_reference_items, consumer_profile
     )
     context.reference = _prioritize_items_for_profile(context.reference, consumer_profile)
-    context.reference = _apply_reference_variant_scoring(context.reference, query, variant, consumer_profile)
+    context.reference = _apply_reference_variant_scoring(context.reference, query, consumer_profile)
     context.reference = _limit_references_for_variant(
         context.reference, variant_config.max_reference_items, consumer_profile
     )
@@ -841,7 +838,6 @@ async def build_progressive_context(
     consumer_profile: str | None = None,
     consumer_agent_slug: str | None = None,
     consumer_tags: list[str] | None = None,
-    variant: str | None = None,
     preserve_required_policy: bool = False,
     db: AsyncSession | None = None,
 ) -> ProgressiveContext:
@@ -866,13 +862,12 @@ async def build_progressive_context(
                 consumer_profile=consumer_profile,
                 consumer_agent_slug=consumer_agent_slug,
                 consumer_tags=consumer_tags,
-                variant=variant,
                 preserve_required_policy=preserve_required_policy,
                 db=session,
             )
 
     context = ProgressiveContext()
-    variant_config = get_variant_config(variant)
+    variant_config = get_variant_config()
     settings = await get_memory_settings(db)
     apply_memory_config_overrides(settings, memory_config)
     if not settings.enabled:
@@ -908,7 +903,6 @@ async def build_progressive_context(
     await _apply_priority_and_limits(
         context,
         query,
-        variant,
         variant_config,
         consumer_profile,
         memory_config,
@@ -916,5 +910,5 @@ async def build_progressive_context(
         preserve_required_policy,
     )
     budget = _build_usage_snapshot(context)
-    _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)
+    _finalize_context(context, budget, query, task_type, phase, consumer_profile)
     return context

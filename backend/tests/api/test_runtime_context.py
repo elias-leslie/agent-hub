@@ -243,7 +243,6 @@ async def test_canonical_memory_selection_is_uncapped_and_required_policy_is_ful
             include_reference_index=True,
             exclude_tags=[],
             exclude_memory_uuids=[],
-            variant=None,
             overrides=[],
             override_by_key={},
             excluded=set(),
