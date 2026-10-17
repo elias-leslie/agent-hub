@@ -85,8 +85,17 @@ INSERT_MODEL = sa.text(
 )
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
     """Register Gemini 3.5 Flash and route the audio critic to it."""
+    if _fresh_bootstrap():
+        # A fresh install gets the whole catalog from the exported seed file.
+        return
 
     bind = op.get_bind()
     bind.execute(

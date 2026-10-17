@@ -230,7 +230,16 @@ UPSERT_SQL = sa.text(
 )
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
+    if _fresh_bootstrap():
+        # A fresh install gets the whole catalog from the exported seed file.
+        return
     conn = op.get_bind()
     service_tiers = json.dumps({"default": 1.0, "batch": 0.5, "flex": 0.5, "priority": 1.8})
     for row in GEMINI_ROWS:

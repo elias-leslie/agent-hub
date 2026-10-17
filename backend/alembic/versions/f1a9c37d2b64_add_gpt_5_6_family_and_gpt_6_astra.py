@@ -309,7 +309,16 @@ def _rows() -> list[dict[str, object]]:
     return rows
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
+    if _fresh_bootstrap():
+        # A fresh install gets the whole catalog from the exported seed file.
+        return
     bind = op.get_bind()
     for row in _rows():
         bind.execute(UPSERT_SQL, row)

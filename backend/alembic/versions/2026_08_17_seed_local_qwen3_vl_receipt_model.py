@@ -35,7 +35,16 @@ depends_on: str | Sequence[str] | None = None
 MODEL_ID = "local/qwen3-vl:8b-instruct"
 
 
+def _fresh_bootstrap() -> bool:
+    """True when this run builds an empty database from base (see alembic/env.py)."""
+    config = getattr(op.get_context(), "config", None)
+    return bool(config is not None and config.attributes.get("fresh_bootstrap"))
+
+
 def upgrade() -> None:
+    if _fresh_bootstrap():
+        # A fresh install gets the whole catalog from the exported seed file.
+        return
     conn = op.get_bind()
     conn.execute(
         sa.text(

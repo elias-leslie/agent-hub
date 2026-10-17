@@ -46,3 +46,15 @@ def test_guard_recognizes_the_old_data_migration_shapes() -> None:
     assert _DML.search("prompts = sa.table('prompts', sa.column('slug'))")
     assert not _DML.search("INSERT INTO clients (id) VALUES (:id)")
     assert not _DML.search('op.add_column("agents", sa.Column("x", sa.Text()))')
+
+
+def test_migrations_that_insert_catalog_rows_skip_fresh_installs() -> None:
+    # A fresh install seeds the whole catalog from the exported file only while the
+    # models table is empty, so no migration may leave catalog rows behind there.
+    versions = Path(__file__).resolve().parents[2] / "alembic" / "versions"
+    inserts = re.compile(r"insert\s+into\s+\"?(models|model_aliases)\b", re.IGNORECASE)
+    offenders = [
+        path.name for path in versions.glob("*.py")
+        if inserts.search(path.read_text()) and "fresh_bootstrap" not in path.read_text()
+    ]
+    assert offenders == []

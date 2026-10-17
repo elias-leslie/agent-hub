@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +26,9 @@ from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
 from app.core.request_actor import current_request_actor
 from app.db import get_db
+from app.middleware.access_control_auth import require_service_client
 from app.routing.registry import is_workload_provider
 from app.services._enrichment_normalizers import _bare_model_id
-from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 if TYPE_CHECKING:
     from app.constants.catalog import ModelEntry
@@ -351,6 +351,8 @@ async def get_latency_stats(
 # ---------------------------------------------------------------------------
 # Catalog writes: the DB models/model_aliases tables are the only catalog, so
 # adding, repricing or retiring a model happens here (never in a migration).
+# They need the internal secret and an active registered client, because a
+# changed price or alias applies to every caller.
 # ---------------------------------------------------------------------------
 
 _MODEL_WRITE_EXCLUDED = {"id", "created_at", "updated_at"}
@@ -386,11 +388,13 @@ class ModelAliasWrite(BaseModel):
 async def put_catalog_model(
     model_id: str,
     payload: ModelRowWrite,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> dict[str, Any]:
     """Create a catalog model or change the given fields of an existing one."""
-    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.exc import DBAPIError
+
+    await require_service_client(request)
 
     from app.models.model_catalog import ModelCatalogEntry
     from app.services.model_catalog_service import refresh_runtime_model_catalog
@@ -399,14 +403,14 @@ async def put_catalog_model(
     row = await db.get(ModelCatalogEntry, model_id)
     created = row is None
     if row is None:
-        row = ModelCatalogEntry(id=model_id, source="manual", **values)
+        row = ModelCatalogEntry(id=model_id, **{"source": "manual", **values})
         db.add(row)
     else:
         for key, value in values.items():
             setattr(row, key, value)
     try:
         await db.commit()
-    except IntegrityError as exc:
+    except DBAPIError as exc:
         await db.rollback()
         raise HTTPException(status_code=422, detail="Model row is missing required fields or invalid") from exc
     await refresh_runtime_model_catalog(db)
@@ -418,10 +422,11 @@ async def put_catalog_model(
 async def put_model_alias(
     alias: str,
     payload: ModelAliasWrite,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> dict[str, Any]:
     """Point an alias at a catalog model (creating the alias if needed)."""
+    await require_service_client(request)
     from app.models.model_catalog import ModelAlias, ModelCatalogEntry
     from app.services.model_catalog_service import refresh_runtime_model_catalog
 

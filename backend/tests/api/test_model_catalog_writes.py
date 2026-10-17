@@ -20,7 +20,10 @@ async def _put(path: str, body: dict, db: AsyncMock):
 
     app.dependency_overrides[get_db] = override_db
     try:
-        with patch("app.services.model_catalog_service.refresh_runtime_model_catalog", new_callable=AsyncMock):
+        with (
+            patch("app.services.model_catalog_service.refresh_runtime_model_catalog", new_callable=AsyncMock),
+            patch("app.api.models.require_service_client", new_callable=AsyncMock, return_value={"status": "active"}),
+        ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=_HEADERS) as client:
                 return await client.put(path, json=body)
     finally:
@@ -82,3 +85,28 @@ async def test_alias_is_repointed_in_place() -> None:
     assert response.status_code == 200
     assert alias.model_id == "gemini-3.8-flash"
     db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_catalog_writes_need_a_verified_service_client() -> None:
+    async def override_db():
+        yield AsyncMock()
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.put("/api/models/aliases/flash", json={"model_id": "gemini-3.8-flash"},
+                                        headers={"X-Client-Id": "portfolio-ai"})
+    finally:
+        app.dependency_overrides.clear()
+    assert 400 <= response.status_code < 500
+
+
+@pytest.mark.asyncio
+async def test_create_may_name_its_own_source() -> None:
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.get.return_value = None
+    response = await _put("/api/models/catalog/xai/grok-5", {"name": "Grok 5", "source": "enrichment"}, db)
+    assert response.status_code == 200
+    assert db.add.call_args.args[0].source == "enrichment"
