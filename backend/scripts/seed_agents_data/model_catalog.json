@@ -494,8 +494,8 @@
       "cache_write_per_million": 0.125,
       "subscription_rates": {
         "long_prompt": {
-          "over_tokens": 100000,
-          "multiplier": 5.0
+          "multiplier": 5.0,
+          "over_tokens": 100000
         }
       },
       "context_window": 1000000,
@@ -704,8 +704,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 50.0,
-          "cached_input": 5.0,
-          "output": 250.0
+          "output": 250.0,
+          "cached_input": 5.0
         }
       },
       "context_window": 272000,
@@ -761,8 +761,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 2.5,
-          "cached_input": 0.25,
-          "output": 12.5
+          "output": 12.5,
+          "cached_input": 0.25
         }
       },
       "context_window": 272000,
@@ -869,8 +869,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 100.0,
-          "cached_input": 10.0,
-          "output": 500.0
+          "output": 500.0,
+          "cached_input": 10.0
         }
       },
       "context_window": 272000,
@@ -977,8 +977,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 50.0,
-          "cached_input": 2.5,
-          "output": 250.0
+          "output": 250.0,
+          "cached_input": 2.5
         }
       },
       "context_window": 272000,
@@ -1034,8 +1034,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 250.0,
-          "cached_input": 25.0,
-          "output": 1250.0
+          "output": 1250.0,
+          "cached_input": 25.0
         }
       },
       "context_window": 272000,
@@ -1144,8 +1144,8 @@
       "subscription_rates": {
         "credits_per_m": {
           "input": 100.0,
-          "cached_input": 10.0,
-          "output": 500.0
+          "output": 500.0,
+          "cached_input": 10.0
         }
       },
       "context_window": 272000,
