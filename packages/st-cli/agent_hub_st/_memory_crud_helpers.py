@@ -12,8 +12,6 @@ from ._api_paths import (
 from .memory_api import agent_hub_request
 from .memory_validation import validate_episode_content_present, validate_summary_length
 
-VALID_TIERS = ("mandate", "guardrail", "reference")
-VALID_CONTEXT_KINDS = ("policy", "reference", "capability", "continuity", "signal")
 VALID_RENDER_MODES = ("full", "compact", "summary")
 RENDER_MODE_CLEAR_ALIASES = ("auto", "clear", "none")
 
@@ -42,26 +40,14 @@ def parse_csv_values(raw: str | None) -> list[str] | None:
     return result
 
 
-def validate_tier(tier: str) -> str:
-    """Validate tier value and return the normalized string."""
-    from st_sdk.output import output_error
-    normalized = tier.strip()
-    if normalized not in VALID_TIERS:
-        output_error(f"Invalid tier: {tier}. Must be mandate, guardrail, or reference.")
-        raise typer.Exit(1)
-    return normalized
+def normalize_tier(tier: str) -> str:
+    """Strip a tier value; Agent Hub owns the allowed tiers and its 422 is shown as-is."""
+    return tier.strip()
 
 
-def validate_context_kind(context_kind: str) -> str:
-    """Validate context kind value and return the normalized string."""
-    from st_sdk.output import output_error
-    normalized = context_kind.strip()
-    if normalized not in VALID_CONTEXT_KINDS:
-        output_error(
-            f"Invalid context kind: {context_kind}. Must be policy, reference, capability, continuity, or signal."
-        )
-        raise typer.Exit(1)
-    return normalized
+def normalize_context_kind(context_kind: str) -> str:
+    """Strip a context kind; Agent Hub owns the allowed kinds and its 422 is shown as-is."""
+    return context_kind.strip()
 
 
 def validate_render_mode_input(value: str | None, *, allow_clear: bool) -> str | None:
@@ -116,7 +102,6 @@ def parse_tags_csv(tags: str | None) -> list[str] | None:
 def validate_save_inputs(tier: str, confidence: int, summary: str) -> str:
     """Validate save inputs and return stripped summary, raise on error."""
     from st_sdk.output import output_error
-    validate_tier(tier)
     if confidence < 0 or confidence > 100:
         output_error(f"Invalid confidence: {confidence}. Must be 0-100.")
         raise typer.Exit(1)
@@ -161,7 +146,7 @@ def build_save_payload(
     if trigger_phases is not None:
         payload["trigger_phases"] = parse_csv_values(trigger_phases) or []
     if context_kind is not None:
-        payload["context_kind"] = validate_context_kind(context_kind)
+        payload["context_kind"] = normalize_context_kind(context_kind)
     if render_mode is not None:
         # save flow: cannot clear, value must be full/compact/summary
         normalized = validate_render_mode_input(render_mode, allow_clear=False)
@@ -276,7 +261,7 @@ def patch_episode_properties(
     if pinned is not None:
         props["pinned"] = pinned
     if context_kind is not None:
-        props["context_kind"] = validate_context_kind(context_kind)
+        props["context_kind"] = normalize_context_kind(context_kind)
     if render_mode is not None:
         # Caller already passed validated render_mode (or RENDER_MODE_CLEAR).
         props["render_mode"] = None if render_mode == RENDER_MODE_CLEAR else render_mode
@@ -331,7 +316,7 @@ def _validate_update_and_normalize(
         validate_episode_content_present(content)
     return (
         validate_summary_input(summary, required=False) if summary is not None else None,
-        validate_tier(tier) if tier is not None else None,
+        normalize_tier(tier) if tier is not None else None,
         [] if clear_tags else parse_tags_csv(tags),
         validate_render_mode_input(render_mode, allow_clear=True),
     )

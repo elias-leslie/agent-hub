@@ -199,7 +199,7 @@ def save_impl(
 ) -> None:
     summary = validate_save_inputs(tier, confidence, summary)
     validate_episode_content_present(content)
-    validate_content_format(content, summary, tier)
+    validate_content_format(content, summary)
     scope, scope_id = validate_write_scope(scope, scope_id)
     payload = build_save_payload(
         content, summary, tier, confidence, context, pinned, trigger_types, trigger_phases,
@@ -383,7 +383,7 @@ def update_impl(
     )
     if content is not None:
         existing_summary = str(existing.get("summary", "")) if existing is not None else ""
-        validate_content_format(content, normalized_summary or existing_summary, effective_tier or "reference")
+        validate_content_format(content, normalized_summary or existing_summary)
     content_or_tier_changed = content is not None or normalized_tier is not None
     tags_changed = replacement_tags is not None or clear_tags
     if content_or_tier_changed:

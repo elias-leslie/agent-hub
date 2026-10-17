@@ -233,9 +233,7 @@ def save(
     resolved_inline_content = content_option if content_option is not None else content
     resolved_content = _resolve_and_validate_save(summary, resolved_inline_content, content_file)
     assert summary is not None
-    validate_memory_authoring(
-        summary, resolved_content, summary, tier
-    )
+    validate_memory_authoring(summary, resolved_content, summary)
     save_impl(
         ctx.obj, resolved_content, summary, tier, confidence, context, pinned,
         trigger_types, trigger_phases, context_kind, consumer_profiles,
@@ -257,9 +255,7 @@ def format_cmd(
     """Generate a standard memory episode body and compact summary."""
     content = build_episode_content(topic, instruction, prohibition, why)
     resolved_summary = (summary.strip() if summary else suggest_summary(instruction)) or "Memory episode"
-    validate_memory_authoring(
-        resolved_summary, content, resolved_summary, tier
-    )
+    validate_memory_authoring(resolved_summary, content, resolved_summary)
     typer.echo(f"SUMMARY: {resolved_summary}")
     typer.echo("CONTENT:")
     typer.echo(content)

@@ -140,11 +140,9 @@ def suggest_summary(instruction: str, limit: int = 40) -> str:
     return clipped.rstrip(".!? ")
 
 
-def validate_format_standard(content: str, summary: str, tier: str) -> tuple[list[str], list[str]]:
-    """Validate record fields without imposing a prose style."""
+def validate_format_standard(content: str, summary: str) -> tuple[list[str], list[str]]:
+    """Validate record fields without imposing a prose style; Agent Hub validates the tier."""
     errors: list[str] = []
-    if tier not in {"mandate", "guardrail", "reference", "archive"}:
-        errors.append(f"Unsupported tier {tier}")
     if not content.strip():
         errors.append("Content cannot be blank")
     if not 10 <= len(summary) <= 40:
@@ -160,10 +158,10 @@ def validate_summary_length(summary: str) -> None:
         raise typer.Exit(1)
 
 
-def validate_content_format(content: str, summary: str, tier: str) -> None:
+def validate_content_format(content: str, summary: str) -> None:
     """Validate content format and raise error if invalid."""
     validate_episode_content_present(content)
-    format_errors, _hints = validate_format_standard(content, summary, tier)
+    format_errors, _hints = validate_format_standard(content, summary)
     if format_errors:
         output_error("Memory validation failed:")
         for err in format_errors:
@@ -172,6 +170,6 @@ def validate_content_format(content: str, summary: str, tier: str) -> None:
         raise typer.Exit(1)
 
 
-def validate_memory_authoring(label: str, content: str, summary: str, tier: str) -> None:
+def validate_memory_authoring(label: str, content: str, summary: str) -> None:
     """Validate authoring fields, retaining the original content."""
-    validate_content_format(content, summary, tier)
+    validate_content_format(content, summary)

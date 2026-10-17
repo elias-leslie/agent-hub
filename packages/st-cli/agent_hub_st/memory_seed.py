@@ -23,7 +23,7 @@ from ._memory_crud_helpers import (
     replace_episode_tags,
     update_episode_content_or_tier,
     validate_save_inputs,
-    validate_tier,
+    normalize_tier,
 )
 from .memory_api import agent_hub_request
 
@@ -77,7 +77,7 @@ def _normalize_frontmatter_list(value: Any) -> list[str]:
 
 def _build_seed_spec(skill_tag: str, content: str, fm: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Build normalized payload and tags for a seeded episode."""
-    tier = validate_tier(str(fm.get("tier", "reference")))
+    tier = normalize_tier(str(fm.get("tier", "reference")))
     summary = validate_save_inputs(tier, 90, str(fm.get("summary") or skill_tag))
     trigger_types = _normalize_frontmatter_list(fm.get("trigger_task_types"))
     trigger_phases = _normalize_frontmatter_list(fm.get("trigger_phases"))

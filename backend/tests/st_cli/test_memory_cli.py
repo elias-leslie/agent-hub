@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 import pytest
 import typer
 from agent_hub_st.memory import app
@@ -302,7 +303,6 @@ class TestMemorySaveContentInput:
             "Use dt for checks",
             "**Quality Checks**: Use dt for all quality checks.\n",
             "Use dt for checks",
-            "reference",
         )
         mock_save_impl.assert_called_once()
 
@@ -923,17 +923,37 @@ class TestMemoryTagOptions:
             render_mode=None,
         )
 
-    def test_update_impl_rejects_invalid_tier(self) -> None:
-        """Tier updates should validate allowed tier values."""
-        with patch("agent_hub_st.memory_crud.fetch_existing_episode") as mock_fetch_existing:
-            try:
-                update_impl("abc12345", None, "bad-tier", None, None, None, None, None, None, None, None, None, None, None, False, None, False)
-            except typer.Exit as exc:
-                assert exc.exit_code == 1
-            else:
-                raise AssertionError("Expected typer.Exit for invalid tier")
+    def test_update_impl_sends_tier_to_agent_hub_without_a_local_copy(self) -> None:
+        """Agent Hub owns the tier list: archive (missing from the old local copy) reaches it as-is."""
+        with (
+            patch("agent_hub_st.memory_crud.fetch_existing_episode", return_value={"uuid": "abc12345", "injection_tier": "reference"}),
+            patch("agent_hub_st.memory_crud.fetch_episode_tags", return_value=[]),
+            patch("agent_hub_st.memory_crud.update_episode_content_or_tier") as mock_update_episode,
+            patch("agent_hub_st.memory_crud.replace_episode_tags"),
+            patch("agent_hub_st.memory_crud.typer.echo"),
+        ):
+            update_impl("abc12345", None, " archive ", None, None, None, None, None, None, None, None, None, None, None, False, None, False)
 
-        mock_fetch_existing.assert_not_called()
+        mock_update_episode.assert_called_once_with(
+            "abc12345", content=None, tier="archive", change_reason=None,
+        )
+
+    def test_update_impl_shows_agent_hub_422_for_unknown_tier(self, capsys) -> None:
+        """An unknown tier fails with Agent Hub's own validation message."""
+        response = httpx.Response(
+            422,
+            json={"detail": [{"loc": ["body", "injection_tier"], "msg": "Input should be 'mandate', 'guardrail', 'reference' or 'archive'"}]},
+            request=httpx.Request("PATCH", "http://agent-hub.test/api/memory/episode/abc12345"),
+        )
+        with (
+            patch("agent_hub_st.memory_crud.fetch_existing_episode", return_value={"uuid": "abc12345", "injection_tier": "reference"}),
+            patch("agent_hub_st.memory_crud.fetch_episode_tags", return_value=[]),
+            patch("agent_hub_st.memory_api._dispatch", return_value=response),
+            pytest.raises(typer.Exit),
+        ):
+            update_impl("abc12345", None, "bad-tier", None, None, None, None, None, None, None, None, None, None, None, False, None, False)
+
+        assert "422" in capsys.readouterr().err
 
     def test_update_impl_passes_render_mode_to_patch(self) -> None:
         """--render-mode flows through update_impl into patch_episode_properties."""

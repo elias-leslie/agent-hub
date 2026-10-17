@@ -26,17 +26,17 @@ ScopeIdOpt = Annotated[
 # Tier options
 TierOpt = Annotated[
     str,
-    typer.Option("--tier", "-t", help="Injection tier (mandate, guardrail, reference)"),
+    typer.Option("--tier", "-t", help="Injection tier (mandate, guardrail, reference, archive)"),
 ]
 
 TierFilterOpt = Annotated[
     str | None,
-    typer.Option("--tier", "-t", help="Filter by tier (mandate, guardrail, reference)"),
+    typer.Option("--tier", "-t", help="Filter by tier (mandate, guardrail, reference, archive)"),
 ]
 
 TierUpdateOpt = Annotated[
     str | None,
-    typer.Option("--tier", "-t", help="New tier (mandate/guardrail/reference)"),
+    typer.Option("--tier", "-t", help="New tier (mandate/guardrail/reference/archive)"),
 ]
 
 # Content and metadata options
