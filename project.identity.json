@@ -17,6 +17,11 @@
     "frontend_dir": "frontend",
     "health_endpoint": "/health"
   },
+  "database": {
+    "name": "agent_hub",
+    "owner_role": "agent_hub_app",
+    "test": {"name": "agent_hub_test", "owner": "agent_hub_app"}
+  },
   "services": {
     "backend": "agent-hub-backend.service",
     "frontend": "agent-hub-frontend.service",
