@@ -948,6 +948,7 @@ class TestMemoryTagOptions:
         with (
             patch("agent_hub_st.memory_crud.fetch_existing_episode", return_value={"uuid": "abc12345", "injection_tier": "reference"}),
             patch("agent_hub_st.memory_crud.fetch_episode_tags", return_value=[]),
+            patch("agent_hub_st.memory_api.load_credentials", return_value=("test-client", "st-memory")),
             patch("agent_hub_st.memory_api._dispatch", return_value=response),
             pytest.raises(typer.Exit),
         ):
