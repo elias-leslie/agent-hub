@@ -172,7 +172,7 @@ async def test_cutover_requires_owner_fence_and_preserves_imported_cursor():
 
 
 @pytest.mark.asyncio
-async def test_jobinator_cutover_waits_for_shared_quota_policy_sync():
+async def test_cutover_waits_for_owner_registered_policy_sync():
     row = AutomationProfile(
         id="profile-1", project_id="jobinator-4000",
         workflow_key="jobinator-4000/nightly_screen", definition_version=1,
@@ -194,7 +194,13 @@ async def test_jobinator_cutover_waits_for_shared_quota_policy_sync():
 
     app.dependency_overrides[get_db] = override_db
     try:
-        with patch("app.api.automations._require_project_owner", new_callable=AsyncMock):
+        with (
+            patch("app.api.automations._require_project_owner", new_callable=AsyncMock),
+            patch(
+                "app.services.automations.project_owner_keys", new_callable=AsyncMock,
+                return_value=["classification_cap", "screening_cap"],
+            ),
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test",
                 headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
@@ -203,6 +209,7 @@ async def test_jobinator_cutover_waits_for_shared_quota_policy_sync():
                     "expected_revision": 1, "fence_receipt": "owner-fenced",
                 })
         assert response.status_code == 409
+        assert "Owner policy awaits owner sync" in response.text
         assert row.clock_owner == "legacy"
     finally:
         app.dependency_overrides.clear()
@@ -221,7 +228,11 @@ async def test_policy_write_refreshes_server_timestamp_before_serializing():
 
     app.dependency_overrides[get_db] = override_db
     try:
-        with patch("app.api.automations.service.update_policy", new_callable=AsyncMock, return_value=row):
+        with (
+            patch("app.api.automations.service.update_policy", new_callable=AsyncMock, return_value=row),
+            patch("app.api.automations.service.project_owner_keys", new_callable=AsyncMock, return_value=[]),
+            patch("app.services.automation_dispatch.sync_owner_policies", new_callable=AsyncMock) as sync,
+        ):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test",
                 headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
@@ -231,6 +242,8 @@ async def test_policy_write_refreshes_server_timestamp_before_serializing():
                 })
         assert response.status_code == 200
         db.refresh.assert_awaited_once_with(row)
+        sync.assert_awaited_once_with("summitflow")
+        assert response.json()["sync_pending"] is False
     finally:
         app.dependency_overrides.clear()
 

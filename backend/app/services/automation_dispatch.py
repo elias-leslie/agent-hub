@@ -22,7 +22,14 @@ from app.models import (
     AutomationProjectPolicy,
     AutomationRun,
 )
-from app.services.automations import admit_run, next_due, policy_sync_pending
+from app.services.automations import (
+    admit_run,
+    current_definitions,
+    next_due,
+    owner_policy_keys,
+    owner_sync_pending,
+    policy_sync_pending,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,29 +49,34 @@ def _owner_api_base(project_id: str) -> str:
     return url.rstrip("/")
 
 
-async def sync_jobinator_policy() -> bool:
-    """Mirror the central quota revision to Jobinator's exact shared counters."""
+async def _pending_owner_syncs() -> list[tuple[str, dict]]:
+    """Owner projects whose registered policy keys changed since the last ack."""
     async with async_session() as db:
-        policy = await db.get(AutomationProjectPolicy, "jobinator-4000")
-        if policy is None or not {
-            "screening_cap", "classification_cap"
-        }.issubset(policy.config or {}):
-            return True
-        if policy.sync_revision >= policy.revision:
-            return True
-        revision = policy.revision
-        payload = {
-            "revision": revision,
-            "enabled": policy.enabled,
-            "config": {
-                "screening_cap": policy.config["screening_cap"],
-                "classification_cap": policy.config["classification_cap"],
-            },
-        }
+        owner_keys: dict[str, list[str]] = {}
+        for definition in await current_definitions(db):
+            keys = owner_policy_keys([definition])
+            if keys:
+                owner_keys.setdefault(definition.owner_project_id, [])
+                owner_keys[definition.owner_project_id] = sorted({*owner_keys[definition.owner_project_id], *keys})
+        pending = []
+        for project_id, keys in owner_keys.items():
+            policy = await db.get(AutomationProjectPolicy, project_id)
+            if policy is None or not policy_sync_pending(policy, keys):
+                continue
+            pending.append((project_id, {
+                "revision": policy.revision,
+                "enabled": policy.enabled,
+                "config": {key: policy.config[key] for key in keys},
+            }))
+        return pending
+
+
+async def _sync_owner_policy(project_id: str, payload: dict) -> bool:
+    revision = payload["revision"]
     try:
         if not settings.internal_service_secret:
             raise RuntimeError("Internal service secret is not configured")
-        url = await asyncio.to_thread(_owner_api_base, "jobinator-4000") + "/automations/policy/sync"
+        url = await asyncio.to_thread(_owner_api_base, project_id) + "/automations/policy/sync"
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 url, json=payload,
@@ -72,16 +84,29 @@ async def sync_jobinator_policy() -> bool:
             )
             response.raise_for_status()
     except (OSError, RuntimeError, httpx.HTTPError):
-        logger.warning("Jobinator automation policy revision %s awaits owner sync", revision, exc_info=True)
+        logger.warning("%s automation policy revision %s awaits owner sync", project_id, revision, exc_info=True)
         return False
     async with async_session() as db:
         row = (await db.execute(select(AutomationProjectPolicy).where(
-            AutomationProjectPolicy.project_id == "jobinator-4000"
+            AutomationProjectPolicy.project_id == project_id
         ).with_for_update())).scalar_one_or_none()
         if row is not None and row.sync_revision < revision:
             row.sync_revision = revision
             await db.commit()
     return True
+
+
+async def sync_owner_policies(project_id: str | None = None) -> bool:
+    """Mirror each changed policy revision to owners that registered policy keys.
+
+    Runs of that project stay held (owner_policy_sync_pending) until the owner
+    acknowledges the exact revision.
+    """
+    synced = True
+    for owner, payload in await _pending_owner_syncs():
+        if project_id is None or owner == project_id:
+            synced = await _sync_owner_policy(owner, payload) and synced
+    return synced
 
 
 def _hatchet_task(target: str):
@@ -250,7 +275,7 @@ async def dispatch_due() -> int:
                 )
                 await db.commit()
                 continue
-            if policy is not None and policy_sync_pending(policy):
+            if policy is not None and await owner_sync_pending(db, policy):
                 continue
             run = await admit_run(
                 db, profile_id, trigger="scheduled", scheduled_for=profile.next_run_at,

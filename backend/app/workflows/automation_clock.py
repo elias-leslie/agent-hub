@@ -6,7 +6,7 @@ from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
-from app.services.automation_dispatch import dispatch_due, reconcile_runs, sync_jobinator_policy
+from app.services.automation_dispatch import dispatch_due, reconcile_runs, sync_owner_policies
 
 
 @hatchet.task(
@@ -20,7 +20,7 @@ from app.services.automation_dispatch import dispatch_due, reconcile_runs, sync_
     ),
 )
 async def automation_clock_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
-    policy_synced = await sync_jobinator_policy()
+    policy_synced = await sync_owner_policies()
     admitted = await dispatch_due()
     reconciled = await reconcile_runs()
     ctx.log(f"Automation clock admitted={admitted} reconciled={reconciled} policy_synced={policy_synced}")

@@ -109,12 +109,13 @@ def _definition(row: AutomationDefinition) -> dict[str, Any]:
     }
 
 
-def _policy(row: Any) -> dict[str, Any]:
+def _policy(row: Any, owner_keys: list[str]) -> dict[str, Any]:
     return {
         "project_id": row.project_id, "enabled": row.enabled,
         "config": row.config or {}, "revision": row.revision,
         "sync_revision": row.sync_revision,
-        "sync_pending": service.policy_sync_pending(row),
+        "sync_pending": service.policy_sync_pending(row, owner_keys),
+        "owner_keys": owner_keys,
         "updated_by": row.updated_by, "updated_at": row.updated_at,
     }
 
@@ -227,7 +228,7 @@ async def get_project_policy(
     row = await service.get_policy(db, project_id)
     await db.commit()
     await db.refresh(row)
-    return _policy(row)
+    return _policy(row, await service.project_owner_keys(db, project_id))
 
 
 @router.put("/projects/{project_id}/policy")
@@ -243,12 +244,11 @@ async def put_project_policy(
     except (service.AutomationValidationError, service.RevisionConflict) as exc:
         raise _bad_command(exc) from exc
     await db.commit()
-    if project_id == "jobinator-4000":
-        from app.services.automation_dispatch import sync_jobinator_policy
+    from app.services.automation_dispatch import sync_owner_policies
 
-        await sync_jobinator_policy()
+    await sync_owner_policies(project_id)
     await db.refresh(row)
-    return _policy(row)
+    return _policy(row, await service.project_owner_keys(db, project_id))
 
 
 @router.get("/profiles")
@@ -395,6 +395,21 @@ async def _require_project_owner(request: Request, project_id: str) -> None:
         raise HTTPException(status_code=403, detail="Project owner mismatch")
 
 
+@router.put("/definitions/{owner_project_id}/{name}")
+async def register_definition(
+    owner_project_id: str, name: str, payload: service.DefinitionRegistration, request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """An owner project declares (or updates) one of its own callback workflows."""
+    await _require_project_owner(request, owner_project_id)
+    try:
+        row = await service.register_definition(db, owner_project_id, name, payload)
+    except service.AutomationValidationError as exc:
+        raise _bad_command(exc) from exc
+    await db.commit()
+    return _definition(row)
+
+
 @router.post("/profiles/import")
 async def import_profile(
     payload: ProfileImport, request: Request,
@@ -468,12 +483,13 @@ async def cutover_profile(
         raise HTTPException(status_code=409, detail="Profile revision has changed")
     if row.clock_owner == "central":
         return await _profile(db, row)
-    if row.project_id == "jobinator-4000":
+    owner_keys = await service.project_owner_keys(db, row.project_id)
+    if owner_keys:
         policy = await service.get_policy(db, row.project_id)
-        if not {"screening_cap", "classification_cap"}.issubset(policy.config or {}):
-            raise HTTPException(status_code=409, detail="Jobinator shared quota policy is not imported")
-        if service.policy_sync_pending(policy):
-            raise HTTPException(status_code=409, detail="Jobinator shared quota policy awaits owner sync")
+        if not set(owner_keys).issubset(policy.config or {}):
+            raise HTTPException(status_code=409, detail="Owner policy keys are not imported")
+        if service.policy_sync_pending(policy, owner_keys):
+            raise HTTPException(status_code=409, detail="Owner policy awaits owner sync")
     row.clock_owner = "central"
     if payload.next_run_at is not None:
         row.next_run_at = payload.next_run_at

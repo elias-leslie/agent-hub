@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
+from jsonschema import Draft202012Validator, SchemaError
 from jsonschema import ValidationError as JsonSchemaError
 from jsonschema import validate as validate_json
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,16 +28,11 @@ from app.services.workflow_schedule_registry import SCHEDULE_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
-# Deployment-owned callback routes. Origins come only from the registered project's
-# local .index.yaml; callers cannot supply an execution URL through a profile.
-EXTERNAL_WORKFLOWS: tuple[tuple[str, str, str, str, dict], ...] = (
-    ("summitflow/browser_workflow", "summitflow", "Browser workflow", "cancel_newest", {}),
-    ("portfolio-ai/jenny_daily_household_maintenance", "portfolio-ai", "Daily household maintenance", "cancel_in_progress", {"type": "cron", "value": "15 13 * * *", "timezone": "UTC"}),
-    ("portfolio-ai/jenny_weekly_price_check", "portfolio-ai", "Weekly price check", "cancel_in_progress", {"type": "cron", "value": "30 13 * * 6", "timezone": "UTC"}),
-    ("jobinator-4000/nightly_screen", "jobinator-4000", "Nightly screen", "group_round_robin", {}),
-    ("jobinator-4000/nightly_enrich", "jobinator-4000", "Nightly enrich", "cancel_in_progress", {}),
-    ("jobinator-4000/deferred_ab_sweep", "jobinator-4000", "Deferred A/B sweep", "cancel_in_progress", {}),
-)
+# Owner-added policy keys: required in that project's shared policy and mirrored to the
+# owner (POST /automations/policy/sync) whenever the policy revision changes.
+OWNER_POLICY_KEYS = "x-owner-keys"
+OVERLAP_STRATEGIES = frozenset({"cancel_in_progress", "cancel_newest", "group_round_robin"})
+_WORKFLOW_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,99}$")
 
 
 class AutomationValidationError(ValueError):
@@ -56,51 +53,50 @@ class PolicyConfig(BaseModel):
     cooldown_seconds: int | None = Field(default=None, ge=0)
     allowed_hours: list[int] | None = None
     filters: dict = Field(default_factory=dict)
-    screening_cap: int | None = Field(default=None, ge=0)
-    classification_cap: int | None = Field(default=None, ge=0)
 
 
-def policy_schema_for(project_id: str) -> dict:
-    schema = PolicyConfig.model_json_schema()
-    schema["properties"] = {
-        key: value for key, value in schema.get("properties", {}).items()
-        if project_id == "jobinator-4000" or key not in {"screening_cap", "classification_cap"}
-    }
-    return schema
+def shared_policy_schema() -> dict:
+    """The project policy keys every owner shares (limits Agent Hub enforces)."""
+    return PolicyConfig.model_json_schema()
 
 
-def external_config_schema(workflow_key: str) -> dict:
-    if workflow_key == "summitflow/browser_workflow":
-        return {
-            "type": "object",
-            "properties": {
-                "workflow": {
-                    "type": "object",
-                    "properties": {"schema_version": {"const": 1}, "steps": {"type": "array", "minItems": 1}},
-                    "required": ["schema_version", "steps"],
-                },
-                "parameters": {"type": "object"},
-                "target": {"enum": ["local-ai"]},
-            },
-            "required": ["workflow"],
-            "additionalProperties": False,
-        }
-    if workflow_key.startswith("jobinator-4000/"):
-        properties: dict = {"limit": {"type": ["integer", "null"], "minimum": 1}}
-        if workflow_key == "jobinator-4000/nightly_screen":
-            properties["notify"] = {"type": "boolean"}
-        if workflow_key == "jobinator-4000/deferred_ab_sweep":
-            properties["limit"] = {"type": "integer", "minimum": 1}
-        return {"type": "object", "properties": properties, "additionalProperties": False}
-    return {"type": "object", "additionalProperties": False}
+def owner_policy_keys(definitions: list[AutomationDefinition]) -> list[str]:
+    """Policy keys the owner registered on any of its current definitions."""
+    keys: set[str] = set()
+    for definition in definitions:
+        keys.update((definition.policy_schema or {}).get(OWNER_POLICY_KEYS) or [])
+    return sorted(keys)
 
 
-def policy_sync_pending(policy: AutomationProjectPolicy) -> bool:
+async def current_definitions(db: AsyncSession, project_id: str | None = None) -> list[AutomationDefinition]:
+    """Latest version of each definition, optionally only one owner's."""
+    query = select(AutomationDefinition)
+    if project_id is not None:
+        query = query.where(AutomationDefinition.owner_project_id == project_id)
+    latest: dict[str, AutomationDefinition] = {}
+    for row in (await db.execute(query)).scalars().all():
+        if row.workflow_key not in latest or row.version > latest[row.workflow_key].version:
+            latest[row.workflow_key] = row
+    return list(latest.values())
+
+
+async def project_owner_keys(db: AsyncSession, project_id: str) -> list[str]:
+    return owner_policy_keys(await current_definitions(db, project_id))
+
+
+def policy_sync_pending(policy: AutomationProjectPolicy, owner_keys: list[str]) -> bool:
     return (
-        policy.project_id == "jobinator-4000"
-        and {"screening_cap", "classification_cap"}.issubset(policy.config or {})
+        bool(owner_keys)
+        and set(owner_keys).issubset(policy.config or {})
         and policy.sync_revision < policy.revision
     )
+
+
+async def owner_sync_pending(db: AsyncSession, policy: AutomationProjectPolicy) -> bool:
+    """Whether the owner has yet to acknowledge this policy revision."""
+    if policy.sync_revision >= policy.revision:
+        return False
+    return policy_sync_pending(policy, await project_owner_keys(db, policy.project_id))
 
 
 def effective_gate_reasons(
@@ -242,12 +238,15 @@ async def update_policy(
         raise RevisionConflict("policy revision has changed")
     row.enabled = enabled
     normalized = validate_policy_config(config)
-    if project_id == "jobinator-4000" and not {
-        "screening_cap", "classification_cap"
-    }.issubset(normalized):
-        raise AutomationValidationError(
-            "Jobinator policy requires screening_cap and classification_cap"
-        )
+    definitions = await current_definitions(db, project_id)
+    owner_keys = owner_policy_keys(definitions)
+    if owner_keys and not set(owner_keys).issubset(normalized):
+        raise AutomationValidationError(f"{project_id} policy requires {', '.join(owner_keys)}")
+    for definition in definitions:
+        try:
+            validate_json(normalized, definition.policy_schema or {"type": "object"})
+        except JsonSchemaError as exc:
+            raise AutomationValidationError(f"config: {exc.message}") from exc
     row.config = normalized
     row.revision += 1
     row.updated_by = changed_by
@@ -402,16 +401,16 @@ async def admit_run(
         manual=trigger == "manual", manual_when_disabled=definition.manual_when_disabled,
     )
     reasons.extend(await _policy_gate_reasons(db, policy, now))
-    if profile.workflow_key == "summitflow/browser_workflow":
-        # A human handoff is still active. Serialize against the profile lock
-        # held above so a new occurrence never supersedes its owned session.
+    if definition.overlap_strategy == "cancel_newest":
+        # An earlier occurrence (e.g. a human handoff) is still active. Serialize
+        # against the profile lock held above so a new one never supersedes it.
         active = await db.scalar(select(func.count()).select_from(AutomationRun).where(
             AutomationRun.profile_id == profile.id,
             AutomationRun.status.in_(["admitted", "dispatching", "dispatched", "accepted", "running"]),
         ))
         if active:
             reasons.append("profile_overlap_cancel_newest")
-    if policy_sync_pending(policy):
+    if await owner_sync_pending(db, policy):
         reasons.append("owner_policy_sync_pending")
     if trigger == "scheduled" and profile.clock_owner != "central":
         reasons.append("legacy_clock_owner")
@@ -452,19 +451,6 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
         await db.execute(select(AutomationProfile).where(AutomationProfile.source_ref.is_not(None)))
     ).scalars().all()}
     now = datetime.now(UTC)
-    for key, project_id, label, overlap, default_schedule in EXTERNAL_WORKFLOWS:
-        if await db.get(AutomationDefinition, (key, 1)) is None:
-            db.add(AutomationDefinition(
-                workflow_key=key, version=1, owner_project_id=project_id,
-                label=label, description=f"{label} owned by {project_id}.",
-                dispatch_kind="callback", dispatch_target=f"/automations/dispatch/{key.split('/', 1)[1]}",
-                config_schema=external_config_schema(key),
-                policy_schema=policy_schema_for(project_id),
-                default_schedule=default_schedule, default_enabled=key != "summitflow/browser_workflow",
-                manual_when_disabled=key in {"summitflow/browser_workflow", "portfolio-ai/jenny_weekly_price_check"},
-                manual_advances_cursor=False,
-                overlap_strategy=overlap,
-            ))
     for schedule in SCHEDULE_DEFINITIONS:
         key = f"agent-hub.{schedule.schedule_id}"
         definition = await db.get(AutomationDefinition, (key, 1))
@@ -474,7 +460,7 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
                 label=schedule.label, description=schedule.description,
                 dispatch_kind="hatchet", dispatch_target=schedule.schedule_id,
                 config_schema={"type": "object", "additionalProperties": False},
-                policy_schema=policy_schema_for("agent-hub"),
+                policy_schema=shared_policy_schema(),
                 default_schedule={"type": "cron", "value": schedule.cron, "timezone": "UTC"},
                 default_enabled=schedule.default_enabled,
                 manual_when_disabled=True, manual_advances_cursor=False,
@@ -500,7 +486,94 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
         elif profile.clock_owner == "legacy":
             profile.enabled = enabled
 
-    for project_id in {"agent-hub", *(item[1] for item in EXTERNAL_WORKFLOWS)}:
-        if await db.get(AutomationProjectPolicy, project_id) is None:
-            db.add(AutomationProjectPolicy(project_id=project_id, enabled=True, config={}, revision=1))
+    if await db.get(AutomationProjectPolicy, "agent-hub") is None:
+        db.add(AutomationProjectPolicy(project_id="agent-hub", enabled=True, config={}, revision=1))
     await db.flush()
+
+
+class DefinitionRegistration(BaseModel):
+    """What an owner project declares about one of its callback workflows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    config_schema: dict = Field(default_factory=lambda: {"type": "object", "additionalProperties": False})
+    # Extra policy keys this owner adds to its project's shared policy (JSON Schema
+    # properties). They become required there and are mirrored to the owner.
+    policy_properties: dict[str, dict] = Field(default_factory=dict)
+    default_schedule: dict = Field(default_factory=dict)
+    default_enabled: bool = True
+    manual_when_disabled: bool = False
+    manual_advances_cursor: bool = False
+    overlap_strategy: str = "cancel_in_progress"
+
+
+def _check_schema(name: str, schema: dict) -> None:
+    try:
+        Draft202012Validator.check_schema(schema)
+    except SchemaError as exc:
+        raise AutomationValidationError(f"{name}: {exc.message}") from exc
+
+
+async def register_definition(
+    db: AsyncSession, owner_project_id: str, name: str, registration: DefinitionRegistration,
+) -> AutomationDefinition:
+    """Create or update an owner's callback definition in place.
+
+    The dispatch route is always the owner's /automations/dispatch/{name}; an owner
+    cannot point Agent Hub at another URL or register another project's workflow.
+    """
+    if not _WORKFLOW_NAME.match(name):
+        raise AutomationValidationError("workflow name must be lowercase letters, digits, '_' or '-'")
+    if owner_project_id == "agent-hub":
+        raise AutomationValidationError("Agent Hub's own schedules are not registered")
+    if registration.overlap_strategy not in OVERLAP_STRATEGIES:
+        raise AutomationValidationError(
+            f"overlap_strategy must be one of {', '.join(sorted(OVERLAP_STRATEGIES))}"
+        )
+    _check_schema("config_schema", registration.config_schema)
+    shared = shared_policy_schema()
+    clash = set(registration.policy_properties) & set(shared.get("properties", {}))
+    if clash:
+        raise AutomationValidationError(f"policy_properties may not redefine {', '.join(sorted(clash))}")
+    owner_keys = sorted(registration.policy_properties)
+    policy_schema = {
+        **shared,
+        "properties": {**shared.get("properties", {}), **registration.policy_properties},
+        "required": owner_keys,
+        OWNER_POLICY_KEYS: owner_keys,
+    }
+    _check_schema("policy_properties", policy_schema)
+    if registration.default_schedule:
+        schedule = registration.default_schedule
+        validate_profile_payload({
+            "schedule_type": schedule.get("type"), "schedule_value": schedule.get("value"),
+            "schedule_timezone": schedule.get("timezone"),
+        })
+    values = {
+        "owner_project_id": owner_project_id, "label": registration.label,
+        "description": registration.description or f"{registration.label} owned by {owner_project_id}.",
+        "dispatch_kind": "callback", "dispatch_target": f"/automations/dispatch/{name}",
+        "config_schema": registration.config_schema, "policy_schema": policy_schema,
+        "default_schedule": registration.default_schedule,
+        "default_enabled": registration.default_enabled,
+        "manual_when_disabled": registration.manual_when_disabled,
+        "manual_advances_cursor": registration.manual_advances_cursor,
+        "overlap_strategy": registration.overlap_strategy,
+    }
+    workflow_key = f"{owner_project_id}/{name}"
+    try:
+        row = await get_definition(db, workflow_key)
+    except KeyError:
+        row = AutomationDefinition(workflow_key=workflow_key, version=1, **values)
+        db.add(row)
+    else:
+        if row.owner_project_id != owner_project_id:
+            raise AutomationValidationError("workflow_key belongs to another project")
+        for key, value in values.items():
+            setattr(row, key, value)
+    if await db.get(AutomationProjectPolicy, owner_project_id) is None:
+        db.add(AutomationProjectPolicy(project_id=owner_project_id, enabled=True, config={}, revision=1))
+    await db.flush()
+    return row

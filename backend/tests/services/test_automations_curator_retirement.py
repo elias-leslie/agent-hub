@@ -17,10 +17,7 @@ async def test_legacy_import_does_not_recreate_persona_job_automations() -> None
     db.execute.return_value = empty
     db.get.return_value = None
 
-    with (
-        patch.object(automations, "EXTERNAL_WORKFLOWS", ()),
-        patch.object(automations, "SCHEDULE_DEFINITIONS", ()),
-    ):
+    with patch.object(automations, "SCHEDULE_DEFINITIONS", ()):
         await automations.import_agent_hub_legacy(db)
 
     rows = [call.args[0] for call in db.add.call_args_list]

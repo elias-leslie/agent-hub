@@ -8,29 +8,101 @@ import pytest
 
 from app.api.automations import ProfileCreate, ProfileImport
 from app.services.automations import (
-    EXTERNAL_WORKFLOWS,
+    OWNER_POLICY_KEYS,
     AutomationValidationError,
+    DefinitionRegistration,
     create_profile,
     effective_gate_reasons,
     ensure_future_one_time,
     occurrence_key,
-    policy_schema_for,
+    policy_sync_pending,
+    register_definition,
     update_policy,
     validate_profile_payload,
 )
 
+_CAPS = {
+    "screening_cap": {"type": "integer", "minimum": 0},
+    "classification_cap": {"type": "integer", "minimum": 0},
+}
 
-def test_portfolio_seeds_only_its_live_workflows():
-    portfolio = {row[0]: row for row in EXTERNAL_WORKFLOWS if row[1] == "portfolio-ai"}
-    # The Jenny investing routines and the ML retrain are retired; a seed would
-    # recreate their definitions on the next legacy import.
-    assert set(portfolio) == {
-        "portfolio-ai/jenny_daily_household_maintenance",
-        "portfolio-ai/jenny_weekly_price_check",
-    }
-    assert portfolio["portfolio-ai/jenny_daily_household_maintenance"][4] == {
-        "type": "cron", "value": "15 13 * * *", "timezone": "UTC",
-    }
+
+def _registration_db(existing=None, policy=None):
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.get.return_value = policy
+    return db, patch(
+        "app.services.automations.get_definition", new_callable=AsyncMock,
+        side_effect=KeyError("missing") if existing is None else None, return_value=existing,
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_registration_creates_definition_with_fixed_route_and_owner_keys():
+    db, get_definition = _registration_db()
+    with get_definition:
+        row = await register_definition(db, "jobinator-4000", "nightly_screen", DefinitionRegistration(
+            label="Nightly screen", overlap_strategy="group_round_robin", policy_properties=_CAPS,
+            default_schedule={"type": "cron", "value": "30 7 * * *", "timezone": "UTC"},
+        ))
+    assert row.workflow_key == "jobinator-4000/nightly_screen"
+    assert row.dispatch_kind == "callback"
+    assert row.dispatch_target == "/automations/dispatch/nightly_screen"
+    assert row.policy_schema[OWNER_POLICY_KEYS] == ["classification_cap", "screening_cap"]
+    assert row.policy_schema["required"] == ["classification_cap", "screening_cap"]
+    assert "daily_limit" in row.policy_schema["properties"]
+    # The owner's project gets a policy row so the shared limits can be edited.
+    added = [call.args[0] for call in db.add.call_args_list]
+    assert any(getattr(item, "project_id", None) == "jobinator-4000" for item in added)
+
+
+@pytest.mark.asyncio
+async def test_owner_registration_updates_existing_definition_in_place():
+    existing = SimpleNamespace(
+        workflow_key="portfolio-ai/jenny_weekly_price_check", owner_project_id="portfolio-ai", version=1,
+        label="old", default_schedule={},
+    )
+    db, get_definition = _registration_db(existing, policy=SimpleNamespace())
+    with get_definition:
+        row = await register_definition(db, "portfolio-ai", "jenny_weekly_price_check", DefinitionRegistration(
+            label="Weekly price check", manual_when_disabled=True,
+            default_schedule={"type": "cron", "value": "30 13 * * 6", "timezone": "UTC"},
+        ))
+    assert row is existing
+    assert row.version == 1
+    assert row.label == "Weekly price check"
+    assert row.default_schedule["value"] == "30 13 * * 6"
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name, registration, match", [
+    ("../other", DefinitionRegistration(label="x"), "workflow name"),
+    ("ok", DefinitionRegistration(label="x", overlap_strategy="parallel"), "overlap_strategy"),
+    ("ok", DefinitionRegistration(label="x", config_schema={"type": "nope"}), "config_schema"),
+    ("ok", DefinitionRegistration(label="x", policy_properties={"daily_limit": {"type": "string"}}), "redefine"),
+    ("ok", DefinitionRegistration(label="x", default_schedule={"type": "cron", "value": "not a cron"}), ""),
+])
+async def test_owner_registration_rejects_unsafe_or_invalid_declarations(name, registration, match):
+    db, get_definition = _registration_db()
+    with get_definition, pytest.raises(AutomationValidationError, match=match):
+        await register_definition(db, "portfolio-ai", name, registration)
+    db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_agent_hub_schedules_cannot_be_registered_as_callbacks():
+    db, get_definition = _registration_db()
+    with get_definition, pytest.raises(AutomationValidationError, match="not registered"):
+        await register_definition(db, "agent-hub", "session_cleanup", DefinitionRegistration(label="x"))
+
+
+def test_policy_sync_is_pending_only_for_owner_keys_at_a_newer_revision():
+    policy = SimpleNamespace(config={"screening_cap": 1, "classification_cap": 2}, revision=3, sync_revision=2)
+    assert policy_sync_pending(policy, ["classification_cap", "screening_cap"])
+    assert not policy_sync_pending(policy, [])
+    assert not policy_sync_pending(SimpleNamespace(config={}, revision=3, sync_revision=2), ["screening_cap"])
+    assert not policy_sync_pending(SimpleNamespace(**{**vars(policy), "sync_revision": 3}), ["screening_cap"])
 
 
 @pytest.mark.asyncio
@@ -150,21 +222,39 @@ def test_summitflow_owned_profile_can_target_another_project():
     assert value["project_id"] == "agent-hub"
 
 
-def test_policy_catalog_only_shows_owner_specific_fields_for_its_project():
-    assert "daily_limit" in policy_schema_for("neri")["properties"]
-    assert "screening_cap" in policy_schema_for("jobinator-4000")["properties"]
-    assert "classification_cap" in policy_schema_for("jobinator-4000")["properties"]
-    assert "screening_cap" not in policy_schema_for("neri")["properties"]
-
-
 @pytest.mark.asyncio
-async def test_jobinator_policy_keeps_both_shared_quota_limits():
+async def test_policy_edit_keeps_every_owner_registered_key():
     db = AsyncMock()
     db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=SimpleNamespace(
         project_id="jobinator-4000", revision=1, config={},
     )))
-    with pytest.raises(AutomationValidationError, match="screening_cap and classification_cap"):
+    definition = SimpleNamespace(policy_schema={
+        "type": "object", "properties": _CAPS, OWNER_POLICY_KEYS: ["classification_cap", "screening_cap"],
+    })
+    with (
+        patch("app.services.automations.current_definitions", new_callable=AsyncMock, return_value=[definition]),
+        pytest.raises(AutomationValidationError, match="requires classification_cap, screening_cap"),
+    ):
         await update_policy(
             db, "jobinator-4000", enabled=False, config={"screening_cap": 200},
+            expected_revision=1, changed_by="test",
+        )
+
+
+@pytest.mark.asyncio
+async def test_policy_edit_validates_owner_key_values_against_registered_schema():
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=SimpleNamespace(
+        project_id="jobinator-4000", revision=1, config={},
+    )))
+    definition = SimpleNamespace(policy_schema={
+        "type": "object", "properties": _CAPS, OWNER_POLICY_KEYS: ["classification_cap", "screening_cap"],
+    })
+    with (
+        patch("app.services.automations.current_definitions", new_callable=AsyncMock, return_value=[definition]),
+        pytest.raises(AutomationValidationError, match="config:"),
+    ):
+        await update_policy(
+            db, "jobinator-4000", enabled=False, config={"screening_cap": -1, "classification_cap": 4},
             expected_revision=1, changed_by="test",
         )

@@ -1,24 +1,11 @@
-"""Browser workflow registration, immutable admission, and overlap safety."""
+"""Immutable admission and cancel-newest overlap safety (e.g. browser handoffs)."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from jsonschema import ValidationError, validate
 
-from app.services.automations import EXTERNAL_WORKFLOWS, admit_run, external_config_schema
-
-
-def test_browser_workflow_has_no_default_schedule_and_rejects_shared_session_config():
-    rows = [row for row in EXTERNAL_WORKFLOWS if row[0] == "summitflow/browser_workflow"]
-    assert len(rows) == 1
-    assert rows[0][1:] == ("summitflow", "Browser workflow", "cancel_newest", {})
-    schema = external_config_schema(rows[0][0])
-    config = {"workflow": {"schema_version": 1, "steps": [{"id": "check"}]}, "parameters": {"query": "hello"}}
-    validate(config, schema)
-    for extra in ({"session": "st-local-ai"}, {"target": "proxmox"}, {"workflow": {"schema_version": 2, "steps": []}}):
-        with pytest.raises(ValidationError):
-            validate({**config, **extra}, schema)
+from app.services.automations import admit_run
 
 
 @pytest.mark.asyncio
@@ -30,8 +17,11 @@ async def test_browser_admission_serializes_overlapping_human_waits(active, expe
         definition_version=1, enabled=False, owner_gate_reasons=[], revision=2, config=config,
         clock_owner="central",
     )
-    definition = SimpleNamespace(manual_when_disabled=True, manual_advances_cursor=False, dispatch_target="/automations/dispatch/browser_workflow")
-    policy = SimpleNamespace(project_id="summitflow", enabled=True, config={})
+    definition = SimpleNamespace(
+        manual_when_disabled=True, manual_advances_cursor=False, overlap_strategy="cancel_newest",
+        dispatch_target="/automations/dispatch/browser_workflow",
+    )
+    policy = SimpleNamespace(project_id="summitflow", enabled=True, config={}, revision=1, sync_revision=1)
     db = AsyncMock()
     db.add = MagicMock()
     db.get.return_value = definition
