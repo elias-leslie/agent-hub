@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.agent_service import AgentDTO
 from app.services.memory.settings import MemorySettingsDTO
+from tests.model_ids import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 
 
 # Helper to create mock AgentDTO
@@ -320,7 +320,7 @@ class TestInactiveModelAssignment:
         from dataclasses import replace
 
         from app.constants import catalog
-        from app.constants.catalog_entries import MODEL_CATALOG
+        from tests.model_ids import MODEL_CATALOG
 
         entry = replace(next(e for e in MODEL_CATALOG if e.provider == "claude"), id="claude-fable-5-1")
         catalog.INACTIVE_MODEL_CATALOG_BY_ID[entry.id] = entry

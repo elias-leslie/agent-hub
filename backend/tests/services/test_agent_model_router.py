@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants.models import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 from app.services.agent_dto import AgentDTO
 from app.services.agent_model_router import (
     RoutingContext,
     RoutingSelectionError,
     resolve_model_route,
 )
+from tests.model_ids import CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL
 
 
 def _agent(**overrides: object) -> AgentDTO:

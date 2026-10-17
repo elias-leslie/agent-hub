@@ -10,8 +10,8 @@ from app.api.sessions import (
     SessionPromoteRequest,
     SessionPromoteResponse,
 )
-from app.constants.models import CLAUDE_SONNET
 from app.models import Session
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestSessionBranchingModels:

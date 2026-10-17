@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.agent_service import (
     AgentDTO,
     AgentService,
     _resolve_system_prompt,
     get_agent_service,
 )
+from tests.model_ids import CLAUDE_OPUS, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 
 
 class TestAgentService:

@@ -16,12 +16,6 @@ import pytest
 
 from app.api.complete import StreamingChunk, stream_completion
 from app.api.complete.streaming_context import StreamContext
-from app.constants.models import (
-    CLAUDE_HAIKU,
-    CLAUDE_SONNET,
-    GEMINI_2_5_FLASH,
-    GEMINI_3_5_FLASH,
-)
 from app.llm.types import (
     AssistantMessage,
     DoneEvent,
@@ -32,6 +26,7 @@ from app.llm.types import (
 )
 from app.services.llm_messages import Message
 from tests.api.stream_test_support import patched_done_persistence
+from tests.model_ids import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_2_5_FLASH, GEMINI_3_5_FLASH
 
 
 def _partial_message() -> AssistantMessage:

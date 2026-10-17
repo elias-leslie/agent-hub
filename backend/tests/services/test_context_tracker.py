@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.context_tracker import (
     CONTEXT_CRITICAL_THRESHOLD,
     CONTEXT_HIGH_THRESHOLD,
@@ -18,6 +17,7 @@ from app.services.context_tracker import (
     should_emit_warning,
 )
 from app.services.token_counter import get_context_limit
+from tests.model_ids import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 
 _LIMIT = get_context_limit(CLAUDE_HAIKU)
 

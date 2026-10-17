@@ -11,7 +11,7 @@ from app.api.complete.citation_tracker import (
     _extract_chat_summary,
     _track_inline_tags,
 )
-from app.constants.models import CLAUDE_SONNET
+from tests.model_ids import CLAUDE_SONNET
 
 # Matches the 120-char truncation in _extract_chat_summary
 MAX_SUMMARY_LENGTH = 120

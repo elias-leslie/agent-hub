@@ -17,7 +17,6 @@ import pytest
 
 from app.api.complete.sse_writer import SseWriter
 from app.api.complete.streaming import _attach_routing, _emit_events
-from app.constants.models import CLAUDE_SONNET
 from app.llm import tool_loop
 from app.llm.tool_loop import ToolLoopEvent
 from app.llm.types import (
@@ -32,6 +31,7 @@ from app.llm.types import (
     Usage,
 )
 from tests.api.stream_test_support import make_stream_ctx, patched_done_persistence
+from tests.model_ids import CLAUDE_SONNET
 
 
 def _message(content: list[Any], stop_reason: StopReason, usage: Usage) -> AssistantMessage:

@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.constants import CLAUDE_OPUS, CODEX_GPT_6_1_SOL
 from app.services.persona_prompt_service import render_completion_review_rules
 
 DEFAULT_COMPLETION_REVIEW_MODELS = [
-    CODEX_GPT_6_1_SOL,
-    CLAUDE_OPUS,
+    "codex/gpt-6.1-sol",
+    "claude-opus-5-5",
 ]
 
 _RESPONSE_SHAPE = """Return JSON only with this exact shape:

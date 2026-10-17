@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from app.constants import (
-    DEFAULT_GEMINI_MODEL,
     MODEL_CATALOG,
     MODEL_CATALOG_BY_ID,
+    resolve_model,
 )
 from app.routing.registry import is_workload_provider
 
@@ -51,7 +51,7 @@ def map_model_to_provider(original_model: str, target_provider: str) -> str:
 
     # Fallback to provider defaults
     if target_provider == "gemini":
-        return DEFAULT_GEMINI_MODEL
+        return resolve_model("flash")
     else:
         # Try to find any model from target provider
         candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]

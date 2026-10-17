@@ -21,7 +21,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
 from app.models.persona import Persona
 from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
 from app.services.tools.base import ToolCall, ToolDecision
@@ -31,6 +30,7 @@ from app.services.tools.tool_handler import (
     _create_cross_project_permission_hook,
     create_direct_handler,
 )
+from tests.model_ids import CLAUDE_SONNET
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures

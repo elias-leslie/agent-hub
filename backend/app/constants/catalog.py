@@ -3,29 +3,19 @@
 Re-exports all public symbols from submodules so existing imports continue to work:
   from app.constants.catalog import MODEL_CATALOG, ModelEntry, resolve_model, ...
 
-Runtime data is hydrated from the DB ``models`` and ``model_aliases`` tables at
-startup. ``catalog_entries.MODEL_CATALOG`` is retained as insert-only seed data.
+The catalog is the DB ``models`` and ``model_aliases`` tables, hydrated into this
+process-local snapshot at startup (``refresh_runtime_model_catalog``). It is empty
+until then; code refers to models by alias, never by a hardcoded id.
 """
 
 from __future__ import annotations
 
-from app.constants.catalog_entries import MODEL_CATALOG as SEED_MODEL_CATALOG
 from app.constants.catalog_types import (
     SCORE_WEIGHTS,
     ModelCapabilities,
     ModelCost,
     ModelEntry,
     ModelScores,
-)
-from app.constants.models import (
-    CF_GLM_4_7_FLASH,
-    CLAUDE_SONNET,
-    CODEX_GPT_6_1_SOL,
-    DEFAULT_GEMINI_MODEL,
-    GEMINI_3_1_FLASH_LITE,
-    LOCAL_GEMMA_4_12B,
-    NVIDIA_NEMOTRON_3_SUPER,
-    XAI_GROK_4_3,
 )
 
 __all__ = [
@@ -43,14 +33,13 @@ __all__ = [
     "get_model_entry",
     "replace_runtime_model_catalog",
     "resolve_model",
-    "seed_alias_overrides",
 ]
 
 # ---------------------------------------------------------------------------
-# Derived lookups — built once at import time from MODEL_CATALOG
+# Process-local snapshot of the DB catalog (empty until refreshed)
 # ---------------------------------------------------------------------------
 
-MODEL_CATALOG: list[ModelEntry] = list(SEED_MODEL_CATALOG)
+MODEL_CATALOG: list[ModelEntry] = []
 MODEL_REGISTRY: list[dict[str, str]] = []
 MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {}
 MODEL_ALIASES: dict[str, str] = {}
@@ -59,30 +48,8 @@ MODEL_ALIASES: dict[str, str] = {}
 INACTIVE_MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {}
 
 
-def seed_alias_overrides() -> dict[str, str]:
-    """Return seed/default aliases that are stored in DB on first boot."""
-    return {
-        # Bare provider names resolve to current default model for that provider.
-        "claude": CLAUDE_SONNET,
-        "cloudflare": CF_GLM_4_7_FLASH,
-        "codex": CODEX_GPT_6_1_SOL,
-        "flash": DEFAULT_GEMINI_MODEL,
-        "gemini": GEMINI_3_1_FLASH_LITE,
-        "local": LOCAL_GEMMA_4_12B,
-        "nvidia": NVIDIA_NEMOTRON_3_SUPER,
-        "xai": XAI_GROK_4_3,
-    }
-
-
 def _default_aliases(entries: list[ModelEntry]) -> dict[str, str]:
-    valid_ids = {entry.id for entry in entries}
-    aliases = {entry.alias.lower(): entry.id for entry in entries if entry.alias}
-    aliases.update({
-        alias.lower(): model_id
-        for alias, model_id in seed_alias_overrides().items()
-        if model_id in valid_ids
-    })
-    return aliases
+    return {entry.alias.lower(): entry.id for entry in entries if entry.alias}
 
 
 def replace_runtime_model_catalog(
@@ -119,5 +86,3 @@ def get_model_capabilities(model: str) -> ModelCapabilities | None:
     entry = get_model_entry(model)
     return entry.capabilities if entry else None
 
-
-replace_runtime_model_catalog(MODEL_CATALOG)

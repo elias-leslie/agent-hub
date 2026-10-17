@@ -68,6 +68,15 @@ from fastapi.testclient import TestClient  # noqa: E402
 from httpx import Response  # noqa: E402
 
 from app.main import app  # noqa: E402
+from tests.model_ids import hydrate_seed_catalog  # noqa: E402
+
+hydrate_seed_catalog()
+
+
+@pytest.fixture(autouse=True)
+def seed_model_catalog_snapshot() -> None:
+    """Each test starts from the exported seed catalog, whatever an earlier test replaced."""
+    hydrate_seed_catalog()
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

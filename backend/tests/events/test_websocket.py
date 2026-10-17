@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
 from app.services.events import (
     EventPublisher,
     SessionEvent,
@@ -19,6 +18,7 @@ from app.services.events import (
     publish_tool_result,
     publish_tool_use,
 )
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestSessionEvent:

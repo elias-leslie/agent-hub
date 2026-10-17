@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,10 +10,9 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
-from app.constants.catalog_entries import MODEL_CATALOG
 from app.db import _get_engine
 from app.models.model_catalog import ModelCatalogEntry
-from app.services.model_catalog_service import _entry_values
+from app.services.model_catalog_service import load_seed_catalog
 
 
 @pytest.mark.integration
@@ -48,8 +46,8 @@ def _verify_migration(conn) -> None:
     conn.execute(sa.text("CREATE TEMP TABLE model_aliases (alias TEXT PRIMARY KEY, model_id TEXT REFERENCES models(id), updated_at TIMESTAMPTZ) ON COMMIT DROP"))
     conn.execute(sa.text("CREATE TEMP TABLE agents (slug TEXT PRIMARY KEY, primary_model_id TEXT, fallback_models JSON, escalation_model_id TEXT, version INT, updated_at TIMESTAMPTZ) ON COMMIT DROP"))
     conn.execute(sa.text("CREATE TEMP TABLE daybreak_history (model TEXT) ON COMMIT DROP"))
-    seed = next(entry for entry in MODEL_CATALOG if entry.id == new)
-    previous = _entry_values(replace(seed, id=old, upstream_id=None, availability="previous"), 1)
+    seed = next(row for row in load_seed_catalog()["models"] if row["id"] == new)
+    previous = {**seed, "id": old, "upstream_id": None, "availability": "previous", "is_active": True}
     conn.execute(models.insert().values(**previous))
     conn.execute(sa.text("INSERT INTO model_aliases VALUES ('codex-daybreak', :old, NOW())"), {"old": old})
     conn.execute(sa.text(

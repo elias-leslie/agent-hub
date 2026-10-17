@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.api.complete.streaming_context import StreamContext
-from app.constants.models import CLAUDE_SONNET
+from tests.model_ids import CLAUDE_SONNET
 
 
 def make_stream_ctx(

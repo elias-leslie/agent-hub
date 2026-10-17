@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.db import get_db
 from app.main import app
 from tests.conftest import APITestClient
+from tests.model_ids import CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 
 
 @pytest.fixture

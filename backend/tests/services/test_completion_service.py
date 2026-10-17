@@ -5,9 +5,9 @@ from unittest.mock import ANY, AsyncMock, patch
 import pytest
 
 from app.api.complete.types import CompletionInternalResult
-from app.constants.models import CLAUDE_SONNET
 from app.services.completion.service import CompletionService
 from app.services.completion.types import CompletionOptions, CompletionSource
+from tests.model_ids import CLAUDE_SONNET
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.constants.catalog_entries import MODEL_CATALOG
+from tests.model_ids import MODEL_CATALOG
 
 SUBSCRIPTION_ONLY_SLUGS = {
     "learn-planner", "learn-researcher", "learn-reviewer", "learn-tutor",

@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID
-from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_3_5_FLASH
 from app.services.llm_messages import CacheMetrics
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.response_cache.cache_key import generate_cache_key
@@ -25,6 +24,7 @@ from app.services.token_counter import (
     estimate_cost,
     estimate_request,
 )
+from tests.model_ids import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_3_5_FLASH
 
 # ============================================================================
 # Step 1: Benchmark - 100 similar requests with/without caching

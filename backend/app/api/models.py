@@ -6,7 +6,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Re-export schemas so existing importers keep working
@@ -23,9 +24,11 @@ from app.api.models_catalog_schemas import (
 from app.api.models_latency_schemas import LatencyStatsResponse, ModelLatencyStats
 from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
+from app.core.request_actor import current_request_actor
 from app.db import get_db
 from app.routing.registry import is_workload_provider
 from app.services._enrichment_normalizers import _bare_model_id
+from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 if TYPE_CHECKING:
     from app.constants.catalog import ModelEntry
@@ -343,3 +346,97 @@ async def get_latency_stats(
     ]
 
     return LatencyStatsResponse(stats=stats)
+
+
+# ---------------------------------------------------------------------------
+# Catalog writes: the DB models/model_aliases tables are the only catalog, so
+# adding, repricing or retiring a model happens here (never in a migration).
+# ---------------------------------------------------------------------------
+
+_MODEL_WRITE_EXCLUDED = {"id", "created_at", "updated_at"}
+
+
+def _model_row_fields() -> dict[str, Any]:
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.models.model_catalog import ModelCatalogEntry
+
+    fields: dict[str, Any] = {}
+    for column in ModelCatalogEntry.__table__.columns:
+        if column.name in _MODEL_WRITE_EXCLUDED:
+            continue
+        python_type: Any = dict if isinstance(column.type, JSONB) else column.type.python_type
+        fields[column.name] = (python_type | None, None)
+    return fields
+
+
+ModelRowWrite = create_model(
+    "ModelRowWrite", __config__=ConfigDict(extra="forbid"), **_model_row_fields()
+)
+
+
+class ModelAliasWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: str = Field(min_length=1, max_length=200)
+    alias_type: str = Field(default="manual", min_length=1, max_length=50)
+
+
+@router.put("/models/catalog/{model_id:path}")
+async def put_catalog_model(
+    model_id: str,
+    payload: ModelRowWrite,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> dict[str, Any]:
+    """Create a catalog model or change the given fields of an existing one."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.model_catalog import ModelCatalogEntry
+    from app.services.model_catalog_service import refresh_runtime_model_catalog
+
+    values = dict(payload.model_dump(exclude_unset=True))
+    row = await db.get(ModelCatalogEntry, model_id)
+    created = row is None
+    if row is None:
+        row = ModelCatalogEntry(id=model_id, source="manual", **values)
+        db.add(row)
+    else:
+        for key, value in values.items():
+            setattr(row, key, value)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=422, detail="Model row is missing required fields or invalid") from exc
+    await refresh_runtime_model_catalog(db)
+    logger.info("Catalog model %s %s by %s", model_id, "created" if created else "updated", current_request_actor() or "unattributed")
+    return {"id": model_id, "created": created, "fields": sorted(values)}
+
+
+@router.put("/models/aliases/{alias}")
+async def put_model_alias(
+    alias: str,
+    payload: ModelAliasWrite,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> dict[str, Any]:
+    """Point an alias at a catalog model (creating the alias if needed)."""
+    from app.models.model_catalog import ModelAlias, ModelCatalogEntry
+    from app.services.model_catalog_service import refresh_runtime_model_catalog
+
+    if await db.get(ModelCatalogEntry, payload.model_id) is None:
+        raise HTTPException(status_code=404, detail="Unknown catalog model")
+    key = alias.strip().lower()
+    if not key:
+        raise HTTPException(status_code=422, detail="Alias is required")
+    row = await db.get(ModelAlias, key)
+    if row is None:
+        db.add(ModelAlias(alias=key, model_id=payload.model_id, alias_type=payload.alias_type, source="manual"))
+    else:
+        row.model_id = payload.model_id
+        row.alias_type = payload.alias_type
+    await db.commit()
+    await refresh_runtime_model_catalog(db)
+    logger.info("Model alias %s -> %s by %s", key, payload.model_id, current_request_actor() or "unattributed")
+    return {"alias": key, "model_id": payload.model_id}

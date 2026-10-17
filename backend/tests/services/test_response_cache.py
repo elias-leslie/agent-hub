@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
 from app.services.response_cache import (
     CachedResponse,
     CacheStats,
@@ -13,6 +12,7 @@ from app.services.response_cache import (
     get_response_cache,
 )
 from app.services.response_cache.cache_key import generate_cache_key
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestCacheStats:

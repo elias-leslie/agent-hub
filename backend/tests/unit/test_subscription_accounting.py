@@ -168,3 +168,17 @@ def test_draw_down_consumes_earliest_expiry_first() -> None:
     purchase = SimpleNamespace(credits=50.0, granted_at=t - timedelta(days=1), expires_at=None, source="purchase")
     states = draw_down([purchase, grant], 120.0)
     assert [(s.lot.source, s.remaining) for s in states] == [("grant", 0.0), ("purchase", 30.0)]
+
+
+def test_rates_come_from_the_catalog_rows() -> None:
+    # Dated Claude ids price at their family row; the 1h cache write is 2x input.
+    rate = rates.claude_rate("claude-opus-5-5-20260922")
+    assert rate is not None
+    assert (rate.input, rate.write_5m, rate.write_1h, rate.read, rate.output) == (4.0, 5.0, 8.0, 0.2, 20.0)
+    # A Codex variant without its own credit card draws at the closest carded model.
+    assert rates.codex_rate("codex/gpt-5.6-sol-daybreak-blue") == (100.0, 10.0, 500.0)
+    # Haiku's long-prompt multiplier lives on its row.
+    short = rates.claude_api_equiv_usd("claude-haiku-5-5", input_tokens=100_000, output_tokens=0)
+    long = rates.claude_api_equiv_usd("claude-haiku-5-5", input_tokens=100_001, output_tokens=0)
+    assert short == pytest.approx(0.01)
+    assert long == pytest.approx(100_001 * 0.10 / 1e6 * 5)

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Iterable
+from pathlib import Path
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants.catalog_entries import MODEL_CATALOG as SEED_MODEL_CATALOG
 from app.constants.catalog_types import (
     ModelCapabilities,
     ModelCost,
@@ -21,54 +21,7 @@ from app.models.model_catalog import ModelAlias, ModelCatalogEntry
 
 logger = logging.getLogger(__name__)
 
-
-def _entry_values(entry: ModelEntry, sort_order: int) -> dict[str, Any]:
-    return {
-        "id": entry.id,
-        "alias": entry.alias,
-        "name": entry.name,
-        "hint": entry.hint,
-        "provider": entry.provider,
-        "score_coding": entry.scores.coding,
-        "score_reasoning": entry.scores.reasoning,
-        "score_planning": entry.scores.planning,
-        "score_tool_use": entry.scores.tool_use,
-        "score_instruction": entry.scores.instruction,
-        "score_design": entry.scores.design,
-        "cost_input_per_m": entry.cost.input_per_m,
-        "cost_output_per_m": entry.cost.output_per_m,
-        "pricing_unit": entry.cost.pricing_unit,
-        "unit_price": entry.cost.unit_price,
-        "service_tiers": entry.cost.service_tiers,
-        "cache_read_per_million": entry.cost.cache_read_per_million,
-        "cache_write_per_million": entry.cost.cache_write_per_million,
-        "context_window": entry.context_window,
-        "speed_tier": entry.speed_tier,
-        "can_generate_images": entry.capabilities.can_generate_images,
-        "has_vision": entry.capabilities.has_vision,
-        "can_edit_images": entry.capabilities.can_edit_images,
-        "has_thinking": entry.capabilities.has_thinking,
-        "supports_pdf": entry.capabilities.supports_pdf,
-        "supports_audio": entry.capabilities.supports_audio,
-        "supports_tool_execution": entry.capabilities.supports_tool_execution,
-        "supports_verbosity": entry.capabilities.supports_verbosity,
-        "supports_xhigh": entry.capabilities.supports_xhigh,
-        "supports_session_cache": entry.capabilities.supports_session_cache,
-        "max_output_tokens": entry.capabilities.max_output_tokens,
-        "supports_chat": entry.capabilities.supports_chat,
-        "supports_typed_judgment": entry.capabilities.supports_typed_judgment,
-        "max_state_question_tokens": entry.capabilities.max_state_question_tokens,
-        "thinking_level_map": entry.capabilities.thinking_level_map,
-        "upstream_id": entry.upstream_id,
-        "access_programs": entry.access_programs,
-        "release_date": entry.release_date,
-        "knowledge_cutoff": entry.knowledge_cutoff,
-        "family": entry.family,
-        "availability": entry.availability,
-        "is_active": True,
-        "sort_order": sort_order,
-        "source": "seed",
-    }
+SEED_CATALOG_FILE = Path(__file__).resolve().parents[2] / "scripts" / "seed_agents_data" / "model_catalog.json"
 
 
 def row_to_model_entry(row: ModelCatalogEntry) -> ModelEntry:
@@ -96,6 +49,7 @@ def row_to_model_entry(row: ModelCatalogEntry) -> ModelEntry:
             service_tiers=cast(dict[str, float], service_tiers),
             cache_read_per_million=row.cache_read_per_million,
             cache_write_per_million=row.cache_write_per_million,
+            subscription_rates=getattr(row, "subscription_rates", None),
         ),
         context_window=row.context_window,
         speed_tier=row.speed_tier,
@@ -125,46 +79,29 @@ def row_to_model_entry(row: ModelCatalogEntry) -> ModelEntry:
     )
 
 
-def _seed_aliases(entries: Iterable[ModelEntry]) -> dict[str, tuple[str, str]]:
-    """Build insert-only seed aliases as alias -> (model_id, alias_type)."""
-    entries_by_id = {entry.id: entry for entry in entries}
-    aliases: dict[str, tuple[str, str]] = {
-        entry.alias.lower(): (entry.id, "canonical")
-        for entry in entries_by_id.values()
-        if entry.alias
-    }
-
-    from app.constants.catalog import seed_alias_overrides
-
-    for alias, model_id in seed_alias_overrides().items():
-        if model_id in entries_by_id:
-            aliases[alias.lower()] = (model_id, "seed")
-    return aliases
+def load_seed_catalog(path: Path = SEED_CATALOG_FILE) -> dict[str, list[dict[str, Any]]]:
+    """Read the exported catalog a fresh install starts from (scripts/export_seeds.py)."""
+    data = json.loads(path.read_text())
+    return {"models": list(data.get("models", [])), "aliases": list(data.get("aliases", []))}
 
 
 async def seed_model_catalog(db: AsyncSession) -> int:
-    """Insert missing seed catalog rows and aliases; never overwrite DB values."""
-    existing_models = set((await db.execute(select(ModelCatalogEntry.id))).scalars().all())
-    inserted = 0
-    for sort_order, entry in enumerate(SEED_MODEL_CATALOG, start=1):
-        if entry.id in existing_models:
-            continue
-        db.add(ModelCatalogEntry(**_entry_values(entry, sort_order)))
-        inserted += 1
+    """Seed an empty catalog from the exported file; never touch a populated one.
 
-    if inserted:
-        await db.flush()
-
-    existing_aliases = set((await db.execute(select(ModelAlias.alias))).scalars().all())
-    for alias, (model_id, alias_type) in _seed_aliases(SEED_MODEL_CATALOG).items():
-        if alias in existing_aliases:
-            continue
-        db.add(ModelAlias(alias=alias, model_id=model_id, alias_type=alias_type, source="seed"))
-        inserted += 1
-
-    if inserted:
-        await db.commit()
-    return inserted
+    The DB is the only catalog: rows edited, retired or deleted there stay that way.
+    """
+    if await db.scalar(select(func.count()).select_from(ModelCatalogEntry)):
+        return 0
+    seed = load_seed_catalog()
+    for row in seed["models"]:
+        db.add(ModelCatalogEntry(**row))
+    await db.flush()
+    known = {row["id"] for row in seed["models"]}
+    aliases = [row for row in seed["aliases"] if row["model_id"] in known]
+    for row in aliases:
+        db.add(ModelAlias(**row))
+    await db.commit()
+    return len(seed["models"]) + len(aliases)
 
 
 async def get_model_catalog_entries(db: AsyncSession, *, active_only: bool = True) -> list[ModelEntry]:

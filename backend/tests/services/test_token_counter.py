@@ -1,7 +1,6 @@
 """Tests for token counter service."""
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
@@ -9,6 +8,7 @@ from app.services.token_counter import (
     estimate_request,
     get_context_limit,
 )
+from tests.model_ids import CLAUDE_HAIKU, CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 
 
 class TestCountTokens:

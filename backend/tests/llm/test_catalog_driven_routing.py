@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from app.constants import catalog
-from app.constants.catalog_entries import MODEL_CATALOG
 from app.llm.model_resolver import resolve_llm_model, upstream_model_id
 from app.llm.providers.openai_codex_responses import _body
 from app.llm.types import Context, SimpleStreamOptions
+from tests.model_ids import MODEL_CATALOG
 
 _BACKEND = Path(__file__).resolve().parents[2]
 

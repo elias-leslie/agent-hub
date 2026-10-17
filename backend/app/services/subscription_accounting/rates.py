@@ -1,20 +1,25 @@
-"""Rate tables for subscription accounting: API-equivalent value and Codex credit draw.
+"""Subscription accounting: API-equivalent value and Codex credit draw.
 
 API-equivalent value is tokens x list price (ccusage-style). It measures value received from a flat
 subscription and allocates the flat fee across projects/agents. It is never spend.
 
-Claude: USD per million tokens, platform.claude.com/docs/en/about-claude/pricing (verified 2026-10-11).
-Claude Code here uses the 1-hour cache TTL, so cache writes without a TTL split price at the 1h rate.
-Opus fast mode is 2x and stacks with the cache multipliers; US-only inference_geo adds 1.1x.
+Per-model prices come from the model catalog (DB models table), never from code:
+Claude list prices are the row's input/output/cache read/cache write (5-minute) costs, and a
+long-prompt multiplier sits in subscription_rates["long_prompt"]. Codex credits per million tokens
+(input / cached input / output) sit in subscription_rates["credits_per_m"].
 
-Codex: credits per million tokens (input / cached input / output), learn.chatgpt.com/docs/pricing.md.
-At CREDIT_API_PARITY_USD per credit the rate card equals API list price, so one table serves both
-API-equivalent value and credit draw. Fast mode is 2x, Ultrafast 6x.
+Pricing rules stay here. Claude Code uses the 1-hour cache TTL, so cache writes without a TTL split
+price at the 1h rate, which is 2x base input. Opus fast mode is 2x and stacks with the cache
+multipliers; US-only inference_geo adds 1.1x. At CREDIT_API_PARITY_USD per credit the Codex rate
+card equals API list price, so one table serves both value and credit draw. Fast mode is 2x,
+Ultrafast 6x.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from app.constants.catalog import INACTIVE_MODEL_CATALOG_BY_ID, MODEL_CATALOG_BY_ID, ModelEntry
 
 SUBSCRIPTION_PROVIDERS = frozenset({"claude", "codex"})
 
@@ -32,26 +37,11 @@ class ClaudeRate:
     output: float
 
 
-CLAUDE_RATES: dict[str, ClaudeRate] = {
-    "claude-opus-5-5": ClaudeRate(4.00, 5.00, 8.00, 0.20, 20.00),
-    "claude-sonnet-5-5": ClaudeRate(2.00, 2.50, 4.00, 0.10, 10.00),
-    "claude-haiku-5-5": ClaudeRate(0.10, 0.125, 0.20, 0.01, 0.50),
-    "claude-fable-5-1": ClaudeRate(10.00, 12.50, 20.00, 0.25, 50.00),
-}
-# Haiku 5.5 prompts over 100k tokens bill every token class at 5x.
-CLAUDE_LONG_PROMPT: dict[str, tuple[int, float]] = {"claude-haiku-5-5": (100_000, 5.0)}
+# Anthropic prices a 1-hour cache write at 2x base input for every model.
+CLAUDE_CACHE_1H_INPUT_MULT = 2.0
 CLAUDE_SPEED_MULT = {"fast": 2.0}
 CLAUDE_GEO_MULT = {"us": 1.1}
 
-# Codex credits per million tokens: (input, cached input, output).
-CODEX_CREDIT_RATES: dict[str, tuple[float, float, float]] = {
-    "gpt-6.1-sol": (50.0, 2.5, 250.0),
-    "gpt-6-sol": (50.0, 5.0, 250.0),
-    "gpt-6-luna": (2.5, 0.25, 12.5),
-    "gpt-6-astra": (250.0, 25.0, 1250.0),
-    "gpt-daybreak-blue": (100.0, 10.0, 500.0),
-    "gpt-5.6-sol": (100.0, 10.0, 500.0),
-}
 CODEX_SPEED_MULT = {"fast": 2.0, "priority": 2.0, "ultrafast": 6.0}
 
 
@@ -59,24 +49,52 @@ def _strip_provider(model: str) -> str:
     return model.split("/", 1)[1] if "/" in model else model
 
 
-def claude_rate(model: str) -> ClaudeRate | None:
+def _catalog_match(model: str, provider: str, *, has: str | None = None) -> ModelEntry | None:
+    """Longest catalog entry of a provider whose bare id is the model or a prefix of it.
+
+    Covers dated ids (claude-opus-5-5-20260922) and rolling suffixes (-latest). With
+    ``has``, only entries carrying that subscription_rates key qualify.
+    """
     key = _strip_provider(model).lower()
-    if key in CLAUDE_RATES:
-        return CLAUDE_RATES[key]
-    for name, rate in CLAUDE_RATES.items():  # dated ids such as claude-opus-5-5-20260922
-        if key.startswith(name):
-            return rate
-    return None
+    best: tuple[int, ModelEntry] | None = None
+    for entry in (*MODEL_CATALOG_BY_ID.values(), *INACTIVE_MODEL_CATALOG_BY_ID.values()):
+        if entry.provider != provider:
+            continue
+        if has is not None and has not in (entry.cost.subscription_rates or {}):
+            continue
+        bare = _strip_provider(entry.id).lower()
+        for name in {bare, bare.removesuffix("-latest")}:
+            if (key == name or key.startswith(name + "-")) and (best is None or len(name) > best[0]):
+                best = (len(name), entry)
+    return best[1] if best else None
+
+
+def claude_rate(model: str) -> ClaudeRate | None:
+    entry = _catalog_match(model, "claude")
+    if entry is None or entry.cost.cache_read_per_million is None or entry.cost.cache_write_per_million is None:
+        return None
+    cost = entry.cost
+    return ClaudeRate(
+        input=cost.input_per_m,
+        write_5m=cost.cache_write_per_million,
+        write_1h=cost.input_per_m * CLAUDE_CACHE_1H_INPUT_MULT,
+        read=cost.cache_read_per_million,
+        output=cost.output_per_m,
+    )
+
+
+def _claude_long_prompt(model: str) -> tuple[int, float] | None:
+    entry = _catalog_match(model, "claude")
+    rule = (entry.cost.subscription_rates or {}).get("long_prompt") if entry else None
+    return (int(rule["over_tokens"]), float(rule["multiplier"])) if rule else None
 
 
 def codex_rate(model: str) -> tuple[float, float, float] | None:
-    key = _strip_provider(model).lower()
-    if key in CODEX_CREDIT_RATES:
-        return CODEX_CREDIT_RATES[key]
-    for name, rate in CODEX_CREDIT_RATES.items():  # rolling aliases such as gpt-daybreak-blue-latest
-        if key.startswith(name + "-") or key == name:
-            return rate
-    return None
+    entry = _catalog_match(model, "codex", has="credits_per_m")
+    if entry is None:
+        return None
+    card = (entry.cost.subscription_rates or {})["credits_per_m"]
+    return float(card["input"]), float(card["cached_input"]), float(card["output"])
 
 
 def provider_for_model(model: str) -> str | None:
@@ -104,7 +122,7 @@ def claude_api_equiv_usd(
     if rate is None:
         return None
     mult = CLAUDE_SPEED_MULT.get(speed or "", 1.0) * CLAUDE_GEO_MULT.get(geo or "", 1.0)
-    long = CLAUDE_LONG_PROMPT.get(_strip_provider(model).lower())
+    long = _claude_long_prompt(model)
     if long and input_tokens + cache_read + cache_write_5m + cache_write_1h > long[0]:
         mult *= long[1]
     usd = (

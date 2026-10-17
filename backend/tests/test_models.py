@@ -1,7 +1,7 @@
 """Unit tests for SQLAlchemy models."""
 
-from app.constants.models import CLAUDE_SONNET
 from app.models import MemoryInjectionMetric, Session
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestMemoryInjectionMetric:

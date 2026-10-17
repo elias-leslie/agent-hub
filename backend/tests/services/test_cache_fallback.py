@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
 from app.services.response_cache import (
     CACHE_PREFIX,
     FALLBACK_PREFIX,
@@ -15,6 +14,7 @@ from app.services.response_cache import (
     ResponseCache,
 )
 from app.services.response_cache.cache_key import generate_cache_key
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestCacheStatsWithFallback:

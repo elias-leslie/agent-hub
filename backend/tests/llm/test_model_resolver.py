@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from app.config import settings
-from app.constants.catalog_entries import MODEL_CATALOG
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.types import OpenAICompletionsCompat
+from tests.model_ids import MODEL_CATALOG
 
 
 def test_gemini_uses_google_sdk_default_endpoint() -> None:

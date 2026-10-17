@@ -37,6 +37,8 @@ class ModelCatalogEntry(Base):
     service_tiers: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     cache_read_per_million: Mapped[float | None] = mapped_column(Float, nullable=True)
     cache_write_per_million: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Subscription pricing facts: {"credits_per_m": {...}} (Codex), {"long_prompt": {...}} (Claude).
+    subscription_rates: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     context_window: Mapped[int] = mapped_column(Integer, nullable=False)
     speed_tier: Mapped[str] = mapped_column(String(20), nullable=False)

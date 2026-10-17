@@ -7,10 +7,10 @@ from dataclasses import replace
 import pytest
 
 from app.constants import catalog
-from app.constants.catalog_entries import MODEL_CATALOG
 from app.routing import availability
 from app.routing.registry import get_provider_for_model, list_credential_providers
 from app.services.model_runtime_health import classify_runtime_failure
+from tests.model_ids import MODEL_CATALOG
 
 
 @pytest.fixture

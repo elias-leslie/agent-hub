@@ -1,6 +1,5 @@
 """Tests for telemetry module."""
 
-from app.constants.models import CLAUDE_SONNET
 from app.services.telemetry import (
     SubagentTraceContext,
     get_current_span_id,
@@ -9,6 +8,7 @@ from app.services.telemetry import (
     init_telemetry,
     setup_telemetry,
 )
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestTelemetrySetup:

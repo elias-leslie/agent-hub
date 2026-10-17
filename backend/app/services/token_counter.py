@@ -11,14 +11,15 @@ from typing import Any
 
 import tiktoken
 
-from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry
-from app.constants.models import DEFAULT_GEMINI_MODEL
+from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry, resolve_model
 from app.services.subscription_accounting.rates import subscription_call_value
 
 logger = logging.getLogger(__name__)
 
 # Default fallback for unknown models
 _DEFAULT_CONTEXT_LIMIT = 100_000
+# Catalog alias whose entry prices a model the catalog does not know.
+DEFAULT_FALLBACK_ALIAS = "flash"
 
 
 def _resolve_model(model: str) -> ModelEntry | None:
@@ -43,7 +44,12 @@ def _get_model_entry(model: str) -> ModelEntry:
     entry = _resolve_model(model)
     if entry is not None:
         return entry
-    return MODEL_CATALOG_BY_ID[DEFAULT_GEMINI_MODEL]
+    fallback = MODEL_CATALOG_BY_ID.get(resolve_model(DEFAULT_FALLBACK_ALIAS))
+    if fallback is None:
+        if not MODEL_CATALOG:
+            raise LookupError("model catalog is not loaded")
+        return MODEL_CATALOG[0]
+    return fallback
 
 
 @dataclass

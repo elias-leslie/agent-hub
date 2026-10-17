@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 # Scoring category weights for composite calculation
 SCORE_WEIGHTS: dict[str, float] = {
@@ -62,6 +62,9 @@ class ModelCost:
     # Prompt caching pricing (Anthropic)
     cache_read_per_million: float | None = None
     cache_write_per_million: float | None = None
+    # Subscription pricing facts: Codex {"credits_per_m": {"input", "cached_input", "output"}},
+    # Claude {"long_prompt": {"over_tokens", "multiplier"}}.
+    subscription_rates: dict[str, Any] | None = field(default=None, hash=False)
 
 
 @dataclass(frozen=True)

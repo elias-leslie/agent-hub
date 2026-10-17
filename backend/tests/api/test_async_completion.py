@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.responses import JSONResponse
 
-from app.constants.models import CODEX_GPT_6_1_SOL
 from tests.conftest import APITestClient
+from tests.model_ids import CODEX_GPT_6_1_SOL
 
 # Patch target: orchestrator imports at top-level from sub-modules
 _ORCH = "app.api.complete.complete_orchestrator"

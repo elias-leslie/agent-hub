@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
+from tests.model_ids import CLAUDE_SONNET
 
 
 class TestPerformanceLogDedup:

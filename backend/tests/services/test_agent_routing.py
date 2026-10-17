@@ -9,16 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.constants.models import (
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS,
-    CLAUDE_SONNET,
-    CODEX_GPT_6_1_SOL,
-    CODEX_GPT_6_LUNA,
-    DEFAULT_GEMINI_MODEL,
-    GEMINI_2_5_FLASH,
-    GEMINI_3_5_FLASH,
-)
 from app.routing.registry import is_workload_model, is_workload_provider
 from app.services.agent_routing import (
     FallbackCompletionResult,
@@ -35,6 +25,16 @@ from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.llm_errors import ProviderError, RateLimitError
 from app.services.llm_messages import Message
 from app.services.prompt_service import get_runtime_excluded_prompt_roles
+from tests.model_ids import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CODEX_GPT_6_1_SOL,
+    CODEX_GPT_6_LUNA,
+    DEFAULT_GEMINI_MODEL,
+    GEMINI_2_5_FLASH,
+    GEMINI_3_5_FLASH,
+)
 
 
 @dataclass

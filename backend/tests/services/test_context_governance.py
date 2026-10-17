@@ -146,13 +146,12 @@ async def test_citation_does_not_infer_helpfulness():
 
 
 def test_jev_catalog_entry_is_typed_and_not_chat():
-    from app.constants.catalog_entries import MODEL_CATALOG
-    from app.services.model_catalog_service import _entry_values
+    from tests.model_ids import MODEL_CATALOG
     entry = next(model for model in MODEL_CATALOG if model.id == "jev-1.13.0")
     assert entry.capabilities.supports_typed_judgment
     assert not entry.capabilities.supports_chat
     assert not entry.capabilities.supports_tool_execution
-    assert _entry_values(entry, 1)["cost_input_per_m"] == 0.042
+    assert entry.cost.input_per_m == 0.042
     assert entry.capabilities.max_state_question_tokens == 32000
 
 
