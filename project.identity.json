@@ -22,6 +22,10 @@
     "owner_role": "agent_hub_app",
     "test": {"name": "agent_hub_test", "owner": "agent_hub_app"}
   },
+  "images": [
+    {"dockerfile": "docker/backend.Dockerfile", "name": "agent-hub-api"},
+    {"dockerfile": "docker/frontend.Dockerfile", "name": "agent-hub-web"}
+  ],
   "services": {
     "backend": "agent-hub-backend.service",
     "frontend": "agent-hub-frontend.service",
