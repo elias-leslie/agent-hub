@@ -1,4 +1,5 @@
 import { RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import { type RefObject, useEffect, useRef, useState } from 'react'
 import {
   SESSION_KINDS,
@@ -71,7 +72,11 @@ export function SessionsToolbar({
 }) {
   const [query, setQuery] = useState(state.q)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [closeSettingsOpen, setCloseSettingsOpen] = useState(false)
+  // /sessions?closing=1 opens the close settings directly (linkable).
+  const searchParams = useSearchParams()
+  const [closeSettingsOpen, setCloseSettingsOpen] = useState(
+    () => searchParams.get('closing') === '1',
+  )
   const activeFilters = [
     state.kinds.length !== DEFAULT_KINDS.length ||
       state.kinds.some((kind) => !DEFAULT_KINDS.includes(kind)),
