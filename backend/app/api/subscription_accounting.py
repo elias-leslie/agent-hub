@@ -32,7 +32,9 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 async def get_cost_accounting(
     db: Annotated[AsyncSession, Depends(get_db)],
     days: Annotated[int, Query(ge=1, le=365)] = 30,
-    collect: Annotated[bool, Query(description="Read new Codex/Claude Code log lines first (throttled)")] = True,
+    collect: Annotated[
+        bool, Query(description="Also read new Codex/Claude Code log lines now (the usage timer does this every minute)")
+    ] = False,
 ) -> dict[str, Any]:
     """Cash, credits, subscription headroom and API-equivalent value as separate blocks."""
     collected: dict[str, Any] = {"skipped": True}

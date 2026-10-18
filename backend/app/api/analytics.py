@@ -4,13 +4,13 @@ Analytics API endpoints for aggregated and raw export surfaces.
 GET /analytics/costs - Aggregate cost data with grouping options.
 GET /analytics/cost-logs - Raw cost-log export with cursor-based pagination.
 GET /analytics/truncations - Truncation metrics and analytics.
-GET /analytics/spend-patterns - Unpriced calls, effort share, alias model names, empty sessions,
-    repeated calls, gated automations and a weekly spend spike.
+GET /analytics/spend - Agent spend overview (transcripts + completions) for the Costs page.
+GET /analytics/spend/item - One session or routine job's drill-in.
 """
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -148,12 +148,28 @@ async def get_truncations(
     )
 
 
-@router.get("/spend-patterns")
-async def get_spend_patterns(
+@router.get("/spend")
+async def get_spend(
     db: Annotated[AsyncSession, Depends(get_db)],
-    days: Annotated[int, Query(ge=1, le=90, description="Window length in days")] = 7,
+    range: Annotated[Literal["1h", "24h", "7d", "30d"], Query(description="Chart range")] = "24h",
+    bucket: Annotated[datetime | None, Query(description="Limit the ranking to one chart bar (its start)")] = None,
+    project: Annotated[str | None, Query()] = None,
+    model: Annotated[str | None, Query()] = None,
+    kind: Annotated[Literal["interactive", "routine", "other"] | None, Query()] = None,
 ) -> dict[str, Any]:
-    """Where model spend is wasted or can't be priced; counts only."""
-    from app.services.spend_patterns import build_spend_patterns
+    """Agent spend: headline numbers, spend over time by kind, what costs the most, and capture coverage."""
+    from app.services.usage_costs import overview
 
-    return await build_spend_patterns(db, days=days)
+    return await overview(db, range, bucket_at=bucket, project=project, model=model, kind=kind)
+
+
+@router.get("/spend/item")
+async def get_spend_item(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    key: Annotated[str, Query(min_length=3, max_length=320)],
+    range: Annotated[Literal["1h", "24h", "7d", "30d"], Query()] = "7d",
+) -> dict[str, Any]:
+    """One session or routine job: cost over time, sub-agents, models, biggest calls, runs."""
+    from app.services.usage_costs import item_detail
+
+    return await item_detail(db, key, range)

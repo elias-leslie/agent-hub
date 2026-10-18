@@ -70,6 +70,8 @@ from .subscription_accounting import (
     SubscriptionUsageCursor,
     SubscriptionUsageDaily,
     SubscriptionUsageSnapshot,
+    UsageCall,
+    UsageSession,
 )
 from .telemetry import RequestLog, TruncationEvent
 from .work_chat import SessionBinding
@@ -138,6 +140,8 @@ __all__ = [
     "SubscriptionUsageDaily",
     "SubscriptionUsageSnapshot",
     "TruncationEvent",
+    "UsageCall",
+    "UsageSession",
     "UsageStatLog",
     "WorkflowScheduleControl",
 ]

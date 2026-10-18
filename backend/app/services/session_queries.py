@@ -574,6 +574,31 @@ _USAGE_ROLLUP_SQL = text(
 ).bindparams(bindparam("session_ids", expanding=True))
 
 
+# Sessions without native usage events: the transcript call ledger (a root session includes its
+# sub-agents; a Codex child thread matches its own agent id) and completion cost logs. Input counts
+# fresh, cached and cache-write tokens, matching the native events' inclusive input.
+_LEDGER_USAGE_SQL = text(
+    """
+    SELECT sid, count(*), sum(inp), sum(outp), sum(cached)
+    FROM (
+        SELECT session_id AS sid, input_tokens + cached_input_tokens + cache_write_tokens AS inp,
+               output_tokens AS outp, cached_input_tokens AS cached
+        FROM usage_calls WHERE session_id IN :session_ids
+        UNION ALL
+        SELECT agent_id, input_tokens + cached_input_tokens + cache_write_tokens, output_tokens,
+               cached_input_tokens
+        FROM usage_calls WHERE agent_id IN :session_ids
+        UNION ALL
+        SELECT session_id, coalesce(input_tokens, 0) + coalesce(cache_read_tokens, 0)
+                   + coalesce(cache_write_tokens, 0),
+               coalesce(output_tokens, 0), coalesce(cache_read_tokens, 0)
+        FROM cost_logs WHERE session_id IN :session_ids
+    ) calls
+    GROUP BY sid
+    """
+).bindparams(bindparam("session_ids", expanding=True))
+
+
 def _optional_int(value: object) -> int | None:
     return None if value is None else int(value)
 
@@ -585,7 +610,7 @@ async def fetch_session_usage_rollups(
     if not session_ids:
         return {}
     rows = (await db.execute(_USAGE_ROLLUP_SQL, {"session_ids": list(session_ids)})).all()
-    return {
+    rollups = {
         str(session_id): SessionUsageRollup(
             responses=int(responses),
             input_tokens=_optional_int(input_tokens),
@@ -594,6 +619,17 @@ async def fetch_session_usage_rollups(
         )
         for session_id, responses, input_tokens, output_tokens, cached_input_tokens in rows
     }
+    missing = [sid for sid in session_ids if sid not in rollups]
+    if missing:
+        fallback = (await db.execute(_LEDGER_USAGE_SQL, {"session_ids": missing})).all()
+        for session_id, responses, input_tokens, output_tokens, cached_input_tokens in fallback:
+            rollups[str(session_id)] = SessionUsageRollup(
+                responses=int(responses),
+                input_tokens=int(input_tokens),
+                output_tokens=int(output_tokens),
+                cached_input_tokens=int(cached_input_tokens),
+            )
+    return rollups
 
 
 async def fetch_session_event_type_counts(db: AsyncSession, session_id: str) -> dict[str, int]:

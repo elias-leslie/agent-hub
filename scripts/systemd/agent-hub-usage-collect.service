@@ -1,0 +1,18 @@
+[Unit]
+Description=Agent Hub: read agent usage from Claude Code and Codex transcripts
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__PROJECT_ROOT__/backend
+Environment="PATH=%h/bin:%h/.local/bin:__PROJECT_ROOT__/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.cli.usage_collect
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=15min
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-usage-collect

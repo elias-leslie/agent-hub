@@ -163,56 +163,130 @@ export async function fetchCostAccounting(
   return response.json()
 }
 
-export interface SpendPatternsResponse {
-  window_days: number
-  generated_at: string
-  unavailable: string[]
-  unpriced: {
+export type SpendRange = '1h' | '24h' | '7d' | '30d'
+export type SpendKind = 'interactive' | 'routine' | 'other'
+
+export interface SpendSummary {
+  rate_per_hour: number
+  rate_typical: number | null
+  rate_ratio: number | null
+  today: number
+  today_typical: number | null
+  today_ratio: number | null
+  week: number
+  week_typical: number | null
+  week_ratio: number | null
+  data_since: string | null
+}
+
+export interface SpendBar {
+  start: string
+  interactive: number
+  routine: number
+  other: number
+}
+
+export interface SpendItem {
+  key: string
+  name: string
+  kind: SpendKind
+  project: string
+  usd: number
+  share: number
+  tokens: number
+  calls: number
+  spark: number[]
+}
+
+export interface SpendCoverage {
+  percent: number | null
+  sessions: number
+  captured: number
+  uncaptured: Array<{ source: string; sessions: number }>
+}
+
+export interface SpendOverview {
+  range: SpendRange
+  start: string
+  end: string
+  bucket_seconds: number
+  selected_bucket: string | null
+  summary: SpendSummary
+  chart: SpendBar[]
+  total_usd: number
+  unpriced_calls: number
+  item_count: number
+  items: SpendItem[]
+  filters: { project: string[]; model: string[]; kind: SpendKind[] }
+  coverage: SpendCoverage
+}
+
+export interface SpendFilters {
+  project?: string | null
+  model?: string | null
+  kind?: SpendKind | null
+}
+
+/** Agent spend (Claude Code, Codex and completions at API list price) for the Costs page. */
+export async function fetchSpend(
+  range: SpendRange,
+  filters: SpendFilters = {},
+  bucket?: string | null,
+): Promise<SpendOverview> {
+  const params = new URLSearchParams({ range })
+  if (bucket) params.set('bucket', bucket)
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value)
+  }
+  const response = await fetchApi(`${API_BASE}/analytics/spend?${params}`)
+  if (!response.ok) {
+    throw new Error(`Spend fetch failed: ${response.status}`)
+  }
+  return response.json()
+}
+
+export interface SpendItemDetail {
+  key: string
+  name: string
+  kind: SpendKind | null
+  project: string | null
+  range: SpendRange
+  bucket_seconds: number
+  total_usd: number
+  tokens: number
+  calls: number
+  timeline: Array<{ start: string; usd: number }>
+  agents: Array<{
+    key: string
+    name: string
+    usd: number
+    tokens: number
     calls: number
-    unpriced_calls: number
-    models: Array<{ model: string; calls: number; tokens: number }>
-  } | null
-  effort: {
-    levels: Array<{ effort: string; sessions: number; tokens: number }>
-    sessions_with_effort: number
-    high_session_share: number | null
-    high_token_share: number | null
-  } | null
-  model_names: {
-    sessions: number
-    names: Array<{ model: string; kind: string; sessions: number }>
-  } | null
-  empty_sessions: {
-    sessions: number
-    by_source: Array<{ project: string; source: string; sessions: number }>
-  } | null
-  repeated_calls: {
-    window_minutes: number
-    repeats: number
-    by_caller: Array<{ project: string; source: string; repeats: number }>
-  } | null
-  gated_automations: {
-    enabled: number
-    gated: Array<{ label: string; project: string; reasons: string[] }>
-  } | null
-  weekly_spike: {
-    measure: 'cash' | 'tokens'
-    current: number
-    usual: number
-    ratio: number | null
-    spike: boolean
+  }>
+  models: Array<{ model: string; usd: number; tokens: number; calls: number }>
+  top_calls: Array<{
+    at: string
+    model: string
+    agent: string
+    tokens: number
+    usd: number
+  }>
+  runs: {
+    count: number
+    cost_per_run: number
+    median_run: number
+    per_day: number
   } | null
 }
 
-/** Where model spend is wasted or can't be priced, over the last `days`. */
-export async function fetchSpendPatterns(
-  days: number,
-): Promise<SpendPatternsResponse> {
-  const response = await fetchApi(
-    `${API_BASE}/analytics/spend-patterns?days=${days}`,
-  )
+export async function fetchSpendItem(
+  key: string,
+  range: SpendRange,
+): Promise<SpendItemDetail> {
+  const params = new URLSearchParams({ key, range })
+  const response = await fetchApi(`${API_BASE}/analytics/spend/item?${params}`)
   if (!response.ok) {
-    throw new Error(`Spend patterns fetch failed: ${response.status}`)
+    throw new Error(`Spend item fetch failed: ${response.status}`)
   }
   return response.json()
 }

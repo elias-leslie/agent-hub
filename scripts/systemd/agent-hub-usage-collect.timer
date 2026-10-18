@@ -1,0 +1,12 @@
+[Unit]
+Description=Read agent usage into Agent Hub every minute
+
+[Timer]
+# OnCalendar keeps the timer armed across restarts (see codex-session-sync.timer).
+OnBootSec=45s
+OnCalendar=*:*:15
+AccuracySec=10s
+Unit=agent-hub-usage-collect.service
+
+[Install]
+WantedBy=timers.target

@@ -32,7 +32,8 @@
     "default_workers": [
       "agent-hub-hatchet-ops-worker.service",
       "codex-session-sync.timer",
-      "codex-session-close-inactive.timer"
+      "codex-session-close-inactive.timer",
+      "agent-hub-usage-collect.timer"
     ],
     "optional_workers": [
       "agent-hub-hatchet-agent-worker.service"

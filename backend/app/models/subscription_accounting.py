@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -116,3 +117,51 @@ class SubscriptionUsageCursor(Base):
     offset: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     state: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UsageCall(Base):
+    """One model call read from a native CLI transcript (Claude Code, Codex), priced at API list price.
+
+    session_id is the root session; agent_id is the sub-agent (Claude Code agentId, Codex child thread) or ''.
+    api_equiv_usd is NULL when the model has no published rate. Agent Hub-routed calls stay in cost_logs.
+    """
+
+    __tablename__ = "usage_calls"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    call_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    cached_input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    api_equiv_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("ix_usage_calls_occurred_at", "occurred_at"),
+        Index("ix_usage_calls_session_occurred", "session_id", "occurred_at"),
+        Index("ix_usage_calls_agent", "agent_id", postgresql_where=text("agent_id <> ''")),
+    )
+
+
+class UsageSession(Base):
+    """Who a transcript session is: project, kind (interactive | routine | other), routine job and title.
+
+    One row per root session (agent_id '') and per sub-agent.
+    """
+
+    __tablename__ = "usage_sessions"
+
+    provider: Mapped[str] = mapped_column(String(20), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(100), primary_key=True, default="")
+    project: Mapped[str] = mapped_column(String(200), nullable=False, default="unknown")
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="other")
+    job: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
