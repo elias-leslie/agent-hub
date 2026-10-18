@@ -31,14 +31,16 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    entries = [row_to_model_entry(row) for row in Session(bind=bind).scalars(sa.select(ModelCatalogEntry))]
-    replace_runtime_model_catalog(entries)
     rows = bind.execute(
         sa.text(
             "SELECT id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens FROM cost_logs "
             "WHERE billing_mode = 'subscription' AND api_equiv_usd IS NULL AND model LIKE 'claude-%'"
         )
     ).all()
+    if not rows:
+        return  # Fresh installs have none; skip loading the catalog through the ORM.
+    entries = [row_to_model_entry(row) for row in Session(bind=bind).scalars(sa.select(ModelCatalogEntry))]
+    replace_runtime_model_catalog(entries)
     for row in rows:
         usd = claude_api_equiv_usd(
             row.model, input_tokens=row.input_tokens or 0, output_tokens=row.output_tokens or 0,
