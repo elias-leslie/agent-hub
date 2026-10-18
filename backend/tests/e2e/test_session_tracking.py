@@ -282,7 +282,8 @@ class TestGetSession:
             mock_specialists_result,    # _fetch_active_specialists
             mock_child_result,
             mock_title_result,          # fetch_session_titles
-            mock_usage_result,          # fetch_session_usage_rollups
+            mock_usage_result,          # fetch_session_usage_rollups (native events)
+            mock_usage_result,          # fetch_session_usage_rollups (ledger / cost-log fallback)
         ]
 
         response = client.get("/api/sessions/session-portfolio-123")
@@ -293,7 +294,7 @@ class TestGetSession:
         assert data["agent_slug"] == "strategy_generation"
         assert data["title"] is None
         assert data["usage_known"] is False
-        assert mock_session.execute.call_count == 8
+        assert mock_session.execute.call_count == 9
 
 
 class TestMultiProjectScenario:

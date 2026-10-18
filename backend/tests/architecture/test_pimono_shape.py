@@ -49,7 +49,9 @@ RESULT_SHAPE_ALLOWLIST = {
     (APP / "models" / "agent_benchmark.py", "AgentBenchmarkAttempt"),
     (APP / "models" / "agent_performance_log.py", "AgentPerformanceLog"),
     (APP / "models" / "session.py", "NativeContinuationTurn"),
+    (APP / "models" / "subscription_accounting.py", "UsageCall"),
     (APP / "services" / "analytics" / "models.py", "CostLogExportRow"),
+    (APP / "services" / "subscription_accounting" / "collector.py", "UsageCallRow"),
     (APP / "services" / "completion" / "types.py", "CompletionServiceResult"),
     (APP / "services" / "response_cache" / "models.py", "CachedResponse"),
 }

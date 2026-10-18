@@ -21,7 +21,7 @@ from sqlalchemy.schema import CreateTable
 
 from app.db import get_db
 from app.main import app
-from app.models import CostLog, Session, SessionEvent
+from app.models import CostLog, Session, SessionEvent, UsageCall, UsageSession
 from app.models.agent import Agent
 from tests.conftest import TEST_HEADERS
 
@@ -45,7 +45,8 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
         await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
 
         def create_tables(sync_connection: Any) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__, Agent.__table__):
+            for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__, Agent.__table__,
+                          UsageCall.__table__, UsageSession.__table__):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)
@@ -466,3 +467,59 @@ async def test_events_summary(api: httpx.AsyncClient, pg_db: AsyncSession) -> No
         "usage_input_tokens": None, "usage_output_tokens": None, "usage_cached_input_tokens": None,
     }
     assert (await api.get("/api/sessions/missing/events/summary")).status_code == 404
+
+
+def _call(key: str, session_id: str, agent_id: str = "", *, minutes: int = 0, usd: float | None = 1.0) -> UsageCall:
+    return UsageCall(
+        call_key=key, occurred_at=BASE + timedelta(minutes=minutes), provider="codex", session_id=session_id,
+        agent_id=agent_id, model="gpt-test", input_tokens=100, cached_input_tokens=40, cache_write_tokens=0,
+        output_tokens=10, api_equiv_usd=usd,
+    )
+
+
+async def test_sessions_without_native_usage_read_the_call_ledger(api: httpx.AsyncClient, pg_db: AsyncSession) -> None:
+    # A review-mode Codex parent has no token events of its own; its child thread did the work.
+    await add_session(pg_db, "parent", minutes=1)
+    await add_session(pg_db, "child", minutes=2, parent="parent")
+    await add_session(pg_db, "completion", minutes=3, session_type="completion")
+    pg_db.add_all([_call("c1", "parent", "child"), _call("c2", "parent", "child")])
+    pg_db.add(CostLog(session_id="completion", model="gpt-test", input_tokens=7, output_tokens=3, cost_usd=0.0,
+                      cache_read_tokens=2, cache_write_tokens=0))
+    await pg_db.flush()
+
+    _, body = await list_ids(api, "include_children=true")
+    by_id = {item["id"]: item for item in body["sessions"]}
+    assert (by_id["parent"]["usage_known"], by_id["parent"]["usage_input_tokens"]) == (True, 280)
+    assert (by_id["child"]["usage_input_tokens"], by_id["child"]["usage_cached_input_tokens"]) == (280, 80)
+    assert (by_id["completion"]["usage_input_tokens"], by_id["completion"]["usage_output_tokens"]) == (9, 3)
+
+
+async def test_spend_overview_ranks_sessions_and_routine_jobs(pg_db: AsyncSession) -> None:
+    from app.services import usage_costs
+
+    now = BASE + timedelta(minutes=50)
+    for sid, kind, job in (("s-int", "interactive", None), ("run-1", "routine", "neri · audit"),
+                           ("run-2", "routine", "neri · audit")):
+        pg_db.add(UsageSession(provider="codex", session_id=sid, agent_id="", project="neri", kind=kind, job=job,
+                               title=f"title {sid}", first_at=BASE, last_at=BASE))
+    pg_db.add(UsageSession(provider="codex", session_id="s-int", agent_id="sub", project="neri", kind="other",
+                           title="helper", first_at=BASE, last_at=BASE))
+    pg_db.add_all([
+        _call("k1", "s-int", usd=5.0), _call("k2", "s-int", "sub", usd=3.0),
+        _call("k3", "run-1", usd=1.0), _call("k4", "run-2", minutes=30, usd=1.0), _call("k5", "run-2", usd=None),
+    ])
+    await pg_db.flush()
+
+    data = await usage_costs.overview(pg_db, "1h", now=now)
+    assert [(i["key"], i["usd"], i["kind"]) for i in data["items"]] == [
+        ("session:codex:s-int", 8.0, "interactive"), ("job:neri · audit", 2.0, "routine"),
+    ]
+    assert data["unpriced_calls"] == 1 and data["total_usd"] == 10.0
+    assert sum(bar["routine"] for bar in data["chart"]) == 2.0
+    assert data["summary"]["rate_per_hour"] == 0.0
+
+    job = await usage_costs.item_detail(pg_db, "job:neri · audit", "1h", now=now)
+    assert job["runs"]["count"] == 2 and job["runs"]["cost_per_run"] == 1.0
+    session = await usage_costs.item_detail(pg_db, "session:codex:s-int", "1h", now=now)
+    assert [(a["name"], a["usd"]) for a in session["agents"]] == [("main session", 5.0), ("helper", 3.0)]
+    assert session["top_calls"][0]["usd"] == 5.0
