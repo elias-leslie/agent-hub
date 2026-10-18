@@ -58,7 +58,7 @@ def _owner_token_matches(presented: str | None) -> bool:
         return False
     try:
         expected = Path(path).read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, ValueError):
         return False
     return bool(expected) and compare_digest(presented.strip().encode(), expected.encode())
 
