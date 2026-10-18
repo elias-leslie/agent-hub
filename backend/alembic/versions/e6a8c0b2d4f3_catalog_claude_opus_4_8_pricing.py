@@ -30,11 +30,14 @@ _COPIED = (
     "pricing_unit, unit_price, service_tiers, context_window, speed_tier, can_generate_images, has_vision, "
     "can_edit_images, has_thinking, supports_pdf, supports_audio, supports_tool_execution, supports_verbosity, "
     "supports_xhigh, supports_session_cache, max_output_tokens, family, supports_chat, supports_typed_judgment, "
-    "max_state_question_tokens, thinking_level_map, access_programs"
+    "max_state_question_tokens"
 )
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.execute(sa.text("SELECT 1 FROM models WHERE id = 'claude-opus-5-5'")).first() is None:
+        return  # Fresh install: the catalog is seeded at startup and has no Opus 4.8 history to price.
     op.execute(
         sa.text(
             f"""
