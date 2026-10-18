@@ -74,7 +74,7 @@ spend AS (
 _RANGE_SQL = text(
     f"""
     WITH {_SPEND_CTE}
-    SELECT date_bin(CAST(:bucket AS interval), ts, :origin) AS b, item, max(name) AS name, kind, project, model,
+    SELECT date_bin(:bucket, ts, :origin) AS b, item, max(name) AS name, kind, project, model,
            sum(usd) AS usd, sum(tokens) AS tokens, count(*) AS calls, count(*) FILTER (WHERE unpriced) AS unpriced
     FROM spend
     GROUP BY 1, item, kind, project, model
@@ -84,7 +84,7 @@ _RANGE_SQL = text(
 _SERIES_SQL = text(
     f"""
     WITH {_SPEND_CTE}
-    SELECT date_bin(CAST(:bucket AS interval), ts, :origin) AS b, sum(usd) FROM spend GROUP BY 1
+    SELECT date_bin(:bucket, ts, :origin) AS b, sum(usd) FROM spend GROUP BY 1
     """
 )
 
@@ -165,7 +165,7 @@ async def _summary(db: AsyncSession, now: datetime) -> dict[str, Any]:
     rows = (
         await db.execute(
             _SERIES_SQL,
-            _params(hist_start, now, bucket="15 minutes", origin=local_midnight(now)),
+            _params(hist_start, now, bucket=timedelta(minutes=15), origin=local_midnight(now)),
         )
     ).all()
     series = [(b, float(usd or 0)) for b, usd in rows]
@@ -251,7 +251,7 @@ async def overview(
     win = window_for(range_key, now)
     rows = (
         await db.execute(
-            _RANGE_SQL, _params(win.start, win.end, bucket=f"{int(win.bucket.total_seconds())} seconds", origin=win.origin)
+            _RANGE_SQL, _params(win.start, win.end, bucket=win.bucket, origin=win.origin)
         )
     ).all()
     starts = [win.start + i * win.bucket for i in range(int((win.end - win.start) / win.bucket))]
