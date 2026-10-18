@@ -167,7 +167,7 @@ export function ItemDrawer({
             </div>
 
             <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart
                   data={data.timeline}
                   margin={{ top: 4, right: 0, bottom: 0, left: 0 }}

@@ -95,7 +95,7 @@ function Chip({
       className={cn(
         'rounded-full border px-3 py-1 text-xs transition-colors',
         active
-          ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+          ? 'border-amber-500 bg-amber-500 font-semibold text-slate-950'
           : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200',
       )}
     >

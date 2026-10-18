@@ -64,7 +64,7 @@ export function SpendChart({
       role="img"
       aria-label="Spend over time by kind"
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <BarChart data={bars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
           <XAxis
             dataKey="start"
