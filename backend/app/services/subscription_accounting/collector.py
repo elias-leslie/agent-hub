@@ -17,6 +17,7 @@ import contextlib
 import json
 import logging
 import os
+import shutil
 import time
 from collections import defaultdict
 from collections.abc import Iterator
@@ -35,6 +36,7 @@ from app.models import (
     SubscriptionUsageDaily,
     SubscriptionUsageSnapshot,
 )
+from app.utils.safe_subprocess import create_process
 
 from . import rates
 
@@ -49,6 +51,11 @@ CODEX_CREDIT_STATE = "@codex_credits"
 SNAPSHOT_STATE = "@snapshots"
 CLAUDE_STATUSLINE_STATE = "@claude_statusline"
 CLAUDE_WINDOWS = {"five_hour": 300, "seven_day": 10080}
+# Runaway backstop: one transcript file is one session or subagent. The auto-compact settings keep
+# turns near 200K; a turn this big means compaction isn't holding, and this much value in a single
+# run means an agent is looping on a huge history. Each file alerts once per signal.
+RUNAWAY_TURN_CONTEXT = 400_000
+RUNAWAY_RUN_USD = 75.0
 
 
 def codex_root() -> Path:
@@ -134,6 +141,7 @@ class PassResult:
     snapshots: list[SnapshotEvent] = field(default_factory=list)
     files_read: int = 0
     bytes_read: int = 0
+    runaways: list[str] = field(default_factory=list)
 
 
 def _iter_new_lines(path: Path, offset: int) -> Iterator[tuple[int, bytes]]:
@@ -149,6 +157,24 @@ def _iter_new_lines(path: Path, offset: int) -> Iterator[tuple[int, bytes]]:
 
 
 # ------------------------------------------------------------------ Codex
+
+
+def _track_run(result: PassResult, path: Path, state: dict[str, Any], ts: datetime, context: int, usd: float) -> None:
+    """Per-transcript peak turn context and cumulative value; queue one alert per signal."""
+    state["max_ctx"] = max(int(state.get("max_ctx") or 0), context)
+    state["usd"] = float(state.get("usd") or 0.0) + usd
+    state["turns"] = int(state.get("turns") or 0) + 1
+    alerted: list[str] = state.setdefault("alerted", [])
+    for signal, hit, text in (
+        ("ctx", state["max_ctx"] >= RUNAWAY_TURN_CONTEXT, f"a single turn read {state['max_ctx'] // 1000}K tokens of context"),
+        ("usd", state["usd"] >= RUNAWAY_RUN_USD, f"one run is at ${state['usd']:.0f} API-equivalent"),
+    ):
+        if hit and signal not in alerted:
+            alerted.append(signal)
+            if datetime.now(UTC) - ts > timedelta(hours=2):
+                continue  # backfilled history: remember it, don't page for it
+            who = "subagent" if any(part.startswith("subagent") for part in path.parts) else "session"
+            result.runaways.append(f"A {who} transcript ({path.stem[:24]}) looks runaway: {text} after {state['turns']} turns.")
 
 
 def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResult) -> int:
@@ -186,12 +212,13 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
         last = info.get("last_token_usage") or {}
         if last and total != state.get("last_total"):
             state["last_total"] = total
-            _add_codex_tokens(result, ts, model, project, speed, last)
+            usd = _add_codex_tokens(result, ts, model, project, speed, last)
+            _track_run(result, path, state, ts, int(last.get("input_tokens") or 0), usd)
         _codex_rate_limits(result, ts, model, project, speed, payload.get("rate_limits") or {})
     return offset
 
 
-def _add_codex_tokens(result: PassResult, ts: datetime, model: str, project: str, speed: str, last: dict) -> None:
+def _add_codex_tokens(result: PassResult, ts: datetime, model: str, project: str, speed: str, last: dict) -> float:
     total_in = int(last.get("input_tokens") or 0)
     cached = int(last.get("cached_input_tokens") or 0)
     uncached = max(total_in - cached, 0)
@@ -204,8 +231,9 @@ def _add_codex_tokens(result: PassResult, ts: datetime, model: str, project: str
     credits = rates.codex_credits(model, input_tokens=uncached, cached_input_tokens=cached, output_tokens=out, speed=speed)
     if credits is None:
         roll.unpriced_tokens += uncached + cached + out
-    else:
-        roll.api_equiv_usd += credits * rates.CREDIT_API_PARITY_USD
+        return 0.0
+    roll.api_equiv_usd += credits * rates.CREDIT_API_PARITY_USD
+    return credits * rates.CREDIT_API_PARITY_USD
 
 
 def _codex_rate_limits(
@@ -258,12 +286,15 @@ def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassRes
             continue
         seen.append(ident)
         seen_set.add(ident)
-        _add_claude_usage(result, ts, model, project_from_cwd(rec.get("cwd")), msg["usage"])
+        usage = msg["usage"]
+        usd = _add_claude_usage(result, ts, model, project_from_cwd(rec.get("cwd")), usage)
+        context = sum(int(usage.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+        _track_run(result, path, state, ts, context, usd)
     del seen[:-MAX_SEEN_IDS]
     return offset
 
 
-def _add_claude_usage(result: PassResult, ts: datetime, model: str, project: str, use: dict) -> None:
+def _add_claude_usage(result: PassResult, ts: datetime, model: str, project: str, use: dict) -> float:
     inp = int(use.get("input_tokens") or 0)
     out = int(use.get("output_tokens") or 0)
     read = int(use.get("cache_read_input_tokens") or 0)
@@ -286,8 +317,9 @@ def _add_claude_usage(result: PassResult, ts: datetime, model: str, project: str
     )
     if usd is None:
         roll.unpriced_tokens += inp + out + read + w5 + w1h
-    else:
-        roll.api_equiv_usd += usd
+        return 0.0
+    roll.api_equiv_usd += usd
+    return usd
 
 
 def _claude_statusline(state: dict[str, Any], result: PassResult) -> None:
@@ -429,6 +461,8 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0) -> dict[st
         result.cursors[SNAPSHOT_STATE] = (0, snap_state)
         await _persist(db, result, snapshots, new_lots)
         await db.commit()
+        for message in result.runaways:
+            await _alert(message)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots)}
 
@@ -470,3 +504,20 @@ async def _persist(
             SubscriptionUsageCursor.updated_at < cutoff, ~SubscriptionUsageCursor.path.startswith("@")
         )
     )
+
+
+async def _alert(message: str) -> None:
+    """Owner alert through Nightshift's push (the only owner-alert path)."""
+    binary = shutil.which("nightshift")
+    if binary is None:
+        logger.warning("nightshift not found; runaway alert not sent: %s", message)
+        return
+    try:
+        process = await create_process(
+            binary, "push", "--severity", "warning", "--title", "Agent context runaway",
+            "--key", f"runaway:{message[:60]}", "--cooldown", "0", "--", message,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(process.wait(), timeout=20)
+    except (OSError, TimeoutError) as exc:
+        logger.warning("runaway alert failed: %s", exc)
