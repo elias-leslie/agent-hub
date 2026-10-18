@@ -32,8 +32,6 @@ export {
 // Re-export all analytics-related exports
 export type {
   CostAccountingResponse,
-  CostAggregation,
-  CostAggregationResponse,
   CostAlert,
   CreditLotState,
   ProviderUtilization,
@@ -42,7 +40,6 @@ export type {
 } from './api/analytics'
 export {
   fetchCostAccounting,
-  fetchCosts,
   fetchTruncations,
 } from './api/analytics'
 // Re-export all budget-related exports

@@ -6,6 +6,7 @@ import {
   Brain,
   BrainCircuit,
   CalendarClock,
+  CircleDollarSign,
   Cpu,
   History,
   LayoutDashboard,
@@ -48,6 +49,12 @@ const NAV_ENTRIES: NavEntry[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     description: 'Overview & status',
+  },
+  {
+    href: '/costs',
+    label: 'Costs',
+    icon: CircleDollarSign,
+    description: 'Agent spend & plans',
   },
   {
     href: '/automations',

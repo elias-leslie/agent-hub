@@ -2,12 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { useSessionEvents } from '@/hooks/use-session-events'
-import {
-  fetchCosts,
-  fetchDashboardStats,
-  fetchSessions,
-  fetchStatus,
-} from '@/lib/api'
+import { fetchDashboardStats, fetchSessions, fetchStatus } from '@/lib/api'
 
 interface UseDashboardDataOptions {
   daysRange: number
@@ -38,31 +33,6 @@ export function useDashboardData({ daysRange }: UseDashboardDataOptions) {
   const statusLoading = hydrated ? statusQuery.isLoading : true
   const statusError = hydrated ? statusQuery.error : null
 
-  // Cost queries
-  const { data: dailyCosts, isLoading: dailyLoading } = useQuery({
-    queryKey: ['costs', 'day', daysRange],
-    queryFn: () => fetchCosts({ group_by: 'day', days: daysRange }),
-    refetchInterval: 60000,
-  })
-
-  const { data: totalCosts } = useQuery({
-    queryKey: ['costs', 'none', daysRange],
-    queryFn: () => fetchCosts({ group_by: 'none', days: daysRange }),
-    refetchInterval: 60000,
-  })
-
-  const { data: costsByProject, isLoading: projectLoading } = useQuery({
-    queryKey: ['costs', 'project', daysRange],
-    queryFn: () => fetchCosts({ group_by: 'project', days: daysRange }),
-    refetchInterval: 60000,
-  })
-
-  const { data: costsByModel, isLoading: modelLoading } = useQuery({
-    queryKey: ['costs', 'model', daysRange],
-    queryFn: () => fetchCosts({ group_by: 'model', days: daysRange }),
-    refetchInterval: 60000,
-  })
-
   // Sessions query
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
     queryKey: ['sessions', 'recent'],
@@ -82,26 +52,17 @@ export function useDashboardData({ daysRange }: UseDashboardDataOptions) {
   const requestsByDay =
     dashboardStats?.requests_by_day.map((d) => d.requests) ?? []
   const requestTotal = dashboardStats?.requests.total_requests
-  const costByDay = dailyCosts?.aggregations.map((a) => a.total_cost_usd) ?? []
 
   return {
     activeSessionCount,
     status,
     statusLoading,
     statusError,
-    dailyCosts,
-    dailyLoading,
-    totalCosts,
-    costsByProject,
-    projectLoading,
-    costsByModel,
-    modelLoading,
     sessionsData,
     sessionsLoading,
     dashboardStats,
     statsLoading,
     requestsByDay,
     requestTotal,
-    costByDay,
   }
 }

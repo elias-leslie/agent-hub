@@ -55,8 +55,8 @@ export function DashboardHeader({
               </div>
               <div className="page-meta">
                 <span>
-                  Live command-center overview for requests, health, cost, and
-                  memory.
+                  Live overview of requests, health and memory. Spend is on
+                  Costs.
                 </span>
                 <span className="page-pill">{daysRange}-day view</span>
               </div>

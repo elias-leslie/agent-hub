@@ -1,24 +1,11 @@
-import {
-  Activity,
-  DollarSign,
-  Layers,
-  MessageSquare,
-  ShieldCheck,
-  Zap,
-} from 'lucide-react'
+import { Activity, Layers, MessageSquare, ShieldCheck, Zap } from 'lucide-react'
 import { KPICard } from '@/components/dashboard/KPICard'
 import type { DashboardStatsResponse } from '@/lib/api/dashboard'
-import { formatCurrency, formatLatency, formatNumber } from '@/lib/formatters'
+import { formatLatency, formatNumber } from '@/lib/formatters'
 
 interface KPISectionProps {
   dashboardStats: DashboardStatsResponse | undefined
   activeSessionCount: number
-  totalCosts:
-    | {
-        total_cost_usd: number
-        total_tokens: number
-      }
-    | undefined
 }
 
 type KPIStatus = 'success' | 'warning' | 'error' | 'neutral'
@@ -35,19 +22,16 @@ function successStatus(rate: number | null | undefined): KPIStatus {
 export function KPISection({
   dashboardStats,
   activeSessionCount,
-  totalCosts,
 }: KPISectionProps) {
   const requests = dashboardStats?.requests
   const totalCalls = requests?.total_requests ?? 0
   const successRate = requests?.success_rate
   const p50 = requests?.p50_latency_ms
   const p95 = requests?.p95_latency_ms
-  const cost = dashboardStats?.total_cost_usd ?? totalCosts?.total_cost_usd ?? 0
-  const tokens = dashboardStats?.total_tokens ?? totalCosts?.total_tokens ?? 0
   const memory = dashboardStats?.memory
 
   return (
-    <div className="col-span-12 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-2">
+    <div className="col-span-12 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-2">
       <KPICard
         label="Model calls"
         value={formatNumber(totalCalls)}
@@ -84,13 +68,6 @@ export function KPISection({
         icon={MessageSquare}
         status="success"
         pulse={activeSessionCount > 0}
-      />
-      <KPICard
-        label="Metered spend"
-        value={formatCurrency(cost)}
-        subtext={`API-billed calls, ${formatNumber(tokens)} tokens`}
-        icon={DollarSign}
-        status="neutral"
       />
       <KPICard
         label="Memory"

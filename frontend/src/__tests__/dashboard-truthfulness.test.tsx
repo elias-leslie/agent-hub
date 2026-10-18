@@ -61,13 +61,7 @@ function stats(
 
 describe('KPISection truthfulness', () => {
   it('shows a 0% success rate as 0%, not 100%', () => {
-    render(
-      <KPISection
-        dashboardStats={stats()}
-        activeSessionCount={0}
-        totalCosts={undefined}
-      />,
-    )
+    render(<KPISection dashboardStats={stats()} activeSessionCount={0} />)
     expect(screen.getByText('0.0%')).toBeInTheDocument()
     expect(screen.getByText('0.0% succeeded')).toBeInTheDocument()
     expect(screen.queryByText('100%')).not.toBeInTheDocument()
@@ -85,7 +79,6 @@ describe('KPISection truthfulness', () => {
           error_count: 0,
         })}
         activeSessionCount={0}
-        totalCosts={undefined}
       />,
     )
     expect(
@@ -95,16 +88,9 @@ describe('KPISection truthfulness', () => {
     expect(screen.queryByText('100%')).not.toBeInTheDocument()
   })
 
-  it('labels cost as metered spend and keeps selected vs passive refs', () => {
-    render(
-      <KPISection
-        dashboardStats={stats()}
-        activeSessionCount={0}
-        totalCosts={undefined}
-      />,
-    )
-    expect(screen.getByText('Metered spend')).toBeInTheDocument()
-    expect(screen.getByText(/API-billed calls/)).toBeInTheDocument()
+  it('leaves spend to the Costs page and keeps selected vs passive refs', () => {
+    render(<KPISection dashboardStats={stats()} activeSessionCount={0} />)
+    expect(screen.queryByText('Metered spend')).not.toBeInTheDocument()
     expect(screen.getByText('4 selected, 9 passive refs')).toBeInTheDocument()
     expect(screen.queryByText('Timeouts')).not.toBeInTheDocument()
     expect(screen.queryByText('Fallbacks')).not.toBeInTheDocument()

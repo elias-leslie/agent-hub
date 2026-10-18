@@ -1,7 +1,7 @@
 import { ProviderStatusCard } from '@/components/dashboard/ProviderStatusCard'
 import { Sparkline } from '@/components/dashboard/Sparkline'
 import type { StatusResponse } from '@/lib/api/status'
-import { formatCurrency, formatNumber } from '@/lib/formatters'
+import { formatNumber } from '@/lib/formatters'
 
 interface ChartsSectionProps {
   /** Model calls per day; the same population as the Model calls KPI. */
@@ -9,35 +9,16 @@ interface ChartsSectionProps {
   /** Model calls in the period, or undefined while stats load. */
   requestTotal: number | undefined
   requestsLoading: boolean
-  costByDay: number[]
-  totalCosts:
-    | {
-        total_cost_usd: number
-      }
-    | undefined
-  dailyLoading: boolean
   statusLoading: boolean
   status: StatusResponse | undefined
-  costsByModel:
-    | {
-        aggregations: Array<{
-          input_tokens: number
-          output_tokens: number
-        }>
-      }
-    | undefined
 }
 
 export function ChartsSection({
   requestsByDay,
   requestTotal,
   requestsLoading,
-  costByDay,
-  totalCosts,
-  dailyLoading,
   statusLoading,
   status,
-  costsByModel,
 }: ChartsSectionProps) {
   return (
     <>
@@ -49,7 +30,7 @@ export function ChartsSection({
               Request Volume
             </h2>
             <p className="mt-1 text-sm text-slate-300">
-              Model calls per day (POST /api/complete), and metered spend.
+              Model calls per day (POST /api/complete).
             </p>
           </div>
           <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500">
@@ -65,58 +46,6 @@ export function ChartsSection({
           ) : (
             <Sparkline data={requestsByDay} color="emerald" showDot />
           )}
-        </div>
-        <div className="mt-4 grid gap-3 border-t border-slate-800/60 pt-4 md:grid-cols-[1.4fr_0.8fr]">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Metered spend (API-billed calls)
-              </span>
-              <span className="text-[10px] font-mono text-amber-800 dark:text-amber-300">
-                {formatCurrency(totalCosts?.total_cost_usd ?? 0)} total
-              </span>
-            </div>
-            <div className="h-20 rounded-2xl border border-slate-800/70 bg-slate-950/55 p-3">
-              {dailyLoading ? (
-                <div className="h-full rounded-xl animate-shimmer" />
-              ) : (
-                <Sparkline data={costByDay} color="amber" showDot />
-              )}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-800/70 bg-slate-950/55 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Token Flow
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Input
-                </p>
-                <p className="text-xl font-mono font-semibold text-slate-100">
-                  {formatNumber(
-                    costsByModel?.aggregations.reduce(
-                      (sum, a) => sum + a.input_tokens,
-                      0,
-                    ) || 0,
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Output
-                </p>
-                <p className="text-xl font-mono font-semibold text-slate-100">
-                  {formatNumber(
-                    costsByModel?.aggregations.reduce(
-                      (sum, a) => sum + a.output_tokens,
-                      0,
-                    ) || 0,
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

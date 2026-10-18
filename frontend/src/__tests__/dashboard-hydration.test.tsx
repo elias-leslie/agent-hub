@@ -11,7 +11,6 @@ vi.mock('@/hooks/use-session-events', () => ({
 
 vi.mock('@/lib/api', () => ({
   fetchStatus: vi.fn(() => new Promise(() => {})),
-  fetchCosts: vi.fn(() => new Promise(() => {})),
   fetchSessions: vi.fn(() => new Promise(() => {})),
   fetchDashboardStats: vi.fn(() => new Promise(() => {})),
 }))

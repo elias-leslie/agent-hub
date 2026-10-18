@@ -6,47 +6,6 @@ import { fetchApi, getApiBaseUrl } from '../api-config'
 
 const API_BASE = `${getApiBaseUrl()}/api`
 
-export interface CostAggregation {
-  group_key: string
-  total_tokens: number
-  input_tokens: number
-  output_tokens: number
-  /** Marginal cash cost; Claude/Codex subscription calls are $0. */
-  total_cost_usd: number
-  request_count: number
-  /** API-equivalent value at list price. Value received, not spend. */
-  api_equiv_usd?: number
-  credits_used?: number
-}
-
-export interface CostAggregationResponse {
-  aggregations: CostAggregation[]
-  total_cost_usd: number
-  total_tokens: number
-  total_requests: number
-  total_api_equiv_usd?: number
-  total_credits_used?: number
-}
-
-export async function fetchCosts(params: {
-  group_by?: 'project' | 'model' | 'day' | 'week' | 'month' | 'none'
-  days?: number
-  project_id?: string
-  model?: string
-}): Promise<CostAggregationResponse> {
-  const searchParams = new URLSearchParams()
-  if (params.group_by) searchParams.set('group_by', params.group_by)
-  if (params.days) searchParams.set('days', params.days.toString())
-  if (params.project_id) searchParams.set('project_id', params.project_id)
-  if (params.model) searchParams.set('model', params.model)
-
-  const response = await fetchApi(`${API_BASE}/analytics/costs?${searchParams}`)
-  if (!response.ok) {
-    throw new Error(`Costs fetch failed: ${response.status}`)
-  }
-  return response.json()
-}
-
 export interface UsageWindow {
   window_minutes: number
   label: string

@@ -6,11 +6,9 @@ import { createQueryClientWrapper } from './test-utils'
 // Mock the API module
 vi.mock('@/lib/api', () => ({
   fetchStatus: vi.fn(),
-  fetchCosts: vi.fn(),
-  fetchCostAccounting: vi.fn(() => new Promise(() => {})),
 }))
 
-import { fetchCosts, fetchStatus } from '@/lib/api'
+import { fetchStatus } from '@/lib/api'
 
 const mockStatus = {
   status: 'healthy' as const,
@@ -56,63 +54,10 @@ const mockStatus = {
   circuit_breaker_trips_total: 0,
 }
 
-const mockDailyCosts = {
-  aggregations: [
-    {
-      group_key: '2026-01-01',
-      total_tokens: 1000,
-      input_tokens: 600,
-      output_tokens: 400,
-      total_cost_usd: 0.01,
-      request_count: 5,
-    },
-    {
-      group_key: '2026-01-02',
-      total_tokens: 2000,
-      input_tokens: 1200,
-      output_tokens: 800,
-      total_cost_usd: 0.02,
-      request_count: 10,
-    },
-  ],
-  total_cost_usd: 0.03,
-  total_tokens: 3000,
-  total_requests: 15,
-}
-
-const mockModelCosts = {
-  aggregations: [
-    {
-      group_key: 'claude-sonnet-5-5',
-      total_tokens: 2000,
-      input_tokens: 1200,
-      output_tokens: 800,
-      total_cost_usd: 0.02,
-      request_count: 10,
-    },
-    {
-      group_key: 'gemini-flash',
-      total_tokens: 1000,
-      input_tokens: 600,
-      output_tokens: 400,
-      total_cost_usd: 0.01,
-      request_count: 5,
-    },
-  ],
-  total_cost_usd: 0.03,
-  total_tokens: 3000,
-  total_requests: 15,
-}
-
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(fetchStatus).mockResolvedValue(mockStatus)
-    vi.mocked(fetchCosts).mockImplementation((params) => {
-      if (params.group_by === 'day') return Promise.resolve(mockDailyCosts)
-      if (params.group_by === 'model') return Promise.resolve(mockModelCosts)
-      return Promise.resolve(mockDailyCosts)
-    })
   })
 
   it('renders dashboard header', async () => {
@@ -126,7 +71,8 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createQueryClientWrapper() })
 
     expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0)
-    expect(screen.getByText('Metered spend')).toBeInTheDocument()
+    // Spend moved to the Costs page; the dashboard no longer shows a cost_logs-only figure.
+    expect(screen.queryByText('Metered spend')).not.toBeInTheDocument()
     expect(screen.getByText('Model calls')).toBeInTheDocument()
     expect(screen.getByText('Success')).toBeInTheDocument()
   })
@@ -153,16 +99,6 @@ describe('DashboardPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('healthy')).toBeInTheDocument()
-    })
-  })
-
-  it('displays cost data after loading', async () => {
-    render(<DashboardPage />, { wrapper: createQueryClientWrapper() })
-
-    await waitFor(() => {
-      // Check that cost is displayed (formatted as currency) - multiple cost values shown
-      const costElements = screen.getAllByText(/\$0\.0/)
-      expect(costElements.length).toBeGreaterThan(0)
     })
   })
 

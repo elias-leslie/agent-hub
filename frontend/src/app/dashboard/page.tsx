@@ -7,7 +7,6 @@ import { AnalyticsTabContent } from '@/components/dashboard/tabs/AnalyticsTabCon
 import { HealthTabContent } from '@/components/dashboard/tabs/HealthTabContent'
 import { SessionsTabContent } from '@/components/dashboard/tabs/SessionsTabContent'
 import { ChartsSection } from './components/ChartsSection'
-import { CostAccountingSection } from './components/CostAccountingSection'
 import { DashboardHeader } from './components/DashboardHeader'
 import { KPISection } from './components/KPISection'
 import { useDashboardData } from './hooks/useDashboardData'
@@ -20,19 +19,12 @@ export default function DashboardPage() {
     activeSessionCount,
     status,
     statusError,
-    totalCosts,
-    costsByProject,
-    projectLoading,
-    costsByModel,
-    modelLoading,
     sessionsData,
     sessionsLoading,
     dashboardStats,
     statsLoading,
     requestsByDay,
     requestTotal,
-    costByDay,
-    dailyLoading,
     statusLoading,
   } = useDashboardData({ daysRange })
 
@@ -68,22 +60,15 @@ export default function DashboardPage() {
             <KPISection
               dashboardStats={dashboardStats}
               activeSessionCount={activeSessionCount}
-              totalCosts={totalCosts}
             />
 
             <ChartsSection
               requestsByDay={requestsByDay}
               requestTotal={requestTotal}
               requestsLoading={statsLoading}
-              costByDay={costByDay}
-              totalCosts={totalCosts}
-              dailyLoading={dailyLoading}
               statusLoading={statusLoading}
               status={status}
-              costsByModel={costsByModel}
             />
-
-            <CostAccountingSection daysRange={daysRange} />
 
             {/* ROW 3: Tabbed Section (full width) */}
             <div className="panel-surface col-span-12 overflow-hidden p-5 lg:p-6">
@@ -123,9 +108,7 @@ export default function DashboardPage() {
                 )}
                 {activeTab === 'analytics' && (
                   <AnalyticsTabContent
-                    costsByProject={costsByProject}
-                    costsByModel={costsByModel}
-                    isLoading={projectLoading || modelLoading}
+                    isLoading={statsLoading}
                     dashboardStats={dashboardStats}
                   />
                 )}
