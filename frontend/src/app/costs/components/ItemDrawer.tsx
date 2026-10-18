@@ -100,7 +100,10 @@ export function ItemDrawer({
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="break-words text-base font-semibold text-slate-100">
+            <h2
+              className="line-clamp-3 break-words text-base font-semibold text-slate-100"
+              title={data?.name}
+            >
               {data?.name ?? (isLoading ? 'Loading…' : itemKey)}
             </h2>
             {data && (
@@ -167,7 +170,11 @@ export function ItemDrawer({
             </div>
 
             <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                initialDimension={{ width: 1, height: 1 }}
+              >
                 <BarChart
                   data={data.timeline}
                   margin={{ top: 4, right: 0, bottom: 0, left: 0 }}

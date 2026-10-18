@@ -131,3 +131,14 @@ def test_cash_only_for_metered_and_time_window() -> None:
 def test_session_id_is_stable_and_project_scoped() -> None:
     assert ingest_session_id("nightshift", "k" * 10) == ingest_session_id("nightshift", "k" * 10)
     assert ingest_session_id("nightshift", "k" * 10) != ingest_session_id("other", "k" * 10)
+
+
+@pytest.mark.asyncio
+async def test_subscription_call_without_list_price_is_priced_from_its_tokens() -> None:
+    db = _db()
+    body = _body(model="claude-opus-5-5", cost_usd=0.0, billing_kind="subscription", input_tokens=10,
+                 output_tokens=2571, cache_read_tokens=88296, cache_write_tokens=26521)
+    await ingest_cost(body, _request(), Response(), db)
+
+    log = next(c.args[0] for c in db.add.call_args_list if isinstance(c.args[0], CostLog))
+    assert log.cost_usd == 0.0 and log.api_equiv_usd == pytest.approx(0.2813, abs=0.001)

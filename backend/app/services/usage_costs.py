@@ -64,7 +64,7 @@ spend AS (
            coalesce(s.project_id, 'unknown'),
            'job:' || coalesce(s.request_source, 'api') || coalesce(' · ' || s.agent_slug, ''),
            coalesce(s.request_source, 'api') || coalesce(' · ' || s.agent_slug, ''),
-           l.cost_usd IS NULL AND l.api_equiv_usd IS NULL
+           l.api_equiv_usd IS NULL AND (l.cost_usd IS NULL OR (l.billing_mode = 'subscription' AND l.cost_usd = 0))
     FROM cost_logs l
     LEFT JOIN sessions s ON s.id = l.session_id
     WHERE l.created_at >= :start AND l.created_at < :end

@@ -30,6 +30,7 @@ from app.db import get_db
 from app.models import CostLog, ProjectPermission
 from app.models import Session as DBSession
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+from app.services.subscription_accounting.rates import claude_api_equiv_usd
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -83,6 +84,16 @@ class CostIngestResponse(BaseModel):
 
 def ingest_session_id(project_id: str, idempotency_key: str) -> str:
     return str(uuid.uuid5(_INGEST_NAMESPACE, f"{project_id}\n{idempotency_key}"))
+
+
+def _api_equiv(body: CostIngestRequest) -> float | None:
+    """List-price value for a subscription call; priced here (1-hour cache writes, like Nightshift) when missing."""
+    if body.api_equiv_usd is not None or body.billing_kind != "subscription":
+        return body.api_equiv_usd
+    return claude_api_equiv_usd(
+        body.model, input_tokens=body.input_tokens, output_tokens=body.output_tokens,
+        cache_read=body.cache_read_tokens or 0, cache_write_1h=body.cache_write_tokens or 0,
+    )
 
 
 async def _existing(db: AsyncSession, body: CostIngestRequest, session_id: str) -> CostIngestResponse | None:
@@ -139,7 +150,7 @@ async def ingest_cost(
         session_id=session_id, model=body.model, input_tokens=body.input_tokens, output_tokens=body.output_tokens,
         cache_read_tokens=body.cache_read_tokens, cache_write_tokens=body.cache_write_tokens,
         cost_usd=body.cost_usd if body.billing_kind == "metered" else 0.0, billing_mode=body.billing_kind,
-        api_equiv_usd=body.api_equiv_usd, cost_note=f"ingested from {body.source}"[:200], created_at=at,
+        api_equiv_usd=_api_equiv(body), cost_note=f"ingested from {body.source}"[:200], created_at=at,
     )
     db.add(log)
     try:
