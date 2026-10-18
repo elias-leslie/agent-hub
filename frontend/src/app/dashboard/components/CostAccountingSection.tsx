@@ -46,7 +46,7 @@ export function timeUntil(
   return `in ${Math.floor(hours / 24)}d ${hours % 24}h`
 }
 
-function Card({
+export function Card({
   title,
   icon: Icon,
   children,
@@ -66,7 +66,7 @@ function Card({
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+export function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 text-sm">
       <span className="text-slate-400">{label}</span>

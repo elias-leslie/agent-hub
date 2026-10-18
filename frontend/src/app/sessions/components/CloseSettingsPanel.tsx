@@ -160,7 +160,10 @@ export function CloseSettingsPanel({ onClose }: { onClose: () => void }) {
         <p className="text-[12px] text-slate-400">Loading settings…</p>
       ) : null}
       {settings.error ? (
-        <p role="alert" className="text-[12px] text-rose-300">
+        <p
+          role="alert"
+          className="text-[12px] text-rose-700 dark:text-rose-300"
+        >
           Couldn't load the close settings: {settings.error.message}
         </p>
       ) : null}
@@ -248,7 +251,7 @@ export function CloseSettingsPanel({ onClose }: { onClose: () => void }) {
               className={cn(
                 'inline-flex h-8 items-center rounded-md border px-3 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50',
                 changed && !save.isPending
-                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
+                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-100 hover:bg-amber-500/25'
                   : 'cursor-not-allowed border-slate-800 text-slate-500',
               )}
             >
@@ -265,11 +268,11 @@ export function CloseSettingsPanel({ onClose }: { onClose: () => void }) {
             ) : null}
             <p aria-live="polite" className="text-[12px]">
               {save.error ? (
-                <span className="text-rose-300">
+                <span className="text-rose-700 dark:text-rose-300">
                   Not saved: {save.error.message}
                 </span>
               ) : save.isSuccess && !changed ? (
-                <span className="text-emerald-300">
+                <span className="text-emerald-700 dark:text-emerald-300">
                   Saved. The reapers use it from their next run.
                 </span>
               ) : null}

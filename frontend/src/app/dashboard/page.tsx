@@ -10,6 +10,7 @@ import { ChartsSection } from './components/ChartsSection'
 import { CostAccountingSection } from './components/CostAccountingSection'
 import { DashboardHeader } from './components/DashboardHeader'
 import { KPISection } from './components/KPISection'
+import { SpendPatternsSection } from './components/SpendPatternsSection'
 import { useDashboardData } from './hooks/useDashboardData'
 
 export default function DashboardPage() {
@@ -84,6 +85,8 @@ export default function DashboardPage() {
             />
 
             <CostAccountingSection daysRange={daysRange} />
+
+            <SpendPatternsSection daysRange={daysRange} />
 
             {/* ROW 3: Tabbed Section (full width) */}
             <div className="panel-surface col-span-12 overflow-hidden p-5 lg:p-6">

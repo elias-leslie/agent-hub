@@ -25,7 +25,8 @@ const chip =
   'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
 const chipOff =
   'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-const chipOn = 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+const chipOn =
+  'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-100'
 const control =
   'h-7 rounded-md border border-slate-800 bg-slate-950/60 px-2 text-[12px] text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
 

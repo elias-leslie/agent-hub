@@ -4,6 +4,8 @@ Analytics API endpoints for aggregated and raw export surfaces.
 GET /analytics/costs - Aggregate cost data with grouping options.
 GET /analytics/cost-logs - Raw cost-log export with cursor-based pagination.
 GET /analytics/truncations - Truncation metrics and analytics.
+GET /analytics/spend-patterns - Unpriced calls, effort share, alias model names, empty sessions,
+    repeated calls, gated automations and a weekly spend spike.
 """
 
 import logging
@@ -144,3 +146,14 @@ async def get_truncations(
         truncation_rate=truncation_rate,
         recent_events=recent_events,
     )
+
+
+@router.get("/spend-patterns")
+async def get_spend_patterns(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: Annotated[int, Query(ge=1, le=90, description="Window length in days")] = 7,
+) -> dict[str, Any]:
+    """Where model spend is wasted or can't be priced; counts only."""
+    from app.services.spend_patterns import build_spend_patterns
+
+    return await build_spend_patterns(db, days=days)

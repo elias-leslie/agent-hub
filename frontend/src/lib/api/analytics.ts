@@ -163,6 +163,60 @@ export async function fetchCostAccounting(
   return response.json()
 }
 
+export interface SpendPatternsResponse {
+  window_days: number
+  generated_at: string
+  unavailable: string[]
+  unpriced: {
+    calls: number
+    unpriced_calls: number
+    models: Array<{ model: string; calls: number; tokens: number }>
+  } | null
+  effort: {
+    levels: Array<{ effort: string; sessions: number; tokens: number }>
+    sessions_with_effort: number
+    high_session_share: number | null
+    high_token_share: number | null
+  } | null
+  model_names: {
+    sessions: number
+    names: Array<{ model: string; kind: string; sessions: number }>
+  } | null
+  empty_sessions: {
+    sessions: number
+    by_source: Array<{ project: string; source: string; sessions: number }>
+  } | null
+  repeated_calls: {
+    window_minutes: number
+    repeats: number
+    by_caller: Array<{ project: string; source: string; repeats: number }>
+  } | null
+  gated_automations: {
+    enabled: number
+    gated: Array<{ label: string; project: string; reasons: string[] }>
+  } | null
+  weekly_spike: {
+    measure: 'cash' | 'tokens'
+    current: number
+    usual: number
+    ratio: number | null
+    spike: boolean
+  } | null
+}
+
+/** Where model spend is wasted or can't be priced, over the last `days`. */
+export async function fetchSpendPatterns(
+  days: number,
+): Promise<SpendPatternsResponse> {
+  const response = await fetchApi(
+    `${API_BASE}/analytics/spend-patterns?days=${days}`,
+  )
+  if (!response.ok) {
+    throw new Error(`Spend patterns fetch failed: ${response.status}`)
+  }
+  return response.json()
+}
+
 export interface TruncationAggregation {
   group_key: string
   truncation_count: number
