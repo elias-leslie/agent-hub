@@ -96,8 +96,10 @@ _ITEM_CALLS_SQL = text(
     """
 )
 
+# Baselines start where the call ledger starts: completion logs reach further back but
+# carry a sliver of the spend, so counting them would make earlier weeks look idle.
 _FIRST_DATA_SQL = text(
-    "SELECT least((SELECT min(occurred_at) FROM usage_calls), (SELECT min(created_at) FROM cost_logs))"
+    "SELECT coalesce((SELECT min(occurred_at) FROM usage_calls), (SELECT min(created_at) FROM cost_logs))"
 )
 
 # Agent work Agent Hub knows about in the window, and whether any usage came with it.

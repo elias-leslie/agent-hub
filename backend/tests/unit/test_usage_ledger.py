@@ -132,6 +132,28 @@ def test_codex_child_thread_rolls_up_to_its_root_and_skips_inherited_history(roo
     assert result.sessions[("codex", "root-1", "child-1")]["title"] == "expiry_review"
 
 
+def test_a_codex_parent_that_spends_nothing_still_names_the_job_its_children_roll_into(
+    roots: tuple[Path, Path],
+) -> None:
+    _, codex = roots
+    day = codex / "2026" / "10" / "11"
+    _jsonl(day / "rollout-review.jsonl", [
+        _codex_meta("root-2", originator="codex_exec", source="exec"),
+        {"timestamp": "2026-10-11T12:00:01Z", "ordinal": 1, "type": "response_item",
+         "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Review commit 775e127"}]}},
+    ])
+    _jsonl(day / "rollout-reviewer.jsonl", [
+        _codex_meta("child-2", root="root-2", source={"subagent": "review"}),
+        _codex_tokens(1, 300, 250, 50, 50),
+    ])
+
+    result = collector.scan({}, now=NOW.timestamp())
+
+    assert [c.agent_id for c in result.calls] == ["child-2"]
+    root = result.sessions[("codex", "root-2", "")]
+    assert (root["kind"], root["job"]) == ("routine", "neri · Review commit #")
+
+
 def test_replay_backfills_the_ledger_without_recounting_rollups(roots: tuple[Path, Path]) -> None:
     claude, _ = roots
     path = claude / "p" / "s.jsonl"

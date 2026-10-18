@@ -62,13 +62,13 @@ RUNAWAY_TURN_CONTEXT = 400_000
 RUNAWAY_RUN_USD = 75.0
 # Per-call ledger (usage_calls). A cursor without this version is re-read from the start once so its
 # history lands in the ledger; lines before the old offset feed only the ledger (rollups already have them).
-LEDGER_VERSION = 1
+LEDGER_VERSION = 2
 COLLECT_LOCK_KEY = 0x55A6E_C011  # one pass at a time across the API and the timer
 PASS_BYTE_BUDGET = 1_000_000_000  # replay bytes per pass; live files are always read first
 CODEX_ROUTINE_ORIGINATORS = frozenset({"codex_exec"})
 CODEX_INTERACTIVE_ORIGINATORS = frozenset({"codex-tui", "codex_cli_rs", "codex_work_desktop", "codex_vscode"})
 _ORDINAL = re.compile(rb'"ordinal":(\d+)')
-_JOB_MASK = re.compile(r"\b(?:[0-9a-f]{8,}|[0-9a-f-]{20,}|task-[0-9a-z]+|\d[\d:.\-/]*)\b", re.IGNORECASE)
+_JOB_MASK = re.compile(r"\b(?:[0-9a-f]{7,}|[0-9a-f-]{20,}|task-[0-9a-z]+|\d[\d:.\-/]*)\b", re.IGNORECASE)
 _SCAFFOLD_PREFIXES = (
     "# AGENTS", "<", "Message Type", "The following is the Codex agent history", "Caveat:", "[Request interrupted",
 )
@@ -306,7 +306,9 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
         head = line[:400]
         if b'"session_meta"' in head:
             with contextlib.suppress(ValueError):
-                _codex_meta(json.loads(line).get("payload") or {}, state)
+                rec = json.loads(line)
+                _codex_meta(rec.get("payload") or {}, state)
+                state.setdefault("meta_ts", rec.get("timestamp"))
             continue
         if not state.get("title") and b'"response_item"' in head and b'"role":"user"' in head:
             _codex_title(line, state)
@@ -350,7 +352,18 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
                            call.api_equiv_usd or 0.0)
         if live:
             _codex_rate_limits(result, ts, model, project, speed, payload.get("rate_limits") or {})
+    _register_codex_root(result, state)
     return offset
+
+
+def _register_codex_root(result: PassResult, state: dict[str, Any]) -> None:
+    """A review parent can spend nothing itself; record its identity so its sub-agents roll up to its job."""
+    if state.get("root_known") or state.get("aid") or not state.get("sid") or not state.get("title"):
+        return
+    ts = _parse_ts(state.get("meta_ts"))
+    if ts is not None:
+        _put_session(result, "codex", state, ts)
+        state["root_known"] = True
 
 
 def _codex_call(
