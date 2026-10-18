@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
+from app.core.access_identity import require_owner
 from app.db import _get_session_factory
 from app.models import Session
 from app.services.memory.analytics_models import MemoryAnalyticsDashboard
@@ -161,7 +162,7 @@ async def get_analytics(
         raise HTTPException(status_code=500, detail=f"Failed to get analytics: {e}") from e
 
 
-@router.get("/capture/stream")
+@router.get("/capture/stream", dependencies=[Depends(require_owner)])
 async def capture_stream() -> StreamingResponse:
     from app.services.memory.capture_stream import get_capture_stream
     stream = get_capture_stream()

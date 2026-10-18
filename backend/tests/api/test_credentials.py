@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from cryptography.fernet import Fernet
 
+from app.core.access_identity import require_owner
 from app.db import get_db
 from app.main import app
 from tests.conftest import APITestClient
@@ -35,6 +36,7 @@ def client(mock_db_session):
         yield mock_db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_owner] = lambda: None  # owner gate has its own tests
     yield APITestClient(app)
     app.dependency_overrides.clear()
 

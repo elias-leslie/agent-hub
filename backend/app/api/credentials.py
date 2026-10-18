@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_identity import require_owner
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
 from app.services.credential_upsert import reset_provider_cooldown_after_credential_change
@@ -26,7 +27,7 @@ from app.storage.credentials import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_owner)])
 
 
 # Valid credential types

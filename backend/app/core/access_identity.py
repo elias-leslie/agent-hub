@@ -20,6 +20,7 @@ from typing import Any
 import jwt
 from fastapi import HTTPException, Request
 from jwt import PyJWKClient, PyJWTError
+from starlette.requests import HTTPConnection
 
 from app.config import settings
 
@@ -35,7 +36,7 @@ class Caller:
     via_owner_token: bool = False
 
 
-def resolve_caller(request: Request) -> Caller:
+def resolve_caller(request: HTTPConnection) -> Caller:
     """Owner when Access proves an owner email, the owner token matches, or (flag on) the caller is loopback."""
     token = (
         request.headers.get("Cf-Access-Jwt-Assertion", "").strip()
@@ -49,6 +50,14 @@ def resolve_caller(request: Request) -> Caller:
     if settings.agent_hub_loopback_is_owner and _is_local_address(_client_address(request)):
         return Caller(email=None, is_owner=True, is_local_bypass=True)
     return Caller(email=None, is_owner=False)
+
+
+def require_owner(request: Request) -> Caller:
+    """FastAPI dependency: only the owner principal passes (Access email, owner token, or flagged loopback)."""
+    caller = resolve_caller(request)
+    if not caller.is_owner:
+        raise HTTPException(status_code=403, detail="Owner access required")
+    return caller
 
 
 def _owner_token_matches(presented: str | None) -> bool:
@@ -67,7 +76,7 @@ def _owner_emails() -> set[str]:
     return {e.strip().lower() for e in settings.agent_hub_owner_emails.split(",") if e.strip()}
 
 
-def _client_address(request: Request) -> str:
+def _client_address(request: HTTPConnection) -> str:
     """The caller's network address, never derived from Host or X-Forwarded-*.
 
     The backend listens on loopback only. The dashboard proxy forwards the

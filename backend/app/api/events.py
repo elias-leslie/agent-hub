@@ -5,10 +5,11 @@ import logging
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core.access_identity import resolve_caller
 from app.services.events import SessionEventType, get_event_publisher
 
 logger = logging.getLogger(__name__)
@@ -151,11 +152,23 @@ def _origin_allowed(websocket: WebSocket) -> bool:
     return parts.netloc == websocket.headers.get("host")
 
 
+def _caller_is_owner(websocket: WebSocket) -> bool:
+    """The event stream carries session content, so only the owner principal may read it."""
+    try:
+        return resolve_caller(websocket).is_owner
+    except HTTPException:
+        return False
+
+
 @router.websocket("/events")
 async def events_websocket(websocket: WebSocket) -> None:
     """WebSocket endpoint; connect → subscribe → receive events → update/unsubscribe."""
     if not _origin_allowed(websocket):
         logger.warning("Rejected events WebSocket from origin %s", websocket.headers.get("origin"))
+        await websocket.close(code=1008)
+        return
+    if not _caller_is_owner(websocket):
+        logger.warning("Rejected events WebSocket without an owner principal")
         await websocket.close(code=1008)
         return
     await websocket.accept()

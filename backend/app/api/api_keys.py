@@ -15,11 +15,12 @@ from app.api.schemas.api_key_schemas import (
     APIKeyResponse,
     APIKeyUpdate,
 )
+from app.core.access_identity import require_owner
 from app.db import get_db
 from app.models import APIKey
 from app.services.api_key_auth import generate_api_key, get_key_prefix
 
-router = APIRouter(prefix="/api-keys", tags=["api-keys"])
+router = APIRouter(prefix="/api-keys", tags=["api-keys"], dependencies=[Depends(require_owner)])
 
 
 @router.post("", response_model=APIKeyCreateResponse, status_code=201)
