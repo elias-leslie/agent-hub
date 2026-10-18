@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.core.access_identity import require_owner
 from app.main import app
 from app.services.api_key_auth import (
     KEY_PREFIX,
@@ -78,7 +79,7 @@ class TestRateLimiting:
         # 11th request should be blocked
         allowed, error = check_rate_limit(key, rpm_limit=10, tpm_limit=100000)
         assert allowed is False
-        assert "requests/minute" in error
+        assert "requests/minute" in (error or "")
 
     def test_rate_limit_blocks_over_tpm(self):
         """Requests over TPM limit are blocked."""
@@ -91,11 +92,17 @@ class TestRateLimiting:
         # Another high-token request should exceed limit
         allowed, error = check_rate_limit(key, rpm_limit=100, tpm_limit=1000, token_count=600)
         assert allowed is False
-        assert "tokens/minute" in error
+        assert "tokens/minute" in (error or "")
 
 
 class TestAPIKeyEndpoints:
     """Tests for API key management endpoints with mocked database."""
+
+    @pytest.fixture(autouse=True)
+    def _owner(self):
+        app.dependency_overrides[require_owner] = lambda: None  # owner gate has its own tests
+        yield
+        app.dependency_overrides.pop(require_owner, None)
 
     def test_create_api_key_format(self, client, mock_db_session):
         """Test API key creation returns correct format."""
