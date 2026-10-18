@@ -62,7 +62,8 @@ RUNAWAY_TURN_CONTEXT = 400_000
 RUNAWAY_RUN_USD = 75.0
 # Per-call ledger (usage_calls). A cursor without this version is re-read from the start once so its
 # history lands in the ledger; lines before the old offset feed only the ledger (rollups already have them).
-LEDGER_VERSION = 2
+# A replay also prices calls stored without a rate whose model has since gained one in the catalog.
+LEDGER_VERSION = 3
 COLLECT_LOCK_KEY = 0x55A6E_C011  # one pass at a time across the API and the timer
 PASS_BYTE_BUDGET = 1_000_000_000  # replay bytes per pass; live files are always read first
 CODEX_ROUTINE_ORIGINATORS = frozenset({"codex_exec"})
@@ -762,7 +763,11 @@ async def _persist_ledger(db: AsyncSession, result: PassResult) -> None:
              "output_tokens": c.output_tokens, "api_equiv_usd": c.api_equiv_usd}
             for c in result.calls[i:i + LEDGER_CHUNK]
         ]
-        await db.execute(pg_insert(UsageCall).values(rows).on_conflict_do_nothing(index_elements=["call_key"]))
+        stmt = pg_insert(UsageCall).values(rows)
+        await db.execute(stmt.on_conflict_do_update(
+            index_elements=["call_key"], set_={"api_equiv_usd": stmt.excluded.api_equiv_usd},
+            where=UsageCall.api_equiv_usd.is_(None),
+        ))
     items = list(result.sessions.items())
     table = UsageSession.__table__
     for i in range(0, len(items), LEDGER_CHUNK):
