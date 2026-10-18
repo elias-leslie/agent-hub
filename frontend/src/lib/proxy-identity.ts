@@ -16,6 +16,8 @@ export function setIdentityHeaders(
   const cookie = request.headers.get('cookie')
   if (jwt) headers.set('Cf-Access-Jwt-Assertion', jwt)
   if (cookie) headers.set('Cookie', cookie)
+  const ownerToken = request.headers.get('x-agent-hub-owner-token')
+  if (ownerToken) headers.set('X-Agent-Hub-Owner-Token', ownerToken)
   headers.set(
     'X-Agent-Hub-Client-Address',
     request.headers.get('x-agent-hub-client-address') || 'unknown',

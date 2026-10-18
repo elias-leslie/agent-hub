@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     agent_hub_owner_emails: str = Field(
         default="", validation_alias=AliasChoices("AGENT_HUB_OWNER_EMAILS", "SUMMITFLOW_OWNER_EMAILS")
     )
+    # Owner by caller identity: a loopback caller is the owner only while loopback_is_owner is on
+    # (AGENT_HUB_LOOPBACK_IS_OWNER, default on = today's behaviour). The owner can always prove it
+    # with the token in agent_hub_owner_token_file (readable only by the owner), sent as
+    # X-Agent-Hub-Owner-Token. Agents and apps keep their client-id access and never get the owner role.
+    agent_hub_loopback_is_owner: bool = True
+    agent_hub_owner_token_file: str = ""
     dashboard_ui_request_log_sample_rate: float = 0.1  # Fraction of internal-header UI requests logged to request_logs
 
     # First-party client registrations for standalone and companion installs

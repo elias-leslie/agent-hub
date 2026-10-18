@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from hmac import compare_digest
 from ipaddress import ip_address
+from pathlib import Path
 from typing import Any
 
 import jwt
@@ -22,6 +24,7 @@ from jwt import PyJWKClient, PyJWTError
 from app.config import settings
 
 CLIENT_ADDRESS_HEADER = "X-Agent-Hub-Client-Address"
+OWNER_TOKEN_HEADER = "X-Agent-Hub-Owner-Token"
 
 
 @dataclass(frozen=True)
@@ -29,10 +32,11 @@ class Caller:
     email: str | None
     is_owner: bool
     is_local_bypass: bool = False
+    via_owner_token: bool = False
 
 
 def resolve_caller(request: Request) -> Caller:
-    """Owner when Access proves an owner email, or for a loopback caller (this host) without Access."""
+    """Owner when Access proves an owner email, the owner token matches, or (flag on) the caller is loopback."""
     token = (
         request.headers.get("Cf-Access-Jwt-Assertion", "").strip()
         or request.cookies.get("CF_Authorization", "").strip()
@@ -40,9 +44,23 @@ def resolve_caller(request: Request) -> Caller:
     if token:
         email = _email_from_access_token(token)
         return Caller(email=email, is_owner=email in _owner_emails())
-    if _is_local_address(_client_address(request)):
+    if _owner_token_matches(request.headers.get(OWNER_TOKEN_HEADER)):
+        return Caller(email=None, is_owner=True, via_owner_token=True)
+    if settings.agent_hub_loopback_is_owner and _is_local_address(_client_address(request)):
         return Caller(email=None, is_owner=True, is_local_bypass=True)
     return Caller(email=None, is_owner=False)
+
+
+def _owner_token_matches(presented: str | None) -> bool:
+    """True when the presented token equals the owner token file's contents (file mode keeps agents out)."""
+    path = settings.agent_hub_owner_token_file.strip()
+    if not path or not presented:
+        return False
+    try:
+        expected = Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    return bool(expected) and compare_digest(presented.strip().encode(), expected.encode())
 
 
 def _owner_emails() -> set[str]:

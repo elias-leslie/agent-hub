@@ -90,3 +90,41 @@ def test_assertion_without_access_config_is_refused() -> None:
     ):
         access_identity._email_from_access_token("token")
     assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_loopback_is_not_owner_when_the_flag_is_off() -> None:
+    with patch.object(access_identity.settings, "agent_hub_loopback_is_owner", False):
+        for headers in ({}, {"X-Agent-Hub-Client-Address": "127.0.0.1"}):
+            _, body = await _me(headers)
+            assert body == {"email": None, "is_owner": False, "is_local_bypass": False}
+
+
+@pytest.mark.asyncio
+async def test_owner_token_makes_a_caller_owner_with_the_flag_off(tmp_path) -> None:
+    token_file = tmp_path / "owner-token"
+    token_file.write_text("s3cret-token\n")
+    with (
+        patch.object(access_identity.settings, "agent_hub_loopback_is_owner", False),
+        patch.object(access_identity.settings, "agent_hub_owner_token_file", str(token_file)),
+    ):
+        _, good = await _me({"X-Agent-Hub-Owner-Token": "s3cret-token"})
+        _, bad = await _me({"X-Agent-Hub-Owner-Token": "wrong"})
+        _, none = await _me({})
+    assert good["is_owner"] is True
+    assert bad["is_owner"] is False and none["is_owner"] is False
+
+
+@pytest.mark.asyncio
+async def test_owner_token_is_ignored_when_no_file_is_configured_or_readable(tmp_path) -> None:
+    with (
+        patch.object(access_identity.settings, "agent_hub_loopback_is_owner", False),
+        patch.object(access_identity.settings, "agent_hub_owner_token_file", ""),
+    ):
+        _, unset = await _me({"X-Agent-Hub-Owner-Token": "anything"})
+    with (
+        patch.object(access_identity.settings, "agent_hub_loopback_is_owner", False),
+        patch.object(access_identity.settings, "agent_hub_owner_token_file", str(tmp_path / "missing")),
+    ):
+        _, missing = await _me({"X-Agent-Hub-Owner-Token": "anything"})
+    assert unset["is_owner"] is False and missing["is_owner"] is False

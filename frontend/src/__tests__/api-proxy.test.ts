@@ -112,6 +112,19 @@ describe('dashboard proxy caller identity', () => {
     expect(headers.get('X-Forwarded-Host')).toBeNull()
   })
 
+  it('forwards the owner token to the identity check', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(me(false))
+    vi.stubGlobal('fetch', fetch)
+    await GET(
+      new Request('http://localhost:3003/api/proxy/sessions', {
+        headers: { 'x-agent-hub-owner-token': 'tok' },
+      }),
+      ctx(['sessions']),
+    )
+    const headers = fetch.mock.calls[0][1].headers as Headers
+    expect(headers.get('X-Agent-Hub-Owner-Token')).toBe('tok')
+  })
+
   it('returns 503 when the identity check cannot run', async () => {
     const fetch = vi.fn().mockRejectedValueOnce(new Error('down'))
     vi.stubGlobal('fetch', fetch)
