@@ -39,6 +39,10 @@ function count(n: number): string {
   return n.toLocaleString()
 }
 
+function plural(n: number, noun: string): string {
+  return `${count(n)} ${noun}${n === 1 ? '' : 's'}`
+}
+
 function percent(share: number): string {
   return `${Math.round(share * 100)}%`
 }
@@ -79,7 +83,7 @@ function UnpricedCard({ data }: { data: SpendPatternsResponse['unpriced'] }) {
               <Row
                 key={m.model}
                 label={m.model}
-                value={`${count(m.calls)} calls`}
+                value={plural(m.calls, 'call')}
               />
             ))}
           </div>
@@ -110,7 +114,7 @@ function EffortCard({ data }: { data: SpendPatternsResponse['effort'] }) {
               <Row
                 key={level.effort}
                 label={level.effort}
-                value={`${count(level.sessions)} sessions`}
+                value={plural(level.sessions, 'session')}
               />
             ))}
           </div>
@@ -238,15 +242,17 @@ function GatedCard({
             {data.gated.length} of {count(data.enabled)} turned-on automations
             can't run.
           </Headline>
-          <div className="space-y-1.5">
+          <ul className="space-y-2 text-sm">
             {data.gated.map((g) => (
-              <Row
-                key={`${g.project}-${g.label}`}
-                label={`${g.label} (${g.project})`}
-                value={g.reasons.map(gateReason).join(', ')}
-              />
+              <li key={`${g.project}-${g.label}`}>
+                <span className="text-slate-200">{g.label}</span>
+                <span className="text-slate-500"> · {g.project}</span>
+                <p className="text-xs text-slate-400">
+                  {g.reasons.map(gateReason).join(', ')}
+                </p>
+              </li>
             ))}
-          </div>
+          </ul>
         </>
       )}
     </Card>
