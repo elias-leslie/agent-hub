@@ -468,3 +468,43 @@ export async function fetchAllSessionEvents(
     snapshot: firstPage.snapshot,
   }
 }
+
+/** When Agent Hub treats a quiet session as dead and closes it. */
+export interface SessionCloseSettings {
+  dead_candidate_after_minutes: number
+  reapable_after_minutes: number
+  zero_event_close_after_minutes: number
+  transcript_sync_close_after_minutes: number
+  completion_close_after_minutes: number
+  any_session_close_after_minutes: number
+  codex_close_inactive_enabled: boolean
+  codex_scan_hours: number
+  updated_by?: string | null
+}
+
+async function closeSettingsError(response: Response): Promise<Error> {
+  const body = await response.json().catch(() => null)
+  const detail = body?.detail
+  if (typeof detail === 'string') return new Error(detail)
+  if (Array.isArray(detail) && typeof detail[0]?.msg === 'string')
+    return new Error(detail[0].msg)
+  return new Error(`Request failed (${response.status})`)
+}
+
+export async function fetchSessionCloseSettings(): Promise<SessionCloseSettings> {
+  const response = await fetchApi(`${API_BASE}/sessions/close-settings`)
+  if (!response.ok) throw await closeSettingsError(response)
+  return response.json()
+}
+
+export async function updateSessionCloseSettings(
+  changes: Partial<SessionCloseSettings>,
+): Promise<SessionCloseSettings> {
+  const response = await fetchApi(`${API_BASE}/sessions/close-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  })
+  if (!response.ok) throw await closeSettingsError(response)
+  return response.json()
+}

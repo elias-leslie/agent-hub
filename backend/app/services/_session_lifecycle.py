@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.models import Session
+from app.services.session_close_settings import current as close_settings
 
 _ACTIVE_PHASES = {
     "created",
@@ -20,9 +21,8 @@ _ACTIVE_PHASES = {
 _QUIET_AFTER_SECONDS = 60
 _STALL_AFTER_SECONDS = 30 * 60
 _NO_ACTIVITY_STALL_AFTER_SECONDS = 90 * 60
-_DEAD_CANDIDATE_AFTER_SECONDS = 30 * 60
-_REAPABLE_AFTER_SECONDS = 6 * 60 * 60
-_ZERO_EVENT_REAP_AFTER_SECONDS = 60 * 60
+# Close thresholds (dead candidate, reapable, zero-event) are owner settings:
+# app.services.session_close_settings, edited on the Sessions page.
 _NON_REAPABLE_PHASES = {
     "injecting_memory",
     "planning",
@@ -123,9 +123,9 @@ def _compute_anti_reap_signals(
         signals.append("specialist_lane")
     if int(response.get("outstanding_tool_calls") or 0) > 0:
         signals.append("outstanding_tool_calls")
-    if phase in _NON_REAPABLE_PHASES and (quiet_for is None or quiet_for < _REAPABLE_AFTER_SECONDS):
+    if phase in _NON_REAPABLE_PHASES and (quiet_for is None or quiet_for < close_settings().reapable_after_seconds):
         signals.append(f"phase_{phase}")
-    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
+    if response.get("last_write_path") and quiet_for is not None and quiet_for < close_settings().reapable_after_seconds:
         signals.append("recent_write_activity")
     return signals
 
@@ -140,7 +140,7 @@ def _should_reap(
         return False
     if (
         quiet_for is not None
-        and quiet_for >= _ZERO_EVENT_REAP_AFTER_SECONDS
+        and quiet_for >= close_settings().zero_event_close_after_seconds
         and "zero_event_session" in dead_signals
     ):
         return True
@@ -148,7 +148,7 @@ def _should_reap(
         return True
     return (
         quiet_for is not None
-        and quiet_for >= _REAPABLE_AFTER_SECONDS
+        and quiet_for >= close_settings().reapable_after_seconds
         and any(s in _STRONG_DEAD_SIGNALS for s in dead_signals)
     )
 
@@ -173,26 +173,26 @@ def _compute_dead_signals_and_state(
     is_zero_event_session = (
         phase == "unknown"
         and quiet_for is not None
-        and quiet_for >= _ZERO_EVENT_REAP_AFTER_SECONDS
+        and quiet_for >= close_settings().zero_event_close_after_seconds
         and not last_event_type
         and int(response.get("tool_calls_count") or 0) == 0
         and int(response.get("outstanding_tool_calls") or 0) == 0
     )
-    if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+    if quiet_for is not None and quiet_for >= close_settings().dead_candidate_after_seconds:
         dead_signals.append("no_model_activity_30m")
     if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
         dead_signals.append("no_structured_activity")
     if is_zero_event_session:
         dead_signals.append("zero_event_session")
-    if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+    if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= close_settings().dead_candidate_after_seconds:
         dead_signals.append("heartbeat_only")
     if response.get("termination_reason"):
         dead_signals.append("termination_signal")
     if is_restart_cmd:
         dead_signals.append("detached_control_plane_rebuild")
-    if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
+    if last_heartbeat_age is None and quiet_for is not None and quiet_for >= close_settings().reapable_after_seconds:
         dead_signals.append("heartbeat_missing")
-    elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
+    elif last_heartbeat_age is not None and last_heartbeat_age >= close_settings().reapable_after_seconds:
         dead_signals.append("heartbeat_absent_6h")
 
     if dead_signals:
@@ -222,7 +222,7 @@ def _apply_lifecycle_state(
     detached_rebuild_stale = (
         not has_owner_lane
         and quiet_for is not None
-        and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS
+        and quiet_for >= close_settings().dead_candidate_after_seconds
         and int(response.get("outstanding_tool_calls") or 0) == 0
         and is_restart_cmd
     )

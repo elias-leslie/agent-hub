@@ -98,6 +98,9 @@ async def session_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any
         ctx.log("Session cleanup skipped (schedule disabled)")
         return _disabled_schedule_result("session_cleanup")
 
+    from app.services import session_close_settings
+
+    await session_close_settings.load()  # the classifier reads this process's copy
     async with async_session() as db:
         cleaned = await cleanup_stale_sessions(db)
 

@@ -30,7 +30,9 @@
     "backend": "agent-hub-backend.service",
     "frontend": "agent-hub-frontend.service",
     "default_workers": [
-      "agent-hub-hatchet-ops-worker.service"
+      "agent-hub-hatchet-ops-worker.service",
+      "codex-session-sync.timer",
+      "codex-session-close-inactive.timer"
     ],
     "optional_workers": [
       "agent-hub-hatchet-agent-worker.service"

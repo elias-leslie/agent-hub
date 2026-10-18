@@ -33,6 +33,7 @@ from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
 from app.api.runtime_context import router as runtime_context_router
+from app.api.session_close_settings import router as session_close_settings_router
 from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
 from app.api.subscription_accounting import router as subscription_accounting_router
@@ -51,6 +52,7 @@ router.include_router(automations_router)
 router.include_router(db_router)  # Has its own prefix /admin/db and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
+router.include_router(session_close_settings_router)  # before /sessions/{id}
 router.include_router(sessions_router, tags=["sessions"])
 router.include_router(events_router, tags=["events"])
 router.include_router(api_keys_router)  # Has its own tags

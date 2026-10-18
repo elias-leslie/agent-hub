@@ -1,0 +1,14 @@
+[Unit]
+Description=Close inactive Codex sessions every five minutes
+
+[Timer]
+# OnBootSec arms the first run after boot. OnCalendar keeps the timer armed even
+# if it is restarted later: a monotonic OnUnitActiveSec has no base until the
+# service runs in the current boot, and an elapsed OnBootSec is not re-armed.
+OnBootSec=2min
+OnCalendar=*:1/5
+AccuracySec=10s
+Unit=codex-session-close-inactive.service
+
+[Install]
+WantedBy=timers.target

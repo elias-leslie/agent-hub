@@ -1,0 +1,10 @@
+[Unit]
+Description=Agent Hub: close Codex sessions whose process is gone
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.env.local
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python __PROJECT_ROOT__/scripts/codex-session-sync.py --scan --close-inactive
+StandardOutput=journal
+StandardError=journal

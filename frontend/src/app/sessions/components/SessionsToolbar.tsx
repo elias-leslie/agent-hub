@@ -1,4 +1,4 @@
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
 import { type RefObject, useEffect, useRef, useState } from 'react'
 import {
   SESSION_KINDS,
@@ -14,6 +14,7 @@ import {
   type SortField,
   STATUS_OPTIONS,
 } from '../types'
+import { CloseSettingsPanel } from './CloseSettingsPanel'
 import { ModelFilterBadge } from './ModelFilterBadge'
 
 const COUNT = new Intl.NumberFormat('en-US')
@@ -70,6 +71,7 @@ export function SessionsToolbar({
 }) {
   const [query, setQuery] = useState(state.q)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [closeSettingsOpen, setCloseSettingsOpen] = useState(false)
   const activeFilters = [
     state.kinds.length !== DEFAULT_KINDS.length ||
       state.kinds.some((kind) => !DEFAULT_KINDS.includes(kind)),
@@ -149,6 +151,18 @@ export function SessionsToolbar({
           )}
         >
           Filters{activeFilters ? ` (${activeFilters})` : ''}
+        </button>
+        <button
+          type="button"
+          aria-expanded={closeSettingsOpen}
+          aria-controls="session-close-settings"
+          onClick={() => setCloseSettingsOpen((open) => !open)}
+          title="When sessions close"
+          className={cn(chip, closeSettingsOpen ? chipOn : chipOff, 'h-8')}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Closing</span>
+          <span className="sr-only sm:hidden">When sessions close</span>
         </button>
         <button
           type="button"
@@ -296,6 +310,9 @@ export function SessionsToolbar({
           />
         ) : null}
       </div>
+      {closeSettingsOpen ? (
+        <CloseSettingsPanel onClose={() => setCloseSettingsOpen(false)} />
+      ) : null}
     </div>
   )
 }

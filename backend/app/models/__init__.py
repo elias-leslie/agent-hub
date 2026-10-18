@@ -63,6 +63,7 @@ from .session import (
     SessionEventType,
     SessionSummarySegment,
 )
+from .session_close_settings import SessionCloseSettings
 from .subscription_accounting import (
     CreditLot,
     SubscriptionPlan,
@@ -128,6 +129,7 @@ __all__ = [
     "RuntimeContextOverride",
     "Session",
     "SessionBinding",
+    "SessionCloseSettings",
     "SessionEvent",
     "SessionEventType",
     "SessionSummarySegment",

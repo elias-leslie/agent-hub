@@ -1,0 +1,15 @@
+[Unit]
+Description=Scan Codex transcripts into Agent Hub every two minutes
+
+[Timer]
+# OnBootSec arms the first run after boot. OnCalendar keeps the timer armed even
+# if it is restarted later: a monotonic OnUnitActiveSec has no base until the
+# service runs in the current boot, and an elapsed OnBootSec is not re-armed.
+OnBootSec=30s
+OnCalendar=*:0/2
+AccuracySec=10s
+# Codex session exit syncs via the finalize hook; this bounds live lag (~1.2 CPU-s/run).
+Unit=codex-session-sync.service
+
+[Install]
+WantedBy=timers.target

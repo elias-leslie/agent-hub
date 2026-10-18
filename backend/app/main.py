@@ -176,6 +176,11 @@ async def _startup() -> None:
     except Exception as e:
         logger.warning("Failed registered project access reconciliation at startup: %s", e)
 
+    from app.services import session_close_settings
+
+    await session_close_settings.load()
+    logger.info("Session close settings loaded")
+
     logger.info("Provider health tracker disabled; unified providers report passively")
 
 
