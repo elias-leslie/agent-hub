@@ -154,6 +154,24 @@ def test_a_codex_parent_that_spends_nothing_still_names_the_job_its_children_rol
     assert (root["kind"], root["job"]) == ("routine", "neri · Review commit #")
 
 
+def test_a_codex_review_run_without_a_prompt_is_named_after_its_target(roots: tuple[Path, Path]) -> None:
+    _, codex = roots
+    day = codex / "2026" / "10" / "11"
+    _jsonl(day / "rollout-review.jsonl", [
+        _codex_meta("root-3", originator="codex_exec", source="exec"),
+        {"timestamp": "2026-10-11T12:00:01Z", "type": "event_msg",
+         "payload": {"type": "item_completed", "item": {"type": "EnteredReviewMode", "user_facing_hint": "commit 8b667cb"}}},
+    ])
+    _jsonl(day / "rollout-reviewer.jsonl", [
+        _codex_meta("child-3", root="root-3", source={"subagent": "review"}),
+        _codex_tokens(1, 300, 250, 50, 50),
+    ])
+
+    result = collector.scan({}, now=NOW.timestamp())
+
+    assert result.sessions[("codex", "root-3", "")]["job"] == "neri · Review commit #"
+
+
 def test_replay_backfills_the_ledger_without_recounting_rollups(roots: tuple[Path, Path]) -> None:
     claude, _ = roots
     path = claude / "p" / "s.jsonl"

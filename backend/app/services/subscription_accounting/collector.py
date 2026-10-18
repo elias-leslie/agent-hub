@@ -62,8 +62,9 @@ RUNAWAY_TURN_CONTEXT = 400_000
 RUNAWAY_RUN_USD = 75.0
 # Per-call ledger (usage_calls). A cursor without this version is re-read from the start once so its
 # history lands in the ledger; lines before the old offset feed only the ledger (rollups already have them).
-# A replay also prices calls stored without a rate whose model has since gained one in the catalog.
-LEDGER_VERSION = 3
+# A replay also prices calls stored without a rate whose model has since gained one in the catalog,
+# and names review runs (v4) whose sub-agents were showing as separate rows.
+LEDGER_VERSION = 4
 COLLECT_LOCK_KEY = 0x55A6E_C011  # one pass at a time across the API and the timer
 PASS_BYTE_BUDGET = 1_000_000_000  # replay bytes per pass; live files are always read first
 CODEX_ROUTINE_ORIGINATORS = frozenset({"codex_exec"})
@@ -299,6 +300,15 @@ def _codex_title(line: bytes, state: dict[str, Any]) -> None:
                 return
 
 
+def _codex_review_title(line: bytes, state: dict[str, Any]) -> None:
+    """`codex exec review` sends no prompt of its own; name the run after its review target."""
+    with contextlib.suppress(ValueError, AttributeError):
+        item = (json.loads(line).get("payload") or {}).get("item") or {}
+        title = _clean_title(f"Review {item.get('user_facing_hint') or 'changes'}")
+        if title:
+            state["title"] = title
+
+
 def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResult, live_from: int = 0) -> int:
     """Read Codex rollout lines. Lines ending at or before live_from are a ledger replay: calls only."""
     for end, line in _iter_new_lines(path, offset):
@@ -313,6 +323,9 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
             continue
         if not state.get("title") and b'"response_item"' in head and b'"role":"user"' in head:
             _codex_title(line, state)
+            continue
+        if not state.get("title") and b'"EnteredReviewMode"' in head:
+            _codex_review_title(line, state)
             continue
         if b'"turn_context"' in head:
             try:
