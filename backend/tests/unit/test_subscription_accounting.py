@@ -73,6 +73,12 @@ def _token_count(ts: str, total: int, inp: int, cached: int, out: int, used: flo
     }
 
 
+@pytest.fixture(autouse=True)
+def _isolated_homes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test reads the real owner or agent home."""
+    monkeypatch.setenv("AGENT_HUB_NATIVE_HOMES", str(tmp_path / "nohome"))
+
+
 def test_scan_reads_codex_and_claude_incrementally(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     codex = tmp_path / "codex"
     claude = tmp_path / "claude"
@@ -218,6 +224,31 @@ def test_scan_reads_every_native_home(tmp_path: Path, monkeypatch: pytest.Monkey
     result = collector.scan({}, now=datetime(2026, 10, 11, 13, tzinfo=UTC).timestamp())
     assert {k[3] for k in result.rollups} == {"nightshift", "summitflow"}
     assert {Path(p).parts[-5] for p in result.cursors if p.endswith(".jsonl")} == {"owner", "agent"}
+
+
+def test_claude_statusline_of_every_native_home_newest_reading_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    owner_home, agent_home = tmp_path / "owner", tmp_path / "agent"
+    monkeypatch.setenv("AGENT_HUB_CODEX_SESSIONS", str(tmp_path / "codex"))
+    monkeypatch.setenv("AGENT_HUB_CLAUDE_PROJECTS", str(tmp_path / "claude"))
+    monkeypatch.setenv("AGENT_HUB_NATIVE_HOMES", os.pathsep.join([str(Path.home()), str(agent_home)]))
+    monkeypatch.setenv("XDG_STATE_HOME", str(owner_home))
+
+    def write(base: Path, observed: int, five: float) -> None:
+        f = base / "claude-usage" / "rate-limits.json" if base == owner_home else base / ".local/state/claude-usage/rate-limits.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"observed_at": observed, "rate_limits": {
+            "five_hour": {"used_percentage": five, "resets_at": observed + 600},
+            "seven_day": {"used_percentage": 7.0, "resets_at": observed + 6000}}}))
+
+    now = datetime(2026, 10, 11, 13, tzinfo=UTC).timestamp()
+    write(owner_home, 1_000, 10.0)
+    assert [s.used_percent for s in collector.scan({}, now=now).snapshots if s.window_minutes == 300] == [10.0]
+    write(agent_home, 2_000, 55.0)  # the agent user's, newer: it is the reading
+    assert [s.used_percent for s in collector.scan({}, now=now).snapshots if s.window_minutes == 300] == [55.0]
+    write(owner_home, 3_000, 20.0)
+    assert [s.used_percent for s in collector.scan({}, now=now).snapshots if s.window_minutes == 300] == [20.0]
+    (agent_home / ".local/state/claude-usage/rate-limits.json").chmod(0)  # unreadable file: skipped, not an error
+    assert collector.claude_statusline_files()[1] == agent_home / ".local/state/claude-usage/rate-limits.json"
 
 
 def test_project_from_cwd_strips_each_native_home(monkeypatch: pytest.MonkeyPatch) -> None:

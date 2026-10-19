@@ -82,6 +82,14 @@ def claude_statusline_file() -> Path:
     return base / "claude-usage" / "rate-limits.json"
 
 
+def claude_statusline_files() -> list[Path]:
+    """Statusline snapshots of every user running Claude Code: this user's, then the other native homes' (the agent
+    user's sits in a dir it shares with this user by ACL; a home or dir that cannot be read is skipped)."""
+    own = claude_statusline_file()
+    return [own, *(home / ".local" / "state" / "claude-usage" / "rate-limits.json"
+                   for home in native_homes() if home != Path.home())]
+
+
 def project_from_cwd(cwd: str | None) -> str:
     if not cwd:
         return "unknown"
@@ -547,11 +555,15 @@ def _add_claude_rollup(result: PassResult, call: UsageCallRow, project: str, spe
 
 
 def _claude_statusline(state: dict[str, Any], result: PassResult) -> None:
-    path = claude_statusline_file()
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return
+    data: dict[str, Any] = {}
+    for path in claude_statusline_files():  # the newest reading wins: limits are the account's, not the user's
+        try:
+            got = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(got, dict) and (_epoch(got.get("observed_at")) or datetime.min.replace(tzinfo=UTC)) > (
+                _epoch(data.get("observed_at")) or datetime.min.replace(tzinfo=UTC)):
+            data = got
     observed = _epoch(data.get("observed_at"))
     limits = data.get("rate_limits") or {}
     if observed is None or not isinstance(limits, dict) or state.get("observed_at") == data.get("observed_at"):
