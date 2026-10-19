@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -201,3 +202,52 @@ def test_runaway_turn_context_alerts_once_and_backfill_stays_quiet(tmp_path: Pat
     result = collector.scan({}, now=now.timestamp())
     assert len(result.runaways) == 1
     assert "subagent" in result.runaways[0] and "450K" in result.runaways[0]
+
+
+def test_scan_reads_every_native_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    owner_home, agent_home = tmp_path / "owner", tmp_path / "agent"
+    for name in ("AGENT_HUB_CODEX_SESSIONS", "AGENT_HUB_CLAUDE_PROJECTS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AGENT_HUB_NATIVE_HOMES", os.pathsep.join([str(owner_home), str(agent_home)]))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    for home, project, msg in ((owner_home, "nightshift", "m1"), (agent_home, "summitflow", "m2")):
+        _jsonl(home / ".claude" / "projects" / "-srv-x" / f"{msg}.jsonl", [
+            {"timestamp": "2026-10-11T12:00:00Z", "requestId": msg, "cwd": f"/srv/workspaces/projects/{project}",
+             "message": {"id": msg, "model": "claude-opus-5-5", "usage": {"input_tokens": 10, "output_tokens": 5}}},
+        ])
+    result = collector.scan({}, now=datetime(2026, 10, 11, 13, tzinfo=UTC).timestamp())
+    assert {k[3] for k in result.rollups} == {"nightshift", "summitflow"}
+    assert {Path(p).parts[-5] for p in result.cursors if p.endswith(".jsonl")} == {"owner", "agent"}
+
+
+def test_project_from_cwd_strips_each_native_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_HUB_NATIVE_HOMES", os.pathsep.join(["/home/owner", "/home/agent"]))
+    assert collector.project_from_cwd("/home/owner/notes/x") == "notes"
+    assert collector.project_from_cwd("/home/agent/scratch/x") == "scratch"
+    monkeypatch.delenv("AGENT_HUB_NATIVE_HOMES")
+    assert collector.project_from_cwd("/home/agent/tmp/x") == "tmp"
+
+
+def test_single_path_knobs_still_work_and_lists_split(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.utils import native_homes
+
+    monkeypatch.setenv("AGENT_HUB_CLAUDE_PROJECTS", "/one")
+    assert native_homes.claude_project_roots() == [Path("/one")]
+    monkeypatch.setenv("AGENT_HUB_CODEX_SESSIONS", os.pathsep.join(["/a", "/b"]))
+    assert native_homes.codex_session_roots() == [Path("/a"), Path("/b")]
+    monkeypatch.delenv("AGENT_HUB_CLAUDE_PROJECTS")
+    monkeypatch.delenv("AGENT_HUB_NATIVE_HOMES", raising=False)
+    assert Path("/home/agent/.claude/projects") in native_homes.claude_project_roots()
+
+
+def test_default_transcript_guard_admits_the_agent_users_transcripts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.session_ingestion.adapters import transcript_parsers
+
+    monkeypatch.delenv("AGENT_HUB_TRANSCRIPT_ROOTS")
+    monkeypatch.delenv("AGENT_HUB_NATIVE_HOMES", raising=False)
+    monkeypatch.delenv("AGENT_HUB_CLAUDE_PROJECTS", raising=False)
+    monkeypatch.delenv("AGENT_HUB_CODEX_SESSIONS", raising=False)
+    roots = transcript_parsers.transcript_roots()
+    assert os.path.realpath("/home/agent/.claude/projects") in roots
+    assert os.path.realpath("/home/agent/.codex/sessions") in roots
+    assert transcript_parsers.contained_transcript_path("/home/agent/.claude/projects/-x/s.jsonl") is not None

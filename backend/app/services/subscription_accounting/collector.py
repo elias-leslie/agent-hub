@@ -39,6 +39,7 @@ from app.models import (
     UsageCall,
     UsageSession,
 )
+from app.utils.native_homes import claude_project_roots, codex_session_roots, native_homes
 from app.utils.safe_subprocess import create_process
 
 from . import rates
@@ -76,14 +77,6 @@ _SCAFFOLD_PREFIXES = (
 )
 
 
-def codex_root() -> Path:
-    return Path(os.environ.get("AGENT_HUB_CODEX_SESSIONS", Path.home() / ".codex" / "sessions"))
-
-
-def claude_root() -> Path:
-    return Path(os.environ.get("AGENT_HUB_CLAUDE_PROJECTS", Path.home() / ".claude" / "projects"))
-
-
 def claude_statusline_file() -> Path:
     base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
     return base / "claude-usage" / "rate-limits.json"
@@ -93,7 +86,7 @@ def project_from_cwd(cwd: str | None) -> str:
     if not cwd:
         return "unknown"
     path = cwd.rstrip("/")
-    for prefix in ("/srv/workspaces/projects/", "/srv/workspaces/", "/srv/scratch/", str(Path.home()) + "/"):
+    for prefix in ("/srv/workspaces/projects/", "/srv/workspaces/", "/srv/scratch/", *(f"{home}/" for home in native_homes())):
         if path.startswith(prefix):
             return path[len(prefix):].split("/", 1)[0] or "unknown"
     return Path(path).name or "unknown"
@@ -600,8 +593,8 @@ def scan(
     now = now or time.time()
     since = now - BACKFILL_DAYS * 86400
     result = PassResult()
-    jobs = [(p, _codex_file) for p in _candidate_files(codex_root(), "*/*/*/*.jsonl", since)]
-    jobs += [(p, _claude_file) for p in _candidate_files(claude_root(), "**/*.jsonl", since)]
+    jobs = [(p, _codex_file) for root in codex_session_roots() for p in _candidate_files(root, "*/*/*/*.jsonl", since)]
+    jobs += [(p, _claude_file) for root in claude_project_roots() for p in _candidate_files(root, "**/*.jsonl", since)]
     live: list[tuple[Path, Any, int, dict[str, Any], int]] = []
     replay: list[tuple[float, Path, Any, int, dict[str, Any]]] = []
     for path, reader in jobs:

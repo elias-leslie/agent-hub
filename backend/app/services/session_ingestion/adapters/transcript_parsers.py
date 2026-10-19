@@ -16,6 +16,7 @@ from app.services.session_ingestion.models import (
     TranscriptSourceHealth,
     TranscriptSourceIssue,
 )
+from app.utils.native_homes import claude_project_roots, codex_session_roots
 
 from ._event_builders import _ParseState, append_normalized_events
 from .codex_model_evidence import observe_model_record
@@ -28,16 +29,13 @@ def transcript_roots() -> tuple[str, ...]:
     """Real paths of the directories native runtimes write transcripts under.
 
     ``AGENT_HUB_TRANSCRIPT_ROOTS`` (os.pathsep-separated) replaces the default
-    Codex and Claude Code locations, for hosts or tests that keep them elsewhere.
+    Codex and Claude Code locations (every native home, see ``app.utils.native_homes``),
+    for hosts or tests that keep them elsewhere.
     """
     configured = os.environ.get("AGENT_HUB_TRANSCRIPT_ROOTS")
     if configured:
         return tuple(os.path.realpath(root) for root in configured.split(os.pathsep) if root)
-    home = os.path.expanduser("~")
-    return (
-        os.path.realpath(os.path.join(home, ".codex", "sessions")),
-        os.path.realpath(os.path.join(home, ".claude", "projects")),
-    )
+    return tuple(os.path.realpath(root) for root in (*codex_session_roots(), *claude_project_roots()))
 
 
 def contained_transcript_path(transcript_path: str) -> Path | None:
