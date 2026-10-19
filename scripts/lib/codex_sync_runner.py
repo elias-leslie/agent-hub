@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from codex_sync_agent_tether import discover_agent_transcripts, merge_snapshots
 from codex_sync_api import finalize_and_close, ingest_transcript, send_heartbeat, upsert_session
 from codex_sync_bindings import (
     ProjectBinding,
@@ -86,7 +87,7 @@ def run_sync(
         except (OSError, ValueError) as exc:
             log_fn(f"[WARN] Invalid Codex project binding snapshot: {exc}")
             return 2
-        open_snapshot = discover_open_transcripts()
+        open_snapshot = merge_snapshots(discover_open_transcripts(), discover_agent_transcripts(log_fn=log_fn))
         infos = _transcript_infos(args, state, open_snapshot, log_fn)
         binding_request, binding_error = _project_binding_request(args, infos)
         if binding_error:

@@ -11,6 +11,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 TRANSCRIPTS_ROOT = Path.home() / ".codex" / "sessions"
+# Agents run as another user: their rollouts sit under that user's home, which the service user can read (ACL).
+# Mirrors backend app/utils/native_homes.py: AGENT_HUB_CODEX_SESSIONS (os.pathsep-separated) replaces the list.
+AGENT_CODEX_ROOTS = (Path("/home/agent/.codex/sessions"),)
 PROC_ROOT = Path("/proc")
 DEFAULT_MODEL = "unknown"
 AICO_PERSONAL_PROJECT_ID = "__aico_personal_workspace__"
@@ -68,6 +71,14 @@ class TranscriptInfo:
     native_session_id: str | None = None
     identity_error: str | None = None
     identity_scan: dict[str, object] = field(default_factory=dict)
+
+
+def transcript_roots() -> list[Path]:
+    """Every rollout root this service user can read: its own, then the agent users'."""
+    configured = os.environ.get("AGENT_HUB_CODEX_SESSIONS")
+    if configured:
+        return [Path(part).expanduser() for part in configured.split(os.pathsep) if part.strip()]
+    return [TRANSCRIPTS_ROOT, *AGENT_CODEX_ROOTS]
 
 
 def _safe_identifier(value: object) -> str:
@@ -336,11 +347,15 @@ def iter_recent_transcripts(
     open_snapshot: OpenTranscriptSnapshot | None = None,
     scan_states: dict[str, object] | None = None,
 ) -> list[TranscriptInfo]:
-    if not TRANSCRIPTS_ROOT.exists():
-        return []
     cutoff = datetime.now(UTC) - timedelta(hours=recent_hours)
     transcripts: list[TranscriptInfo] = []
-    for path in TRANSCRIPTS_ROOT.rglob("*.jsonl"):
+    paths: list[Path] = []
+    for root in transcript_roots():
+        try:
+            paths += root.rglob("*.jsonl")
+        except OSError:
+            continue
+    for path in paths:
         try:
             modified_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
         except OSError:
