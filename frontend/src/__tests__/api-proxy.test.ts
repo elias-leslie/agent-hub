@@ -89,13 +89,18 @@ describe('dashboard proxy caller identity', () => {
       .mockResolvedValueOnce(Response.json({ ok: true }))
     vi.stubGlobal('fetch', fetch)
     const response = await GET(
-      new Request('http://localhost:3003/api/proxy/sessions?limit=5'),
+      new Request('http://localhost:3003/api/proxy/sessions?limit=5', {
+        headers: { 'x-agent-hub-owner-token': 'tok' },
+      }),
       ctx(['sessions']),
     )
     expect(response.status).toBe(200)
     const [url, init] = fetch.mock.calls[1]
     expect(url).toBe('http://backend.test/api/sessions?limit=5')
-    expect(init.headers['X-Agent-Hub-Internal']).toBe('test-secret')
+    const headers = init.headers as Headers
+    expect(headers.get('X-Agent-Hub-Internal')).toBe('test-secret')
+    // The upstream call carries the caller's own identity too, so owner-only routes judge the real caller.
+    expect(headers.get('X-Agent-Hub-Owner-Token')).toBe('tok')
   })
 
   it('marks a request without a stamped client address as unknown', async () => {

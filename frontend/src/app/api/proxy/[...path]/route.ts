@@ -10,7 +10,7 @@
  */
 
 import { buildInternalHeaders, getApiBaseUrl } from '@/lib/api-config'
-import { requireOwner } from '@/lib/proxy-identity'
+import { requireOwner, setIdentityHeaders } from '@/lib/proxy-identity'
 
 const SSE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-cache, no-transform',
@@ -43,6 +43,17 @@ function buildUpstreamUrl(path: string[], searchParams?: string): string {
 type RouteContext = { params: Promise<{ path: string[] }> }
 
 const auth = buildInternalHeaders()
+
+/**
+ * Internal secret plus the caller's own identity, so owner-only routes judge the real caller:
+ * the backend no longer treats this loopback proxy as the owner.
+ */
+function upstreamHeaders(
+  request: Request,
+  extra: Record<string, string> = {},
+): Headers {
+  return setIdentityHeaders(request, new Headers({ ...extra, ...auth }))
+}
 
 function dashboardProxyGuard(
   request: Request,
@@ -89,7 +100,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     path,
     new URL(request.url).searchParams.toString(),
   )
-  const response = await fetch(url, { headers: auth })
+  const response = await fetch(url, { headers: upstreamHeaders(request) })
   return new Response(response.body, {
     status: response.status,
     headers: {
@@ -107,7 +118,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const body = await request.text()
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...auth },
+    headers: upstreamHeaders(request, { 'Content-Type': 'application/json' }),
     body,
   })
   const contentType = response.headers.get('Content-Type') ?? 'application/json'
@@ -132,7 +143,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
   const body = await request.text()
   const response = await fetch(url, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...auth },
+    headers: upstreamHeaders(request, { 'Content-Type': 'application/json' }),
     body,
   })
   return new Response(response.body, {
@@ -152,7 +163,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const body = await request.text()
   const response = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...auth },
+    headers: upstreamHeaders(request, { 'Content-Type': 'application/json' }),
     body,
   })
   return new Response(response.body, {
@@ -175,7 +186,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   const body = await request.text()
   const response = await fetch(url, {
     method: 'DELETE',
-    headers: body ? { 'Content-Type': 'application/json', ...auth } : auth,
+    headers: body
+      ? upstreamHeaders(request, { 'Content-Type': 'application/json' })
+      : upstreamHeaders(request),
     ...(body ? { body } : {}),
   })
   return new Response(response.body, {
