@@ -33,7 +33,7 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb) -> bool:
         return False
 
-    async def get(self, url: str) -> _FakeResponse:
+    async def get(self, url: str, headers: dict[str, str] | None = None) -> _FakeResponse:
         self.requested_urls.append(url)
         return self._response
 
@@ -152,3 +152,17 @@ class TestFetchBackupSourcesSummary:
             "agent-hub            project    disabled weekly   14   Agent Hub"
         )
         assert fake_client.requested_urls == ["http://localhost:8001/api/backup-sources?source_type=workspace"]
+
+
+def test_summitflow_auth_headers_follow_the_owner_token_file(monkeypatch, tmp_path) -> None:
+    from app.config import settings
+    from app.services.backup_summary import summitflow_auth_headers
+
+    token_file = tmp_path / "owner-token"
+    token_file.write_text("owner-s3cret\n")
+    monkeypatch.setattr(settings, "summitflow_owner_token_file", str(token_file))
+    assert summitflow_auth_headers() == {"X-SummitFlow-Owner-Token": "owner-s3cret"}
+    monkeypatch.setattr(settings, "summitflow_owner_token_file", str(tmp_path / "missing"))
+    assert summitflow_auth_headers() == {}
+    monkeypatch.setattr(settings, "summitflow_owner_token_file", "")
+    assert summitflow_auth_headers() == {}

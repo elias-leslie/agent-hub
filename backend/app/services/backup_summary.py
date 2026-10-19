@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 
+from app.config import settings
 from app.core.project_roots import resolve_project_root
 
 logger = logging.getLogger(__name__)
@@ -65,6 +67,16 @@ def _read_summitflow_api_url() -> str:
     return api_url.strip() if isinstance(api_url, str) else ""
 
 
+def summitflow_auth_headers() -> dict[str, str]:
+    """X-SummitFlow-Owner-Token from the configured token file, or nothing when it is unset or unreadable."""
+    path = settings.summitflow_owner_token_file.strip()
+    try:
+        token = Path(path).read_text(encoding="utf-8").strip() if path else ""
+    except (OSError, ValueError):
+        return {}
+    return {"X-SummitFlow-Owner-Token": token} if token else {}
+
+
 async def _fetch_backup_json(path: str, *, failure_log: str) -> Any:
     """Fetch one SummitFlow backup API payload."""
     api_base = await asyncio.to_thread(_read_summitflow_api_url)
@@ -73,7 +85,7 @@ async def _fetch_backup_json(path: str, *, failure_log: str) -> Any:
         return None
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{api_base}{path}")
+            response = await client.get(f"{api_base}{path}", headers=summitflow_auth_headers())
             response.raise_for_status()
             return response.json()
     except Exception:

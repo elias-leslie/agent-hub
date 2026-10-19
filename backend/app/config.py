@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     # X-Agent-Hub-Owner-Token. Agents and apps keep their client-id access and never get the owner role.
     agent_hub_loopback_is_owner: bool = True
     agent_hub_owner_token_file: str = ""
+    # SummitFlow's owner token file (SUMMITFLOW_OWNER_TOKEN_FILE). Agent Hub's own calls to the SummitFlow
+    # API (backup summary, notifications) send it as X-SummitFlow-Owner-Token now that loopback alone is no owner.
+    summitflow_owner_token_file: str = ""
     dashboard_ui_request_log_sample_rate: float = 0.1  # Fraction of internal-header UI requests logged to request_logs
 
     # First-party client registrations for standalone and companion installs

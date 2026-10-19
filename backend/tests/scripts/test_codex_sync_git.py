@@ -26,11 +26,14 @@ class _Response:
         return self._body.read()
 
 
-def test_fetch_registered_project_root_uses_exact_registry_record(monkeypatch) -> None:
+def test_fetch_registered_project_root_uses_exact_registry_record(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
+    token_file = tmp_path / "owner-token"
+    token_file.write_text("owner-s3cret\n")
+    monkeypatch.setenv("SUMMITFLOW_OWNER_TOKEN_FILE", str(token_file))
 
-    def fake_urlopen(url: str, timeout: int):
-        captured.update(url=url, timeout=timeout)
+    def fake_urlopen(req, timeout: int):
+        captured.update(url=req.full_url, timeout=timeout, token=req.get_header("X-summitflow-owner-token"))
         return _Response(b'{"id":"rootfall","root_path":"/srv/workspaces/projects/rootfall"}')
 
     monkeypatch.setattr(codex_sync_git.request, "urlopen", fake_urlopen)
@@ -44,6 +47,7 @@ def test_fetch_registered_project_root_uses_exact_registry_record(monkeypatch) -
     assert captured == {
         "url": "http://summitflow.test/api/projects/rootfall",
         "timeout": codex_sync_git.REGISTRY_TIMEOUT_SECONDS,
+        "token": "owner-s3cret",
     }
 
 

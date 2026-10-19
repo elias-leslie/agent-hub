@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 import httpx
 
-from app.services.backup_summary import _read_summitflow_api_url
+from app.services.backup_summary import _read_summitflow_api_url, summitflow_auth_headers
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ async def create_summitflow_notification(
     url = f"{api_base.rstrip('/')}/projects/{project_id}/notifications"
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=summitflow_auth_headers())
             response.raise_for_status()
     except Exception as exc:
         logger.warning("Failed to create SummitFlow notification %r: %s", title, exc)

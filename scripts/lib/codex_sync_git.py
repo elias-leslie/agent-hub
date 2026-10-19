@@ -84,8 +84,16 @@ def fetch_registered_project_root(
         return None
     base = (api_base or os.environ.get("ST_API_BASE") or DEFAULT_SUMMITFLOW_API).rstrip("/")
     url = f"{base}/projects/{parse.quote(project_id, safe='')}"
+    token_file = os.environ.get("SUMMITFLOW_OWNER_TOKEN_FILE") or str(
+        Path.home() / ".config/credstore/summitflow/owner-token"
+    )
     try:
-        with request.urlopen(url, timeout=REGISTRY_TIMEOUT_SECONDS) as response:
+        token = Path(token_file).read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        token = ""
+    req = request.Request(url, headers={"X-SummitFlow-Owner-Token": token} if token else {})
+    try:
+        with request.urlopen(req, timeout=REGISTRY_TIMEOUT_SECONDS) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (error.HTTPError, error.URLError, OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
