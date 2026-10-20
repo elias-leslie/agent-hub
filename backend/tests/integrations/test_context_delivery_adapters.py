@@ -613,7 +613,10 @@ async def test_claude_session_hook_is_not_suppressed_by_a_stale_launcher_hash(
 
 
 @pytest.mark.asyncio
-async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None:
+@pytest.mark.parametrize("home_relative", [False, True])
+async def test_installer_links_sources_and_detects_drift(
+    tmp_path: Path, home_relative: bool
+) -> None:
     workspace = tmp_path / "workspace"
     fake_repo = workspace / "agent-hub"
     fake_claude = workspace / "claude-config"
@@ -622,7 +625,11 @@ async def test_installer_links_sources_and_detects_drift(tmp_path: Path) -> None
     shutil.copytree(REPO_ROOT / "integrations", fake_repo / "integrations")
     _executable(fake_repo / "backend/.venv/bin/agent-hub-context", "#!/bin/sh\nexit 0\n")
     (fake_claude / "hooks").mkdir(parents=True)
-    claude_command = f"{home}/.local/bin/agent-hub-context-client bind --surface claude_code"
+    claude_command = (
+        '"$HOME"/.local/bin/agent-hub-context-client bind --surface claude_code'
+        if home_relative
+        else f"{home}/.local/bin/agent-hub-context-client bind --surface claude_code"
+    )
     (fake_claude / "settings.json").write_text(
         json.dumps(
             {
@@ -833,20 +840,24 @@ def canonical_hook_is_exact() -> Callable[[dict[str, Any], dict[str, Any], Path]
 
 
 @pytest.mark.parametrize("event", ["SessionStart", "SubagentStart"])
+@pytest.mark.parametrize("home_form", ["absolute", "quoted", "unquoted"])
 @pytest.mark.parametrize("variant,expected", [
     ("unrelated", True), ("duplicate", False), ("missing", False),
-    ("timeout", False), ("type", False), ("matcher", False),
+    ("timeout", False), ("type", False), ("matcher", False), ("foreign_home", False),
 ])
 def test_codex_canonical_bind_coexists_without_duplicate_or_drift(
     tmp_path: Path,
     canonical_hook_is_exact: Callable[[dict[str, Any], dict[str, Any], Path], bool],
     event: str,
+    home_form: str,
     variant: str,
     expected: bool,
 ) -> None:
     command = f"{tmp_path}/.local/bin/agent-hub-context-client bind --surface codex"
     entry = {"event": event, "command": command, "timeout": 10}
-    bind = {"hooks": [{"type": "command", "command": command, "timeout": 10}]}
+    prefix = {"absolute": str(tmp_path), "quoted": '"$HOME"', "unquoted": "$HOME"}[home_form]
+    installed_command = f"{prefix}/.local/bin/agent-hub-context-client bind --surface codex"
+    bind = {"hooks": [{"type": "command", "command": installed_command, "timeout": 10}]}
     # Unrelated native context/status and ownership hooks may share an event.
     unrelated = {"hooks": [{"type": "command", "command": "operator-status-hook", "timeout": 30}]}
     groups: list[dict[str, Any]] = [unrelated, bind]
@@ -858,6 +869,8 @@ def test_codex_canonical_bind_coexists_without_duplicate_or_drift(
         bind["hooks"][0][variant] = 11 if variant == "timeout" else "prompt"
     elif variant == "matcher":
         bind["matcher"] = "startup"
+    elif variant == "foreign_home":
+        bind["hooks"][0]["command"] = "/other/home/.local/bin/agent-hub-context-client bind --surface codex"
     assert canonical_hook_is_exact({event: groups}, entry, tmp_path) is expected
 
 

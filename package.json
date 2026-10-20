@@ -8,11 +8,11 @@
       "@babel/core": "7.29.7",
       "baseline-browser-mapping": "2.11.0",
       "browserslist": "4.28.7",
-      "picomatch": ">=4.0.4",
+      "picomatch": ">=4.0.5",
       "ws": "8.21.0",
       "postcss": "8.5.23",
       "source-map-js": "1.2.2",
-      "vite": "8.0.16",
+      "vite": "8.1.6",
       "esbuild": "0.28.1",
       "sharp": "0.35.5"
     }

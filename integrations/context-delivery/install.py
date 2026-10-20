@@ -186,11 +186,22 @@ def _contains_exact_command(groups: list[Any], command: str) -> bool:
     return False
 
 
+def _canonical_hook_commands(command: str, home: Path) -> set[str]:
+    """Accept only the native adapters' explicit forms of this user's home prefix."""
+    commands = {command}
+    prefix = f"{home}/"
+    if command.startswith(prefix):
+        relative = command[len(prefix):]
+        commands.update({f'"$HOME"/{relative}', f"$HOME/{relative}"})
+    return commands
+
+
 def _canonical_hook_is_exact(
     hooks: dict[str, Any], entry: dict[str, Any], home: Path
 ) -> bool:
     expected = _expected_hook_group(entry, home)
     command = expected["hooks"][0]["command"]
+    commands = _canonical_hook_commands(command, home)
     groups = hooks.get(entry["event"])
     if not isinstance(groups, list):
         return False
@@ -198,14 +209,20 @@ def _canonical_hook_is_exact(
     for group in groups:
         if not isinstance(group, dict):
             continue
-        if group.get("command") == command:
+        if isinstance(group.get("command"), str) and group["command"] in commands:
             matches.append(group)
         native_hooks = group.get("hooks")
         if not isinstance(native_hooks, list):
             continue
         for hook in native_hooks:
-            if isinstance(hook, dict) and hook.get("command") == command:
-                matches.append(group)
+            if (isinstance(hook, dict) and isinstance(hook.get("command"), str)
+                    and hook["command"] in commands):
+                normalized = copy.deepcopy(group)
+                for candidate in normalized["hooks"]:
+                    if (isinstance(candidate, dict) and isinstance(candidate.get("command"), str)
+                            and candidate["command"] in commands):
+                        candidate["command"] = command
+                matches.append(normalized)
     return matches == [expected]
 
 
@@ -245,7 +262,8 @@ def _merge_hook(path: Path, entry: dict[str, Any], home: Path) -> dict[str, str]
             if existing_event != event and isinstance(existing_groups, list):
                 hooks[existing_event] = _remove_exact_command(existing_groups, command)
     if not _canonical_hook_is_exact(hooks, entry, home):
-        hooks[event] = _remove_exact_command(hooks[event], command)
+        for equivalent in _canonical_hook_commands(command, home):
+            hooks[event] = _remove_exact_command(hooks[event], equivalent)
         hooks[event].append(expected)
 
     if value == original:
