@@ -641,12 +641,21 @@ def build_params(
     if compat.thinking_format in ("zai", "qwen") and model.reasoning:
         params["enable_thinking"] = bool(reasoning_effort)
     elif compat.thinking_format == "qwen-chat-template" and model.reasoning:
-        params["chat_template_kwargs"] = {
-            "enable_thinking": bool(reasoning_effort),
-            "preserve_thinking": True,
-        }
-        if reasoning_effort and reasoning_effort in compat.reasoning_budget_tokens:
-            params["reasoning_budget_tokens"] = compat.reasoning_budget_tokens[reasoning_effort]
+        if compat.supports_reasoning_effort:
+            # Ollama ignores llama.cpp's template kwargs and token budgets. Its
+            # API rejects xhigh, and the installed Qwen template rejects high/max,
+            # so upper levels retain the template's default xhigh effort.
+            if reasoning_effort in (None, "minimal"):
+                params["reasoning_effort"] = "none"
+            elif reasoning_effort in ("low", "medium"):
+                params["reasoning_effort"] = reasoning_effort
+        else:
+            params["chat_template_kwargs"] = {
+                "enable_thinking": bool(reasoning_effort),
+                "preserve_thinking": True,
+            }
+            if reasoning_effort and reasoning_effort in compat.reasoning_budget_tokens:
+                params["reasoning_budget_tokens"] = compat.reasoning_budget_tokens[reasoning_effort]
     elif compat.thinking_format == "deepseek" and model.reasoning:
         params["thinking"] = {"type": "enabled" if reasoning_effort else "disabled"}
         if reasoning_effort:

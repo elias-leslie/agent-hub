@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
+from app.config import settings
 from app.llm.model_resolver import resolve_llm_model
-from app.llm.providers.openai_completions import _get_compat, _prepare_sdk_body, build_params
+from app.llm.providers.openai_completions import (
+    OpenAICompletionsOptions,
+    _get_compat,
+    _prepare_sdk_body,
+    build_params,
+)
 from app.llm.types import Context, UserMessage
 
 
@@ -104,6 +112,71 @@ def test_remote_non_reasoning_model_does_not_get_reasoning_effort() -> None:
     )
 
     assert "reasoning_effort" not in params
+
+
+@pytest.mark.parametrize(
+    ("effort", "upstream_effort"),
+    [
+        (None, "none"),
+        ("minimal", "none"),
+        ("low", "low"),
+        ("medium", "medium"),
+        ("high", None),
+        ("xhigh", None),
+    ],
+)
+def test_local_qwen_ollama_uses_supported_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+    effort,
+    upstream_effort,
+) -> None:
+    monkeypatch.setattr(settings, "local_openai_base_url", "http://127.0.0.1:11434/v1")
+    model = resolve_llm_model("local/qwen3.8-27b-gsq-rco-iq3_s", "local")
+    params = build_params(
+        model,
+        Context(messages=[UserMessage(content="Reply with exactly: OK", timestamp=1)]),
+        OpenAICompletionsOptions(reasoning_effort=effort, max_tokens=128),
+        _get_compat(model),
+        "none",
+    )
+    body = _prepare_sdk_body(params)
+
+    # Ollama ignores llama.cpp template kwargs and budget fields. Its API rejects
+    # xhigh, while this Qwen template rejects high/max; upper levels use its default.
+    assert body.get("reasoning_effort") == upstream_effort
+    if upstream_effort is None:
+        assert "reasoning_effort" not in body
+    assert "chat_template_kwargs" not in params
+    assert "reasoning_budget_tokens" not in params
+    assert body["max_tokens"] == 128
+
+
+@pytest.mark.parametrize(
+    ("effort", "budget"),
+    [(None, None), ("low", 512), ("medium", 1024), ("xhigh", 2048)],
+)
+def test_local_qwen_llama_cpp_keeps_chat_template_controls(
+    monkeypatch: pytest.MonkeyPatch,
+    effort,
+    budget,
+) -> None:
+    monkeypatch.setattr(settings, "local_openai_base_url", "http://127.0.0.1:8080/v1")
+    model = resolve_llm_model("local/qwen3.8-27b-gsq-rco-iq3_s", "local")
+    params = build_params(
+        model,
+        Context(messages=[UserMessage(content="hi", timestamp=1)]),
+        OpenAICompletionsOptions(reasoning_effort=effort),
+        _get_compat(model),
+        "none",
+    )
+    body = _prepare_sdk_body(params)
+
+    assert "reasoning_effort" not in body
+    assert body["extra_body"]["chat_template_kwargs"] == {
+        "enable_thinking": bool(effort),
+        "preserve_thinking": True,
+    }
+    assert body["extra_body"].get("reasoning_budget_tokens") == budget
 
 
 def test_base_url_provider_detection_matches_host_not_substring() -> None:

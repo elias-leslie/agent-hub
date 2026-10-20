@@ -63,6 +63,18 @@ def test_local_qwen_keeps_shared_endpoint_and_request_semantics(monkeypatch) -> 
     assert model.base_url == settings.local_openai_base_url
     assert isinstance(model.compat, OpenAICompletionsCompat)
     assert model.compat.thinking_format == "qwen-chat-template"
+    assert model.compat.supports_reasoning_effort is True
+    assert model.compat.reasoning_budget_tokens is None
+
+
+def test_local_qwen_llama_cpp_keeps_chat_template_request_semantics(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "local_openai_base_url", "http://127.0.0.1:8080/v1")
+    model = resolve_llm_model("local/qwen3.8-27b-gsq-rco-iq3_s", "local")
+
+    assert model.base_url == settings.local_openai_base_url
+    assert isinstance(model.compat, OpenAICompletionsCompat)
+    assert model.compat.thinking_format == "qwen-chat-template"
+    assert model.compat.supports_reasoning_effort is False
     assert model.compat.reasoning_budget_tokens == {"low": 512, "medium": 1024, "xhigh": 2048}
 
 

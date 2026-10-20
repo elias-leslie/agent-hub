@@ -12,6 +12,7 @@ the transitional surface.
 from __future__ import annotations
 
 from typing import cast
+from urllib.parse import urlparse
 
 from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
 from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
@@ -122,25 +123,28 @@ def resolve_llm_model(
         headers=headers,
         access_programs=entry.access_programs,
         compat=(
-            _local_qwen_compat()
+            _local_qwen_compat(base_url)
             if provider == "local" and entry.family == "qwen"
             else None
         ),
     )
 
 
-def _local_qwen_compat() -> OpenAICompletionsCompat:
-    """Preserve Qwen chat-template semantics for local model administration."""
+def _local_qwen_compat(base_url: str) -> OpenAICompletionsCompat:
+    """Use Ollama's effort API on its endpoint; retain llama.cpp template controls."""
+    is_ollama = urlparse(base_url).port == 11434
     return OpenAICompletionsCompat(
         supports_store=False,
         supports_developer_role=False,
-        supports_reasoning_effort=False,
+        supports_reasoning_effort=is_ollama,
         supports_usage_in_streaming=True,
         max_tokens_field="max_tokens",
         thinking_format="qwen-chat-template",
         supports_strict_mode=False,
         supports_long_cache_retention=False,
-        reasoning_budget_tokens={"low": 512, "medium": 1_024, "xhigh": 2_048},
+        reasoning_budget_tokens=(
+            None if is_ollama else {"low": 512, "medium": 1_024, "xhigh": 2_048}
+        ),
         loopback_only_transport=True,
     )
 
