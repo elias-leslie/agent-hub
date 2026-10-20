@@ -16,6 +16,13 @@ from tests.model_ids import CODEX_GPT_6_1_SOL
 _ORCH = "app.api.complete.complete_orchestrator"
 
 
+@pytest.fixture(autouse=True)
+def no_provider_cooldown():
+    # Redis cooldown behavior has separate orchestration coverage.
+    with patch(f"{_ORCH}.get_provider_rate_limit_cooldown_remaining", new_callable=AsyncMock, return_value=None):
+        yield
+
+
 def _mock_agent() -> MagicMock:
     mock_agent = MagicMock()
     mock_agent.model = CODEX_GPT_6_1_SOL

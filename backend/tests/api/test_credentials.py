@@ -46,7 +46,10 @@ def mock_encryption():
     """Mock encryption settings for all tests."""
     with patch("app.storage.credentials.settings") as mock_settings:
         mock_settings.agent_hub_encryption_key = TEST_KEY
-        with patch("app.api.credentials.EncryptionError", Exception):
+        with (
+            patch("app.api.credentials.EncryptionError", Exception),
+            patch("app.api.credentials.reset_provider_cooldown_after_credential_change", new_callable=AsyncMock),
+        ):
             yield mock_settings
 
 
