@@ -150,7 +150,7 @@ class TestPromptHistoryCommands:
         content_file = tmp_path / "prompt.md"
         content_file.write_text("Keep signal, cut filler.\n", encoding="utf-8")
 
-        with patch("agent_hub_st.prompt.prompt_api", return_value={"content": "Keep signal, cut filler.\n"}) as mock_prompt_api:
+        with patch("agent_hub_st.memory_api.agent_hub_request", side_effect=AssertionError("unexpected runtime request")) as runtime_request, patch("agent_hub_st.prompt.prompt_api", return_value={"content": "Keep signal, cut filler.\n"}) as mock_prompt_api:
             result = runner.invoke(
                 app,
                 [
@@ -164,6 +164,7 @@ class TestPromptHistoryCommands:
             )
 
         assert result.exit_code == 0
+        runtime_request.assert_not_called()
         mock_prompt_api.assert_called_once_with(
             "PUT",
             "/persona-heartbeat-instructions",
@@ -201,20 +202,21 @@ class TestPromptHistoryCommands:
 
 
     def test_measure_fetches_current_prompt_when_no_candidate_file(self) -> None:
-        with patch(
+        with patch("agent_hub_st.memory_api.agent_hub_request", side_effect=AssertionError("unexpected runtime request")) as runtime_request, patch(
             "agent_hub_st.prompt.prompt_api",
             return_value={"content": "Keep signal, cut filler.\n"},
         ) as mock_prompt_api:
             result = runner.invoke(app, ["measure", "persona-heartbeat-instructions"])
 
         assert result.exit_code == 0
+        runtime_request.assert_not_called()
         mock_prompt_api.assert_called_once_with("GET", "/persona-heartbeat-instructions")
 
     def test_measure_reads_candidate_file_when_provided(self, tmp_path: Path) -> None:
         candidate_file = tmp_path / "prompt.md"
         candidate_file.write_text("Compressed wording.\n", encoding="utf-8")
 
-        with patch(
+        with patch("agent_hub_st.memory_api.agent_hub_request", side_effect=AssertionError("unexpected runtime request")) as runtime_request, patch(
             "agent_hub_st.prompt.prompt_api",
             return_value={"content": "Keep signal, cut filler.\n"},
         ) as mock_prompt_api:
@@ -224,6 +226,7 @@ class TestPromptHistoryCommands:
             )
 
         assert result.exit_code == 0
+        runtime_request.assert_not_called()
         mock_prompt_api.assert_called_once_with("GET", "/persona-heartbeat-instructions")
 
     def test_search_finds_metadata_and_content_matches(self) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from unittest.mock import patch
 
@@ -18,13 +19,16 @@ note_app = typer.Typer()
 note_app.command("note")(note_mod.note)
 
 
-def test_mandates_preserves_compact_and_json_contracts(monkeypatch) -> None:
+def test_mandates_preserves_compact_and_json_contracts(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv(mandates_mod._CONTRACT_ENV, raising=False)
     fake = {
-        "status": "ok", "estimated_tokens": 7, "payload_hash": "abc123", "rendered": "x",
+        "status": "ok", "estimated_tokens": 7, "payload_hash": hashlib.sha256(b"x").hexdigest(), "rendered": "x",
         "blocks": [{"block_id": "prompt:a", "kind": "global_guardrail", "title": "A", "estimated_tokens": 7}],
     }
-    with patch.object(mandates_mod, "agent_hub_request", return_value=fake):
+    artifact = tmp_path / "saved.json"
+    artifact.write_text(json.dumps(fake), encoding="utf-8")
+    monkeypatch.setenv(mandates_mod._CONTRACT_ENV, str(artifact))
+    with patch("socket.socket.connect", side_effect=AssertionError("unexpected network")):
         compact = runner.invoke(mandates_app, [], obj=OutputContext(compact=True))
         structured = runner.invoke(mandates_app, [], obj=OutputContext(compact=False))
 
@@ -33,7 +37,8 @@ def test_mandates_preserves_compact_and_json_contracts(monkeypatch) -> None:
     data = json.loads(structured.stdout)
     assert data["items"] == fake["blocks"]
     assert data["count"] == 1
-    assert data["payload_hash"] == "abc123"
+    assert data["payload_hash"] == fake["payload_hash"]
+    assert data["source"] == "saved"
 
 
 def test_note_saves_a_reference_episode_with_kind_tag() -> None:

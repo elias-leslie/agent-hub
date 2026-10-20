@@ -7,11 +7,9 @@ from typing import Annotated, Any
 
 import typer
 from st_sdk.output import output_error
-from st_sdk.state import is_compact
 from st_sdk.usage import usage
 
 from ._api_paths import PROMPT_RESTORE_PATH, PROMPT_REVISIONS_PATH
-from .mandates import delivery_warnings
 from .memory_options import ChangeReasonOpt, HistoryLimitOpt
 from .prompt_api import prompt_api
 from .prompt_formatters import (
@@ -196,8 +194,6 @@ def update_prompt(
         payload["change_reason"] = change_reason
     p = prompt_api("PUT", f"/{slug}", json=payload)
     format_updated(slug, p.get("content", ""), p)
-    if "content" in payload:
-        _print_context_warnings(slug)
 
 
 @app.command("revisions")
@@ -244,19 +240,6 @@ def measure_prompt(
             raise typer.Exit(1)
         candidate_content = file.read_text()
     format_prompt_measure(slug, current_content, candidate_content)
-    _print_context_warnings(slug, candidate_content)
-
-
-def _print_context_warnings(slug: str, candidate: str | None = None) -> None:
-    """Print CONTEXT_WARN lines for this prompt's delivered block; never fail the command."""
-    if not is_compact():
-        return
-    try:
-        warnings = delivery_warnings(f"prompt:{slug}", candidate)
-    except Exception:  # noqa: BLE001 - advisory audit only
-        return
-    for warning in warnings:
-        print(warning)
 
 
 @app.command("delete")
