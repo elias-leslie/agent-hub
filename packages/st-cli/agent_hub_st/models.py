@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from typing import Annotated, Any
 
 import typer
@@ -12,7 +15,7 @@ from ._api_paths import MODELS_BASE_PATH
 from .agents_formatters import print_table
 from .memory_api import agent_hub_request
 
-app = typer.Typer(help="Agent Hub model catalog")
+app = typer.Typer(help="Agent Hub model catalog and managed local downloads")
 
 
 def _models_api() -> dict[str, Any]:
@@ -153,3 +156,31 @@ def list_models(
         limit=limit,
         as_json=as_json,
     )
+
+
+@app.command("pull")
+@usage(
+    surface="st.models.pull",
+    cmd="st models pull MODEL",
+    when="download a public model while the local Ollama daemon stays offline",
+    precautions="Uses managed resource admission and a temporary loopback registry. Refuses to replace an existing different manifest; requires the official ollama CLI and a running local daemon.",
+    task_types=("model-admin",),
+    on_demand="model administration",
+    tier="reference",
+)
+def pull_model(model: Annotated[str, typer.Argument(help="Public Ollama [namespace/]name[:tag].")]) -> None:
+    """Download through an ephemeral registry; preserve the native model manifest."""
+    from .model_download_registry import model_name
+
+    try:
+        model_name(model)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    # The extension may be loaded from a checkout rather than an installed wheel.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    result = subprocess.run(
+        ["st", "tools", "run", "--label", f"Download Ollama model {model}", "--",
+         sys.executable, "-m", "agent_hub_st.model_download", model],
+        env=env, check=False,
+    )
+    raise typer.Exit(result.returncode)

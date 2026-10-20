@@ -7,6 +7,21 @@ entry point accepts a fixed leading namespace, for example:
 agent-hub-st models list --json
 ```
 
+`st models pull [namespace/]name[:tag]` downloads a public Ollama model through
+managed resource admission. The official `ollama` CLI and a running local daemon
+are required. A temporary agent-owned loopback registry serves only the frozen
+manifest and its referenced blobs; upstream HTTPS redirects stay inside the
+helper. Native pull/copy preserves all model metadata, and the command verifies
+the installed manifest digest. An existing different destination is refused.
+The temporary alias and listener are removed on completion or cancellation.
+
+Defaults are `https://registry.ollama.ai` and `http://127.0.0.1:11434`;
+`ST_MODELS_REGISTRY` can select another HTTPS registry origin, and
+`ST_MODELS_OLLAMA_HOST` can select a different HTTP port on `127.0.0.1`.
+No daemon configuration or inference request is involved. Ollama 0.30.5's
+tensor downloader may transfer a blob twice because it follows a local
+`Location` header even on a successful streamed response.
+
 ## Public helper contract
 
 Version `1`, exposed as `agent_hub_st.PUBLIC_HELPER_API_VERSION`, supports these
