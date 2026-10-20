@@ -28,7 +28,7 @@ def installed_models(endpoint: str) -> dict[str, str]:
     with httpx.Client(trust_env=False, timeout=10) as client:
         response = client.get(f"{endpoint}/api/tags")
         response.raise_for_status()
-        return {item["name"]: item["digest"] for item in response.json()["models"]}
+        return {item["name"].lower(): "sha256:" + item["digest"].removeprefix("sha256:") for item in response.json()["models"]}
 
 
 def installed_digest(endpoint: str, model: str) -> str | None:
@@ -37,7 +37,7 @@ def installed_digest(endpoint: str, model: str) -> str | None:
             candidate = model_name(name)
         except ValueError:
             continue  # Temporary loopback names are not public destination names.
-        if candidate == model_name(model):
+        if candidate == model_name(model.lower()):
             return digest
     return None
 
@@ -64,10 +64,13 @@ def pull(model: str) -> None:
         if before is not None:
             raise ValueError("Destination already contains a different manifest; choose a different model tag.")
         with registry.serve() as temporary:
-            if temporary in installed_models(endpoint):
+            alias = temporary.lower()
+            if alias in installed_models(endpoint):
                 raise ValueError("Temporary registry name already exists; leaving it unchanged.")
             try:
                 native(endpoint, "pull", "--insecure", temporary)
+                if installed_models(endpoint).get(alias) != registry.digest:
+                    raise ValueError("Temporary model manifest did not match the frozen public manifest.")
                 if installed_digest(endpoint, model) is not None:
                     raise ValueError("Destination appeared during download; leaving it unchanged.")
                 native(endpoint, "cp", temporary, model)
@@ -75,9 +78,13 @@ def pull(model: str) -> None:
                     raise ValueError("Installed model manifest did not match the frozen public manifest.")
             finally:
                 try:
-                    native(endpoint, "rm", temporary, quiet=True)
-                except (subprocess.SubprocessError, OSError) as exc:
-                    raise ValueError(f"Could not remove temporary model {temporary}; remove that exact alias with ollama rm.") from exc
+                    current = installed_models(endpoint).get(alias)
+                    if current is not None:
+                        if current != registry.digest:
+                            raise ValueError("Temporary model identity changed.")
+                        native(endpoint, "rm", temporary, quiet=True)
+                except (httpx.HTTPError, httpx.InvalidURL, KeyError, TypeError, ValueError, subprocess.SubprocessError, OSError) as exc:
+                    raise ValueError(f"Temporary model cleanup incomplete for {temporary}; its current identity could not be safely removed.") from exc
         print(f"Installed {model} ({registry.digest}).", flush=True)
     finally:
         registry.close()

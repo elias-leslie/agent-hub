@@ -118,7 +118,9 @@ class FakeRegistry:
 def test_native_copy_identity_and_exact_cleanup(monkeypatch, failure):
     reg = FakeRegistry()
     monkeypatch.setattr(download, "Registry", lambda *args: reg)
-    monkeypatch.setattr(download, "installed_models", lambda endpoint: {})
+    state = {}
+    temporary = "127.0.0.1:12345/library/tiny:latest"
+    monkeypatch.setattr(download, "installed_models", lambda endpoint: state)
     calls = []
     digests = iter([None, None, "wrong" if failure == "verify" else DIGEST])
     monkeypatch.setattr(download, "installed_digest", lambda *args: next(digests))
@@ -129,6 +131,8 @@ def test_native_copy_identity_and_exact_cleanup(monkeypatch, failure):
             raise subprocess.CalledProcessError(1, "ollama")
         if failure == "cancel" and args[0] == "pull":
             raise KeyboardInterrupt
+        if args[0] == "pull":
+            state[temporary] = DIGEST
 
     monkeypatch.setattr(download, "native", native)
     if failure:
@@ -138,7 +142,10 @@ def test_native_copy_identity_and_exact_cleanup(monkeypatch, failure):
         download.pull("tiny")
         assert calls[1] == ("cp", "127.0.0.1:12345/library/tiny:latest", "tiny")
     assert calls[0] == ("pull", "--insecure", "127.0.0.1:12345/library/tiny:latest")
-    assert calls[-1] == ("rm", "127.0.0.1:12345/library/tiny:latest")
+    if failure in ("pull", "cancel"):
+        assert len(calls) == 1  # No alias was installed, so cleanup has nothing to remove.
+    else:
+        assert calls[-1] == ("rm", temporary)
     assert reg.closed and reg.stopped
 
 
@@ -152,6 +159,24 @@ def test_existing_destination_is_never_overwritten(monkeypatch):
     assert reg.closed
 
 
+def test_ollama_bare_manifest_digest_is_normalized(monkeypatch):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"models": [{"name": "tiny:latest", "digest": DIGEST.removeprefix("sha256:")}]}))
+    monkeypatch.setattr(download.httpx, "Client", lambda **kwargs: CLIENT(transport=transport, **kwargs))
+    assert download.installed_digest("http://127.0.0.1:11434", "library/tiny") == DIGEST
+
+
+def test_local_collisions_ignore_case_without_changing_upstream_tag(monkeypatch):
+    fetched = []
+    monkeypatch.setattr(download, "Registry", lambda model, base: fetched.append(model) or FakeRegistry())
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"models": [{"name": "TiNy:v1", "digest": "0" * 64}]}))
+    monkeypatch.setattr(download.httpx, "Client", lambda **kwargs: CLIENT(transport=transport, **kwargs))
+    monkeypatch.setattr(download, "native", lambda *args, **kwargs: pytest.fail("must preserve different destination"))
+    with pytest.raises(ValueError, match="already contains"):
+        download.pull("tiny:V1")
+    assert fetched == ["tiny:V1"]
+    assert relay.model_name("tiny:V1") == ("library/tiny", "V1")
+
+
 @pytest.mark.parametrize("collision", ["destination", "temporary"])
 def test_concurrent_destination_and_stale_temporary_alias_are_preserved(monkeypatch, collision):
     reg = FakeRegistry()
@@ -159,9 +184,16 @@ def test_concurrent_destination_and_stale_temporary_alias_are_preserved(monkeypa
     digests = iter([None, "appeared"])
     monkeypatch.setattr(download, "installed_digest", lambda *args: next(digests))
     temporary = "127.0.0.1:12345/library/tiny:latest"
-    monkeypatch.setattr(download, "installed_models", lambda endpoint: {temporary: DIGEST} if collision == "temporary" else {})
+    state = {temporary: DIGEST} if collision == "temporary" else {}
+    monkeypatch.setattr(download, "installed_models", lambda endpoint: state)
     calls = []
-    monkeypatch.setattr(download, "native", lambda endpoint, *args, **kwargs: calls.append(args))
+
+    def native(endpoint, *args, **kwargs):
+        calls.append(args)
+        if args[0] == "pull":
+            state[temporary] = DIGEST
+
+    monkeypatch.setattr(download, "native", native)
     with pytest.raises(ValueError, match="leaving it unchanged"):
         download.pull("tiny")
     assert not any(call[0] == "cp" for call in calls)
@@ -171,17 +203,47 @@ def test_concurrent_destination_and_stale_temporary_alias_are_preserved(monkeypa
 
 def test_cleanup_failure_is_reported_as_failure(monkeypatch):
     monkeypatch.setattr(download, "Registry", lambda *args: FakeRegistry())
-    monkeypatch.setattr(download, "installed_models", lambda endpoint: {})
+    state = {}
+    temporary = "127.0.0.1:12345/library/tiny:latest"
+    monkeypatch.setattr(download, "installed_models", lambda endpoint: state)
     digests = iter([None, None, DIGEST])
     monkeypatch.setattr(download, "installed_digest", lambda *args: next(digests))
 
     def native(endpoint, *args, **kwargs):
+        if args[0] == "pull":
+            state[temporary] = DIGEST
         if args[0] == "rm":
             raise subprocess.CalledProcessError(1, "ollama")
 
     monkeypatch.setattr(download, "native", native)
-    with pytest.raises(ValueError, match="Could not remove temporary model"):
+    with pytest.raises(ValueError, match="cleanup incomplete"):
         download.pull("tiny")
+
+
+@pytest.mark.parametrize("changed_at", ["pull", "cp"])
+def test_changed_temporary_alias_is_never_copied_or_removed(monkeypatch, changed_at):
+    monkeypatch.setattr(download, "Registry", lambda *args: FakeRegistry())
+    temporary = "127.0.0.1:12345/library/tiny:latest"
+    state = {}
+    monkeypatch.setattr(download, "installed_models", lambda endpoint: state)
+    monkeypatch.setattr(download, "installed_digest", lambda *args: None)
+    calls = []
+
+    def native(endpoint, *args, **kwargs):
+        calls.append(args)
+        if args[0] == "pull":
+            state[temporary] = DIGEST
+        if args[0] == changed_at:
+            state[temporary] = "changed"
+            if changed_at == "cp":
+                raise subprocess.CalledProcessError(1, "ollama")
+
+    monkeypatch.setattr(download, "native", native)
+    with pytest.raises(ValueError, match="cleanup incomplete"):
+        download.pull("tiny")
+    assert not any(call[0] == "rm" for call in calls)
+    if changed_at == "pull":
+        assert not any(call[0] == "cp" for call in calls)
 
 
 def test_pull_launches_admitted_child_and_exposes_usage(monkeypatch):
