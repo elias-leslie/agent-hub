@@ -361,7 +361,7 @@ def _review_benchmark_run(
 
 
 @pytest.mark.asyncio
-async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() -> None:
+async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop(tmp_path: Path) -> None:
     client = _FakeImprovementClient()
     run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
 
@@ -384,7 +384,7 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
             review_run=None,
             previous_review_clusters=None,
             timeout_seconds=5.0,
-            working_root=Path("/tmp/persona-honing-test"),
+            working_root=tmp_path,
         )
 
     assert session_id == "sess-improve"
@@ -485,7 +485,7 @@ def test_parse_decision_review_content_tolerates_narration() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_decision_review_uses_freeform_completion_and_parses_json() -> None:
+async def test_run_decision_review_uses_freeform_completion_and_parses_json(tmp_path: Path) -> None:
     from scripts.persona_honing._experiment import _run_decision_review
 
     client = _FakeDecisionReviewClient()
@@ -513,7 +513,7 @@ async def test_run_decision_review_uses_freeform_completion_and_parses_json() ->
             experiment_key="exp-1234",
             project_id="agent-hub",
             timeout_seconds=60.0,
-            working_root=Path("/tmp/persona-honing-test"),
+            working_root=tmp_path,
             proposed_decision="hold",
             proposed_reason="no_clear_winner",
             experiment_summary={"decision": "hold", "decision_reason": "no_clear_winner"},
@@ -586,7 +586,7 @@ async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> 
 
 
 @pytest.mark.asyncio
-async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
+async def test_run_honing_loop_rolls_back_non_promoted_candidate(tmp_path: Path) -> None:
     baseline_run = _benchmark_run("baseline-1", [_failing_attempt("session_patience_quiet")])
     extra_baseline_run = _benchmark_run("baseline-2", [_failing_attempt("session_patience_quiet")])
     candidate_run_1 = _benchmark_run("candidate-1", [_failing_attempt("session_patience_quiet")])
@@ -636,8 +636,8 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             case_ids=["session_patience_quiet"],
             runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/persona-honing-test"),
-            output_dir=Path("/tmp/persona-honing-test/reports"),
+            working_root=tmp_path,
+            output_dir=tmp_path / "reports",
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",
@@ -654,7 +654,7 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> None:
+async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed(tmp_path: Path) -> None:
     baseline_run = _benchmark_run("baseline-1", [_failing_attempt("session_patience_quiet")])
     extra_baseline_run = _benchmark_run("baseline-2", [_failing_attempt("session_patience_quiet")])
     candidate_run_1 = _benchmark_run("candidate-1", [_passing_attempt("session_patience_quiet")])
@@ -704,8 +704,8 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
             case_ids=["session_patience_quiet"],
             runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/persona-honing-test"),
-            output_dir=Path("/tmp/persona-honing-test/reports"),
+            working_root=tmp_path,
+            output_dir=tmp_path / "reports",
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",
@@ -723,7 +723,9 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
 
 
 @pytest.mark.asyncio
-async def test_run_honing_loop_rolls_back_when_completion_review_surface_regresses() -> None:
+async def test_run_honing_loop_rolls_back_when_completion_review_surface_regresses(
+    tmp_path: Path,
+) -> None:
     baseline_run = _benchmark_run("baseline-1", [_failing_attempt("session_patience_quiet")])
     extra_baseline_run = _benchmark_run("baseline-2", [_failing_attempt("session_patience_quiet")])
     candidate_run_1 = _benchmark_run("candidate-1", [_passing_attempt("session_patience_quiet")])
@@ -808,8 +810,8 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             reviewer_case_ids=["review_recent_progress_patience"],
             reviewer_runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/persona-honing-test"),
-            output_dir=Path("/tmp/persona-honing-test/reports"),
+            working_root=tmp_path,
+            output_dir=tmp_path / "reports",
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",
