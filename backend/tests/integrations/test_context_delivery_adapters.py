@@ -887,7 +887,7 @@ def test_codex_sources_preserve_native_prompt_and_use_canonical_hooks(
             "event": event,
             "command": "{home}/.local/bin/agent-hub-context-client bind --surface codex",
             "timeout": 10,
-        }, Path("/home/kasadis"))
+        }, Path("$HOME"))
 
 
 def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
