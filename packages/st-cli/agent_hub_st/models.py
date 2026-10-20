@@ -163,7 +163,7 @@ def list_models(
     surface="st.models.pull",
     cmd="st models pull MODEL",
     when="download a public model while the local Ollama daemon stays offline",
-    precautions="Uses managed resource admission and a temporary loopback registry. Refuses to replace an existing different manifest; requires the official ollama CLI and a running local daemon.",
+    precautions=("Uses managed resource admission and a temporary loopback registry. Refuses to replace an existing different manifest; requires the official ollama CLI and a running local daemon.",),
     task_types=("model-admin",),
     on_demand="model administration",
     tier="reference",
