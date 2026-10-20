@@ -173,6 +173,13 @@ async def _check_quotas(
 
         budget_result = await check_project_budget(request.project_id, db)
         if not budget_result.allowed:
+            if budget_result.failure_kind == "permission_missing":
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Project permission not configured: '{request.project_id}'.",
+                )
+            if budget_result.failure_kind == "check_error":
+                raise HTTPException(status_code=503, detail="Project budget check unavailable.")
             raise HTTPException(status_code=429, detail=f"Project budget exceeded: {budget_result.reason}")
 
 

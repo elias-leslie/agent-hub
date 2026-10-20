@@ -2,13 +2,82 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from app.api.complete.orchestration_helpers import execute_and_respond
 from app.api.complete.types import CompletionInternalResult
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("permission", "usage", "expected_status", "expected_detail"),
+    [
+        (None, None, 403, "Project permission not configured: 'test-project'."),
+        (
+            SimpleNamespace(
+                daily_cost_budget_usd=10.0, monthly_cost_budget_usd=100.0,
+                budget_alert_threshold=0.8,
+            ),
+            ["10", "50"],
+            429,
+            "Project budget exceeded: daily budget exceeded: $10.0000 >= $10.0000",
+        ),
+        (
+            SimpleNamespace(
+                daily_cost_budget_usd=10.0, monthly_cost_budget_usd=100.0,
+                budget_alert_threshold=0.8,
+            ),
+            ["5", "100"],
+            429,
+            "Project budget exceeded: monthly budget exceeded: $100.0000 >= $100.0000",
+        ),
+        (
+            SimpleNamespace(
+                daily_cost_budget_usd=10.0, monthly_cost_budget_usd=100.0,
+                budget_alert_threshold=0.8,
+            ),
+            ConnectionError("Redis unavailable"),
+            503,
+            "Project budget check unavailable.",
+        ),
+    ],
+)
+async def test_completion_quota_denial_classifies_missing_permission_and_exhausted_budget(
+    permission, usage, expected_status, expected_detail,
+) -> None:
+    from app.api.complete.complete_orchestrator import orchestrate_completion
+
+    db = AsyncMock()
+    db_result = MagicMock()
+    db_result.scalar_one_or_none.return_value = permission
+    db.execute.return_value = db_result
+    redis = AsyncMock()
+    redis.get.side_effect = usage
+    with (
+        patch("app.services.project_budget._get_redis", return_value=redis),
+        patch(
+            "app.api.complete.complete_orchestrator._validate_and_resolve",
+            new=AsyncMock(return_value=("trace", None, None, "model", "provider", None, None, None)),
+        ),
+        patch(
+            "app.api.complete.complete_orchestrator._guard_provider_cooldowns",
+            new_callable=AsyncMock,
+        ) as provider_guard,
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await orchestrate_completion(
+            SimpleNamespace(session_id=None, project_id="test-project"),
+            SimpleNamespace(), False, db,
+        )
+
+    assert exc_info.value.status_code == expected_status
+    assert exc_info.value.detail == expected_detail
+    provider_guard.assert_not_awaited()
+    if permission is None:
+        redis.get.assert_not_called()
 
 
 @pytest.mark.asyncio

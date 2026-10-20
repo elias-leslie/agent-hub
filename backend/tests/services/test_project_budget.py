@@ -102,6 +102,7 @@ async def test_budget_check_fails_daily_limit_exceeded(mock_redis):
     assert result.allowed is False
     assert result.reason is not None
     assert "daily" in result.reason
+    assert result.failure_kind == "budget_exceeded"
     assert result.alert_level == "critical"
 
 
@@ -117,6 +118,7 @@ async def test_budget_check_fails_monthly_limit_exceeded(mock_redis):
     assert result.allowed is False
     assert result.reason is not None
     assert "monthly" in result.reason
+    assert result.failure_kind == "budget_exceeded"
     assert result.alert_level == "critical"
 
 
@@ -158,6 +160,7 @@ async def test_budget_check_fail_closed_on_redis_error(mock_redis):
     assert result.allowed is False
     assert result.reason is not None
     assert "budget check error" in result.reason
+    assert result.failure_kind == "check_error"
 
 
 @pytest.mark.asyncio
@@ -171,6 +174,7 @@ async def test_budget_check_fail_closed_on_db_error(mock_redis):
     assert result.allowed is False
     assert result.reason is not None
     assert "budget check error" in result.reason
+    assert result.failure_kind == "check_error"
 
 
 @pytest.mark.asyncio
@@ -183,6 +187,8 @@ async def test_budget_check_fail_closed_on_unknown_project(mock_redis):
     assert result.allowed is False
     assert result.reason is not None
     assert "no permission record" in result.reason
+    assert result.failure_kind == "permission_missing"
+    mock_redis.get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +455,7 @@ async def test_budget_check_fails_at_exact_daily_limit(mock_redis):
     result = await check_project_budget("test-project-1", db=mock_db)
 
     assert result.allowed is False
+    assert result.reason is not None
     assert "daily" in result.reason
 
 

@@ -9,6 +9,7 @@ Fail-CLOSED on errors: budget enforcement is a security/cost gate.
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -48,6 +49,7 @@ class BudgetCheckResult:
     daily_limit_usd: float | None
     monthly_limit_usd: float | None
     alert_level: str | None  # None, "warning", "critical"
+    failure_kind: Literal["permission_missing", "budget_exceeded", "check_error"] | None = None
 
 
 async def check_project_budget(project_id: str, db: AsyncSession | None = None) -> BudgetCheckResult:
@@ -82,6 +84,7 @@ async def check_project_budget(project_id: str, db: AsyncSession | None = None) 
             return BudgetCheckResult(
                 allowed=False,
                 reason=f"no permission record for project '{project_id}'",
+                failure_kind="permission_missing",
                 daily_usage_usd=0.0,
                 monthly_usage_usd=0.0,
                 daily_limit_usd=None,
@@ -122,6 +125,7 @@ async def check_project_budget(project_id: str, db: AsyncSession | None = None) 
             return BudgetCheckResult(
                 allowed=False,
                 reason=f"daily budget exceeded: ${daily_usage:.4f} >= ${daily_limit:.4f}",
+                failure_kind="budget_exceeded",
                 daily_usage_usd=daily_usage,
                 monthly_usage_usd=monthly_usage,
                 daily_limit_usd=daily_limit,
@@ -133,6 +137,7 @@ async def check_project_budget(project_id: str, db: AsyncSession | None = None) 
             return BudgetCheckResult(
                 allowed=False,
                 reason=f"monthly budget exceeded: ${monthly_usage:.4f} >= ${monthly_limit:.4f}",
+                failure_kind="budget_exceeded",
                 daily_usage_usd=daily_usage,
                 monthly_usage_usd=monthly_usage,
                 daily_limit_usd=daily_limit,
@@ -161,6 +166,7 @@ async def check_project_budget(project_id: str, db: AsyncSession | None = None) 
         return BudgetCheckResult(
             allowed=False,
             reason=f"budget check error: {e}",
+            failure_kind="check_error",
             daily_usage_usd=0.0,
             monthly_usage_usd=0.0,
             daily_limit_usd=None,
