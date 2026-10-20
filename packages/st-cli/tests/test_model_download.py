@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
+import sys
 from contextlib import contextmanager
 
 import httpx
@@ -254,7 +256,40 @@ def test_pull_launches_admitted_child_and_exposes_usage(monkeypatch):
     args, kwargs = calls[0]
     assert args[:6] == ["st", "tools", "run", "--label", "Download Ollama model tiny", "--"]
     assert args[-3:] == ["-m", "agent_hub_st.model_download", "tiny"]
-    assert "PYTHONPATH" in kwargs["env"]
+    assert "env" not in kwargs
     spec = next(spec for spec in collect_usage_specs(models.app) if spec.surface == "st.models.pull")
     assert spec.on_demand == "model administration"
     assert CliRunner().invoke(models.app, ["pull", "--help"]).exit_code == 0
+
+
+def test_admission_subprocess_does_not_export_owner_import_path(monkeypatch, tmp_path):
+    """A fixture ST core and owner both provide app; only the child uses owner Python."""
+    owner = tmp_path / "owner"
+    core = tmp_path / "core"
+    for root, identity in ((owner, "agent-hub"), (core, "summitflow")):
+        package = root / "app"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("")
+        (package / "config.py").write_text(f"IDENTITY = {identity!r}\n")
+    # This represents the extension's in-process import path, never an ST env var.
+    monkeypatch.syspath_prepend(str(owner))
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    marker = tmp_path / "child-ok"
+    st = tmp_path / "st"
+    child_code = f"import agent_hub_st.model_download; from pathlib import Path; Path({str(marker)!r}).write_text('ok')"
+    st.write_text(
+        f"#!{sys.executable} -S\n"  # Fixture core has no owner editable-site hooks.
+        "import subprocess, sys\n"
+        f"sys.path.append({str(core)!r})\n"
+        "from app.config import IDENTITY\n"
+        "assert IDENTITY == 'summitflow', IDENTITY\n"
+        "assert sys.argv[1:3] == ['tools', 'run']\n"
+        "assert sys.argv[-3:] == ['-m', 'agent_hub_st.model_download', 'tiny']\n"
+        f"assert sys.argv[-4] == {sys.executable!r}\n"
+        f"subprocess.run([sys.argv[-4], '-c', {child_code!r}], check=True)\n"
+    )
+    st.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
+    result = CliRunner().invoke(models.app, ["pull", "tiny"])
+    assert result.exit_code == 0, result.output
+    assert marker.read_text() == "ok"

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from typing import Annotated, Any
@@ -176,11 +175,10 @@ def pull_model(model: Annotated[str, typer.Argument(help="Public Ollama [namespa
         model_name(model)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    # The extension may be loaded from a checkout rather than an installed wheel.
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    # Keep ST's import environment separate; this interpreter has the owner wheel.
     result = subprocess.run(
         ["st", "tools", "run", "--label", f"Download Ollama model {model}", "--",
          sys.executable, "-m", "agent_hub_st.model_download", model],
-        env=env, check=False,
+        check=False,
     )
     raise typer.Exit(result.returncode)
