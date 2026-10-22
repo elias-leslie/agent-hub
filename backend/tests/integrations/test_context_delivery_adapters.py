@@ -1185,25 +1185,31 @@ async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_pat
     if int(version.lstrip("v").split(".")[0]) < 24:
         pytest.skip("Node 24 required for built-in TypeScript execution")
     log = tmp_path / "sync.jsonl"
+    transcript = tmp_path / "native.jsonl"
     client = _executable(tmp_path / "client", "#!/usr/bin/env python3\nimport json, os, sys\n"
         "with open(os.environ['SYNC_LOG'], 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\\n')\n")
     extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
     harness = _executable(tmp_path / "sync.mjs",
         "import install from " + json.dumps(extension.as_uri()) + ";\n"
+        "import {existsSync, writeFileSync} from 'node:fs';\n"
         "const handlers = new Map(); await install({on:(n,h)=>handlers.set(n,h),registerCommand:()=>{}});\n"
         "let id = '00000000-0000-4000-8000-000000000001';\n"
         "const ctx = {cwd: '/fixture', hasUI:false, model:{provider:'openai-codex',id:'gpt-6.1-sol'},\n"
-        "sessionManager:{getSessionId:()=>id,getSessionFile:()=>'/fixture/native.jsonl'}};\n"
-        "for(const event of ['session_start','agent_start','agent_end','session_shutdown']) await handlers.get(event)({},ctx);\n"
+        "sessionManager:{getSessionId:()=>id,getSessionFile:()=>process.env.SYNC_TRANSCRIPT}};\n"
+        "await handlers.get('session_start')({},ctx);\n"
+        "if(existsSync(process.env.SYNC_LOG)) throw new Error('synced before transcript existed');\n"
+        "writeFileSync(process.env.SYNC_TRANSCRIPT,'{}\\n');\n"
+        "for(const event of ['agent_start','agent_end','session_shutdown']) await handlers.get(event)({},ctx);\n"
         "id = '00000000-0000-4000-8000-000000000002'; await handlers.get('session_start')({},ctx);\n"
         "console.log(process.env.PI_SESSION_ID);\n")
     code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
         "AGENT_HUB_CONTEXT_CLIENT": str(client), "SYNC_LOG": str(log),
+        "SYNC_TRANSCRIPT": str(transcript),
         "AICO_ROOT_AGENT_HUB_CONTEXT": optional_context,
         "AICO_SESSION_ID": "widget-session", "AICO_PROJECT_ID": "agent-hub"})
     assert code == 0, stderr
     calls = [json.loads(line) for line in log.read_text().splitlines()]
-    assert [call[call.index("--phase") + 1] for call in calls] == ["idle", "working", "idle", "shutdown", "idle"]
+    assert [call[call.index("--phase") + 1] for call in calls] == ["working", "idle", "shutdown", "idle"]
     assert all(call[0] == "sync-pi" and call[call.index("--aico-session") + 1] == "widget-session" for call in calls)
     assert calls[-1][calls[-1].index("--session") + 1] == stdout.strip()
 

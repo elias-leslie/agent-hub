@@ -9,6 +9,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 import type { AnyModel, Provider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -203,7 +204,8 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 
 	const sync = async (ctx: ExtensionContext, phase: string) => {
 		const file = ctx.sessionManager.getSessionFile();
-		if (!file || !ctx.model) return;
+		// Pi can advertise a transcript path before its first event creates the file.
+		if (!file || !ctx.model || !existsSync(file)) return;
 		const args = ["sync-pi", "--surface", "pi", "--cwd", ctx.cwd,
 			"--session", sessionId(ctx), "--transcript", file,
 			"--provider", ctx.model.provider, "--model", ctx.model.id, "--phase", phase];
