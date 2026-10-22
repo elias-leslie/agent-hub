@@ -442,12 +442,8 @@ def summarize_activity_cost(
         if key in seen_responses:
             continue
         seen_responses.add(key)
-        response_usage[event.session_id]["input_tokens"] += usage["input_tokens"]
-        response_usage[event.session_id]["output_tokens"] += usage["output_tokens"]
-        cache = usage.get("cached_input_tokens")
-        if isinstance(cache, int) and not isinstance(cache, bool) and 0 <= cache <= usage["input_tokens"]:
-            response_usage[event.session_id]["cache_read_tokens"] += cache
-            response_usage[event.session_id]["cache_detail_input_tokens"] += usage["input_tokens"]
+        for field, amount in _response_usage(usage).items():
+            response_usage[event.session_id][field] += amount
         category = _combined(turn_categories[(event.session_id, event.turn)])
         if len(native_ids[(event.session_id, event.turn)]) > 1:
             category = "mixed"

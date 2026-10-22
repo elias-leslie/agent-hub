@@ -60,6 +60,30 @@ def test_response_denominator_excludes_counters_cache_and_duplicate_responses():
     assert result["response_tokens"]["denominator"] == 120
 
 
+@pytest.mark.parametrize("written, expected_written, expected_read, expected_coverage", [
+    (25, 25, 50, 100),
+    (51, 0, 0, 0),
+    (None, 0, 0, 0),
+])
+def test_response_cache_partitions_reach_every_accounting_group(
+    written, expected_written, expected_read, expected_coverage,
+):
+    measured = usage(cache_write_tokens=written)
+    sessions = [Row(id="s", project_id="project", provider="fixture", model="fixture",
+                    provider_metadata={"harness": "pi", "work_role": {
+                        "id": "operations", "source": "fixture", "declared_at": NOW.isoformat(),
+                    }})]
+    result = snapshot([event(), measured, measured], sessions=sessions)
+    expected = {"input_tokens": 100, "output_tokens": 20,
+                "cache_read_tokens": expected_read, "cache_write_tokens": expected_written,
+                "cache_detail_input_tokens": expected_coverage}
+    assert result["usage"] == expected
+    assert result["tokens"]["denominator"] == 120
+    assert result["session_efficiency"]["rows"][0]["usage"] == expected
+    for dimension in ("by_project", "by_work_role", "by_harness"):
+        assert result[dimension][0]["usage"] == expected
+
+
 def test_mixed_turn_and_missing_tool_evidence_stay_mixed_or_unknown():
     result = snapshot([
         event(), event(call="edit", tool_name="apply_patch", tool_input={}), usage(),
