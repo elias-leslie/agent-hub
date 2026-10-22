@@ -27,7 +27,7 @@ CODEX_LAUNCHER = CONFIG_ROOT / "codex-config/bin/codex"
 
 @pytest.fixture(autouse=True)
 def _isolate_aico_launcher_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("AICO_SESSION_ID", "AICO_PROJECT_ID", "AICO_WIDGET_ID"):
+    for name in ("AICO_SESSION_ID", "AICO_PROJECT_ID", "AICO_WIDGET_ID", "AICO_ROOT_DAYBREAK", "AICO_ROOT_MODEL", "AICO_ROOT_AGENT_HUB_CONTEXT"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -919,8 +919,9 @@ def test_pi_source_degrades_to_native_prompt_without_consuming_input() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("active_tools", [[], ["read"], ["read", "bash"]])
 @pytest.mark.parametrize("status", ["ok", "failed"])
+@pytest.mark.parametrize("optional_context", ["", "true", "false"])
 async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
-    tmp_path: Path, fake_context_cli: Path, active_tools: list[str], status: str
+    tmp_path: Path, fake_context_cli: Path, active_tools: list[str], status: str, optional_context: str
 ) -> None:
     node = shutil.which("node")
     if node is None:
@@ -934,7 +935,7 @@ async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
     harness.write_text(
         "import install from " + json.dumps(extension.as_uri()) + ";\n"
         "const handlers = new Map();\n"
-        "install({\n"
+        "await install({\n"
         "  on: (name, handler) => handlers.set(name, handler),\n"
         "  registerCommand: () => {},\n"
         "  getActiveTools: () => JSON.parse(process.env.ACTIVE_TOOLS),\n"
@@ -956,6 +957,7 @@ async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
             "FAKE_ARGV_LOG": str(client_log),
             "FAKE_RENDERED": "Exact canonical payload <unchanged>",
             "FAKE_STATUS": status,
+            "AICO_ROOT_AGENT_HUB_CONTEXT": optional_context,
         },
     )
     assert code == 0, stderr
@@ -968,6 +970,9 @@ async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
         assert "continuing with native context only" in stderr
     assert result["result"]["systemPrompt"] == expected
     arguments = json.loads(client_log.read_text())
+    assert ("--optional-context" in arguments) == (optional_context == "false")
+    if optional_context == "false":
+        assert arguments[arguments.index("--optional-context") + 1] == "off"
     assert ("--capability" in arguments) == ("bash" in active_tools)
     if "bash" in active_tools:
         assert arguments[arguments.index("--capability") + 1] == "bash"
@@ -990,7 +995,165 @@ async def test_pi_sync_client_forwards_native_metadata(tmp_path: Path, fake_cont
     assert arguments[arguments.index("--aico-session") + 1] == "widget-session"
 
 
-async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_optional_context_client_forwards_mode_without_dropping_delivery(
+    tmp_path: Path, fake_context_cli: Path,
+) -> None:
+    log = tmp_path / "argv.json"
+    code, stdout, stderr = await _run(
+        str(CLIENT), "deliver", "--surface", "pi", "--optional-context", "off",
+        "--artifact-root", str(tmp_path / "artifacts"), "--emit", "json",
+        env={**os.environ, "AGENT_HUB_CONTEXT_CLI": str(fake_context_cli), "FAKE_ARGV_LOG": str(log)},
+    )
+    assert code == 0, stderr
+    assert json.loads(stdout)["status"] == "ok"
+    arguments = json.loads(log.read_text())
+    assert arguments[arguments.index("--optional-context") + 1] == "off"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("selection", ["", "true", "false"])
+async def test_pi_daybreak_uses_dynamic_model_metadata_and_preserves_provider(
+    tmp_path: Path, selection: str,
+) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    _, version, _ = await _run(node, "--version")
+    if int(version.lstrip("v").split(".")[0]) < 24:
+        pytest.skip("Node 24 required for built-in TypeScript execution")
+    native = tmp_path / "native.mjs"
+    native.write_text("export const openaiProvider = () => globalThis.nativeProvider;\n")
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness = tmp_path / "daybreak.mjs"
+    harness.write_text("""
+import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+registerHooks({resolve(specifier, context, next) {
+  if (specifier === '@earendil-works/pi-ai/providers/openai') return {url: process.env.NATIVE_PROVIDER, shortCircuit: true};
+  return next(specifier, context);
+}});
+const {default: install} = await import(process.env.EXTENSION);
+let models = [{type: 'chat', provider: 'openai', id: 'gpt-6-sol', api: 'openai-responses',
+  samplingParams: {temperature: 0.2}},
+  {type: 'chat', provider: 'openai', id: 'unselected', api: 'openai-responses'}];
+const classifier = {type: 'classifier', id: 'gpt-6-sol', api: 'openai-decisions'};
+const stream = () => {throw new Error('native provider error');};
+const base = globalThis.nativeProvider = {id: 'openai', auth: {opaque: true},
+  getModels: () => models, getAllModels: () => [...models, classifier], stream, streamSimple: stream,
+  refreshModels: () => {}, filterModels: () => {}, filterAllModels: () => {}};
+const registrations = [];
+await install({on: () => {}, registerCommand: () => {}, registerProvider: value => registrations.push(value)});
+assert.equal(registrations.length, process.env.AICO_ROOT_DAYBREAK ? 1 : 0);
+if (registrations.length) {
+  const provider = registrations[0];
+  for (const key of ['id', 'auth', 'stream', 'streamSimple', 'refreshModels', 'filterModels', 'filterAllModels']) assert.equal(provider[key], base[key]);
+  const program = process.env.AICO_ROOT_DAYBREAK === 'true' ? 'daybreak_blue' : 'standard';
+  for (const getter of ['getModels', 'getAllModels']) {
+    const selected = provider[getter]()[0];
+    assert.deepEqual(selected.samplingParams, {temperature: 0.2, access_programs: {cyber: program}});
+    assert.equal(selected.compat, models[0].compat);
+    assert.equal(provider[getter]()[1], models[1]);
+  }
+  assert.equal(provider.getAllModels().at(-1), classifier);
+  assert.deepEqual(models[0].samplingParams, {temperature: 0.2});
+  models = [...models, {type: 'chat', id: 'new-catalog-model'}];
+  assert.equal(provider.getModels().length, 3);
+  assert.equal(provider.getAllModels().length, 4);
+  assert.throws(provider.stream, /native provider error/);
+  console.log(JSON.stringify({registered: true, program, dynamicCatalog: true, nativeMethodsPreserved: true}));
+} else console.log(JSON.stringify({registered: false}));
+""")
+    code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
+        "EXTENSION": extension.as_uri(), "NATIVE_PROVIDER": native.as_uri(),
+        "AICO_ROOT_DAYBREAK": selection, "AICO_ROOT_MODEL": "openai/gpt-6-sol"})
+    assert code == 0, stderr
+    assert json.loads(stdout)["registered"] is bool(selection)
+
+
+@pytest.mark.asyncio
+async def test_pi_daybreak_rejects_ambiguous_model_before_registration(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness = tmp_path / "invalid-daybreak.mjs"
+    harness.write_text("import install from " + json.dumps(extension.as_uri()) + ";\n"
+                       "await install({registerProvider: () => {throw new Error('must not register');}});\n")
+    code, _stdout, stderr = await _run(node, str(harness), env={**os.environ,
+        "AICO_ROOT_DAYBREAK": "true", "AICO_ROOT_MODEL": "openai-codex/gpt-6-sol"})
+    assert code != 0
+    assert "Pi Daybreak requires the explicit model openai/gpt-6-sol" in stderr
+
+
+@pytest.mark.asyncio
+async def test_pi_native_daybreak_request_covers_agent_nested_and_compaction(tmp_path: Path) -> None:
+    """Optional installed-Pi check; every request is intercepted in memory."""
+    node = shutil.which("node")
+    install_root = Path.home() / ".pi/agent/install"
+    version_file = install_root / "current-version"
+    if node is None or not version_file.is_file():
+        pytest.skip("Managed Pi installation required for native transport check")
+    version = version_file.read_text().strip()
+    if not version or any(char not in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz._+-" for char in version):
+        pytest.skip("Managed Pi version is invalid")
+    packages = install_root / "releases" / version / "node_modules/@earendil-works"
+    provider = packages / "pi-ai/dist/providers/openai.js"
+    compaction = packages / "pi-coding-agent/dist/core/compaction/compaction.js"
+    if not provider.is_file() or not compaction.is_file():
+        pytest.skip("Native Pi provider and compaction modules required")
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness = tmp_path / "native-daybreak.mjs"
+    harness.write_text("""
+import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+registerHooks({resolve(specifier, context, next) {
+  if (specifier === '@earendil-works/pi-ai/providers/openai') return {url: process.env.NATIVE_PROVIDER, shortCircuit: true};
+  return next(specifier, context);
+}});
+const {default: install} = await import(process.env.EXTENSION);
+const {completeSummarization} = await import(process.env.COMPACTION);
+const providers = [];
+await install({on: () => {}, registerCommand: () => {}, registerProvider: value => providers.push(value)});
+const provider = providers[0];
+const model = provider.getModels().find(model => model.id === 'gpt-6-sol');
+assert.ok(model);
+const context = {systemPrompt: 'Synthetic native instructions.', messages: [{role: 'user', content: 'Reply OK.', timestamp: 0}]};
+const observations = [];
+let phase = '';
+const fetch = async (_url, init) => {
+  const body = JSON.parse(init.body);
+  observations.push({phase, model: body.model, program: body.access_programs.cyber,
+    requestEffort: body.reasoning.effort,
+    effectiveEffort: body.input.find(item => item.type === 'configuration_update')?.reasoning.effort ?? body.reasoning.effort});
+  return new Response(JSON.stringify({error: {message: 'synthetic provider failure', type: 'invalid_request_error'}}),
+    {status: 400, headers: {'Content-Type': 'application/json'}});
+};
+const options = {apiKey: 'sk-synthetic-not-a-credential', reasoning: 'xhigh', fetch, maxRetries: 0};
+for (phase of ['agent', 'nested']) {
+  const selected = phase === 'agent' ? model : provider.getAllModels().find(model => model.type === 'chat' && model.id === 'gpt-6-sol');
+  const result = await provider.streamSimple(selected, context, options).result();
+  assert.equal(result.stopReason, 'error');
+  assert.match(result.errorMessage, /synthetic provider failure/);
+}
+phase = 'compaction';
+const result = await completeSummarization(model, context, options,
+  (selected, context, options) => provider.streamSimple(selected, context, {...options, fetch}), {enabled: false});
+assert.equal(result.stopReason, 'error');
+assert.equal(observations.length, 3);
+for (const observed of observations) assert.deepEqual(observed, {
+  phase: observed.phase, model: 'gpt-6-sol', program: 'daybreak_blue', requestEffort: 'medium', effectiveEffort: 'xhigh'});
+console.log(JSON.stringify(observations));
+""")
+    code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
+        "EXTENSION": extension.as_uri(), "NATIVE_PROVIDER": provider.as_uri(), "COMPACTION": compaction.as_uri(),
+        "AICO_ROOT_DAYBREAK": "true", "AICO_ROOT_MODEL": "openai/gpt-6-sol"})
+    assert code == 0, stderr
+    assert [item["phase"] for item in json.loads(stdout)] == ["agent", "nested", "compaction"]
+
+
+@pytest.mark.parametrize("optional_context", ["true", "false"])
+async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_path: Path, optional_context: str) -> None:
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node 24 required for the Pi adapter runtime check")
@@ -1003,7 +1166,7 @@ async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_pat
     extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
     harness = _executable(tmp_path / "sync.mjs",
         "import install from " + json.dumps(extension.as_uri()) + ";\n"
-        "const handlers = new Map(); install({on:(n,h)=>handlers.set(n,h),registerCommand:()=>{}});\n"
+        "const handlers = new Map(); await install({on:(n,h)=>handlers.set(n,h),registerCommand:()=>{}});\n"
         "let id = '00000000-0000-4000-8000-000000000001';\n"
         "const ctx = {cwd: '/fixture', hasUI:false, model:{provider:'openai-codex',id:'gpt-6.1-sol'},\n"
         "sessionManager:{getSessionId:()=>id,getSessionFile:()=>'/fixture/native.jsonl'}};\n"
@@ -1012,6 +1175,7 @@ async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_pat
         "console.log(process.env.PI_SESSION_ID);\n")
     code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
         "AGENT_HUB_CONTEXT_CLIENT": str(client), "SYNC_LOG": str(log),
+        "AICO_ROOT_AGENT_HUB_CONTEXT": optional_context,
         "AICO_SESSION_ID": "widget-session", "AICO_PROJECT_ID": "agent-hub"})
     assert code == 0, stderr
     calls = [json.loads(line) for line in log.read_text().splitlines()]

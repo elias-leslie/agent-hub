@@ -74,6 +74,8 @@ def _build_parser() -> argparse.ArgumentParser:
     deliver_parser.add_argument("--provider", help="Consumer provider label")
     deliver_parser.add_argument("--model", help="Consumer model label")
     deliver_parser.add_argument("--variant", help="Optional memory-selection variant")
+    deliver_parser.add_argument("--optional-context", choices=("on", "off"), default="on",
+                                help="Off omits advisory context, indexes, guidance and continuity; required policy remains")
     deliver_parser.add_argument("--hook-event", help="Native hook event name")
     deliver_parser.add_argument("--source", help="Native launch source")
     deliver_parser.add_argument("--turn-id", help="Native turn ID")
@@ -178,6 +180,11 @@ async def _deliver(args: argparse.Namespace):
         model=args.model,
         variant=args.variant,
         client_metadata=client_metadata,
+        include_references=args.optional_context != "off",
+        include_reference_index=args.optional_context != "off",
+        include_project_index=args.optional_context != "off",
+        include_tool_capabilities=args.optional_context != "off",
+        include_continuity=args.optional_context != "off",
     )
     async with async_session() as db:
         return await build_canonical_context_delivery(db, request)

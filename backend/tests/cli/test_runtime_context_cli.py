@@ -1,5 +1,7 @@
 """Tests for the stable canonical context CLI contract."""
 
+import pytest
+
 from app.cli.runtime_context import _build_parser, _parse_metadata
 
 
@@ -71,6 +73,26 @@ def test_consumer_profile_legacy_alias_remains_supported() -> None:
     )
 
     assert args.consumer_profile == "agent_startup"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["on", "off"])
+async def test_optional_context_mode_maps_existing_selectors_and_preserves_required_policy(monkeypatch, mode) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.cli import runtime_context
+
+    build = AsyncMock()
+    monkeypatch.setattr(runtime_context, "build_canonical_context_delivery", build)
+    monkeypatch.setattr(runtime_context, "async_session", MagicMock(return_value=AsyncMock()))
+    args = _build_parser().parse_args(["deliver", "--surface", "pi", "--optional-context", mode])
+    await runtime_context._deliver(args)
+    request = build.call_args.args[1]
+    assert request.include_global and request.include_prompts and request.include_memories
+    assert request.include_mandates and request.include_guardrails
+    for field in ("include_references", "include_reference_index", "include_project_index",
+                  "include_tool_capabilities", "include_continuity"):
+        assert getattr(request, field) is (mode == "on")
 
 
 def test_pi_sync_parser_and_failure_receipt(monkeypatch, capsys) -> None:

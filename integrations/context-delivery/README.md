@@ -136,3 +136,38 @@ fails visibly rather than charging inherited history again.
 `AGENT_HUB_TRANSCRIPT_ROOTS` still replaces all transcript roots. Sync never calls
 a model or changes credentials. Failures preserve native Pi input and context.
 Live delivery and authenticated model readiness require separate runtime evidence.
+
+### Explicit Pi Daybreak and optional context
+
+Tether can select `--tool pi --model openai/gpt-6-sol --reasoning-effort xhigh
+--daybreak on`. The extension reads the per-launch `AICO_ROOT_MODEL` and
+`AICO_ROOT_DAYBREAK` metadata, registers the native public OpenAI provider, and
+decorates both model getters with `samplingParams.access_programs.cyber` for the
+selected Responses model. True requests `daybreak_blue`; false requests
+`standard`. An omitted switch registers no provider override. Native auth,
+streaming, filtering, refresh, and other models remain owned by Pi. The model
+metadata reaches main, nested, and compaction requests without relying on a
+main-agent request hook. Native Pi 1.4 encodes `--thinking xhigh` in a
+`configuration_update.reasoning.effort` item while the top-level request effort
+is `medium`; the extension preserves that native model behavior. See the [OpenAI Daybreak guide](https://developers.openai.com/api/docs/guides/daybreak)
+for project/model approval and explicit program errors.
+
+`--agent-hub-context off` in Tether sets `AICO_ROOT_AGENT_HUB_CONTEXT=false` for
+that Pi session. The extension still requests canonical delivery, using
+`--optional-context off` on the shared client/CLI. That mode maps the existing
+reference, reference-index, project-index, tool-guidance and continuity selectors
+to false. It omits nonrequired advisory prompts and memories while retaining
+required global/project sources, mandates and guardrails. Native Pi/project
+instructions and lifecycle transcript ingestion are unaffected. This compares
+optional injection with required policy retained; it does not claim zero Agent
+Hub bytes. Default/on behavior is unchanged.
+
+The installer command above remains the supported installation/check route.
+Integrate both Tether and Agent Hub changes before a managed Tether reload, then
+start fresh Pi sessions or use Pi's native extension reload. No credentials or
+global `models.json` changes are needed. Synthetic tests intercept native
+Responses requests in memory and check program/effort for main, nested and
+compaction calls, plus policy preservation and ingestion. The optional installed
+Pi transport check skips when the managed Pi runtime is absent; it never calls a
+remote provider. A harmless authenticated request and live delivery observation
+are separate owner-run qualifications.

@@ -10,6 +10,7 @@
 
 import { spawn } from "node:child_process";
 
+import type { AnyModel, Provider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const CONTEXT_CLIENT =
@@ -19,6 +20,39 @@ const CLIENT_TIMEOUT_MS = Number.parseInt(
 	process.env.AGENT_HUB_CONTEXT_ADAPTER_TIMEOUT_MS ?? "20000",
 	10,
 );
+
+/** Model metadata also reaches compaction and nested native provider calls. */
+export function daybreakProvider(provider: Provider, enabled: boolean): Provider {
+	const select = <T extends AnyModel>(model: T): T => {
+		if (model.type !== "chat" || model.id !== "gpt-6-sol" || model.api !== "openai-responses") {
+			return model;
+		}
+		return {
+			...model,
+			samplingParams: {
+				...model.samplingParams,
+				access_programs: { cyber: enabled ? "daybreak_blue" : "standard" },
+			},
+		};
+	};
+	return {
+		...provider,
+		getModels: () => provider.getModels().map(select),
+		getAllModels: () => (provider.getAllModels?.() ?? provider.getModels()).map(select),
+	};
+}
+
+async function configureDaybreak(pi: ExtensionAPI): Promise<void> {
+	const selection = process.env.AICO_ROOT_DAYBREAK;
+	if (selection !== "true" && selection !== "false") return;
+	if (process.env.AICO_ROOT_MODEL !== "openai/gpt-6-sol") {
+		throw new Error("Pi Daybreak requires the explicit model openai/gpt-6-sol");
+	}
+	// Public native provider registration preserves authentication, catalog refresh,
+	// filtering and stream implementations. No credentials or global config copied.
+	const { openaiProvider } = await import("@earendil-works/pi-ai/providers/openai");
+	pi.registerProvider(daybreakProvider(openaiProvider(), selection === "true"));
+}
 
 type DeliveryContract = {
 	schema_version: string;
@@ -134,6 +168,7 @@ async function deliver(
 	if (ctx.model?.provider) args.push("--provider", ctx.model.provider);
 	if (ctx.model?.id) args.push("--model", ctx.model.id);
 	if (process.env.SUMMITFLOW_TASK_ID) args.push("--task", process.env.SUMMITFLOW_TASK_ID);
+	if (process.env.AICO_ROOT_AGENT_HUB_CONTEXT === "false") args.push("--optional-context", "off");
 
 	const result = await runClient(args);
 	if (result.stderr) process.stderr.write(result.stderr);
@@ -152,7 +187,8 @@ async function deliver(
 	return contract;
 }
 
-export default function agentHubContext(pi: ExtensionAPI) {
+export default async function agentHubContext(pi: ExtensionAPI) {
+	await configureDaybreak(pi);
 	let currentSessionId = "";
 	let lastHash = "";
 	let lastStatus: "idle" | "ok" | "failed" = "idle";
@@ -230,7 +266,7 @@ export default function agentHubContext(pi: ExtensionAPI) {
 		try {
 			const contract =
 				pendingContract ?? (await deliver(
-					ctx, event.prompt, currentSessionId, pi.getActiveTools().includes("bash"),
+					ctx, "prompt" in event ? event.prompt : "startup context", currentSessionId, pi.getActiveTools().includes("bash"),
 				));
 			pendingContract = undefined;
 			lastHash = contract.payload_hash;

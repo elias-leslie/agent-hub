@@ -65,6 +65,8 @@ def _common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--capability", action="append", default=[])
     parser.add_argument("--metadata", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--artifact-root")
+    parser.add_argument("--optional-context", choices=("on", "off"), default="on",
+                        help="Optional context only; off retains required policy")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -255,6 +257,7 @@ async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> d
         "task_type": task_type,
         "phase": phase,
         "profile": args.profile,
+        "optional_context": args.optional_context,
         "agent_slug": args.agent_slug,
         "consumer_tags": consumer_tags,
         "capabilities": args.capability,
@@ -397,6 +400,8 @@ def _delivery_command(cli: str, metadata: dict[str, Any]) -> list[str]:
     for flag, value in flags:
         if value:
             command.extend((flag, value))
+    if metadata.get("optional_context") == "off":
+        command.extend(("--optional-context", "off"))
     for workflow in metadata.get("workflow_ids", []):
         command.extend(("--workflow", workflow))
     for capability in metadata["capabilities"]:

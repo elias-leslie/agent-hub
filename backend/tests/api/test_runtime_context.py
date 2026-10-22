@@ -641,6 +641,33 @@ async def test_build_prompt_blocks_auto_includes_enabled_global_prompt() -> None
 
 
 @pytest.mark.asyncio
+async def test_optional_prompt_selection_preserves_required_global_and_project_policy() -> None:
+    rows = []
+    for slug, kind, required, scope in [
+        ("mandate", "global_mandate", True, "global"),
+        ("guardrail", "global_guardrail", True, "global"),
+        ("project-instructions", "standard", True, "project"),
+        ("advisory", "standard", False, "global"),
+        ("project-advisory", "standard", False, "project"),
+    ]:
+        row = _make_prompt_row(slug, prompt_type=kind, boot_eligible=False)
+        row.context_policy = {"scope": scope, "targets": ["synthetic"] if scope == "project" else [],
+                              "required": required, "activation": "always", "format": "full"}
+        rows.append(row)
+    db = _mock_db_returning(rows)
+    request = CanonicalContextDeliveryRequest(consumer_surface="pi", project_id="synthetic")
+    full = await _build_prompt_blocks(db, [], {}, set(), delivery_request=request)
+    required_only = await _build_prompt_blocks(db, [], {}, set(), delivery_request=request.model_copy(
+        update={"include_references": False, "include_reference_index": False}))
+    required_ids = {"mandate", "guardrail", "project-instructions"}
+    assert {block.source_id for block in required_only} == required_ids
+    assert len(full) == 5 and len(required_only) == 3
+    def digest(blocks):
+        return hashlib.sha256("\n".join(block.content for block in blocks if block.source_id in required_ids).encode()).hexdigest()
+    assert digest(full) == digest(required_only)
+
+
+@pytest.mark.asyncio
 async def test_build_prompt_blocks_orders_authority_then_slug_independent_of_ids() -> None:
     db = _mock_db_returning(
         [

@@ -1394,6 +1394,10 @@ async def _build_prompt_blocks(
             # Owned prompts are composed by the existing agent prompt stack.
             continue
         policy = source_policy(prompt)
+        if not context.include_references and not (
+            policy.required or prompt.prompt_type in {GLOBAL_MANDATE_PROMPT_TYPE, GLOBAL_GUARDRAIL_PROMPT_TYPE}
+        ):
+            continue
         # Compatibility for old, unmigrated fixtures/imports only.
         if getattr(prompt, "context_policy", None) is None and is_pinned and ovr and ovr.project_id:
             policy = policy.model_copy(update={"scope": "project", "targets": [ovr.project_id]})
