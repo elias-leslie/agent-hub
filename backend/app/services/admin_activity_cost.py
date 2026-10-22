@@ -9,6 +9,7 @@ from __future__ import annotations
 import shlex
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -94,6 +95,10 @@ def _tool_family(event: Any) -> tuple[str, str]:
 
 
 def _number(value: Any) -> int:
+    # PostgreSQL SUM(bigint) is NUMERIC, returned as Decimal by asyncpg.
+    # Keep exact integer ledger sums instead of silently presenting zero usage.
+    if isinstance(value, Decimal) and value.is_finite() and value >= 0 and value == value.to_integral_value():
+        return int(value)
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 

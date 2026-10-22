@@ -2,6 +2,7 @@
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from types import SimpleNamespace as Row
 from unittest.mock import AsyncMock, Mock
 
@@ -88,6 +89,13 @@ def test_other_providers_with_ledger_only_are_included_as_unknown():
     assert result["tokens"]["denominator"] == 570
     assert buckets(result["tokens"]["breakdown"], "tokens")["unknown"] == 450
     assert result["sessions"] == 2
+
+
+def test_postgres_bigint_sum_keeps_exact_decimal_ledger_tokens():
+    result = snapshot(ledger=[Row(session_id="s", input_tokens=Decimal("109178850"),
+                                  output_tokens=Decimal("244"), calls=1)])
+    assert result["tokens"]["denominator"] == 109179094
+    assert result["tokens"]["unclassified_share"] == 1
 
 
 def test_time_union_excludes_wait_and_retains_overlapping_mixed_activity():

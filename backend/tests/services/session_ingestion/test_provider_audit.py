@@ -1,6 +1,7 @@
 """Regressions reproduced by the supported-provider source audit."""
 
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -58,6 +59,42 @@ async def test_claude_refresh_preserves_native_events_beside_hooks_and_replays_r
             again = await ingest_transcript_events(db, session_id, request, session=session)
             assert again.events_appended == 0
             assert {row.id for row in (await db.execute(select(SessionEvent).where(SessionEvent.session_id == session_id))).scalars()} == ids
+            # The backend and host can see different st_dev values for this
+            # exact file. Replaying it must find the same retained records.
+            native = [row for row in rows if row.source_event_id]
+            for row in native:
+                assert row.source_event_id is not None
+                row.source_event_id = re.sub(r"^([^:]+):[0-9]+:", r"\g<1>:999999:", row.source_event_id)
+            metadata = dict(session.provider_metadata or {})
+            retained = dict(metadata["transcript_ingestion"])
+            cursor = json.loads(retained["checkpoint"])
+            cursor["device"] += 1
+            retained["checkpoint"] = json.dumps(cursor)
+            metadata["transcript_ingestion"] = retained
+            session.provider_metadata = metadata
+            await db.commit()
+            replay = await ingest_transcript_events(db, session_id, request, session=session)
+            assert replay.events_appended == 0
+
+            # Recover a proven duplicate written by the older mount-sensitive
+            # projection. Preserve all original IDs, including the hook.
+            original = native[0]
+            assert original.source_event_id is not None
+            duplicate = SessionEvent(
+                session_id=session_id, turn=original.turn, sequence=99,
+                event_type=original.event_type, role=original.role, content=original.content,
+                tool_name=original.tool_name, call_id=original.call_id,
+                tool_input=original.tool_input, tool_output=original.tool_output,
+                model_used=original.model_used, source_timestamp=original.source_timestamp,
+                source_event_id=re.sub(r"^([^:]+):[0-9]+:", r"\g<1>:888888:", original.source_event_id),
+            )
+            db.add(duplicate)
+            await db.commit()
+            repair = await ingest_transcript_events(db, session_id, request, session=session, repair_projection=True)
+            assert repair.events_deduplicated == 1
+            assert {row.id for row in (await db.execute(select(SessionEvent).where(SessionEvent.session_id == session_id))).scalars()} == ids
+            repeated = await ingest_transcript_events(db, session_id, request, session=session, repair_projection=True)
+            assert repeated.events_deduplicated == repeated.events_appended == 0
     finally:
         async with factory() as db:
             await db.execute(delete(Session).where(Session.id == session_id))

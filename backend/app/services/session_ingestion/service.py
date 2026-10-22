@@ -408,11 +408,14 @@ async def ingest_transcript_events(
 
         await retain_rollout_commands(db, session, events)
     events_updated = 0
+    events_deduplicated = 0
     repaired_ids: list[str] = []
     if repair_projection and session is not None:
-        from .projection_repair import repair_codex_projection
+        from .projection_repair import deduplicate_mount_aliases, repair_codex_projection
 
         assert next_checkpoint is not None
+        if request.provider.lower() != "codex":
+            events_deduplicated = await deduplicate_mount_aliases(db, session_id, repair_events)
         events_updated, repaired_ids, next_checkpoint = await repair_codex_projection(
             db, session, repair_events, next_checkpoint,
             include_messages=request.provider.lower() != "codex",
@@ -438,6 +441,7 @@ async def ingest_transcript_events(
         events_appended=append_result.events_appended + len(repaired_ids),
         events_skipped=append_result.events_skipped + suppressed_commands,
         events_updated=events_updated,
+        events_deduplicated=events_deduplicated,
         last_turn=append_result.last_turn,
         last_sequence=append_result.last_sequence,
         event_ids=append_result.event_ids + repaired_ids,

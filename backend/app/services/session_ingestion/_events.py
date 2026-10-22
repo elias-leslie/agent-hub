@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,18 @@ from .models import AppendNormalizedEventsResult, NormalizedEvent
 
 if TYPE_CHECKING:
     from app.models import Session
+
+
+_FILE_SOURCE_ID = r"^((assistant|user|response_item|event_msg):)[0-9]+:([0-9]+:(byte|ordinal):[0-9]+:[0-9a-f]{16}:[0-9]+)$"
+
+
+def source_identity(source_id: str) -> str:
+    """A mount device number is not part of a transcript record's identity.
+
+    Keep the inode, byte/ordinal position, exact record digest and block index.
+    Native provider IDs and all other caller identities remain unchanged.
+    """
+    return re.sub(_FILE_SOURCE_ID, r"\1\3", source_id)
 
 
 def _normalize_event_turn_sequence(
@@ -64,14 +77,22 @@ async def _load_existing_source_events(
     result = await db.execute(
         select(SessionEvent).where(
             SessionEvent.session_id == session_id,
-            SessionEvent.source_event_id.in_(source_ids),
-        )
+            or_(SessionEvent.source_event_id.in_(source_ids),
+                func.regexp_replace(SessionEvent.source_event_id, _FILE_SOURCE_ID, r"\1\3").in_(
+                    {source_identity(source_id) for source_id in source_ids}
+                )),
+        ).order_by(SessionEvent.created_at, SessionEvent.id)
     )
-    return {
-        event.source_event_id: event
-        for event in result.scalars().all()
-        if event.source_event_id
-    }
+    rows = result.scalars().all()
+    found = {event.source_event_id: event for event in rows if event.source_event_id}
+    canonical: dict[str, SessionEvent] = {}
+    for event in rows:
+        if event.source_event_id:
+            canonical.setdefault(source_identity(event.source_event_id), event)
+    for source_id in source_ids:
+        if source_identity(source_id) in canonical:
+            found[source_id] = canonical[source_identity(source_id)]
+    return found
 
 
 def _source_event_fingerprint(
@@ -96,6 +117,8 @@ def _source_event_fingerprint(
     # persisted redaction on an unchanged-source replay.
     canonical = _build_session_event("fingerprint", turn, sequence, **fields)
     fields = {key: getattr(canonical, key) for key in fields}
+    if fields["source_event_id"]:
+        fields["source_event_id"] = source_identity(fields["source_event_id"])
     fields.update({"turn": turn, "sequence": sequence})
     return hashlib.sha256(json.dumps(
         fields,

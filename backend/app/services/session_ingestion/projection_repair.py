@@ -2,13 +2,42 @@
 
 import json
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session
+from app.models import Session, SessionEvent
 from app.services.event_storage import _build_session_event, get_max_sequence
 
-from ._events import _load_existing_source_events
+from ._events import _load_existing_source_events, _source_event_fingerprint, source_identity
 from .models import NormalizedEvent
+
+
+async def deduplicate_mount_aliases(db: AsyncSession, session_id: str, events: list[NormalizedEvent]) -> int:
+    """Remove proven duplicate projections while preserving the oldest row/ID.
+
+    The caller has verified the complete retained source and holds its lock.
+    Matching record digest/position/block plus identical stored payload proves
+    these are the same event across device aliases, never repeated commands.
+    """
+    identities = {source_identity(event.source_event_id) for event in events if event.source_event_id}
+    rows = (await db.execute(select(SessionEvent).where(
+        SessionEvent.session_id == session_id, SessionEvent.source_event_id.is_not(None),
+    ).order_by(SessionEvent.created_at, SessionEvent.id))).scalars().all()
+    retained: dict[str, SessionEvent] = {}
+    removed = 0
+    for row in rows:
+        assert row.source_event_id is not None
+        identity = source_identity(row.source_event_id)
+        if identity not in identities:
+            continue
+        previous = retained.setdefault(identity, row)
+        if previous is row or previous.source_event_id == row.source_event_id:
+            continue
+        if _source_event_fingerprint(previous, turn=1, sequence=1) == _source_event_fingerprint(row, turn=1, sequence=1):
+            await db.delete(row)
+            removed += 1
+    await db.flush()
+    return removed
 
 
 async def repair_codex_projection(
