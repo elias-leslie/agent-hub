@@ -110,7 +110,7 @@ async def upsert_session(
         (existing.provider_metadata or {}).get("transcript_path") and request.provider.lower() != "codex"
     ):
         raise SessionIngestionConflict("session_provider_immutable", "A native Codex session cannot change provider.")
-    if request.provider.lower() == "codex" and existing is not None:
+    if request.provider.lower() in {"codex", "pi"} and existing is not None:
         await lock_session_event_ingestion(db, existing.id)
         await db.refresh(existing)
     await _validate_parent_link(db, request)
