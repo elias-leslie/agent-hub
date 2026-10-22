@@ -33,6 +33,7 @@ from app.services._session_metadata_helpers import (
     working_dir,
 )
 from app.services.session_live_activity import build_live_activity_response
+from app.services.session_roles import session_work_role
 from app.services.session_scope import resolve_scope_confidence
 
 # Re-export private helpers with underscore names for backward compatibility
@@ -133,6 +134,7 @@ def _session_summary_kwargs(
         "parent_session_id": optional_str(session.parent_session_id),
         "external_identity": external_session_identity(session),
         "external_id": optional_str(session.external_id),
+        "work_role": session_work_role(session),
         "client_id": optional_str(session.client_id),
         "request_source": optional_str(session.request_source),
         "source_client": source_client(session),

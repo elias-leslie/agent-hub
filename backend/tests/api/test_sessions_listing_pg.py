@@ -21,7 +21,7 @@ from sqlalchemy.schema import CreateTable
 
 from app.db import get_db
 from app.main import app
-from app.models import CostLog, Session, SessionEvent, UsageCall, UsageSession
+from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall, UsageSession
 from app.models.agent import Agent
 from tests.conftest import TEST_HEADERS
 
@@ -46,7 +46,7 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
 
         def create_tables(sync_connection: Any) -> None:
             for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__, Agent.__table__,
-                          UsageCall.__table__, UsageSession.__table__):
+                          UsageCall.__table__, UsageSession.__table__, SessionBinding.__table__):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)
@@ -523,3 +523,125 @@ async def test_spend_overview_ranks_sessions_and_routine_jobs(pg_db: AsyncSessio
     session = await usage_costs.item_detail(pg_db, "session:codex:s-int", "1h", now=now)
     assert [(a["name"], a["usd"]) for a in session["agents"]] == [("main session", 5.0), ("helper", 3.0)]
     assert session["top_calls"][0]["usd"] == 5.0
+
+
+async def test_work_role_is_fixed_across_upsert_resume_heartbeat_and_conflict(
+    api: httpx.AsyncClient, pg_db: AsyncSession,
+) -> None:
+    payload = {"session_id": "fixed-role", "project_id": "agent-hub", "provider": "openai", "model": "fixture",
+               "session_type": "agent", "work_role": {"id": "implementation", "source": "explicit-launch", "display_name": "Backend"},
+               "provider_metadata": {"external_identity": {"display_identity": "worker"}}, "external_id": "task-fixture"}
+    first = await api.post("/api/session-ingestion/sessions/upsert", json=payload)
+    assert first.status_code == 200, first.text
+    declaration = first.json()["session"]["work_role"]
+    assert declaration["id"] == "implementation" and declaration["source"] == "explicit-launch"
+    assert declaration["declared_at"]
+    for declaration_input in (None, {"id": "implementation", "source": "retry", "display_name": "New name"}):
+        response = await api.post("/api/session-ingestion/sessions/upsert", json={**payload, "work_role": declaration_input})
+        assert response.status_code == 200, response.text
+        assert response.json()["session"]["work_role"] == declaration
+    heartbeat = await api.post("/api/sessions/fixed-role/heartbeat", json={"provider_metadata": {"work_role": None, "role": "review"}})
+    assert heartbeat.status_code == 200, heartbeat.text
+    assert heartbeat.json()["work_role"] == declaration
+    assert heartbeat.json()["external_id"] == "task-fixture"
+    assert heartbeat.json()["external_identity"]["display_identity"] == "worker"
+    for path, update in (("/api/session-ingestion/sessions/upsert", {**payload, "work_role": {"id": "review", "source": "resume"}}),
+                         ("/api/sessions", {**payload, "work_role": {"id": "review", "source": "resume"}}),
+                         ("/api/sessions/fixed-role/heartbeat", {"provider_metadata": {"work_role": {"id": "review", "source": "resume"}}})):
+        conflict = await api.post(path, json=update)
+        assert conflict.status_code == 409, conflict.text
+        assert conflict.json()["error"] == "session_work_role_immutable"
+    await pg_db.rollback()  # conflict paths leave the transaction open, without writes
+
+
+async def test_admin_sort_precedes_pagination_and_pins_the_window(
+    api: httpx.AsyncClient, pg_db: AsyncSession,
+) -> None:
+    from app.services.session_ingestion._service_helpers import _merge_metadata
+
+    metadata = _merge_metadata({}, {"work_role": {"id": "implementation", "source": "fixture"}, "harness": "codex"})
+    for index, sid in enumerate(("big", "small", "missing", "zero", "excluded")):
+        await add_session(pg_db, sid, minutes=index, metadata=metadata, project_id="other" if sid == "excluded" else "agent-hub")
+    for sid, durations in (("big", [("Bash", 100_000, 110), ("apply_patch", 900_000, 1010)]),
+                           ("small", [("Bash", 20_000, 25)]), ("excluded", [("Bash", 999_000, 1100)]),
+                           ("missing", [("Bash", None, 30)]), ("zero", [("Bash", 0, 30)])):
+        for index, (tool, duration, second) in enumerate(durations):
+            await add_event(pg_db, sid, 1, index, "tool_use", call_id=f"{sid}-{index}", tool_name=tool,
+                            tool_input={"command": "st context fixture"} if tool == "Bash" else {},
+                            duration_ms=duration, source_timestamp=BASE + timedelta(seconds=second))
+    params = {"accounting_start": BASE.isoformat(), "accounting_end": (BASE + timedelta(hours=1)).isoformat(),
+              "project_id": "agent-hub", "work_role": "implementation", "harness": "codex_cli", "page_size": 1, "sort_direction": "desc"}
+    shares = await api.get("/api/sessions", params={**params, "sort_by": "admin_share"})
+    assert shares.status_code == 200, shares.text
+    body = shares.json()
+    assert body["total"] == 4 and body["sessions"][0]["id"] == "small"
+    assert body["sessions"][0]["activity_accounting"]["admin_share"] == 1
+    assert body["sessions"][0]["activity_accounting"]["duration_coverage"] == 1
+    next_params = {key: value for key, value in params.items() if key not in {"accounting_start", "accounting_end"}}
+    second = await api.get("/api/sessions", params={**next_params, "sort_by": "admin_share", "cursor": body["next_cursor"]})
+    assert second.status_code == 200, second.text
+    assert second.json()["sessions"][0]["id"] == "big"
+    assert second.json()["accounting_window"] == body["accounting_window"]
+    assert second.json()["sessions"][0]["activity_accounting"]["admin_share"] == 0.1
+    changed = await api.get("/api/sessions", params={**params, "sort_by": "admin_share", "cursor": body["next_cursor"],
+                                                    "accounting_start": (BASE - timedelta(seconds=1)).isoformat()})
+    assert changed.status_code == 422
+    durations = await api.get("/api/sessions", params={**params, "sort_by": "admin_duration"})
+    assert durations.status_code == 200, durations.text
+    assert durations.json()["sessions"][0]["id"] == "big"
+    assert durations.json()["sessions"][0]["activity_accounting"]["admin_seconds"] == 100
+    ascending = await api.get("/api/sessions", params={**params, "sort_by": "admin_share", "sort_direction": "asc", "page_size": 100})
+    assert ascending.status_code == 200, ascending.text
+    rows = ascending.json()["sessions"]
+    assert [row["id"] for row in rows] == ["big", "small", "missing", "zero"]
+    assert rows[2]["activity_accounting"]["duration_coverage"] == 0
+    assert rows[3]["activity_accounting"]["duration_coverage"] == 1
+    assert all(row["activity_accounting"]["admin_share"] is None for row in rows[2:])
+    assert "unknown" in {role["id"] for role in body["work_roles"]}
+
+
+async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger(
+    api: httpx.AsyncClient, pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.session_ingestion._service_helpers import _merge_metadata
+
+    for sid, project, role, harness, seconds in (("codex", "agent-hub", "implementation", "codex", 10),
+                                                ("pi", "agent-hub", "research", "pi", 30),
+                                                ("elsewhere", "summitflow", "implementation", "codex", 99)):
+        await add_session(pg_db, sid, minutes=1, metadata=_merge_metadata({}, {"work_role": {"id": role, "source": "fixture"}, "harness": harness}))
+        await add_event(pg_db, sid, 1, 1, "tool_use", call_id=sid, duration_ms=seconds * 1000,
+                        tool_name="Bash", tool_input={"command": "st context fixture"}, source_timestamp=BASE + timedelta(seconds=150))
+        session = await pg_db.get(Session, sid)
+        assert session is not None
+        session.project_id = project
+        pg_db.add(CostLog(session_id=sid, model="fixture", input_tokens=100, output_tokens=20,
+                          cache_read_tokens=50, cache_write_tokens=0, api_equiv_usd=0.03, cost_usd=0,
+                          created_at=BASE + timedelta(seconds=200)))
+    await pg_db.flush()
+    params = {"accounting_start": BASE.isoformat(), "accounting_end": (BASE + timedelta(hours=1)).isoformat(),
+              "project_id": "agent-hub", "work_role": "implementation", "harness": "codex_cli", "kind": "coding", "status": "completed"}
+    activity = await api.get("/api/admin/session-efficiency", params=params)
+    assert activity.status_code == 200, activity.text
+    rows = await api.get("/api/sessions", params=params)
+    assert rows.status_code == 200, rows.text
+    chart = activity.json()
+    assert chart["window_start"] == BASE.isoformat() and chart["window_end"] == (BASE + timedelta(hours=1)).isoformat()
+    assert rows.json()["total"] == chart["sessions"] == 1
+    assert chart["duration_split"] == rows.json()["sessions"][0]["activity_accounting"]
+    assert chart["duration_split"]["admin_seconds"] == 10
+    assert chart["by_project"][0]["project_id"] == "agent-hub"
+    assert chart["by_work_role"][0]["work_role_id"] == "implementation"
+    assert chart["by_harness"][0]["harness_id"] == "codex_cli"
+    assert chart["by_harness"][0]["usage"]["input_tokens"] == 150
+    assert chart["by_harness"][0]["cost"]["cash_usd"] == 0
+    assert chart["by_harness"][0]["cost"]["api_equiv_usd"] == 0.03
+    # Capping Activity's sample must not cap the full-session sort ledger.
+    monkeypatch.setattr("app.services.admin_activity_cost.EVENT_LIMIT", 1)
+    capped = await api.get("/api/admin/session-efficiency", params={key: value for key, value in params.items() if key not in {"work_role", "harness"}})
+    assert capped.status_code == 200, capped.text
+    assert capped.json()["events_truncated"]
+    assert all(row["duration_split"]["events_truncated"] for row in capped.json()["by_project"])
+    complete = await api.get("/api/sessions", params={**params, "work_role": "research", "harness": "pi", "sort_by": "admin_duration"})
+    assert complete.status_code == 200, complete.text
+    assert complete.json()["sessions"][0]["activity_accounting"]["admin_seconds"] == 30
+    assert complete.json()["sessions"][0]["activity_accounting"]["events_truncated"] is False

@@ -11,6 +11,8 @@ import pytest
 
 from app.db import get_db
 from app.main import app
+from app.services.session_harnesses import harness_options
+from app.services.session_roles import work_role_options
 from tests.conftest import APITestClient
 from tests.model_ids import CLAUDE_SONNET
 
@@ -804,6 +806,8 @@ class TestSessionListContractValidation:
             "status": {"active": 0, "completed": 0, "failed": 0, "running": 0},
             "kind": {"coding": 0, "chat": 0, "completion": 0, "image": 0},
             "projects": [],
+            "work_roles": work_role_options(),
+            "harnesses": harness_options(),
         }
         assert mock_session.execute.await_count == 3
 

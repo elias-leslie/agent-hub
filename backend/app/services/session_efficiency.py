@@ -35,3 +35,22 @@ def session_efficiency(rows: list[dict[str, Any]], *, limit: int) -> dict:
                           for status in ("within_goal", "above_goal", "insufficient_coverage", "unmeasured", "goal_not_selected")},
         "rows": rows[:limit],
     }
+
+
+def duration_split(seconds: dict[str, float], *, calls: int, missing: int, truncated: bool) -> dict:
+    """Weighted occupancy shares; missing duration has unknown size, including at zero."""
+    admin = seconds.get("administration", 0) + seconds.get("necessary_support", 0)
+    unknown = seconds.get("unknown", 0) + seconds.get("mixed", 0)
+    other = seconds.get("substantive", 0) + unknown
+    denominator = admin + other
+    return {
+        "admin_seconds": round(admin, 3), "other_seconds": round(other, 3),
+        "denominator_seconds": round(denominator, 3),
+        "admin_share": admin / denominator if denominator else None,
+        "other_share": other / denominator if denominator else None,
+        "unknown_seconds": round(unknown, 3),
+        "unknown_share": unknown / denominator if denominator else None,
+        "tools_sampled": calls, "tools_missing_duration": missing,
+        "duration_coverage": (calls - missing) / calls if calls else None,
+        "events_truncated": truncated,
+    }

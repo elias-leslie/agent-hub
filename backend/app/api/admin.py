@@ -98,22 +98,48 @@ async def get_session_efficiency(
     until: datetime | None = Query(default=None, description="Exclusive UTC window end; pin for repeatable comparisons"),
     project_id: str | None = Query(default=None, max_length=100),
     provider: str | None = Query(default=None, max_length=20),
-    model: str | None = Query(default=None, max_length=100, description="Stored session model; not proof of served model"),
+    model: str | None = Query(default=None, max_length=100, description="Requested session model, matching Sessions; not proof of served model"),
     session_id: str | None = Query(default=None, max_length=36),
+    accounting_start: datetime | None = Query(default=None),
+    accounting_end: datetime | None = Query(default=None),
+    work_role: str | None = Query(default=None),
+    harness: str | None = Query(default=None),
+    kind: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    since: datetime | None = Query(default=None),
+    agent_slug: str | None = Query(default=None),
+    parent_session_id: str | None = Query(default=None),
+    session_type: str | None = Query(default=None),
+    external_id: str | None = Query(default=None),
+    roots_only: bool = Query(default=False),
+    exclude_benchmarks: bool = Query(default=False),
 ) -> dict[str, Any]:
     """Read existing session observations, filtered before the event cap. No task binding required."""
+    from app.api.sessions import _list_filters
     from app.services.admin_activity_cost import build_activity_cost_snapshot
+    from app.services.session_accounting import accounting_window
 
     current = datetime.now(UTC)
     end = until or current
     if end.tzinfo is None or end > current:
         raise HTTPException(status_code=422, detail="until must include a timezone and cannot be in the future")
     end = end.astimezone(UTC)
-    payload = await build_activity_cost_snapshot(
-        db, cutoff=end - timedelta(hours=hours), now=end, limit=limit,
-        project_id=project_id, provider=provider, model=model, session_id=session_id,
-    )
-    payload["filters"] = {"project_id": project_id, "provider": provider, "model": model, "session_id": session_id}
+    try:
+        start, end, _ = accounting_window(accounting_start, accounting_end, None) if accounting_start is not None or accounting_end is not None else (end - timedelta(hours=hours), end, None)
+        filters = _list_filters(project_id=project_id, status=status, agent_slug=agent_slug, parent_session_id=parent_session_id,
+            session_type=session_type, external_id=external_id, q=q, kind=kind, since=since,
+            exclude_benchmarks=exclude_benchmarks, model=model, roots_only=roots_only, work_role=work_role, harness=harness)
+        payload = await build_activity_cost_snapshot(
+            db, cutoff=start, now=end, limit=limit, provider=provider, session_id=session_id,
+            list_filters=filters,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    payload["filters"] = {"project_id": project_id, "provider": provider, "model": model, "session_id": session_id,
+                          "work_role": work_role, "harness": harness, "kind": kind, "status": status, "q": q,
+                          "since": since.isoformat() if since else None, "roots_only": roots_only, "exclude_benchmarks": exclude_benchmarks,
+                          "agent_slug": agent_slug, "parent_session_id": parent_session_id, "session_type": session_type, "external_id": external_id}
     return payload
 
 

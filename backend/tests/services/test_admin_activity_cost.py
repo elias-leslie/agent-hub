@@ -224,6 +224,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
             parsed = json.loads(value) if value is not None else None
             return "string" if isinstance(parsed, str) else "object" if isinstance(parsed, dict) else "null"
         sql.create_function("jsonb_typeof", 1, jsonb_typeof)
+        sql.create_function("to_jsonb", 1, lambda value: value)
         timestamp = "2026-10-22 11:59:00.000000"
         long_output = {"output": "x" * 10000}
         clipped_content = _extract_tool_result_content(long_output)
@@ -249,17 +250,20 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
         cursor = sql.execute(compiled)
         extracted = [dict(zip([column[0] for column in cursor.description], row, strict=True)) for row in cursor.fetchall()]
         assert [row["returned_characters"] for row in extracted] == [4, 0, 4, None, 11, 10000]
-        sql.execute("INSERT INTO cost_logs VALUES (?, 10, 20, 30, 40, ?)", ("cached", timestamp))
+        sql.execute("ALTER TABLE cost_logs ADD COLUMN api_equiv_usd REAL")
+        sql.execute("ALTER TABLE cost_logs ADD COLUMN cost_usd REAL")
+        sql.execute("INSERT INTO cost_logs (session_id,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,created_at) VALUES (?, 10, 20, 30, 40, ?)", ("cached", timestamp))
         cost_query = db.execute.call_args_list[1].args[0]
         compiled = str(cost_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
-        assert sql.execute(compiled).fetchall() == [("cached", 80, 20, 1, 30, 40)]
+        assert sql.execute(compiled).fetchall() == [("cached", 80, 20, 1, None, 0, None, 0, 30, 40)]
         sql.executemany("INSERT INTO sessions VALUES (?, ?, ?)", [
             ("claude-native", "anthropic", "claude_code"),
             ("claude-legacy", "openai", "claude_code"),
             ("codex-child", "codex", "agent"),
             ("unrelated", "openai", "chat"),
         ])
-        sql.executemany("INSERT INTO usage_calls VALUES (?, ?, ?, 10, 20, 30, 40, ?)", [
+        sql.execute("ALTER TABLE usage_calls ADD COLUMN api_equiv_usd REAL")
+        sql.executemany("INSERT INTO usage_calls (session_id,agent_id,provider,input_tokens,cached_input_tokens,cache_write_tokens,output_tokens,occurred_at) VALUES (?, ?, ?, 10, 20, 30, 40, ?)", [
             ("claude-native", "", "claude", timestamp),
             ("claude-legacy", "", "claude", timestamp),
             ("root", "codex-child", "codex", timestamp),
@@ -268,8 +272,8 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
         ledger_query = db.execute.call_args_list[2].args[0]
         compiled = str(ledger_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
         assert set(sql.execute(compiled).fetchall()) == {
-            ("claude-legacy", 60, 40, 1, 20, 30), ("claude-native", 60, 40, 1, 20, 30), ("codex-child", 60, 40, 1, 20, 30),
-            (None, 60, 40, 1, 20, 30),
+            ("claude-legacy", 60, 40, 1, None, 0, 20, 30), ("claude-native", 60, 40, 1, None, 0, 20, 30), ("codex-child", 60, 40, 1, None, 0, 20, 30),
+            (None, 60, 40, 1, None, 0, 20, 30),
         }
 
 

@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError
 
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+from app.services.session_roles import WorkRoleDeclaration
 
 
 class SessionModelEvidence(BaseModel):
@@ -73,6 +74,7 @@ def validated_native_model_evidence(
 class SessionUpsertRequest(BaseModel):
     """Canonical request for creating or updating a session."""
 
+    work_role: WorkRoleDeclaration | None = None
     session_id: str | None = Field(default=None, description="Stable session identifier")
     project_id: str = Field(..., description="Project identifier")
     provider: str = Field(..., description="Provider slug")

@@ -4,7 +4,7 @@ import base64
 import json
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -374,6 +374,7 @@ class SessionListPage:
     sessions: list[Session]
     total: int
     next_cursor: str | None
+    accounting: dict[str, dict] = field(default_factory=dict)
 
 
 async def _fetch_filtered_sessions(
@@ -384,6 +385,8 @@ async def _fetch_filtered_sessions(
     sort_by: str,
     sort_direction: str,
     cursor: str | None = None,
+    accounting_start: datetime | None = None,
+    accounting_end: datetime | None = None,
 ) -> SessionListPage:
     """Count with every filter in SQL, then page by offset or keyset cursor."""
     from app.services.session_queries import session_list_predicates
@@ -391,6 +394,39 @@ async def _fetch_filtered_sessions(
     predicates = session_list_predicates(filters)
     total_result = await db.execute(select(func.count(Session.id)).where(*predicates))
     total = total_result.scalar() or 0
+
+    if sort_by in {"admin_share", "admin_duration"}:
+        from app.services.session_accounting import accounting_sort_key, fetch_session_accounting
+        from app.services.session_efficiency import duration_split
+
+        if sort_direction not in _SESSION_SORT_DIRECTIONS:
+            raise ValueError("Unsupported session sort direction")
+        selected_ids = select(Session.id).where(*predicates)
+        accounting = await fetch_session_accounting(db, selected_ids, start=accounting_start, end=accounting_end)
+        ids = list((await db.execute(selected_ids)).scalars())
+        empty = duration_split({}, calls=0, missing=0, truncated=False)
+        def key(sid):
+            return accounting_sort_key(sid, accounting.get(sid, empty), sort_by, sort_direction)
+        ids.sort(key=key)
+        if cursor:
+            try:
+                boundary = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+                if boundary["sort"] != sort_by or boundary["direction"] != sort_direction:
+                    raise ValueError("Session cursor does not match the requested sort")
+                last = tuple(boundary["key"])
+                ids = [sid for sid in ids if key(sid) > last]
+            except (ValueError, TypeError, KeyError) as exc:
+                raise ValueError("Invalid session accounting cursor") from exc
+        else:
+            ids = ids[(page - 1) * page_size:]
+        next_cursor = None
+        if len(ids) > page_size:
+            ids = ids[:page_size]
+            payload = {"sort": sort_by, "direction": sort_direction, "key": key(ids[-1])}
+            next_cursor = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+        sessions = list((await db.execute(select(Session).where(Session.id.in_(ids)))).scalars()) if ids else []
+        sessions.sort(key=lambda session: key(session.id))
+        return SessionListPage(sessions, int(total), next_cursor, {sid: accounting.get(sid, empty) for sid in ids})
 
     keys = _session_sort_keys(sort_by, sort_direction)
     key_exprs = [expr for expr, _ in keys]
@@ -427,6 +463,8 @@ async def list_sessions_with_stats(
     *,
     filters: Any = None,
     cursor: str | None = None,
+    accounting_start: datetime | None = None,
+    accounting_end: datetime | None = None,
 ) -> tuple[Any, ...]:
     """List sessions with pagination, filtering, and batched statistics.
 
@@ -454,10 +492,16 @@ async def list_sessions_with_stats(
             external_id=external_id,
         )
     listing = await _fetch_filtered_sessions(
-        db, filters, page, page_size, sort_by, sort_direction, cursor=cursor
+        db, filters, page, page_size, sort_by, sort_direction, cursor=cursor,
+        accounting_start=accounting_start, accounting_end=accounting_end,
     )
 
     session_ids = [s.id for s in listing.sessions]
+    if accounting_start is not None and sort_by not in {"admin_share", "admin_duration"}:
+        from app.services.session_accounting import fetch_session_accounting
+        from app.services.session_efficiency import duration_split
+        measured = await fetch_session_accounting(db, session_ids, start=accounting_start, end=accounting_end) if session_ids else {}
+        listing.accounting = {sid: measured.get(sid, duration_split({}, calls=0, missing=0, truncated=False)) for sid in session_ids}
     msg_counts, event_counts, token_stats, child_counts, active_child_counts = await fetch_session_statistics(db, session_ids)
     titles = await fetch_session_titles(db, session_ids)
     usage_rollups = await fetch_session_usage_rollups(db, session_ids)
@@ -473,6 +517,7 @@ async def list_sessions_with_stats(
         listing.next_cursor,
         titles,
         usage_rollups,
+        listing.accounting,
     )
 
 

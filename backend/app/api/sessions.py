@@ -16,6 +16,7 @@ from app.api.schemas.sessions import (
     CloseSessionResponse,
     CreateSessionEventRequest,
     CreateSessionEventResponse,
+    DurationAccounting,
     SessionCreate,
     SessionEventsResponse,
     SessionEventsSummaryResponse,
@@ -28,6 +29,8 @@ from app.api.schemas.sessions import (
     SessionResponse,
 )
 from app.db import get_db
+from app.services.session_accounting import accounting_cursor, accounting_window
+from app.services.session_harnesses import harness_options
 from app.services.session_helpers import (
     build_event_responses,
     build_session_list_items,
@@ -61,6 +64,7 @@ from app.services.session_responses import (
     build_full_session_response,
     build_project_lane_session_ids,
 )
+from app.services.session_roles import WorkRoleConflict, work_role_options
 from app.services.session_transforms import build_session_response
 
 router = APIRouter()
@@ -68,7 +72,7 @@ router = APIRouter()
 # Re-export schemas for backward compatibility
 __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
 
-_SESSION_SORT_FIELDS = {"status", "project", "agent", "time", "last_active"}
+_SESSION_SORT_FIELDS = {"status", "project", "agent", "time", "last_active", "admin_share", "admin_duration"}
 _SESSION_SORT_DIRECTIONS = {"asc", "desc"}
 
 
@@ -129,6 +133,8 @@ def _list_filters(
     exclude_benchmarks: bool,
     model: str | None,
     roots_only: bool,
+    work_role: str | None = None,
+    harness: str | None = None,
 ) -> SessionListFilters:
     return SessionListFilters(
         project_id=project_id,
@@ -143,6 +149,8 @@ def _list_filters(
         exclude_benchmarks=exclude_benchmarks,
         model=model or None,
         roots_only=roots_only,
+        work_role=work_role,
+        harness=harness,
     )
 
 
@@ -165,6 +173,7 @@ def _normalize_list_sessions_stats(result: Sequence[Any]) -> dict[str, Any]:
         "next_cursor": optional(7, None),
         "titles": dict(optional(8, {})),
         "usage": dict(optional(9, {})),
+        "accounting": dict(optional(10, {})),
     }
 
 
@@ -193,6 +202,7 @@ async def create_session(
             observed_write_paths=request.observed_write_paths,
             scope_confidence=request.scope_confidence,
             provider_metadata=request.provider_metadata,
+            work_role=request.work_role,
         ),
         http_request,
     )
@@ -201,6 +211,8 @@ async def create_session(
             db,
             session_request,
         )
+    except WorkRoleConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "error": exc.code, "message": str(exc)}) from exc
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     http_request.state.session_id = session.id  # request_logs attribution
@@ -218,6 +230,8 @@ async def heartbeat_existing_session(
     heartbeat_request = enrich_session_heartbeat_request(request, http_request)
     try:
         session, _ = await heartbeat_session(db, session_id, heartbeat_request)
+    except WorkRoleConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "error": exc.code, "message": str(exc)}) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return build_session_response(session)
@@ -248,6 +262,8 @@ async def get_session_facets(
     exclude_benchmarks: Annotated[bool, Query(description="Exclude benchmark-attributed sessions")] = False,
     model: Annotated[str | None, Query(description="Exact requested model")] = None,
     roots_only: Annotated[bool, Query(description="Only sessions without a parent")] = False,
+    work_role: Annotated[str | None, Query(description="Declared work role ID or unknown")] = None,
+    harness: Annotated[str | None, Query(description="Explicit harness ID or unknown")] = None,
 ) -> SessionFacetsResponse:
     """Facet counts for the list filters; each facet ignores its own filter."""
     filters = _list_filters(
@@ -263,8 +279,14 @@ async def get_session_facets(
         exclude_benchmarks=exclude_benchmarks,
         model=model,
         roots_only=roots_only,
+        work_role=work_role,
+        harness=harness,
     )
-    return SessionFacetsResponse.model_validate(await fetch_session_facets(db, filters))
+    try:
+        data = await fetch_session_facets(db, filters)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return SessionFacetsResponse.model_validate(data | {"work_roles": work_role_options(), "harnesses": harness_options()})
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
@@ -453,9 +475,13 @@ async def list_sessions(
     exclude_benchmarks: Annotated[bool, Query(description="Exclude benchmark-attributed sessions")] = False,
     model: Annotated[str | None, Query(description="Exact requested model")] = None,
     roots_only: Annotated[bool, Query(description="Only sessions without a parent")] = False,
+    work_role: Annotated[str | None, Query(description="Declared work role ID or unknown")] = None,
+    harness: Annotated[str | None, Query(description="Explicit harness ID or unknown")] = None,
+    accounting_start: Annotated[datetime | None, Query(description="Inclusive tool-accounting start")] = None,
+    accounting_end: Annotated[datetime | None, Query(description="Exclusive tool-accounting end")] = None,
     sort_by: Annotated[
         str,
-        Query(description="Sort field: status, project, agent, time, or last_active"),
+        Query(description="Sort field: status, project, agent, time, last_active, admin_share, admin_duration"),
     ] = "status",
     sort_direction: Annotated[str, Query(description="Sort direction: asc or desc")] = "asc",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
@@ -479,9 +505,12 @@ async def list_sessions(
         exclude_benchmarks=exclude_benchmarks,
         model=model,
         roots_only=roots_only,
+        work_role=work_role,
+        harness=harness,
     )
     normalized_sort, normalized_direction = _normalize_session_sort(sort_by, sort_direction)
     try:
+        start, end, inner_cursor = accounting_window(accounting_start, accounting_end, cursor)
         raw_stats = await list_sessions_with_stats(
             db,
             page=page,
@@ -489,7 +518,8 @@ async def list_sessions(
             sort_by=normalized_sort,
             sort_direction=normalized_direction,
             filters=filters,
-            cursor=cursor,
+            cursor=inner_cursor,
+            accounting_start=start, accounting_end=end,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -510,6 +540,8 @@ async def list_sessions(
         specialist_session_ids=specialist_session_ids,
     )
     for session, item in zip(sessions, items, strict=True):
+        if session.id in stats["accounting"]:
+            item.activity_accounting = DurationAccounting.model_validate(stats["accounting"][session.id])
         apply_session_rollups(
             item,
             session,
@@ -521,7 +553,10 @@ async def list_sessions(
         total=stats["total"],
         page=page,
         page_size=page_size,
-        next_cursor=stats["next_cursor"],
+        next_cursor=accounting_cursor(stats["next_cursor"], start, end),
+        accounting_window={"start": start, "end": end},
+        work_roles=work_role_options(),
+        harnesses=harness_options(),
     )
 
 

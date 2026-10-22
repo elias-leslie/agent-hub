@@ -264,6 +264,8 @@ class SessionListFilters:
     exclude_benchmarks: bool = False
     model: str | None = None
     roots_only: bool = False
+    work_role: str | None = None
+    harness: str | None = None
 
 
 def session_last_active() -> ColumnElement[datetime]:
@@ -384,6 +386,12 @@ def session_list_predicates(
     Dimensions: ``project``, ``status`` and ``kind``.
     """
     predicates: list[ColumnElement[bool]] = []
+    if filters.work_role:
+        from app.services.session_roles import role_predicate
+        predicates.append(role_predicate(filters.work_role))
+    if filters.harness:
+        from app.services.session_harnesses import harness_predicate
+        predicates.append(harness_predicate(filters.harness))
     if filters.project_id and "project" not in ignore:
         predicates.append(Session.project_id == filters.project_id)
     if filters.status and "status" not in ignore:

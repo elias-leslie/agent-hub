@@ -1,0 +1,7 @@
+{
+  "codex_cli": {"label": "Codex CLI", "metadata_values": ["codex", "codex_cli", "codex-cli"], "request_sources": ["codex-transcript-sync"]},
+  "agent_hub": {"label": "Agent Hub", "metadata_values": ["agent_hub", "agent-hub"], "request_sources": []},
+  "claude_code": {"label": "Claude Code", "metadata_values": ["claude_code", "claude-code"], "request_sources": []},
+  "antigravity": {"label": "Antigravity", "metadata_values": ["antigravity"], "request_sources": []},
+  "pi": {"label": "Pi", "metadata_values": ["pi"], "request_sources": ["pi-extension"]}
+}

@@ -100,6 +100,10 @@ async def upsert_session(
     await _validate_project_id(request.project_id)
     _validate_external_id(request.external_id)
 
+    if request.work_role is not None:
+        request = request.model_copy(update={"provider_metadata": _merge_metadata(
+            request.provider_metadata, {"work_role": request.work_role.model_dump(exclude_none=True)},
+        )})
     existing, is_existing = await get_or_create_session(db, request.session_id)
     if is_existing and existing is not None and existing.project_id != request.project_id:
         raise SessionIngestionConflict(
@@ -110,9 +114,10 @@ async def upsert_session(
         (existing.provider_metadata or {}).get("transcript_path") and request.provider.lower() != "codex"
     ):
         raise SessionIngestionConflict("session_provider_immutable", "A native Codex session cannot change provider.")
-    if (request.provider.lower() == "codex" or request.session_type == "pi") and existing is not None:
-        await lock_session_event_ingestion(db, existing.id)
-        await db.refresh(existing)
+    if existing is not None:
+        if request.provider.lower() == "codex" or request.session_type == "pi":
+            await lock_session_event_ingestion(db, existing.id)
+        await db.refresh(existing, with_for_update=True)
     await _validate_parent_link(db, request)
 
     if request.provider.lower() == "codex" and existing is not None and request.parent_session_id is not None and (
@@ -188,9 +193,10 @@ async def heartbeat_session(
         ).scalar_one_or_none()
     if session is None:
         raise ValueError(f"Session not found: {session_id}")
-    if session.provider == "codex":
+    if session.provider == "codex" or session.session_type == "pi":
         await lock_session_event_ingestion(db, session_id)
-        await db.refresh(session)
+    await db.refresh(session, with_for_update=True)
+    if session.provider == "codex":
         await _validate_project_id(session.project_id)
         await _validate_native_parent_project(db, session)
         await asyncio.to_thread(validate_native_provenance,

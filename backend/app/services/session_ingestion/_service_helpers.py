@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Session, SessionEvent
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.session_live_activity import apply_live_activity_heartbeat
+from app.services.session_roles import merge_work_role
 from app.services.session_scope import (
     apply_scope_state,
     extract_tool_scope_paths,
@@ -35,7 +36,11 @@ def _merge_metadata(
     """Recursively merge provider metadata dictionaries."""
     base = dict(existing or {})
     for key, value in (incoming or {}).items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
+        if key == "work_role":
+            role = merge_work_role(base.get(key), value)
+            if role is not None:
+                base[key] = role
+        elif isinstance(value, dict) and isinstance(base.get(key), dict):
             base[key] = _merge_metadata(base[key], value)
         else:
             base[key] = value

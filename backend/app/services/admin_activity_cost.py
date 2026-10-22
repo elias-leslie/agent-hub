@@ -19,7 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall
 from app.services.activity_accounting import argument_characters, transcript_view, usage_partitions
 from app.services.activity_accounting import number as _number
-from app.services.session_efficiency import efficiency_status, session_efficiency
+from app.services.session_efficiency import duration_split, efficiency_status, session_efficiency
+from app.services.session_harnesses import (
+    HARNESSES,
+    harness_options,
+    harness_predicate,
+    session_harness,
+)
+from app.services.session_roles import role_predicate, session_work_role, work_role_options
 from app.services.st_activity import st_command_family, summarize_st_commands
 
 EVENT_LIMIT = 20_000
@@ -136,13 +143,8 @@ def _time_view(seconds: dict[str, float]) -> dict:
     }
 
 
-def summarize_activity_cost(
-    events: list[Any], cost_rows: list[Any], usage_rows: list[Any], sessions: list[Any], bindings: list[Any],
-    *, cutoff: datetime, now: datetime, limit: int, truncated: bool,
-) -> dict[str, Any]:
-    """Combine only source-backed identities; return no prompts, commands, or tool outputs."""
-    by_session = {session.id: session for session in sessions}
-    events = sorted(events, key=lambda event: (event.session_id, event.turn, event.sequence))
+def paired_activity_tools(events: list[Any]) -> tuple[dict, dict, set]:
+    """One retained call/result pair; suppress exact nested wrapper correlations."""
     suppressed = {
         (event.session_id, event.tool_input["wrapper_candidate_call_id"])
         for event in events if event.event_type == "tool_use" and isinstance(event.tool_input, dict)
@@ -164,6 +166,28 @@ def summarize_activity_cost(
         if key not in tools:
             tools[key] = result
 
+    return tools, results, suppressed
+
+
+def measured_tool_interval(tool: Any, result: Any, *, cutoff: datetime, now: datetime):
+    duration = result.duration_ms if result is not None else tool.duration_ms
+    end_event = result or tool
+    timestamp = end_event.source_timestamp or end_event.created_at
+    if not (isinstance(duration, int) and not isinstance(duration, bool) and duration >= 0 and isinstance(timestamp, datetime)):
+        return None
+    timestamp = timestamp.astimezone(UTC)
+    return max(timestamp - timedelta(milliseconds=duration), cutoff), min(timestamp, now)
+
+
+def summarize_activity_cost(
+    events: list[Any], cost_rows: list[Any], usage_rows: list[Any], sessions: list[Any], bindings: list[Any],
+    *, cutoff: datetime, now: datetime, limit: int, truncated: bool,
+) -> dict[str, Any]:
+    """Combine only source-backed identities; return no prompts, commands, or tool outputs."""
+    by_session = {session.id: session for session in sessions}
+    events = sorted(events, key=lambda event: (event.session_id, event.turn, event.sequence))
+    tools, results, suppressed = paired_activity_tools(events)
+
     turn_categories: dict[tuple[str, int], set[str]] = defaultdict(set)
     intervals: dict[str, list] = defaultdict(list)
     patterns: dict[str, dict] = {}
@@ -177,15 +201,10 @@ def summarize_activity_cost(
         family, category = _tool_family(tool)
         turn_categories[(tool.session_id, tool.turn)].add("unknown" if category == "wait" else category)
         result = results.get(key)
-        duration = result.duration_ms if result is not None else tool.duration_ms
-        valid_duration = isinstance(duration, int) and not isinstance(duration, bool) and duration >= 0
-        seconds = _number(duration) / 1000
-        end_event = result or tool
-        timestamp = end_event.source_timestamp or end_event.created_at
-        measured = valid_duration and isinstance(timestamp, datetime)
-        if measured:
-            end = min(timestamp.astimezone(UTC), now)
-            start = max(timestamp.astimezone(UTC) - timedelta(seconds=seconds), cutoff)
+        interval = measured_tool_interval(tool, result, cutoff=cutoff, now=now)
+        measured = interval is not None
+        if interval is not None:
+            start, end = interval
             intervals[tool.session_id].append((start, end, category))
         else:
             missing_duration += 1
@@ -280,8 +299,16 @@ def summarize_activity_cost(
         coverage = token_sources.setdefault(source, {"source": source, "sessions": 0, "tokens": 0})
         coverage["sessions"] += 1
         coverage["tokens"] += amount
+        source_row = costs.get(sid) if source == "cost_logs" else ledger.get(sid) if source == "usage_calls" else None
+        cost = {
+            "recorded_calls": _number(getattr(source_row, "calls", None)),
+            "api_equiv_known_calls": _number(getattr(source_row, "api_equiv_known_calls", None)),
+            "cash_known_calls": _number(getattr(source_row, "cash_known_calls", None)),
+            "api_equiv_usd": getattr(source_row, "api_equiv_usd", None),
+            "cash_usd": getattr(source_row, "cash_usd", None),
+        }
         occupancy = _occupancy(intervals[sid])
-        per_session[sid] = {"source": source, "counts": counts, "seconds": occupancy, "usage": partitions, "transcript": transcript_view(transcript_rows[sid])}
+        per_session[sid] = {"source": source, "counts": counts, "seconds": occupancy, "usage": partitions, "transcript": transcript_view(transcript_rows[sid]), "cost": cost}
         for category in CATEGORIES:
             tokens[category] += counts[category]
         for category, duration in occupancy.items():
@@ -347,6 +374,8 @@ def summarize_activity_cost(
         spans = session_spans[sid]
         efficiency_rows.append(row | {
             "model": getattr(by_session[sid], "model", None),
+            "work_role": session_work_role(by_session[sid]),
+            "duration_split": duration_split(per_session[sid]["seconds"], calls=tool_counts[sid], missing=missing_durations[sid], truncated=truncated),
             "tool_time": measured_time, "tools_sampled": tool_counts[sid],
             "tools_missing_duration": missing_durations[sid],
             "sampled_event_span_seconds": round((max(spans) - min(spans)).total_seconds(), 3) if spans else None,
@@ -381,6 +410,36 @@ def summarize_activity_cost(
     usage_totals = {field: sum(metrics["usage"][field] for metrics in per_session.values()) + unmatched_usage[field] for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens")}
     transcript = transcript_view([row for rows in transcript_rows.values() for row in rows])
     tool_time = _time_view(seconds)
+    grouped: dict[str, dict[str, dict]] = {"project": {}, "work_role": {}, "harness": {}}
+    for sid, metrics in per_session.items():
+        role = session_work_role(by_session[sid])
+        harness = session_harness(by_session[sid])
+        for dimension, identity, label in (("harness", harness, HARNESSES[harness]["label"] if harness in HARNESSES else "Unknown"),
+                                            ("project", by_session[sid].project_id, by_session[sid].project_id),
+                                            ("work_role", role["id"] if role else "unknown", role["label"] if role else "Unknown")):
+            group = grouped[dimension].setdefault(identity, {
+                f"{dimension}_id": identity, "label": label, "sessions": 0,
+                "seconds": defaultdict(float), "calls": 0, "missing": 0,
+                "usage": dict.fromkeys(metrics["usage"], 0), "missing_usage_sessions": 0,
+                "cost": {"recorded_calls": 0, "api_equiv_known_calls": 0, "cash_known_calls": 0, "api_equiv_usd": None, "cash_usd": None},
+            })
+            group["sessions"] += 1
+            group["missing_usage_sessions"] += metrics["source"] == "missing"
+            for field, amount in metrics["usage"].items():
+                group["usage"][field] += amount
+            for field, amount in metrics["cost"].items():
+                if amount is not None:
+                    group["cost"][field] = (group["cost"][field] or 0) + amount
+            group["calls"] += tool_counts[sid]
+            group["missing"] += missing_durations[sid]
+            for category, value in metrics["seconds"].items():
+                group["seconds"][category] += value
+    def group_rows(dimension: str) -> list[dict]:
+        return [{f"{dimension}_id": row[f"{dimension}_id"], "label": row["label"], "sessions": row["sessions"],
+                 "usage": row["usage"], "cost": row["cost"],
+                 "coverage": {"usage_sessions": row["sessions"] - row["missing_usage_sessions"], "missing_usage_sessions": row["missing_usage_sessions"]},
+                 "duration_split": duration_split(row["seconds"], calls=row["calls"], missing=row["missing"], truncated=truncated)}
+                for _, row in sorted(grouped[dimension].items())]
     shares = {row["category"]: row["share"] for row in tool_time["breakdown"]}
     summary = "No measured tool-runtime intervals in this window."
     if tool_time["denominator_seconds"]:
@@ -406,6 +465,9 @@ def summarize_activity_cost(
         "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Unmatched ledger calls add to unknown globally and are excluded from Hub rankings. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
         "response_tokens": _token_view(responses),
         "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
+        "duration_split": duration_split(seconds, calls=len(tools), missing=missing_duration, truncated=truncated),
+        "by_project": group_rows("project"), "by_work_role": group_rows("work_role"), "by_harness": group_rows("harness"),
+        "work_roles": work_role_options(), "harnesses": harness_options(),
         "tool_time": tool_time, "tools_missing_duration": missing_duration, "tools_sampled": len(tools),
         "summary": summary, "repeat_admin_patterns": repeats[:limit], "repeat_admin_patterns_total": len(repeats),
         "task_rollups": task_rows[:limit], "task_rollups_total": len(task_rows),
@@ -423,6 +485,7 @@ def summarize_activity_cost(
 async def build_activity_cost_snapshot(
     db: AsyncSession, *, cutoff: datetime, now: datetime, limit: int,
     project_id: str | None = None, provider: str | None = None, model: str | None = None, session_id: str | None = None,
+    work_role: str | None = None, harness: str | None = None, list_filters: Any = None,
 ) -> dict[str, Any]:
     """Bound event memory, aggregate ledgers in SQL, and include old-but-active sessions."""
     event_time = func.coalesce(SessionEvent.source_timestamp, SessionEvent.created_at)
@@ -430,12 +493,19 @@ async def build_activity_cost_snapshot(
     for column, value in ((Session.project_id, project_id), (Session.provider, provider), (Session.model, model), (Session.id, session_id)):
         if value is not None:
             filters.append(column == value)
+    if list_filters is not None:
+        from app.services.session_queries import session_list_predicates
+        filters.extend(session_list_predicates(list_filters))
+    if work_role is not None:
+        filters.append(role_predicate(work_role))
+    if harness is not None:
+        filters.append(harness_predicate(harness))
     selected_sessions = select(Session.id).where(*filters)
     output = SessionEvent.tool_output
 
     def text_length(key: str):
         value = output[key]
-        return case((func.jsonb_typeof(value) == "string", func.length(value.as_string())), else_=None)
+        return case((func.jsonb_typeof(func.to_jsonb(value)) == "string", func.length(value.as_string())), else_=None)
 
     returned_characters = func.coalesce(
         # The content column is a redacted summary capped at 2,000 characters.
@@ -456,6 +526,8 @@ async def build_activity_cost_snapshot(
     cost_rows = (await db.execute(select(
         CostLog.session_id, func.sum(CostLog.input_tokens + CostLog.cache_read_tokens + CostLog.cache_write_tokens).label("input_tokens"),
         func.sum(CostLog.output_tokens).label("output_tokens"), func.count().label("calls"),
+        func.sum(CostLog.api_equiv_usd).label("api_equiv_usd"), func.count(CostLog.api_equiv_usd).label("api_equiv_known_calls"),
+        func.sum(CostLog.cost_usd).label("cash_usd"), func.count(CostLog.cost_usd).label("cash_known_calls"),
         func.sum(CostLog.cache_read_tokens).label("cache_read_tokens"), func.sum(CostLog.cache_write_tokens).label("cache_write_tokens"),
     ).where(CostLog.created_at >= cutoff, CostLog.created_at < now,
             *([CostLog.session_id.in_(selected_sessions)] if filters else [])).group_by(CostLog.session_id))).all()
@@ -473,11 +545,12 @@ async def build_activity_cost_snapshot(
         Session.id.label("session_id"),
         func.sum(UsageCall.input_tokens + UsageCall.cached_input_tokens + UsageCall.cache_write_tokens).label("input_tokens"),
         func.sum(UsageCall.output_tokens).label("output_tokens"), func.count().label("calls"),
+        func.sum(UsageCall.api_equiv_usd).label("api_equiv_usd"), func.count(UsageCall.api_equiv_usd).label("api_equiv_known_calls"),
         func.sum(UsageCall.cached_input_tokens).label("cache_read_tokens"), func.sum(UsageCall.cache_write_tokens).label("cache_write_tokens"),
     ).select_from(UsageCall).outerjoin(Session, (Session.id == native_id) & (native_provider == UsageCall.provider))
         .where(UsageCall.occurred_at >= cutoff, UsageCall.occurred_at < now, *filters).group_by(Session.id))).all()
     ids = {row.session_id for row in [*events[:EVENT_LIMIT], *cost_rows, *usage_rows]}
-    sessions = (await db.execute(select(Session.id, Session.project_id, Session.provider, Session.model).where(or_(
+    sessions = (await db.execute(select(Session.id, Session.project_id, Session.provider, Session.model, Session.provider_metadata, Session.request_source, Session.session_type).where(or_(
         Session.id.in_(ids), (Session.created_at >= cutoff) & (Session.created_at < now),
         (Session.updated_at >= cutoff) & (Session.updated_at < now),
     ), *filters))).all()

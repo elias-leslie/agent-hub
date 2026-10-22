@@ -25,9 +25,9 @@ async def test_pinned_filtered_window_and_validation():
             assert response.json()["filters"]["session_id"] == "s"
             assert build.call_args.kwargs["cutoff"] == datetime(2026, 10, 22, 11, tzinfo=UTC)
             assert build.call_args.kwargs["now"] == datetime(2026, 10, 22, 12, tzinfo=UTC)
-            assert build.call_args.kwargs["project_id"] == "project"
+            assert build.call_args.kwargs["list_filters"].project_id == "project"
             assert build.call_args.kwargs["provider"] == "codex"
-            assert build.call_args.kwargs["model"] == "fixture-model"
+            assert build.call_args.kwargs["list_filters"].model == "fixture-model"
             assert build.call_args.kwargs["session_id"] == "s"
             for params in ({"until": "2026-10-22T12:00:00"}, {"until": "2099-01-01T00:00:00Z"}, {"hours": 0}, {"limit": 21}):
                 assert (await client.get("/api/admin/session-efficiency", params=params)).status_code == 422

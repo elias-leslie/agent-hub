@@ -113,7 +113,7 @@ def create_forked_session(parent: Session, new_session_id: str, fork_at: int) ->
         parent_session_id=parent.id,
         fork_point_turn=fork_at,
         branch_status="active",
-        provider_metadata=parent.provider_metadata.copy() if parent.provider_metadata else None,
+        provider_metadata={key: value for key, value in (parent.provider_metadata or {}).items() if key != "work_role"},
     )
 
 

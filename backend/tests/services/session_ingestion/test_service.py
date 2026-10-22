@@ -560,7 +560,7 @@ async def test_upsert_session_reactivates_existing_completed_session() -> None:
     assert session.status == "active"
     assert session.updated_at is not None
     assert db.commit.await_count == 1
-    db.refresh.assert_not_awaited()
+    db.refresh.assert_awaited_once_with(session, with_for_update=True)
 
 
 @pytest.mark.unit
@@ -834,7 +834,7 @@ async def test_upsert_session_rejects_overlong_external_id() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_heartbeat_session_updates_without_refresh() -> None:
+async def test_heartbeat_session_refreshes_and_locks_before_metadata_update() -> None:
     db = AsyncMock()
     session = Session(
         id="session-heartbeat",
@@ -874,7 +874,7 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
     assert live_activity["last_read_path"] == "backend/app/api/sessions.py"
     assert session.updated_at is not None
     assert db.commit.await_count == 1
-    db.refresh.assert_not_awaited()
+    db.refresh.assert_awaited_once_with(session, with_for_update=True)
 
 
 @pytest.mark.unit

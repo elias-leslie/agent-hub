@@ -1,0 +1,10 @@
+{
+  "coordinator": "Coordinator",
+  "implementation": "Implementation",
+  "research": "Research",
+  "review": "Review",
+  "recon": "Recon",
+  "hunting": "Hunting",
+  "operations": "Operations",
+  "other": "Other"
+}

@@ -5,11 +5,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.services.session_ingestion.models import SessionModelEvidence
+from app.services.session_roles import SessionWorkRole, WorkRoleDeclaration
 
 
 class SessionCreate(BaseModel):
     """Request body for creating a session."""
 
+    work_role: WorkRoleDeclaration | None = None
     session_id: str | None = Field(
         default=None,
         description="Custom session ID (e.g. from Claude Code). Generated if not provided.",
@@ -191,6 +193,20 @@ class ExternalSessionIdentity(BaseModel):
     )
 
 
+class DurationAccounting(BaseModel):
+    admin_seconds: float
+    other_seconds: float
+    denominator_seconds: float
+    admin_share: float | None
+    other_share: float | None
+    unknown_seconds: float
+    unknown_share: float | None
+    tools_sampled: int
+    tools_missing_duration: int
+    duration_coverage: float | None
+    events_truncated: bool
+
+
 class SessionSummaryFields(BaseModel):
     """Fields shared by session list items and session detail responses.
 
@@ -202,6 +218,8 @@ class SessionSummaryFields(BaseModel):
     provider: str
     model: str
     model_evidence: SessionModelEvidence | None = None
+    work_role: SessionWorkRole | None = None
+    activity_accounting: DurationAccounting | None = None
     requested_provider: str | None = Field(default=None, description="Originally requested provider")
     requested_model: str | None = Field(default=None, description="Originally requested model")
     effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")
@@ -313,6 +331,9 @@ class SessionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    accounting_window: dict[str, datetime] | None = None
+    work_roles: list[dict[str, str]] = Field(default_factory=list)
+    harnesses: list[dict[str, str]] = Field(default_factory=list)
     next_cursor: str | None = Field(
         default=None,
         description="Opaque keyset cursor for the next page; null when exhausted",
@@ -330,6 +351,8 @@ class SessionFacetsResponse(BaseModel):
     status: dict[str, int]
     kind: dict[str, int]
     projects: list[SessionFacetProject]
+    work_roles: list[dict[str, str]] = Field(default_factory=list)
+    harnesses: list[dict[str, str]] = Field(default_factory=list)
 
 
 class CloseSessionResponse(BaseModel):

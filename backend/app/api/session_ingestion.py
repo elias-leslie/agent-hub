@@ -55,6 +55,7 @@ from app.services.session_ingestion.native_observations import (
 from app.services.session_ingestion.service import SessionIngestionConflict
 from app.services.session_operations import get_or_create_session
 from app.services.session_queries import get_session_or_404
+from app.services.session_roles import WorkRoleConflict
 
 router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
 
@@ -178,10 +179,10 @@ async def upsert_session_endpoint(
                         "An existing session cannot be moved to another project.",
                     )
         session, result = await upsert_session(db, enriched_request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(
             status_code=409,
-            detail={"code": exc.code, "message": str(exc)},
+            detail={"code": exc.code, "message": str(exc), **({"error": exc.code} if isinstance(exc, WorkRoleConflict) else {})},
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -221,10 +222,10 @@ async def heartbeat_session_endpoint(
                 enriched_request,
                 session=session,
             )
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(
             status_code=409,
-            detail={"code": exc.code, "message": str(exc)},
+            detail={"code": exc.code, "message": str(exc), **({"error": exc.code} if isinstance(exc, WorkRoleConflict) else {})},
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -297,10 +298,10 @@ async def ingest_transcript_events_endpoint(
         session = await get_session_or_404(db, session_id)
         require_project_access(http_request, session.project_id)
         return await ingest_transcript_events(db, session_id, request, session=session)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(
             status_code=409,
-            detail={"code": exc.code, "message": str(exc)},
+            detail={"code": exc.code, "message": str(exc), **({"error": exc.code} if isinstance(exc, WorkRoleConflict) else {})},
         ) from exc
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400
@@ -355,10 +356,10 @@ async def refresh_transcript_events_endpoint(
             session=session,
             **({"repair_projection": True} if repair_projection else {}),
         )
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(
             status_code=409,
-            detail={"code": exc.code, "message": str(exc)},
+            detail={"code": exc.code, "message": str(exc), **({"error": exc.code} if isinstance(exc, WorkRoleConflict) else {})},
         ) from exc
     except ValueError as exc:
         status = 404 if "not found" in str(exc).lower() else 400
@@ -377,7 +378,7 @@ async def register_native_source_endpoint(
     require_project_access(http_request, session.project_id)
     try:
         return await register_native_source(db, session, request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
@@ -393,7 +394,7 @@ async def ingest_native_observations_endpoint(
     require_project_access(http_request, session.project_id)
     try:
         return await ingest_native_observations(db, session, source_id, request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
@@ -404,7 +405,7 @@ async def register_native_quarantine_endpoint(request: NativeQuarantineRegistrat
     require_project_access(http_request, request.project_id)
     try:
         return await register_native_quarantine(db, request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
     except ValueError as exc:
@@ -422,7 +423,7 @@ async def ingest_native_quarantine_endpoint(source_id: str, request: NativeQuara
     require_project_access(http_request, source.project_id)
     try:
         return await ingest_native_quarantine(db, source, request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
@@ -486,7 +487,7 @@ async def qualify_native_protocol_profile_endpoint(request: NativeProtocolProfil
         raise HTTPException(status_code=403, detail="Protocol qualification requires the internal evidence owner.")
     try:
         return await qualify_native_protocol_profile(db, request)
-    except SessionIngestionConflict as exc:
+    except (SessionIngestionConflict, WorkRoleConflict) as exc:
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc)}) from exc
 
 
