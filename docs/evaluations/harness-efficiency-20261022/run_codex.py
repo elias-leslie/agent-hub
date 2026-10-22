@@ -23,7 +23,9 @@ def main(root):
     private.mkdir(exist_ok=True)
     started = time.time()
     (root / "attempt.json").write_text(json.dumps({"started": started, "harness": "codex", "arm": "on" if condition["optional_context"] else "off"}))
-    command = [native, "exec", "--json", "--model", "gpt-6.1-sol", "--sandbox", "danger-full-access", "-c", "approval_policy=\"never\"", "-c", "model_reasoning_effort=\"xhigh\"", "-c", "service_tier=\"default\"", "-c", "developer_instructions=" + json.dumps(instructions), "-C", str(root), "-"]
+    # This ordinary-coding control uses the supported standard access mode even
+    # when the user's unrelated interactive Codex default selects Daybreak.
+    command = [native, "exec", "--json", "--model", "gpt-6.1-sol", "--cyber-access-program", "standard", "--sandbox", "danger-full-access", "-c", "approval_policy=\"never\"", "-c", "model_reasoning_effort=\"xhigh\"", "-c", "service_tier=\"default\"", "-c", "developer_instructions=" + json.dumps(instructions), "-C", str(root), "-"]
     with (private / "stdout.jsonl").open("w") as out, (private / "stderr.log").open("w") as err:
         result = subprocess.run(command, input=condition["task"], text=True, stdout=out, stderr=err)
     receipt = {"started": started, "ended": time.time(), "whole_seconds": time.time() - started, "exit_code": result.returncode}
