@@ -621,7 +621,8 @@ async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger
     for sid, project, role, harness, seconds in (("codex", "agent-hub", "implementation", "codex", 10),
                                                 ("pi", "agent-hub", "research", "pi", 30),
                                                 ("elsewhere", "summitflow", "implementation", "codex", 99)):
-        await add_session(pg_db, sid, minutes=1, metadata=_merge_metadata({}, {"work_role": {"id": role, "source": "fixture"}, "harness": harness}))
+        await add_session(pg_db, sid, minutes=1, session_type="pi" if harness == "pi" else "agent",
+                          metadata=_merge_metadata({}, {"work_role": {"id": role, "source": "fixture"}, "harness": harness}))
         await add_event(pg_db, sid, 1, 1, "tool_use", call_id=sid, duration_ms=seconds * 1000,
                         tool_name="Bash", tool_input={"command": "st context fixture"}, source_timestamp=BASE + timedelta(seconds=150))
         session = await pg_db.get(Session, sid)
@@ -654,6 +655,7 @@ async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger
     assert capped.status_code == 200, capped.text
     assert capped.json()["events_truncated"]
     assert all(row["duration_split"]["events_truncated"] for row in capped.json()["by_project"])
+    assert {row["harness_id"] for row in capped.json()["by_harness"]} == {"codex_cli", "pi"}
     complete = await api.get("/api/sessions", params={**params, "work_role": "research", "harness": "pi", "sort_by": "admin_duration"})
     assert complete.status_code == 200, complete.text
     assert complete.json()["sessions"][0]["activity_accounting"]["admin_seconds"] == 30

@@ -37,7 +37,7 @@ _EVENT_ORDERS = frozenset({"asc", "desc"})
 
 # Coarse UI kinds over the stored session_type.
 SESSION_KIND_TYPES: dict[str, tuple[str, ...]] = {
-    "coding": ("agent", "claude_code"),
+    "coding": ("agent", "claude_code", "pi"),
     "chat": ("chat",),
     "completion": ("completion",),
     "image": ("image_generation",),
