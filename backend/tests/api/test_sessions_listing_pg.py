@@ -526,8 +526,13 @@ async def test_spend_overview_ranks_sessions_and_routine_jobs(pg_db: AsyncSessio
 
 
 async def test_work_role_is_fixed_across_upsert_resume_heartbeat_and_conflict(
-    api: httpx.AsyncClient, pg_db: AsyncSession,
+    api: httpx.AsyncClient, pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from unittest.mock import AsyncMock
+
+    # The isolated acceptance clone has no host ST binary; project membership
+    # is outside this session-role contract.
+    monkeypatch.setattr("app.constants.projects.validate_project_id", AsyncMock())
     payload = {"session_id": "fixed-role", "project_id": "agent-hub", "provider": "openai", "model": "fixture",
                "session_type": "agent", "work_role": {"id": "implementation", "source": "explicit-launch", "display_name": "Backend"},
                "provider_metadata": {"external_identity": {"display_identity": "worker"}}, "external_id": "task-fixture"}

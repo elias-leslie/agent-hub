@@ -244,6 +244,9 @@
       "minimum_duration_coverage": 0.8,
       "maximum_unknown_share": 0.2
     },
+    "trial_goal": {
+      "relative_cost_reduction_target": 0.2
+    },
     "sessions_total": 1,
     "status_counts": {
       "within_goal": 0,
@@ -291,6 +294,20 @@
           ]
         },
         "model": null,
+        "work_role": null,
+        "duration_split": {
+          "admin_seconds": 10.0,
+          "other_seconds": 0,
+          "denominator_seconds": 10.0,
+          "admin_share": 1.0,
+          "other_share": 0.0,
+          "unknown_seconds": 0,
+          "unknown_share": 0.0,
+          "tools_sampled": 4,
+          "tools_missing_duration": 1,
+          "duration_coverage": 0.75,
+          "events_truncated": false
+        },
         "tool_time": {
           "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
           "denominator_seconds": 10.0,
@@ -323,10 +340,7 @@
         "repeat_admin_patterns": [],
         "repeat_admin_patterns_total": 0
       }
-    ],
-    "trial_goal": {
-      "relative_cost_reduction_target": 0.2
-    }
+    ]
   },
   "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Unmatched ledger calls add to unknown globally and are excluded from Hub rankings. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
   "response_tokens": {
@@ -353,6 +367,197 @@
     "sources": []
   },
   "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
+  "duration_split": {
+    "admin_seconds": 10.0,
+    "other_seconds": 0,
+    "denominator_seconds": 10.0,
+    "admin_share": 1.0,
+    "other_share": 0.0,
+    "unknown_seconds": 0,
+    "unknown_share": 0.0,
+    "tools_sampled": 4,
+    "tools_missing_duration": 1,
+    "duration_coverage": 0.75,
+    "events_truncated": false
+  },
+  "by_project": [
+    {
+      "project_id": "project",
+      "label": "project",
+      "sessions": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cache_detail_input_tokens": 0
+      },
+      "cost": {
+        "recorded_calls": 0,
+        "api_equiv_known_calls": 0,
+        "cash_known_calls": 0,
+        "api_equiv_usd": null,
+        "cash_usd": null
+      },
+      "coverage": {
+        "usage_sessions": 0,
+        "missing_usage_sessions": 1
+      },
+      "duration_split": {
+        "admin_seconds": 10.0,
+        "other_seconds": 0,
+        "denominator_seconds": 10.0,
+        "admin_share": 1.0,
+        "other_share": 0.0,
+        "unknown_seconds": 0,
+        "unknown_share": 0.0,
+        "tools_sampled": 4,
+        "tools_missing_duration": 1,
+        "duration_coverage": 0.75,
+        "events_truncated": false
+      }
+    }
+  ],
+  "by_work_role": [
+    {
+      "work_role_id": "unknown",
+      "label": "Unknown",
+      "sessions": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cache_detail_input_tokens": 0
+      },
+      "cost": {
+        "recorded_calls": 0,
+        "api_equiv_known_calls": 0,
+        "cash_known_calls": 0,
+        "api_equiv_usd": null,
+        "cash_usd": null
+      },
+      "coverage": {
+        "usage_sessions": 0,
+        "missing_usage_sessions": 1
+      },
+      "duration_split": {
+        "admin_seconds": 10.0,
+        "other_seconds": 0,
+        "denominator_seconds": 10.0,
+        "admin_share": 1.0,
+        "other_share": 0.0,
+        "unknown_seconds": 0,
+        "unknown_share": 0.0,
+        "tools_sampled": 4,
+        "tools_missing_duration": 1,
+        "duration_coverage": 0.75,
+        "events_truncated": false
+      }
+    }
+  ],
+  "by_harness": [
+    {
+      "harness_id": "unknown",
+      "label": "Unknown",
+      "sessions": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cache_detail_input_tokens": 0
+      },
+      "cost": {
+        "recorded_calls": 0,
+        "api_equiv_known_calls": 0,
+        "cash_known_calls": 0,
+        "api_equiv_usd": null,
+        "cash_usd": null
+      },
+      "coverage": {
+        "usage_sessions": 0,
+        "missing_usage_sessions": 1
+      },
+      "duration_split": {
+        "admin_seconds": 10.0,
+        "other_seconds": 0,
+        "denominator_seconds": 10.0,
+        "admin_share": 1.0,
+        "other_share": 0.0,
+        "unknown_seconds": 0,
+        "unknown_share": 0.0,
+        "tools_sampled": 4,
+        "tools_missing_duration": 1,
+        "duration_coverage": 0.75,
+        "events_truncated": false
+      }
+    }
+  ],
+  "work_roles": [
+    {
+      "id": "coordinator",
+      "label": "Coordinator"
+    },
+    {
+      "id": "implementation",
+      "label": "Implementation"
+    },
+    {
+      "id": "research",
+      "label": "Research"
+    },
+    {
+      "id": "review",
+      "label": "Review"
+    },
+    {
+      "id": "recon",
+      "label": "Recon"
+    },
+    {
+      "id": "hunting",
+      "label": "Hunting"
+    },
+    {
+      "id": "operations",
+      "label": "Operations"
+    },
+    {
+      "id": "other",
+      "label": "Other"
+    },
+    {
+      "id": "unknown",
+      "label": "Unknown"
+    }
+  ],
+  "harnesses": [
+    {
+      "id": "codex_cli",
+      "label": "Codex CLI"
+    },
+    {
+      "id": "agent_hub",
+      "label": "Agent Hub"
+    },
+    {
+      "id": "claude_code",
+      "label": "Claude Code"
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity"
+    },
+    {
+      "id": "pi",
+      "label": "Pi"
+    },
+    {
+      "id": "unknown",
+      "label": "Unknown"
+    }
+  ],
   "tool_time": {
     "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
     "denominator_seconds": 10.0,
