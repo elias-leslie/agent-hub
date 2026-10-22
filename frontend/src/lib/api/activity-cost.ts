@@ -53,6 +53,7 @@ export interface StCommandMetrics {
   measured_seconds: number
   input_tokens_estimate: number
   output_tokens_estimate: number
+  commands_with_tokenized_input: number
   commands_with_duration: number
   commands_with_output: number
   shared_commands: number
@@ -250,10 +251,12 @@ function stMetrics(value: unknown) {
       'measured_seconds',
       'input_tokens_estimate',
       'output_tokens_estimate',
+      'commands_with_tokenized_input',
       'commands_with_duration',
       'commands_with_output',
       'shared_commands',
     ]) &&
+    Number(value.commands_with_tokenized_input) <= Number(value.commands) &&
     Number(value.commands_with_duration) + Number(value.shared_commands) <=
       Number(value.commands) &&
     Number(value.commands_with_output) + Number(value.shared_commands) <=

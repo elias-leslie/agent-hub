@@ -104,3 +104,28 @@ def test_backend_st_fixture_reconciles_across_the_frontend_boundary():
     assert st["output_tokens_estimate"] == 21
 
 
+def test_tokenizer_bounds_fall_back_without_losing_count_time_or_output(monkeypatch):
+    from app.services import st_activity
+
+    monkeypatch.setitem(st_activity.POLICY, "max_tokenized_characters_per_command", 8)
+    monkeypatch.setitem(st_activity.POLICY, "max_tokenized_characters_per_snapshot", 10)
+    seen = []
+    def encode(text, **kwargs):
+        seen.append(text)
+        return list(text)
+    monkeypatch.setattr(st_activity, "_encoding", lambda: Row(encode=encode))
+    result = snapshot([
+        event(call="one", tool_input={"command": ["st", "list"]}),
+        event("tool_result", call="one", duration_ms=0, returned_characters=0),
+        event(call="two", tool_input={"command": ["st", "show"]}),
+        event(call="large", tool_input={"command": ["st", "sessions", "send", "synthetic", "a" * 120000]}),
+        event("tool_result", call="large", seconds=2, returned_characters=80),
+    ])["st_commands"]
+    assert seen == ["st list"]  # Second small call exhausts snapshot budget; large call exceeds per-command budget.
+    assert result["commands"] == 3
+    assert result["commands_with_tokenized_input"] == 1
+    assert result["input_tokens_estimate"] == 7 + 2 + (len("st sessions send synthetic ") + 120000 + 3) // 4
+    assert result["commands_with_duration"] == result["commands_with_output"] == 2
+    assert result["measured_seconds"] == 2 and result["output_tokens_estimate"] == 20
+
+

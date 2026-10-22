@@ -110,13 +110,14 @@ def _encoding() -> tiktoken.Encoding:
 
 def _metrics() -> dict:
     return dict.fromkeys(("commands", "measured_seconds", "input_tokens_estimate", "output_tokens_estimate",
-                          "commands_with_duration", "commands_with_output", "shared_commands"), 0)
+                          "commands_with_tokenized_input", "commands_with_duration", "commands_with_output", "shared_commands"), 0)
 
 
 def summarize_st_commands(tools: dict, results: dict, *, sessions: dict, limit: int) -> dict:
     totals = _metrics()
     families: dict[tuple[str, str], dict] = {}
     shell_calls = unparsed = calls_with_st = 0
+    remaining = POLICY["max_tokenized_characters_per_snapshot"]
     for key, tool in tools.items():
         if tool.event_type != "tool_use" or (tool.tool_name or "").split(".")[-1].lower() not in {"bash", "exec_command", "run_command"}:
             continue
@@ -141,9 +142,16 @@ def summarize_st_commands(tools: dict, results: dict, *, sessions: dict, limit: 
             has_duration = not shared and isinstance(duration, int) and not isinstance(duration, bool) and duration >= 0
             returned = getattr(result, "returned_characters", None)
             has_output = not shared and isinstance(returned, int) and not isinstance(returned, bool) and returned >= 0
+            normalized = shlex.join(words)
+            tokenized = len(normalized) <= min(POLICY["max_tokenized_characters_per_command"], remaining)
+            if tokenized:
+                input_tokens = len(_encoding().encode(normalized, disallowed_special=()))
+                remaining -= len(normalized)
+            else:
+                input_tokens = math.ceil(len(normalized) / POLICY["output_characters_per_token"])
             metrics = {
                 "commands": 1, "shared_commands": int(shared),
-                "input_tokens_estimate": len(_encoding().encode(shlex.join(words), disallowed_special=())),
+                "input_tokens_estimate": input_tokens, "commands_with_tokenized_input": int(tokenized),
                 "output_tokens_estimate": math.ceil(returned / POLICY["output_characters_per_token"]) if has_output else 0,
                 "measured_seconds": int(duration) / 1000 if has_duration else 0,
                 "commands_with_duration": int(has_duration), "commands_with_output": int(has_output),
@@ -165,7 +173,7 @@ def summarize_st_commands(tools: dict, results: dict, *, sessions: dict, limit: 
         "input_token_encoding": POLICY["input_token_encoding"],
         "output_characters_per_token": POLICY["output_characters_per_token"],
         "count_basis": "Recognizable ST commands in sampled shell source, not proof of execution. Conditional commands may not run; scripts and unsupported syntax can hide more commands.",
-        "input_token_basis": "Reference tokenizer on normalized ST command argv, once per recognizable command. Excludes tool JSON framing and other shell text; text estimate, not provider usage.",
+        "input_token_basis": "Reference tokenizer on normalized ST command argv within per-command and per-snapshot character budgets. Beyond either budget, ceiling of normalized characters / output_characters_per_token; commands_with_tokenized_input exposes method coverage. Excludes tool JSON framing and other shell text; text estimate, not provider usage.",
         "output_token_basis": f"Ceiling of retained returned characters / {POLICY['output_characters_per_token']} per isolated invocation, matching ST tools cost's character approximation. Output contents are not fetched or tokenized. Language and formatting change accuracy; missing, truncated or shared output has unknown size.",
         "time_basis": "Sum of reported elapsed durations for isolated ST commands, including zero. Concurrent calls add; this is not union occupancy or agent thinking time. Shared shell durations are unallocated.",
     }

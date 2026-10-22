@@ -67,6 +67,11 @@ export function StCommandActivity({
             {sampleCapped &&
               ' Event sample capped; earlier calls may be missing.'}
           </p>
+          <p className="section-copy">
+            Input tokenized for {commands.commands_with_tokenized_input}/
+            {commands.commands} commands; the rest use a character estimate to
+            bound refresh cost.
+          </p>
           {commands.commands === 0 && (
             <p className="section-copy">
               No recognizable ST commands in the sampled calls. Unrecorded or
@@ -98,8 +103,10 @@ export function StCommandActivity({
                     tokens · {output(row)}
                   </p>
                   <p className="text-xs text-slate-400">
-                    Time known for {row.commands_with_duration}/{row.commands} ·{' '}
-                    output known for {row.commands_with_output}/{row.commands}.
+                    Input tokenized for {row.commands_with_tokenized_input}/
+                    {row.commands} · time known for {row.commands_with_duration}
+                    /{row.commands} · output known for{' '}
+                    {row.commands_with_output}/{row.commands}.
                   </p>
                   {row.sample_session_id && row.sample_project_id && (
                     <Link
@@ -128,11 +135,13 @@ export function StCommandActivity({
               </p>
               <p className="section-copy">
                 Input uses {commands.input_token_encoding} on normalized command
-                arguments. Output uses retained characters ÷{' '}
-                {commands.output_characters_per_token}, rounded up per isolated
-                command, matching ST tools cost. Language and formatting affect
-                accuracy. Missing or truncated text has unknown size. Arguments
-                and output contents are not included in this report.
+                arguments within tokenizer limits; other input uses characters ÷{' '}
+                {commands.output_characters_per_token}, rounded up. Output uses
+                retained characters ÷ {commands.output_characters_per_token},
+                rounded up per isolated command, matching ST tools cost.
+                Language and formatting affect accuracy. Missing or truncated
+                text has unknown size. Arguments and output contents are not
+                included in this report.
               </p>
             </div>
           </details>

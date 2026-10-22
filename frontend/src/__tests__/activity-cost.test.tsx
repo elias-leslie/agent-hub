@@ -146,6 +146,11 @@ describe('activity observations', () => {
     expect(screen.getByText('st.web · Substantive')).toBeInTheDocument()
     expect(screen.getByText('st.context · Admin')).toBeInTheDocument()
     expect(screen.getByText('st.check · Support')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Input tokenized for 4\/4 commands; the rest use a character estimate/,
+      ),
+    ).toBeInTheDocument()
     expect(screen.getAllByText(/Time unavailable/)).toHaveLength(2)
     expect(
       screen.getByRole('link', { name: 'Open an observed st.context session' }),
@@ -182,6 +187,39 @@ describe('activity observations', () => {
             { ...stSnapshot.st_commands.families[0], category: 'invented' },
           ],
         },
+      }),
+    ).toThrow()
+  })
+
+  it('shows input fallback coverage without dropping measured time or output', () => {
+    const value = {
+      ...stSnapshot,
+      st_commands: {
+        ...stSnapshot.st_commands,
+        commands_with_tokenized_input: 1,
+        families: stSnapshot.st_commands.families.map((row, index) => ({
+          ...row,
+          commands_with_tokenized_input: index === 0 ? 1 : 0,
+        })),
+      },
+    }
+    const data = parseActivityCost(value)
+    if (!data) throw new Error('Missing synthetic Activity snapshot')
+    render(panel(data))
+    expect(
+      screen.getByText(
+        /Input tokenized for 1\/4 commands; the rest use a character estimate/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /4 ST commands in sampled calls · 2s elapsed · ~19 input text tokens · ~21 output text tokens/,
+      ),
+    ).toBeInTheDocument()
+    expect(() =>
+      parseActivityCost({
+        ...value,
+        st_commands: { ...value.st_commands, commands_with_tokenized_input: 5 },
       }),
     ).toThrow()
   })
