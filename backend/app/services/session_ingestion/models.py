@@ -259,6 +259,7 @@ class TranscriptIngestResult(BaseModel):
     transcript_path: str
     events_appended: int
     events_skipped: int = 0
+    events_updated: int = 0
     last_turn: int
     last_sequence: int
     event_ids: list[str] = Field(default_factory=list)

@@ -719,6 +719,24 @@ def _append_codex_event_message(payload: JsonObject, state: _ParseState) -> None
         _append_codex_token_counter(payload, state)
     elif payload.get("type") == "item_completed":
         _append_codex_command_execution(payload, state)
+    elif payload.get("type") == "task_complete":
+        error = payload.get("error")
+        if not isinstance(error, dict):
+            return
+        message = error.get("message")
+        code = error.get("codex_error_info")
+        if not isinstance(message, str) or not message.strip():
+            return
+        # Only the public error fields belong in the timeline. Native payloads
+        # can also contain encrypted or otherwise opaque provider material.
+        details = {}
+        if isinstance(code, str) and code:
+            details["codex_error_info"] = code
+            message = f"{code}: {message}"
+        turn_id = payload.get("turn_id")
+        if isinstance(turn_id, str) and turn_id:
+            details["turn_id"] = turn_id
+        state.append("error", content=message, tool_output=details or None)
 
 
 _USAGE_FIELDS = (
@@ -779,6 +797,14 @@ def _append_codex_token_counter(payload: JsonObject, state: _ParseState) -> None
 
 def _append_codex_message_payload(payload: JsonObject, state: _ParseState) -> None:
     role = payload.get("role")
+    event_type = {
+        "user": "user_message",
+        "assistant": "assistant_message",
+        "developer": "system_message",
+        "system": "system_message",
+    }.get(role) if isinstance(role, str) else None
+    if event_type is None:
+        return
     content = payload.get("content")
     if not isinstance(content, list):
         return
@@ -799,8 +825,8 @@ def _append_codex_message_payload(payload: JsonObject, state: _ParseState) -> No
         if not cleaned:
             continue
         state.append(
-            "user_message" if is_user else "assistant_message",
-            role="user" if is_user else "assistant",
+            event_type,
+            role=role,
             content=cleaned,
         )
 

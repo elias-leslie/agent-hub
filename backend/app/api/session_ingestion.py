@@ -291,6 +291,9 @@ async def refresh_transcript_events_endpoint(
     session_id: str,
     http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
+    repair_projection: Annotated[
+        bool, Query(description="Repair native instruction roles and missing task errors"),
+    ] = False,
 ) -> TranscriptIngestResult:
     """Catch up the exact transcript source already registered for a session."""
     try:
@@ -326,6 +329,7 @@ async def refresh_transcript_events_endpoint(
                 checkpoint=checkpoint,
             ),
             session=session,
+            **({"repair_projection": True} if repair_projection else {}),
         )
     except SessionIngestionConflict as exc:
         raise HTTPException(

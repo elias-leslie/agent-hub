@@ -643,9 +643,11 @@ class TestSessionIngestionAPI:
         assert data["source_health"]["caught_up"] is True
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("repair_projection", [False, True])
     async def test_transcript_refresh_uses_retained_source_and_checkpoint(
         self,
         client: AsyncClient,
+        repair_projection: bool,
     ) -> None:
         session = MagicMock()
         session.id = "session-123"
@@ -696,7 +698,8 @@ class TestSessionIngestionAPI:
             ) as ingest,
         ):
             response = await client.post(
-                "/api/session-ingestion/sessions/session-123/transcript-refresh"
+                "/api/session-ingestion/sessions/session-123/transcript-refresh",
+                params={"repair_projection": str(repair_projection).lower()},
             )
 
         assert response.status_code == 200
@@ -708,6 +711,7 @@ class TestSessionIngestionAPI:
             checkpoint="checkpoint-4",
         )
         assert ingest.await_args.kwargs["session"] is session
+        assert ingest.await_args.kwargs.get("repair_projection", False) is repair_projection
 
 
 @pytest.mark.asyncio

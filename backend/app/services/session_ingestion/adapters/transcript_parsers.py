@@ -22,7 +22,7 @@ from ._event_builders import _ParseState, append_normalized_events
 from .codex_model_evidence import observe_model_record
 
 JsonObject = dict[str, object]
-PARSER_VERSION = "agent-hub.transcript-jsonl.v4"
+PARSER_VERSION = "agent-hub.transcript-jsonl.v5"
 
 
 def transcript_roots() -> tuple[str, ...]:

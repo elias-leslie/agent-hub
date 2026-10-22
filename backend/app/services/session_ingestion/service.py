@@ -279,8 +279,12 @@ async def ingest_transcript_events(
     session_id: str,
     request: TranscriptIngestRequest,
     session: Session | None = None,
+    *,
+    repair_projection: bool = False,
 ) -> TranscriptIngestResult:
     """Parse a provider transcript and append normalized events idempotently."""
+    if repair_projection and request.provider.lower() != "codex":
+        raise ValueError("Projection repair is supported only for native Codex transcripts.")
     if session is not None and session.id != session_id:
         raise SessionIngestionConflict(
             "session_identity_mismatch",
@@ -363,6 +367,32 @@ async def ingest_transcript_events(
         from .native_observations import retain_rollout_commands
 
         await retain_rollout_commands(db, session, events)
+    events_updated = 0
+    repaired_ids: list[str] = []
+    if repair_projection and session is not None:
+        from .projection_repair import repair_codex_projection
+
+        full_events, full_checkpoint = await adapter.read_new_events(session_ref)
+        committed = _load_parse_checkpoint(next_checkpoint)
+        full = _load_parse_checkpoint(full_checkpoint)
+        if (
+            not next_checkpoint
+            or (committed.device, committed.inode, committed.byte_offset, committed.tail_digest)
+            != (full.device, full.inode, full.byte_offset, full.tail_digest)
+        ):
+            raise SessionIngestionConflict(
+                "transcript_changed_during_repair",
+                "The native source changed during projection repair; refresh it again.",
+            )
+        events_updated, repaired_ids, next_checkpoint = await repair_codex_projection(
+            db, session, full_events, next_checkpoint,
+        )
+        if repaired_ids:
+            last_turn = await get_max_turn(db, session_id)
+            append_result = append_result.model_copy(update={
+                "last_turn": last_turn,
+                "last_sequence": await get_max_sequence(db, session_id, last_turn),
+            })
     await _reconcile_transcript_session_models(
         db, session_id, session=session if request.provider.lower() == "codex" else None,
     )
@@ -375,11 +405,12 @@ async def ingest_transcript_events(
         session_id=session_id,
         provider=request.provider,
         transcript_path=request.transcript_path,
-        events_appended=append_result.events_appended,
+        events_appended=append_result.events_appended + len(repaired_ids),
         events_skipped=append_result.events_skipped + suppressed_commands,
+        events_updated=events_updated,
         last_turn=append_result.last_turn,
         last_sequence=append_result.last_sequence,
-        event_ids=append_result.event_ids,
+        event_ids=append_result.event_ids + repaired_ids,
         next_checkpoint=next_checkpoint,
         boundaries=[boundary.boundary_type for boundary in boundaries],
         source_health=source_health,
