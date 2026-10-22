@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import SessionEvent
+from app.models import Session, SessionEvent
 from app.services.session_efficiency import duration_split
 
 
@@ -65,7 +65,8 @@ def summarize_session_duration(events: list[Any], *, start: datetime, end: datet
     intervals = []
     missing = 0
     for key, tool in tools.items():
-        interval = measured_tool_interval(tool, results.get(key), cutoff=start, now=end)
+        interval = measured_tool_interval(tool, results.get(key), cutoff=start, now=end,
+                                          session_type=getattr(tool, "session_type", None))
         if interval is None:
             missing += 1
         else:
@@ -84,8 +85,8 @@ async def fetch_session_accounting(db: AsyncSession, selected_ids: Any, *, start
     query = select(
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
         SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input,
-        SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at,
-    ).where(SessionEvent.session_id.in_(selected_ids), event_time >= start, event_time < end,
+        SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at, Session.session_type,
+    ).join(Session, Session.id == SessionEvent.session_id).where(SessionEvent.session_id.in_(selected_ids), event_time >= start, event_time < end,
             SessionEvent.event_type.in_(["tool_use", "tool_result"]))
     query = query.order_by(SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence).execution_options(yield_per=1000)
     stream = await db.stream(query)
