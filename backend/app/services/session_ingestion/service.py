@@ -328,7 +328,28 @@ async def ingest_transcript_events(
         provider_session_id=session_id,
         source_id=request.transcript_path,
     )
-    events, next_checkpoint = await adapter.read_new_events(session_ref, request.checkpoint)
+    events, next_checkpoint = await adapter.read_new_events(
+        session_ref, None if repair_projection else request.checkpoint,
+    )
+    repair_events = []
+    if repair_projection:
+        committed = _load_parse_checkpoint(request.checkpoint)
+        full = _load_parse_checkpoint(next_checkpoint)
+        # A native home remount can change st_dev without changing the file.
+        # Repair only a complete, previously consumed source; never feed its
+        # history through append or silently acknowledge an unconsumed tail.
+        if (
+            not next_checkpoint
+            or not request.checkpoint
+            or committed.legacy
+            or (committed.inode, committed.line_offset, committed.byte_offset, committed.tail_digest)
+            != (full.inode, full.line_offset, full.byte_offset, full.tail_digest)
+        ):
+            raise SessionIngestionConflict(
+                "transcript_repair_source_mismatch",
+                "Projection repair requires the complete transcript matching its committed cursor.",
+            )
+        repair_events, events = events, []
     source_health = await asyncio.to_thread(inspect_transcript_source, request.transcript_path, next_checkpoint)
     model_evidence = None
     native_model_state = {}
@@ -347,7 +368,7 @@ async def ingest_transcript_events(
                 raise SessionIngestionConflict("transcript_model_evidence_identity_mismatch", "Native evidence belongs to another thread.")
     boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
     suppressed_commands = 0
-    if request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
+    if not repair_projection and request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
         from .native_observations import (
             exclude_projected_rollout_commands,
             prepare_rollout_source_generation,
@@ -363,7 +384,7 @@ async def ingest_transcript_events(
         request=AppendNormalizedEventsRequest(events=events),
         **({"session": session, "commit": False} if request.provider.lower() == "codex" else {}),
     )
-    if request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
+    if not repair_projection and request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
         from .native_observations import retain_rollout_commands
 
         await retain_rollout_commands(db, session, events)
@@ -372,20 +393,9 @@ async def ingest_transcript_events(
     if repair_projection and session is not None:
         from .projection_repair import repair_codex_projection
 
-        full_events, full_checkpoint = await adapter.read_new_events(session_ref)
-        committed = _load_parse_checkpoint(next_checkpoint)
-        full = _load_parse_checkpoint(full_checkpoint)
-        if (
-            not next_checkpoint
-            or (committed.device, committed.inode, committed.byte_offset, committed.tail_digest)
-            != (full.device, full.inode, full.byte_offset, full.tail_digest)
-        ):
-            raise SessionIngestionConflict(
-                "transcript_changed_during_repair",
-                "The native source changed during projection repair; refresh it again.",
-            )
+        assert next_checkpoint is not None
         events_updated, repaired_ids, next_checkpoint = await repair_codex_projection(
-            db, session, full_events, next_checkpoint,
+            db, session, repair_events, next_checkpoint,
         )
         if repaired_ids:
             last_turn = await get_max_turn(db, session_id)

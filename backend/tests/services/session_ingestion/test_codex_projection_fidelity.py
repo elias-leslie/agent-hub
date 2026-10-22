@@ -49,7 +49,10 @@ def test_injected_instructions_keep_their_native_role(role: str, event_type: str
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_refresh_repairs_legacy_projection_without_replaying_executions(tmp_path: Path) -> None:
+@pytest.mark.parametrize("device_changed", [False, True])
+async def test_refresh_repairs_legacy_projection_without_replaying_executions(
+    tmp_path: Path, device_changed: bool,
+) -> None:
     url = _get_async_url(settings.agent_hub_db_url)
     assert make_url(url).database == "agent_hub_test"
     engine = create_async_engine(url)
@@ -80,6 +83,8 @@ async def test_refresh_repairs_legacy_projection_without_replaying_executions(tm
     events, checkpoint = read_incremental_transcript_events(str(transcript))
     legacy_checkpoint = json.loads(checkpoint or "{}")
     legacy_checkpoint["sequence"] -= 1  # The old parser dropped task_complete.error.
+    if device_changed:
+        legacy_checkpoint["device"] += 1  # Same inode after the native home mount changed.
     request = TranscriptIngestRequest(provider="codex", transcript_path=str(transcript))
     try:
         async with factory() as db:
