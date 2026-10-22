@@ -26,8 +26,8 @@ async def test_pi_upsert_preserves_cursor_advanced_after_stale_session_load() ->
     try:
         async with factory() as seed:
             seed.add(Session(
-                id=session_id, project_id="agent-hub", provider="pi", model="pi/unknown",
-                status="active", session_type="agent",
+                id=session_id, project_id="agent-hub", provider="openai", model="openai/unknown",
+                status="active", session_type="pi",
                 provider_metadata={"transcript_path": "/fixture/pi.jsonl",
                                    "transcript_ingestion": {"checkpoint": "before"}},
             ))
@@ -43,8 +43,8 @@ async def test_pi_upsert_preserves_cursor_advanced_after_stale_session_load() ->
             await advancing_db.commit()
             with patch("app.services.session_ingestion.service._validate_project_id", return_value=None):
                 await upsert_session(stale_db, SessionUpsertRequest(
-                    session_id=session_id, project_id="agent-hub", provider="pi",
-                    model="pi/unknown", session_type="agent",
+                    session_id=session_id, project_id="agent-hub", provider="openai",
+                    model="openai/unknown", session_type="pi",
                     provider_metadata={"transcript_path": "/fixture/pi.jsonl", "harness": "pi"},
                 ))
         async with factory() as verify:
