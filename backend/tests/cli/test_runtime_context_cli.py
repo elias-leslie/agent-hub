@@ -110,6 +110,22 @@ def test_pi_sync_parser_and_failure_receipt(monkeypatch, capsys) -> None:
     assert output.err == "Pi session sync unavailable\n"
 
 
+@pytest.mark.parametrize("command,surface", [("retire-pi", "Pi"), ("retire-opencode", "OpenCode")])
+def test_retirement_cli_failure_receipt_is_content_free(monkeypatch, capsys, command, surface):
+    from unittest.mock import AsyncMock
+
+    from app.cli import runtime_context
+    from app.services.session_ingestion import opencode_sync, pi_sync
+
+    module = pi_sync if command == "retire-pi" else opencode_sync
+    monkeypatch.setattr(module, "retire_pi_sessions" if command == "retire-pi" else "retire_opencode_sessions",
+                        AsyncMock(side_effect=ValueError("private detail")))
+    assert runtime_context.main([command, "--aico-session", "aico-widget-12345678"]) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == f"{surface} retirement sync unavailable\n"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("surface", ["codex", "claude_code"])
 @pytest.mark.parametrize("child", [False, True])

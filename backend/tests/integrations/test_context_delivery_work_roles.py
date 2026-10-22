@@ -76,3 +76,16 @@ async def test_pi_sync_forwards_launch_declaration_on_existing_sync_seam(client,
     assert argv[:2] == ["canonical-cli", "sync-pi"]
     assert argv[argv.index("--session") + 1] == SID
     assert json.loads(argv[argv.index("--work-role-json") + 1]) == ROLE
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("surface", ["pi", "opencode"])
+async def test_retirement_forwards_only_exact_owner_to_canonical_cli(client, monkeypatch, surface):
+    run = AsyncMock(return_value=(0, b"", b""))
+    globals_ = client["_main"].__globals__
+    monkeypatch.setitem(globals_, "_run", run)
+    monkeypatch.setitem(globals_, "_canonical_cli", AsyncMock(return_value="canonical-cli"))
+    args = client["_parser"]().parse_args([f"retire-{surface}", "--surface", surface,
+                                           "--aico-session", "aico-widget-12345678"])
+    assert await client["_main"](args) == 0
+    run.assert_awaited_once_with("canonical-cli", f"retire-{surface}", "--aico-session", "aico-widget-12345678")

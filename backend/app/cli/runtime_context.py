@@ -24,6 +24,9 @@ def _build_parser() -> argparse.ArgumentParser:
     retire = subparsers.add_parser("retire-opencode", help="Finalize OpenCode sessions for an exactly retired Tether ownership ID.")
     retire.add_argument("--aico-session", required=True)
 
+    retire_pi = subparsers.add_parser("retire-pi", help="Finalize Pi sessions for an exactly retired Tether ownership ID.")
+    retire_pi.add_argument("--aico-session", required=True)
+
     sync = subparsers.add_parser("sync-pi", help="Ingest a native Pi transcript without model calls.")
     for field in ("session", "transcript", "cwd", "provider", "model"):
         sync.add_argument("--" + field, required=True)
@@ -221,16 +224,19 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             print("Native session work role registration unavailable", file=sys.stderr)
             return 2
-    if args.command == "retire-opencode":
+    if args.command in {"retire-opencode", "retire-pi"}:
+        surface_name = "Pi" if args.command == "retire-pi" else "OpenCode"
         try:
             from app.services.session_ingestion.opencode_sync import retire_opencode_sessions
+            from app.services.session_ingestion.pi_sync import retire_pi_sessions
             async def run_retirement() -> dict:
                 async with async_session() as db:
-                    return await retire_opencode_sessions(db, args.aico_session)
+                    retire_sessions = retire_pi_sessions if args.command == "retire-pi" else retire_opencode_sessions
+                    return await retire_sessions(db, args.aico_session)
             print(json.dumps(asyncio.run(run_retirement())))
             return 0
         except Exception:
-            print("OpenCode retirement sync unavailable", file=sys.stderr)
+            print(f"{surface_name} retirement sync unavailable", file=sys.stderr)
             return 2
     if args.command == "sync-opencode":
         try:

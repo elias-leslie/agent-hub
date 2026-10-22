@@ -87,6 +87,10 @@ def _parser() -> argparse.ArgumentParser:
     _common_arguments(retire)
     retire.add_argument("--aico-session", required=True)
 
+    retire_pi = subparsers.add_parser("retire-pi", help="Finalize an exactly retired Tether Pi session.")
+    _common_arguments(retire_pi)
+    retire_pi.add_argument("--aico-session", required=True)
+
     deliver = subparsers.add_parser("deliver", help="Deliver context and persist artifacts.")
     _common_arguments(deliver)
     deliver.add_argument(
@@ -821,17 +825,18 @@ async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any])
 
 
 async def _main(args: argparse.Namespace) -> int:
-    if args.command == "retire-opencode":
+    if args.command in {"retire-opencode", "retire-pi"}:
+        surface_name = "Pi" if args.command == "retire-pi" else "OpenCode"
         try:
             cli = await _canonical_cli()
-            code, stdout, _stderr = await _run(cli, "retire-opencode", "--aico-session", args.aico_session)
+            code, stdout, _stderr = await _run(cli, args.command, "--aico-session", args.aico_session)
             if code:
-                sys.stderr.write("OpenCode retirement sync unavailable\n")
+                sys.stderr.write(f"{surface_name} retirement sync unavailable\n")
             else:
                 sys.stdout.buffer.write(stdout)
             return code
         except Exception:
-            sys.stderr.write("OpenCode retirement sync unavailable\n")
+            sys.stderr.write(f"{surface_name} retirement sync unavailable\n")
             return 2
     if args.command == "sync-opencode":
         try:

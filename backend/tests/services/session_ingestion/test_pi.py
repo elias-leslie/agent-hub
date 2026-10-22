@@ -122,9 +122,9 @@ async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, 
 
     db = AsyncMock()
     result = MagicMock()
-    result.scalar_one_or_none.return_value = None
+    session = SimpleNamespace(id=SID, provider_metadata={})
+    result.scalar_one_or_none.side_effect = [None, session]
     db.execute.return_value = result
-    session = SimpleNamespace(id=SID)
     upsert = AsyncMock(return_value=(session, None))
     ingest = AsyncMock(return_value=SimpleNamespace(events_appended=7, events_skipped=0))
     heartbeat = AsyncMock()
@@ -148,3 +148,63 @@ async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, 
     assert heartbeat.await_args.args[2].status == status
     assert heartbeat.await_args.args[2].phase == phase
     assert _adapter_for_provider("pi").provider_name == "pi"
+
+
+@pytest.mark.asyncio
+async def test_pi_retirement_is_exact_and_idempotent(transcript, monkeypatch):
+    from app.services.session_ingestion import pi_sync
+
+    owner = "aico-widget-12345678"
+    session = SimpleNamespace(id=SID, project_id="agent-hub", provider_metadata={
+        "transcript_path": str(transcript), "cwd": "/fixture/project",
+        "pi_selection": {"provider": PROVIDER, "model": MODEL}})
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [session]
+    db.execute.return_value = result
+
+    async def sync(_db, **kwargs):
+        assert kwargs == {"session_id": SID, "project_id": "agent-hub", "transcript": str(transcript),
+            "cwd": "/fixture/project", "provider": PROVIDER, "model": MODEL,
+            "phase": "shutdown", "aico_session_id": owner, "retired_by_tether": True}
+        session.provider_metadata["tether_retired"] = True
+
+    sync_mock = AsyncMock(side_effect=sync)
+    monkeypatch.setattr(pi_sync, "sync_pi_session", sync_mock)
+    assert (await pi_sync.retire_pi_sessions(db, owner))["closed_session_ids"] == [SID]
+    query = db.execute.await_args.args[0]
+    assert set(query.compile().params.values()) >= {owner, "pi", "harness", "aico_session_id"}
+    assert (await pi_sync.retire_pi_sessions(db, owner))["closed_session_ids"] == []
+    sync_mock.assert_awaited_once()
+    with pytest.raises(ValueError, match="exact Tether"):
+        await pi_sync.retire_pi_sessions(db, "another-owner")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retired_by_tether", [False, True])
+async def test_late_idle_sync_cannot_reopen_retired_pi_or_drop_correlation(transcript, monkeypatch, retired_by_tether):
+    from app.services.session_ingestion import pi_sync
+
+    metadata = {"transcript_path": str(transcript), "aico_session_id": "aico-widget-12345678"}
+    existing = SimpleNamespace(id=SID, session_type="pi", model=f"{PROVIDER}/{MODEL}", provider_metadata=metadata)
+    latest = SimpleNamespace(id=SID, provider_metadata={**metadata, "tether_retired": not retired_by_tether})
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.side_effect = [existing, latest]
+    db.execute.return_value = result
+    upsert = AsyncMock(return_value=(existing, None))
+    monkeypatch.setattr(pi_sync, "upsert_session", upsert)
+    monkeypatch.setattr(pi_sync, "ingest_transcript_events", AsyncMock(return_value=SimpleNamespace(events_appended=0, events_skipped=7)))
+    heartbeat = AsyncMock()
+    monkeypatch.setattr(pi_sync, "heartbeat_session", heartbeat)
+    receipt = await sync_pi_session(db, session_id=SID, transcript=str(transcript), project_id="agent-hub",
+        cwd="/fixture/project", provider=PROVIDER, model=MODEL, phase="idle", retired_by_tether=retired_by_tether)
+    assert upsert.await_args is not None
+    assert heartbeat.await_args is not None
+    assert db.execute.await_args is not None
+    assert upsert.await_args.args[1].provider_metadata["aico_session_id"] == metadata["aico_session_id"]
+    assert receipt["phase"] == "shutdown"
+    assert heartbeat.await_args.args[2].status == "completed"
+    assert heartbeat.await_args.args[2].provider_metadata == ({"tether_retired": True} if retired_by_tether else {})
+    assert heartbeat.await_args.kwargs["session"] is latest
+    assert db.execute.await_args.args[0]._for_update_arg is not None
