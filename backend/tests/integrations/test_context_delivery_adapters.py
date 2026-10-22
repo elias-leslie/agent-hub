@@ -1022,17 +1022,10 @@ async def test_pi_daybreak_uses_dynamic_model_metadata_and_preserves_provider(
     _, version, _ = await _run(node, "--version")
     if int(version.lstrip("v").split(".")[0]) < 24:
         pytest.skip("Node 24 required for built-in TypeScript execution")
-    native = tmp_path / "native.mjs"
-    native.write_text("export const openaiProvider = () => globalThis.nativeProvider;\n")
     extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
     harness = tmp_path / "daybreak.mjs"
     harness.write_text("""
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
-registerHooks({resolve(specifier, context, next) {
-  if (specifier === '@earendil-works/pi-ai/providers/openai') return {url: process.env.NATIVE_PROVIDER, shortCircuit: true};
-  return next(specifier, context);
-}});
 const {default: install} = await import(process.env.EXTENSION);
 let models = [{type: 'chat', provider: 'openai', id: 'gpt-6-sol', api: 'openai-responses',
   samplingParams: {temperature: 0.2}},
@@ -1043,7 +1036,14 @@ const base = globalThis.nativeProvider = {id: 'openai', auth: {opaque: true},
   getModels: () => models, getAllModels: () => [...models, classifier], stream, streamSimple: stream,
   refreshModels: () => {}, filterModels: () => {}, filterAllModels: () => {}};
 const registrations = [];
-await install({on: () => {}, registerCommand: () => {}, registerProvider: value => registrations.push(value)});
+const handlers = new Map();
+await install({on: (name, handler) => handlers.set(name, handler), registerCommand: () => {},
+  registerProvider: value => registrations.push(value)});
+const ctx = {hasUI: false, modelRegistry: {getProvider: id => id === 'openai' ? base : undefined},
+  sessionManager: {getSessionId: () => 'synthetic-session', getSessionFile: () => null}};
+await handlers.get('session_start')({}, ctx);
+assert.equal(registrations.length, process.env.AICO_ROOT_DAYBREAK ? 1 : 0);
+await handlers.get('session_start')({}, ctx);
 assert.equal(registrations.length, process.env.AICO_ROOT_DAYBREAK ? 1 : 0);
 if (registrations.length) {
   const provider = registrations[0];
@@ -1065,7 +1065,7 @@ if (registrations.length) {
 } else console.log(JSON.stringify({registered: false}));
 """)
     code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
-        "EXTENSION": extension.as_uri(), "NATIVE_PROVIDER": native.as_uri(),
+        "EXTENSION": extension.as_uri(),
         "AICO_ROOT_DAYBREAK": selection, "AICO_ROOT_MODEL": "openai/gpt-6-sol"})
     assert code == 0, stderr
     assert json.loads(stdout)["registered"] is bool(selection)
@@ -1084,6 +1084,28 @@ async def test_pi_daybreak_rejects_ambiguous_model_before_registration(tmp_path:
         "AICO_ROOT_DAYBREAK": "true", "AICO_ROOT_MODEL": "openai-codex/gpt-6-sol"})
     assert code != 0
     assert "Pi Daybreak requires the explicit model openai/gpt-6-sol" in stderr
+
+
+@pytest.mark.asyncio
+async def test_pi_daybreak_requires_live_native_provider(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness = tmp_path / "missing-provider.mjs"
+    harness.write_text("""
+import assert from 'node:assert/strict';
+const {default: install} = await import(process.env.EXTENSION);
+const handlers = new Map();
+await install({on: (name, handler) => handlers.set(name, handler), registerCommand: () => {},
+  registerProvider: () => {throw new Error('must not register');}});
+const ctx = {modelRegistry: {getProvider: () => undefined}};
+await assert.rejects(handlers.get('session_start')({}, ctx), /Pi OpenAI provider is unavailable for Daybreak/);
+""")
+    code, _stdout, stderr = await _run(node, str(harness), env={**os.environ,
+        "EXTENSION": extension.as_uri(), "AICO_ROOT_DAYBREAK": "true",
+        "AICO_ROOT_MODEL": "openai/gpt-6-sol"})
+    assert code == 0, stderr
 
 
 @pytest.mark.asyncio
@@ -1106,15 +1128,17 @@ async def test_pi_native_daybreak_request_covers_agent_nested_and_compaction(tmp
     harness = tmp_path / "native-daybreak.mjs"
     harness.write_text("""
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
-registerHooks({resolve(specifier, context, next) {
-  if (specifier === '@earendil-works/pi-ai/providers/openai') return {url: process.env.NATIVE_PROVIDER, shortCircuit: true};
-  return next(specifier, context);
-}});
 const {default: install} = await import(process.env.EXTENSION);
+const {openaiProvider} = await import(process.env.NATIVE_PROVIDER);
 const {completeSummarization} = await import(process.env.COMPACTION);
 const providers = [];
-await install({on: () => {}, registerCommand: () => {}, registerProvider: value => providers.push(value)});
+const handlers = new Map();
+await install({on: (name, handler) => handlers.set(name, handler), registerCommand: () => {},
+  registerProvider: value => providers.push(value)});
+const base = openaiProvider();
+const ctx = {hasUI: false, modelRegistry: {getProvider: id => id === 'openai' ? base : undefined},
+  sessionManager: {getSessionId: () => 'synthetic-session', getSessionFile: () => null}};
+await handlers.get('session_start')({}, ctx);
 const provider = providers[0];
 const model = provider.getModels().find(model => model.id === 'gpt-6-sol');
 assert.ok(model);

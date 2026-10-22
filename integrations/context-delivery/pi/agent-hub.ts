@@ -42,16 +42,21 @@ export function daybreakProvider(provider: Provider, enabled: boolean): Provider
 	};
 }
 
-async function configureDaybreak(pi: ExtensionAPI): Promise<void> {
+function daybreakSelection(): boolean | undefined {
 	const selection = process.env.AICO_ROOT_DAYBREAK;
-	if (selection !== "true" && selection !== "false") return;
+	if (selection !== "true" && selection !== "false") return undefined;
 	if (process.env.AICO_ROOT_MODEL !== "openai/gpt-6-sol") {
 		throw new Error("Pi Daybreak requires the explicit model openai/gpt-6-sol");
 	}
-	// Public native provider registration preserves authentication, catalog refresh,
-	// filtering and stream implementations. No credentials or global config copied.
-	const { openaiProvider } = await import("@earendil-works/pi-ai/providers/openai");
-	pi.registerProvider(daybreakProvider(openaiProvider(), selection === "true"));
+	return selection === "true";
+}
+
+function configureDaybreak(pi: ExtensionAPI, ctx: ExtensionContext, enabled: boolean): void {
+	// Use Pi's live provider through its public extension context. The extension
+	// source lives outside Pi's package tree, so bare package imports do not resolve.
+	const provider = ctx.modelRegistry.getProvider("openai");
+	if (!provider) throw new Error("Pi OpenAI provider is unavailable for Daybreak");
+	pi.registerProvider(daybreakProvider(provider, enabled));
 }
 
 type DeliveryContract = {
@@ -188,7 +193,8 @@ async function deliver(
 }
 
 export default async function agentHubContext(pi: ExtensionAPI) {
-	await configureDaybreak(pi);
+	const daybreakEnabled = daybreakSelection();
+	let daybreakConfigured = false;
 	let currentSessionId = "";
 	let lastHash = "";
 	let lastStatus: "idle" | "ok" | "failed" = "idle";
@@ -215,6 +221,10 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
+		if (daybreakEnabled !== undefined && !daybreakConfigured) {
+			configureDaybreak(pi, ctx, daybreakEnabled);
+			daybreakConfigured = true;
+		}
 		currentSessionId = sessionId(ctx);
 		process.env.PI_SESSION_ID = currentSessionId;
 		lastHash = "";
