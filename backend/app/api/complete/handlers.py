@@ -44,6 +44,7 @@ async def build_cached_completion_response(
         await save_and_track(
             db, session, session_id, request, cached, resolved_model, is_new_session,
             model_used=getattr(cached, "model", resolved_model),
+            record_provider_usage=False,
         )
     output_usage = make_output_usage_info(cached, resolved_model)
     return make_completion_response(

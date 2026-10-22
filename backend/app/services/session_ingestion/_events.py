@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.session import SessionEvent
 from app.services.event_storage import (
+    _build_session_event,
     get_max_sequence,
     get_max_turn,
     get_sequencer,
@@ -90,6 +91,11 @@ def _source_event_fingerprint(
             "source_timestamp", "usage",
         )
     }
+    # Replay compares the same redacted/compacted representation as storage.
+    # Otherwise a native credential-shaped string conflicts with its own
+    # persisted redaction on an unchanged-source replay.
+    canonical = _build_session_event("fingerprint", turn, sequence, **fields)
+    fields = {key: getattr(canonical, key) for key in fields}
     fields.update({"turn": turn, "sequence": sequence})
     return hashlib.sha256(json.dumps(
         fields,

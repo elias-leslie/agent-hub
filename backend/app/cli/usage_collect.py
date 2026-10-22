@@ -6,6 +6,7 @@ then push an owner alert when spend runs far above its own normal.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
@@ -19,11 +20,11 @@ logger = logging.getLogger(__name__)
 SPEND_ALERT_COOLDOWN_S = 24 * 3600
 
 
-async def run() -> dict:
+async def run(*, replay: str | None = None) -> dict:
     async with async_session() as db:
         await refresh_runtime_model_catalog(db)
-        result = await collect(db, min_interval_s=0)
-    if result.get("skipped"):
+        result = await collect(db, min_interval_s=0, replay=replay)
+    if replay is not None or result.get("skipped"):
         return result
     async with async_session() as db:
         alerts = await spend_alerts(db)
@@ -35,8 +36,11 @@ async def run() -> dict:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--replay", metavar="NAME", help="Reconcile native usage; reuse NAME to resume bounded passes (no retention pruning)")
+    args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    print(json.dumps(asyncio.run(run())), flush=True)
+    print(json.dumps(asyncio.run(run(replay=args.replay))), flush=True)
 
 
 if __name__ == "__main__":

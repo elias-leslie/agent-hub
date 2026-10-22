@@ -30,7 +30,7 @@ from app.db import get_db
 from app.models import CostLog, ProjectPermission
 from app.models import Session as DBSession
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
-from app.services.subscription_accounting.rates import claude_api_equiv_usd
+from app.services.subscription_accounting.rates import subscription_call_value
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -90,10 +90,11 @@ def _api_equiv(body: CostIngestRequest) -> float | None:
     """List-price value for a subscription call; priced here (1-hour cache writes, like Nightshift) when missing."""
     if body.api_equiv_usd is not None or body.billing_kind != "subscription":
         return body.api_equiv_usd
-    return claude_api_equiv_usd(
+    value = subscription_call_value(
         body.model, input_tokens=body.input_tokens, output_tokens=body.output_tokens,
-        cache_read=body.cache_read_tokens or 0, cache_write_1h=body.cache_write_tokens or 0,
+        cache_read=body.cache_read_tokens or 0, cache_write=body.cache_write_tokens or 0,
     )
+    return value.api_equiv_usd if value is not None else None
 
 
 async def _existing(db: AsyncSession, body: CostIngestRequest, session_id: str) -> CostIngestResponse | None:
@@ -107,6 +108,11 @@ async def _existing(db: AsyncSession, body: CostIngestRequest, session_id: str) 
             detail={"code": "idempotency_conflict", "message": "This idempotency key was used for a different entry."},
         )
     row = (await db.execute(select(CostLog).where(CostLog.session_id == session_id).limit(1))).scalar_one_or_none()
+    if row is not None and row.billing_mode == "subscription" and row.api_equiv_usd is None:
+        value = _api_equiv(body)
+        if value is not None:
+            row.api_equiv_usd = value
+            await db.commit()
     return CostIngestResponse(
         status="duplicate", session_id=session_id, cost_log_id=row.id if row else None,
         billing_kind=row.billing_mode if row else body.billing_kind, cost_usd=float(row.cost_usd) if row else body.cost_usd,

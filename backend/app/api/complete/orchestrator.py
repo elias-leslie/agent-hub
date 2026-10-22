@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from app.llm.event_stream import AssistantMessageEventStream
@@ -51,6 +51,8 @@ from app.llm.types import (
     UserMessage,
 )
 
+from .runtime_usage import aggregate_message_usage
+
 
 @dataclass(slots=True)
 class OrchestratorResult:
@@ -59,6 +61,7 @@ class OrchestratorResult:
     message: AssistantMessage
     turns: int = 1
     tool_calls_count: int = 0
+    usage_messages: list[AssistantMessage] = field(default_factory=list)
 
 
 def completion_options(
@@ -213,6 +216,7 @@ async def run_completion(
             raise ValueError("run_tool callback is required when execute_tools=True")
         tool_calls_count = 0
         final: AssistantMessage | None = None
+        usage_messages: list[AssistantMessage] = []
         async for event in run_tool_loop(
             model,
             context,
@@ -230,15 +234,20 @@ async def run_completion(
                 # wins. Do not break — the loop itself decides when
                 # to stop iterating based on stop_reason.
                 final = getattr(event, "message", None)
+                if final is not None:
+                    usage_messages.append(final)
             elif event_type == "error":
                 final = getattr(event, "error", None)
-        # The tool_loop appends each turn's assistant message to
-        # ``context.messages``; the count of AssistantMessages there
-        # is the turn count.
-        turns = sum(1 for m in context.messages if isinstance(m, AssistantMessage))
+                if final is not None:
+                    usage_messages.append(final)
+        # Count only this request's terminal calls, excluding replayed history.
+        turns = len(usage_messages)
         if final is None:
             raise RuntimeError("tool_loop ended without a terminal event")
-        return OrchestratorResult(message=final, turns=turns, tool_calls_count=tool_calls_count)
+        return OrchestratorResult(
+            message=aggregate_message_usage(final, usage_messages), turns=turns,
+            tool_calls_count=tool_calls_count, usage_messages=usage_messages,
+        )
 
     stream_handle = llm_stream(model, context, options)
     # Drain the stream so all events fire (consumers may attach
@@ -246,7 +255,7 @@ async def run_completion(
     async for _event in stream_handle:
         pass
     final = await stream_handle.result()
-    return OrchestratorResult(message=final, turns=1, tool_calls_count=0)
+    return OrchestratorResult(message=final, turns=1, tool_calls_count=0, usage_messages=[final])
 
 
 async def run_completion_stream(

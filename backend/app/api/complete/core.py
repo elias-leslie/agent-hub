@@ -239,6 +239,7 @@ async def complete_internal(
 
     return CompletionInternalResult(
         message=message,
+        usage_messages=result.usage_messages,
         finish_reason=message.stop_reason,
         session_id=session_id,
         memory_uuids=loaded_memory_uuids,

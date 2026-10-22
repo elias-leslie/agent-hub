@@ -14,6 +14,7 @@ from app.services._session_metadata_helpers import (
     session_metadata,
     source_client,
 )
+from app.services.admin_activity_cost import build_activity_cost_snapshot
 from app.services.session_live_activity import build_live_activity_response
 
 
@@ -286,4 +287,5 @@ async def build_session_hotspot_snapshot(
             for row in low_yield_items[:limit]
         ],
         "zero_event_active_sessions": zero_event_active[:limit],
+        "activity_cost": await build_activity_cost_snapshot(db, cutoff=cutoff, now=now, limit=limit),
     }

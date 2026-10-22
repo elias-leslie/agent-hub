@@ -20,6 +20,7 @@ from app.api.session_ingestion import (
     native_capture_status_endpoint,
     native_receipts_endpoint,
     register_native_source_endpoint,
+    turn_diagnostics_endpoint,
     upsert_session_endpoint,
 )
 from app.main import app
@@ -60,6 +61,16 @@ async def test_native_health_query_requires_project_access_without_runtime_depen
         await native_capture_status_endpoint("thread", request, AsyncMock())
     assert denied.value.status_code == 403
     query.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_turn_diagnostics_requires_project_access_before_reading_events():
+    request = _identified_request('["other"]')
+    db = AsyncMock()
+    with patch("app.api.session_ingestion.get_session_or_404", new_callable=AsyncMock, return_value=MagicMock(project_id="agent-hub")), pytest.raises(HTTPException) as denied:
+        await turn_diagnostics_endpoint("thread", request, db, limit=20, event_limit=100)
+    assert denied.value.status_code == 403
+    db.execute.assert_not_awaited()
 
 
 @pytest.fixture

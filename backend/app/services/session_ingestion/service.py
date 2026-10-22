@@ -283,8 +283,7 @@ async def ingest_transcript_events(
     repair_projection: bool = False,
 ) -> TranscriptIngestResult:
     """Parse a provider transcript and append normalized events idempotently."""
-    if repair_projection and request.provider.lower() != "codex":
-        raise ValueError("Projection repair is supported only for native Codex transcripts.")
+    adapter = _adapter_for_provider(request.provider)
     if session is not None and session.id != session_id:
         raise SessionIngestionConflict(
             "session_identity_mismatch",
@@ -298,6 +297,19 @@ async def ingest_transcript_events(
                 "transcript_source_mismatch",
                 "The transcript path does not match the source registered for this session.",
             )
+    if session is not None and request.provider.lower() != "codex":
+        if session.provider == "codex":
+            raise SessionIngestionConflict("transcript_provider_mismatch", "The registered provider is Codex.")
+        await lock_session_event_ingestion(db, session_id)
+        await db.refresh(session)
+        metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+        if metadata.get("transcript_path") not in {None, request.transcript_path}:
+            raise SessionIngestionConflict("transcript_source_mismatch", "The registered transcript source changed.")
+        retained = metadata.get("transcript_ingestion")
+        retained = retained if isinstance(retained, dict) else {}
+        canonical_checkpoint = retained.get("checkpoint")
+        if isinstance(canonical_checkpoint, str):
+            request = request.model_copy(update={"checkpoint": canonical_checkpoint})
     if request.provider.lower() == "codex":
         if session is None:
             session = (await db.execute(select(Session).where(Session.id == session_id).limit(1))).scalar_one_or_none()
@@ -323,7 +335,6 @@ async def ingest_transcript_events(
         request = request.model_copy(update={
             "checkpoint": canonical_checkpoint if isinstance(canonical_checkpoint, str) else None,
         })
-    adapter = _adapter_for_provider(request.provider)
     session_ref = ProviderSessionRef(
         provider_session_id=session_id,
         source_id=request.transcript_path,
@@ -378,11 +389,19 @@ async def ingest_transcript_events(
         original_count = len(events)
         events = await exclude_projected_rollout_commands(db, session, events)
         suppressed_commands = original_count - len(events)
+    # Source identity deduplicates native records; their parser sequence must
+    # never collide with independently stored hooks or live observations.
+    if session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
+        # Managed native authority already owns lifecycle records and reserves
+        # the rollout's ordering for command reconciliation.
+        events = [event for event in events if event.event_type not in {"native_lifecycle", "native_settings"}]
+    else:
+        events = [event.model_copy(update={"sequence": None}) if event.source_event_id else event for event in events]
     append_result = await append_normalized_events(
         db=db,
         session_id=session_id,
         request=AppendNormalizedEventsRequest(events=events),
-        **({"session": session, "commit": False} if request.provider.lower() == "codex" else {}),
+        **({"session": session, "commit": False} if session is not None else {}),
     )
     if not repair_projection and request.provider.lower() == "codex" and session is not None and (session.provider_metadata or {}).get("native_observation_namespace"):
         from .native_observations import retain_rollout_commands
@@ -396,6 +415,7 @@ async def ingest_transcript_events(
         assert next_checkpoint is not None
         events_updated, repaired_ids, next_checkpoint = await repair_codex_projection(
             db, session, repair_events, next_checkpoint,
+            include_messages=request.provider.lower() != "codex",
         )
         if repaired_ids:
             last_turn = await get_max_turn(db, session_id)
@@ -404,12 +424,12 @@ async def ingest_transcript_events(
                 "last_sequence": await get_max_sequence(db, session_id, last_turn),
             })
     await _reconcile_transcript_session_models(
-        db, session_id, session=session if request.provider.lower() == "codex" else None,
+        db, session_id, session=session,
     )
     if append_result.events_appended == 0:
         await _reconcile_transcript_session_scope(
-            db, session_id, session=session if request.provider.lower() == "codex" else None,
-            commit=request.provider.lower() != "codex",
+            db, session_id, session=session,
+            commit=session is None,
         )
     result = TranscriptIngestResult(
         session_id=session_id,

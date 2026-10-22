@@ -192,6 +192,35 @@ def estimate_cost(
     )
 
 
+def estimate_usage_cost(
+    input_tokens: int,
+    output_tokens: int,
+    model: str,
+    *,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> CostBreakdown:
+    """Price provider Usage buckets, whose input excludes cache reads/writes.
+
+    ``estimate_cost`` keeps its inclusive-input contract for request estimates
+    and native callers. Runtime provider accounting uses this disjoint form.
+    """
+    value = subscription_call_value(
+        model, input_tokens=input_tokens, output_tokens=output_tokens,
+        cache_read=cache_read_tokens, cache_write=cache_write_tokens,
+    )
+    if value is not None:
+        return CostBreakdown(0.0, 0.0, 0.0, 0.0, billing_mode="subscription", api_equiv_usd=value.api_equiv_usd)
+    price = _get_model_entry(model).cost
+    input_cost = input_tokens * price.input_per_m / 1e6
+    output_cost = output_tokens * price.output_per_m / 1e6
+    cache_cost = (
+        cache_read_tokens * (price.cache_read_per_million or 0.0)
+        + cache_write_tokens * (price.cache_write_per_million or 0.0)
+    ) / 1e6
+    return CostBreakdown(input_cost, output_cost, cache_cost, input_cost + output_cost + cache_cost)
+
+
 def estimate_request(
     messages: list[dict[str, str]],
     model: str,

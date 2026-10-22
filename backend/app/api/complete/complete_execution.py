@@ -16,6 +16,7 @@ from app.api.complete.execution import (
     prepare_response_format,
     prepare_tools,
 )
+from app.api.complete.runtime_usage import persist_failed_attempt_usage
 from app.api.complete.schemas import CompletionRequest
 from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing_models import ResolvedAgent
@@ -160,6 +161,10 @@ async def _run_with_agentic_fallback(
             assert isinstance(raw, CompletionInternalResult)
             terminal_error = _terminal_error_from_result(raw)
             if terminal_error is not None:
+                await persist_failed_attempt_usage(
+                    db, raw, model_id, raw.session_id or sid,
+                    project_id=req.project_id, agent_slug=req.agent_slug,
+                )
                 raise terminal_error
             raw.requested_model = primary_model
             raw.requested_provider = provider

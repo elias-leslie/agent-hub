@@ -59,6 +59,30 @@ from app.services.session_queries import get_session_or_404
 router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
 
 
+@router.get("/sessions/{session_id}/turn-diagnostics")
+async def turn_diagnostics_endpoint(
+    session_id: str, http_request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(default=20, ge=1, le=100),
+    event_limit: int = Query(default=5000, ge=1, le=20000),
+) -> dict[str, Any]:
+    from app.services.session_turn_diagnostics import native_turn_diagnostics
+
+    session = await get_session_or_404(db, session_id)
+    require_project_access(http_request, session.project_id)
+    metadata = session.provider_metadata or {}
+    native_path = metadata.get("transcript_path")
+    managed = metadata.get("native_observation_namespace")
+    if managed and not isinstance(native_path, str):
+        return {"session_id": session_id, "source": "unavailable", "denominator": 0,
+                "categories": [], "turns": [], "reason": "No registered native transcript for managed turn comparison."}
+    result = await native_turn_diagnostics(db, session_id, limit=limit, event_limit=event_limit,
+                                           managed_transcript=native_path if managed else None)
+    if not managed:
+        result["source_health"] = (metadata.get("transcript_ingestion") or {}).get("source_health")
+    return result
+
+
 @router.get("/sessions/{session_id}/native-sources/{source_id}/issues")
 async def native_issues_endpoint(
     session_id: str, source_id: str, http_request: Request,
@@ -292,7 +316,7 @@ async def refresh_transcript_events_endpoint(
     http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     repair_projection: Annotated[
-        bool, Query(description="Repair native instruction roles and missing task errors"),
+        bool, Query(description="Recover missing native events and repair known instruction roles"),
     ] = False,
 ) -> TranscriptIngestResult:
     """Catch up the exact transcript source already registered for a session."""

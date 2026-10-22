@@ -70,7 +70,7 @@ COLLECT_LOCK_KEY = 0x55A6E_C011  # one pass at a time across the API and the tim
 PASS_BYTE_BUDGET = 1_000_000_000  # replay bytes per pass; live files are always read first
 CODEX_ROUTINE_ORIGINATORS = frozenset({"codex_exec"})
 CODEX_INTERACTIVE_ORIGINATORS = frozenset({"codex-tui", "codex_cli_rs", "codex_work_desktop", "codex_vscode"})
-_ORDINAL = re.compile(rb'"ordinal":(\d+)')
+_ORDINAL = re.compile(rb'"ordinal":\s*(\d+)')
 _JOB_MASK = re.compile(r"\b(?:[0-9a-f]{7,}|[0-9a-f-]{20,}|task-[0-9a-z]+|\d[\d:.\-/]*)\b", re.IGNORECASE)
 _SCAFFOLD_PREFIXES = (
     "# AGENTS", "<", "Message Type", "The following is the Codex agent history", "Caveat:", "[Request interrupted",
@@ -165,6 +165,9 @@ class UsageCallRow:
     cache_write_tokens: int
     output_tokens: int
     api_equiv_usd: float | None
+    project: str = "unknown"
+    speed: str = "standard"
+    count_new: bool = True
 
 
 @dataclass
@@ -179,6 +182,8 @@ class PassResult:
     calls: list[UsageCallRow] = field(default_factory=list)
     sessions: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
     replay_pending: int = 0
+    call_indexes: dict[str, int] = field(default_factory=dict)
+    reconcile: bool = False
 
 
 def _iter_new_lines(path: Path, offset: int) -> Iterator[tuple[int, bytes]]:
@@ -233,18 +238,25 @@ def _clean_title(text: object) -> str | None:
 
 
 def _add_call(result: PassResult, call: UsageCallRow, state: dict[str, Any], provider: str) -> None:
-    result.calls.append(call)
+    index = result.call_indexes.get(call.key)
+    if index is None:
+        result.call_indexes[call.key] = len(result.calls)
+        result.calls.append(call)
+    else:
+        result.calls[index] = call
     _put_session(result, provider, state, call.occurred_at)
 
 
 # ------------------------------------------------------------------ Codex
 
 
-def _track_run(result: PassResult, path: Path, state: dict[str, Any], ts: datetime, context: int, usd: float) -> None:
+def _track_run(
+    result: PassResult, path: Path, state: dict[str, Any], ts: datetime, context: int, usd: float, *, new_call: bool = True,
+) -> None:
     """Per-transcript peak turn context and cumulative value; queue one alert per signal."""
     state["max_ctx"] = max(int(state.get("max_ctx") or 0), context)
     state["usd"] = float(state.get("usd") or 0.0) + usd
-    state["turns"] = int(state.get("turns") or 0) + 1
+    state["turns"] = int(state.get("turns") or 0) + int(new_call)
     alerted: list[str] = state.setdefault("alerted", [])
     for signal, hit, note in (
         ("ctx", state["max_ctx"] >= RUNAWAY_TURN_CONTEXT, f"a single turn read {state['max_ctx'] // 1000}K tokens of context"),
@@ -337,7 +349,7 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
             tier = payload.get("service_tier")
             state["speed"] = tier if isinstance(tier, str) and tier in rates.CODEX_SPEED_MULT else "standard"
             continue
-        if b'"token_count"' not in head:
+        if not any(kind in head for kind in (b'"token_count"', b'"token_usage_record"', b'"compacted"')):
             continue
         hist_start = state.get("hist_start")
         ordinal = _ORDINAL.search(head) if hist_start is not None else None
@@ -348,6 +360,24 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
         except ValueError:
             continue
         payload = rec.get("payload") or {}
+        if rec.get("type") == "token_usage_record" or payload.get("type") == "token_usage_record":
+            if payload.get("thread_id") and state.get("tid") and payload["thread_id"] != state["tid"]:
+                continue
+            response = payload.get("response_id")
+            if response and response not in state.get("responses", []):
+                state["pending_usage"] = {
+                    "response": response, "usage": payload.get("usage") or {}, "timestamp": rec.get("timestamp"),
+                    "model": payload.get("model") or state.get("model"), "speed": state.get("speed"),
+                    "live": live,
+                }
+            continue
+        if rec.get("type") == "compacted":
+            pending = state.get("pending_usage")
+            if pending and pending["response"] == payload.get("compaction_response_id"):
+                pending["live"] = pending["live"] or live
+                _codex_native_call(path, state, result, pending, pending["response"])
+                state.pop("pending_usage", None)
+            continue
         ts = _parse_ts(rec.get("timestamp"))
         if payload.get("type") != "token_count" or ts is None:
             continue
@@ -357,9 +387,18 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
         info = payload.get("info") or {}
         total = (info.get("total_token_usage") or {}).get("total_tokens")
         last = info.get("last_token_usage") or {}
-        if last and total != state.get("last_total"):
+        pending = state.pop("pending_usage", None)
+        positive = any(int(last.get(k) or 0) for k in ("input_tokens", "cached_input_tokens", "output_tokens"))
+        if pending and positive:
+            pending["live"] = pending["live"] or live
+            _codex_native_call(path, state, result, pending, total)
+            state["last_total"] = total
+        elif pending:
+            _codex_native_call(path, state, result, pending, pending["response"])
+        elif positive and total != state.get("last_total"):
             state["last_total"] = total
             call = _codex_call(path, state, ts, model, speed, last, total)
+            call.count_new = live
             _add_call(result, call, state, "codex")
             if live:
                 _add_codex_rollup(result, call, project, speed)
@@ -369,6 +408,27 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
             _codex_rate_limits(result, ts, model, project, speed, payload.get("rate_limits") or {})
     _register_codex_root(result, state)
     return offset
+
+
+def _codex_native_call(path: Path, state: dict[str, Any], result: PassResult, pending: dict, identity: object) -> None:
+    ts = _parse_ts(pending.get("timestamp"))
+    if ts is None:
+        return
+    response = pending["response"]
+    responses = state.setdefault("responses", [])
+    if response in responses:
+        return
+    responses.append(response)
+    del responses[:-MAX_SEEN_IDS]
+    speed = pending.get("speed") or "standard"
+    call = _codex_call(path, state, ts, pending.get("model") or "unknown", speed, pending["usage"], identity)
+    # Ordinary pairs keep the old cumulative key. Only the compaction response had no
+    # counterpart in historical daily totals, so explicit replay may add that missing call.
+    call.count_new = pending["live"] or (result.reconcile and identity == response)
+    _add_call(result, call, state, "codex")
+    if pending["live"]:
+        _add_codex_rollup(result, call, call.project, speed)
+        _track_run(result, path, state, ts, call.input_tokens + call.cached_input_tokens, call.api_equiv_usd or 0.0)
 
 
 def _register_codex_root(result: PassResult, state: dict[str, Any]) -> None:
@@ -395,6 +455,7 @@ def _codex_call(
         occurred_at=ts, provider="codex", session_id=str(state.get("sid") or thread), agent_id=str(state.get("aid") or ""),
         model=model, input_tokens=uncached, cached_input_tokens=cached, cache_write_tokens=0, output_tokens=out,
         api_equiv_usd=None if credits is None else credits * rates.CREDIT_API_PARITY_USD,
+        project=project_from_cwd(state.get("cwd")), speed=speed,
     )
 
 
@@ -473,8 +534,7 @@ def _claude_title(rec: dict[str, Any], state: dict[str, Any]) -> None:
 def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassResult, live_from: int = 0) -> int:
     """Read Claude Code transcript lines. Lines ending at or before live_from are a ledger replay: calls only."""
     _claude_identity(path, state)
-    seen: list[str] = state.setdefault("seen", [])
-    seen_set = set(seen)
+    seen: dict[str, list] = state.setdefault("usage_seen", {})
     for end, line in _iter_new_lines(path, offset):
         offset = end
         if not state.get("title") and not state.get("aid") and b'"type":"user"' in line[:2000]:
@@ -495,10 +555,6 @@ def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassRes
         if not isinstance(model, str) or model.startswith("<") or ts is None:
             continue
         ident = f"{msg.get('id')}:{rec.get('requestId')}"
-        if ident in seen_set:
-            continue
-        seen.append(ident)
-        seen_set.add(ident)
         entry = rec.get("entrypoint")
         if isinstance(entry, str) and entry and "kind" not in state:
             state["kind"] = "interactive" if entry == "cli" else "routine" if entry.startswith("sdk") else "other"
@@ -506,12 +562,24 @@ def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassRes
             state["project"] = project_from_cwd(rec.get("cwd"))
         usage = msg["usage"]
         call, speed, project = _claude_call(state, ts, model, ident, usage, rec)
+        values = [call.input_tokens, call.cached_input_tokens, call.cache_write_tokens, call.output_tokens, call.api_equiv_usd]
+        previous = seen.get(ident)
+        if previous == values or (previous and call.output_tokens < previous[3]):
+            continue
+        seen[ident] = values
+        call.count_new = end > live_from
         _add_call(result, call, state, "claude")
         if end > live_from:
             _add_claude_rollup(result, call, project, speed)
+            if previous is not None:
+                roll = result.rollups[(_local_day(ts), "claude", model, project, speed)]
+                _rollup_usage(roll, previous, -1)
+                roll.requests -= 1
             context = call.input_tokens + call.cached_input_tokens + call.cache_write_tokens
-            _track_run(result, path, state, ts, context, call.api_equiv_usd or 0.0)
-    del seen[:-MAX_SEEN_IDS]
+            usd = (call.api_equiv_usd or 0.0) - ((previous[4] or 0.0) if previous else 0.0)
+            _track_run(result, path, state, ts, context, usd, new_call=previous is None)
+    for ident in list(seen)[:-MAX_SEEN_IDS]:
+        del seen[ident]
     return offset
 
 
@@ -536,6 +604,7 @@ def _claude_call(
         key=f"claude:{ident}"[:200], occurred_at=ts, provider="claude", session_id=str(state["sid"]),
         agent_id=str(state.get("aid") or ""), model=model, input_tokens=inp, cached_input_tokens=read,
         cache_write_tokens=w5 + w1h, output_tokens=out, api_equiv_usd=usd,
+        project=project_from_cwd(rec.get("cwd")), speed=speed,
     )
     return call, speed, project_from_cwd(rec.get("cwd"))
 
@@ -551,6 +620,18 @@ def _add_claude_rollup(result: PassResult, call: UsageCallRow, project: str, spe
         roll.unpriced_tokens += call.input_tokens + call.output_tokens + call.cached_input_tokens + call.cache_write_tokens
     else:
         roll.api_equiv_usd += call.api_equiv_usd
+
+
+def _rollup_usage(roll: Rollup, values: list, sign: int) -> None:
+    inp, cached, write, out, usd = values
+    roll.input_tokens += sign * inp
+    roll.cached_input_tokens += sign * cached
+    roll.cache_write_tokens += sign * write
+    roll.output_tokens += sign * out
+    if usd is None:
+        roll.unpriced_tokens += sign * (inp + cached + write + out)
+    else:
+        roll.api_equiv_usd += sign * usd
 
 
 
@@ -595,20 +676,23 @@ def _candidate_files(root: Path, pattern: str, since: float) -> list[Path]:
 
 
 def scan(
-    cursors: dict[str, tuple[int, dict[str, Any]]], now: float | None = None, byte_budget: int = PASS_BYTE_BUDGET
+    cursors: dict[str, tuple[int, dict[str, Any]]], now: float | None = None, byte_budget: int = PASS_BYTE_BUDGET,
+    *, replay: str | None = None,
 ) -> PassResult:
     """Read new log bytes (blocking; run in a thread). cursors: path -> (offset, state).
 
     Files whose cursor predates the call ledger are replayed from the start (ledger only for the bytes
     already counted), newest first, within byte_budget per pass; live appends are always read first.
+    An explicit replay name reconciles ledger differences into daily totals. Reuse the same name to
+    resume budgeted passes; each file records completion in its existing cursor.
     """
     now = now or time.time()
     since = now - BACKFILL_DAYS * 86400
-    result = PassResult()
+    result = PassResult(reconcile=replay is not None)
     jobs = [(p, _codex_file) for root in codex_session_roots() for p in _candidate_files(root, "*/*/*/*.jsonl", since)]
     jobs += [(p, _claude_file) for root in claude_project_roots() for p in _candidate_files(root, "**/*.jsonl", since)]
     live: list[tuple[Path, Any, int, dict[str, Any], int]] = []
-    replay: list[tuple[float, Path, Any, int, dict[str, Any]]] = []
+    replays: list[tuple[float, Path, Any, int, dict[str, Any]]] = []
     for path, reader in jobs:
         offset, state = cursors.get(str(path), (0, {}))
         try:
@@ -617,13 +701,13 @@ def scan(
             continue
         if stat.st_size < offset:
             offset, state = 0, {}
-        if offset and state.get("ledger") != LEDGER_VERSION:
-            replay.append((stat.st_mtime, path, reader, offset, dict(state)))
+        if offset and (state.get("ledger") != LEDGER_VERSION or (replay and state.get("replay") != replay)):
+            replays.append((stat.st_mtime, path, reader, offset, dict(state)))
         elif stat.st_size != offset:
             live.append((path, reader, offset, dict(state), 0))
-    replay.sort(key=lambda item: item[0], reverse=True)
+    replays.sort(key=lambda item: item[0], reverse=True)
     spent = 0
-    for _mtime, path, reader, offset, old in replay:
+    for _mtime, path, reader, offset, old in replays:
         if spent >= byte_budget:
             result.replay_pending += 1
             continue
@@ -632,6 +716,8 @@ def scan(
         spent += offset
     for path, reader, offset, state, live_from in live:
         state["ledger"] = LEDGER_VERSION
+        if replay:
+            state["replay"] = replay
         try:
             new_offset = reader(path, offset, state, result, live_from)
         except OSError as exc:
@@ -697,8 +783,8 @@ _lock = asyncio.Lock()
 _last_run = 0.0
 
 
-async def collect(db: AsyncSession, *, min_interval_s: float = 300.0) -> dict[str, Any]:
-    """Run one incremental pass unless one ran within min_interval_s. Commits its own transaction."""
+async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: str | None = None) -> dict[str, Any]:
+    """Run one incremental pass and commit. Named reconciliation skips retention pruning."""
     global _last_run
     if _lock.locked() or time.monotonic() - _last_run < min_interval_s:
         return {"skipped": True}
@@ -710,7 +796,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0) -> dict[st
             return {"skipped": True}
         rows = (await db.execute(select(SubscriptionUsageCursor))).scalars().all()
         cursors = {r.path: (int(r.offset), dict(r.state or {})) for r in rows}
-        result = await asyncio.to_thread(scan, cursors)
+        result = await asyncio.to_thread(scan, cursors, replay=replay)
         lots = (await db.execute(select(CreditLot).where(CreditLot.provider == "codex"))).scalars().all()
         credit_state = dict(cursors.get(CODEX_CREDIT_STATE, (0, {}))[1])
         new_lots = apply_credit_draws(result.balances, credit_state, [lot.granted_at for lot in lots], result)
@@ -718,17 +804,20 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0) -> dict[st
         snapshots = select_snapshots(result.snapshots, snap_state)
         result.cursors[CODEX_CREDIT_STATE] = (0, credit_state)
         result.cursors[SNAPSHOT_STATE] = (0, snap_state)
-        await _persist(db, result, snapshots, new_lots)
+        await _persist(db, result, snapshots, new_lots, prune=replay is None)
         await db.commit()
-        for message in result.runaways:
-            await _alert(message)
+        if replay is None:
+            for message in result.runaways:
+                await _alert(message)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots), "calls": len(result.calls), "replay_pending": result.replay_pending}
 
 
 async def _persist(
-    db: AsyncSession, result: PassResult, snapshots: list[SnapshotEvent], new_lots: list[tuple[datetime, float]]
+    db: AsyncSession, result: PassResult, snapshots: list[SnapshotEvent], new_lots: list[tuple[datetime, float]],
+    *, prune: bool = True,
 ) -> None:
+    await _persist_ledger(db, result)
     for (day, provider, model, project, speed), r in result.rollups.items():
         values = {
             "day": day, "provider": provider, "model": model[:100], "project": project[:200], "speed": speed,
@@ -740,7 +829,6 @@ async def _persist(
         table = SubscriptionUsageDaily.__table__
         additive = {k: table.c[k] + stmt.excluded[k] for k in values if k not in {"day", "provider", "model", "project", "speed"}}
         await db.execute(stmt.on_conflict_do_update(index_elements=["day", "provider", "model", "project", "speed"], set_=additive))
-    await _persist_ledger(db, result)
     for ev in snapshots:
         await db.execute(
             pg_insert(SubscriptionUsageSnapshot)
@@ -758,6 +846,8 @@ async def _persist(
             index_elements=["path"],
             set_={"offset": stmt.excluded.offset, "state": stmt.excluded.state, "updated_at": func.now()},
         ))
+    if not prune:
+        return
     ledger_cutoff = datetime.now(UTC) - timedelta(days=LEDGER_RETAIN_DAYS)
     await db.execute(delete(UsageCall).where(UsageCall.occurred_at < ledger_cutoff))
     await db.execute(delete(UsageSession).where(UsageSession.last_at < ledger_cutoff))
@@ -773,18 +863,45 @@ LEDGER_CHUNK = 2000
 
 
 async def _persist_ledger(db: AsyncSession, result: PassResult) -> None:
+    # Scanner totals are useful to callers before persistence. Only ledger differences may reach
+    # the daily table: a retry or a corrected final usage record must not add a second request.
+    for key, roll in list(result.rollups.items()):
+        result.rollups[key] = Rollup(credits_drawn=roll.credits_drawn)
     for i in range(0, len(result.calls), LEDGER_CHUNK):
+        calls = result.calls[i:i + LEDGER_CHUNK]
+        existing = (await db.execute(
+            select(UsageCall).where(UsageCall.call_key.in_([c.key for c in calls]))
+            .execution_options(populate_existing=True)
+        )).scalars().all()
+        previous = {c.call_key: c for c in existing}
+        for call in calls:
+            old = previous.get(call.key)
+            if old is None and not call.count_new:
+                continue  # pre-ledger history was already included in the daily table
+            key = (_local_day(old.occurred_at if old is not None else call.occurred_at),
+                   call.provider, call.model, call.project, call.speed)
+            roll = result.rollups[key]
+            roll.requests += 1
+            _rollup_usage(roll, [call.input_tokens, call.cached_input_tokens, call.cache_write_tokens,
+                                 call.output_tokens, call.api_equiv_usd], 1)
+            if old is not None:
+                old_key = (_local_day(old.occurred_at), old.provider, old.model, call.project, call.speed)
+                prior_roll = result.rollups[old_key]
+                prior_roll.requests -= 1
+                _rollup_usage(prior_roll, [old.input_tokens, old.cached_input_tokens, old.cache_write_tokens,
+                                          old.output_tokens, old.api_equiv_usd], -1)
         rows = [
             {"call_key": c.key, "occurred_at": c.occurred_at, "provider": c.provider, "session_id": c.session_id[:100],
              "agent_id": c.agent_id[:100], "model": c.model[:100], "input_tokens": c.input_tokens,
              "cached_input_tokens": c.cached_input_tokens, "cache_write_tokens": c.cache_write_tokens,
              "output_tokens": c.output_tokens, "api_equiv_usd": c.api_equiv_usd}
-            for c in result.calls[i:i + LEDGER_CHUNK]
+            for c in calls
         ]
         stmt = pg_insert(UsageCall).values(rows)
         await db.execute(stmt.on_conflict_do_update(
-            index_elements=["call_key"], set_={"api_equiv_usd": stmt.excluded.api_equiv_usd},
-            where=UsageCall.api_equiv_usd.is_(None),
+            index_elements=["call_key"], set_={key: stmt.excluded[key] for key in (
+                "model", "input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens", "api_equiv_usd",
+            )},
         ))
     items = list(result.sessions.items())
     table = UsageSession.__table__

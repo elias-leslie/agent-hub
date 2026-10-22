@@ -16,11 +16,12 @@ from app.services.events import publish_complete, publish_message
 from app.services.response_cache import get_response_cache
 from app.services.session_health import health_detail_for_error
 from app.services.session_live_activity import mark_session_completed, mark_session_terminal_state
-from app.services.token_counter import build_output_usage, estimate_cost
+from app.services.token_counter import build_output_usage, estimate_cost, estimate_usage_cost
 
 from .event_helpers import save_events
 from .execution_observability import persist_execution_observability
 from .helpers import is_error_response
+from .runtime_usage import accounting_model
 from .schemas import (
     CacheInfo,
     CompletionRequest,
@@ -50,6 +51,7 @@ async def save_and_track(
     duration_ms: int | None = None,
     execution_status: str = "success",
     execution_error: str | None = None,
+    record_provider_usage: bool = True,
 ) -> None:
     """Save events and track token usage, costs, and session status."""
     source_metadata = (
@@ -98,30 +100,41 @@ async def save_and_track(
                     msg.content if isinstance(msg.content, str) else str(msg.content),
                 )
         await publish_message(session_id, "assistant", result.content, result.output_tokens)
-    cost = estimate_cost(result.input_tokens, result.output_tokens, effective_model)
-    # `result` is a CompletionInternalResult on the live path but a CachedResponse
-    # on a cache hit (no `.message`), so read usage defensively like the rest of
-    # this function. Cache tokens don't apply to our own response cache → 0.
-    usage = getattr(getattr(result, "message", None), "usage", None)
-    await log_token_usage(
-        db, session_id, effective_model,
-        result.input_tokens, result.output_tokens, cost.total_cost_usd,
-        cache_read_tokens=int(getattr(usage, "cache_read", 0) or 0),
-        cache_write_tokens=int(getattr(usage, "cache_write", 0) or 0),
-        compression_stats=getattr(result, "compression_stats", None),
-    )
-    await publish_complete(session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)
+    # A Hub response-cache hit delivers saved content without a provider call.
+    # Keep its original counts in history/response, but never bill them again.
+    usage_messages = (
+        getattr(result, "usage_messages", None) or [getattr(result, "message", None)]
+    ) if record_provider_usage else []
+    total_cost_usd = 0.0
+    for index, message in enumerate(usage_messages):
+        usage = getattr(message, "usage", None)
+        call_model = accounting_model(message, effective_model) if message is not None else effective_model
+        input_tokens = usage.input if usage is not None else result.input_tokens
+        output_tokens = usage.output if usage is not None else result.output_tokens
+        cache_read = int(getattr(usage, "cache_read", 0) or 0)
+        cache_write = int(getattr(usage, "cache_write", 0) or 0)
+        cost = estimate_usage_cost(
+            input_tokens, output_tokens, call_model,
+            cache_read_tokens=cache_read, cache_write_tokens=cache_write,
+        )
+        total_cost_usd += cost.total_cost_usd
+        await log_token_usage(
+            db, session_id, call_model, input_tokens, output_tokens, cost.total_cost_usd,
+            cache_read_tokens=cache_read, cache_write_tokens=cache_write,
+            compression_stats=getattr(result, "compression_stats", None) if index == 0 else None,
+        )
+    await publish_complete(session_id, result.input_tokens, result.output_tokens, total_cost_usd)
     # Record token usage for quota tracking
-    if request.agent_slug:
+    if request.agent_slug and record_provider_usage:
         from app.services.quota import record_token_usage
 
         total_tokens = result.input_tokens + result.output_tokens
         await record_token_usage(request.agent_slug, total_tokens)
     # Record cost for project budget tracking
-    if request.project_id and cost.total_cost_usd > 0:
+    if request.project_id and total_cost_usd > 0:
         from app.services.project_budget import record_project_cost
 
-        await record_project_cost(request.project_id, cost.total_cost_usd)
+        await record_project_cost(request.project_id, total_cost_usd)
     if getattr(result, "cache_metrics", None):
         await update_provider_metadata(db, session, {
             "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,

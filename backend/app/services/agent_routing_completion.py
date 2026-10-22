@@ -190,6 +190,16 @@ async def _try_model(
         )
         terminal_error = _error_from_terminal_result(internal)
         if terminal_error is not None:
+            if db is not None and prompt_cache_key:
+                from app.api.complete.runtime_usage import persist_failed_attempt_usage
+                from app.models import Session
+
+                session = await db.get(Session, prompt_cache_key)
+                if session is not None:
+                    await persist_failed_attempt_usage(
+                        db, internal, model, session.id,
+                        project_id=session.project_id, agent_slug=session.agent_slug,
+                    )
             raise terminal_error
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await record_model_runtime_success(db, model_id=model, provider=provider)

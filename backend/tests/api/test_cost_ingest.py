@@ -142,3 +142,35 @@ async def test_subscription_call_without_list_price_is_priced_from_its_tokens() 
 
     log = next(c.args[0] for c in db.add.call_args_list if isinstance(c.args[0], CostLog))
     assert log.cost_usd == 0.0 and log.api_equiv_usd == pytest.approx(0.2813, abs=0.001)
+
+
+@pytest.mark.asyncio
+async def test_codex_subscription_ingest_uses_its_catalog_rate() -> None:
+    from app.services.subscription_accounting.rates import subscription_call_value
+
+    db = _db()
+    body = _body(provider="codex", model="gpt-6.1-sol", cost_usd=0, billing_kind="subscription",
+                 input_tokens=17950, output_tokens=244)
+    await ingest_cost(body, _request(), Response(), db)
+    log = next(call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], CostLog))
+    expected = subscription_call_value(body.model, input_tokens=body.input_tokens, output_tokens=body.output_tokens)
+    assert expected is not None and expected.api_equiv_usd is not None
+    assert log.api_equiv_usd == expected.api_equiv_usd
+
+
+@pytest.mark.asyncio
+async def test_subscription_retry_fills_only_missing_list_price() -> None:
+    body = _body(provider="codex", model="gpt-6.1-sol", cost_usd=0, billing_kind="subscription")
+    existing = MagicMock(spec=DBSession, project_id="nightshift",
+                         provider_metadata={"cost_ingest": {"payload_hash": body.payload_hash()}})
+    row = CostLog(id=42, session_id="retained", model=body.model, input_tokens=1200, output_tokens=0,
+                  billing_mode="subscription", cost_usd=0, api_equiv_usd=None)
+    db = _db(existing)
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=row))
+    for _ in range(2):
+        result = await ingest_cost(body, _request(), Response(), db)
+        assert result.status == "duplicate" and result.cost_log_id == 42
+    assert row.api_equiv_usd is not None
+    assert row.cost_usd == 0
+    db.commit.assert_awaited_once()
+    db.add.assert_not_called()

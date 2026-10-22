@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 
 from app.services.session_ingestion.models import NormalizedEvent, SessionUpsertRequest
@@ -35,7 +36,7 @@ class ClaudeCodeTranscriptAdapter:
     ) -> tuple[list[NormalizedEvent], str | None]:
         if not session_ref.source_id:
             return [], checkpoint
-        return read_incremental_transcript_events(session_ref.source_id, checkpoint)
+        return await asyncio.to_thread(read_incremental_transcript_events, session_ref.source_id, checkpoint)
 
     async def detect_boundaries(
         self,

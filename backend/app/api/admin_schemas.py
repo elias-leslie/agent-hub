@@ -1,6 +1,7 @@
 """Admin API schemas for request/response models."""
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -141,3 +142,4 @@ class SessionHotspotsResponse(BaseModel):
     repeated_workloads: list[RepeatedWorkloadRow]
     low_yield_sessions: list[LowYieldSessionRow]
     zero_event_active_sessions: list[ZeroEventActiveSessionRow]
+    activity_cost: dict[str, Any] | None = None

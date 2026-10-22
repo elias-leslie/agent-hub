@@ -150,6 +150,7 @@ class TestSessionHotspots:
                     "lifecycle_state": "dead_candidate",
                 }
             ],
+            "activity_cost": {"tokens": {"denominator": 100, "unclassified_share": 1}},
         }
         with patch(
             "app.services.admin_session_hotspots.build_session_hotspot_snapshot",
@@ -161,6 +162,7 @@ class TestSessionHotspots:
         body = resp.json()
         assert body["totals"]["rate_limit_fallback_sessions"] == 3
         assert body["repeated_workloads"][0]["project_id"] == "summitflow"
+        assert body["activity_cost"] == payload["activity_cost"]
 
 
 class TestClearEndpointsHideExceptionText:

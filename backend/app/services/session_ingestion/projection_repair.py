@@ -13,6 +13,7 @@ from .models import NormalizedEvent
 
 async def repair_codex_projection(
     db: AsyncSession, session: Session, events: list[NormalizedEvent], checkpoint: str,
+    *, include_messages: bool = False,
 ) -> tuple[int, list[str], str]:
     """Correct roles and recover errors without replaying tools or live activity.
 
@@ -20,7 +21,10 @@ async def repair_codex_projection(
     parse ends at the committed cursor. Historical errors append within their
     original turn, retaining their source timestamp and identity.
     """
-    candidates = [event for event in events if event.event_type in {"system_message", "error"}]
+    types = {"system_message", "error"}
+    if not (session.provider_metadata or {}).get("native_observation_namespace"):
+        types.update({"native_lifecycle", "native_settings"})
+    candidates = [event for event in events if include_messages or event.event_type in types]
     existing = await _load_existing_source_events(
         db, session.id, {event.source_event_id for event in candidates if event.source_event_id},
     )
@@ -46,16 +50,15 @@ async def repair_codex_projection(
                 retained.role = event.role
                 updated += 1
             continue
-        if event.event_type != "error" or not event.source_event_id or event.turn is None:
+        if not event.source_event_id or event.turn is None:
+            continue
+        if event.event_type == "system_message" and not include_messages:
             continue
         if event.turn not in sequences:
             sequences[event.turn] = await get_max_sequence(db, session.id, event.turn)
         sequences[event.turn] += 1
-        stored = _build_session_event(
-            session.id, event.turn, sequences[event.turn], "error",
-            content=event.content, tool_output=event.tool_output,
-            source_event_id=event.source_event_id, source_timestamp=event.source_timestamp,
-        )
+        values = event.model_dump(exclude={"turn", "sequence", "native_observation"})
+        stored = _build_session_event(session.id, event.turn, sequences[event.turn], **values)
         db.add(stored)
         existing[event.source_event_id] = stored
         added.append(stored)

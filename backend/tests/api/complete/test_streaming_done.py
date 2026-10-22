@@ -19,7 +19,7 @@ async def test_done_reports_the_served_model_when_the_primary_served() -> None:
     writer = SseWriter(session_id="s-1")
     _attach_routing(writer, ctx)
     usage = SimpleNamespace(input=1, output=1, cache_read=0, cache_write=0)
-    message = SimpleNamespace(usage=usage, content=[], stop_reason="stop")
+    message = SimpleNamespace(usage=usage, content=[], stop_reason="stop", model=ctx.model, provider="claude")
 
     with patched_done_persistence():
         chunk = await _persist_and_build_done_sse(writer=writer, ctx=ctx, message=message, accumulated_content="ok")
@@ -47,7 +47,7 @@ async def test_stream_finalize_writes_a_cost_log_row() -> None:
     ctx = make_stream_ctx("s-cost", model="claude-opus-5-5", agent_used="chat")
     writer = SseWriter(session_id="s-cost")
     usage = SimpleNamespace(input=120, output=30, cache_read=7, cache_write=3)
-    message = SimpleNamespace(usage=usage, content=[], stop_reason="stop")
+    message = SimpleNamespace(usage=usage, content=[], stop_reason="stop", model=ctx.model, provider="claude")
     fake_db = _FakeDb()
     log_usage = AsyncMock()
 

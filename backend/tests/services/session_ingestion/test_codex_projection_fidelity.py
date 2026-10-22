@@ -161,8 +161,10 @@ def test_task_completion_error_reaches_the_error_view_without_repeating_final_te
         }}),
     ])
 
-    assert len(events) == 1
-    error = events[0]
+    errors = [event for event in events if event.event_type == "error"]
+    assert len(errors) == 1
+    error = errors[0]
+    assert [event.tool_output["status"] for event in events if event.event_type == "native_lifecycle" and event.tool_output] == ["failed", "completed"]
     assert error.event_type == "error"
     assert "cyber_policy" in (error.content or "")
     assert "flagged for possible cybersecurity risk" in (error.content or "")

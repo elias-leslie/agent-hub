@@ -20,6 +20,7 @@ from app.utils.native_homes import claude_project_roots, codex_session_roots
 
 from ._event_builders import _ParseState, append_normalized_events
 from .codex_model_evidence import observe_model_record
+from .native_metadata import append_native_metadata
 
 JsonObject = dict[str, object]
 PARSER_VERSION = "agent-hub.transcript-jsonl.v5"
@@ -58,6 +59,7 @@ _KNOWN_TOP_LEVEL_TYPES = {
     "response_item",
     "retained_context",
     "session_meta",
+    "system",
     "token_usage_record",
     "turn_context",
     "user",
@@ -165,6 +167,8 @@ def _unsupported_record_issue(obj: JsonObject) -> str | None:
     elif entry_type in {"user", "assistant"}:
         if not isinstance(obj.get("message"), dict):
             return "unsupported_record_shape"
+    elif entry_type == "system" and obj.get("subtype") != "compact_boundary":
+        return "unsupported_system_record"
     return None
 
 
@@ -194,6 +198,7 @@ def parse_transcript_events(lines: list[str]) -> list[NormalizedEvent]:
         if isinstance(obj, dict):
             state.set_source(obj, f"line:{index}")
             append_normalized_events(obj, state)
+            append_native_metadata(obj, state)
     return state.events
 
 
@@ -292,6 +297,7 @@ def read_incremental_transcript_events(
                     state.set_source(obj, identity)
                     observe_model_record(state.codex_model_state, obj, line_count)
                     append_normalized_events(obj, state)
+                    append_native_metadata(obj, state)
                 else:
                     parse_issue_counts["non_object_json"] = (
                         parse_issue_counts.get("non_object_json", 0) + 1

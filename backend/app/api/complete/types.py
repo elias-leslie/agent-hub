@@ -23,6 +23,7 @@ class CompletionInternalResult:
     """HTTP completion metadata around the universal assistant message."""
 
     message: AssistantMessage
+    usage_messages: list[AssistantMessage]
     session_id: str
     memory_uuids: list[str]
     cited_uuids: list[str]
@@ -53,6 +54,7 @@ class CompletionInternalResult:
         self,
         *,
         message: AssistantMessage | None = None,
+        usage_messages: list[AssistantMessage] | None = None,
         content: str = "",
         model: str = "unknown",
         provider: str = "unknown",
@@ -94,6 +96,7 @@ class CompletionInternalResult:
                 tool_calls=tool_calls,
             )
         self.message = message
+        self.usage_messages = usage_messages or [message]
         self.session_id = session_id
         self.memory_uuids = memory_uuids or []
         self.cited_uuids = cited_uuids or []

@@ -47,6 +47,7 @@ from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message, messages_to_dicts
 
 from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
+from .runtime_usage import accounting_model, aggregate_message_usage
 from .schemas import MessageInput
 from .sse_writer import SseWriter, tool_result_text
 from .streaming_context import StreamContext
@@ -78,7 +79,7 @@ async def _log_stream_cost(
 ) -> None:
     """Write the CostLog row for a finished stream, as the non-streaming path does."""
     usage = message.usage
-    if not (usage.input or usage.output):
+    if not (usage.input or usage.output or usage.cache_read or usage.cache_write):
         return
     try:
         from app.db import async_session
@@ -100,16 +101,34 @@ async def _log_stream_cost(
         logger.error("Failed to log streaming token usage for %s: %s", ctx.session_id, exc)
 
 
+async def _record_stream_usage(ctx: StreamContext, message: AssistantMessage) -> float:
+    """Record each terminal provider call, including intermediate and failed turns."""
+    from app.services.token_counter import estimate_usage_cost
+
+    model = accounting_model(message, ctx.model_used or ctx.model)
+    usage = message.usage
+    cost = estimate_usage_cost(
+        usage.input, usage.output, model,
+        cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
+    ).total_cost_usd
+    await _log_stream_cost(ctx, message, model, cost)
+    if ctx.project_id and cost > 0:
+        from app.services.project_budget import record_project_cost
+
+        await record_project_cost(ctx.project_id, cost)
+    return cost
+
+
 async def _persist_and_build_done_sse(
     *,
     writer: SseWriter,
     ctx: StreamContext,
     message: AssistantMessage,
     accumulated_content: str,
+    cost_usd: float | None = None,
 ) -> str:
     """Run the same persistence side-effects the legacy path emitted, then return done SSE."""
     from app.constants.catalog import MODEL_CATALOG_BY_ID
-    from app.services.token_counter import estimate_cost
 
     from .streaming_persistence import (
         _track_citations as track_citations,
@@ -146,18 +165,14 @@ async def _persist_and_build_done_sse(
     if ctx.is_new_session and ctx.is_one_shot:
         await close_one_shot_session(ctx.session_id)
 
-    cost = estimate_cost(input_tokens, output_tokens, effective_model)
-    await _log_stream_cost(ctx, message, effective_model, cost.total_cost_usd)
-    if ctx.project_id and cost.total_cost_usd > 0:
-        from app.services.project_budget import record_project_cost
-
-        await record_project_cost(ctx.project_id, cost.total_cost_usd)
+    if cost_usd is None:
+        cost_usd = await _record_stream_usage(ctx, message)
 
     catalog_entry = MODEL_CATALOG_BY_ID.get(effective_model)
     display_name = catalog_entry.name if catalog_entry else None
 
     extras: dict[str, object] = {
-        "cost_usd": cost.total_cost_usd,
+        "cost_usd": cost_usd,
         "finish_reason": message.stop_reason,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
@@ -200,9 +215,12 @@ async def _emit_events(
     """Translate the orchestrator event stream into SSE, accumulating final text.
 
     When the server-side tool loop is active, each intermediate turn ends with
-    a ``toolUse`` DoneEvent; only the loop's final turn persists and emits done.
+    a ``toolUse`` DoneEvent; every call records usage, while only the final
+    turn persists the answer and emits done with the request totals.
     """
     cancel_event = ctx.cancel_event
+    usage_messages: list[AssistantMessage] = []
+    total_cost_usd = 0.0
     async for event in events:
         if cancel_event is not None and cancel_event.is_set():
             yield writer.cancel_acknowledged()
@@ -249,16 +267,20 @@ async def _emit_events(
             yield writer.tool_result(event.tool_call.id, event.error, "error")
             continue
         if isinstance(event, DoneEvent):
+            usage_messages.append(event.message)
+            total_cost_usd += await _record_stream_usage(ctx, event.message)
             if tool_loop_active and event.reason == "toolUse":
                 continue
             yield await _persist_and_build_done_sse(
                 writer=writer,
                 ctx=ctx,
-                message=event.message,
+                message=aggregate_message_usage(event.message, usage_messages),
                 accumulated_content=content_buf[0],
+                cost_usd=total_cost_usd,
             )
             continue
         if isinstance(event, ErrorEvent):
+            await _record_stream_usage(ctx, event.error)
             if retry_error_before_output and not bool(
                 attempt_output_started and attempt_output_started[0]
             ):

@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
+from sqlalchemy import make_url, select, text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.schema import CreateTable
 
+from app.models import (
+    SubscriptionUsageCursor,
+    SubscriptionUsageDaily,
+    SubscriptionUsageSnapshot,
+    UsageCall,
+    UsageSession,
+)
 from app.services.subscription_accounting import collector, rates
 from app.services.subscription_accounting.summary import amortize, draw_down
 from app.services.token_counter import estimate_cost
@@ -71,6 +85,247 @@ def _token_count(ts: str, total: int, inp: int, cached: int, out: int, used: flo
             },
         },
     }
+
+
+def _native_codex(response: str, inp: int, cached: int, out: int, ordinal: int = 2) -> dict:
+    return {"timestamp": "2026-10-11T12:00:02Z", "type": "token_usage_record", "ordinal": ordinal,
+            "payload": {"thread_id": "thread", "response_id": response,
+                        "usage": {"input_tokens": inp, "cached_input_tokens": cached, "output_tokens": out}}}
+
+
+def test_native_codex_pairs_legacy_usage_and_keeps_compaction_once(tmp_path: Path) -> None:
+    path = tmp_path / "rollout.jsonl"
+    pair = _token_count("2026-10-11T12:00:03Z", 1100, 1000, 400, 100, 0, "100")
+    reset = _token_count("2026-10-11T12:00:05Z", 1100, 0, 0, 0, 0, "100")
+    _jsonl(path, [
+        {"type": "session_meta", "payload": {"id": "thread", "cwd": "/srv/workspaces/projects/agent-hub"}},
+        {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+        _native_codex("ordinary", 1000, 400, 100), pair,
+        _native_codex("compact", 2000, 1500, 50, 4),
+        {"type": "compacted", "payload": {"compaction_response_id": "compact"}}, reset,
+        {"type": "turn_context", "payload": {"model": "gpt-6-luna"}},
+        _native_codex("next", 100, 20, 10, 8),
+        _token_count("2026-10-11T12:00:06Z", 1210, 100, 20, 10, 0, "100"),
+    ])
+    result = collector.PassResult()
+    state: dict = {}
+    offset = collector._codex_file(path, 0, state, result)
+    assert len(result.calls) == 3
+    assert [c.key for c in result.calls] == ["codex:thread:1100", "codex:thread:compact", "codex:thread:1210"]
+    assert sum(c.input_tokens + c.cached_input_tokens for c in result.calls) == 3100
+    assert sum(c.output_tokens for c in result.calls) == 160
+    assert result.calls[-1].model == "gpt-6-luna"
+    assert sum(r.requests for r in result.rollups.values()) == 3
+    _jsonl(path, [_native_codex("next", 100, 20, 10, 10),
+                  _token_count("2026-10-11T12:00:07Z", 1210, 100, 20, 10, 0, "100")])
+    retry = collector.PassResult()
+    collector._codex_file(path, offset, state, retry)
+    assert retry.calls == [] and not retry.rollups
+
+
+def test_native_codex_child_excludes_inherited_usage(tmp_path: Path) -> None:
+    path = tmp_path / "rollout.jsonl"
+    _jsonl(path, [
+        {"type": "session_meta", "payload": {"id": "thread", "session_id": "parent",
+                                               "subagent_history_start_ordinal": 10}},
+        {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+        _native_codex("parent-response", 1000, 400, 100, 2),
+        _native_codex("child-response", 100, 20, 10, 11),
+        {"type": "compacted", "payload": {"compaction_response_id": "child-response"}},
+    ])
+    result = collector.PassResult()
+    collector._codex_file(path, 0, {}, result)
+    assert [(c.session_id, c.agent_id, c.input_tokens) for c in result.calls] == [("parent", "thread", 80)]
+
+
+def _claude_usage(out: int) -> dict:
+    return {"timestamp": "2026-10-11T12:00:00Z", "requestId": "request", "cwd": "/srv/workspaces/projects/agent-hub",
+            "message": {"id": "message", "model": "claude-opus-5-5",
+                        "usage": {"input_tokens": 10, "output_tokens": out, "cache_read_input_tokens": 400}}}
+
+
+@pytest.mark.parametrize("split", [False, True])
+def test_claude_stream_final_usage_replaces_initial_usage(tmp_path: Path, split: bool) -> None:
+    path = tmp_path / "claude.jsonl"
+    _jsonl(path, [_claude_usage(21)])
+    state: dict = {}
+    first = collector.PassResult()
+    if not split:
+        _jsonl(path, [_claude_usage(191)])
+    offset = collector._claude_file(path, 0, state, first)
+    if split:
+        _jsonl(path, [_claude_usage(191)])
+        final = collector.PassResult()
+        offset = collector._claude_file(path, offset, state, final)
+    else:
+        final = first
+    assert len(final.calls) == 1 and final.calls[0].output_tokens == 191
+    assert state["turns"] == 1
+    assert state["usd"] == pytest.approx(final.calls[0].api_equiv_usd)
+    assert sum(r.requests for r in first.rollups.values()) == 1
+    assert sum(r.output_tokens for r in first.rollups.values()) + (
+        sum(r.output_tokens for r in final.rollups.values()) if split else 0) == 191
+    _jsonl(path, [_claude_usage(191), _claude_usage(21)])  # a stale streamed retry must not replace final usage
+    retry = collector.PassResult()
+    collector._claude_file(path, offset, state, retry)
+    assert retry.calls == [] and not retry.rollups
+
+
+def test_codex_pending_native_usage_survives_partial_legacy_tail(tmp_path: Path) -> None:
+    path = tmp_path / "rollout.jsonl"
+    _jsonl(path, [{"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+                  _native_codex("ordinary", 1000, 400, 100)])
+    legacy = json.dumps(_token_count("2026-10-11T12:00:03Z", 1100, 1000, 400, 100, 0, "100"))
+    with path.open("a") as fh:
+        fh.write(legacy[:40])
+    state: dict = {}
+    first = collector.PassResult()
+    offset = collector._codex_file(path, 0, state, first)
+    assert first.calls == [] and "pending_usage" in state
+    with path.open("a") as fh:
+        fh.write(legacy[40:] + "\n")
+    final = collector.PassResult()
+    collector._codex_file(path, offset, state, final)
+    assert len(final.calls) == 1 and final.calls[0].output_tokens == 100
+    assert "pending_usage" not in state
+
+
+def test_named_usage_replay_resumes_its_byte_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_HUB_CODEX_SESSIONS", str(tmp_path / "codex"))
+    monkeypatch.setenv("AGENT_HUB_CLAUDE_PROJECTS", str(tmp_path / "claude"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    for name in ("a", "b"):
+        _jsonl(tmp_path / "claude" / "p" / f"{name}.jsonl", [_claude_usage(191)])
+    first = collector.scan({})
+    cursors = dict(first.cursors)
+    replay = collector.scan(cursors, byte_budget=1, replay="native-usage-test")
+    assert replay.replay_pending == 1 and len(replay.calls) == 1 and replay.reconcile
+    cursors.update(replay.cursors)
+    resumed = collector.scan(cursors, byte_budget=1, replay="native-usage-test")
+    assert resumed.replay_pending == 0 and len(resumed.calls) == 1
+    cursors.update(resumed.cursors)
+    assert collector.scan(cursors, replay="native-usage-test").calls == []
+
+
+@pytest.mark.parametrize("replay", [None, "native-usage-20261022"])
+def test_usage_collect_cli_parses_optional_replay(replay: str | None, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    from app.cli import usage_collect
+
+    run = AsyncMock(return_value={"replay_pending": 0})
+    monkeypatch.setattr(usage_collect, "run", run)
+    monkeypatch.setattr("sys.argv", ["usage_collect", *(["--replay", replay] if replay else [])])
+    usage_collect.main()
+    run.assert_awaited_once_with(replay=replay)
+    assert json.loads(capsys.readouterr().out) == {"replay_pending": 0}
+
+
+@pytest.mark.parametrize("prune", [False, True])
+async def test_usage_replay_can_skip_existing_retention_pruning(prune: bool) -> None:
+    db = SimpleNamespace(execute=AsyncMock())
+    await collector._persist(db, collector.PassResult(), [], [], prune=prune)
+    assert db.execute.await_count == (3 if prune else 0)
+
+
+async def test_usage_collect_replay_uses_initialized_collector_without_spend_alerts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.cli import usage_collect
+
+    db = object()
+    calls = []
+
+    @asynccontextmanager
+    async def session():
+        yield db
+
+    async def refresh(actual_db):
+        assert actual_db is db
+        calls.append("catalog")
+
+    async def collect(actual_db, **kwargs):
+        assert actual_db is db and kwargs == {"min_interval_s": 0, "replay": "native-usage-test"}
+        calls.append("collect")
+        return {"replay_pending": 0}
+
+    alerts = AsyncMock()
+    monkeypatch.setattr(usage_collect, "async_session", session)
+    monkeypatch.setattr(usage_collect, "refresh_runtime_model_catalog", refresh)
+    monkeypatch.setattr(usage_collect, "collect", collect)
+    monkeypatch.setattr(usage_collect, "spend_alerts", alerts)
+    assert await usage_collect.run(replay="native-usage-test") == {"replay_pending": 0}
+    assert calls == ["catalog", "collect"]
+    alerts.assert_not_awaited()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("previously_unpriced", [False, True])
+async def test_native_usage_reconciliation_updates_ledger_and_daily_totals_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, previously_unpriced: bool,
+) -> None:
+    configured = os.environ.get("TEST_AGENT_HUB_DB_URL")
+    if not configured:
+        pytest.skip("TEST_AGENT_HUB_DB_URL is required")
+    url = make_url(configured).set(drivername="postgresql+asyncpg")
+    assert url.database and url.database.endswith("_test")
+    monkeypatch.setenv("AGENT_HUB_CODEX_SESSIONS", str(tmp_path / "codex"))
+    monkeypatch.setenv("AGENT_HUB_CLAUDE_PROJECTS", str(tmp_path / "claude"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    codex = tmp_path / "codex" / "2026" / "10" / "11" / "rollout.jsonl"
+    claude = tmp_path / "claude" / "p" / "s.jsonl"
+    _jsonl(codex, [
+        {"type": "session_meta", "payload": {"id": "thread", "cwd": "/srv/workspaces/projects/agent-hub"}},
+        {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+        _native_codex("ordinary", 1000, 400, 100),
+        _token_count("2026-10-11T12:00:03Z", 1100, 1000, 400, 100, 0, "100"),
+        _native_codex("compact", 2000, 1500, 50, 4),
+        {"type": "compacted", "payload": {"compaction_response_id": "compact"}},
+        _token_count("2026-10-11T12:00:05Z", 1100, 0, 0, 0, 0, "100"),
+    ])
+    _jsonl(claude, [_claude_usage(21), _claude_usage(191)])
+    full = collector.scan({})
+    initial = collector.PassResult(sessions=full.sessions)
+    for call in full.calls:
+        if call.key == "codex:thread:compact":
+            continue
+        if call.provider == "claude":
+            call = replace(call, output_tokens=21, api_equiv_usd=None if previously_unpriced else 0.00054)
+        initial.calls.append(call)
+    engine = create_async_engine(url)
+    schema = f"native_usage_{uuid4().hex}"
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            await connection.execute(text(f"CREATE SCHEMA {schema}"))
+            await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
+            for model in (UsageCall, UsageSession, SubscriptionUsageDaily, SubscriptionUsageCursor, SubscriptionUsageSnapshot):
+                await connection.execute(CreateTable(model.__table__))
+            async with AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint") as db:
+                await collector._persist(db, initial, [], [])
+                # Same committed source offsets as the buggy collector: replay needs to discover the
+                # missing compaction and replace the already-priced initial Claude response.
+                replay = collector.scan(full.cursors, replay="native-usage-test")
+                await collector._persist(db, replay, [], [])
+                await db.flush()
+                calls = (await db.execute(select(UsageCall).execution_options(populate_existing=True))).scalars().all()
+                rolls = (await db.execute(select(SubscriptionUsageDaily).execution_options(populate_existing=True))).scalars().all()
+                assert len(calls) == 3
+                assert sum(c.output_tokens for c in calls) == 341
+                assert sum(r.requests for r in rolls) == 3
+                assert sum(r.input_tokens for r in rolls) == 1110
+                assert sum(r.cached_input_tokens for r in rolls) == 2300
+                assert sum(r.output_tokens for r in rolls) == 341
+                assert sum(r.unpriced_tokens for r in rolls) == 0
+                expected_usd = sum(c.api_equiv_usd or 0 for c in full.calls)
+                assert sum(r.api_equiv_usd for r in rolls) == pytest.approx(expected_usd)
+                # A new explicit replay and a retried persistence must each be no-ops.
+                again = collector.scan(replay.cursors, replay="native-usage-test-again")
+                await collector._persist(db, again, [], [])
+                await collector._persist(db, again, [], [])
+                rolls = (await db.execute(select(SubscriptionUsageDaily).execution_options(populate_existing=True))).scalars().all()
+                assert sum(r.requests for r in rolls) == 3
+                assert sum(r.output_tokens for r in rolls) == 341
+                assert sum(r.api_equiv_usd for r in rolls) == pytest.approx(expected_usd)
+            await transaction.rollback()
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture(autouse=True)
