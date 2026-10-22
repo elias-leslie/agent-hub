@@ -1,0 +1,218 @@
+{
+  "pi-off-pilot": {
+    "attempts": 4,
+    "accepted": 4,
+    "total_usd": 0.2113896,
+    "cost_per_accepted_usd": 0.0528474,
+    "api_equivalent_usd": {
+      "mean": 0.0528474,
+      "min": 0.038958,
+      "max": 0.08884560000000001,
+      "sample_sd": 0.024045273729917632
+    },
+    "active_seconds": {
+      "mean": 53.7205,
+      "min": 40.901,
+      "max": 82.058,
+      "sample_sd": 19.06594399271469
+    },
+    "whole_seconds": {
+      "mean": 63.66703301668167,
+      "min": 51.03934192657471,
+      "max": 91.77698159217834,
+      "sample_sd": 18.906983614613104
+    },
+    "tool_seconds_union": {
+      "mean": 0.8600002527236938,
+      "min": 0.3229999542236328,
+      "max": 2.444000482559204,
+      "sample_sd": 1.0560257221271974
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.3262500762939453,
+      "min": 0.312999963760376,
+      "max": 0.34200000762939453,
+      "sample_sd": 0.012175823703354847
+    }
+  },
+  "pi-off-matched": {
+    "attempts": 1,
+    "accepted": 1,
+    "total_usd": 0.0443132,
+    "cost_per_accepted_usd": 0.0443132,
+    "api_equivalent_usd": {
+      "mean": 0.0443132,
+      "min": 0.0443132,
+      "max": 0.0443132,
+      "sample_sd": null
+    },
+    "active_seconds": {
+      "mean": 40.805,
+      "min": 40.805,
+      "max": 40.805,
+      "sample_sd": null
+    },
+    "whole_seconds": {
+      "mean": 50.716508865356445,
+      "min": 50.716508865356445,
+      "max": 50.716508865356445,
+      "sample_sd": null
+    },
+    "tool_seconds_union": {
+      "mean": 0.3360002040863037,
+      "min": 0.3360002040863037,
+      "max": 0.3360002040863037,
+      "sample_sd": null
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.3210000991821289,
+      "min": 0.3210000991821289,
+      "max": 0.3210000991821289,
+      "sample_sd": null
+    }
+  },
+  "codex-on-matched": {
+    "attempts": 3,
+    "accepted": 3,
+    "total_usd": 0.2023704,
+    "cost_per_accepted_usd": 0.0674568,
+    "api_equivalent_usd": {
+      "mean": 0.0674568,
+      "min": 0.055441199999999996,
+      "max": 0.0823716,
+      "sample_sd": 0.01369728555298458
+    },
+    "active_seconds": {
+      "mean": 29.279999891916912,
+      "min": 24.393999814987183,
+      "max": 33.1949999332428,
+      "sample_sd": 4.480126289764702
+    },
+    "whole_seconds": {
+      "mean": 32.700648387273155,
+      "min": 28.263597011566162,
+      "max": 36.28715515136719,
+      "sample_sd": 4.078840632820765
+    },
+    "tool_seconds_union": {
+      "mean": 0.9356667200724283,
+      "min": 0.8890001773834229,
+      "max": 0.9620001316070557,
+      "sample_sd": 0.04052561530771596
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.6960000197092692,
+      "min": 0.690000057220459,
+      "max": 0.7079999446868896,
+      "sample_sd": 0.010392239874126715
+    }
+  },
+  "pi-on-matched": {
+    "attempts": 3,
+    "accepted": 3,
+    "total_usd": 0.0895684,
+    "cost_per_accepted_usd": 0.029856133333333337,
+    "api_equivalent_usd": {
+      "mean": 0.029856133333333333,
+      "min": 0.0285024,
+      "max": 0.030970400000000002,
+      "sample_sd": 0.0012513050041190338
+    },
+    "active_seconds": {
+      "mean": 44.087666666666664,
+      "min": 34.974,
+      "max": 53.627,
+      "sample_sd": 9.333782530857112
+    },
+    "whole_seconds": {
+      "mean": 53.9601186911265,
+      "min": 44.71526336669922,
+      "max": 63.44880962371826,
+      "sample_sd": 9.369153147100583
+    },
+    "tool_seconds_union": {
+      "mean": 0.34166669845581055,
+      "min": 0.3299999237060547,
+      "max": 0.3579998016357422,
+      "sample_sd": 0.014571522116204964
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.32600005467732746,
+      "min": 0.315000057220459,
+      "max": 0.3399999141693115,
+      "sample_sd": 0.012767050992224806
+    }
+  },
+  "codex-off-matched": {
+    "attempts": 1,
+    "accepted": 1,
+    "total_usd": 0.0494752,
+    "cost_per_accepted_usd": 0.0494752,
+    "api_equivalent_usd": {
+      "mean": 0.0494752,
+      "min": 0.0494752,
+      "max": 0.0494752,
+      "sample_sd": null
+    },
+    "active_seconds": {
+      "mean": 32.330000162124634,
+      "min": 32.330000162124634,
+      "max": 32.330000162124634,
+      "sample_sd": null
+    },
+    "whole_seconds": {
+      "mean": 35.87164354324341,
+      "min": 35.87164354324341,
+      "max": 35.87164354324341,
+      "sample_sd": null
+    },
+    "tool_seconds_union": {
+      "mean": 0.8950002193450928,
+      "min": 0.8950002193450928,
+      "max": 0.8950002193450928,
+      "sample_sd": null
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.7030000686645508,
+      "min": 0.7030000686645508,
+      "max": 0.7030000686645508,
+      "sample_sd": null
+    }
+  },
+  "pi-on-pilot": {
+    "attempts": 1,
+    "accepted": 1,
+    "total_usd": 0.0617356,
+    "cost_per_accepted_usd": 0.0617356,
+    "api_equivalent_usd": {
+      "mean": 0.0617356,
+      "min": 0.0617356,
+      "max": 0.0617356,
+      "sample_sd": null
+    },
+    "active_seconds": {
+      "mean": 48.714,
+      "min": 48.714,
+      "max": 48.714,
+      "sample_sd": null
+    },
+    "whole_seconds": {
+      "mean": 58.63390374183655,
+      "min": 58.63390374183655,
+      "max": 58.63390374183655,
+      "sample_sd": null
+    },
+    "tool_seconds_union": {
+      "mean": 0.33699989318847656,
+      "min": 0.33699989318847656,
+      "max": 0.33699989318847656,
+      "sample_sd": null
+    },
+    "verification_tool_seconds_union": {
+      "mean": 0.3259999752044678,
+      "min": 0.3259999752044678,
+      "max": 0.3259999752044678,
+      "sample_sd": null
+    }
+  }
+}

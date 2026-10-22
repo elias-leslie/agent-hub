@@ -1,0 +1,23 @@
+{
+  "schedule_id": "gpt-6.1-sol-standard-20261022",
+  "catalog_source": "catalog.json",
+  "catalog_model_id": "codex/gpt-6.1-sol",
+  "catalog_input_per_million": 2.0,
+  "catalog_output_per_million": 10.0,
+  "catalog_cached_read_per_million": null,
+  "supplement_source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+  "cache_accounting_source": "https://developers.openai.com/api/docs/guides/prompt-caching",
+  "rates_per_million": {
+    "uncached_input": 2.0,
+    "cached_read": 0.1,
+    "cache_write_30m": 2.5,
+    "cache_write_12h": 5.0,
+    "output_including_reasoning": 10.0
+  },
+  "service_tier_basis": "Standard normalized across all conditions; actual tier mismatches separately recorded",
+  "subscription_cash": "not measured; API-equivalent only",
+  "long_context_threshold": 272000,
+  "long_context_input_multiplier": 2.0,
+  "long_context_output_multiplier": 1.5,
+  "pinned_date": "2026-10-22"
+}

@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import observer from "/srv/workspaces/projects/agent-hub/docs/evaluations/harness-efficiency-20261022/pi-observer.js";
+
+const handlers = new Map();
+observer({on(name, fn) { handlers.set(name, fn); }});
+const options = {forceSystemPrompt: undefined, selectedTools: ["read", "bash"], contextFiles: [{path:"AGENTS.md", content:"REQUIRED LOCAL RULE"}], sections:{safety:"NATIVE SAFETY"}};
+const event = {systemPromptOptions:options, get systemPrompt() {return options.forceSystemPrompt || "NATIVE SAFETY\nREQUIRED LOCAL RULE";}};
+const expected = handlers.get("before_agent_start")(event).systemPrompt;
+const history = {role:"user", content:"unchanged task"};
+const tools = [{type:"function", name:"read"}];
+const payload = {model:"fixed-model", reasoning:{effort:"xhigh"}, tools, input:[{role:"developer", content:[{type:"input_text", text:expected+"\n\nSECOND AH COPY"}]},history]};
+const actual = handlers.get("before_provider_request")({payload});
+assert.equal(actual.input[0].content[0].text, expected);
+assert.ok(expected.startsWith("NATIVE SAFETY\nREQUIRED LOCAL RULE\n\n"));
+assert.ok(expected.includes("REQUIRED SHARED RULE"));
+assert.equal(actual.input[1], history);
+assert.equal(actual.tools, tools);
+assert.equal(actual.model, "fixed-model");
+assert.deepEqual(actual.reasoning, {effort:"xhigh"});
+assert.deepEqual(options.selectedTools, ["read","bash"]);
+assert.deepEqual(options.sections, {safety:"NATIVE SAFETY"});
+assert.deepEqual(options.contextFiles, [{path:"AGENTS.md",content:"REQUIRED LOCAL RULE"}]);
+const unrelated = {model:"fixed-model", input:[{role:"developer",content:"OTHER REQUIRED SYSTEM"}]};
+assert.equal(handlers.get("before_provider_request")({payload:unrelated}).input[0].content,"OTHER REQUIRED SYSTEM");
+console.log("PASS: native/required bytes, roles, history, tools, model and reasoning preserved; only duplicate supplemental transport removed.");

@@ -1,0 +1,1002 @@
+[
+  {
+    "native_session_id": "01a164d4-48e5-7322-ae7e-3f121d9e5b34",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 29235,
+      "cache_read_input": 99456,
+      "cache_write_input": 0,
+      "visible_output": 1096,
+      "reasoning_output": 947
+    },
+    "first_call_input_including_cache": 9120,
+    "first_call_cached_input": 0,
+    "model_calls": 11,
+    "compactions": 0,
+    "api_equivalent_usd": 0.08884560000000001,
+    "native_reported_cost_usd": 0.0888456,
+    "tool_calls": 16,
+    "tool_seconds_sum": 2.4740002155303955,
+    "tool_seconds_union": 2.444000482559204,
+    "verification_tool_seconds_union": 0.34200000762939453,
+    "active_seconds": 82.058,
+    "whole_seconds": 91.77698159217834,
+    "transport_verified": false,
+    "requests_verified": 0,
+    "requests_observed": 11,
+    "context_receipts": [
+      {
+        "at": 1792693001052,
+        "type": "context",
+        "transport": "structured-native-plus-frozen-preview-v2",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4055,
+        "native_sha256": "c0f1d1795d562b2640c7776933279eb2f2734ae14fa2e8f832f24371b6468e2a",
+        "bytes": 18351,
+        "sha256": "a8b1508b205974ef763adb9e77429b84ab8f3bb56884aec6bb5282212e1d3693",
+        "expected_system_sha256": "aa1ea56d3d715b1f891caecd66d2b7e8dd375bfc052c5c0362a7ec8b93fe837d"
+      }
+    ],
+    "condition": "final-pi-off",
+    "harness": "pi",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d5-6de3-75ce-9c67-fe5b54fdc020",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 15732,
+      "cache_read_input": 30592,
+      "cache_write_input": 0,
+      "visible_output": 832,
+      "reasoning_output": 147
+    },
+    "first_call_input_including_cache": 5477,
+    "first_call_cached_input": 0,
+    "model_calls": 7,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0443132,
+    "native_reported_cost_usd": 0.0443132,
+    "tool_calls": 11,
+    "tool_seconds_sum": 0.3600006103515625,
+    "tool_seconds_union": 0.3360002040863037,
+    "verification_tool_seconds_union": 0.3210000991821289,
+    "active_seconds": 40.805,
+    "whole_seconds": 50.716508865356445,
+    "transport_verified": true,
+    "requests_verified": 7,
+    "requests_observed": 7,
+    "context_receipts": [
+      {
+        "at": 1792693076134,
+        "type": "context",
+        "transport": "structured-native-plus-frozen-preview-v2",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4057,
+        "native_sha256": "a191a6f4f11be6ccdf5eb7d0bf5d18c24b05c83ca365445b0f7cdc5543437538",
+        "bytes": 18351,
+        "sha256": "a8b1508b205974ef763adb9e77429b84ab8f3bb56884aec6bb5282212e1d3693",
+        "expected_system_sha256": "5928e936cd2c1303551713388c0c79ff0913fdba4ed9f94f07eca87c78553d54"
+      }
+    ],
+    "condition": "matched-pi-off",
+    "harness": "pi",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d0-88b5-7121-bf5d-2b406f043504",
+    "native_version": "0.163.0",
+    "model_settings": [
+      {
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        }
+      }
+    ],
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 31522,
+      "cache_read_input": 101376,
+      "cache_write_input": 0,
+      "visible_output": 757,
+      "reasoning_output": 162
+    },
+    "first_call_input_including_cache": 20801,
+    "first_call_cached_input": 7168,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0823716,
+    "tool_calls": 5,
+    "tool_seconds_sum": 0.9620001316070557,
+    "tool_seconds_union": 0.9620001316070557,
+    "verification_tool_seconds_union": 0.690000057220459,
+    "active_seconds": 30.250999927520752,
+    "whole_seconds": 33.55119299888611,
+    "exact_developer_payload_copies": 1,
+    "transport_verified": true,
+    "condition": "repeat1-codex-on",
+    "harness": "codex",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d0-8c43-7746-9b8b-4475e3704832",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 11384,
+      "cache_read_input": 51200,
+      "cache_write_input": 0,
+      "visible_output": 765,
+      "reasoning_output": 342
+    },
+    "first_call_input_including_cache": 9121,
+    "first_call_cached_input": 0,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.038958,
+    "native_reported_cost_usd": 0.038958,
+    "tool_calls": 10,
+    "tool_seconds_sum": 0.3489999771118164,
+    "tool_seconds_union": 0.3320002555847168,
+    "verification_tool_seconds_union": 0.32200002670288086,
+    "active_seconds": 47.139,
+    "whole_seconds": 57.13919496536255,
+    "transport_verified": false,
+    "requests_verified": 0,
+    "requests_observed": 6,
+    "context_receipts": [
+      {
+        "at": 1792692756254,
+        "type": "context",
+        "bytes": 18351,
+        "sha256": "a8b1508b205974ef763adb9e77429b84ab8f3bb56884aec6bb5282212e1d3693"
+      }
+    ],
+    "condition": "repeat1-pi-off",
+    "harness": "pi",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164db-c050-738a-be90-81f3724210f5",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 7741,
+      "cache_read_input": 33536,
+      "cache_write_input": 0,
+      "visible_output": 749,
+      "reasoning_output": 377
+    },
+    "first_call_input_including_cache": 5586,
+    "first_call_cached_input": 0,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0300956,
+    "native_reported_cost_usd": 0.0300956,
+    "tool_calls": 11,
+    "tool_seconds_sum": 0.36100006103515625,
+    "tool_seconds_union": 0.3299999237060547,
+    "verification_tool_seconds_union": 0.315000057220459,
+    "active_seconds": 43.662,
+    "whole_seconds": 53.716283082962036,
+    "transport_verified": true,
+    "requests_verified": 6,
+    "requests_observed": 6,
+    "context_receipts": [
+      {
+        "at": 1792693490740,
+        "type": "context",
+        "transport": "native-plus-frozen-preview-v4",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4056,
+        "native_sha256": "61a5c45e149a189a960317ea5ea081535ebb355a4b9e1d5673ef6d707dedd09d",
+        "bytes": 18682,
+        "sha256": "c3a609132735385d992750b4f7a956235c528b2df282e7a07d0aef6b98bc1d2b",
+        "expected_system_sha256": "d53e4c868b70b0c509cccee10e9a5cc60529bfcb7b16a99865255b05c5d64455"
+      }
+    ],
+    "condition": "repeat1-pi-on",
+    "harness": "pi",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d6-35e3-7760-862e-81f6a5b27fd6",
+    "native_version": "0.163.0",
+    "model_settings": [
+      {
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        }
+      }
+    ],
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 23380,
+      "cache_read_input": 88576,
+      "cache_write_input": 0,
+      "visible_output": 779,
+      "reasoning_output": 115
+    },
+    "first_call_input_including_cache": 21244,
+    "first_call_cached_input": 0,
+    "model_calls": 5,
+    "compactions": 0,
+    "api_equivalent_usd": 0.06455759999999999,
+    "tool_calls": 4,
+    "tool_seconds_sum": 0.9559998512268066,
+    "tool_seconds_union": 0.9559998512268066,
+    "verification_tool_seconds_union": 0.7079999446868896,
+    "active_seconds": 24.393999814987183,
+    "whole_seconds": 28.263597011566162,
+    "exact_developer_payload_copies": 1,
+    "transport_verified": true,
+    "condition": "repeat2-codex-on",
+    "harness": "codex",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164db-c42e-71ad-b02b-df88ba4b486a",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 8092,
+      "cache_read_input": 32384,
+      "cache_write_input": 0,
+      "visible_output": 764,
+      "reasoning_output": 144
+    },
+    "first_call_input_including_cache": 5586,
+    "first_call_cached_input": 0,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0285024,
+    "native_reported_cost_usd": 0.0285024,
+    "tool_calls": 11,
+    "tool_seconds_sum": 0.37000012397766113,
+    "tool_seconds_union": 0.33700037002563477,
+    "verification_tool_seconds_union": 0.3230001926422119,
+    "active_seconds": 34.974,
+    "whole_seconds": 44.71526336669922,
+    "transport_verified": true,
+    "requests_verified": 6,
+    "requests_observed": 6,
+    "context_receipts": [
+      {
+        "at": 1792693491437,
+        "type": "context",
+        "transport": "native-plus-frozen-preview-v4",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4056,
+        "native_sha256": "a17f967900f53992d804bdabc52669efc765b16c84c5b19698c04a2fb042fc8d",
+        "bytes": 18682,
+        "sha256": "c3a609132735385d992750b4f7a956235c528b2df282e7a07d0aef6b98bc1d2b",
+        "expected_system_sha256": "c31ef955502a60d214e2e24b0e2c51a3bb8bb27916c50c3668021584fb831c69"
+      }
+    ],
+    "condition": "repeat2-pi-on",
+    "harness": "pi",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164ce-e4e2-70d2-afd7-680023e4b196",
+    "native_version": "0.163.0",
+    "model_settings": [
+      {
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        }
+      }
+    ],
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 15632,
+      "cache_read_input": 93312,
+      "cache_write_input": 0,
+      "visible_output": 744,
+      "reasoning_output": 144
+    },
+    "first_call_input_including_cache": 20691,
+    "first_call_cached_input": 7168,
+    "model_calls": 5,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0494752,
+    "tool_calls": 4,
+    "tool_seconds_sum": 0.8950002193450928,
+    "tool_seconds_union": 0.8950002193450928,
+    "verification_tool_seconds_union": 0.7030000686645508,
+    "active_seconds": 32.330000162124634,
+    "whole_seconds": 35.87164354324341,
+    "exact_developer_payload_copies": 1,
+    "transport_verified": true,
+    "condition": "screen-codex-off",
+    "harness": "codex",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164cd-ed64-7212-8d03-4149fba42e92",
+    "native_version": "0.163.0",
+    "model_settings": [
+      {
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh",
+        "approval_policy": "never",
+        "sandbox_policy": {
+          "type": "danger-full-access"
+        }
+      }
+    ],
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 16745,
+      "cache_read_input": 118912,
+      "cache_write_input": 0,
+      "visible_output": 866,
+      "reasoning_output": 140
+    },
+    "first_call_input_including_cache": 21242,
+    "first_call_cached_input": 7168,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.055441199999999996,
+    "tool_calls": 5,
+    "tool_seconds_sum": 0.8890001773834229,
+    "tool_seconds_union": 0.8890001773834229,
+    "verification_tool_seconds_union": 0.690000057220459,
+    "active_seconds": 33.1949999332428,
+    "whole_seconds": 36.28715515136719,
+    "exact_developer_payload_copies": 1,
+    "transport_verified": true,
+    "condition": "screen-codex-on",
+    "harness": "codex",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164ce-a71e-752f-9499-dc892133ee8c",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 12382,
+      "cache_read_input": 50304,
+      "cache_write_input": 0,
+      "visible_output": 782,
+      "reasoning_output": 336
+    },
+    "first_call_input_including_cache": 9120,
+    "first_call_cached_input": 0,
+    "model_calls": 6,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0409744,
+    "native_reported_cost_usd": 0.0409744,
+    "tool_calls": 10,
+    "tool_seconds_sum": 0.3379993438720703,
+    "tool_seconds_union": 0.3229999542236328,
+    "verification_tool_seconds_union": 0.312999963760376,
+    "active_seconds": 40.901,
+    "whole_seconds": 51.03934192657471,
+    "transport_verified": false,
+    "requests_verified": 0,
+    "requests_observed": 6,
+    "context_receipts": [
+      {
+        "at": 1792692632300,
+        "type": "context",
+        "bytes": 18351,
+        "sha256": "a8b1508b205974ef763adb9e77429b84ab8f3bb56884aec6bb5282212e1d3693"
+      }
+    ],
+    "condition": "screen-pi-off",
+    "harness": "pi",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164cd-1a02-72e8-9a86-ae443dbd7864",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 22653,
+      "cache_read_input": 61696,
+      "cache_write_input": 0,
+      "visible_output": 740,
+      "reasoning_output": 286
+    },
+    "first_call_input_including_cache": 9228,
+    "first_call_cached_input": 0,
+    "model_calls": 8,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0617356,
+    "native_reported_cost_usd": 0.0617356,
+    "tool_calls": 10,
+    "tool_seconds_sum": 0.34400010108947754,
+    "tool_seconds_union": 0.33699989318847656,
+    "verification_tool_seconds_union": 0.3259999752044678,
+    "active_seconds": 48.714,
+    "whole_seconds": 58.63390374183655,
+    "transport_verified": false,
+    "requests_verified": 0,
+    "requests_observed": 8,
+    "context_receipts": [
+      {
+        "at": 1792692530459,
+        "type": "context",
+        "bytes": 18682,
+        "sha256": "c3a609132735385d992750b4f7a956235c528b2df282e7a07d0aef6b98bc1d2b"
+      }
+    ],
+    "condition": "screen-pi-on",
+    "harness": "pi",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d3-7571-73e8-98bf-c2f90a8c7b95",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 12548,
+      "cache_read_input": 70656,
+      "cache_write_input": 0,
+      "visible_output": 710,
+      "reasoning_output": 335
+    },
+    "first_call_input_including_cache": 9120,
+    "first_call_cached_input": 0,
+    "model_calls": 8,
+    "compactions": 0,
+    "api_equivalent_usd": 0.0426116,
+    "native_reported_cost_usd": 0.0426116,
+    "tool_calls": 10,
+    "tool_seconds_sum": 0.34800052642822266,
+    "tool_seconds_union": 0.3410003185272217,
+    "verification_tool_seconds_union": 0.3280003070831299,
+    "active_seconds": 44.784,
+    "whole_seconds": 54.712613582611084,
+    "transport_verified": false,
+    "requests_verified": 0,
+    "requests_observed": 8,
+    "context_receipts": [
+      {
+        "at": 1792692947033,
+        "type": "context",
+        "transport": "structured-native-plus-frozen-preview-v2",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4058,
+        "native_sha256": "f1c77a3dcad137391e3953f1b35426f2b4c0ab8386fea377d71da4eb8adb0446",
+        "bytes": 18351,
+        "sha256": "a8b1508b205974ef763adb9e77429b84ab8f3bb56884aec6bb5282212e1d3693",
+        "expected_system_sha256": "8591aa7044f0d6a38441778216ed57ac0be678f08380b4cf483634e860727870"
+      }
+    ],
+    "condition": "verified-pi-off",
+    "harness": "pi",
+    "optional_context": false,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  },
+  {
+    "native_session_id": "01a164d6-32fa-72ec-996e-ff6411143098",
+    "native_version": "1.4.0",
+    "model_settings": {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "thinking": "xhigh",
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write"
+      ]
+    },
+    "usage_known": true,
+    "disjoint_tokens": {
+      "uncached_input": 8130,
+      "cache_read_input": 53504,
+      "cache_write_input": 0,
+      "visible_output": 713,
+      "reasoning_output": 223
+    },
+    "first_call_input_including_cache": 5585,
+    "first_call_cached_input": 0,
+    "model_calls": 9,
+    "compactions": 0,
+    "api_equivalent_usd": 0.030970400000000002,
+    "native_reported_cost_usd": 0.0309704,
+    "tool_calls": 11,
+    "tool_seconds_sum": 0.367999792098999,
+    "tool_seconds_union": 0.3579998016357422,
+    "verification_tool_seconds_union": 0.3399999141693115,
+    "active_seconds": 53.627,
+    "whole_seconds": 63.44880962371826,
+    "transport_verified": true,
+    "requests_verified": 9,
+    "requests_observed": 9,
+    "context_receipts": [
+      {
+        "at": 1792693126640,
+        "type": "context",
+        "transport": "structured-native-plus-frozen-preview-v2",
+        "prior_forced_bytes": 0,
+        "native_bytes": 4057,
+        "native_sha256": "8f46e2698c69315aa97c9300cab253786389e3674376fa3de943d4b9bd6b3de2",
+        "bytes": 18682,
+        "sha256": "c3a609132735385d992750b4f7a956235c528b2df282e7a07d0aef6b98bc1d2b",
+        "expected_system_sha256": "7e57296f2b543b890165bcde23afc2b9a0d29062552a5c900da052019f3a41ac"
+      }
+    ],
+    "condition": "verified-pi-on",
+    "harness": "pi",
+    "optional_context": true,
+    "acceptance": {
+      "accepted": true,
+      "checks": {
+        "inspection": true,
+        "paging_cycle": true,
+        "paging_empty": true,
+        "paging_empty_string": true,
+        "paging_normal": true,
+        "paging_zero": true,
+        "preserved_README.md": true,
+        "preserved_catalog.py": true,
+        "preserved_condition.json": true,
+        "windows_0": true,
+        "windows_1": true,
+        "windows_2": true,
+        "windows_3": true,
+        "windows_4": true,
+        "windows_5": true,
+        "windows_no_mutation": true
+      },
+      "passed": 16,
+      "total": 16
+    },
+    "subject_source_sha256": {
+      "windows.py": "d122b740c9bfbee4d0ea630f6812768fbc9378fc77bbee992fd47f4ce2f8da65",
+      "paging.py": "a536ce13959d13029aa8c7fd00ddb9d5b44f8ce35f63976211712417d9be0ae4",
+      "catalog.py": "5b6d6d37488068faedfd95445c3ada83020f2df46fb6cf1238334c207022bc5e",
+      "README.md": "8885a1d51471617c785e436b7601e76e74fdec3de5574f21d04aa24434cf853c"
+    }
+  }
+]

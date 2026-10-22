@@ -1,0 +1,51 @@
+{
+  "acceptance": {
+    "baseline": {
+      "passed": 7,
+      "total": 16,
+      "accepted": false
+    },
+    "native_completed_runs": 13,
+    "native_accepted_runs": 13,
+    "checks_per_run": 16,
+    "same_start_source_digest_sets": 1,
+    "failed_agent_hub_arms": 2,
+    "failed_agent_hub_checks_each": 7
+  },
+  "focused_checks": [
+    {
+      "name": "observer native/required/tool/history preservation",
+      "command": "st check cleanroom --project-root <observer-fixture> -- node check_observer.mjs",
+      "result": "passed",
+      "receipt": "receipts/observer-final-check.log"
+    },
+    {
+      "name": "disjoint pricing, duplicate-counter and actual native receipts",
+      "command": "st check cleanroom --project-root <observer-fixture> -- <project-python> verify_results.py",
+      "result": "passed",
+      "receipt": "receipts/accounting-check.log"
+    },
+    {
+      "name": "scoped Python lint",
+      "command": "st check ruff -- <owned Python scripts>",
+      "result": "passed"
+    },
+    {
+      "name": "Biome docs JS coverage",
+      "command": "st check biome -- <owned observer.js>",
+      "result": "0 files checked; not counted as JS verification"
+    }
+  ],
+  "checkpoint_receipts": [
+    {
+      "sha": "c40c88322278e008525c82f17f2b00f4bd6d4d23",
+      "result": "success; pushed=false"
+    },
+    {
+      "sha": "147dd78c2380287fad46b6cc47bcc80464b42caa",
+      "result": "success; pushed=false"
+    }
+  ],
+  "deployment_required": false,
+  "publication_requested": false
+}

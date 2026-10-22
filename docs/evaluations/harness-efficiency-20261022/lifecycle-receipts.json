@@ -1,0 +1,211 @@
+[
+  {
+    "condition": "final-pi-off",
+    "native_session_id": "01a164d4-48e5-7322-ae7e-3f121d9e5b34",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-final-pi-off-20261022",
+      "hostIdentity": "168c8dff",
+      "logicalSessionId": "aico-root-8dea2074-aea5-46cb-84c7-165cc5088b4d",
+      "surfaceLocator": "aico://widget/168c8dff",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164d4-48e5-7322-ae7e-3f121d9e5b34",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "matched-pi-off",
+    "native_session_id": "01a164d5-6de3-75ce-9c67-fe5b54fdc020",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-matched-pi-off-20261022",
+      "hostIdentity": "737001b6",
+      "logicalSessionId": "aico-root-4e136cad-1cf7-44a0-9152-000f17ef14de",
+      "surfaceLocator": "aico://widget/737001b6",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164d5-6de3-75ce-9c67-fe5b54fdc020",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "repeat1-codex-on",
+    "native_session_id": "01a164d0-88b5-7121-bf5d-2b406f043504",
+    "hub_lookup_error_type": "AgentHubError"
+  },
+  {
+    "condition": "repeat1-pi-off",
+    "native_session_id": "01a164d0-8c43-7746-9b8b-4475e3704832",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-repeat1-pi-off-20261022",
+      "hostIdentity": "3a81d896",
+      "logicalSessionId": "aico-root-72c5ab40-39fa-4c97-91da-f7b11697e4b3",
+      "surfaceLocator": "aico://widget/3a81d896",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164d0-8c43-7746-9b8b-4475e3704832",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "repeat1-pi-on",
+    "native_session_id": "01a164db-c050-738a-be90-81f3724210f5",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-repeat1-pi-on-20261022",
+      "hostIdentity": "a9feafbf",
+      "logicalSessionId": "aico-root-6112fe35-cf53-4a73-a9b0-161068378b8c",
+      "surfaceLocator": "aico://widget/a9feafbf",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164db-c050-738a-be90-81f3724210f5",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": "harness-efficiency-20261022:repeat1-pi-on",
+      "cwd": null
+    }
+  },
+  {
+    "condition": "repeat2-codex-on",
+    "native_session_id": "01a164d6-35e3-7760-862e-81f6a5b27fd6",
+    "hub_lookup_error_type": "AgentHubError"
+  },
+  {
+    "condition": "repeat2-pi-on",
+    "native_session_id": "01a164db-c42e-71ad-b02b-df88ba4b486a",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-repeat2-pi-on-20261022",
+      "hostIdentity": "ddb6e2b0",
+      "logicalSessionId": "aico-root-16cb7983-125d-4ffc-ac1d-5562e0fb6b13",
+      "surfaceLocator": "aico://widget/ddb6e2b0",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164db-c42e-71ad-b02b-df88ba4b486a",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": "harness-efficiency-20261022:repeat2-pi-on",
+      "cwd": null
+    }
+  },
+  {
+    "condition": "screen-codex-off",
+    "native_session_id": "01a164ce-e4e2-70d2-afd7-680023e4b196",
+    "hub_lookup_error_type": "AgentHubError"
+  },
+  {
+    "condition": "screen-codex-on",
+    "native_session_id": "01a164cd-ed64-7212-8d03-4149fba42e92",
+    "hub_lookup_error_type": "AgentHubError"
+  },
+  {
+    "condition": "screen-pi-off",
+    "native_session_id": "01a164ce-a71e-752f-9499-dc892133ee8c",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-screen-pi-off-20261022",
+      "hostIdentity": "f57ce86b",
+      "logicalSessionId": "aico-root-6ccfd959-d1c8-46b8-95cc-5206b526d0a2",
+      "surfaceLocator": "aico://widget/f57ce86b",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164ce-a71e-752f-9499-dc892133ee8c",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "screen-pi-on",
+    "native_session_id": "01a164cd-1a02-72e8-9a86-ae443dbd7864",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-screen-pi-on-20261022",
+      "hostIdentity": "922ccb22",
+      "logicalSessionId": "aico-root-3e3ff8a9-eb48-45f3-935a-b634a88307b2",
+      "surfaceLocator": "aico://widget/922ccb22",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164cd-1a02-72e8-9a86-ae443dbd7864",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "verified-pi-off",
+    "native_session_id": "01a164d3-7571-73e8-98bf-c2f90a8c7b95",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-verified-pi-off-20261022",
+      "hostIdentity": "6b4adc01",
+      "logicalSessionId": "aico-root-fb9b1d9c-cf88-489e-9d9a-537c0239b8ff",
+      "surfaceLocator": "aico://widget/6b4adc01",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164d3-7571-73e8-98bf-c2f90a8c7b95",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  },
+  {
+    "condition": "verified-pi-on",
+    "native_session_id": "01a164d6-32fa-72ec-996e-ff6411143098",
+    "root": {
+      "owner": "aico",
+      "requestId": "harness-matched-pi-on-20261022",
+      "hostIdentity": "f03f6a30",
+      "logicalSessionId": "aico-root-b49b12aa-3065-4b4b-aea4-9f51d2106de5",
+      "surfaceLocator": "aico://widget/f03f6a30",
+      "generation": null,
+      "status": "ended"
+    },
+    "hub": {
+      "id": "01a164d6-32fa-72ec-996e-ff6411143098",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "pi",
+      "external_id": null,
+      "cwd": null
+    }
+  }
+]

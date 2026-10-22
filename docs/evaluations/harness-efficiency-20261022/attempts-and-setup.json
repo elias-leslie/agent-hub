@@ -1,0 +1,104 @@
+[
+  {
+    "id": "context-api-403",
+    "stage": "setup",
+    "harness": null,
+    "class": "APIError",
+    "category": "dashboard_route_internal_only",
+    "http_status": 403,
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "No restricted-route retry. Used public agent previews and documented per-run hooks/config instead."
+  },
+  {
+    "id": "ah-on-thinking-validation",
+    "stage": "screen",
+    "harness": "agent-hub",
+    "arm": "on",
+    "category": "request_thinking_level_validation",
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "Omitted unsupported request xhigh enum; experiment agent config retains xhigh."
+  },
+  {
+    "id": "ah-on-output-path",
+    "stage": "screen",
+    "harness": "agent-hub",
+    "arm": "on",
+    "category": "working_dir_outside_allowed_roots",
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "Moved isolated fixture temporarily into owned docs path inside accepted project root."
+  },
+  {
+    "id": "ah-on-refresh401",
+    "stage": "screen",
+    "harness": "agent-hub",
+    "arm": "on",
+    "category": "codex_token_refresh_rejected_401",
+    "http_status": 401,
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "No unchanged credential retries; owning parent investigates source separately."
+  },
+  {
+    "id": "ah-off-scratch-path",
+    "stage": "screen",
+    "harness": "agent-hub",
+    "arm": "off",
+    "category": "working_dir_outside_allowed_roots",
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "Scratch path rejected despite error wording. Used temporary owned in-project fixture."
+  },
+  {
+    "id": "ah-off-refresh401",
+    "stage": "screen",
+    "harness": "agent-hub",
+    "arm": "off",
+    "category": "codex_token_refresh_rejected_401",
+    "http_status": 401,
+    "model_usage_reported": false,
+    "model_tokens": null,
+    "correction": "No unchanged credential retries."
+  },
+  {
+    "id": "checkpoint-hook-rejection",
+    "stage": "setup",
+    "harness": null,
+    "category": "local_fixture_checkpoint_hook_override_rejected",
+    "model_tokens": 0,
+    "correction": "Removed hook override; kept normal hooks enabled."
+  },
+  {
+    "id": "runner-lint-initial",
+    "stage": "verification",
+    "harness": null,
+    "category": "six_import_order_or_unused_import_errors",
+    "model_tokens": 0,
+    "correction": "Focused managed Ruff auto-fix passed."
+  },
+  {
+    "id": "observer-cleanroom-initial",
+    "stage": "verification",
+    "harness": null,
+    "category": "fixture_directory_not_git_initialized",
+    "model_tokens": 0,
+    "correction": "Initialized fixture Git index; managed observer preservation check passed."
+  },
+  {
+    "id": "owner-correlation-missing-headers",
+    "stage": "setup",
+    "category": "registered_identity_headers_missing",
+    "http_status": 400,
+    "model_tokens": 0,
+    "correction": "Public canonical upsert succeeded with registered identity loaded through st_sdk.credentials; no internal header."
+  },
+  {
+    "id": "failed-session-export-python-runtime",
+    "stage": "verification",
+    "category": "system_python_sdk_not_installed",
+    "model_tokens": 0,
+    "correction": "Used existing project virtualenv; no install."
+  }
+]
