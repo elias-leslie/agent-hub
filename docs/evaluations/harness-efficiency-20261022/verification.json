@@ -10,7 +10,10 @@
     "checks_per_run": 16,
     "same_start_source_digest_sets": 1,
     "failed_agent_hub_arms": 2,
-    "failed_agent_hub_checks_each": 7
+    "failed_agent_hub_checks_each": 7,
+    "recovered_agent_hub_runs": 2,
+    "recovered_agent_hub_accepted": 2,
+    "total_completed_accepted": 15
   },
   "focused_checks": [
     {
@@ -23,7 +26,7 @@
       "name": "disjoint pricing, duplicate-counter and actual native receipts",
       "command": "st check cleanroom --project-root <observer-fixture> -- <project-python> verify_results.py",
       "result": "passed",
-      "receipt": "receipts/accounting-check.log"
+      "receipt": "receipts/accounting-final-check.log"
     },
     {
       "name": "scoped Python lint",

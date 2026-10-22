@@ -43,10 +43,13 @@ def union(intervals):
 
 
 def cost(usage):
+    output = usage.get("output_including_reasoning")
+    if output is None:
+        output = usage["visible_output"] + usage["reasoning_output"]
     return (usage["uncached_input"] * RATES["uncached_input"]
             + usage["cache_read_input"] * RATES["cached_read"]
             + usage["cache_write_input"] * RATES["cache_write_30m"]
-            + (usage["visible_output"] + usage["reasoning_output"]) * RATES["output_including_reasoning"]) / 1e6
+            + output * RATES["output_including_reasoning"]) / 1e6
 
 
 def disjoint(uncached, cached, write, output, reasoning):
@@ -137,6 +140,32 @@ def acceptance(name):
     return None
 
 
+def agent_hub(root):
+    response = json.loads((root / "result.json").read_text())
+    calls = [row for row in json.loads((BASE / "receipts/ah-cost-rows.json").read_text()) if row["session_id"] == response["session_id"]]
+    assert calls
+    usage = {"uncached_input": sum(row["input_tokens"] for row in calls),
+             "cache_read_input": sum(row["cache_read_tokens"] for row in calls),
+             "cache_write_input": sum(row["cache_write_tokens"] for row in calls),
+             "visible_output": None, "reasoning_output": None,
+             "output_including_reasoning": sum(row["output_tokens"] for row in calls)}
+    assert usage["uncached_input"] == response["usage"]["input_tokens"]
+    assert usage["output_including_reasoning"] == response["usage"]["output_tokens"]
+    context = next(row for row in json.loads((BASE / "agent-hub-context-receipts.json").read_text()) if row["session_id"] == response["session_id"])
+    return {"native_session_id": response["session_id"], "model_settings": {"model": response["model_used"], "provider": response["provider"], "configured_effort": "xhigh", "native_effort_observation": None, "temperature": 0.1, "fallback_used": response["fallback_used"]},
+            "usage_known": True, "disjoint_tokens": usage,
+            "output_partition_coverage": "visible/reasoning split not supplied; inclusive output charged once",
+            "first_call_input_including_cache": calls[0]["input_tokens"] + calls[0]["cache_read_tokens"] + calls[0]["cache_write_tokens"],
+            "first_call_cached_input": calls[0]["cache_read_tokens"],
+            "model_calls": len(calls), "compactions": sum(row["compression_blocks"] for row in calls),
+            "api_equivalent_usd": cost(usage), "tool_calls": response["tool_calls_count"],
+            "tool_seconds_sum": None, "tool_seconds_union": None,
+            "verification_tool_seconds_union": None, "active_seconds": None,
+            "whole_seconds": response["whole_seconds"],
+            "transport_verified": context["runtime_hash_matches_preview"],
+            "canonical_context_receipt": context, "call_receipts": calls}
+
+
 def main():
     results = []
     for root in sorted((BASE / "runs").iterdir()):
@@ -145,7 +174,7 @@ def main():
             if not (root/"pi-receipts.jsonl").exists() or '"type":"settled"' not in (root/"pi-receipts.jsonl").read_text():
                 continue
             receipt = pi(root)
-        else:
+        elif condition["harness"] == "codex":
             if not (root/"result.json").exists():
                 continue
             run = json.loads((root/"result.json").read_text())
@@ -161,6 +190,10 @@ def main():
                 for block in row["payload"].get("content", [])
             )
             receipt["transport_verified"] = receipt["exact_developer_payload_copies"] == 1
+        else:
+            if not (root / "result.json").exists():
+                continue
+            receipt = agent_hub(root)
         receipt.update(condition=root.name, harness=condition["harness"], optional_context=condition["optional_context"], acceptance=acceptance(root.name))
         receipt["subject_source_sha256"] = {name: hashlib.sha256(__import__('subprocess').check_output(["git", "-C", str(root), "show", f"HEAD:{name}"])).hexdigest() for name in ["windows.py", "paging.py", "catalog.py", "README.md"]}
         results.append(receipt)
@@ -175,7 +208,7 @@ def main():
         summary[key] = {"attempts":len(rows), "accepted":accepted, "total_usd":sum(r["api_equivalent_usd"] for r in rows), "cost_per_accepted_usd":sum(r["api_equivalent_usd"] for r in rows)/accepted if accepted else None}
         for field in ["api_equivalent_usd", "active_seconds", "whole_seconds", "tool_seconds_union", "verification_tool_seconds_union"]:
             values=[r[field] for r in rows if r[field] is not None]
-            summary[key][field] = {"mean":statistics.mean(values), "min":min(values), "max":max(values), "sample_sd":statistics.stdev(values) if len(values)>1 else None}
+            summary[key][field] = {"mean":statistics.mean(values), "min":min(values), "max":max(values), "sample_sd":statistics.stdev(values) if len(values)>1 else None} if values else None
     (BASE / "summary.json").write_text(json.dumps(summary,indent=2))
     print(json.dumps(summary,indent=2))
 

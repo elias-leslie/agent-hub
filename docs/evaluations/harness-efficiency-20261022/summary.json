@@ -1,4 +1,46 @@
 {
+  "agent-hub-off-matched": {
+    "attempts": 1,
+    "accepted": 1,
+    "total_usd": 0.097338,
+    "cost_per_accepted_usd": 0.097338,
+    "api_equivalent_usd": {
+      "mean": 0.097338,
+      "min": 0.097338,
+      "max": 0.097338,
+      "sample_sd": null
+    },
+    "active_seconds": null,
+    "whole_seconds": {
+      "mean": 40.942609548568726,
+      "min": 40.942609548568726,
+      "max": 40.942609548568726,
+      "sample_sd": null
+    },
+    "tool_seconds_union": null,
+    "verification_tool_seconds_union": null
+  },
+  "agent-hub-on-matched": {
+    "attempts": 1,
+    "accepted": 1,
+    "total_usd": 0.113832,
+    "cost_per_accepted_usd": 0.113832,
+    "api_equivalent_usd": {
+      "mean": 0.113832,
+      "min": 0.113832,
+      "max": 0.113832,
+      "sample_sd": null
+    },
+    "active_seconds": null,
+    "whole_seconds": {
+      "mean": 69.14640641212463,
+      "min": 69.14640641212463,
+      "max": 69.14640641212463,
+      "sample_sd": null
+    },
+    "tool_seconds_union": null,
+    "verification_tool_seconds_union": null
+  },
   "pi-off-pilot": {
     "attempts": 4,
     "accepted": 4,

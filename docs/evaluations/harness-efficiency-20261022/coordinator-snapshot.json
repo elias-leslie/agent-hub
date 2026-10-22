@@ -1,7 +1,13 @@
 {
   "native_session_id": "01a164c4-7bb4-7f01-b872-6e862d9d5fa9",
-  "cutoff": "2026-10-22T18:21:24.754Z",
-  "token_count_events": 63,
+  "session_start": "2026-10-22T17:59:20.774Z",
+  "cutoff": "2026-10-22T18:48:43.248Z",
+  "model_settings": {
+    "model": "gpt-6.1-sol",
+    "effort": "xhigh"
+  },
+  "model_calls_observed": 117,
+  "compactions": 0,
   "first_call": {
     "input_tokens": 20923,
     "cached_input_tokens": 6912,
@@ -11,13 +17,20 @@
     "total_tokens": 21095
   },
   "total_cumulative_usage": {
-    "input_tokens": 9395039,
-    "cached_input_tokens": 9106816,
+    "input_tokens": 23624991,
+    "cached_input_tokens": 23298304,
     "cache_write_input_tokens": 0,
-    "output_tokens": 49731,
-    "reasoning_output_tokens": 17375,
-    "total_tokens": 9444770
+    "output_tokens": 102818,
+    "reasoning_output_tokens": 43267,
+    "total_tokens": 23727809
   },
-  "api_equivalent_usd_lower_bound": 1.9844376000000001,
-  "open_tail": "coordinator is still running; final tail not yet observable"
+  "disjoint_tokens": {
+    "uncached_input": 326687,
+    "cache_read_input": 23298304,
+    "cache_write_input": 0,
+    "visible_output": 59551,
+    "reasoning_output": 43267
+  },
+  "api_equivalent_usd_lower_bound": 4.0113844,
+  "open_tail": "Final closeout/checkpoint/final-response tail is not yet observable. This is an explicit lower bound, not a complete final invoice."
 }

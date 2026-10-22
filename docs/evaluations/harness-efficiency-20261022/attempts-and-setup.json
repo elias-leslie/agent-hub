@@ -100,5 +100,15 @@
     "category": "system_python_sdk_not_installed",
     "model_tokens": 0,
     "correction": "Used existing project virtualenv; no install."
+  },
+  {
+    "id": "hub-recovery-state-change",
+    "stage": "recovery",
+    "category": "parent_confirmed_public_route_recovered",
+    "auxiliary_probe_session_id": "f45e8db4-7df2-4de2-bb64-b3445c974b50",
+    "fresh_subject_attempts": 2,
+    "accepted": 2,
+    "checks_each": 16,
+    "earlier_failures_retained": true
   }
 ]

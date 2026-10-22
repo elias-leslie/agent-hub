@@ -1,0 +1,24 @@
+{
+  "schedule_id": "gpt-6.1-sol-standard-20261022",
+  "accepted_subject_outcomes": 15,
+  "subject_model_calls": 105,
+  "subject_usd": 0.8700224,
+  "qualified_candidate_usd_per_accepted": 0.029856133333333337,
+  "qualified_control_usd_per_accepted": 0.0674568,
+  "qualified_reduction_fraction": 0.5574036519174741,
+  "discarded_transport_pilot_usd": 0.2731252,
+  "candidate_usd_per_qualified_outcome_after_pilot_charge": 0.12089786666666667,
+  "known_auxiliary_model_calls": 1,
+  "known_auxiliary_usd": 0.008238,
+  "coordinator_model_calls_observed": 117,
+  "coordinator_usd_lower_bound": 4.0113844,
+  "known_total_usd_lower_bound": 4.8896448,
+  "known_total_usd_per_accepted_subject_lower_bound": 0.32597632,
+  "all_in_20_percent_goal_achieved": false,
+  "coverage_limits": [
+    "Final coordinator tail remains open.",
+    "Original Hub failures supplied no model usage; null is not zero.",
+    "Parent-owned runtime repair work is not metered here except its reported public recovery probe."
+  ],
+  "claim": "Qualified repeated native workflow subset is cheaper; all-in experiment goal not achieved."
+}

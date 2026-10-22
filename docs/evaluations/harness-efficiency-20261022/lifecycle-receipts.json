@@ -207,5 +207,29 @@
       "external_id": null,
       "cwd": null
     }
+  },
+  {
+    "condition": "ah-recovery-on",
+    "native_session_id": "6c42f597-f00d-45a2-bf00-b7ce0a1c573d",
+    "hub": {
+      "id": "6c42f597-f00d-45a2-bf00-b7ce0a1c573d",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "completion",
+      "external_id": null,
+      "working_dir": "/srv/workspaces/projects/agent-hub/docs/evaluations/harness-efficiency-20261022/subjects/ah-recovery-on"
+    }
+  },
+  {
+    "condition": "ah-recovery-off",
+    "native_session_id": "ff3d1531-f577-4c6d-bb5d-73421bcb520c",
+    "hub": {
+      "id": "ff3d1531-f577-4c6d-bb5d-73421bcb520c",
+      "status": "completed",
+      "project_id": "agent-hub",
+      "session_type": "completion",
+      "external_id": null,
+      "working_dir": "/srv/workspaces/projects/agent-hub/docs/evaluations/harness-efficiency-20261022/subjects/ah-recovery-off"
+    }
   }
 ]

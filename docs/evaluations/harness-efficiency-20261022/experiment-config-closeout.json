@@ -1,0 +1,61 @@
+{
+  "agents": [
+    {
+      "slug": "harness-trial-20261022-on",
+      "is_active": false,
+      "version": 3,
+      "primary_model_id": "codex/gpt-6.1-sol",
+      "thinking_level": "xhigh",
+      "temperature": 0.1,
+      "fallback_models": [],
+      "memory_config": {
+        "injection_enabled": true,
+        "project_index_enabled": true,
+        "tool_capabilities_enabled": true,
+        "include_mandates": true,
+        "include_guardrails": true,
+        "include_references": true,
+        "reference_index_enabled": true,
+        "continuity_enabled": true,
+        "continuity_max_sessions": 5,
+        "audience_tags": [
+          "coding",
+          "tooling"
+        ],
+        "exclude_tags": [],
+        "exclude_memory_uuids": [],
+        "runtime_consumer_profile": "agent_coding",
+        "preview_consumer_profile": "agent_coding"
+      }
+    },
+    {
+      "slug": "harness-trial-20261022-off",
+      "is_active": false,
+      "version": 3,
+      "primary_model_id": "codex/gpt-6.1-sol",
+      "thinking_level": "xhigh",
+      "temperature": 0.1,
+      "fallback_models": [],
+      "memory_config": {
+        "injection_enabled": true,
+        "project_index_enabled": false,
+        "tool_capabilities_enabled": false,
+        "include_mandates": true,
+        "include_guardrails": true,
+        "include_references": false,
+        "reference_index_enabled": false,
+        "continuity_enabled": false,
+        "continuity_max_sessions": 5,
+        "audience_tags": [
+          "coding",
+          "tooling"
+        ],
+        "exclude_tags": [],
+        "exclude_memory_uuids": [],
+        "runtime_consumer_profile": "agent_coding",
+        "preview_consumer_profile": "agent_coding"
+      }
+    }
+  ],
+  "sdk_version": "0.7.0"
+}

@@ -27,8 +27,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert result["disjoint_tokens"]["uncached_input"] == 1000
 
 rows = json.loads((BASE / "results.json").read_text())
-assert len(rows) == 13
-assert sum(row["model_calls"] for row in rows) == 89
+assert len(rows) == 15
+assert sum(row["model_calls"] for row in rows) == 105
 assert all(row["acceptance"]["accepted"] and row["acceptance"]["passed"] == 16 for row in rows)
 assert len({json.dumps(row["subject_source_sha256"], sort_keys=True) for row in rows}) == 1
 assert all(row["disjoint_tokens"]["cache_write_input"] == 0 for row in rows)
@@ -38,12 +38,18 @@ for row in rows:
         assert abs(row["native_reported_cost_usd"] - row["api_equivalent_usd"]) < 1e-10
         if row["transport_verified"]:
             assert row["requests_verified"] == row["requests_observed"]
-    else:
+    elif row["harness"] == "codex":
         assert row["exact_developer_payload_copies"] == 1
         assert all(x["model"] == "gpt-6.1-sol" and x["effort"] == "xhigh" for x in row["model_settings"])
+    else:
+        assert row["canonical_context_receipt"]["runtime_hash_matches_preview"]
+        assert row["model_calls"] == 8
+        assert not row["model_settings"]["fallback_used"]
+        assert row["disjoint_tokens"]["reasoning_output"] is None
+        assert row["model_settings"]["native_effort_observation"] is None
 context = json.loads((BASE / "context-freeze.json").read_text())
 assert context["on"]["required_section_hashes"] == context["off"]["required_section_hashes"]
 assert len(context["on"]["required_section_hashes"]) == 21
 assert context["on"]["selected_reference_uuids"] == context["off"]["selected_reference_uuids"] == []
 assert context["on"]["passive_reference_index_uuids"] == context["off"]["passive_reference_index_uuids"] == []
-print("PASS: 13 accepted native outcomes, 89 calls, identical fixture starts; disjoint pricing, duplicate-counter handling, required-byte integrity and native payload receipts verified.")
+print("PASS: 15 accepted outcomes, 105 subject calls, identical fixture starts; disjoint pricing, duplicate-counter handling, required-byte integrity, native payload receipts and recovered Hub accounting verified.")
