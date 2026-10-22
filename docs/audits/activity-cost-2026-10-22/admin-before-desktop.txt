@@ -1,0 +1,120 @@
+- complementary:
+  - link "Agent Hub Command Center":
+    - /url: /dashboard
+    - heading "Agent Hub" [level=1]
+    - paragraph: Command Center
+  - navigation:
+    - link "Chat Primary agent workspace":
+      - /url: /chat
+      - paragraph: Chat
+      - paragraph: Primary agent workspace
+    - link "Dashboard Overview & status":
+      - /url: /dashboard
+      - paragraph: Dashboard
+      - paragraph: Overview & status
+    - link "Costs Agent spend & plans":
+      - /url: /costs
+      - paragraph: Costs
+      - paragraph: Agent spend & plans
+    - link "Automations Schedules, policy & runs":
+      - /url: /automations
+      - paragraph: Automations
+      - paragraph: Schedules, policy & runs
+    - link "Monitoring Requests & metrics":
+      - /url: /monitoring/requests
+      - paragraph: Monitoring
+      - paragraph: Requests & metrics
+    - link "Sessions History & logs":
+      - /url: /sessions
+      - paragraph: Sessions
+      - paragraph: History & logs
+    - group "Agents":
+      - paragraph: Agents
+      - link "Agents Agent management":
+        - /url: /agents
+        - paragraph: Agents
+        - paragraph: Agent management
+      - link "Models Model catalog":
+        - /url: /models
+        - paragraph: Models
+        - paragraph: Model catalog
+      - link "Prompts Prompt templates":
+        - /url: /prompts
+        - paragraph: Prompts
+        - paragraph: Prompt templates
+      - link "Memory Semantic store":
+        - /url: /memory
+        - paragraph: Memory
+        - paragraph: Semantic store
+      - link "Agent context Instructions and memories for agents":
+        - /url: /runtime-context
+        - paragraph: Agent context
+        - paragraph: Instructions and memories for agents
+    - link "Access Control Client authentication":
+      - /url: /access-control
+      - paragraph: Access Control
+      - paragraph: Client authentication
+  - paragraph: healthy
+  - paragraph: <1m uptime
+  - generic: Notes
+  - button "Settings":
+    - generic: Settings
+  - button "Collapse sidebar":
+    - generic: Collapse
+- main:
+  - heading "Admin" [level=1]
+  - generic: Live
+  - button "Refresh admin data":
+  - main:
+    - generic: Blocked Today
+    - generic: "0"
+    - generic: Unknown Clients
+    - generic: "0"
+    - heading "Churn Hotspots" [level=2]
+    - generic: last 24h
+    - generic: Window Cost
+    - generic: $0.00
+    - paragraph: 126 in / 29.0K out
+    - generic: Rate-Limit Fallbacks
+    - generic: "0"
+    - paragraph: Sessions that burned time on 429 or rate-limit fallback paths
+    - generic: Zero-Event Active
+    - generic: "0"
+    - paragraph: Active sessions with no event trail
+    - generic: Missing Attribution
+    - generic: "0"
+    - paragraph: Sessions with no request source or logical client
+    - heading "Attribution Breakdown" [level=3]
+    - paragraph: User
+    - paragraph: 10 sessions · 126 in
+    - generic: $0.00
+    - paragraph: System
+    - paragraph: 101 sessions · 0 in
+    - generic: $0.00
+    - heading "Repeated Workloads" [level=3]
+    - paragraph: "# AGENTS.md instructions for /srv/workspaces/projects/neri"
+    - paragraph: neri · — · 75 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: "# AGENTS.md instructions for /srv/workspaces/projects/bugout"
+    - paragraph: bugout · — · 10 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: <environment_context>
+    - paragraph: agent-hub · — · 9 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: <environment_context>
+    - paragraph: summitflow · — · 5 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - heading "Low-Yield Sessions" [level=3]
+    - paragraph: No high-input low-output sessions in the current window.
+    - heading "Zero-Event Active Sessions" [level=3]
+    - paragraph: No active ghost sessions right now.
+    - heading "Automations" [level=2]
+    - paragraph: Manage schedules and project policy in Automations.
+    - link "Open Automations":
+      - /url: /automations
+- region "Notifications"
+- alert

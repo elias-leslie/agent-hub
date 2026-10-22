@@ -1,0 +1,7 @@
+{
+  "url": "https://agent.summitflow.dev/sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+  "sessionSearchVisible": true,
+  "project": "agent-hub",
+  "observedAt": "2026-10-22T15:20:20.492Z",
+  "basis": "Observed selected session expanded in the accessibility snapshot, with Search this session visible; URL includes its exact source-backed ID."
+}

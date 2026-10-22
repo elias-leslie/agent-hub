@@ -1,0 +1,267 @@
+- complementary:
+  - link "Agent Hub Command Center":
+    - /url: /dashboard
+    - heading "Agent Hub" [level=1]
+    - paragraph: Command Center
+  - navigation:
+    - link "Chat Primary agent workspace":
+      - /url: /chat
+      - paragraph: Chat
+      - paragraph: Primary agent workspace
+    - link "Dashboard Overview & status":
+      - /url: /dashboard
+      - paragraph: Dashboard
+      - paragraph: Overview & status
+    - link "Costs Agent spend & plans":
+      - /url: /costs
+      - paragraph: Costs
+      - paragraph: Agent spend & plans
+    - link "Automations Schedules, policy & runs":
+      - /url: /automations
+      - paragraph: Automations
+      - paragraph: Schedules, policy & runs
+    - link "Monitoring Requests & metrics":
+      - /url: /monitoring/requests
+      - paragraph: Monitoring
+      - paragraph: Requests & metrics
+    - link "Sessions History & logs":
+      - /url: /sessions
+      - paragraph: Sessions
+      - paragraph: History & logs
+    - group "Agents":
+      - paragraph: Agents
+      - link "Agents Agent management":
+        - /url: /agents
+        - paragraph: Agents
+        - paragraph: Agent management
+      - link "Models Model catalog":
+        - /url: /models
+        - paragraph: Models
+        - paragraph: Model catalog
+      - link "Prompts Prompt templates":
+        - /url: /prompts
+        - paragraph: Prompts
+        - paragraph: Prompt templates
+      - link "Memory Semantic store":
+        - /url: /memory
+        - paragraph: Memory
+        - paragraph: Semantic store
+      - link "Agent context Instructions and memories for agents":
+        - /url: /runtime-context
+        - paragraph: Agent context
+        - paragraph: Instructions and memories for agents
+    - link "Admin Work & admin activity":
+      - /url: /admin
+      - paragraph: Admin
+      - paragraph: Work & admin activity
+    - link "Access Control Client authentication":
+      - /url: /access-control
+      - paragraph: Access Control
+      - paragraph: Client authentication
+  - paragraph: healthy
+  - paragraph: 4m uptime
+  - generic: Notes
+  - button "Settings":
+    - generic: Settings
+  - button "Collapse sidebar":
+    - generic: Collapse
+- main:
+  - heading "Admin" [level=1]
+  - generic: Refreshes every 30s
+  - button "Refresh admin data":
+  - main:
+    - region "Work and admin activity":
+      - heading "Work and admin activity" [level=2]
+      - paragraph: Across all Hub projects and providers · last 24 hours
+      - link "Browse sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all
+      - alert:
+        - paragraph: Refresh failed. Showing the last loaded snapshot. Failed to fetch
+        - button "Retry activity"
+      - paragraph:
+        - text: "Measured tool time:"
+        - strong: 4,650.1s
+        - text: across 119 sessions. Intervals are merged within each session; concurrent sessions add. Wait-only time is excluded.
+      - term: Substantive
+      - definition: 0.0%
+      - definition: 0s / 4,650.1s
+      - term: Admin + support
+      - definition: 43.8%
+      - definition: 2,037.7s / 4,650.1s
+      - term: Unknown + mixed
+      - definition: 56.2%
+      - definition: 2,612.4s / 4,650.1s
+      - paragraph: Admin includes necessary checks, commits and builds. Repetition alone does not show waste. Thinking, idle time and unrecorded work are unmeasured; these are tool-time shares, not token, spend or total-work shares.
+      - heading "Coverage and gaps" [level=3]
+      - paragraph: "20,000 events sampled · cap 20,000 · CAPPED: recent events only; earlier activity may be omitted."
+      - paragraph: "3,602 / 6,596 observed tool calls lack usable duration. Missing time has unknown size. Excluded wait-only time: 0s. Mixed time within unknown: 604.3s."
+      - paragraph: "119 / 119 sessions have no single reliable task link: 4,650.1s measured tool time and 863,254,609 recorded tokens remain unlinked."
+      - paragraph: 30 / 119 sessions lack usage. 863,254,609 tokens recorded using one source per session; this is not a reconciled billing total. No per-command token allocation is available.
+      - paragraph: "Window: 10/21/2026, 11:23:20 AM – 10/22/2026, 11:23:20 AM. Tool interval placement may be approximate."
+      - heading "Repeated admin and support families" [level=3]
+      - paragraph: Showing 5 of 14 families, ranked by measured tool time. Family times can overlap; do not add them. Open a recorded session to judge whether repetition was needed.
+      - paragraph: st.check
+      - paragraph: 140 calls · 23 sessions · 911.9s
+      - paragraph: "Projects shown: 4 / 4"
+      - paragraph: agent-hub · 58 calls · 345.9s
+      - link "Open st.check session in agent-hub":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1636b-3540-77c0-a7b8-9ff27fb7d1cc
+      - link "All agent-hub sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub
+      - paragraph: neri · 28 calls · 324.4s
+      - link "Open st.check session in neri":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri&sel=01a1605a-5eaa-7871-89b4-ecc8da096d9b
+      - link "All neri sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri
+      - paragraph: summitflow · 32 calls · 161.2s
+      - link "Open st.check session in summitflow":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow&sel=01a1611e-b2ee-7520-a4ca-9873abb8917d
+      - link "All summitflow sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow
+      - paragraph: bugout · 22 calls · 80.5s
+      - link "Open st.check session in bugout":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout&sel=01a160e7-8093-7dd0-a09e-4f066f0e805f
+      - link "All bugout sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout
+      - paragraph: st.service
+      - paragraph: 74 calls · 11 sessions · 650.9s
+      - paragraph: "Projects shown: 3 / 3"
+      - paragraph: neri · 45 calls · 422.6s
+      - link "Open st.service session in neri":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri&sel=01a1605a-5eaa-7871-89b4-ecc8da096d9b
+      - link "All neri sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri
+      - paragraph: summitflow · 18 calls · 153s
+      - link "Open st.service session in summitflow":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow&sel=01a1611e-b2ee-7520-a4ca-9873abb8917d
+      - link "All summitflow sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow
+      - paragraph: agent-hub · 11 calls · 75.4s
+      - link "Open st.service session in agent-hub":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1636b-3540-77c0-a7b8-9ff27fb7d1cc
+      - link "All agent-hub sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub
+      - paragraph: st.commit
+      - paragraph: 24 calls · 12 sessions · 179.5s
+      - paragraph: "Projects shown: 4 / 4"
+      - paragraph: neri · 14 calls · 98.3s
+      - link "Open st.commit session in neri":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri&sel=01a1605a-5eaa-7871-89b4-ecc8da096d9b
+      - link "All neri sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri
+      - paragraph: summitflow · 4 calls · 44s
+      - link "Open st.commit session in summitflow":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow&sel=01a1611e-b2ee-7520-a4ca-9873abb8917d
+      - link "All summitflow sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow
+      - paragraph: agent-hub · 4 calls · 22s
+      - link "Open st.commit session in agent-hub":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1636b-3540-77c0-a7b8-9ff27fb7d1cc
+      - link "All agent-hub sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub
+      - paragraph: bugout · 2 calls · 15.2s
+      - link "Open st.commit session in bugout":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout&sel=01a16104-b0f0-7df1-9a3b-ece1bde27b65
+      - link "All bugout sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout
+      - paragraph: st.sessions
+      - paragraph: 647 calls · 25 sessions · 141.2s
+      - paragraph: "Projects shown: 4 / 4"
+      - paragraph: neri · 530 calls · 113.4s
+      - link "Open st.sessions session in neri":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri&sel=01a1605a-5eaa-7871-89b4-ecc8da096d9b
+      - link "All neri sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri
+      - paragraph: bugout · 71 calls · 19.9s
+      - link "Open st.sessions session in bugout":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout&sel=01a160e7-8093-7dd0-a09e-4f066f0e805f
+      - link "All bugout sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout
+      - paragraph: summitflow · 37 calls · 6.4s
+      - link "Open st.sessions session in summitflow":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow&sel=01a1611e-b2ee-7520-a4ca-9873abb8917d
+      - link "All summitflow sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow
+      - paragraph: agent-hub · 9 calls · 1.6s
+      - link "Open st.sessions session in agent-hub":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1637d-a238-77f0-b200-c9350e5be980
+      - link "All agent-hub sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub
+      - paragraph: compound
+      - paragraph: 93 calls · 17 sessions · 140.2s
+      - paragraph: "Projects shown: 4 / 4"
+      - paragraph: summitflow · 13 calls · 59.9s
+      - link "Open compound session in summitflow":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow&sel=01a1611e-b2ee-7520-a4ca-9873abb8917d
+      - link "All summitflow sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=summitflow
+      - paragraph: agent-hub · 19 calls · 43.1s
+      - link "Open compound session in agent-hub":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub&sel=01a1636b-3540-77c0-a7b8-9ff27fb7d1cc
+      - link "All agent-hub sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=agent-hub
+      - paragraph: bugout · 18 calls · 19.4s
+      - link "Open compound session in bugout":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout&sel=01a160e7-8093-7dd0-a09e-4f066f0e805f
+      - link "All bugout sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=bugout
+      - paragraph: neri · 43 calls · 17.8s
+      - link "Open compound session in neri":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri&sel=01a160d6-e3d8-7173-b5a0-646f82b4a38d
+      - link "All neri sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all&project=neri
+      - heading "Reliably linked tasks" [level=3]
+      - paragraph: Showing 0 of 0 tasks, ranked by recorded tokens. Only sessions with one durable project/task binding qualify. Session totals do not prove all work served that task.
+      - paragraph: No unambiguous task links in this window. Use the project sessions above; task attribution remains unknown.
+    - generic: Blocked Today
+    - generic: "0"
+    - generic: Unknown Clients
+    - generic: "0"
+    - heading "Churn Hotspots" [level=2]
+    - generic: last 24h
+    - generic: Window Cost
+    - generic: $0.00
+    - paragraph: 126 in / 29.0K out
+    - generic: Rate-Limit Fallbacks
+    - generic: "0"
+    - paragraph: Sessions that burned time on 429 or rate-limit fallback paths
+    - generic: Zero-Event Active
+    - generic: "0"
+    - paragraph: Active sessions with no event trail
+    - generic: Missing Attribution
+    - generic: "0"
+    - paragraph: Sessions with no request source or logical client
+    - heading "Attribution Breakdown" [level=3]
+    - paragraph: User
+    - paragraph: 10 sessions · 126 in
+    - generic: $0.00
+    - paragraph: System
+    - paragraph: 98 sessions · 0 in
+    - generic: $0.00
+    - heading "Repeated Workloads" [level=3]
+    - paragraph: "# AGENTS.md instructions for /srv/workspaces/projects/neri"
+    - paragraph: neri · — · 71 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: "# AGENTS.md instructions for /srv/workspaces/projects/bugout"
+    - paragraph: bugout · — · 10 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: <environment_context>
+    - paragraph: agent-hub · — · 9 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - paragraph: <environment_context>
+    - paragraph: summitflow · — · 6 sessions
+    - paragraph: codex-transcript-sync
+    - generic: $0.00
+    - heading "Low-Yield Sessions" [level=3]
+    - paragraph: No high-input low-output sessions in the current window.
+    - heading "Zero-Event Active Sessions" [level=3]
+    - paragraph: No active ghost sessions right now.
+    - heading "Automations" [level=2]
+    - paragraph: Manage schedules and project policy in Automations.
+    - link "Open Automations":
+      - /url: /automations
+- region "Notifications"
+- alert

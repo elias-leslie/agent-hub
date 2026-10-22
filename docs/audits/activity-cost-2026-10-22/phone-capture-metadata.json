@@ -1,0 +1,16 @@
+{
+  "observedAt": "2026-10-22T15:27:36.931Z",
+  "cssViewport": {
+    "height": 844,
+    "scrollWidth": 390,
+    "visualScale": 1,
+    "width": 390
+  },
+  "compositorBounds": {
+    "clientHeight": 1319,
+    "clientWidth": 610,
+    "pageX": 0,
+    "pageY": 0
+  },
+  "note": "Raw compositor bounds retain blank margins; CSS viewport and content width are 390px."
+}

@@ -1,0 +1,92 @@
+- complementary:
+  - link "Agent Hub Command Center":
+    - /url: /dashboard
+    - heading "Agent Hub" [level=1]
+    - paragraph: Command Center
+  - navigation:
+    - link "Chat Primary agent workspace":
+      - /url: /chat
+      - paragraph: Chat
+      - paragraph: Primary agent workspace
+    - link "Dashboard Overview & status":
+      - /url: /dashboard
+      - paragraph: Dashboard
+      - paragraph: Overview & status
+    - link "Costs Agent spend & plans":
+      - /url: /costs
+      - paragraph: Costs
+      - paragraph: Agent spend & plans
+    - link "Automations Schedules, policy & runs":
+      - /url: /automations
+      - paragraph: Automations
+      - paragraph: Schedules, policy & runs
+    - link "Monitoring Requests & metrics":
+      - /url: /monitoring/requests
+      - paragraph: Monitoring
+      - paragraph: Requests & metrics
+    - link "Sessions History & logs":
+      - /url: /sessions
+      - paragraph: Sessions
+      - paragraph: History & logs
+    - group "Agents":
+      - paragraph: Agents
+      - link "Agents Agent management":
+        - /url: /agents
+        - paragraph: Agents
+        - paragraph: Agent management
+      - link "Models Model catalog":
+        - /url: /models
+        - paragraph: Models
+        - paragraph: Model catalog
+      - link "Prompts Prompt templates":
+        - /url: /prompts
+        - paragraph: Prompts
+        - paragraph: Prompt templates
+      - link "Memory Semantic store":
+        - /url: /memory
+        - paragraph: Memory
+        - paragraph: Semantic store
+      - link "Agent context Instructions and memories for agents":
+        - /url: /runtime-context
+        - paragraph: Agent context
+        - paragraph: Instructions and memories for agents
+    - link "Admin Work & admin activity":
+      - /url: /admin
+      - paragraph: Admin
+      - paragraph: Work & admin activity
+    - link "Access Control Client authentication":
+      - /url: /access-control
+      - paragraph: Access Control
+      - paragraph: Client authentication
+  - paragraph: healthy
+  - paragraph: 5m uptime
+  - generic: Notes
+  - button "Settings":
+    - generic: Settings
+  - button "Collapse sidebar":
+    - generic: Collapse
+- main:
+  - heading "Costs" [level=1]
+  - generic: What agent work would cost at API list prices, subscription use included.
+  - group "Time range":
+    - button "1h"
+    - button "24h" [pressed]
+    - button "7d"
+    - button "30d"
+  - main:
+    - link "Work and admin activity across projects":
+      - /url: /admin#activity
+    - heading "Spend, last 24 hours" [level=2]
+    - heading "What's costing the most" [level=2]
+    - button "All kinds" [pressed]
+    - button "Interactive"
+    - button "Routine"
+    - button "Other"
+    - combobox "Project":
+      - option "All projects" [selected]
+    - combobox "Model":
+      - option "All models" [selected]
+    - paragraph: Plans and credits
+    - paragraph: Cash actually paid, how much of each plan's limits is used, and Codex credits.
+- region "Notifications"
+- alert

@@ -1,0 +1,91 @@
+- complementary:
+  - link "Agent Hub":
+    - /url: /dashboard
+    - heading "Agent Hub" [level=1]
+  - button:
+  - navigation:
+    - link "Chat Primary agent workspace":
+      - /url: /chat
+      - paragraph: Chat
+      - paragraph: Primary agent workspace
+    - link "Dashboard Overview & status":
+      - /url: /dashboard
+      - paragraph: Dashboard
+      - paragraph: Overview & status
+    - link "Costs Agent spend & plans":
+      - /url: /costs
+      - paragraph: Costs
+      - paragraph: Agent spend & plans
+    - link "Automations Schedules, policy & runs":
+      - /url: /automations
+      - paragraph: Automations
+      - paragraph: Schedules, policy & runs
+    - link "Monitoring Requests & metrics":
+      - /url: /monitoring/requests
+      - paragraph: Monitoring
+      - paragraph: Requests & metrics
+    - link "Sessions History & logs":
+      - /url: /sessions
+      - paragraph: Sessions
+      - paragraph: History & logs
+    - group "Agents":
+      - paragraph: Agents
+      - link "Agents Agent management":
+        - /url: /agents
+        - paragraph: Agents
+        - paragraph: Agent management
+      - link "Models Model catalog":
+        - /url: /models
+        - paragraph: Models
+        - paragraph: Model catalog
+      - link "Prompts Prompt templates":
+        - /url: /prompts
+        - paragraph: Prompts
+        - paragraph: Prompt templates
+      - link "Memory Semantic store":
+        - /url: /memory
+        - paragraph: Memory
+        - paragraph: Semantic store
+      - link "Agent context Instructions and memories for agents":
+        - /url: /runtime-context
+        - paragraph: Agent context
+        - paragraph: Instructions and memories for agents
+    - link "Admin Work & admin activity":
+      - /url: /admin
+      - paragraph: Admin
+      - paragraph: Work & admin activity
+    - link "Access Control Client authentication":
+      - /url: /access-control
+      - paragraph: Access Control
+      - paragraph: Client authentication
+  - generic: Notes
+  - button "Settings":
+    - generic: Settings
+- banner:
+  - button "Open navigation menu":
+  - link "Agent Hub Command Center":
+    - /url: /dashboard
+    - generic: Agent Hub
+    - generic: Command Center
+- main:
+  - heading "Admin" [level=1]
+  - generic: Refreshing…
+  - button "Refresh admin data" [disabled]:
+  - main:
+    - region "Work and admin activity":
+      - heading "Work and admin activity" [level=2]
+      - paragraph: Across all Hub projects and providers · last 24 hours
+      - link "Browse sessions":
+        - /url: /sessions?kind=all&subagents=1&benchmarks=1&since=all
+      - status: Loading activity…
+    - generic: Blocked Today
+    - generic: —
+    - generic: Unknown Clients
+    - generic: —
+    - heading "Churn Hotspots" [level=2]
+    - heading "Automations" [level=2]
+    - paragraph: Manage schedules and project policy in Automations.
+    - link "Open Automations":
+      - /url: /automations
+- region "Notifications"
+- alert

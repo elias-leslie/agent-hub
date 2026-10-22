@@ -1,0 +1,307 @@
+{
+  "scope": "All Hub sessions created/updated or with observed events/accounting in the window, across providers. Sessions without usage remain visible.",
+  "window_start": "2026-10-21T15:19:19.595576+00:00",
+  "window_end": "2026-10-22T15:19:19.595576+00:00",
+  "sessions": 122,
+  "events_sampled": 20000,
+  "event_limit": 20000,
+  "events_truncated": true,
+  "missing_usage_sessions": 28,
+  "unlinked_sessions": 122,
+  "overlapping_sources_excluded": 37,
+  "unlinked_tokens": 862118425,
+  "unlinked_tool_seconds": 4673.687,
+  "tokens": {
+    "denominator": 862118425,
+    "unclassified_share": 1,
+    "mixed_tokens": 0,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "tokens": 0,
+        "share": 0
+      },
+      {
+        "category": "administration",
+        "tokens": 0,
+        "share": 0
+      },
+      {
+        "category": "unknown",
+        "tokens": 862118425,
+        "share": 1
+      }
+    ],
+    "sources": [
+      {
+        "source": "cost_logs",
+        "sessions": 10,
+        "tokens": 1704329
+      },
+      {
+        "source": "usage_calls",
+        "sessions": 84,
+        "tokens": 860414096
+      },
+      {
+        "source": "missing",
+        "sessions": 28,
+        "tokens": 0
+      }
+    ]
+  },
+  "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
+  "response_tokens": {
+    "denominator": 396739036,
+    "unclassified_share": 1,
+    "mixed_tokens": 0,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "tokens": 0,
+        "share": 0
+      },
+      {
+        "category": "administration",
+        "tokens": 0,
+        "share": 0
+      },
+      {
+        "category": "unknown",
+        "tokens": 396739036,
+        "share": 1
+      }
+    ],
+    "sources": []
+  },
+  "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
+  "tool_time": {
+    "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+    "denominator_seconds": 4673.687,
+    "explicit_wait_seconds": 0,
+    "mixed_seconds": 558.924,
+    "thinking_seconds": null,
+    "idle_seconds": null,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "seconds": 0,
+        "share": 0
+      },
+      {
+        "category": "administration",
+        "seconds": 2047.932,
+        "share": 0.43818338712027566
+      },
+      {
+        "category": "unknown",
+        "seconds": 2625.755,
+        "share": 0.5618166128797244
+      }
+    ]
+  },
+  "tools_missing_duration": 3591,
+  "tools_sampled": 6586,
+  "summary": "Of 4673.69 measured active tool seconds: 0% substantive, 44% administration including support, 56% unknown including mixed. Thinking and idle time are unmeasured.",
+  "repeat_admin_patterns": [
+    {
+      "family": "st.check",
+      "category": "administration",
+      "calls": 140,
+      "sessions": 23,
+      "measured_tool_seconds": 911.917,
+      "avoidable": null,
+      "projects": [
+        {
+          "project_id": "agent-hub",
+          "calls": 58,
+          "sessions": 8,
+          "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+          "measured_tool_seconds": 345.856
+        },
+        {
+          "project_id": "neri",
+          "calls": 28,
+          "sessions": 8,
+          "sample_session_id": "01a1605a-5eaa-7871-89b4-ecc8da096d9b",
+          "measured_tool_seconds": 324.36
+        },
+        {
+          "project_id": "summitflow",
+          "calls": 32,
+          "sessions": 2,
+          "sample_session_id": "01a1611e-b2ee-7520-a4ca-9873abb8917d",
+          "measured_tool_seconds": 161.245
+        },
+        {
+          "project_id": "bugout",
+          "calls": 22,
+          "sessions": 5,
+          "sample_session_id": "01a160e7-8093-7dd0-a09e-4f066f0e805f",
+          "measured_tool_seconds": 80.456
+        }
+      ],
+      "projects_total": 4
+    },
+    {
+      "family": "st.service",
+      "category": "administration",
+      "calls": 74,
+      "sessions": 10,
+      "measured_tool_seconds": 650.914,
+      "avoidable": null,
+      "projects": [
+        {
+          "project_id": "neri",
+          "calls": 46,
+          "sessions": 6,
+          "sample_session_id": "01a1605a-5eaa-7871-89b4-ecc8da096d9b",
+          "measured_tool_seconds": 422.704
+        },
+        {
+          "project_id": "summitflow",
+          "calls": 18,
+          "sessions": 2,
+          "sample_session_id": "01a1611e-b2ee-7520-a4ca-9873abb8917d",
+          "measured_tool_seconds": 152.967
+        },
+        {
+          "project_id": "agent-hub",
+          "calls": 10,
+          "sessions": 2,
+          "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+          "measured_tool_seconds": 75.243
+        }
+      ],
+      "projects_total": 3
+    },
+    {
+      "family": "st.commit",
+      "category": "administration",
+      "calls": 24,
+      "sessions": 12,
+      "measured_tool_seconds": 179.457,
+      "avoidable": null,
+      "projects": [
+        {
+          "project_id": "neri",
+          "calls": 14,
+          "sessions": 6,
+          "sample_session_id": "01a1605a-5eaa-7871-89b4-ecc8da096d9b",
+          "measured_tool_seconds": 98.321
+        },
+        {
+          "project_id": "summitflow",
+          "calls": 4,
+          "sessions": 2,
+          "sample_session_id": "01a1611e-b2ee-7520-a4ca-9873abb8917d",
+          "measured_tool_seconds": 43.986
+        },
+        {
+          "project_id": "agent-hub",
+          "calls": 4,
+          "sessions": 2,
+          "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+          "measured_tool_seconds": 21.993
+        },
+        {
+          "project_id": "bugout",
+          "calls": 2,
+          "sessions": 2,
+          "sample_session_id": "01a16104-b0f0-7df1-9a3b-ece1bde27b65",
+          "measured_tool_seconds": 15.157
+        }
+      ],
+      "projects_total": 4
+    },
+    {
+      "family": "compound",
+      "category": "administration",
+      "calls": 110,
+      "sessions": 17,
+      "measured_tool_seconds": 147.586,
+      "avoidable": null,
+      "projects": [
+        {
+          "project_id": "summitflow",
+          "calls": 13,
+          "sessions": 3,
+          "sample_session_id": "01a1611e-b2ee-7520-a4ca-9873abb8917d",
+          "measured_tool_seconds": 59.915
+        },
+        {
+          "project_id": "agent-hub",
+          "calls": 18,
+          "sessions": 6,
+          "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+          "measured_tool_seconds": 42.884
+        },
+        {
+          "project_id": "bugout",
+          "calls": 19,
+          "sessions": 5,
+          "sample_session_id": "01a160e7-8093-7dd0-a09e-4f066f0e805f",
+          "measured_tool_seconds": 23.416
+        },
+        {
+          "project_id": "neri",
+          "calls": 60,
+          "sessions": 3,
+          "sample_session_id": "01a160d6-e3d8-7173-b5a0-646f82b4a38d",
+          "measured_tool_seconds": 21.371
+        }
+      ],
+      "projects_total": 4
+    },
+    {
+      "family": "st.sessions",
+      "category": "administration",
+      "calls": 636,
+      "sessions": 24,
+      "measured_tool_seconds": 139.233,
+      "avoidable": null,
+      "projects": [
+        {
+          "project_id": "neri",
+          "calls": 522,
+          "sessions": 13,
+          "sample_session_id": "01a1605a-5eaa-7871-89b4-ecc8da096d9b",
+          "measured_tool_seconds": 111.838
+        },
+        {
+          "project_id": "bugout",
+          "calls": 71,
+          "sessions": 5,
+          "sample_session_id": "01a160e7-8093-7dd0-a09e-4f066f0e805f",
+          "measured_tool_seconds": 19.905
+        },
+        {
+          "project_id": "summitflow",
+          "calls": 34,
+          "sessions": 4,
+          "sample_session_id": "01a1611e-b2ee-7520-a4ca-9873abb8917d",
+          "measured_tool_seconds": 5.888
+        },
+        {
+          "project_id": "agent-hub",
+          "calls": 9,
+          "sessions": 2,
+          "sample_session_id": "01a1637d-a238-77f0-b200-c9350e5be980",
+          "measured_tool_seconds": 1.602
+        }
+      ],
+      "projects_total": 4
+    }
+  ],
+  "repeat_admin_patterns_total": 14,
+  "task_rollups": [],
+  "task_rollups_total": 0,
+  "limits": [
+    "Tool categories are conservative observations; unsupported commands and unseen work stay unknown. Mixed turns are not split into invented token allocations.",
+    "Repeated administration is not evidence that it was unnecessary. Avoidable ceremony is unknown.",
+    "Source precedence prevents double counting, but partial/disjoint source histories can be omitted. This is a recorded-token coverage view, not a reconciled billing total.",
+    "The event sample can omit tool/response associations; truncation makes response attribution unknown. Missing usage and tool duration have unknown size; token shares cover recorded tokens only. Family time can overlap other families.",
+    "Explicit waits are observed wait-only tool occupancy, not all waiting. Native turn wall spans include thinking and waits; neither elapsed time nor tool occupancy measures total active thinking time.",
+    "Task linkage uses only one unambiguous project/task session binding. External IDs and inferred task names are not task evidence."
+  ]
+}
