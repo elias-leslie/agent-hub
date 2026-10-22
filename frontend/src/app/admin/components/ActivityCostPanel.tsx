@@ -7,6 +7,7 @@ import {
   activitySessionsHref,
 } from '@/lib/api/activity-cost'
 import { ActivityAccounting } from './ActivityAccounting'
+import { SessionEfficiency } from './SessionEfficiency'
 
 const LABELS: Record<ActivityCategory, string> = {
   substantive: 'Substantive',
@@ -41,7 +42,7 @@ export function ActivityCostPanel({
             Work and admin activity
           </h2>
           <p className="section-copy mt-1">
-            Across all Hub projects and providers · last 24 hours
+            Across all Hub projects and providers · recorded window below
           </p>
         </div>
         <Link href={activitySessionsHref()} className="button-secondary">
@@ -80,6 +81,7 @@ export function ActivityCostPanel({
         )
       ) : (
         <>
+          <SessionEfficiency activity={activity} />
           <ActivityAccounting activity={activity} />
           <h3 className="text-sm font-semibold text-slate-100">
             Observed tool time

@@ -77,6 +77,42 @@ export interface StCommandSummary extends StCommandMetrics {
   })[]
 }
 
+export type EfficiencyStatus =
+  | 'within_goal'
+  | 'above_goal'
+  | 'insufficient_coverage'
+  | 'unmeasured'
+  | 'goal_not_selected'
+
+export interface SessionEfficiencyData {
+  method: 'session-tool-occupancy-v1'
+  goal: {
+    admin_share_target: number | null
+    minimum_duration_coverage: number
+    maximum_unknown_share: number
+  }
+  trial_goal: { relative_cost_reduction_target: number }
+  sessions_total: number
+  status_counts: Record<EfficiencyStatus, number>
+  rows: (ActivityRanking & {
+    session_id: string
+    provider: string
+    model: string | null
+    usage_source: string
+    tool_time: ToolTime
+    tools_sampled: number
+    tools_missing_duration: number
+    sampled_event_span_seconds: number | null
+    goal_status: EfficiencyStatus
+    repeat_admin_patterns_total: number
+    repeat_admin_patterns: {
+      family: string
+      calls: number
+      measured_tool_seconds: number
+    }[]
+  })[]
+}
+
 export interface ActivityCost {
   window_start: string
   window_end: string
@@ -98,6 +134,7 @@ export interface ActivityCost {
   usage: ActivityUsage
   transcript: ActivityTranscript
   st_commands?: StCommandSummary | null
+  session_efficiency?: SessionEfficiencyData | null
   wrappers_excluded: number
   unmatched_accounting_tokens: number
   unmatched_accounting_calls: number
@@ -307,6 +344,65 @@ function stCommands(value: unknown) {
   )
 }
 
+function sessionEfficiency(value: unknown) {
+  if (value == null) return true
+  const statuses = [
+    'within_goal',
+    'above_goal',
+    'insufficient_coverage',
+    'unmeasured',
+    'goal_not_selected',
+  ]
+  return (
+    record(value) &&
+    value.method === 'session-tool-occupancy-v1' &&
+    record(value.goal) &&
+    share(value.goal.admin_share_target) &&
+    typeof value.goal.minimum_duration_coverage === 'number' &&
+    share(value.goal.minimum_duration_coverage) &&
+    typeof value.goal.maximum_unknown_share === 'number' &&
+    share(value.goal.maximum_unknown_share) &&
+    record(value.trial_goal) &&
+    typeof value.trial_goal.relative_cost_reduction_target === 'number' &&
+    share(value.trial_goal.relative_cost_reduction_target) &&
+    numbers(value, ['sessions_total']) &&
+    record(value.status_counts) &&
+    numbers(value.status_counts, statuses) &&
+    Object.values(value.status_counts).reduce<number>(
+      (sum, count) => sum + Number(count),
+      0,
+    ) === value.sessions_total &&
+    Array.isArray(value.rows) &&
+    value.rows.length <= Number(value.sessions_total) &&
+    value.rows.every(
+      (row: unknown) =>
+        record(row) &&
+        ranking(row) &&
+        strings(row, ['session_id', 'provider', 'usage_source']) &&
+        (row.model === null || typeof row.model === 'string') &&
+        toolTime(row.tool_time) &&
+        numbers(row, [
+          'tools_sampled',
+          'tools_missing_duration',
+          'repeat_admin_patterns_total',
+        ]) &&
+        Number(row.tools_missing_duration) <= Number(row.tools_sampled) &&
+        (row.sampled_event_span_seconds === null ||
+          numbers(row, ['sampled_event_span_seconds'])) &&
+        statuses.includes(String(row.goal_status)) &&
+        Array.isArray(row.repeat_admin_patterns) &&
+        row.repeat_admin_patterns.length <=
+          Number(row.repeat_admin_patterns_total) &&
+        row.repeat_admin_patterns.every(
+          (family: unknown) =>
+            record(family) &&
+            strings(family, ['family']) &&
+            numbers(family, ['calls', 'measured_tool_seconds']),
+        ),
+    )
+  )
+}
+
 /** A missing older-server field is unavailable, never a fabricated zero. */
 export function parseActivityCost(value: unknown): ActivityCost | null {
   if (value == null) return null
@@ -347,6 +443,7 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
     !usage(value.usage) ||
     !transcript(value.transcript) ||
     !stCommands(value.st_commands) ||
+    !sessionEfficiency(value.session_efficiency) ||
     !Array.isArray(value.project_rankings) ||
     !value.project_rankings.every(
       (row) =>

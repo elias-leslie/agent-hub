@@ -3,6 +3,14 @@
   "max_tokenized_characters_per_command": 4096,
   "max_tokenized_characters_per_snapshot": 65536,
   "output_characters_per_token": 4,
+  "session_efficiency": {
+    "admin_share_target": null,
+    "minimum_duration_coverage": 0.8,
+    "maximum_unknown_share": 0.2
+  },
+  "session_efficiency_trial": {
+    "relative_cost_reduction_target": 0.2
+  },
   "st_families": {
     "administration": ["context", "task", "show", "list", "ready", "ready-all", "claim", "done", "log", "plan", "portfolio", "session", "sessions", "agent", "hub", "prompt", "memory", "lease", "queue", "ownership", "batch", "tools", "aico", "agents", "export", "pulse"],
     "necessary_support": ["check", "commit", "service", "services", "build", "deploy", "vcs"],

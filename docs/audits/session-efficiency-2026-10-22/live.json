@@ -1,0 +1,1836 @@
+{
+  "current_hour": {
+    "window_start": "2026-10-22T16:53:00+00:00",
+    "window_end": "2026-10-22T17:53:00+00:00",
+    "sessions": 21,
+    "events_sampled": 4760,
+    "event_limit": 20000,
+    "events_truncated": false,
+    "tools_sampled": 1721,
+    "tools_missing_duration": 578,
+    "missing_usage_sessions": 3,
+    "tokens": {
+      "denominator": 100061816,
+      "unclassified_share": 1.0,
+      "mixed_tokens": 1265981,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "administration",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "unknown",
+          "tokens": 100061816,
+          "share": 1.0
+        }
+      ],
+      "sources": [
+        {
+          "source": "usage_calls",
+          "sessions": 14,
+          "tokens": 98497014
+        },
+        {
+          "source": "response_events",
+          "sessions": 3,
+          "tokens": 1316163
+        },
+        {
+          "source": "missing",
+          "sessions": 3,
+          "tokens": 0
+        },
+        {
+          "source": "cost_logs",
+          "sessions": 1,
+          "tokens": 248639
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 99732994,
+      "output_tokens": 328822,
+      "cache_read_tokens": 97773706,
+      "cache_write_tokens": 41828,
+      "cache_detail_input_tokens": 99732994
+    },
+    "transcript": {
+      "characters": 9177968,
+      "argument_characters": 879914,
+      "returned_characters": 8298054,
+      "calls_with_returned_text": 1714,
+      "calls_missing_returned_text": 7,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "characters": 112792,
+          "share": 0.012289430514466819
+        },
+        {
+          "category": "administration",
+          "characters": 618006,
+          "share": 0.06733581986775286
+        },
+        {
+          "category": "unknown",
+          "characters": 8447170,
+          "share": 0.9203747496177803
+        }
+      ]
+    },
+    "tool_time": {
+      "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+      "denominator_seconds": 820.087,
+      "explicit_wait_seconds": 0,
+      "mixed_seconds": 66.113,
+      "thinking_seconds": null,
+      "idle_seconds": null,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "seconds": 21.593,
+          "share": 0.02633013326634857
+        },
+        {
+          "category": "administration",
+          "seconds": 618.09,
+          "share": 0.7536883281895701
+        },
+        {
+          "category": "unknown",
+          "seconds": 180.404,
+          "share": 0.21998153854408134
+        }
+      ]
+    },
+    "repeat_admin_patterns": [
+      {
+        "family": "st.check",
+        "category": "administration",
+        "calls": 31,
+        "sessions": 8,
+        "measured_tool_seconds": 251.067,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 8,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 191.587
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 22,
+            "sessions": 5,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 59.361
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 1,
+            "sessions": 1,
+            "sample_session_id": "01a1648d-2d5b-7132-ac3d-682b8d20d6c9",
+            "measured_tool_seconds": 0.119
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.aico",
+        "category": "administration",
+        "calls": 53,
+        "sessions": 3,
+        "measured_tool_seconds": 90.62,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 51,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 90.017
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 2,
+            "sessions": 1,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 0.603
+          }
+        ],
+        "projects_total": 2
+      },
+      {
+        "family": "st.commit",
+        "category": "administration",
+        "calls": 14,
+        "sessions": 7,
+        "measured_tool_seconds": 86.53,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 4,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 44.414
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 9,
+            "sessions": 4,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 40.141
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 1,
+            "sessions": 1,
+            "sample_session_id": "01a16489-61f4-7751-aec4-f3e7502d3902",
+            "measured_tool_seconds": 1.975
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.service",
+        "category": "administration",
+        "calls": 8,
+        "sessions": 2,
+        "measured_tool_seconds": 84.946,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 8,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 84.946
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "compound",
+        "category": "administration",
+        "calls": 61,
+        "sessions": 7,
+        "measured_tool_seconds": 60.071,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 48,
+            "sessions": 6,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 30.412
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 13,
+            "sessions": 1,
+            "sample_session_id": "01a16489-61f4-7751-aec4-f3e7502d3902",
+            "measured_tool_seconds": 29.659
+          }
+        ],
+        "projects_total": 2
+      }
+    ],
+    "sessions_by_admin_time": [
+      {
+        "session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+        "project_id": "neri",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 45981532,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 45892623,
+          "output_tokens": 88909,
+          "cache_read_tokens": 45563904,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 45892623
+        },
+        "transcript": {
+          "characters": 1026216,
+          "argument_characters": 92395,
+          "returned_characters": 933821,
+          "calls_with_returned_text": 441,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 166362,
+              "share": 0.1621120699735728
+            },
+            {
+              "category": "unknown",
+              "characters": 859854,
+              "share": 0.8378879300264271
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 402.041,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 0.272,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 385.237,
+              "share": 0.9582032678259184
+            },
+            {
+              "category": "unknown",
+              "seconds": 16.804,
+              "share": 0.041796732174081745
+            }
+          ]
+        },
+        "tools_sampled": 441,
+        "tools_missing_duration": 120,
+        "sampled_event_span_seconds": 2716.678,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.check",
+            "calls": 7,
+            "measured_tool_seconds": 191.467
+          },
+          {
+            "family": "st.aico",
+            "calls": 35,
+            "measured_tool_seconds": 85.224
+          },
+          {
+            "family": "st.service",
+            "calls": 4,
+            "measured_tool_seconds": 80.225
+          },
+          {
+            "family": "st.done",
+            "calls": 2,
+            "measured_tool_seconds": 11.476
+          },
+          {
+            "family": "st.sessions",
+            "calls": 65,
+            "measured_tool_seconds": 10.074
+          }
+        ]
+      },
+      {
+        "session_id": "01a164b1-fe5f-7513-9e51-34fda93627ae",
+        "project_id": "neri",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 4126333,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 4107384,
+          "output_tokens": 18949,
+          "cache_read_tokens": 3951488,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 4107384
+        },
+        "transcript": {
+          "characters": 1158178,
+          "argument_characters": 96150,
+          "returned_characters": 1062028,
+          "calls_with_returned_text": 230,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 170506,
+              "share": 0.14721916665659338
+            },
+            {
+              "category": "unknown",
+              "characters": 987672,
+              "share": 0.8527808333434066
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 70.57,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 3.555,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 62.42,
+              "share": 0.8845118322233243
+            },
+            {
+              "category": "unknown",
+              "seconds": 8.15,
+              "share": 0.11548816777667563
+            }
+          ]
+        },
+        "tools_sampled": 230,
+        "tools_missing_duration": 45,
+        "sampled_event_span_seconds": 765.104,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.commit",
+            "calls": 3,
+            "measured_tool_seconds": 38.662
+          },
+          {
+            "family": "st.sessions",
+            "calls": 39,
+            "measured_tool_seconds": 10.232
+          },
+          {
+            "family": "st.pulse",
+            "calls": 2,
+            "measured_tool_seconds": 8.096
+          },
+          {
+            "family": "st.aico",
+            "calls": 16,
+            "measured_tool_seconds": 4.793
+          },
+          {
+            "family": "st.service",
+            "calls": 4,
+            "measured_tool_seconds": 4.721
+          }
+        ]
+      },
+      {
+        "session_id": "01a16479-e600-7e91-ab28-a5b3c38554a7",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 12596043,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 12568557,
+          "output_tokens": 27486,
+          "cache_read_tokens": 12528896,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 12568557
+        },
+        "transcript": {
+          "characters": 178485,
+          "argument_characters": 69414,
+          "returned_characters": 109071,
+          "calls_with_returned_text": 105,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 23197,
+              "share": 0.12996610359413957
+            },
+            {
+              "category": "unknown",
+              "characters": 155288,
+              "share": 0.8700338964058605
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 88.406,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 26.087,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 33.497,
+              "share": 0.37889962219758844
+            },
+            {
+              "category": "unknown",
+              "seconds": 54.909,
+              "share": 0.6211003778024116
+            }
+          ]
+        },
+        "tools_sampled": 105,
+        "tools_missing_duration": 56,
+        "sampled_event_span_seconds": 1170.637,
+        "repeat_admin_patterns": [
+          {
+            "family": "compound",
+            "calls": 13,
+            "measured_tool_seconds": 10.727
+          },
+          {
+            "family": "st.sessions",
+            "calls": 6,
+            "measured_tool_seconds": 1.494
+          }
+        ]
+      },
+      {
+        "session_id": "01a164a3-c58e-7773-b9d9-b23f884d21be",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 4864893,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 4822600,
+          "output_tokens": 42293,
+          "cache_read_tokens": 4715520,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 4822600
+        },
+        "transcript": {
+          "characters": 763159,
+          "argument_characters": 120598,
+          "returned_characters": 642561,
+          "calls_with_returned_text": 131,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 63790,
+              "share": 0.0835867754950148
+            },
+            {
+              "category": "unknown",
+              "characters": 699369,
+              "share": 0.9164132245049852
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 41.449,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 6.17,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 32.708,
+              "share": 0.7891143332770393
+            },
+            {
+              "category": "unknown",
+              "seconds": 8.741,
+              "share": 0.21088566672296072
+            }
+          ]
+        },
+        "tools_sampled": 131,
+        "tools_missing_duration": 45,
+        "sampled_event_span_seconds": 1552.132,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.check",
+            "calls": 16,
+            "measured_tool_seconds": 23.694
+          },
+          {
+            "family": "compound",
+            "calls": 9,
+            "measured_tool_seconds": 5.639
+          },
+          {
+            "family": "st.claim",
+            "calls": 2,
+            "measured_tool_seconds": 3.759
+          },
+          {
+            "family": "st.commit",
+            "calls": 3,
+            "measured_tool_seconds": 1.77
+          },
+          {
+            "family": "st.sessions",
+            "calls": 4,
+            "measured_tool_seconds": 0.61
+          }
+        ]
+      },
+      {
+        "session_id": "01a16489-61f4-7751-aec4-f3e7502d3902",
+        "project_id": "summitflow",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 5736884,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 5719450,
+          "output_tokens": 17434,
+          "cache_read_tokens": 5585536,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 5719450
+        },
+        "transcript": {
+          "characters": 518544,
+          "argument_characters": 57229,
+          "returned_characters": 461315,
+          "calls_with_returned_text": 127,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 26082,
+              "share": 0.05029852818661483
+            },
+            {
+              "category": "unknown",
+              "characters": 492462,
+              "share": 0.9497014718133852
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 36.032,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 1.915,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 32.473,
+              "share": 0.9012266873889876
+            },
+            {
+              "category": "unknown",
+              "seconds": 3.559,
+              "share": 0.09877331261101245
+            }
+          ]
+        },
+        "tools_sampled": 127,
+        "tools_missing_duration": 74,
+        "sampled_event_span_seconds": 834.307,
+        "repeat_admin_patterns": [
+          {
+            "family": "compound",
+            "calls": 13,
+            "measured_tool_seconds": 29.659
+          }
+        ]
+      }
+    ]
+  },
+  "previous_hour": {
+    "window_start": "2026-10-22T15:53:00+00:00",
+    "window_end": "2026-10-22T16:53:00+00:00",
+    "sessions": 13,
+    "events_sampled": 4797,
+    "event_limit": 20000,
+    "events_truncated": false,
+    "tools_sampled": 1638,
+    "tools_missing_duration": 569,
+    "missing_usage_sessions": 0,
+    "tokens": {
+      "denominator": 110949735,
+      "unclassified_share": 1.0,
+      "mixed_tokens": 0,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "administration",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "unknown",
+          "tokens": 110949735,
+          "share": 1.0
+        }
+      ],
+      "sources": [
+        {
+          "source": "usage_calls",
+          "sessions": 11,
+          "tokens": 110949735
+        },
+        {
+          "source": "response_events",
+          "sessions": 2,
+          "tokens": 0
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 110604159,
+      "output_tokens": 345576,
+      "cache_read_tokens": 108674816,
+      "cache_write_tokens": 0,
+      "cache_detail_input_tokens": 110604159
+    },
+    "transcript": {
+      "characters": 8473538,
+      "argument_characters": 936128,
+      "returned_characters": 7537410,
+      "calls_with_returned_text": 1638,
+      "calls_missing_returned_text": 0,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "characters": 57634,
+          "share": 0.006801645310376846
+        },
+        {
+          "category": "administration",
+          "characters": 552473,
+          "share": 0.06519980201894415
+        },
+        {
+          "category": "unknown",
+          "characters": 7863431,
+          "share": 0.927998552670679
+        }
+      ]
+    },
+    "tool_time": {
+      "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+      "denominator_seconds": 1271.621,
+      "explicit_wait_seconds": 0,
+      "mixed_seconds": 74.902,
+      "thinking_seconds": null,
+      "idle_seconds": null,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "seconds": 29.049,
+          "share": 0.022844070678291726
+        },
+        {
+          "category": "administration",
+          "seconds": 1077.546,
+          "share": 0.8473798403769676
+        },
+        {
+          "category": "unknown",
+          "seconds": 165.026,
+          "share": 0.12977608894474063
+        }
+      ]
+    },
+    "repeat_admin_patterns": [
+      {
+        "family": "st.service",
+        "category": "administration",
+        "calls": 10,
+        "sessions": 1,
+        "measured_tool_seconds": 472.245,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 10,
+            "sessions": 1,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 472.245
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "st.check",
+        "category": "administration",
+        "calls": 61,
+        "sessions": 8,
+        "measured_tool_seconds": 420.658,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 28,
+            "sessions": 1,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 241.679
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 18,
+            "sessions": 3,
+            "sample_session_id": "01a1644a-049b-7ac1-9d56-3648db0223ad",
+            "measured_tool_seconds": 103.53
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 15,
+            "sessions": 4,
+            "sample_session_id": "01a1644c-1905-7fd1-b3b0-3d16c6262678",
+            "measured_tool_seconds": 75.449
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.commit",
+        "category": "administration",
+        "calls": 17,
+        "sessions": 3,
+        "measured_tool_seconds": 78.759,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 12,
+            "sessions": 1,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 45.007
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 4,
+            "sessions": 1,
+            "sample_session_id": "01a1644a-049b-7ac1-9d56-3648db0223ad",
+            "measured_tool_seconds": 25.137
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 1,
+            "sessions": 1,
+            "sample_session_id": "01a1644c-1905-7fd1-b3b0-3d16c6262678",
+            "measured_tool_seconds": 8.615
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "compound",
+        "category": "administration",
+        "calls": 28,
+        "sessions": 7,
+        "measured_tool_seconds": 47.927,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "summitflow",
+            "calls": 14,
+            "sessions": 2,
+            "sample_session_id": "01a1644a-049b-7ac1-9d56-3648db0223ad",
+            "measured_tool_seconds": 21.668
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 13,
+            "sessions": 4,
+            "sample_session_id": "01a1644c-1905-7fd1-b3b0-3d16c6262678",
+            "measured_tool_seconds": 18.524
+          },
+          {
+            "project_id": "neri",
+            "calls": 1,
+            "sessions": 1,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 7.735
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.sessions",
+        "category": "administration",
+        "calls": 125,
+        "sessions": 8,
+        "measured_tool_seconds": 30.904,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 51,
+            "sessions": 5,
+            "sample_session_id": "01a1644c-1905-7fd1-b3b0-3d16c6262678",
+            "measured_tool_seconds": 19.652
+          },
+          {
+            "project_id": "neri",
+            "calls": 65,
+            "sessions": 1,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 9.54
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 9,
+            "sessions": 2,
+            "sample_session_id": "01a1644a-049b-7ac1-9d56-3648db0223ad",
+            "measured_tool_seconds": 1.712
+          }
+        ],
+        "projects_total": 3
+      }
+    ]
+  },
+  "current_day": {
+    "window_start": "2026-10-21T17:53:00+00:00",
+    "window_end": "2026-10-22T17:53:00+00:00",
+    "sessions": 126,
+    "events_sampled": 20000,
+    "event_limit": 20000,
+    "events_truncated": true,
+    "tools_sampled": 7150,
+    "tools_missing_duration": 2332,
+    "missing_usage_sessions": 26,
+    "tokens": {
+      "denominator": 1004799313,
+      "unclassified_share": 1.0,
+      "mixed_tokens": 0,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "administration",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "unknown",
+          "tokens": 1004799313,
+          "share": 1.0
+        }
+      ],
+      "sources": [
+        {
+          "source": "cost_logs",
+          "sessions": 10,
+          "tokens": 1779723
+        },
+        {
+          "source": "usage_calls",
+          "sessions": 85,
+          "tokens": 1001703427
+        },
+        {
+          "source": "missing",
+          "sessions": 26,
+          "tokens": 0
+        },
+        {
+          "source": "response_events",
+          "sessions": 5,
+          "tokens": 1316163
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 1001293569,
+      "output_tokens": 3505744,
+      "cache_read_tokens": 983025297,
+      "cache_write_tokens": 315800,
+      "cache_detail_input_tokens": 1001293569
+    },
+    "transcript": {
+      "characters": 40906372,
+      "argument_characters": 3970328,
+      "returned_characters": 36936044,
+      "calls_with_returned_text": 7142,
+      "calls_missing_returned_text": 8,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "characters": 257622,
+          "share": 0.006297845235456226
+        },
+        {
+          "category": "administration",
+          "characters": 2452066,
+          "share": 0.0599433750810265
+        },
+        {
+          "category": "unknown",
+          "characters": 38196684,
+          "share": 0.9337587796835173
+        }
+      ]
+    },
+    "tool_time": {
+      "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+      "denominator_seconds": 4194.777,
+      "explicit_wait_seconds": 0,
+      "mixed_seconds": 473.748,
+      "thinking_seconds": null,
+      "idle_seconds": null,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "seconds": 90.858,
+          "share": 0.02165979264213569
+        },
+        {
+          "category": "administration",
+          "seconds": 3003.934,
+          "share": 0.71611291851748
+        },
+        {
+          "category": "unknown",
+          "seconds": 1099.985,
+          "share": 0.26222728884038427
+        }
+      ]
+    },
+    "repeat_admin_patterns": [
+      {
+        "family": "st.check",
+        "category": "administration",
+        "calls": 186,
+        "sessions": 25,
+        "measured_tool_seconds": 1240.596,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 95,
+            "sessions": 16,
+            "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+            "measured_tool_seconds": 527.808
+          },
+          {
+            "project_id": "neri",
+            "calls": 44,
+            "sessions": 3,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 526.225
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 47,
+            "sessions": 6,
+            "sample_session_id": "01a1639a-bc93-77a3-b1ae-65959fc02d28",
+            "measured_tool_seconds": 186.563
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.service",
+        "category": "administration",
+        "calls": 68,
+        "sessions": 7,
+        "measured_tool_seconds": 945.22,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 47,
+            "sessions": 3,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 799.601
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 14,
+            "sessions": 3,
+            "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+            "measured_tool_seconds": 144.62
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 7,
+            "sessions": 1,
+            "sample_session_id": "01a1639a-bc93-77a3-b1ae-65959fc02d28",
+            "measured_tool_seconds": 0.999
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.commit",
+        "category": "administration",
+        "calls": 47,
+        "sessions": 15,
+        "measured_tool_seconds": 266.856,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 24,
+            "sessions": 3,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 143.94
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 14,
+            "sessions": 8,
+            "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+            "measured_tool_seconds": 68.071
+          },
+          {
+            "project_id": "summitflow",
+            "calls": 9,
+            "sessions": 4,
+            "sample_session_id": "01a1639a-bc93-77a3-b1ae-65959fc02d28",
+            "measured_tool_seconds": 54.845
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "compound",
+        "category": "administration",
+        "calls": 148,
+        "sessions": 22,
+        "measured_tool_seconds": 253.827,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "summitflow",
+            "calls": 50,
+            "sessions": 5,
+            "sample_session_id": "01a1639a-bc93-77a3-b1ae-65959fc02d28",
+            "measured_tool_seconds": 142.403
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 89,
+            "sessions": 15,
+            "sample_session_id": "01a1636b-3540-77c0-a7b8-9ff27fb7d1cc",
+            "measured_tool_seconds": 96.485
+          },
+          {
+            "project_id": "neri",
+            "calls": 9,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 14.939
+          }
+        ],
+        "projects_total": 3
+      },
+      {
+        "family": "st.aico",
+        "category": "administration",
+        "calls": 185,
+        "sessions": 3,
+        "measured_tool_seconds": 150.063,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "neri",
+            "calls": 183,
+            "sessions": 2,
+            "sample_session_id": "01a1635b-b74a-76f2-934e-3bf6e0731822",
+            "measured_tool_seconds": 149.46
+          },
+          {
+            "project_id": "agent-hub",
+            "calls": 2,
+            "sessions": 1,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 0.603
+          }
+        ],
+        "projects_total": 2
+      }
+    ]
+  },
+  "agent_hub_hour": {
+    "window_start": "2026-10-22T16:53:00+00:00",
+    "window_end": "2026-10-22T17:53:00+00:00",
+    "sessions": 9,
+    "events_sampled": 1580,
+    "event_limit": 20000,
+    "events_truncated": false,
+    "tools_sampled": 650,
+    "tools_missing_duration": 246,
+    "missing_usage_sessions": 0,
+    "tokens": {
+      "denominator": 34470313,
+      "unclassified_share": 1.0,
+      "mixed_tokens": 0,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "administration",
+          "tokens": 0,
+          "share": 0.0
+        },
+        {
+          "category": "unknown",
+          "tokens": 34470313,
+          "share": 1.0
+        }
+      ],
+      "sources": [
+        {
+          "source": "usage_calls",
+          "sessions": 9,
+          "tokens": 34470313
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 34313444,
+      "output_tokens": 156869,
+      "cache_read_tokens": 33471104,
+      "cache_write_tokens": 0,
+      "cache_detail_input_tokens": 34313444
+    },
+    "transcript": {
+      "characters": 4298007,
+      "argument_characters": 482510,
+      "returned_characters": 3815497,
+      "calls_with_returned_text": 649,
+      "calls_missing_returned_text": 1,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "characters": 3864,
+          "share": 0.0008990213370987995
+        },
+        {
+          "category": "administration",
+          "characters": 227967,
+          "share": 0.053040164895031584
+        },
+        {
+          "category": "unknown",
+          "characters": 4066176,
+          "share": 0.9460608137678697
+        }
+      ]
+    },
+    "tool_time": {
+      "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+      "denominator_seconds": 272.596,
+      "explicit_wait_seconds": 0,
+      "mixed_seconds": 59.602,
+      "thinking_seconds": null,
+      "idle_seconds": null,
+      "breakdown": [
+        {
+          "category": "substantive",
+          "seconds": 3.811,
+          "share": 0.013980395897225197
+        },
+        {
+          "category": "administration",
+          "seconds": 136.829,
+          "share": 0.5019479376073017
+        },
+        {
+          "category": "unknown",
+          "seconds": 131.956,
+          "share": 0.4840716664954731
+        }
+      ]
+    },
+    "repeat_admin_patterns": [
+      {
+        "family": "st.check",
+        "category": "administration",
+        "calls": 22,
+        "sessions": 5,
+        "measured_tool_seconds": 59.361,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 22,
+            "sessions": 5,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 59.361
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "st.commit",
+        "category": "administration",
+        "calls": 9,
+        "sessions": 4,
+        "measured_tool_seconds": 40.141,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 9,
+            "sessions": 4,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 40.141
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "compound",
+        "category": "administration",
+        "calls": 48,
+        "sessions": 6,
+        "measured_tool_seconds": 30.412,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 48,
+            "sessions": 6,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 30.412
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "st.claim",
+        "category": "administration",
+        "calls": 3,
+        "sessions": 2,
+        "measured_tool_seconds": 6.126,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 3,
+            "sessions": 2,
+            "sample_session_id": "01a164a3-c58e-7773-b9d9-b23f884d21be",
+            "measured_tool_seconds": 6.126
+          }
+        ],
+        "projects_total": 1
+      },
+      {
+        "family": "st.sessions",
+        "category": "administration",
+        "calls": 24,
+        "sessions": 6,
+        "measured_tool_seconds": 4.797,
+        "avoidable": null,
+        "projects": [
+          {
+            "project_id": "agent-hub",
+            "calls": 24,
+            "sessions": 6,
+            "sample_session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+            "measured_tool_seconds": 4.797
+          }
+        ],
+        "projects_total": 1
+      }
+    ],
+    "sessions_by_admin_time": [
+      {
+        "session_id": "01a16479-e600-7e91-ab28-a5b3c38554a7",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 12596043,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 12568557,
+          "output_tokens": 27486,
+          "cache_read_tokens": 12528896,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 12568557
+        },
+        "transcript": {
+          "characters": 178485,
+          "argument_characters": 69414,
+          "returned_characters": 109071,
+          "calls_with_returned_text": 105,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 23197,
+              "share": 0.12996610359413957
+            },
+            {
+              "category": "unknown",
+              "characters": 155288,
+              "share": 0.8700338964058605
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 88.406,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 26.087,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 33.497,
+              "share": 0.37889962219758844
+            },
+            {
+              "category": "unknown",
+              "seconds": 54.909,
+              "share": 0.6211003778024116
+            }
+          ]
+        },
+        "tools_sampled": 105,
+        "tools_missing_duration": 56,
+        "sampled_event_span_seconds": 1170.637,
+        "repeat_admin_patterns": [
+          {
+            "family": "compound",
+            "calls": 13,
+            "measured_tool_seconds": 10.727
+          },
+          {
+            "family": "st.sessions",
+            "calls": 6,
+            "measured_tool_seconds": 1.494
+          }
+        ]
+      },
+      {
+        "session_id": "01a164a3-c58e-7773-b9d9-b23f884d21be",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 4864893,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 4822600,
+          "output_tokens": 42293,
+          "cache_read_tokens": 4715520,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 4822600
+        },
+        "transcript": {
+          "characters": 763159,
+          "argument_characters": 120598,
+          "returned_characters": 642561,
+          "calls_with_returned_text": 131,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 63790,
+              "share": 0.0835867754950148
+            },
+            {
+              "category": "unknown",
+              "characters": 699369,
+              "share": 0.9164132245049852
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 41.449,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 6.17,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 32.708,
+              "share": 0.7891143332770393
+            },
+            {
+              "category": "unknown",
+              "seconds": 8.741,
+              "share": 0.21088566672296072
+            }
+          ]
+        },
+        "tools_sampled": 131,
+        "tools_missing_duration": 45,
+        "sampled_event_span_seconds": 1552.132,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.check",
+            "calls": 16,
+            "measured_tool_seconds": 23.694
+          },
+          {
+            "family": "compound",
+            "calls": 9,
+            "measured_tool_seconds": 5.639
+          },
+          {
+            "family": "st.claim",
+            "calls": 2,
+            "measured_tool_seconds": 3.759
+          },
+          {
+            "family": "st.commit",
+            "calls": 3,
+            "measured_tool_seconds": 1.77
+          },
+          {
+            "family": "st.sessions",
+            "calls": 4,
+            "measured_tool_seconds": 0.61
+          }
+        ]
+      },
+      {
+        "session_id": "01a164ab-b6fa-7683-a6fd-fd80189b2822",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 3385535,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 3367072,
+          "output_tokens": 18463,
+          "cache_read_tokens": 3266176,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 3367072
+        },
+        "transcript": {
+          "characters": 745363,
+          "argument_characters": 64278,
+          "returned_characters": 681085,
+          "calls_with_returned_text": 91,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 35305,
+              "share": 0.04736618265194274
+            },
+            {
+              "category": "unknown",
+              "characters": 710058,
+              "share": 0.9526338173480573
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 45.098,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 13.165,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 31.417,
+              "share": 0.6966384318595059
+            },
+            {
+              "category": "unknown",
+              "seconds": 13.681,
+              "share": 0.3033615681404941
+            }
+          ]
+        },
+        "tools_sampled": 91,
+        "tools_missing_duration": 35,
+        "sampled_event_span_seconds": 699.186,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.check",
+            "calls": 2,
+            "measured_tool_seconds": 18.309
+          },
+          {
+            "family": "st.commit",
+            "calls": 3,
+            "measured_tool_seconds": 7.655
+          },
+          {
+            "family": "compound",
+            "calls": 9,
+            "measured_tool_seconds": 3.526
+          },
+          {
+            "family": "st.sessions",
+            "calls": 4,
+            "measured_tool_seconds": 0.664
+          },
+          {
+            "family": "st.context",
+            "calls": 2,
+            "measured_tool_seconds": 0.589
+          }
+        ]
+      },
+      {
+        "session_id": "01a164b7-c5c4-7070-bb5c-5e121d7cd235",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 503701,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 496737,
+          "output_tokens": 6964,
+          "cache_read_tokens": 429568,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 496737
+        },
+        "transcript": {
+          "characters": 567267,
+          "argument_characters": 58419,
+          "returned_characters": 508848,
+          "calls_with_returned_text": 61,
+          "calls_missing_returned_text": 0,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "characters": 10236,
+              "share": 0.01804441294839996
+            },
+            {
+              "category": "unknown",
+              "characters": 557031,
+              "share": 0.9819555870516
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 25.692,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 3.778,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 19.099,
+              "share": 0.7433831542892729
+            },
+            {
+              "category": "unknown",
+              "seconds": 6.593,
+              "share": 0.256616845710727
+            }
+          ]
+        },
+        "tools_sampled": 61,
+        "tools_missing_duration": 16,
+        "sampled_event_span_seconds": 423.313,
+        "repeat_admin_patterns": [
+          {
+            "family": "compound",
+            "calls": 3,
+            "measured_tool_seconds": 3.617
+          },
+          {
+            "family": "st.sessions",
+            "calls": 2,
+            "measured_tool_seconds": 0.458
+          }
+        ]
+      },
+      {
+        "session_id": "01a16479-0620-7b31-903c-f045dcdeb829",
+        "project_id": "agent-hub",
+        "provider": "codex",
+        "model": "codex/unknown",
+        "tokens": 9060426,
+        "usage_source": "usage_calls",
+        "usage": {
+          "input_tokens": 9027100,
+          "output_tokens": 33326,
+          "cache_read_tokens": 8773632,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 9027100
+        },
+        "transcript": {
+          "characters": 283285,
+          "argument_characters": 92009,
+          "returned_characters": 191276,
+          "calls_with_returned_text": 100,
+          "calls_missing_returned_text": 1,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 3864,
+              "share": 0.013639973877896817
+            },
+            {
+              "category": "administration",
+              "characters": 21533,
+              "share": 0.07601179024657147
+            },
+            {
+              "category": "unknown",
+              "characters": 257888,
+              "share": 0.9103482358755317
+            }
+          ]
+        },
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 54.012,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 6.955,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 3.811,
+              "share": 0.0705583944308672
+            },
+            {
+              "category": "administration",
+              "seconds": 15.964,
+              "share": 0.29556394875212916
+            },
+            {
+              "category": "unknown",
+              "seconds": 34.237,
+              "share": 0.6338776568170037
+            }
+          ]
+        },
+        "tools_sampled": 101,
+        "tools_missing_duration": 49,
+        "sampled_event_span_seconds": 1393.64,
+        "repeat_admin_patterns": [
+          {
+            "family": "st.commit",
+            "calls": 2,
+            "measured_tool_seconds": 8.897
+          },
+          {
+            "family": "compound",
+            "calls": 10,
+            "measured_tool_seconds": 4.133
+          },
+          {
+            "family": "st.sessions",
+            "calls": 5,
+            "measured_tool_seconds": 1.129
+          },
+          {
+            "family": "st.aico",
+            "calls": 2,
+            "measured_tool_seconds": 0.603
+          }
+        ]
+      }
+    ]
+  },
+  "provenance": {
+    "method": "Existing snapshot queries against live PostgreSQL in a read-only transaction; pre-checkpoint source from this isolated worktree. No HTTP/deployed route claim. Goal status omitted because policy was still being revised.",
+    "captured_window_end": "2026-10-22T17:53:00+00:00",
+    "filters": {
+      "agent_hub_hour": {
+        "project_id": "agent-hub",
+        "provider": "codex"
+      },
+      "other_windows": "all projects/providers"
+    },
+    "privacy": "Only aggregate accounting, lengths, safe family names and retained session identities; no commands, transcript text, output payloads or credentials."
+  }
+}

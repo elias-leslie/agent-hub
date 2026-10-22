@@ -202,7 +202,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
     assert "jsonb_typeof" in postgres_query
     assert "session_events.tool_output" in postgres_query
     assert "json_typeof" not in postgres_query
-    assert "sessions.updated_at BETWEEN" in statements[3]
+    assert "sessions.updated_at >=" in statements[3]
     assert "usage_calls.agent_id" in statements[2]
     # Execute the actual aggregate queries against an isolated in-memory DB:
     # cached partitions and historical provider aliases must survive the seam.

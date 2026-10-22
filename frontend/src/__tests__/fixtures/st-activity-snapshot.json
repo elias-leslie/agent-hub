@@ -237,6 +237,97 @@
     }
   ],
   "session_rankings_total": 1,
+  "session_efficiency": {
+    "method": "session-tool-occupancy-v1",
+    "goal": {
+      "admin_share_target": null,
+      "minimum_duration_coverage": 0.8,
+      "maximum_unknown_share": 0.2
+    },
+    "sessions_total": 1,
+    "status_counts": {
+      "within_goal": 0,
+      "above_goal": 0,
+      "insufficient_coverage": 1,
+      "unmeasured": 0,
+      "goal_not_selected": 0
+    },
+    "rows": [
+      {
+        "session_id": "s",
+        "project_id": "project",
+        "provider": "codex",
+        "tokens": 0,
+        "usage_source": "missing",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_detail_input_tokens": 0
+        },
+        "transcript": {
+          "characters": 1242,
+          "argument_characters": 161,
+          "returned_characters": 1081,
+          "calls_with_returned_text": 3,
+          "calls_missing_returned_text": 1,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "characters": 31,
+              "share": 0.0249597423510467
+            },
+            {
+              "category": "administration",
+              "characters": 1176,
+              "share": 0.9468599033816425
+            },
+            {
+              "category": "unknown",
+              "characters": 35,
+              "share": 0.02818035426731079
+            }
+          ]
+        },
+        "model": null,
+        "tool_time": {
+          "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+          "denominator_seconds": 10.0,
+          "explicit_wait_seconds": 0,
+          "mixed_seconds": 0,
+          "thinking_seconds": null,
+          "idle_seconds": null,
+          "breakdown": [
+            {
+              "category": "substantive",
+              "seconds": 0,
+              "share": 0.0
+            },
+            {
+              "category": "administration",
+              "seconds": 10.0,
+              "share": 1.0
+            },
+            {
+              "category": "unknown",
+              "seconds": 0,
+              "share": 0.0
+            }
+          ]
+        },
+        "tools_sampled": 4,
+        "tools_missing_duration": 1,
+        "sampled_event_span_seconds": 0.0,
+        "goal_status": "insufficient_coverage",
+        "repeat_admin_patterns": [],
+        "repeat_admin_patterns_total": 0
+      }
+    ],
+    "trial_goal": {
+      "relative_cost_reduction_target": 0.2
+    }
+  },
   "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Unmatched ledger calls add to unknown globally and are excluded from Hub rankings. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
   "response_tokens": {
     "denominator": 0,

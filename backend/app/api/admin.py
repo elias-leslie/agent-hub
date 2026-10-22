@@ -1,9 +1,10 @@
 """Admin API endpoints for schedules, request audit and session diagnostics."""
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.automation_guidance import automation_moved
@@ -87,6 +88,33 @@ async def get_session_hotspots(
 
     payload = await build_session_hotspot_snapshot(db, hours=hours, limit=limit)
     return SessionHotspotsResponse(**payload)
+
+
+@router.get("/session-efficiency")
+async def get_session_efficiency(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hours: int = Query(default=24, ge=1, le=168),
+    limit: int = Query(default=5, ge=1, le=20),
+    until: datetime | None = Query(default=None, description="Exclusive UTC window end; pin for repeatable comparisons"),
+    project_id: str | None = Query(default=None, max_length=100),
+    provider: str | None = Query(default=None, max_length=20),
+    model: str | None = Query(default=None, max_length=100, description="Stored session model; not proof of served model"),
+    session_id: str | None = Query(default=None, max_length=36),
+) -> dict[str, Any]:
+    """Read existing session observations, filtered before the event cap. No task binding required."""
+    from app.services.admin_activity_cost import build_activity_cost_snapshot
+
+    current = datetime.now(UTC)
+    end = until or current
+    if end.tzinfo is None or end > current:
+        raise HTTPException(status_code=422, detail="until must include a timezone and cannot be in the future")
+    end = end.astimezone(UTC)
+    payload = await build_activity_cost_snapshot(
+        db, cutoff=end - timedelta(hours=hours), now=end, limit=limit,
+        project_id=project_id, provider=provider, model=model, session_id=session_id,
+    )
+    payload["filters"] = {"project_id": project_id, "provider": provider, "model": model, "session_id": session_id}
+    return payload
 
 
 # Unknown callers endpoint
