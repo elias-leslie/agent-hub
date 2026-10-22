@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   Fragment,
   Suspense,
@@ -145,6 +146,12 @@ function SessionsView() {
 
       <main className="relative px-0 md:px-4 lg:px-8">
         <div className="page-container">
+          <Link
+            href="/admin#activity"
+            className="inline-block text-sm text-amber-300 underline focus-ring-amber my-3"
+          >
+            Work and admin activity across projects
+          </Link>
           <div className="min-w-0 py-3">
             {data.error ? (
               <ErrorAlert

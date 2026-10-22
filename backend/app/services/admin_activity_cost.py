@@ -196,9 +196,18 @@ def summarize_activity_cost(
         else:
             missing_duration += 1
         if category in {"administration", "necessary_support"}:
-            pattern = patterns.setdefault(family, {"family": family, "category": "administration", "calls": 0, "session_ids": set(), "intervals": defaultdict(list)})
+            pattern = patterns.setdefault(family, {"family": family, "category": "administration", "calls": 0, "session_ids": set(), "intervals": defaultdict(list), "projects": {}})
             pattern["calls"] += 1
             pattern["session_ids"].add(tool.session_id)
+            session = by_session.get(tool.session_id)
+            if session is not None:
+                project = pattern["projects"].setdefault(session.project_id, {
+                    "project_id": session.project_id, "calls": 0, "session_ids": set(), "intervals": defaultdict(list),
+                })
+                project["calls"] += 1
+                project["session_ids"].add(tool.session_id)
+                if measured:
+                    project["intervals"][tool.session_id].append((start, end, category))
             if measured:
                 pattern["intervals"][tool.session_id].append((start, end, category))
 
@@ -280,7 +289,7 @@ def summarize_activity_cost(
             unlinked_tool_seconds += sum(metrics["seconds"].get(category, 0) for category in CATEGORIES)
             continue
         project, task = next(iter(links))
-        row = tasks.setdefault((project, task), {"project_id": project, "task_id": task, "sessions": 0, "tokens": 0, "counts": dict.fromkeys(CATEGORIES, 0), "seconds": defaultdict(float)})
+        row = tasks.setdefault((project, task), {"project_id": project, "task_id": task, "sample_session_id": sid, "sessions": 0, "tokens": 0, "counts": dict.fromkeys(CATEGORIES, 0), "seconds": defaultdict(float)})
         row["sessions"] += 1
         row["tokens"] += sum(metrics["counts"].values())
         for category, amount in metrics["counts"].items():
@@ -288,9 +297,17 @@ def summarize_activity_cost(
         for category, amount in metrics["seconds"].items():
             row["seconds"][category] += amount
 
-    repeats = [{"family": family, "category": row["category"], "calls": row["calls"], "sessions": len(row["session_ids"]), "measured_tool_seconds": round(sum(sum(_occupancy(spans).values()) for spans in row["intervals"].values()), 3), "avoidable": None} for family, row in patterns.items() if row["calls"] > 1]
+    def project_rows(pattern: dict) -> list[dict]:
+        rows = [{"project_id": project["project_id"], "calls": project["calls"],
+                 "sessions": len(project["session_ids"]), "sample_session_id": min(project["session_ids"]),
+                 "measured_tool_seconds": round(sum(sum(_occupancy(spans).values()) for spans in project["intervals"].values()), 3)}
+                for project in pattern["projects"].values()]
+        rows.sort(key=lambda row: (row["measured_tool_seconds"], row["calls"], row["project_id"]), reverse=True)
+        return rows[:limit]
+
+    repeats = [{"family": family, "category": row["category"], "calls": row["calls"], "sessions": len(row["session_ids"]), "measured_tool_seconds": round(sum(sum(_occupancy(spans).values()) for spans in row["intervals"].values()), 3), "avoidable": None, "projects": project_rows(row), "projects_total": len(row["projects"])} for family, row in patterns.items() if row["calls"] > 1]
     repeats.sort(key=lambda row: (row["measured_tool_seconds"], row["calls"]), reverse=True)
-    task_rows = [{"project_id": row["project_id"], "task_id": row["task_id"], "sessions": row["sessions"], "tokens": row["tokens"], "token_breakdown": _token_view(row["counts"])["breakdown"], "tool_time": _time_view(row["seconds"])} for row in tasks.values()]
+    task_rows = [{"sample_session_id": row["sample_session_id"], "project_id": row["project_id"], "task_id": row["task_id"], "sessions": row["sessions"], "tokens": row["tokens"], "token_breakdown": _token_view(row["counts"])["breakdown"], "tool_time": _time_view(row["seconds"])} for row in tasks.values()]
     task_rows.sort(key=lambda row: (row["tokens"], row["tool_time"]["denominator_seconds"]), reverse=True)
     tool_time = _time_view(seconds)
     shares = {row["category"]: row["share"] for row in tool_time["breakdown"]}
@@ -308,8 +325,8 @@ def summarize_activity_cost(
         "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
         "response_tokens": _token_view(responses),
         "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
-        "tool_time": tool_time, "tools_missing_duration": missing_duration,
-        "summary": summary, "repeat_admin_patterns": repeats[:limit],
+        "tool_time": tool_time, "tools_missing_duration": missing_duration, "tools_sampled": len(tools),
+        "summary": summary, "repeat_admin_patterns": repeats[:limit], "repeat_admin_patterns_total": len(repeats),
         "task_rollups": task_rows[:limit], "task_rollups_total": len(task_rows),
         "limits": [
             "Tool categories are conservative observations; unsupported commands and unseen work stay unknown. Mixed turns are not split into invented token allocations.",

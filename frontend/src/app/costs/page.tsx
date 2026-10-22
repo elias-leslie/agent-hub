@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CircleDollarSign, X } from 'lucide-react'
+import Link from 'next/link'
 import { Suspense, useCallback } from 'react'
 import {
   fetchSpend,
@@ -172,6 +173,12 @@ function CostsView() {
 
       <main className="page-frame">
         <div className="page-container space-y-5">
+          <Link
+            href="/admin#activity"
+            className="inline-block text-sm text-amber-300 underline focus-ring-amber my-3"
+          >
+            Work and admin activity across projects
+          </Link>
           <SpendSummary summary={data?.summary} loading={isLoading} />
           {data && <CoverageLine data={data} />}
 

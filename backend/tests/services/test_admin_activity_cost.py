@@ -235,3 +235,21 @@ def test_orphan_result_and_no_call_id_runtime_keep_unknown_time_visible():
     result = snapshot([event("tool_result", call=None, tool_input=None, tool_name="Bash", seconds=5)])
     assert result["tool_time"]["denominator_seconds"] == 5
     assert buckets(result["tool_time"]["breakdown"], "seconds")["unknown"] == 5
+
+
+def test_repeat_projects_and_task_drills_are_source_backed_bounded_and_counted():
+    sessions = [Row(id=sid, project_id=project, provider="codex") for sid, project in (("s", "p1"), ("other", "p2"))]
+    result = snapshot([
+        event(call="one"), event("tool_result", call="one", seconds=5),
+        event(sid="other", call="two"), event("tool_result", sid="other", call="two", seconds=10),
+    ], sessions=sessions, bindings=[Row(session_id="s", project_id="p1", task_id="task-real")], limit=1)
+    pattern = result["repeat_admin_patterns"][0]
+    assert result["repeat_admin_patterns_total"] == 1
+    assert pattern["projects_total"] == 2
+    assert pattern["projects"] == [{"project_id": "p2", "calls": 1, "sessions": 1,
+                                      "sample_session_id": "other", "measured_tool_seconds": 10}]
+    assert result["task_rollups"][0]["sample_session_id"] == "s"
+    assert result["task_rollups"][0]["project_id"] == "p1"
+    assert result["tools_sampled"] == 2
+    assert result["tools_missing_duration"] == 0
+    assert result["unlinked_sessions"] == 1

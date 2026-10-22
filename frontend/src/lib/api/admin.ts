@@ -1,6 +1,7 @@
 // API functions for admin page
 
 import { fetchApi } from '@/lib/api-config'
+import { type ActivityCost, parseActivityCost } from './activity-cost'
 
 export interface HotspotTotals {
   sessions: number
@@ -65,6 +66,7 @@ export interface SessionHotspots {
   repeated_workloads: RepeatedWorkloadRow[]
   low_yield_sessions: LowYieldSessionRow[]
   zero_event_active_sessions: ZeroEventActiveSessionRow[]
+  activity_cost?: ActivityCost | null
 }
 
 export interface RequestBlockStats {
@@ -89,6 +91,8 @@ export async function fetchSessionHotspots(
     limit: String(limit),
   })
   const res = await fetchApi(`/api/admin/session-hotspots?${params.toString()}`)
-  if (!res.ok) throw new Error('Failed to fetch session hotspots')
-  return res.json()
+  if (!res.ok)
+    throw new Error(`Could not load activity and session data (${res.status})`)
+  const data: SessionHotspots = await res.json()
+  return { ...data, activity_cost: parseActivityCost(data.activity_cost) }
 }

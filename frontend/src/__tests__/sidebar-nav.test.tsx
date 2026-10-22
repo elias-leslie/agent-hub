@@ -30,7 +30,7 @@ describe('SidebarNav', () => {
       ).toBeInTheDocument()
     }
 
-    for (const href of ['/chat', '/dashboard', '/access-control']) {
+    for (const href of ['/chat', '/dashboard', '/admin', '/access-control']) {
       const link = screen
         .getAllByRole('link')
         .find((candidate) => candidate.getAttribute('href') === href)
@@ -40,6 +40,7 @@ describe('SidebarNav', () => {
   })
 
   it.each([
+    ['/admin', '/admin'],
     ['/agents/persona', '/agents'],
     ['/memory', '/memory'],
     ['/runtime-context', '/runtime-context'],

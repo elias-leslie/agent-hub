@@ -3,10 +3,10 @@
 import { AlertTriangle, RefreshCw, Shield, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { useToastActions } from '@/components/error/toast'
 import { fetchSessionHotspots, type SessionHotspots } from '@/lib/api'
 import { fetchRequestBlockStats, type RequestBlockStats } from '@/lib/api/admin'
 import { cn } from '@/lib/utils'
+import { ActivityCostPanel } from './components/ActivityCostPanel'
 import { SessionHotspotsPanel } from './components/SessionHotspotsPanel'
 
 export default function AdminPage() {
@@ -14,24 +14,34 @@ export default function AdminPage() {
   const [hotspots, setHotspots] = useState<SessionHotspots | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const toast = useToastActions()
+  const [activityError, setActivityError] = useState<string | null>(null)
+  const [blockError, setBlockError] = useState(false)
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      const [b, h] = await Promise.all([
+      const [blocks, activity] = await Promise.allSettled([
         fetchRequestBlockStats(),
         fetchSessionHotspots(),
       ])
-      setBlockStats(b)
-      setHotspots(h)
-    } catch {
-      toast.error('Failed to refresh', 'Could not load admin data')
+      if (blocks.status === 'fulfilled') {
+        setBlockStats(blocks.value)
+        setBlockError(false)
+      } else setBlockError(true)
+      if (activity.status === 'fulfilled') {
+        setHotspots(activity.value)
+        setActivityError(null)
+      } else
+        setActivityError(
+          activity.reason instanceof Error
+            ? activity.reason.message
+            : 'Request failed',
+        )
     } finally {
       setIsRefreshing(false)
       setIsLoading(false)
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     refresh()
@@ -52,15 +62,9 @@ export default function AdminPage() {
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-slate-400" />
             <h1 className="text-base font-semibold text-slate-100">Admin</h1>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800/50">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-              </span>
-              <span className="text-[10px] font-medium text-emerald-400">
-                Live
-              </span>
-            </div>
+            <span className="text-xs text-slate-400">
+              {isRefreshing ? 'Refreshing…' : 'Refreshes every 30s'}
+            </span>
           </div>
 
           <button
@@ -78,6 +82,19 @@ export default function AdminPage() {
       </header>
 
       <main className="px-6 lg:px-8 py-8 space-y-8 relative">
+        <ActivityCostPanel
+          activity={hotspots?.activity_cost ?? null}
+          isLoading={isLoading}
+          error={activityError}
+          onRetry={refresh}
+        />
+
+        {blockError && (
+          <p role="alert" className="text-sm text-amber-300">
+            Request block stats could not be refreshed.
+            {blockStats ? ' Showing the last loaded counts.' : ''}
+          </p>
+        )}
         {/* Stats Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-5 rounded-xl bg-gradient-to-br from-amber-950/50 to-slate-900/40 border border-amber-800/50 hover:border-amber-700 transition-colors">
@@ -134,7 +151,9 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <SessionHotspotsPanel hotspots={hotspots} isLoading={isLoading} />
+        {(hotspots || isLoading) && (
+          <SessionHotspotsPanel hotspots={hotspots} isLoading={isLoading} />
+        )}
 
         <section className="section-card flex flex-wrap items-center justify-between gap-4">
           <div>
