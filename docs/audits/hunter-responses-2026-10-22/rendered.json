@@ -1,0 +1,33 @@
+{
+  "source": "Synthetic backend response fixture rendered through the actual HunterResponseActivity component and existing deployed CSS. No live target/session contents.",
+  "theme": "Existing product dark theme; isolated managed Chrome without Dark Reader",
+  "revision": "Working tree based on 41cfc241; additive response accounting before checkpoint",
+  "desktop": {
+    "time": "2026-10-22T21:59:32.945Z",
+    "viewport": [
+      1280,
+      720
+    ],
+    "overflow": false,
+    "text": "Synthetic response accounting fixture \u00b7 no live sessions\n\nNeri hunter responses \u00b7 4 responses \u00b7 1 session\n\nUnique provider responses for declared Neri hunting and recon sessions. Categories describe linked tool calls. Source reads, searches and recon calls show observed investigation; they do not establish a bug, successful execution or the purpose of every token. Mixed responses stay whole.\n\nNeri response and reported token shares by observed activity\nObserved activity\tResponses / share\tInput + output / share\nInvestigation only\t1 \u00b7 25.0%\t220 \u00b7 20.4%\nMixed\t1 \u00b7 25.0%\t320 \u00b7 29.6%\nSupport / coordination\t1 \u00b7 25.0%\t120 \u00b7 11.1%\nUnknown\t1 \u00b7 25.0%\t420 \u00b7 38.9%\n\nCumulative reported input 1,000 \u00b7 output 80. Input includes recorded cache read 500 and write 20; cache detail covers 1,000 input tokens. Repeated input adds across responses. These totals overlap other usage on this page.\n\n0 calls lack a response link \u00b7 0 sessions lack usable response usage \u00b7 1 duplicate usage events excluded \u00b7 0 unusable usage events. Unsupported actions stay unknown.\n\nShowing 1 of 1 sessions, ranked by reported response tokens. Response numbers are within this window's sample; earlier investigation may be absent.\n\ns \u00b7 pi \u00b7 hunting \u00b7 4 responses\n\nInput per response: first 100 \u2192 peak 400 tokens at sampled response 4. This is separate from cumulative repeated input.\n\nFirst observed investigation: Source read \u00b7 sampled response 2 \u00b7 10s since first sampled response \u00b7 input 200 tokens.\n\nInvestigation only: 1 response / 20.4% tokens \u00b7 Mixed: 1 response / 29.6% tokens \u00b7 Support / coordination: 1 response / 11.1% tokens \u00b7 Unknown: 1 response / 38.9% tokens\n\nResponse accounting limits"
+  },
+  "mobile": {
+    "time": "2026-10-22T21:59:57.016Z",
+    "viewport": [
+      390,
+      844
+    ],
+    "overflow": false,
+    "text": "Synthetic response accounting fixture \u00b7 no live sessions\n\nNeri hunter responses \u00b7 4 responses \u00b7 1 session\n\nUnique provider responses for declared Neri hunting and recon sessions. Categories describe linked tool calls. Source reads, searches and recon calls show observed investigation; they do not establish a bug, successful execution or the purpose of every token. Mixed responses stay whole.\n\nNeri response and reported token shares by observed activity\nObserved activity\tResponses / share\tInput + output / share\nInvestigation only\t1 \u00b7 25.0%\t220 \u00b7 20.4%\nMixed\t1 \u00b7 25.0%\t320 \u00b7 29.6%\nSupport / coordination\t1 \u00b7 25.0%\t120 \u00b7 11.1%\nUnknown\t1 \u00b7 25.0%\t420 \u00b7 38.9%\n\nCumulative reported input 1,000 \u00b7 output 80. Input includes recorded cache read 500 and write 20; cache detail covers 1,000 input tokens. Repeated input adds across responses. These totals overlap other usage on this page.\n\n0 calls lack a response link \u00b7 0 sessions lack usable response usage \u00b7 1 duplicate usage events excluded \u00b7 0 unusable usage events. Unsupported actions stay unknown.\n\nShowing 1 of 1 sessions, ranked by reported response tokens. Response numbers are within this window's sample; earlier investigation may be absent.\n\ns \u00b7 pi \u00b7 hunting \u00b7 4 responses\n\nInput per response: first 100 \u2192 peak 400 tokens at sampled response 4. This is separate from cumulative repeated input.\n\nFirst observed investigation: Source read \u00b7 sampled response 2 \u00b7 10s since first sampled response \u00b7 input 200 tokens.\n\nInvestigation only: 1 response / 20.4% tokens \u00b7 Mixed: 1 response / 29.6% tokens \u00b7 Support / coordination: 1 response / 11.1% tokens \u00b7 Unknown: 1 response / 38.9% tokens\n\nResponse accounting limits"
+  },
+  "interaction": {
+    "native_summary_enter_toggle": "closed then reopened",
+    "tab_to_session_link": "observed; solid amber focus outline",
+    "link_followed": false
+  },
+  "coverage_limits": [
+    "Synthetic component rendering; not full application integration or live metrics",
+    "Empty/unavailable/capped/missing/zero states covered in component tests; screenshots show populated fixture",
+    "Existing retained ST Activity screenshot supplied the styling baseline; no redesign"
+  ]
+}

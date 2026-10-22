@@ -36,6 +36,55 @@ export interface ActivityUsage {
   cache_detail_input_tokens: number
 }
 
+export type HunterResponseCategory =
+  | 'investigation_only'
+  | 'mixed'
+  | 'support_coordination'
+  | 'unknown'
+
+export interface HunterResponseMetrics {
+  responses: number
+  tokens: number
+  usage: ActivityUsage
+  breakdown: {
+    category: HunterResponseCategory
+    responses: number
+    response_share: number | null
+    tokens: number
+    token_share: number | null
+  }[]
+}
+
+export interface HunterResponseActivity extends HunterResponseMetrics {
+  method: 'linked-provider-responses-v1'
+  sessions_total: number
+  sessions_without_usage: number
+  duplicate_usage_events: number
+  unusable_usage_events: number
+  tools_without_response: number
+  events_truncated: boolean
+  basis: string
+  rows: (HunterResponseMetrics & {
+    session_id: string
+    project_id: string
+    harness: string
+    work_role: string
+    tools_without_response: number
+    window_starts_mid_session: boolean
+    first_observed_investigation: {
+      action: 'source_read' | 'source_search' | 'recon_run'
+      sample_response_number: number | null
+      seconds_from_first_response: number | null
+      input_tokens: number | null
+    } | null
+    input_per_response: {
+      first_tokens: number | null
+      peak_tokens: number | null
+      peak_sample_response_number: number | null
+    }
+  })[]
+}
+
 export interface ActivityTranscript {
   characters: number
   argument_characters: number
@@ -123,6 +172,7 @@ export interface SessionEfficiencyData {
 }
 
 export interface ActivityCost {
+  hunter_responses?: HunterResponseActivity
   context_split?: ContextSplit
   duration_split?: DurationSplit
   by_project?: (ActivityComparison & { project_id: string })[]
@@ -274,6 +324,94 @@ function usage(value: unknown) {
     Number(value.cache_read_tokens) + Number(value.cache_write_tokens) <=
       Number(value.input_tokens) &&
     Number(value.cache_detail_input_tokens) <= Number(value.input_tokens)
+  )
+}
+
+function hunterResponseMetrics(value: unknown) {
+  if (
+    !record(value) ||
+    !numbers(value, ['responses', 'tokens']) ||
+    !usage(value.usage) ||
+    !Array.isArray(value.breakdown)
+  )
+    return false
+  const categories = new Set([
+    'investigation_only',
+    'mixed',
+    'support_coordination',
+    'unknown',
+  ])
+  let responses = 0
+  let tokens = 0
+  for (const row of value.breakdown) {
+    if (
+      !record(row) ||
+      typeof row.category !== 'string' ||
+      !categories.delete(row.category) ||
+      !numbers(row, ['responses', 'tokens']) ||
+      !share(row.response_share) ||
+      !share(row.token_share)
+    )
+      return false
+    responses += Number(row.responses)
+    tokens += Number(row.tokens)
+  }
+  return (
+    categories.size === 0 &&
+    responses === value.responses &&
+    tokens === value.tokens &&
+    record(value.usage) &&
+    tokens ===
+      Number(value.usage.input_tokens) + Number(value.usage.output_tokens)
+  )
+}
+
+function nullableNumbers(row: Record<string, unknown>, keys: string[]) {
+  return keys.every((key) => row[key] === null || numbers(row, [key]))
+}
+
+function hunterResponses(value: unknown) {
+  if (value === undefined) return true
+  return (
+    record(value) &&
+    value.method === 'linked-provider-responses-v1' &&
+    hunterResponseMetrics(value) &&
+    strings(value, ['basis']) &&
+    numbers(value, [
+      'sessions_total',
+      'sessions_without_usage',
+      'duplicate_usage_events',
+      'unusable_usage_events',
+      'tools_without_response',
+    ]) &&
+    Number(value.sessions_without_usage) <= Number(value.sessions_total) &&
+    typeof value.events_truncated === 'boolean' &&
+    Array.isArray(value.rows) &&
+    value.rows.length <= Number(value.sessions_total) &&
+    value.rows.every(
+      (row: unknown) =>
+        record(row) &&
+        hunterResponseMetrics(row) &&
+        strings(row, ['session_id', 'project_id', 'harness', 'work_role']) &&
+        numbers(row, ['tools_without_response']) &&
+        typeof row.window_starts_mid_session === 'boolean' &&
+        record(row.input_per_response) &&
+        nullableNumbers(row.input_per_response, [
+          'first_tokens',
+          'peak_tokens',
+          'peak_sample_response_number',
+        ]) &&
+        (row.first_observed_investigation === null ||
+          (record(row.first_observed_investigation) &&
+            ['source_read', 'source_search', 'recon_run'].includes(
+              String(row.first_observed_investigation.action),
+            ) &&
+            nullableNumbers(row.first_observed_investigation, [
+              'sample_response_number',
+              'seconds_from_first_response',
+              'input_tokens',
+            ]))),
+    )
   )
 }
 function transcript(value: unknown) {
@@ -478,6 +616,7 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
     !transcript(value.transcript) ||
     !stCommands(value.st_commands) ||
     !sessionEfficiency(value.session_efficiency) ||
+    !hunterResponses(value.hunter_responses) ||
     !activityComparisons(value) ||
     !Array.isArray(value.project_rankings) ||
     !value.project_rankings.every(

@@ -1,0 +1,109 @@
+{
+  "method": "linked-provider-responses-v1",
+  "responses": 4,
+  "tokens": 1080,
+  "usage": {
+    "input_tokens": 1000,
+    "output_tokens": 80,
+    "cache_read_tokens": 500,
+    "cache_write_tokens": 20,
+    "cache_detail_input_tokens": 1000
+  },
+  "breakdown": [
+    {
+      "category": "investigation_only",
+      "responses": 1,
+      "response_share": 0.25,
+      "tokens": 220,
+      "token_share": 0.2037037037037037
+    },
+    {
+      "category": "mixed",
+      "responses": 1,
+      "response_share": 0.25,
+      "tokens": 320,
+      "token_share": 0.2962962962962963
+    },
+    {
+      "category": "support_coordination",
+      "responses": 1,
+      "response_share": 0.25,
+      "tokens": 120,
+      "token_share": 0.1111111111111111
+    },
+    {
+      "category": "unknown",
+      "responses": 1,
+      "response_share": 0.25,
+      "tokens": 420,
+      "token_share": 0.3888888888888889
+    }
+  ],
+  "sessions_total": 1,
+  "sessions_without_usage": 0,
+  "duplicate_usage_events": 1,
+  "unusable_usage_events": 0,
+  "tools_without_response": 0,
+  "events_truncated": false,
+  "rows": [
+    {
+      "session_id": "s",
+      "project_id": "neri",
+      "harness": "pi",
+      "work_role": "hunting",
+      "responses": 4,
+      "tokens": 1080,
+      "usage": {
+        "input_tokens": 1000,
+        "output_tokens": 80,
+        "cache_read_tokens": 500,
+        "cache_write_tokens": 20,
+        "cache_detail_input_tokens": 1000
+      },
+      "breakdown": [
+        {
+          "category": "investigation_only",
+          "responses": 1,
+          "response_share": 0.25,
+          "tokens": 220,
+          "token_share": 0.2037037037037037
+        },
+        {
+          "category": "mixed",
+          "responses": 1,
+          "response_share": 0.25,
+          "tokens": 320,
+          "token_share": 0.2962962962962963
+        },
+        {
+          "category": "support_coordination",
+          "responses": 1,
+          "response_share": 0.25,
+          "tokens": 120,
+          "token_share": 0.1111111111111111
+        },
+        {
+          "category": "unknown",
+          "responses": 1,
+          "response_share": 0.25,
+          "tokens": 420,
+          "token_share": 0.3888888888888889
+        }
+      ],
+      "tools_without_response": 0,
+      "window_starts_mid_session": false,
+      "first_observed_investigation": {
+        "action": "source_read",
+        "sample_response_number": 2,
+        "seconds_from_first_response": 10.0,
+        "input_tokens": 200
+      },
+      "input_per_response": {
+        "first_tokens": 100,
+        "peak_tokens": 400,
+        "peak_sample_response_number": 4
+      }
+    }
+  ],
+  "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
+}

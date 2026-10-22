@@ -4,6 +4,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace as Row
 from unittest.mock import AsyncMock, Mock
 
@@ -25,6 +26,7 @@ def event(kind="tool_use", *, sid="s", turn=1, call="c", seconds=0, at=10, **kw)
         returned_characters=kw.pop("returned_characters", None),
         source_timestamp=NOW - timedelta(seconds=at), created_at=NOW - timedelta(seconds=at),
         native_turn_id=kw.pop("native_turn_id", None), native_status=kw.pop("native_status", None),
+        source_event_id=kw.pop("source_event_id", None),
         **kw,
     )
 
@@ -218,7 +220,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
         sql.execute("""CREATE TABLE session_events (
             id TEXT, session_id TEXT, turn INT, sequence INT, event_type TEXT, call_id TEXT,
             tool_name TEXT, tool_input JSON, usage JSON, duration_ms INT,
-            source_timestamp TEXT, created_at TEXT, content TEXT, tool_output JSON
+            source_timestamp TEXT, created_at TEXT, content TEXT, tool_output JSON, source_event_id TEXT
         )""")
         def jsonb_typeof(value):
             parsed = json.loads(value) if value is not None else None
@@ -237,7 +239,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
             (None, {"content": "claude text"}),
             (clipped_content, long_output),
         ]):
-            sql.execute("INSERT INTO session_events VALUES (?, 's', 1, ?, 'tool_result', ?, NULL, NULL, NULL, 0, ?, ?, ?, ?)",
+            sql.execute("INSERT INTO session_events (id, session_id, turn, sequence, event_type, call_id, tool_name, tool_input, usage, duration_ms, source_timestamp, created_at, content, tool_output) VALUES (?, 's', 1, ?, 'tool_result', ?, NULL, NULL, NULL, 0, ?, ?, ?, ?)",
                         (str(index), index, str(index), timestamp, timestamp, content, json.dumps(output)))
         event_query = db.execute.call_args_list[0].args[0]
         compiled = str(event_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
@@ -359,3 +361,119 @@ def test_native_partitions_global_unmatched_coverage_and_rankings_reconcile():
     assert task["usage"]["cache_read_tokens"] == 800
     assert task["transcript"] == result["transcript"]
     assert result["unlinked_tokens"] == 2210
+
+
+def hunter_session(*, sid="s", project="neri", role="hunting", harness="pi"):
+    return Row(id=sid, project_id=project, provider="openai", session_type=harness,
+               created_at=NOW - timedelta(minutes=2), provider_metadata={"work_role": {
+                   "id": role, "source": "test", "declared_at": NOW.isoformat(),
+               }})
+
+
+def hunter_usage(response, *, at=10, inp=100, out=20, **kw):
+    return event("usage", at=at, usage={"scope": "response", "response_id": response,
+                                       "input_tokens": inp, "output_tokens": out,
+                                       "cached_input_tokens": inp // 2, "cache_write_tokens": 5, **kw})
+
+
+def test_hunter_response_join_does_not_collapse_pi_user_turns_or_duplicate_usage():
+    rows = [
+        event(call="support", at=100, source_event_id="message:r1:0"), hunter_usage("r1", at=100, inp=100),
+        event(call="read", at=90, tool_name="read", tool_input={"path": "/source/file.php"}, source_event_id="message:r2:0"),
+        hunter_usage("r2", at=90, inp=200), hunter_usage("r2", at=90, inp=200),
+        event(call="mixed-source", at=80, tool_name="read", tool_input={"path": "app/file.py"}, source_event_id="message:r3:0"),
+        event(call="mixed-support", at=80, source_event_id="message:r3:1"), hunter_usage("r3", at=80, inp=300),
+        hunter_usage("r4", at=70, inp=400),
+    ]
+    data = snapshot(rows, sessions=[hunter_session()])["hunter_responses"]
+    assert data["responses"] == 4 and data["tokens"] == 1080
+    assert data["duplicate_usage_events"] == 1
+    assert data["usage"] == {"input_tokens": 1000, "output_tokens": 80, "cache_read_tokens": 500,
+                             "cache_write_tokens": 20, "cache_detail_input_tokens": 1000}
+    parts = {part["category"]: part for part in data["breakdown"]}
+    assert {key: part["responses"] for key, part in parts.items()} == {
+        "investigation_only": 1, "mixed": 1, "support_coordination": 1, "unknown": 1,
+    }
+    assert parts["investigation_only"]["response_share"] == 0.25
+    assert parts["investigation_only"]["token_share"] == 220 / 1080
+    row = data["rows"][0]
+    assert row["first_observed_investigation"] == {
+        "action": "source_read", "sample_response_number": 2,
+        "seconds_from_first_response": 10, "input_tokens": 200,
+    }
+    assert row["input_per_response"] == {"first_tokens": 100, "peak_tokens": 400, "peak_sample_response_number": 4}
+    fixture = Path(__file__).parents[3] / "frontend/src/__tests__/fixtures/hunter-responses.json"
+    assert data == json.loads(fixture.read_text())
+
+
+def test_hunter_missing_links_and_opaque_purpose_remain_unknown_and_content_free():
+    secret = "PRIVATE_SYNTHETIC_BODY"
+    rows = [
+        event(call="unlinked", at=90, tool_name="read", tool_input={"path": f"src/{secret}.py"}),
+        hunter_usage("r1", at=90),
+        event(call="opaque", at=80, tool_input={"command": f"python -c '{secret}'"}, source_event_id="message:r2:0"),
+        hunter_usage("r2", at=80),
+        event(call="docs", at=70, tool_name="read", tool_input={"path": "AGENTS.md"}, source_event_id="message:r3:0"),
+        hunter_usage("r3", at=70),
+        hunter_usage("bad", at=60, output_tokens=None),
+    ]
+    data = snapshot(rows, sessions=[hunter_session()])["hunter_responses"]
+    assert data["responses"] == 3 and data["tools_without_response"] == 1
+    assert data["unusable_usage_events"] == 1
+    assert buckets(data["breakdown"], "responses")["unknown"] == 3
+    assert data["rows"][0]["first_observed_investigation"]["sample_response_number"] is None
+    assert secret not in json.dumps(data)
+
+
+def test_hunter_source_search_compounds_and_explicit_recon_invocation_are_observations():
+    rows = [
+        event(call="source", at=90, tool_input={"command": "rg -n symbol src"}, source_event_id="message:r1:0"),
+        hunter_usage("r1", at=90),
+        event(call="compound", at=80, tool_input={"command": "cat src/file.py && st context synthetic-task"}, source_event_id="message:r2:0"),
+        hunter_usage("r2", at=80),
+        event(call="lab", at=70, tool_input={"command": "st bugout recon run synthetic-run"}, source_event_id="message:r3:0"),
+        hunter_usage("r3", at=70),
+    ]
+    data = snapshot(rows, sessions=[hunter_session()])["hunter_responses"]
+    assert buckets(data["breakdown"], "responses") == {
+        "investigation_only": 2, "mixed": 1, "support_coordination": 0, "unknown": 0,
+    }
+    assert data["rows"][0]["first_observed_investigation"]["action"] == "source_search"
+
+
+def test_hunter_scope_is_explicit_and_non_pi_tools_are_not_joined_by_user_turn():
+    sessions = [hunter_session(), hunter_session(sid="other-project", project="other"),
+                hunter_session(sid="coordinator", role="coordinator"), hunter_session(sid="codex", harness="codex")]
+    rows = [event(tool_name="read", tool_input={"path": "src/file.py"}, source_event_id="message:r1:0"), hunter_usage("r1")]
+    rows += [usage(sid=sid, response="r") for sid in ("other-project", "coordinator", "codex")]
+    rows += [event(sid="codex", call="read", tool_name="read", tool_input={"path": "src/file.py"}, source_event_id="message:r:0")]
+    data = snapshot(rows, sessions=sessions)["hunter_responses"]
+    assert data["sessions_total"] == 2 and data["responses"] == 2
+    assert buckets(data["breakdown"], "responses")["unknown"] == 1
+    assert data["tools_without_response"] == 1
+
+
+def test_hunter_cutoff_and_cap_do_not_claim_a_lifetime_first_or_complete_purpose():
+    rows = [
+        event(at=100, call="old", tool_name="read", tool_input={"path": "old.py"}, source_event_id="message:old:0"),
+        hunter_usage("old", at=100, inp=999),
+        event(at=10, call="new", tool_name="read", tool_input={"path": "new.py"}, source_event_id="message:new:0"),
+        hunter_usage("new", at=10, inp=200),
+    ]
+    data = summarize_activity_cost(rows, [], [], [hunter_session()], [],
+                                   cutoff=NOW - timedelta(seconds=60), now=NOW, limit=5, truncated=True)["hunter_responses"]
+    assert data["responses"] == 1 and data["events_truncated"] is True
+    assert buckets(data["breakdown"], "responses")["unknown"] == 1
+    row = data["rows"][0]
+    assert row["window_starts_mid_session"] is True
+    assert row["first_observed_investigation"]["sample_response_number"] == 1
+    assert row["input_per_response"]["first_tokens"] == 200
+
+
+@pytest.mark.parametrize("command", [[], "cat AGENTS.md src/file.py", "rg symbol docs src", "python -c 'opaque()'"])
+def test_hunter_ambiguous_shell_invocations_stay_unknown(command):
+    data = snapshot([
+        event(tool_input={"command": command}, source_event_id="message:r1:0"), hunter_usage("r1"),
+    ], sessions=[hunter_session()])["hunter_responses"]
+    assert buckets(data["breakdown"], "responses")["unknown"] == 1
+    assert data["rows"][0]["first_observed_investigation"] is None

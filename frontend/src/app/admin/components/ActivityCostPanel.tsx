@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/activity-cost'
 import { ActivityAccounting } from './ActivityAccounting'
 import { EfficiencyOverview } from './EfficiencyOverview'
+import { HunterResponseActivity } from './HunterResponseActivity'
 import { SessionEfficiency } from './SessionEfficiency'
 
 const LABELS: Record<ActivityCategory, string> = {
@@ -98,6 +99,7 @@ export function ActivityCostPanel({
             activity={activity}
             scope={scope ?? new URLSearchParams()}
           />
+          <HunterResponseActivity activity={activity} scope={scope} />
           <details className="rounded-lg border border-slate-700 p-3">
             <summary className="cursor-pointer text-sm text-slate-200 focus-ring-amber">
               Usage, coverage and session evidence

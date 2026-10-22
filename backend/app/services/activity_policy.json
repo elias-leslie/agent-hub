@@ -11,6 +11,19 @@
   "session_efficiency_trial": {
     "relative_cost_reduction_target": 0.2
   },
+  "hunter_responses": {
+    "project_id": "neri",
+    "work_roles": ["hunting", "recon"],
+    "shell_tools": ["bash", "exec_command", "run_command"],
+    "source_read_tools": ["read", "read_file"],
+    "source_search_tools": ["grep", "search_files"],
+    "coordination_tools": ["spawn_agent", "send_message", "followup_task", "wait_agent", "request_user_input"],
+    "source_read_commands": ["cat", "sed", "head", "tail"],
+    "source_search_commands": ["rg", "grep"],
+    "source_extensions": [".py", ".pyi", ".js", ".jsx", ".ts", ".tsx", ".php", ".rb", ".go", ".rs", ".c", ".cc", ".cpp", ".h", ".hpp", ".java", ".kt", ".cs", ".vue", ".svelte", ".sql"],
+    "source_directories": ["src", "source", "app", "lib", "backend", "frontend", "plugins", "modules", "core"],
+    "recon_command_prefixes": [["st", "bugout", "recon", "run"]]
+  },
   "st_families": {
     "administration": ["context", "task", "show", "list", "ready", "ready-all", "claim", "done", "log", "plan", "portfolio", "session", "sessions", "agent", "hub", "prompt", "memory", "lease", "queue", "ownership", "batch", "tools", "aico", "agents", "export", "pulse"],
     "necessary_support": ["check", "commit", "service", "services", "build", "deploy", "vcs"],

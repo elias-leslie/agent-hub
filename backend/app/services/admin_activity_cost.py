@@ -33,10 +33,179 @@ from app.services.session_harnesses import (
     session_harness,
 )
 from app.services.session_roles import role_predicate, session_work_role, work_role_options
-from app.services.st_activity import st_command_family, summarize_st_commands
+from app.services.st_activity import (
+    POLICY,
+    shell_segments,
+    st_command_family,
+    summarize_st_commands,
+)
 
 EVENT_LIMIT = 20_000
 CATEGORIES = ("substantive", "necessary_support", "administration", "mixed", "unknown")
+RESPONSE_CATEGORIES = ("investigation_only", "mixed", "support_coordination", "unknown")
+
+
+def _response_action(tool: Any) -> tuple[set[str], set[str]]:
+    """Recognize bounded invocation metadata; neither command success nor intent."""
+    policy = POLICY["hunter_responses"]
+    name = (tool.tool_name or "").split(".")[-1].lower()
+    data = tool.tool_input if isinstance(tool.tool_input, dict) else {}
+
+    def source_path(value: Any) -> bool:
+        if not isinstance(value, str) or not value or value.startswith("-"):
+            return False
+        path = PurePosixPath(value)
+        return path.suffix.lower() in policy["source_extensions"] or path.name in policy["source_directories"]
+
+    if name in policy["source_read_tools"]:
+        action = "source_read" if source_path(data.get("path", data.get("file_path"))) else None
+        return ({"investigation_only"}, {action}) if action else ({"unknown"}, set())
+    if name in policy["source_search_tools"]:
+        action = "source_search" if source_path(data.get("path")) else None
+        return ({"investigation_only"}, {action}) if action else ({"unknown"}, set())
+    if name in policy["coordination_tools"]:
+        return {"support_coordination"}, set()
+    if name not in policy["shell_tools"]:
+        _, category = _tool_family(tool)
+        return {"support_coordination" if category in {"administration", "necessary_support"} else "unknown"}, set()
+    command = data.get("command", data.get("cmd"))
+    if isinstance(command, list) and all(isinstance(word, str) for word in command):
+        commands = [command]
+        if len(command) == 3 and PurePosixPath(command[0]).name in {"bash", "sh", "zsh"} and command[1] in {"-c", "-lc"}:
+            commands = shell_segments(command[2])
+    else:
+        commands = shell_segments(command) if isinstance(command, str) else None
+    categories: set[str] = set()
+    actions: set[str] = set()
+    for words in commands or []:
+        if not words:
+            continue
+        executable = PurePosixPath(words[0]).name
+        action = None
+        bounded_read = len(words) == 2 or (len(words) == 4 and words[1] in {"-n", "-c"})
+        bounded_search = len(words) == 3 or (len(words) == 4 and words[1] in {"-n", "-l", "-i", "-r", "-rn"})
+        if executable in policy["source_read_commands"] and bounded_read and source_path(words[-1]):
+            action = "source_read"
+        elif executable in policy["source_search_commands"] and bounded_search and source_path(words[-1]):
+            action = "source_search"
+        elif any(words[:len(prefix)] == prefix for prefix in policy["recon_command_prefixes"]):
+            action = "recon_run"
+        if action:
+            categories.add("investigation_only")
+            actions.add(action)
+        else:
+            _, category = _command_family(words)
+            categories.add("support_coordination" if category in {"administration", "necessary_support"} else "unknown")
+    return categories or {"unknown"}, actions
+
+
+def _response_usage(usage: dict) -> dict:
+    """Response input is already inclusive; cache partitions never add again."""
+    counts = {"input_tokens": usage["input_tokens"], "output_tokens": usage["output_tokens"],
+              "cache_read_tokens": 0, "cache_write_tokens": 0, "cache_detail_input_tokens": 0}
+    cached, written = usage.get("cached_input_tokens"), usage.get("cache_write_tokens", 0)
+    if all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in (cached, written)) and cached + written <= usage["input_tokens"]:
+        counts.update(cache_read_tokens=cached, cache_write_tokens=written, cache_detail_input_tokens=usage["input_tokens"])
+    return counts
+
+
+def hunter_response_activity(events: list[Any], tools: dict, sessions: dict, *, cutoff: datetime, now: datetime, limit: int, truncated: bool) -> dict:
+    """Separate response evidence; never add it to ledger totals or infer a turn join."""
+    policy = POLICY["hunter_responses"]
+    selected = {sid: session for sid, session in sessions.items() if session.project_id == policy["project_id"]
+                and (session_work_role(session) or {}).get("id") in policy["work_roles"]}
+    responses: dict[str, dict[str, dict]] = defaultdict(dict)
+    duplicate_usage = unusable_usage = 0
+
+    def timestamp(event: Any) -> datetime:
+        return (event.source_timestamp or event.created_at).astimezone(UTC)
+
+    for event in sorted(events, key=lambda event: (timestamp(event), event.sequence, str(event.id))):
+        if event.session_id not in selected or event.event_type != "usage" or not cutoff <= timestamp(event) < now:
+            continue
+        usage = event.usage if isinstance(event.usage, dict) else {}
+        if usage.get("scope") != "response":
+            continue
+        identity = usage.get("response_id")
+        if not isinstance(identity, str) or not identity or any(
+            not isinstance(usage.get(field), int) or isinstance(usage[field], bool) or usage[field] < 0
+            for field in ("input_tokens", "output_tokens")
+        ):
+            unusable_usage += 1
+            continue
+        if identity in responses[event.session_id]:
+            duplicate_usage += 1
+            continue
+        responses[event.session_id][identity] = {"at": timestamp(event), "usage": _response_usage(usage), "categories": set()}
+
+    first_actions: dict[str, list] = defaultdict(list)
+    unlinked: dict[str, int] = defaultdict(int)
+    for tool in tools.values():
+        if tool.session_id not in selected or tool.event_type != "tool_use" or not cutoff <= timestamp(tool) < now:
+            continue
+        categories, actions = _response_action(tool)
+        # Pi's adapter keeps the assistant entry ID on every tool block. No
+        # user-turn, timestamp proximity, call-id or purpose-based fallback.
+        source = getattr(tool, "source_event_id", None)
+        identity = None
+        if getattr(selected[tool.session_id], "session_type", None) == "pi" and isinstance(source, str) and source.startswith("message:"):
+            entry, _, index = source.removeprefix("message:").rpartition(":")
+            if index.isdigit() and entry in responses[tool.session_id]:
+                identity = entry
+        if identity is None:
+            unlinked[tool.session_id] += 1
+        else:
+            responses[tool.session_id][identity]["categories"].update(categories)
+        for action in actions:
+            first_actions[tool.session_id].append((timestamp(tool), tool.sequence, action, identity))
+
+    def metrics(rows: list[dict]) -> dict:
+        usage = {field: sum(row["usage"][field] for row in rows) for field in
+                 ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens")}
+        tokens = usage["input_tokens"] + usage["output_tokens"]
+        breakdown = []
+        for category in RESPONSE_CATEGORIES:
+            matching = [row for row in rows if row["category"] == category]
+            amount = sum(row["usage"]["input_tokens"] + row["usage"]["output_tokens"] for row in matching)
+            breakdown.append({"category": category, "responses": len(matching),
+                              "response_share": len(matching) / len(rows) if rows else None,
+                              "tokens": amount, "token_share": amount / tokens if tokens else None})
+        return {"responses": len(rows), "tokens": tokens, "usage": usage, "breakdown": breakdown}
+
+    session_rows = []
+    all_responses = []
+    for sid, session in selected.items():
+        rows = list(responses[sid].values())
+        for row in rows:
+            categories = row["categories"]
+            row["category"] = "unknown" if truncated or not categories else next(iter(categories)) if len(categories) == 1 else "mixed"
+        all_responses.extend(rows)
+        first = min(first_actions[sid], key=lambda action: action[:3]) if first_actions[sid] else None
+        first_identity = first[3] if first else None
+        identities = list(responses[sid])
+        first_response = responses[sid].get(first_identity)
+        start = getattr(session, "created_at", None)
+        elapsed = (first[0] - rows[0]["at"]).total_seconds() if first and rows and first[0] >= rows[0]["at"] else None
+        peak = max(range(len(rows)), key=lambda index: rows[index]["usage"]["input_tokens"]) if rows else None
+        session_rows.append({"session_id": sid, "project_id": session.project_id, "harness": session_harness(session),
+                             "work_role": (session_work_role(session) or {})["id"], **metrics(rows),
+                             "tools_without_response": unlinked[sid],
+                             "window_starts_mid_session": isinstance(start, datetime) and start < cutoff,
+                             "first_observed_investigation": None if first is None else {
+                                 "action": first[2], "sample_response_number": identities.index(first_identity) + 1 if first_identity in identities else None,
+                                 "seconds_from_first_response": round(elapsed, 3) if elapsed is not None else None,
+                                 "input_tokens": first_response["usage"]["input_tokens"] if first_response else None,
+                             },
+                             "input_per_response": {"first_tokens": rows[0]["usage"]["input_tokens"] if rows else None,
+                                                    "peak_tokens": rows[peak]["usage"]["input_tokens"] if peak is not None else None,
+                                                    "peak_sample_response_number": peak + 1 if peak is not None else None}})
+    session_rows.sort(key=lambda row: (row["tokens"], row["session_id"]), reverse=True)
+    return {"method": "linked-provider-responses-v1", **metrics(all_responses),
+            "sessions_total": len(selected), "sessions_without_usage": sum(not responses[sid] for sid in selected),
+            "duplicate_usage_events": duplicate_usage, "unusable_usage_events": unusable_usage,
+            "tools_without_response": sum(unlinked.values()), "events_truncated": truncated,
+            "rows": session_rows[:limit],
+            "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."}
 
 
 def _combined(categories: set[str]) -> str:
@@ -479,6 +648,7 @@ def summarize_activity_cost(
         "unmatched_accounting_calls": unmatched_calls,
         "transcript": transcript,
         "st_commands": summarize_st_commands(tools, results, sessions=by_session, limit=limit),
+        "hunter_responses": hunter_response_activity(events, tools, by_session, cutoff=cutoff, now=now, limit=limit, truncated=truncated),
         "transcript_basis": "Estimate of sampled tool text added to history: normalized call arguments plus retained returned text, once per call. Exact nested-command wrapper correlations are suppressed. Characters are not model tokens, resident context, or causal spend. Excludes prose, system instructions, images, protocol framing and unretained output; compaction and repeated reads are not modeled.",
         "wrappers_excluded": len(suppressed & {(event.session_id, event.call_id) for event in events if event.event_type in {"tool_use", "tool_result"}}),
         "project_rankings": project_rankings[:limit], "project_rankings_total": len(project_rankings),
@@ -527,7 +697,7 @@ async def build_activity_cost_snapshot(
     returned_characters = returned_characters_expression(SessionEvent)
     events = (await db.execute(select(
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
-        SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input,
+        SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input, SessionEvent.source_event_id,
         returned_characters, SessionEvent.usage, SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at,
     ).where(event_time >= cutoff, event_time < now, SessionEvent.event_type.in_(["tool_use", "tool_result", "usage"]),
             *([SessionEvent.session_id.in_(selected_sessions)] if filters else []))
@@ -559,7 +729,7 @@ async def build_activity_cost_snapshot(
     ).select_from(UsageCall).outerjoin(Session, (Session.id == native_id) & (native_provider == UsageCall.provider))
         .where(UsageCall.occurred_at >= cutoff, UsageCall.occurred_at < now, *filters).group_by(Session.id))).all()
     ids = {row.session_id for row in [*events[:EVENT_LIMIT], *cost_rows, *usage_rows]}
-    sessions = (await db.execute(select(Session.id, Session.project_id, Session.provider, Session.model, Session.provider_metadata, Session.request_source, Session.session_type).where(or_(
+    sessions = (await db.execute(select(Session.id, Session.project_id, Session.provider, Session.model, Session.provider_metadata, Session.request_source, Session.session_type, Session.created_at).where(or_(
         Session.id.in_(ids), (Session.created_at >= cutoff) & (Session.created_at < now),
         (Session.updated_at >= cutoff) & (Session.updated_at < now),
     ), *filters))).all()
