@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Launch the authenticated OpenCode CLI; sync its native export on orderly exit."""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    binary = shutil.which('opencode')
+    if not binary:
+        installed = Path.home() / '.opencode/bin/opencode'
+        binary = str(installed) if os.access(installed, os.X_OK) else None
+    if not binary:
+        print('OpenCode is not installed; install the official CLI and sign in.', file=sys.stderr)
+        return 127
+    args = sys.argv[1:]
+    if not args or args[0] not in {'mini', 'run'}:
+        print('agent-hub-opencode expects mini or run', file=sys.stderr)
+        return 2
+    if '--continue' in args or '-c' in args or '--fork' in args:
+        print('Use --session for an exact OpenCode resume through this launcher.', file=sys.stderr)
+        return 2
+    session = next((args[i + 1] for i, arg in enumerate(args[:-1]) if arg in {'--session', '-s'}), None)
+    model = next((args[i + 1] for i, arg in enumerate(args[:-1]) if arg in {'--model', '-m'}), None)
+    client = Path.home() / '.local/bin/agent-hub-context-client'
+    try:
+        if session:
+            allocated = subprocess.run([binary, 'api', 'session.get', '--param', 'sessionID=' + session],
+                                       capture_output=True, timeout=20, check=True)
+        else:
+            request = {'location': {'directory': os.getcwd()}}
+            if model and '/' in model:
+                provider, model_id = model.split('/', 1)
+                request['model'] = {'providerID': provider, 'id': model_id}
+            allocated = subprocess.run([binary, 'api', 'session.create', '--data', json.dumps(request)],
+                                       capture_output=True, timeout=20, check=True)
+        info = json.loads(allocated.stdout)['data']
+        session = info['id']
+        if not any(arg in args for arg in ('--session', '-s')):
+            args[1:1] = ['--session', session]
+    except (OSError, KeyError, ValueError, subprocess.SubprocessError):
+        print('OpenCode could not allocate or resume its native session.', file=sys.stderr)
+        return 2
+    # Bind pane/role metadata before the shared service runs. Native completed
+    # messages remain the only source of response model and usage attribution.
+    try:
+        subprocess.run([str(client), 'sync-opencode', '--surface', 'opencode'],
+                       input=json.dumps({'info': info, 'messages': [], 'phase': 'working'}).encode(),
+                       capture_output=True, timeout=25, check=True)
+    except (OSError, subprocess.SubprocessError):
+        print('OpenCode launch registration unavailable; native OpenCode continues.', file=sys.stderr)
+    code = subprocess.call([binary, *args])
+    try:
+        exported = subprocess.run([binary, 'session', 'export', session],
+                                  capture_output=True, timeout=20, check=True)
+        payload = json.loads(exported.stdout)
+        payload['phase'] = 'shutdown'
+        client = Path.home() / '.local/bin/agent-hub-context-client'
+        result = subprocess.run([str(client), 'sync-opencode', '--surface', 'opencode'],
+                                input=json.dumps(payload).encode(), capture_output=True, timeout=25)
+        if result.returncode:
+            raise RuntimeError('sync failed')
+    except (OSError, ValueError, subprocess.SubprocessError, RuntimeError):
+        print('OpenCode session sync unavailable; native session is retained by OpenCode.', file=sys.stderr)
+    return code
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

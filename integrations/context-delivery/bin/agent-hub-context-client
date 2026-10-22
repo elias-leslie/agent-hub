@@ -27,7 +27,7 @@ from typing import Any
 
 SCHEMA_VERSION = "agent-hub.context.v1"
 CONTEXT_VERSION = "1"
-SURFACES = ("agent_hub", "claude_code", "codex", "mcp", "pi", "antigravity")
+SURFACES = ("agent_hub", "claude_code", "codex", "mcp", "pi", "antigravity", "opencode")
 DEFAULT_PROVIDER = {
     "claude_code": "anthropic",
     "codex": "openai",
@@ -79,6 +79,9 @@ def _parser() -> argparse.ArgumentParser:
     _common_arguments(sync)
     sync.add_argument("--transcript", required=True)
     sync.add_argument("--aico-session")
+
+    sync_opencode = subparsers.add_parser("sync-opencode", help="Sync an OpenCode native export from stdin.")
+    _common_arguments(sync_opencode)
 
     deliver = subparsers.add_parser("deliver", help="Deliver context and persist artifacts.")
     _common_arguments(deliver)
@@ -814,6 +817,23 @@ async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any])
 
 
 async def _main(args: argparse.Namespace) -> int:
+    if args.command == "sync-opencode":
+        try:
+            payload = json.loads(sys.stdin.read(16 * 1024 * 1024 + 1))
+            payload["aico_session_id"] = os.getenv("AICO_SESSION_ID")
+            role = _launch_work_role()
+            if role is not None:
+                payload["work_role"] = role
+            cli = await _canonical_cli()
+            code, stdout, _stderr = await _run(cli, "sync-opencode", stdin=json.dumps(payload).encode())
+            if code == 0:
+                sys.stdout.buffer.write(stdout)
+            else:
+                sys.stderr.write("OpenCode session sync unavailable\n")
+            return code
+        except Exception:
+            sys.stderr.write("OpenCode session sync unavailable\n")
+            return 2
     if args.command == "sync-pi":
         try:
             metadata = await _resolve_metadata(args, {})

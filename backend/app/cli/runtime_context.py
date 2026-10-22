@@ -19,6 +19,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render runtime context for external agentic CLIs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser("sync-opencode", help="Ingest an OpenCode native export from stdin.")
+
     sync = subparsers.add_parser("sync-pi", help="Ingest a native Pi transcript without model calls.")
     for field in ("session", "transcript", "cwd", "provider", "model"):
         sync.add_argument("--" + field, required=True)
@@ -215,6 +217,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except Exception:
             print("Native session work role registration unavailable", file=sys.stderr)
+            return 2
+    if args.command == "sync-opencode":
+        try:
+            from app.services.session_ingestion.opencode_sync import sync_opencode_export
+            payload = json.loads(sys.stdin.read(16 * 1024 * 1024 + 1))
+            async def run_sync() -> dict:
+                async with async_session() as db:
+                    return await sync_opencode_export(db, payload)
+            print(json.dumps(asyncio.run(run_sync())))
+            return 0
+        except Exception:
+            print("OpenCode session sync unavailable", file=sys.stderr)
             return 2
     if args.command == "sync-pi":
         try:

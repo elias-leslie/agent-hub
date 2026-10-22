@@ -3,5 +3,6 @@
   "agent_hub": {"label": "Agent Hub", "metadata_values": ["agent_hub", "agent-hub"], "request_sources": []},
   "claude_code": {"label": "Claude Code", "metadata_values": ["claude_code", "claude-code"], "request_sources": []},
   "antigravity": {"label": "Antigravity", "metadata_values": ["antigravity"], "request_sources": []},
-  "pi": {"label": "Pi", "metadata_values": ["pi"], "request_sources": ["pi-extension"]}
+  "pi": {"label": "Pi", "metadata_values": ["pi"], "request_sources": ["pi-extension"]},
+  "opencode": {"label": "OpenCode", "metadata_values": ["opencode"], "request_sources": ["opencode-plugin"]}
 }
