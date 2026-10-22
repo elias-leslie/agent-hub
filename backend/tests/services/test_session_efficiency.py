@@ -50,6 +50,23 @@ def test_sessions_rank_by_admin_time_without_tasks_or_provider_usage():
     assert result["task_rollups"] == []
 
 
+def test_pi_pair_timestamps_measure_tool_time_without_native_duration():
+    events = [Row(id=f"pi-{kind}", session_id="pi", turn=1, sequence=index + 1,
+                  event_type=kind, call_id="call", tool_name="exec_command",
+                  tool_input={"cmd": "st context fixture"}, duration_ms=None,
+                  source_timestamp=NOW - timedelta(seconds=50 - index * 30), created_at=NOW,
+                  returned_characters=None, usage=None)
+              for index, kind in enumerate(("tool_use", "tool_result"))]
+    sessions = [Row(id="pi", project_id="project", provider="pi", model="fixture",
+                    session_type="pi", provider_metadata={"harness": "pi"})]
+    measured = summarize_activity_cost(events, [], [], sessions, [],
+                                       cutoff=NOW - timedelta(hours=1), now=NOW, limit=5, truncated=False)
+    assert measured["duration_split"]["admin_seconds"] == 30
+    assert measured["duration_split"]["duration_coverage"] == 1
+    assert measured["by_harness"][0]["harness_id"] == "pi"
+    assert measured["by_harness"][0]["duration_split"]["admin_share"] == 1
+
+
 def test_goal_keeps_unknown_caps_missing_duration_zero_and_unselected_distinct(monkeypatch):
     monkeypatch.setitem(POLICY, "session_efficiency", {
         "admin_share_target": 0.5, "minimum_duration_coverage": 0.8, "maximum_unknown_share": 0.2,

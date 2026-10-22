@@ -169,10 +169,17 @@ def paired_activity_tools(events: list[Any]) -> tuple[dict, dict, set]:
     return tools, results, suppressed
 
 
-def measured_tool_interval(tool: Any, result: Any, *, cutoff: datetime, now: datetime):
+def measured_tool_interval(tool: Any, result: Any, *, cutoff: datetime, now: datetime, session_type: str | None = None):
     duration = result.duration_ms if result is not None else tool.duration_ms
     end_event = result or tool
     timestamp = end_event.source_timestamp or end_event.created_at
+    if (duration is None and session_type == "pi" and result is not None and tool.event_type == "tool_use"
+            and isinstance(tool.source_timestamp, datetime) and isinstance(result.source_timestamp, datetime)
+            and tool.source_timestamp.tzinfo is not None and result.source_timestamp.tzinfo is not None
+            and result.source_timestamp >= tool.source_timestamp):
+        # Pi records both ends of a tool call but omits duration_ms. Use the
+        # native record timestamps; never infer a missing or unmatched end.
+        return max(tool.source_timestamp.astimezone(UTC), cutoff), min(result.source_timestamp.astimezone(UTC), now)
     if not (isinstance(duration, int) and not isinstance(duration, bool) and duration >= 0 and isinstance(timestamp, datetime)):
         return None
     timestamp = timestamp.astimezone(UTC)
@@ -201,7 +208,9 @@ def summarize_activity_cost(
         family, category = _tool_family(tool)
         turn_categories[(tool.session_id, tool.turn)].add("unknown" if category == "wait" else category)
         result = results.get(key)
-        interval = measured_tool_interval(tool, result, cutoff=cutoff, now=now)
+        session = by_session.get(tool.session_id)
+        interval = measured_tool_interval(tool, result, cutoff=cutoff, now=now,
+                                          session_type=getattr(session, "session_type", None))
         measured = interval is not None
         if interval is not None:
             start, end = interval

@@ -623,8 +623,11 @@ async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger
                                                 ("elsewhere", "summitflow", "implementation", "codex", 99)):
         await add_session(pg_db, sid, minutes=1, session_type="pi" if harness == "pi" else "agent",
                           metadata=_merge_metadata({}, {"work_role": {"id": role, "source": "fixture"}, "harness": harness}))
-        await add_event(pg_db, sid, 1, 1, "tool_use", call_id=sid, duration_ms=seconds * 1000,
+        await add_event(pg_db, sid, 1, 1, "tool_use", call_id=sid, duration_ms=None if sid == "pi" else seconds * 1000,
                         tool_name="Bash", tool_input={"command": "st context fixture"}, source_timestamp=BASE + timedelta(seconds=150))
+        if sid == "pi":
+            await add_event(pg_db, sid, 1, 2, "tool_result", call_id=sid,
+                            source_timestamp=BASE + timedelta(seconds=150 + seconds))
         session = await pg_db.get(Session, sid)
         assert session is not None
         session.project_id = project
