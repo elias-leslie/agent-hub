@@ -1,18 +1,18 @@
 {
   "codex_current": {
     "status": 200,
-    "window_start": "2026-10-15T22:05:52.179050+00:00",
-    "window_end": "2026-10-22T22:05:52.179050+00:00",
+    "window_start": "2026-10-15T22:12:16.728501+00:00",
+    "window_end": "2026-10-22T22:12:16.728501+00:00",
     "hunter_responses": {
       "method": "linked-provider-responses-v1",
-      "responses": 56,
-      "tokens": 5789735,
+      "responses": 66,
+      "tokens": 7429904,
       "usage": {
-        "input_tokens": 5766926,
-        "output_tokens": 22809,
-        "cache_read_tokens": 5604736,
+        "input_tokens": 7405010,
+        "output_tokens": 24894,
+        "cache_read_tokens": 7230080,
         "cache_write_tokens": 0,
-        "cache_detail_input_tokens": 5766926
+        "cache_detail_input_tokens": 7405010
       },
       "breakdown": [
         {
@@ -38,9 +38,9 @@
         },
         {
           "category": "unknown",
-          "responses": 56,
+          "responses": 66,
           "response_share": 1.0,
-          "tokens": 5789735,
+          "tokens": 7429904,
           "token_share": 1.0
         }
       ],
@@ -48,7 +48,7 @@
       "sessions_without_usage": 0,
       "duplicate_usage_events": 0,
       "unusable_usage_events": 0,
-      "tools_without_response": 170,
+      "tools_without_response": 187,
       "events_truncated": false,
       "rows": [
         {
@@ -56,14 +56,14 @@
           "project_id": "neri",
           "harness": "codex_cli",
           "work_role": "hunting",
-          "responses": 56,
-          "tokens": 5789735,
+          "responses": 66,
+          "tokens": 7429904,
           "usage": {
-            "input_tokens": 5766926,
-            "output_tokens": 22809,
-            "cache_read_tokens": 5604736,
+            "input_tokens": 7405010,
+            "output_tokens": 24894,
+            "cache_read_tokens": 7230080,
             "cache_write_tokens": 0,
-            "cache_detail_input_tokens": 5766926
+            "cache_detail_input_tokens": 7405010
           },
           "breakdown": [
             {
@@ -89,15 +89,15 @@
             },
             {
               "category": "unknown",
-              "responses": 56,
+              "responses": 66,
               "response_share": 1.0,
-              "tokens": 5789735,
+              "tokens": 7429904,
               "token_share": 1.0
             }
           ],
-          "tools_without_response": 170,
+          "tools_without_response": 187,
           "window_starts_mid_session": false,
-          "first_observed_investigation": {
+          "first_source_recon_signal": {
             "action": "source_search",
             "sample_response_number": null,
             "seconds_from_first_response": 52.462,
@@ -105,18 +105,18 @@
           },
           "input_per_response": {
             "first_tokens": 20931,
-            "peak_tokens": 157088,
-            "peak_sample_response_number": 56
+            "peak_tokens": 169303,
+            "peak_sample_response_number": 66
           }
         }
       ],
-      "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
+      "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked tool-action signals; they do not establish actual bug work, token purpose, successful execution, a bug finding or accepted outcome. Source-like paths may refer to support code. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
     }
   },
   "pi_neri": {
     "status": 200,
-    "window_start": "2026-10-15T22:05:52.245713+00:00",
-    "window_end": "2026-10-22T22:05:52.245713+00:00",
+    "window_start": "2026-10-15T22:12:16.968794+00:00",
+    "window_end": "2026-10-22T22:12:16.968794+00:00",
     "hunter_responses": {
       "method": "linked-provider-responses-v1",
       "responses": 208,
@@ -211,7 +211,7 @@
           ],
           "tools_without_response": 0,
           "window_starts_mid_session": false,
-          "first_observed_investigation": {
+          "first_source_recon_signal": {
             "action": "source_read",
             "sample_response_number": 19,
             "seconds_from_first_response": 155.05,
@@ -269,7 +269,7 @@
           ],
           "tools_without_response": 0,
           "window_starts_mid_session": false,
-          "first_observed_investigation": {
+          "first_source_recon_signal": {
             "action": "source_read",
             "sample_response_number": 26,
             "seconds_from_first_response": 279.573,
@@ -327,7 +327,7 @@
           ],
           "tools_without_response": 0,
           "window_starts_mid_session": false,
-          "first_observed_investigation": null,
+          "first_source_recon_signal": null,
           "input_per_response": {
             "first_tokens": 5443,
             "peak_tokens": 73016,
@@ -380,7 +380,7 @@
           ],
           "tools_without_response": 0,
           "window_starts_mid_session": false,
-          "first_observed_investigation": null,
+          "first_source_recon_signal": null,
           "input_per_response": {
             "first_tokens": 6285,
             "peak_tokens": 52084,
@@ -433,7 +433,7 @@
           ],
           "tools_without_response": 0,
           "window_starts_mid_session": false,
-          "first_observed_investigation": {
+          "first_source_recon_signal": {
             "action": "source_read",
             "sample_response_number": 12,
             "seconds_from_first_response": 91.351,
@@ -446,7 +446,7 @@
           }
         }
       ],
-      "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
+      "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked tool-action signals; they do not establish actual bug work, token purpose, successful execution, a bug finding or accepted outcome. Source-like paths may refer to support code. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
     }
   }
 }
