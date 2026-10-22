@@ -6,6 +6,7 @@ import {
   type ActivityTranscript,
   activitySessionsHref,
 } from '@/lib/api/activity-cost'
+import { StCommandActivity } from './StCommandActivity'
 
 function adminCharacters(transcript: ActivityTranscript) {
   return (
@@ -100,6 +101,10 @@ export function ActivityAccounting({ activity }: { activity: ActivityCost }) {
           </p>
         </div>
       </div>
+      <StCommandActivity
+        commands={activity.st_commands}
+        sampleCapped={activity.events_truncated}
+      />
       <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4 space-y-2 text-sm text-slate-300">
         <h3 className="font-semibold text-slate-100">Usage sources and gaps</h3>
         {activity.tokens.sources.map((row) => (

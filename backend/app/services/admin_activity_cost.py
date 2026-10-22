@@ -6,6 +6,7 @@ Independent accounting sources are alternatives, never additive for a session.
 
 from __future__ import annotations
 
+import asyncio
 import shlex
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -18,11 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall
 from app.services.activity_accounting import argument_characters, transcript_view, usage_partitions
 from app.services.activity_accounting import number as _number
+from app.services.st_activity import st_command_family, summarize_st_commands
 
 EVENT_LIMIT = 20_000
 CATEGORIES = ("substantive", "necessary_support", "administration", "mixed", "unknown")
-_ADMIN = {"context", "task", "show", "list", "ready", "ready-all", "claim", "done", "log", "plan", "portfolio", "session", "sessions", "agent", "hub", "prompt", "memory", "lease", "queue", "ownership", "batch"}
-_SUPPORT = {"check", "commit", "service", "services", "build", "deploy"}
 
 
 def _combined(categories: set[str]) -> str:
@@ -37,14 +37,7 @@ def _command_family(words: list[str]) -> tuple[str, str]:
     if executable in {"bash", "sh", "zsh"} and len(words) == 3 and words[1] in {"-c", "-lc"}:
         return _shell_family(words[2])
     if executable == "st":
-        args = words[1:]
-        while len(args) >= 2 and args[0] in {"-P", "--project"}:
-            args = args[2:]
-        verb = args[0] if args else ""
-        if verb in _ADMIN:
-            return f"st.{verb}", "administration"
-        if verb in _SUPPORT:
-            return f"st.{verb}", "necessary_support"
+        return st_command_family(words)
     if executable in {"git", "docker", "systemctl", "pytest", "ruff", "npm", "pnpm", "uv"}:
         # Package runners can invoke arbitrary programs; only known check/build operations qualify.
         if executable in {"npm", "pnpm", "uv"} and not any(word in {"test", "build", "lint", "check", "sync"} for word in words[1:3]):
@@ -372,6 +365,7 @@ def summarize_activity_cost(
         "unmatched_accounting_tokens": unmatched_usage["input_tokens"] + unmatched_usage["output_tokens"],
         "unmatched_accounting_calls": unmatched_calls,
         "transcript": transcript,
+        "st_commands": summarize_st_commands(tools, results, sessions=by_session, limit=limit),
         "transcript_basis": "Estimate of sampled tool text added to history: normalized call arguments plus retained returned text, once per call. Exact nested-command wrapper correlations are suppressed. Characters are not model tokens, resident context, or causal spend. Excludes prose, system instructions, images, protocol framing and unretained output; compaction and repeated reads are not modeled.",
         "wrappers_excluded": len(suppressed & {(event.session_id, event.call_id) for event in events if event.event_type in {"tool_use", "tool_result"}}),
         "project_rankings": project_rankings[:limit], "project_rankings_total": len(project_rankings),
@@ -446,5 +440,5 @@ async def build_activity_cost_snapshot(db: AsyncSession, *, cutoff: datetime, no
     ids = {session.id for session in sessions}
     bindings = (await db.execute(select(SessionBinding.session_id, SessionBinding.project_id, SessionBinding.task_id)
         .where(SessionBinding.session_id.in_(ids), SessionBinding.task_id.is_not(None)))).all() if ids else []
-    return summarize_activity_cost(events[:EVENT_LIMIT], cost_rows, usage_rows, sessions, bindings,
+    return await asyncio.to_thread(summarize_activity_cost, events[:EVENT_LIMIT], cost_rows, usage_rows, sessions, bindings,
         cutoff=cutoff, now=now, limit=limit, truncated=len(events) > EVENT_LIMIT)

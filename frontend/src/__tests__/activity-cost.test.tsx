@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/activity-cost'
 import { activityFixture as activity } from './activity-cost-fixture'
 import backendSnapshot from './fixtures/activity-accounting-snapshot.json'
+import stSnapshot from './fixtures/st-activity-snapshot.json'
 
 function panel(data = activity, error: string | null = null) {
   return (
@@ -121,6 +122,68 @@ describe('activity observations', () => {
     expect(
       screen.getByRole('link', { name: 'Open a linked session for task-real' }),
     ).toHaveAttribute('href', activitySessionsHref('p1', 's'))
+  })
+
+  it('displays the backend ST sample with measured and estimated coverage separate', () => {
+    const data = parseActivityCost(stSnapshot)
+    if (!data) throw new Error('Missing synthetic Activity snapshot')
+    render(panel(data))
+    expect(
+      screen.getByText(
+        /4 ST commands in sampled calls · 2s elapsed · ~19 input text tokens · ~21 output text tokens/,
+      ),
+    ).toBeInTheDocument()
+    const disclosure = screen.getByText('Top ST families and coverage')
+    fireEvent.click(disclosure)
+    expect(disclosure.closest('details')).toHaveAttribute('open')
+    expect(screen.getByText(/Showing 4 of 4 families/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/2 commands share shell results/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/1 shell calls could not be parsed/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('st.web · Substantive')).toBeInTheDocument()
+    expect(screen.getByText('st.context · Admin')).toBeInTheDocument()
+    expect(screen.getByText('st.check · Support')).toBeInTheDocument()
+    expect(screen.getAllByText(/Time unavailable/)).toHaveLength(2)
+    expect(
+      screen.getByRole('link', { name: 'Open an observed st.context session' }),
+    ).toHaveAttribute('href', activitySessionsHref('project', 's'))
+    expect(screen.queryByText('task-synthetic')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/separate from provider usage, billed tokens/),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps older-server ST data unavailable and rejects invalid ST metrics', () => {
+    render(panel())
+    expect(
+      screen.getByText('ST command data is unavailable from this server.'),
+    ).toBeInTheDocument()
+    expect(() =>
+      parseActivityCost({
+        ...stSnapshot,
+        st_commands: { ...stSnapshot.st_commands, measured_seconds: -1 },
+      }),
+    ).toThrow()
+    expect(() =>
+      parseActivityCost({
+        ...stSnapshot,
+        st_commands: { ...stSnapshot.st_commands, commands_with_output: 99 },
+      }),
+    ).toThrow()
+    expect(() =>
+      parseActivityCost({
+        ...stSnapshot,
+        st_commands: {
+          ...stSnapshot.st_commands,
+          families: [
+            { ...stSnapshot.st_commands.families[0], category: 'invented' },
+          ],
+        },
+      }),
+    ).toThrow()
   })
 
   it('omits the incompatible legacy Window Cost card while retaining diagnostics', () => {

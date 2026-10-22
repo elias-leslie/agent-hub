@@ -1,4 +1,4 @@
-/** Recorded observations only; no allocation of time or tokens to individual commands. */
+/** Recorded usage and separate, explicitly estimated ST text footprint. */
 export type ActivityCategory = 'substantive' | 'administration' | 'unknown'
 
 export interface ToolTime {
@@ -48,6 +48,34 @@ export interface ActivityRanking {
   transcript: ActivityTranscript
 }
 
+export interface StCommandMetrics {
+  commands: number
+  measured_seconds: number
+  input_tokens_estimate: number
+  output_tokens_estimate: number
+  commands_with_duration: number
+  commands_with_output: number
+  shared_commands: number
+}
+
+export interface StCommandSummary extends StCommandMetrics {
+  input_token_encoding: string
+  output_characters_per_token: number
+  shell_calls: number
+  shell_calls_unparsed: number
+  calls_with_st: number
+  unknown_commands: number
+  administration_commands: number
+  substantive_commands: number
+  families_total: number
+  families: (StCommandMetrics & {
+    family: string
+    category: ActivityCategory | 'necessary_support'
+    sample_session_id: string | null
+    sample_project_id: string | null
+  })[]
+}
+
 export interface ActivityCost {
   window_start: string
   window_end: string
@@ -68,6 +96,7 @@ export interface ActivityCost {
   }
   usage: ActivityUsage
   transcript: ActivityTranscript
+  st_commands?: StCommandSummary | null
   wrappers_excluded: number
   unmatched_accounting_tokens: number
   unmatched_accounting_calls: number
@@ -213,6 +242,68 @@ function ranking(value: unknown) {
   )
 }
 
+function stMetrics(value: unknown) {
+  return (
+    record(value) &&
+    numbers(value, [
+      'commands',
+      'measured_seconds',
+      'input_tokens_estimate',
+      'output_tokens_estimate',
+      'commands_with_duration',
+      'commands_with_output',
+      'shared_commands',
+    ]) &&
+    Number(value.commands_with_duration) + Number(value.shared_commands) <=
+      Number(value.commands) &&
+    Number(value.commands_with_output) + Number(value.shared_commands) <=
+      Number(value.commands)
+  )
+}
+
+function stCommands(value: unknown) {
+  if (value == null) return true // Older servers have no ST-specific coverage.
+  return (
+    record(value) &&
+    stMetrics(value) &&
+    numbers(value, [
+      'shell_calls',
+      'shell_calls_unparsed',
+      'calls_with_st',
+      'unknown_commands',
+      'administration_commands',
+      'substantive_commands',
+      'families_total',
+      'output_characters_per_token',
+    ]) &&
+    strings(value, ['input_token_encoding']) &&
+    Number(value.output_characters_per_token) > 0 &&
+    Number(value.shell_calls_unparsed) + Number(value.calls_with_st) <=
+      Number(value.shell_calls) &&
+    Number(value.unknown_commands) <= Number(value.commands) &&
+    Number(value.administration_commands) +
+      Number(value.substantive_commands) +
+      Number(value.unknown_commands) ===
+      Number(value.commands) &&
+    Array.isArray(value.families) &&
+    value.families.length <= Number(value.families_total) &&
+    value.families.every(
+      (row: unknown) =>
+        record(row) &&
+        stMetrics(row) &&
+        strings(row, ['family']) &&
+        [
+          'substantive',
+          'administration',
+          'necessary_support',
+          'unknown',
+        ].includes(String(row.category)) &&
+        ((row.sample_session_id === null && row.sample_project_id === null) ||
+          strings(row, ['sample_session_id', 'sample_project_id'])),
+    )
+  )
+}
+
 /** A missing older-server field is unavailable, never a fabricated zero. */
 export function parseActivityCost(value: unknown): ActivityCost | null {
   if (value == null) return null
@@ -252,6 +343,7 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
     ) ||
     !usage(value.usage) ||
     !transcript(value.transcript) ||
+    !stCommands(value.st_commands) ||
     !Array.isArray(value.project_rankings) ||
     !value.project_rankings.every(
       (row) =>

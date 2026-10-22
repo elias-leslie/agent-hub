@@ -1,0 +1,300 @@
+{
+  "scope": "Windowed recorded usage across providers, including accounting without a matching Hub session. Hub sessions created/updated or with events/accounting in the window remain visible even without usage. Rankings cover Hub-linked usage only.",
+  "window_start": "2026-10-21T12:00:00+00:00",
+  "window_end": "2026-10-22T12:00:00+00:00",
+  "sessions": 1,
+  "events_sampled": 7,
+  "event_limit": 20000,
+  "events_truncated": false,
+  "missing_usage_sessions": 1,
+  "unlinked_sessions": 1,
+  "overlapping_sources_excluded": 0,
+  "unlinked_tokens": 0,
+  "unlinked_tool_seconds": 10.0,
+  "tokens": {
+    "denominator": 0,
+    "unclassified_share": null,
+    "mixed_tokens": 0,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "tokens": 0,
+        "share": null
+      },
+      {
+        "category": "administration",
+        "tokens": 0,
+        "share": null
+      },
+      {
+        "category": "unknown",
+        "tokens": 0,
+        "share": null
+      }
+    ],
+    "sources": [
+      {
+        "source": "missing",
+        "sessions": 1,
+        "tokens": 0
+      }
+    ]
+  },
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cache_detail_input_tokens": 0
+  },
+  "unmatched_accounting_tokens": 0,
+  "unmatched_accounting_calls": 0,
+  "transcript": {
+    "characters": 1242,
+    "argument_characters": 161,
+    "returned_characters": 1081,
+    "calls_with_returned_text": 3,
+    "calls_missing_returned_text": 1,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "characters": 31,
+        "share": 0.0249597423510467
+      },
+      {
+        "category": "administration",
+        "characters": 1176,
+        "share": 0.9468599033816425
+      },
+      {
+        "category": "unknown",
+        "characters": 35,
+        "share": 0.02818035426731079
+      }
+    ]
+  },
+  "st_commands": {
+    "commands": 4,
+    "measured_seconds": 2.0,
+    "input_tokens_estimate": 19,
+    "output_tokens_estimate": 21,
+    "commands_with_duration": 2,
+    "commands_with_output": 2,
+    "shared_commands": 2,
+    "shell_calls": 4,
+    "shell_calls_unparsed": 1,
+    "calls_with_st": 3,
+    "administration_commands": 3,
+    "substantive_commands": 1,
+    "unknown_commands": 0,
+    "families": [
+      {
+        "family": "st.context",
+        "category": "administration",
+        "commands": 1,
+        "measured_seconds": 2.0,
+        "input_tokens_estimate": 6,
+        "output_tokens_estimate": 21,
+        "commands_with_duration": 1,
+        "commands_with_output": 1,
+        "shared_commands": 0,
+        "sample_session_id": "s",
+        "sample_project_id": "project"
+      },
+      {
+        "family": "st.commit",
+        "category": "necessary_support",
+        "commands": 1,
+        "measured_seconds": 0,
+        "input_tokens_estimate": 5,
+        "output_tokens_estimate": 0,
+        "commands_with_duration": 0,
+        "commands_with_output": 0,
+        "shared_commands": 1,
+        "sample_session_id": "s",
+        "sample_project_id": "project"
+      },
+      {
+        "family": "st.web",
+        "category": "substantive",
+        "commands": 1,
+        "measured_seconds": 0.0,
+        "input_tokens_estimate": 4,
+        "output_tokens_estimate": 0,
+        "commands_with_duration": 1,
+        "commands_with_output": 1,
+        "shared_commands": 0,
+        "sample_session_id": "s",
+        "sample_project_id": "project"
+      },
+      {
+        "family": "st.check",
+        "category": "necessary_support",
+        "commands": 1,
+        "measured_seconds": 0,
+        "input_tokens_estimate": 4,
+        "output_tokens_estimate": 0,
+        "commands_with_duration": 0,
+        "commands_with_output": 0,
+        "shared_commands": 1,
+        "sample_session_id": "s",
+        "sample_project_id": "project"
+      }
+    ],
+    "families_total": 4,
+    "input_token_encoding": "cl100k_base",
+    "output_characters_per_token": 4,
+    "count_basis": "Recognizable ST commands in sampled shell source, not proof of execution. Conditional commands may not run; scripts and unsupported syntax can hide more commands.",
+    "input_token_basis": "Reference tokenizer on normalized ST command argv, once per recognizable command. Excludes tool JSON framing and other shell text; text estimate, not provider usage.",
+    "output_token_basis": "Ceiling of retained returned characters / 4 per isolated invocation, matching ST tools cost's character approximation. Output contents are not fetched or tokenized. Language and formatting change accuracy; missing, truncated or shared output has unknown size.",
+    "time_basis": "Sum of reported elapsed durations for isolated ST commands, including zero. Concurrent calls add; this is not union occupancy or agent thinking time. Shared shell durations are unallocated."
+  },
+  "transcript_basis": "Estimate of sampled tool text added to history: normalized call arguments plus retained returned text, once per call. Exact nested-command wrapper correlations are suppressed. Characters are not model tokens, resident context, or causal spend. Excludes prose, system instructions, images, protocol framing and unretained output; compaction and repeated reads are not modeled.",
+  "wrappers_excluded": 0,
+  "project_rankings": [
+    {
+      "project_id": "project",
+      "sessions": 1,
+      "tokens": 0,
+      "missing_usage_sessions": 1,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cache_detail_input_tokens": 0
+      },
+      "transcript": {
+        "characters": 1242,
+        "argument_characters": 161,
+        "returned_characters": 1081,
+        "calls_with_returned_text": 3,
+        "calls_missing_returned_text": 1,
+        "breakdown": [
+          {
+            "category": "substantive",
+            "characters": 31,
+            "share": 0.0249597423510467
+          },
+          {
+            "category": "administration",
+            "characters": 1176,
+            "share": 0.9468599033816425
+          },
+          {
+            "category": "unknown",
+            "characters": 35,
+            "share": 0.02818035426731079
+          }
+        ]
+      }
+    }
+  ],
+  "project_rankings_total": 1,
+  "session_rankings": [
+    {
+      "session_id": "s",
+      "project_id": "project",
+      "provider": "codex",
+      "tokens": 0,
+      "usage_source": "missing",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cache_detail_input_tokens": 0
+      },
+      "transcript": {
+        "characters": 1242,
+        "argument_characters": 161,
+        "returned_characters": 1081,
+        "calls_with_returned_text": 3,
+        "calls_missing_returned_text": 1,
+        "breakdown": [
+          {
+            "category": "substantive",
+            "characters": 31,
+            "share": 0.0249597423510467
+          },
+          {
+            "category": "administration",
+            "characters": 1176,
+            "share": 0.9468599033816425
+          },
+          {
+            "category": "unknown",
+            "characters": 35,
+            "share": 0.02818035426731079
+          }
+        ]
+      }
+    }
+  ],
+  "session_rankings_total": 1,
+  "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Unmatched ledger calls add to unknown globally and are excluded from Hub rankings. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
+  "response_tokens": {
+    "denominator": 0,
+    "unclassified_share": null,
+    "mixed_tokens": 0,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "tokens": 0,
+        "share": null
+      },
+      {
+        "category": "administration",
+        "tokens": 0,
+        "share": null
+      },
+      {
+        "category": "unknown",
+        "tokens": 0,
+        "share": null
+      }
+    ],
+    "sources": []
+  },
+  "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
+  "tool_time": {
+    "basis": "Union of reported tool-runtime intervals per session; concurrent sessions add. Intervals end at source timestamp when available, otherwise stored event timestamp (approximate placement). Explicit wait-only time is excluded. This is observed tool occupancy, not total agent thinking or active time.",
+    "denominator_seconds": 10.0,
+    "explicit_wait_seconds": 0,
+    "mixed_seconds": 0,
+    "thinking_seconds": null,
+    "idle_seconds": null,
+    "breakdown": [
+      {
+        "category": "substantive",
+        "seconds": 0,
+        "share": 0.0
+      },
+      {
+        "category": "administration",
+        "seconds": 10.0,
+        "share": 1.0
+      },
+      {
+        "category": "unknown",
+        "seconds": 0,
+        "share": 0.0
+      }
+    ]
+  },
+  "tools_missing_duration": 1,
+  "tools_sampled": 4,
+  "summary": "Of 10 measured active tool seconds: 0% substantive, 100% administration including support, 0% unknown including mixed. Thinking and idle time are unmeasured.",
+  "repeat_admin_patterns": [],
+  "repeat_admin_patterns_total": 0,
+  "task_rollups": [],
+  "task_rollups_total": 0,
+  "limits": [
+    "Tool categories are conservative observations; unsupported commands and unseen work stay unknown. Mixed turns are not split into invented token allocations.",
+    "Repeated administration is not evidence that it was unnecessary. Avoidable ceremony is unknown.",
+    "Source precedence prevents double counting, but partial/disjoint source histories can be omitted. This is a recorded-token coverage view, not a reconciled billing total.",
+    "The event sample can omit tool/response associations; truncation makes response attribution unknown. Missing usage and tool duration have unknown size; token shares cover recorded tokens only. Family time can overlap other families.",
+    "Explicit waits are observed wait-only tool occupancy, not all waiting. Native turn wall spans include thinking and waits; neither elapsed time nor tool occupancy measures total active thinking time.",
+    "Task linkage uses only one unambiguous project/task session binding. External IDs and inferred task names are not task evidence."
+  ]
+}

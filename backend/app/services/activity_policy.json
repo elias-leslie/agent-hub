@@ -1,0 +1,10 @@
+{
+  "input_token_encoding": "cl100k_base",
+  "output_characters_per_token": 4,
+  "st_families": {
+    "administration": ["context", "task", "show", "list", "ready", "ready-all", "claim", "done", "log", "plan", "portfolio", "session", "sessions", "agent", "hub", "prompt", "memory", "lease", "queue", "ownership", "batch", "tools", "aico", "agents", "export", "pulse"],
+    "necessary_support": ["check", "commit", "service", "services", "build", "deploy", "vcs"],
+    "substantive": ["search", "web", "browser", "graphify"],
+    "unknown": ["db", "wiki", "help"]
+  }
+}

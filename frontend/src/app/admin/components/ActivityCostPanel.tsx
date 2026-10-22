@@ -157,7 +157,7 @@ export function ActivityCostPanel({
               {activity.sessions.toLocaleString()} sessions lack usage.{' '}
               {activity.tokens.denominator.toLocaleString()} tokens recorded
               using one source per session; this is not a reconciled billing
-              total. No per-command token allocation is available.
+              total. Provider usage is not allocated to individual commands.
             </p>
             <p className="text-xs text-slate-400">
               Window: {new Date(activity.window_start).toLocaleString()} –{' '}

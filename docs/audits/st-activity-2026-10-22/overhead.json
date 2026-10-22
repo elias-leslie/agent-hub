@@ -1,0 +1,28 @@
+{
+  "kind": "synthetic-local-microbenchmark",
+  "calls": 1000,
+  "events": 2000,
+  "repeats": 5,
+  "cold_encoding_ms": 74.558,
+  "timings": {
+    "without_st_summary": {
+      "median_ms": 21.547,
+      "range_ms": [
+        21.452,
+        21.81
+      ]
+    },
+    "with_st_summary": {
+      "median_ms": 39.165,
+      "range_ms": [
+        38.898,
+        45.043
+      ]
+    }
+  },
+  "extra_summary_bytes": 1563,
+  "per_command_added_output_bytes": 0,
+  "per_command_added_network_calls": 0,
+  "per_command_added_agent_tokens": 0,
+  "notes": "No ST invocation code changed. Cold tokenizer loads on an Activity request in a thread. Snapshot microbenchmark excludes DB and HTTP latency; not a production API measurement."
+}

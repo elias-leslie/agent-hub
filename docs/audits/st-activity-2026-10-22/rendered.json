@@ -1,0 +1,26 @@
+{
+  "width": 390,
+  "height": 844,
+  "overflow": false,
+  "text": "ST command time and text\n\n4 ST commands in sampled calls \u00b7 2s elapsed \u00b7 ~19 input text tokens \u00b7 ~21 output text tokens\n\n3 admin + support \u00b7 1 substantive \u00b7 0 unknown commands. Text estimates describe command input and retained output added once to history. They are separate from provider usage, billed tokens and context still resident after compaction.\n\nTime known for 2/4; output known for 2/4. 2 commands share shell results and may not have run; their time and output stay unallocated.\n\nTop ST families and coverage\n\nShowing 4 of 4 families, ranked by estimated input + output text tokens.\n\nst.context \u00b7 Admin\n\n1 command \u00b7 2s elapsed \u00b7 ~6 input text tokens \u00b7 ~21 output text tokens\n\nTime known for 1/1 \u00b7 output known for 1/1.\n\nOpen an observed st.context session\n\nst.commit \u00b7 Support\n\n1 command \u00b7 Time unavailable \u00b7 ~5 input text tokens \u00b7 Output estimate unavailable\n\nTime known for 0/1 \u00b7 output known for 0/1.\n\nOpen an observed st.commit session\n\nst.web \u00b7 Substantive\n\n1 command \u00b7 0s elapsed \u00b7 ~4 input text tokens \u00b7 ~0 output text tokens\n\nTime known for 1/1 \u00b7 output known for 1/1.\n\nOpen an observed st.web session\n\nst.check \u00b7 Support\n\n1 command \u00b7 Time unavailable \u00b7 ~4 input text tokens \u00b7 Output estimate unavailable\n\nTime known for 0/1 \u00b7 output known for 0/1.\n\nOpen an observed st.check session\n\nConcurrent elapsed times add; this differs from merged tool occupancy below.\n\n3/4 sampled shell calls contain recognizable ST commands; 1 shell calls could not be parsed. 0 ST commands have unknown class. Only direct ST commands in supported shell syntax are counted; wrappers, scripts and unsampled events can hide more.\n\nInput uses cl100k_base on normalized command arguments. Output uses retained characters \u00f7 4, rounded up per isolated command, matching ST tools cost. Language and formatting affect accuracy. Missing or truncated text has unknown size. Arguments and output contents are not included in this report.",
+  "open": true,
+  "focus": "Open an observed st.context session",
+  "links": [
+    "/sessions?kind=all&subagents=1&benchmarks=1&since=all&project=project&sel=s",
+    "/sessions?kind=all&subagents=1&benchmarks=1&since=all&project=project&sel=s",
+    "/sessions?kind=all&subagents=1&benchmarks=1&since=all&project=project&sel=s",
+    "/sessions?kind=all&subagents=1&benchmarks=1&since=all&project=project&sel=s"
+  ],
+  "capture_note": "Actual component standalone HTML, synthetic API snapshot, inherited built CSS; phone 390x844. Desktop 1280x720 separately captured. Browser disclosure and keyboard checks succeeded. No live API/navigation claim.",
+  "observed_states": [
+    "sample with shared/zero/missing fields",
+    "empty ST commands",
+    "older-server ST unavailable",
+    "capped event sample"
+  ],
+  "keyboard": {
+    "Enter_closes": true,
+    "Enter_opens": true,
+    "Tab_reaches_first_session_link": true
+  }
+}
