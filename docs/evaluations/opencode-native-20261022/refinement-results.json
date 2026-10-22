@@ -1,0 +1,140 @@
+{
+  "tether_runtime_commit": "857913677e34c532cebb166e0ba593f920b31ab5",
+  "agent_hub_runtime_commit": "93d235e6faaf490c40269b0b817187e04fed6bda",
+  "records": [
+    {
+      "widget_id": "eaec9b44",
+      "native_session_id": "ses_e9a29d542ffer3d6DgxBxjTIow",
+      "retirement": {
+        "status": "ended"
+      },
+      "retirement_elapsed_s": 3.221,
+      "repeated_retirement": {
+        "aico_session_id": "aico-widget-eaec9b44",
+        "closed_session_ids": []
+      },
+      "late_idle_sync": {
+        "session_id": "ses_e9a29d542ffer3d6DgxBxjTIow",
+        "events_appended": 0,
+        "events_skipped": 6
+      },
+      "native_permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "allow"
+        }
+      ],
+      "native_outcome": "succeeded",
+      "native_cost_usd": 0,
+      "tool_checks": [
+        {
+          "name": "shell",
+          "status": "completed",
+          "exit": 0,
+          "synthetic_output_observed": true
+        }
+      ],
+      "pending_permissions": 0,
+      "native_tokens": {
+        "input": 11522,
+        "output": 52,
+        "reasoning": 0,
+        "cache": {
+          "read": 16640,
+          "write": 0
+        }
+      },
+      "hub_status_after_late_idle": "completed",
+      "hub_tether_retired_after_late_idle": true,
+      "context": {
+        "status": "ok",
+        "payload_hash": "acdc5385522ffc243d2092a64a68a7d58200eaefd908965b9fd1b30fd611d32b",
+        "artifact": "/home/kasadis/.local/state/agent-hub/context-deliveries/opencode/agent-hub/ses_e9a29d542ffer3d6DgxBxjTIow/20261022T225839.884211Z-acdc5385522ffc24-d6605381.json"
+      }
+    },
+    {
+      "widget_id": "3ab234cc",
+      "native_session_id": "ses_e9a24ea55ffeKOrWWs5TMtGV9Q",
+      "retirement": {
+        "status": "ended"
+      },
+      "retirement_elapsed_s": 3.166,
+      "repeated_retirement": {
+        "aico_session_id": "aico-widget-3ab234cc",
+        "closed_session_ids": []
+      },
+      "late_idle_sync": {
+        "session_id": "ses_e9a24ea55ffeKOrWWs5TMtGV9Q",
+        "events_appended": 0,
+        "events_skipped": 7
+      },
+      "native_permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "allow"
+        }
+      ],
+      "native_outcome": "succeeded",
+      "native_cost_usd": 0,
+      "tool_checks": [
+        {
+          "name": "shell",
+          "status": "completed",
+          "exit": 0,
+          "synthetic_output_observed": true
+        }
+      ],
+      "pending_permissions": 0,
+      "native_tokens": {
+        "input": 27230,
+        "output": 18,
+        "reasoning": 67,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "hub_status_after_late_idle": "completed",
+      "hub_tether_retired_after_late_idle": true,
+      "context": {
+        "status": "ok",
+        "payload_hash": "acdc5385522ffc243d2092a64a68a7d58200eaefd908965b9fd1b30fd611d32b",
+        "artifact": "/home/kasadis/.local/state/agent-hub/context-deliveries/opencode/agent-hub/ses_e9a24ea55ffeKOrWWs5TMtGV9Q/20261022T230356.021562Z-acdc5385522ffc24-359a9bd0.json"
+      }
+    }
+  ],
+  "retirement_response_smoke": {
+    "widget_id": "48b04490",
+    "retirement": {
+      "status": "ended",
+      "contextFinalization": "completed"
+    },
+    "model_calls_requested": 0
+  },
+  "checks": {
+    "focused_adapter_tests": 13,
+    "agent_hub_full_backend_passed": 4651,
+    "agent_hub_full_backend_skipped": 3,
+    "agent_hub_full_frontend_passed": 290,
+    "tether_full_python_passed": 427,
+    "tether_full_vitest_passed": 593
+  },
+  "deployments": {
+    "tether": {
+      "job_id": "6d8be5089e174159bf2cf0e19a3e5cfb",
+      "state": "succeeded",
+      "source_commit": "857913677e34c532cebb166e0ba593f920b31ab5",
+      "acceptance_artifact": "/srv/workspaces/projects/tether/.git/st/acceptance/95ad75723c004c97ecbb6ee5cb52d0a0ae193d8f145be00166739584655bafbb.json",
+      "deployment_artifact": "/home/kasadis/.summitflow/services/jobs/6d8be5089e174159bf2cf0e19a3e5cfb.deployment.json"
+    },
+    "agent-hub": {
+      "job_id": "3b9941b572bc408887ef972fa25c3805",
+      "state": "succeeded",
+      "source_commit": "93d235e6faaf490c40269b0b817187e04fed6bda",
+      "acceptance_artifact": "/srv/workspaces/projects/agent-hub/.git/st/acceptance/092301a57448c4869b8497c7e209b331143b017db51c4a02274b3e8371a95ece.json",
+      "deployment_artifact": "/home/kasadis/.summitflow/services/jobs/3b9941b572bc408887ef972fa25c3805.deployment.json"
+    }
+  }
+}

@@ -34,7 +34,7 @@ source is `218d695ac2dc2c1f11b9b3a99f35bdecfaa1fd9a`. Focused adapter/accounting
 checks passed 9 tests; the changed-source gate passed 52 tests plus types,
 formatting and security checks. Full acceptance identified two shared fixture
 harness-option lists requiring the new OpenCode option; those fixtures are updated
-with this report. The final managed deployment receipt is reported separately.
+with this report. Final runtime deployment and refinement receipts are linked below.
 
 ## Supported path and evidence limits
 
@@ -59,3 +59,33 @@ Native model labels do not independently verify the upstream backend model.
 Child/fork accounting fails closed, Tether root resume and crash catchup are
 unsupported, and Tether's OpenCode activity indicator remains `unknown`. The native
 UI, successful native outcome and recorded usage are independent retained facts.
+
+## Final permission and retirement verification
+
+Both model launchers were tested again with the native per-session permission rule
+`{"action":"*","resource":"*","effect":"allow"}`. DeepSeek ran
+`printf OPENCODE_PERMISSIONS_OK`; GLM ran `printf GLM_PERMISSIONS_OK`. Both native
+shell results completed with exit 0, with zero pending permissions and native
+cost $0. The GLM tool result, its output and 8 ms duration were retained by Agent
+Hub's version 2 event parser. No global OpenCode user configuration was changed.
+
+Ending each owned Aico window through deployed Tether closed its correlated Hub
+conversation in 3.221/3.166 seconds. Repeating retirement returned no session to
+close. Replaying a late idle export appended zero events, skipped 6/7 existing
+events and left both rows `completed` with `tether_retired=true`. The native CLI
+session remains available as a retained export. A final metadata-only session
+verified the API response `{"status":"ended","contextFinalization":"completed"}`
+without requesting a model call. All verification windows were ended.
+
+Current runtime commits are Tether `857913677e34c532cebb166e0ba593f920b31ab5`
+and Agent Hub `93d235e6faaf490c40269b0b817187e04fed6bda`. Managed rebuild jobs
+`6d8be5089e174159bf2cf0e19a3e5cfb` and `3b9941b572bc408887ef972fa25c3805`
+both succeeded. Full acceptance passed 427 Python and 593 Vitest tests for Tether,
+and 4,651 backend tests (3 skipped) plus 290 frontend tests for Agent Hub. The
+focused OpenCode adapter suite passed 13 tests. Types, formatting and configured
+security checks passed. [refinement-results.json](refinement-results.json) retains
+native evidence, idempotency results, and exact acceptance/deployment artifact paths.
+
+Remaining limits are native child/fork accounting, Tether root resume, crash
+catchup outside explicit Tether retirement, and the `unknown` OpenCode activity
+indicator. Upstream model identity remains limited to OpenCode's native labels.
