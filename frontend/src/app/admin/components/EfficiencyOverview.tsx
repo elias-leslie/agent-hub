@@ -97,7 +97,7 @@ export function EfficiencyOverview({
             substantive + unknown. Admin includes necessary support.
           </p>
           <p className="text-xs text-slate-400">
-            Unknown {durationPercent(split.unknown_share)} · retained output on{' '}
+            Unknown {durationPercent(split.unknown_share)} · retained text on{' '}
             {split.tools_sampled - split.tools_missing_output}/
             {split.tools_sampled} calls
             {split.events_truncated
@@ -221,17 +221,18 @@ function ComparisonRow({
         <div className="mt-2 space-y-2">
           <p>
             Unknown {durationPercent(split.unknown_share)} (
-            {contextTokens(split.unknown_tokens_estimate)}) · retained output on{' '}
+            {contextTokens(split.unknown_tokens_estimate)}) · retained text on{' '}
             {split.tools_sampled - split.tools_missing_output}/
             {split.tools_sampled} calls
             {split.events_truncated
               ? ' · Capped sample: incomplete coverage.'
               : '.'}{' '}
-            Missing output has unknown size. Arguments tokenized on{' '}
-            {split.tokenized_argument_calls}/{split.tools_sampled} calls;{' '}
-            {split.estimated_argument_calls} use a character estimate. Returned
-            text: {split.output_characters_per_token} characters per estimated
-            token. Tool time:{' '}
+            Retained text can be a capped or redacted summary and undercount
+            model-seen output. Missing output has unknown size. Arguments
+            tokenized on {split.tokenized_argument_calls}/{split.tools_sampled}{' '}
+            calls; {split.estimated_argument_calls} use a character estimate.
+            Returned text: {split.output_characters_per_token} characters per
+            estimated token. Tool time:{' '}
             {durationSeconds(row.duration_split.admin_seconds)} admin /{' '}
             {durationSeconds(row.duration_split.denominator_seconds)} recorded.
           </p>

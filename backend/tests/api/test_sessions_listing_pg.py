@@ -671,3 +671,21 @@ async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger
     assert complete.status_code == 200, complete.text
     assert complete.json()["sessions"][0]["activity_accounting"]["admin_seconds"] == 30
     assert complete.json()["sessions"][0]["activity_accounting"]["events_truncated"] is False
+
+
+async def test_context_counts_retained_summary_without_claiming_full_output(
+    api: httpx.AsyncClient, pg_db: AsyncSession,
+) -> None:
+    await add_session(pg_db, "summary", minutes=1)
+    await add_event(pg_db, "summary", 1, 1, "tool_use", call_id="summary",
+                    tool_name="Bash", tool_input={"command": "st context fixture"})
+    await add_event(pg_db, "summary", 1, 2, "tool_result", call_id="summary",
+                    content="x" * 2000, tool_output={"result": {"unretained": True}})
+    response = await api.get("/api/sessions", params={
+        "accounting_start": BASE.isoformat(), "accounting_end": (BASE + timedelta(hours=1)).isoformat(),
+    })
+    assert response.status_code == 200, response.text
+    context = response.json()["sessions"][0]["activity_accounting"]["context_split"]
+    # Coverage means retained text exists; this summary is not the full output.
+    assert context["tools_sampled"] == 1 and context["tools_missing_output"] == 0
+    assert context["returned_tokens_estimate"] == 500

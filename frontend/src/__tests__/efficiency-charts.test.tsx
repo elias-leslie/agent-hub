@@ -98,9 +98,12 @@ describe('efficiency charts and accounting contracts', () => {
     expect(screen.getByText('40.0%')).toBeInTheDocument()
     expect(screen.getByText('60.0%')).toBeInTheDocument()
     expect(
-      screen.getByText(/Unknown 10.0% · retained output on 4\/5 calls/),
+      screen.getByText(/Unknown 10.0% · retained text on 4\/5 calls/),
     ).toHaveTextContent('Capped sample')
     expect(screen.getByText(/weighted by text size/)).toBeInTheDocument()
+    expect(
+      screen.getAllByText(/capped or redacted summary/).length,
+    ).toBeGreaterThan(0)
     for (const [button, name, field, value] of [
       ['Projects', 'project/one', 'project', 'project/one'],
       ['Work roles', 'Implementation', 'work_role', 'implementation'],

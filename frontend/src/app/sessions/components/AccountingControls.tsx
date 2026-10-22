@@ -111,10 +111,10 @@ export function AccountingWindowLabel({
       –{' '}
       <time dateTime={window.end}>{new Date(window.end).toLocaleString()}</time>
       . Admin and Other estimate tool text added once. Other includes
-      substantive + unknown. Missing or truncated output has unknown size.
-      Prose, system instructions, repeated context reads and compaction are
-      excluded; resident context is unavailable here. Provider usage is
-      cumulative.
+      substantive + unknown. Retained text may be a capped or redacted summary
+      and undercount model-seen output. Missing output has unknown size. Prose,
+      system instructions, repeated context reads and compaction are excluded;
+      resident context is unavailable here. Provider usage is cumulative.
     </p>
   )
 }

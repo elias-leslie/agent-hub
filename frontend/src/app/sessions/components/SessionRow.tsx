@@ -149,7 +149,7 @@ export const SessionRow = memo(function SessionRow({
           className="text-[11px] text-slate-300 xl:text-right"
           title={
             context
-              ? `${contextTokens(context.admin_tokens_estimate)} admin / ${contextTokens(context.denominator_tokens_estimate)} added tool text. Unknown ${durationPercent(context.unknown_share)} included in Other. Output on ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled} calls. Excludes prose, system instructions, repeated context reads and compaction. Resident context is unavailable here; provider usage is cumulative. Missing or truncated output has unknown size.${context.events_truncated ? ' Capped sample.' : ''}${accounting ? ` Tool time: ${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded.` : ''}`
+              ? `${contextTokens(context.admin_tokens_estimate)} admin / ${contextTokens(context.denominator_tokens_estimate)} added tool text. Unknown ${durationPercent(context.unknown_share)} included in Other. Retained text on ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled} calls. Excludes prose, system instructions, repeated context reads and compaction. Resident context is unavailable here; provider usage is cumulative. Retained text may be a capped or redacted summary and undercount model-seen output. Missing output has unknown size.${context.events_truncated ? ' Capped sample.' : ''}${accounting ? ` Tool time: ${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded.` : ''}`
               : 'Estimated tool context unavailable from this server.'
           }
         >
@@ -166,7 +166,7 @@ export const SessionRow = memo(function SessionRow({
           <span className="block text-slate-400">
             {session.work_role?.label ?? 'Unknown'}
             {context
-              ? ` · retained output ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled}${context.tools_missing_output > 0 || context.events_truncated ? ' · partial' : ''}`
+              ? ` · retained text ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled}${context.tools_missing_output > 0 || context.events_truncated ? ' · partial' : ''}`
               : ''}
           </span>
         </span>

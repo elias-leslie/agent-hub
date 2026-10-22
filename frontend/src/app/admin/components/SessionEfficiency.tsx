@@ -93,7 +93,7 @@ export function SessionEfficiency({
           <div className="mt-3 space-y-2 text-xs text-slate-300">
             <p>
               Unknown {percent(row.context_split?.unknown_share ?? null)}{' '}
-              included in Other. Retained output on{' '}
+              included in Other. Retained text on{' '}
               {row.context_split
                 ? `${row.context_split.tools_sampled - row.context_split.tools_missing_output}/${row.context_split.tools_sampled}`
                 : 'Unavailable'}{' '}

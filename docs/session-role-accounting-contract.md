@@ -57,7 +57,9 @@ Output uses the configured character/token ratio on retained result length witho
 its text into the response. Wrapper suppression and call pairing match tool-time accounting.
 Empty denominators have null shares. Other includes unknown, and unknown is shown explicitly.
 Group estimates sum session estimates, never average percentages. Missing or truncated
-output has unknown size. Counts cover retained text only, once per call; prose, system
+output has unknown size. A non-null result length can come from the capped/redacted
+`SessionEvent.content` summary fallback; retained-text call coverage is not complete-output
+coverage. Summaries can undercount model-seen output. Counts cover retained text only, once per call; prose, system
 instructions, images, protocol framing, repeated context reads and compaction are excluded.
 This is neither resident context-window occupancy nor an allocation of provider usage/cost.
 No resident-context measurement is available in the list or Activity contract. Native provider
