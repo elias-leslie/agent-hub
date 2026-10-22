@@ -47,13 +47,15 @@ def transcript(tmp_path):
     return path
 
 
-def test_pi_events_usage_and_incremental_replay(transcript):
+@pytest.mark.parametrize("provider", ["openai-codex", "openai"])
+def test_pi_events_usage_and_incremental_replay(transcript, provider):
+    transcript.write_text(transcript.read_text().replace(PROVIDER, provider))
     events, checkpoint = read_incremental_transcript_events(str(transcript))
     assert [event.event_type for event in events] == [
         "user_message", "thinking", "tool_use", "usage", "tool_result", "usage", "assistant_message", "usage"]
     assert events[2].call_id == events[4].call_id == "call-1"
     assert events[2].tool_input == {"path": "fixture.py"}
-    assert events[3].model_used == f"{PROVIDER}/{MODEL}"
+    assert events[3].model_used == f"{provider}/{MODEL}"
     usage = [event.usage for event in events if event.event_type == "usage" and event.usage is not None]
     assert sum(row["input_tokens"] for row in usage) == 43
     assert sum(row["output_tokens"] for row in usage) == 8
