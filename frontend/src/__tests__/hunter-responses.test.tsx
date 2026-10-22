@@ -20,7 +20,9 @@ describe('Neri response accounting', () => {
     const disclosure = screen.getByText(/Neri hunter responses/)
     fireEvent.click(disclosure)
     expect(disclosure.parentElement).toHaveAttribute('open')
-    expect(screen.getByRole('table')).toHaveTextContent('Investigation only')
+    expect(screen.getByRole('table')).toHaveTextContent(
+      'Source/recon signal only',
+    )
     expect(screen.getByRole('table')).toHaveTextContent('Mixed')
     expect(screen.getByRole('table')).toHaveTextContent('Unknown')
     expect(screen.getAllByText('1 · 25.0%')).toHaveLength(4)
@@ -29,7 +31,7 @@ describe('Neri response accounting', () => {
       screen.getByText(/first 100 → peak 400 tokens at sampled response 4/),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/First observed investigation: Source read/),
+      screen.getByText(/First source\/recon signal: Source read/),
     ).toHaveTextContent(
       'sampled response 2 · 10s since first sampled response · input 200 tokens',
     )
@@ -80,7 +82,7 @@ describe('Neri response accounting', () => {
             rows: [
               {
                 ...first,
-                first_observed_investigation: {
+                first_source_recon_signal: {
                   action: 'source_read',
                   sample_response_number: null,
                   seconds_from_first_response: 0,

@@ -191,7 +191,7 @@ def hunter_response_activity(events: list[Any], tools: dict, sessions: dict, *, 
                              "work_role": (session_work_role(session) or {})["id"], **metrics(rows),
                              "tools_without_response": unlinked[sid],
                              "window_starts_mid_session": isinstance(start, datetime) and start < cutoff,
-                             "first_observed_investigation": None if first is None else {
+                             "first_source_recon_signal": None if first is None else {
                                  "action": first[2], "sample_response_number": identities.index(first_identity) + 1 if first_identity in identities else None,
                                  "seconds_from_first_response": round(elapsed, 3) if elapsed is not None else None,
                                  "input_tokens": first_response["usage"]["input_tokens"] if first_response else None,
@@ -205,7 +205,7 @@ def hunter_response_activity(events: list[Any], tools: dict, sessions: dict, *, 
             "duplicate_usage_events": duplicate_usage, "unusable_usage_events": unusable_usage,
             "tools_without_response": sum(unlinked.values()), "events_truncated": truncated,
             "rows": session_rows[:limit],
-            "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."}
+            "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked tool-action signals; they do not establish actual bug work, token purpose, successful execution, a bug finding or accepted outcome. Source-like paths may refer to support code. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."}
 
 
 def _combined(categories: set[str]) -> str:

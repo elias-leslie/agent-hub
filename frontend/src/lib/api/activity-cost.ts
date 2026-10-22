@@ -71,7 +71,7 @@ export interface HunterResponseActivity extends HunterResponseMetrics {
     work_role: string
     tools_without_response: number
     window_starts_mid_session: boolean
-    first_observed_investigation: {
+    first_source_recon_signal: {
       action: 'source_read' | 'source_search' | 'recon_run'
       sample_response_number: number | null
       seconds_from_first_response: number | null
@@ -401,12 +401,12 @@ function hunterResponses(value: unknown) {
           'peak_tokens',
           'peak_sample_response_number',
         ]) &&
-        (row.first_observed_investigation === null ||
-          (record(row.first_observed_investigation) &&
+        (row.first_source_recon_signal === null ||
+          (record(row.first_source_recon_signal) &&
             ['source_read', 'source_search', 'recon_run'].includes(
-              String(row.first_observed_investigation.action),
+              String(row.first_source_recon_signal.action),
             ) &&
-            nullableNumbers(row.first_observed_investigation, [
+            nullableNumbers(row.first_source_recon_signal, [
               'sample_response_number',
               'seconds_from_first_response',
               'input_tokens',

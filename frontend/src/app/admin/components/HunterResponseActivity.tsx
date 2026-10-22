@@ -8,7 +8,7 @@ import {
 } from '@/lib/api/activity-cost'
 
 const LABELS: Record<HunterResponseCategory, string> = {
-  investigation_only: 'Investigation only',
+  investigation_only: 'Source/recon signal only',
   mixed: 'Mixed',
   support_coordination: 'Support / coordination',
   unknown: 'Unknown',
@@ -47,10 +47,10 @@ export function HunterResponseActivity({
           <>
             <p className="section-copy">
               Unique provider responses for declared Neri hunting and recon
-              sessions. Categories describe linked tool calls. Source reads,
-              searches and recon calls show observed investigation; they do not
-              establish a bug, successful execution or the purpose of every
-              token. Mixed responses stay whole.
+              sessions. Shares describe linked tool-action signals. Source-like
+              reads and searches can include support code. These signals cannot
+              show when actual bug hunting began or allocate tokens to actual
+              bug work. Mixed responses stay whole.
             </p>
             {data.events_truncated && (
               <p className="text-amber-200">
@@ -118,7 +118,7 @@ export function HunterResponseActivity({
               this window's sample; earlier investigation may be absent.
             </p>
             {data.rows.map((row) => {
-              const first = row.first_observed_investigation
+              const first = row.first_source_recon_signal
               return (
                 <div
                   key={row.session_id}
@@ -149,7 +149,7 @@ export function HunterResponseActivity({
                   <p>
                     {first ? (
                       <>
-                        First observed investigation: {ACTIONS[first.action]} ·
+                        First source/recon signal: {ACTIONS[first.action]} ·
                         sampled response {count(first.sample_response_number)} ·{' '}
                         {first.seconds_from_first_response === null
                           ? 'elapsed time unavailable'
@@ -157,7 +157,7 @@ export function HunterResponseActivity({
                         · input {count(first.input_tokens)} tokens.
                       </>
                     ) : (
-                      'No investigation call observed in this sample.'
+                      'No source/recon signal observed in this sample.'
                     )}{' '}
                     {row.window_starts_mid_session &&
                       'This window starts after the session began.'}

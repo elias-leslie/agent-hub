@@ -397,7 +397,7 @@ def test_hunter_response_join_does_not_collapse_pi_user_turns_or_duplicate_usage
     assert parts["investigation_only"]["response_share"] == 0.25
     assert parts["investigation_only"]["token_share"] == 220 / 1080
     row = data["rows"][0]
-    assert row["first_observed_investigation"] == {
+    assert row["first_source_recon_signal"] == {
         "action": "source_read", "sample_response_number": 2,
         "seconds_from_first_response": 10, "input_tokens": 200,
     }
@@ -421,7 +421,7 @@ def test_hunter_missing_links_and_opaque_purpose_remain_unknown_and_content_free
     assert data["responses"] == 3 and data["tools_without_response"] == 1
     assert data["unusable_usage_events"] == 1
     assert buckets(data["breakdown"], "responses")["unknown"] == 3
-    assert data["rows"][0]["first_observed_investigation"]["sample_response_number"] is None
+    assert data["rows"][0]["first_source_recon_signal"]["sample_response_number"] is None
     assert secret not in json.dumps(data)
 
 
@@ -438,7 +438,7 @@ def test_hunter_source_search_compounds_and_explicit_recon_invocation_are_observ
     assert buckets(data["breakdown"], "responses") == {
         "investigation_only": 2, "mixed": 1, "support_coordination": 0, "unknown": 0,
     }
-    assert data["rows"][0]["first_observed_investigation"]["action"] == "source_search"
+    assert data["rows"][0]["first_source_recon_signal"]["action"] == "source_search"
 
 
 def test_hunter_scope_is_explicit_and_non_pi_tools_are_not_joined_by_user_turn():
@@ -466,7 +466,7 @@ def test_hunter_cutoff_and_cap_do_not_claim_a_lifetime_first_or_complete_purpose
     assert buckets(data["breakdown"], "responses")["unknown"] == 1
     row = data["rows"][0]
     assert row["window_starts_mid_session"] is True
-    assert row["first_observed_investigation"]["sample_response_number"] == 1
+    assert row["first_source_recon_signal"]["sample_response_number"] == 1
     assert row["input_per_response"]["first_tokens"] == 200
 
 
@@ -476,4 +476,4 @@ def test_hunter_ambiguous_shell_invocations_stay_unknown(command):
         event(tool_input={"command": command}, source_event_id="message:r1:0"), hunter_usage("r1"),
     ], sessions=[hunter_session()])["hunter_responses"]
     assert buckets(data["breakdown"], "responses")["unknown"] == 1
-    assert data["rows"][0]["first_observed_investigation"] is None
+    assert data["rows"][0]["first_source_recon_signal"] is None
