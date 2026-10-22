@@ -34,16 +34,34 @@ Launcher production is a separate integration change; no recurring command taggi
 
 `GET /api/admin/session-efficiency` returns the Activity snapshot, adding:
 
-- `duration_split`: overall measured tool duration split.
+- `context_split`: estimated tool text added once, the headline measure.
+- `duration_split`: secondary measured tool duration split.
 - `by_project`, `by_work_role`, `by_harness`: complete group arrays, not limited by `limit`.
 - `work_roles`, `harnesses`: canonical `{id,label}` filter options, including Unknown.
 
 Group rows have `project_id`, `work_role_id`, or `harness_id`, plus `label`, `sessions`,
-`duration_split`, `usage`, `cost`, and `coverage`. Shares use summed duration totals,
+`context_split`, `duration_split`, `usage`, `cost`, and `coverage`. Shares use summed estimates or duration totals,
 never the average of session percentages. Accounting without a matching Hub session
 remains in the existing unmatched accounting fields; group usage/cost covers Hub-linked
 sessions only. Existing source precedence is unchanged: cost logs, matched usage calls,
 then deduplicated response events; alternative sources are never added for one session.
+
+`context_split` reports `admin_tokens_estimate`, `other_tokens_estimate`,
+`unknown_tokens_estimate`, `denominator_tokens_estimate`, `argument_tokens_estimate`,
+`returned_tokens_estimate`, the three shares, and coverage (`tools_sampled`,
+`tools_missing_output`, `tokenized_argument_calls`, `estimated_argument_calls`,
+`events_truncated`). `input_token_encoding` and `output_characters_per_token` expose
+configured estimation methods. Arguments use the reference tokenizer within the existing
+per-call and per-session character budgets, with character estimates beyond either budget.
+Output uses the configured character/token ratio on retained result length without loading
+its text into the response. Wrapper suppression and call pairing match tool-time accounting.
+Empty denominators have null shares. Other includes unknown, and unknown is shown explicitly.
+Group estimates sum session estimates, never average percentages. Missing or truncated
+output has unknown size. Counts cover retained text only, once per call; prose, system
+instructions, images, protocol framing, repeated context reads and compaction are excluded.
+This is neither resident context-window occupancy nor an allocation of provider usage/cost.
+No resident-context measurement is available in the list or Activity contract. Native provider
+usage stays separate; the Sessions row usage is cumulative while Activity usage is windowed.
 
 `duration_split` fields are `admin_seconds`, `other_seconds`, `denominator_seconds`,
 `admin_share`, `other_share`, `unknown_seconds`, `unknown_share`, `tools_sampled`,
@@ -80,12 +98,13 @@ Activity retains its existing window-active session selection and event cap; `ev
 and all missing/unknown fields remain explicit. A truncated sample can omit evidence, so
 its shares are sample observations. Sessions can also show inactive historical matches.
 
-`GET /api/sessions` adds `activity_accounting` to every row, `accounting_window: {start,end}`,
+`GET /api/sessions` adds `activity_accounting` (duration fields plus nested `context_split`) to every row, `accounting_window: {start,end}`,
 and both registries to the response. Facets also return both registries. The first Sessions
 request defaults to a trailing 24-hour accounting window. `next_cursor` pins that window
 for every sort; later pages may omit dates, and changing them is rejected. Offset pagination
-must resend the same explicit dates. `sort_by=admin_share|admin_duration` and existing
-`sort_direction=asc|desc` sort all filtered sessions before pagination. Unavailable denominators
+must resend the same explicit dates. `sort_by=admin_share|admin_tokens|admin_duration` and existing
+`sort_direction=asc|desc` sort all filtered sessions before pagination. `admin_share` uses the displayed context share;
+`admin_tokens` uses estimated admin tool tokens, and `admin_duration` retains tool time. Unavailable denominators
 sort last in either direction, with stable session-ID ties. These sorts stream all retained
 tool records in the interval without a source/session cap; per-session pairing, overlap union,
 wrapper suppression, and interval boundaries match Activity. The existing row usage rollups
@@ -97,5 +116,5 @@ Focused unit/API tests cover immutable roles, fork behavior, missing versus zero
 wait/overlap handling, weighted groups, explicit harness evidence, cost-source precedence,
 and cursor windows. Isolated PostgreSQL tests exercise actual routes, shared filters and
 ledger totals, pre-pagination sorting in both directions, pricing fields, and cap disclosure.
-These are test-environment checks, not deployment evidence. Parent owns integration and
-live rendered verification; this contribution does not deploy or publish.
+These are test-environment checks, not deployment evidence. Rendered and deployment evidence
+belongs to the dated audit for the integrated revision.

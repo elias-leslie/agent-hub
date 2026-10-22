@@ -232,7 +232,13 @@ export interface SessionListQuery {
   exclude_benchmarks?: boolean
   parent_session_id?: string
   /** time = coalesce(last_activity_at, updated_at, created_at). */
-  sort_by?: 'last_active' | 'status' | 'time' | 'admin_share' | 'admin_duration'
+  sort_by?:
+    | 'last_active'
+    | 'status'
+    | 'time'
+    | 'admin_share'
+    | 'admin_tokens'
+    | 'admin_duration'
   sort_direction?: 'asc' | 'desc'
   cursor?: string
   page_size?: number

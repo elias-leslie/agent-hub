@@ -21,10 +21,10 @@ def efficiency_status(tool_time: dict, *, calls: int, missing: int, truncated: b
 
 
 def session_efficiency(rows: list[dict[str, Any]], *, limit: int) -> dict:
-    """Rank all observed sessions before limiting, independently of token/task coverage."""
+    """Rank by estimated admin tool-context tokens, independent of provider usage."""
     rows.sort(key=lambda row: (
-        next(part["seconds"] for part in row["tool_time"]["breakdown"] if part["category"] == "administration"),
-        row["tool_time"]["denominator_seconds"], row["session_id"],
+        row["context_split"]["admin_tokens_estimate"],
+        row["context_split"]["denominator_tokens_estimate"], row["session_id"],
     ), reverse=True)
     return {
         "method": "session-tool-occupancy-v1",

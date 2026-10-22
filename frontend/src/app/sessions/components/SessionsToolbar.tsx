@@ -320,8 +320,15 @@ export function SessionsToolbar({
           >
             <option value="last_active">Last active</option>
             <option value="status">Status</option>
-            <option value="admin_share">Admin share · highest first</option>
-            <option value="admin_duration">Admin time · longest first</option>
+            <option value="admin_share">
+              Admin context share · highest first
+            </option>
+            <option value="admin_tokens">
+              Admin context tokens · most first
+            </option>
+            <option value="admin_duration">
+              Admin tool time · longest first
+            </option>
           </select>
         </label>
 

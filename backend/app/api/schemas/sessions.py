@@ -193,7 +193,27 @@ class ExternalSessionIdentity(BaseModel):
     )
 
 
+class ContextAccounting(BaseModel):
+    admin_tokens_estimate: int
+    other_tokens_estimate: int
+    unknown_tokens_estimate: int
+    denominator_tokens_estimate: int
+    argument_tokens_estimate: int
+    returned_tokens_estimate: int
+    admin_share: float | None
+    other_share: float | None
+    unknown_share: float | None
+    tools_sampled: int
+    tools_missing_output: int
+    tokenized_argument_calls: int
+    estimated_argument_calls: int
+    events_truncated: bool
+    input_token_encoding: str
+    output_characters_per_token: float
+
+
 class DurationAccounting(BaseModel):
+    context_split: ContextAccounting | None = None
     admin_seconds: float
     other_seconds: float
     denominator_seconds: float

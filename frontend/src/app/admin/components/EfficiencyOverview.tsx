@@ -8,11 +8,8 @@ import {
   type ActivityCost,
   activitySessionsHref,
 } from '@/lib/api/activity-cost'
-import {
-  type DurationSplit,
-  durationPercent,
-  durationSeconds,
-} from '@/lib/api/duration-split'
+import { type ContextSplit, contextTokens } from '@/lib/api/context-split'
+import { durationPercent, durationSeconds } from '@/lib/api/duration-split'
 
 export function EfficiencyOverview({
   activity,
@@ -24,7 +21,7 @@ export function EfficiencyOverview({
   const [comparison, setComparison] = useState<
     'projects' | 'roles' | 'harnesses'
   >('projects')
-  const split = activity.duration_split
+  const split = activity.context_split
   if (!split)
     return (
       <p className="section-copy">
@@ -49,13 +46,13 @@ export function EfficiencyOverview({
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-stretch gap-x-8 gap-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4 sm:flex-row sm:items-center">
-        {split.denominator_seconds > 0 ? (
+        {split.denominator_tokens_estimate > 0 ? (
           <div aria-hidden="true" className="shrink-0 self-center">
             <PieChart width={176} height={156}>
               <Pie
                 data={[
-                  { name: 'Admin', value: split.admin_seconds },
-                  { name: 'Other', value: split.other_seconds },
+                  { name: 'Admin', value: split.admin_tokens_estimate },
+                  { name: 'Other', value: split.other_tokens_estimate },
                 ]}
                 dataKey="value"
                 innerRadius={48}
@@ -71,7 +68,7 @@ export function EfficiencyOverview({
         ) : null}
         <div className="min-w-0 flex-1 space-y-2">
           <h3 className="text-sm font-semibold text-slate-100">
-            Recorded tool time
+            Estimated tool context
           </h3>
           <dl className="flex flex-wrap gap-x-8 gap-y-3">
             <div>
@@ -80,7 +77,7 @@ export function EfficiencyOverview({
                 {durationPercent(split.admin_share)}
               </dd>
               <dd className="text-xs text-slate-400">
-                {durationSeconds(split.admin_seconds)}
+                {contextTokens(split.admin_tokens_estimate)}
               </dd>
             </div>
             <div>
@@ -89,34 +86,38 @@ export function EfficiencyOverview({
                 {durationPercent(split.other_share)}
               </dd>
               <dd className="text-xs text-slate-400">
-                {durationSeconds(split.other_seconds)}
+                {contextTokens(split.other_tokens_estimate)}
               </dd>
             </div>
           </dl>
           <p className="section-copy">
-            {durationSeconds(split.denominator_seconds)} recorded non-wait tool
-            time · {activity.sessions.toLocaleString()} sessions. Other includes
+            Tool text added once:{' '}
+            {contextTokens(split.denominator_tokens_estimate)} ·{' '}
+            {activity.sessions.toLocaleString()} sessions. Other includes
             substantive + unknown. Admin includes necessary support.
           </p>
           <p className="text-xs text-slate-400">
-            Unknown {durationPercent(split.unknown_share)} · duration on{' '}
-            {split.tools_sampled - split.tools_missing_duration}/
+            Unknown {durationPercent(split.unknown_share)} · retained output on{' '}
+            {split.tools_sampled - split.tools_missing_output}/
             {split.tools_sampled} calls
             {split.events_truncated
               ? ' · Capped sample: incomplete coverage'
               : ''}
-            .
+            . Provider usage: {activity.tokens.denominator.toLocaleString()}{' '}
+            recorded tokens; {activity.missing_usage_sessions} sessions without
+            usage. Missing or truncated output has unknown size. Resident
+            context is unavailable in this view.
           </p>
-          {split.denominator_seconds === 0 && (
+          {split.denominator_tokens_estimate === 0 && (
             <p className="section-copy">
-              No recorded non-wait tool time. Shares are unavailable.
+              No retained tool text. Context shares are unavailable.
             </p>
           )}
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-100">
-          Compare tool time
+          Compare estimated tool context
         </h3>
         <div className="flex flex-wrap gap-1" aria-label="Comparison groups">
           {(
@@ -139,9 +140,9 @@ export function EfficiencyOverview({
         </div>
       </div>
       <p className="section-copy">
-        Shares use each group’s total recorded seconds, weighted by time. Same
-        interval and filters. Lower admin share alone does not establish better
-        results.
+        Shares use each group’s total estimated tool tokens, weighted by text
+        size. Same interval and filters. Lower admin share alone does not
+        establish better results.
       </p>
       {!groups ? (
         <p className="section-copy">
@@ -169,8 +170,11 @@ export function EfficiencyOverview({
         </div>
       )}
       <p className="text-xs text-slate-400">
-        Tool-time shares do not allocate provider tokens or cost. Token purpose
-        remains unknown.
+        Arguments use a reference tokenizer within the recorded budget; returned
+        text uses a character estimate. Each call counts once. Prose, system
+        instructions, images, protocol framing, repeated context reads and
+        compaction are excluded. Missing output has unknown size. These
+        estimates do not allocate provider tokens or cost.
       </p>
     </div>
   )
@@ -183,7 +187,13 @@ function ComparisonRow({
   row: ActivityComparison
   href: string
 }) {
-  const split = row.duration_split
+  const split = row.context_split
+  if (!split)
+    return (
+      <p className="section-copy">
+        {row.label}: estimated tool context unavailable.
+      </p>
+    )
   return (
     <div className="min-w-0 rounded-lg border border-slate-800 p-3 space-y-2">
       <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-sm">
@@ -196,7 +206,7 @@ function ComparisonRow({
         <span className="text-xs text-slate-400">
           {row.sessions.toLocaleString()}{' '}
           {row.sessions === 1 ? 'session' : 'sessions'} ·{' '}
-          {durationSeconds(split.denominator_seconds)}
+          {contextTokens(split.denominator_tokens_estimate)}
         </span>
       </div>
       <SplitBar split={split} />
@@ -211,14 +221,19 @@ function ComparisonRow({
         <div className="mt-2 space-y-2">
           <p>
             Unknown {durationPercent(split.unknown_share)} (
-            {durationSeconds(split.unknown_seconds)}) · duration on{' '}
-            {split.tools_sampled - split.tools_missing_duration}/
-            {split.tools_sampled} calls (
-            {durationPercent(split.duration_coverage)})
+            {contextTokens(split.unknown_tokens_estimate)}) · retained output on{' '}
+            {split.tools_sampled - split.tools_missing_output}/
+            {split.tools_sampled} calls
             {split.events_truncated
               ? ' · Capped sample: incomplete coverage.'
               : '.'}{' '}
-            Missing time has unknown size.
+            Missing output has unknown size. Arguments tokenized on{' '}
+            {split.tokenized_argument_calls}/{split.tools_sampled} calls;{' '}
+            {split.estimated_argument_calls} use a character estimate. Returned
+            text: {split.output_characters_per_token} characters per estimated
+            token. Tool time:{' '}
+            {durationSeconds(row.duration_split.admin_seconds)} admin /{' '}
+            {durationSeconds(row.duration_split.denominator_seconds)} recorded.
           </p>
           {row.usage && row.coverage?.usage_sessions !== 0 ? (
             <p>
@@ -257,7 +272,7 @@ function ComparisonRow({
   )
 }
 
-function SplitBar({ split }: { split: DurationSplit }) {
+function SplitBar({ split }: { split: ContextSplit }) {
   return (
     <div
       aria-hidden="true"

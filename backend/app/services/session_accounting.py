@@ -1,4 +1,4 @@
-"""Read existing tool durations for session rows and sorting, without source caps."""
+"""Read retained tool text and durations for session rows and sorting, without caps."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent
+from app.services.activity_accounting import returned_characters_expression
+from app.services.context_accounting import context_split, tool_context_row
 from app.services.session_efficiency import duration_split
 
 
@@ -63,16 +65,18 @@ def summarize_session_duration(events: list[Any], *, start: datetime, end: datet
 
     tools, results, _ = paired_activity_tools(events)
     intervals = []
+    context = []
     missing = 0
     for key, tool in tools.items():
+        _, category = _tool_family(tool)
+        context.append(tool_context_row(tool, results.get(key), category))
         interval = measured_tool_interval(tool, results.get(key), cutoff=start, now=end,
                                           session_type=getattr(tool, "session_type", None))
         if interval is None:
             missing += 1
         else:
-            _, category = _tool_family(tool)
             intervals.append((*interval, category))
-    return duration_split(_occupancy(intervals), calls=len(tools), missing=missing, truncated=False)
+    return duration_split(_occupancy(intervals), calls=len(tools), missing=missing, truncated=False) | {"context_split": context_split(context)}
 
 
 async def fetch_session_accounting(db: AsyncSession, selected_ids: Any, *, start: datetime, end: datetime) -> dict[str, dict]:
@@ -86,6 +90,7 @@ async def fetch_session_accounting(db: AsyncSession, selected_ids: Any, *, start
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
         SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input,
         SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at, Session.session_type,
+        returned_characters_expression(SessionEvent),
     ).join(Session, Session.id == SessionEvent.session_id).where(SessionEvent.session_id.in_(selected_ids), event_time >= start, event_time < end,
             SessionEvent.event_type.in_(["tool_use", "tool_result"]))
     query = query.order_by(SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence).execution_options(yield_per=1000)
@@ -108,6 +113,11 @@ async def fetch_session_accounting(db: AsyncSession, selected_ids: Any, *, start
 
 
 def accounting_sort_key(sid: str, accounting: dict, field: str, direction: str) -> tuple:
-    value = accounting["admin_share"] if field == "admin_share" else (
-        accounting["admin_seconds"] if accounting["admin_share"] is not None else None)
+    context = accounting.get("context_split") or {}
+    if field == "admin_share":
+        value = context.get("admin_share")
+    elif field == "admin_tokens":
+        value = context.get("admin_tokens_estimate") if context.get("admin_share") is not None else None
+    else:
+        value = accounting["admin_seconds"] if accounting["admin_share"] is not None else None
     return value is None, -value if value is not None and direction == "desc" else value or 0, sid

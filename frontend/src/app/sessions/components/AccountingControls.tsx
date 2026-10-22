@@ -24,7 +24,7 @@ export function AccountingControls({
   return (
     <>
       <label className="flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
-        <span>Tool-time window</span>
+        <span>Accounting window</span>
         <select
           className={control}
           value={[1, 24, 168].includes(hours) ? hours : 'custom'}
@@ -100,18 +100,21 @@ export function AccountingWindowLabel({
 }) {
   if (!window)
     return (
-      <p className="text-xs text-slate-400">Tool-time interval unavailable.</p>
+      <p className="text-xs text-slate-400">Accounting interval unavailable.</p>
     )
   return (
     <p className="text-xs text-slate-400 break-words">
-      Tool-time interval:{' '}
+      Accounting interval:{' '}
       <time dateTime={window.start}>
         {new Date(window.start).toLocaleString()}
       </time>{' '}
       –{' '}
       <time dateTime={window.end}>{new Date(window.end).toLocaleString()}</time>
-      . Admin and Other use recorded non-wait tool time. Other includes
-      substantive + unknown.
+      . Admin and Other estimate tool text added once. Other includes
+      substantive + unknown. Missing or truncated output has unknown size.
+      Prose, system instructions, repeated context reads and compaction are
+      excluded; resident context is unavailable here. Provider usage is
+      cumulative.
     </p>
   )
 }

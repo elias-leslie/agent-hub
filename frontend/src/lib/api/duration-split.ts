@@ -1,5 +1,8 @@
+import { type ContextSplit, isContextSplit } from './context-split'
+
 /** Recorded non-wait tool occupancy, shared by Activity and Sessions. */
 export interface DurationSplit {
+  context_split?: ContextSplit | null
   admin_seconds: number
   other_seconds: number
   denominator_seconds: number
@@ -67,7 +70,11 @@ export function isSessionWorkRole(value: unknown): value is SessionWorkRole {
 }
 
 export function isDurationSplit(value: unknown): value is DurationSplit {
-  if (!isRecord(value)) return false
+  if (
+    !isRecord(value) ||
+    (value.context_split != null && !isContextSplit(value.context_split))
+  )
+    return false
   const counts = ['tools_sampled', 'tools_missing_duration']
   const durations = [
     'admin_seconds',

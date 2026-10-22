@@ -17,8 +17,14 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall
-from app.services.activity_accounting import argument_characters, transcript_view, usage_partitions
+from app.services.activity_accounting import (
+    argument_characters,
+    returned_characters_expression,
+    transcript_view,
+    usage_partitions,
+)
 from app.services.activity_accounting import number as _number
+from app.services.context_accounting import combine_context_splits, context_split, tool_context_row
 from app.services.session_efficiency import duration_split, efficiency_status, session_efficiency
 from app.services.session_harnesses import (
     HARNESSES,
@@ -200,6 +206,7 @@ def summarize_activity_cost(
     patterns: dict[str, dict] = {}
     missing_duration = 0
     transcript_rows: dict[str, list[dict]] = defaultdict(list)
+    context_rows: dict[str, list[dict]] = defaultdict(list)
     tool_counts: dict[str, int] = defaultdict(int)
     missing_durations: dict[str, int] = defaultdict(int)
     session_families: dict[str, dict] = defaultdict(dict)
@@ -208,6 +215,7 @@ def summarize_activity_cost(
         family, category = _tool_family(tool)
         turn_categories[(tool.session_id, tool.turn)].add("unknown" if category == "wait" else category)
         result = results.get(key)
+        context_rows[tool.session_id].append(tool_context_row(tool, result, category))
         session = by_session.get(tool.session_id)
         interval = measured_tool_interval(tool, result, cutoff=cutoff, now=now,
                                           session_type=getattr(session, "session_type", None))
@@ -318,6 +326,7 @@ def summarize_activity_cost(
         }
         occupancy = _occupancy(intervals[sid])
         per_session[sid] = {"source": source, "counts": counts, "seconds": occupancy, "usage": partitions, "transcript": transcript_view(transcript_rows[sid]), "cost": cost}
+        per_session[sid]["context_split"] = context_split(context_rows[sid], truncated=truncated)
         for category in CATEGORIES:
             tokens[category] += counts[category]
         for category, duration in occupancy.items():
@@ -384,6 +393,7 @@ def summarize_activity_cost(
         efficiency_rows.append(row | {
             "model": getattr(by_session[sid], "model", None),
             "work_role": session_work_role(by_session[sid]),
+            "context_split": per_session[sid]["context_split"],
             "duration_split": duration_split(per_session[sid]["seconds"], calls=tool_counts[sid], missing=missing_durations[sid], truncated=truncated),
             "tool_time": measured_time, "tools_sampled": tool_counts[sid],
             "tools_missing_duration": missing_durations[sid],
@@ -429,10 +439,12 @@ def summarize_activity_cost(
             group = grouped[dimension].setdefault(identity, {
                 f"{dimension}_id": identity, "label": label, "sessions": 0,
                 "seconds": defaultdict(float), "calls": 0, "missing": 0,
+                "context_splits": [],
                 "usage": dict.fromkeys(metrics["usage"], 0), "missing_usage_sessions": 0,
                 "cost": {"recorded_calls": 0, "api_equiv_known_calls": 0, "cash_known_calls": 0, "api_equiv_usd": None, "cash_usd": None},
             })
             group["sessions"] += 1
+            group["context_splits"].append(metrics["context_split"])
             group["missing_usage_sessions"] += metrics["source"] == "missing"
             for field, amount in metrics["usage"].items():
                 group["usage"][field] += amount
@@ -446,6 +458,7 @@ def summarize_activity_cost(
     def group_rows(dimension: str) -> list[dict]:
         return [{f"{dimension}_id": row[f"{dimension}_id"], "label": row["label"], "sessions": row["sessions"],
                  "usage": row["usage"], "cost": row["cost"],
+                 "context_split": combine_context_splits(row["context_splits"], truncated=truncated),
                  "coverage": {"usage_sessions": row["sessions"] - row["missing_usage_sessions"], "missing_usage_sessions": row["missing_usage_sessions"]},
                  "duration_split": duration_split(row["seconds"], calls=row["calls"], missing=row["missing"], truncated=truncated)}
                 for _, row in sorted(grouped[dimension].items())]
@@ -475,6 +488,7 @@ def summarize_activity_cost(
         "response_tokens": _token_view(responses),
         "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
         "duration_split": duration_split(seconds, calls=len(tools), missing=missing_duration, truncated=truncated),
+        "context_split": combine_context_splits([metrics["context_split"] for metrics in per_session.values()], truncated=truncated),
         "by_project": group_rows("project"), "by_work_role": group_rows("work_role"), "by_harness": group_rows("harness"),
         "work_roles": work_role_options(), "harnesses": harness_options(),
         "tool_time": tool_time, "tools_missing_duration": missing_duration, "tools_sampled": len(tools),
@@ -510,21 +524,7 @@ async def build_activity_cost_snapshot(
     if harness is not None:
         filters.append(harness_predicate(harness))
     selected_sessions = select(Session.id).where(*filters)
-    output = SessionEvent.tool_output
-
-    def text_length(key: str):
-        value = output[key]
-        return case((func.jsonb_typeof(func.to_jsonb(value)) == "string", func.length(value.as_string())), else_=None)
-
-    returned_characters = func.coalesce(
-        # The content column is a redacted summary capped at 2,000 characters.
-        # Prefer one complete retained string in the same order as event storage.
-        text_length("result"), text_length("content"), text_length("output"), text_length("message"),
-        # Native command records retain separate stdout/stderr. Empty text is known zero.
-        case((or_(text_length("stdout").is_not(None), text_length("stderr").is_not(None)),
-              func.coalesce(text_length("stdout"), 0) + func.coalesce(text_length("stderr"), 0)), else_=None),
-        func.length(SessionEvent.content),
-    ).label("returned_characters")
+    returned_characters = returned_characters_expression(SessionEvent)
     events = (await db.execute(select(
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
         SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input,

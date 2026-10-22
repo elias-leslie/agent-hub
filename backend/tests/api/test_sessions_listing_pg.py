@@ -573,43 +573,48 @@ async def test_admin_sort_precedes_pagination_and_pins_the_window(
     from app.services.session_ingestion._service_helpers import _merge_metadata
 
     metadata = _merge_metadata({}, {"work_role": {"id": "implementation", "source": "fixture"}, "harness": "codex"})
-    for index, sid in enumerate(("big", "small", "missing", "zero", "excluded")):
+    for index, sid in enumerate(("big", "small", "missing", "empty", "excluded")):
         await add_session(pg_db, sid, minutes=index, metadata=metadata, project_id="other" if sid == "excluded" else "agent-hub")
-    for sid, durations in (("big", [("Bash", 100_000, 110), ("apply_patch", 900_000, 1010)]),
-                           ("small", [("Bash", 20_000, 25)]), ("excluded", [("Bash", 999_000, 1100)]),
-                           ("missing", [("Bash", None, 30)]), ("zero", [("Bash", 0, 30)])):
-        for index, (tool, duration, second) in enumerate(durations):
-            await add_event(pg_db, sid, 1, index, "tool_use", call_id=f"{sid}-{index}", tool_name=tool,
+    for sid, durations in (("big", [("Bash", 100_000, 110, 4000), ("apply_patch", 900_000, 1010, 40)]),
+                           ("small", [("Bash", 20_000, 25, 100)]), ("excluded", [("Bash", 999_000, 1100, 9999)]),
+                           ("missing", [("unsupported", None, 30, None)])):
+        for index, (tool, duration, second, output) in enumerate(durations):
+            await add_event(pg_db, sid, 1, index * 2, "tool_use", call_id=f"{sid}-{index}", tool_name=tool,
                             tool_input={"command": "st context fixture"} if tool == "Bash" else {},
                             duration_ms=duration, source_timestamp=BASE + timedelta(seconds=second))
+            if output is not None:
+                await add_event(pg_db, sid, 1, index * 2 + 1, "tool_result", call_id=f"{sid}-{index}",
+                                tool_output={"output": "x" * output}, duration_ms=duration,
+                                source_timestamp=BASE + timedelta(seconds=second))
     params = {"accounting_start": BASE.isoformat(), "accounting_end": (BASE + timedelta(hours=1)).isoformat(),
               "project_id": "agent-hub", "work_role": "implementation", "harness": "codex_cli", "page_size": 1, "sort_direction": "desc"}
     shares = await api.get("/api/sessions", params={**params, "sort_by": "admin_share"})
     assert shares.status_code == 200, shares.text
     body = shares.json()
     assert body["total"] == 4 and body["sessions"][0]["id"] == "small"
-    assert body["sessions"][0]["activity_accounting"]["admin_share"] == 1
-    assert body["sessions"][0]["activity_accounting"]["duration_coverage"] == 1
+    assert body["sessions"][0]["activity_accounting"]["context_split"]["admin_share"] == 1
     next_params = {key: value for key, value in params.items() if key not in {"accounting_start", "accounting_end"}}
     second = await api.get("/api/sessions", params={**next_params, "sort_by": "admin_share", "cursor": body["next_cursor"]})
     assert second.status_code == 200, second.text
     assert second.json()["sessions"][0]["id"] == "big"
     assert second.json()["accounting_window"] == body["accounting_window"]
-    assert second.json()["sessions"][0]["activity_accounting"]["admin_share"] == 0.1
+    accounting = second.json()["sessions"][0]["activity_accounting"]
+    assert accounting["admin_share"] == 0.1  # time differs from the displayed context share
+    assert accounting["context_split"]["admin_share"] > 0.98
     changed = await api.get("/api/sessions", params={**params, "sort_by": "admin_share", "cursor": body["next_cursor"],
                                                     "accounting_start": (BASE - timedelta(seconds=1)).isoformat()})
     assert changed.status_code == 422
-    durations = await api.get("/api/sessions", params={**params, "sort_by": "admin_duration"})
-    assert durations.status_code == 200, durations.text
-    assert durations.json()["sessions"][0]["id"] == "big"
-    assert durations.json()["sessions"][0]["activity_accounting"]["admin_seconds"] == 100
+    for field in ("admin_duration", "admin_tokens"):
+        response = await api.get("/api/sessions", params={**params, "sort_by": field})
+        assert response.status_code == 200, response.text
+        assert response.json()["sessions"][0]["id"] == "big"
     ascending = await api.get("/api/sessions", params={**params, "sort_by": "admin_share", "sort_direction": "asc", "page_size": 100})
     assert ascending.status_code == 200, ascending.text
     rows = ascending.json()["sessions"]
-    assert [row["id"] for row in rows] == ["big", "small", "missing", "zero"]
-    assert rows[2]["activity_accounting"]["duration_coverage"] == 0
-    assert rows[3]["activity_accounting"]["duration_coverage"] == 1
-    assert all(row["activity_accounting"]["admin_share"] is None for row in rows[2:])
+    assert [row["id"] for row in rows] == ["missing", "big", "small", "empty"]
+    assert rows[0]["activity_accounting"]["context_split"]["unknown_share"] == 1
+    assert rows[0]["activity_accounting"]["context_split"]["tools_missing_output"] == 1
+    assert rows[-1]["activity_accounting"]["context_split"]["admin_share"] is None
     assert "unknown" in {role["id"] for role in body["work_roles"]}
 
 
@@ -644,7 +649,10 @@ async def test_activity_groups_and_sessions_use_same_filters_interval_and_ledger
     chart = activity.json()
     assert chart["window_start"] == BASE.isoformat() and chart["window_end"] == (BASE + timedelta(hours=1)).isoformat()
     assert rows.json()["total"] == chart["sessions"] == 1
-    assert chart["duration_split"] == rows.json()["sessions"][0]["activity_accounting"]
+    accounting = rows.json()["sessions"][0]["activity_accounting"]
+    assert chart["duration_split"] == {key: value for key, value in accounting.items() if key != "context_split"}
+    assert chart["context_split"] == accounting["context_split"]
+    assert chart["by_project"][0]["context_split"] == chart["context_split"]
     assert chart["duration_split"]["admin_seconds"] == 10
     assert chart["by_project"][0]["project_id"] == "agent-hub"
     assert chart["by_work_role"][0]["work_role_id"] == "implementation"

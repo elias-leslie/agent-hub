@@ -70,9 +70,9 @@ export function SessionEfficiency({
       </p>
       <p className="section-copy">
         Showing {data.rows.length} of {data.sessions_total} sessions, ranked by
-        admin + support seconds. Compare equal windows with the same project,
-        provider, model and method; check coverage before calling a change a
-        regression.
+        estimated admin tool-context tokens. Compare equal windows with the same
+        project, provider, model and method; check coverage before calling a
+        change a regression.
       </p>
       {data.rows.length === 0 && (
         <p className="section-copy">No sessions in this window.</p>
@@ -83,16 +83,23 @@ export function SessionEfficiency({
           className="rounded-lg border border-slate-800 bg-slate-950/60 p-3"
         >
           <summary className="cursor-pointer text-sm text-slate-100 focus-ring-amber break-words">
-            {row.project_id} · {row.session_id} · Admin + support{' '}
-            {percent(
-              row.tool_time.breakdown.find(
-                (part) => part.category === 'administration',
-              )?.share ?? null,
-            )}{' '}
-            of {seconds(row.tool_time.denominator_seconds)} ·{' '}
-            {STATUS[row.goal_status]}
+            {row.project_id} · {row.session_id} · Estimated tool context: Admin{' '}
+            {percent(row.context_split?.admin_share ?? null)} · Other{' '}
+            {percent(row.context_split?.other_share ?? null)} ·{' '}
+            {row.context_split?.denominator_tokens_estimate.toLocaleString() ??
+              'Unavailable'}{' '}
+            est. tokens
           </summary>
           <div className="mt-3 space-y-2 text-xs text-slate-300">
+            <p>
+              Unknown {percent(row.context_split?.unknown_share ?? null)}{' '}
+              included in Other. Retained output on{' '}
+              {row.context_split
+                ? `${row.context_split.tools_sampled - row.context_split.tools_missing_output}/${row.context_split.tools_sampled}`
+                : 'Unavailable'}{' '}
+              calls. Tool-time assessment: {STATUS[row.goal_status]} ·{' '}
+              {seconds(row.tool_time.denominator_seconds)} measured.
+            </p>
             <p>
               {row.provider} · Stored model: {row.model ?? 'Unavailable'} ·{' '}
               {row.usage_source === 'missing'

@@ -17,6 +17,7 @@ const SORT_FIELDS: readonly SortField[] = [
   'last_active',
   'status',
   'admin_share',
+  'admin_tokens',
   'admin_duration',
 ]
 

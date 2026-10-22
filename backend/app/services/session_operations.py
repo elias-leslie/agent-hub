@@ -395,16 +395,19 @@ async def _fetch_filtered_sessions(
     total_result = await db.execute(select(func.count(Session.id)).where(*predicates))
     total = total_result.scalar() or 0
 
-    if sort_by in {"admin_share", "admin_duration"}:
-        from app.services.session_accounting import accounting_sort_key, fetch_session_accounting
-        from app.services.session_efficiency import duration_split
+    if sort_by in {"admin_share", "admin_tokens", "admin_duration"}:
+        from app.services.session_accounting import (
+            accounting_sort_key,
+            fetch_session_accounting,
+            summarize_session_duration,
+        )
 
         if sort_direction not in _SESSION_SORT_DIRECTIONS:
             raise ValueError("Unsupported session sort direction")
         selected_ids = select(Session.id).where(*predicates)
         accounting = await fetch_session_accounting(db, selected_ids, start=accounting_start, end=accounting_end)
         ids = list((await db.execute(selected_ids)).scalars())
-        empty = duration_split({}, calls=0, missing=0, truncated=False)
+        empty = summarize_session_duration([], start=accounting_start, end=accounting_end)
         def key(sid):
             return accounting_sort_key(sid, accounting.get(sid, empty), sort_by, sort_direction)
         ids.sort(key=key)
@@ -497,11 +500,14 @@ async def list_sessions_with_stats(
     )
 
     session_ids = [s.id for s in listing.sessions]
-    if accounting_start is not None and sort_by not in {"admin_share", "admin_duration"}:
-        from app.services.session_accounting import fetch_session_accounting
-        from app.services.session_efficiency import duration_split
+    if accounting_start is not None and sort_by not in {"admin_share", "admin_tokens", "admin_duration"}:
+        from app.services.session_accounting import (
+            fetch_session_accounting,
+            summarize_session_duration,
+        )
         measured = await fetch_session_accounting(db, session_ids, start=accounting_start, end=accounting_end) if session_ids else {}
-        listing.accounting = {sid: measured.get(sid, duration_split({}, calls=0, missing=0, truncated=False)) for sid in session_ids}
+        empty = summarize_session_duration([], start=accounting_start, end=accounting_end)
+        listing.accounting = {sid: measured.get(sid, empty) for sid in session_ids}
     msg_counts, event_counts, token_stats, child_counts, active_child_counts = await fetch_session_statistics(db, session_ids)
     titles = await fetch_session_titles(db, session_ids)
     usage_rollups = await fetch_session_usage_rollups(db, session_ids)

@@ -6,7 +6,8 @@ import {
   sessionScopeParams,
 } from '@/app/sessions/hooks/useSessionListState'
 import { type ActivityCost, parseActivityCost } from '@/lib/api/activity-cost'
-import { type DurationSplit, isDurationSplit } from '@/lib/api/duration-split'
+import { type ContextSplit, isContextSplit } from '@/lib/api/context-split'
+import type { DurationSplit } from '@/lib/api/duration-split'
 import {
   parseSessionListResponse,
   sessionListSearchParams,
@@ -27,11 +28,31 @@ const split: DurationSplit = {
   events_truncated: true,
 }
 
+const context: ContextSplit = {
+  admin_tokens_estimate: 40,
+  other_tokens_estimate: 60,
+  unknown_tokens_estimate: 10,
+  denominator_tokens_estimate: 100,
+  argument_tokens_estimate: 20,
+  returned_tokens_estimate: 80,
+  admin_share: 0.4,
+  other_share: 0.6,
+  unknown_share: 0.1,
+  tools_sampled: 5,
+  tools_missing_output: 1,
+  tokenized_argument_calls: 4,
+  estimated_argument_calls: 1,
+  events_truncated: true,
+  input_token_encoding: 'reference-fixture',
+  output_characters_per_token: 4,
+}
+
 function data(): ActivityCost {
   const group = {
     label: 'Implementation',
     sessions: 3,
     duration_split: split,
+    context_split: context,
     usage: {
       ...activityFixture.usage,
       cache_detail_input_tokens: 0,
@@ -50,6 +71,7 @@ function data(): ActivityCost {
   return {
     ...activityFixture,
     duration_split: split,
+    context_split: context,
     by_project: [{ ...group, project_id: 'project/one', label: 'project/one' }],
     by_work_role: [{ ...group, work_role_id: 'implementation' }],
     by_harness: [{ ...group, harness_id: 'codex_cli', label: 'Codex CLI' }],
@@ -73,12 +95,12 @@ describe('efficiency charts and accounting contracts', () => {
       model: 'recorded-model',
     })
     render(<EfficiencyOverview activity={activity} scope={scope} />)
-    expect(screen.getByText('25.0%')).toBeInTheDocument()
-    expect(screen.getByText('75.0%')).toBeInTheDocument()
+    expect(screen.getByText('40.0%')).toBeInTheDocument()
+    expect(screen.getByText('60.0%')).toBeInTheDocument()
     expect(
-      screen.getByText(/Unknown 10.0% · duration on 4\/5 calls/),
+      screen.getByText(/Unknown 10.0% · retained output on 4\/5 calls/),
     ).toHaveTextContent('Capped sample')
-    expect(screen.getByText(/weighted by time/)).toBeInTheDocument()
+    expect(screen.getByText(/weighted by text size/)).toBeInTheDocument()
     for (const [button, name, field, value] of [
       ['Projects', 'project/one', 'project', 'project/one'],
       ['Work roles', 'Implementation', 'work_role', 'implementation'],
@@ -97,56 +119,57 @@ describe('efficiency charts and accounting contracts', () => {
       '$0.00 (2/4 calls priced). Cash cost: Unavailable (0/4 calls)',
     )
     expect(
-      screen.getByText(/Token purpose remains unknown/),
+      screen.getByText(/do not allocate provider tokens/),
     ).toBeInTheDocument()
   })
 
   it('preserves known zero admin shares while leaving missing non-wait time unavailable', () => {
     const activity = data()
     const zeroAdmin = {
-      ...split,
-      admin_seconds: 0,
+      ...context,
+      admin_tokens_estimate: 0,
       admin_share: 0,
-      other_seconds: 100,
+      other_tokens_estimate: 100,
       other_share: 1,
     }
     const { rerender } = render(
       <EfficiencyOverview
-        activity={{ ...activity, duration_split: zeroAdmin }}
+        activity={{ ...activity, context_split: zeroAdmin }}
         scope={new URLSearchParams()}
       />,
     )
     expect(screen.getByText('0.0%')).toBeInTheDocument()
     expect(screen.getByText('100.0%')).toBeInTheDocument()
     const empty = {
-      ...split,
-      admin_seconds: 0,
-      other_seconds: 0,
-      unknown_seconds: 0,
-      denominator_seconds: 0,
+      ...context,
+      admin_tokens_estimate: 0,
+      other_tokens_estimate: 0,
+      unknown_tokens_estimate: 0,
+      argument_tokens_estimate: 0,
+      returned_tokens_estimate: 0,
+      denominator_tokens_estimate: 0,
       admin_share: null,
       other_share: null,
       unknown_share: null,
     }
     rerender(
       <EfficiencyOverview
-        activity={{ ...activity, duration_split: empty, by_project: [] }}
+        activity={{ ...activity, context_split: empty, by_project: [] }}
         scope={new URLSearchParams()}
       />,
     )
     expect(screen.getAllByText('Unavailable')).toHaveLength(2)
+    expect(screen.getByText(/No retained tool text/)).toBeInTheDocument()
     expect(
-      screen.getByText(/No recorded non-wait tool time/),
-    ).toBeInTheDocument()
-    expect(
-      isDurationSplit({
+      isContextSplit({
         ...empty,
         tools_sampled: 1,
-        tools_missing_duration: 0,
-        duration_coverage: 1,
+        tools_missing_output: 0,
+        tokenized_argument_calls: 1,
+        estimated_argument_calls: 0,
       }),
     ).toBe(true)
-    expect(isDurationSplit({ ...empty, admin_share: 0 })).toBe(false)
+    expect(isContextSplit({ ...empty, admin_share: 0 })).toBe(false)
   })
 
   it('validates grouped measures, cost coverage and additive Sessions fields at the boundary', () => {
@@ -154,6 +177,8 @@ describe('efficiency charts and accounting contracts', () => {
     expect(parseActivityCost(activity)).toEqual(activity)
     for (const bad of [
       { duration_split: { ...split, admin_share: NaN } },
+      { context_split: { ...context, admin_share: 0.25 } },
+      { context_split: { ...context, unknown_tokens_estimate: 999 } },
       {
         by_harness: [
           {
@@ -207,7 +232,7 @@ describe('efficiency charts and accounting contracts', () => {
       accounting_end: activityFixture.window_end,
       work_role: 'unknown',
       harness: 'pi',
-      sort_by: 'admin_duration',
+      sort_by: 'admin_tokens',
       sort_direction: 'desc',
       cursor: 'next-page',
     })
@@ -216,7 +241,7 @@ describe('efficiency charts and accounting contracts', () => {
       harness: 'pi',
       accounting_start: activityFixture.window_start,
       accounting_end: activityFixture.window_end,
-      sort_by: 'admin_duration',
+      sort_by: 'admin_tokens',
       cursor: 'next-page',
     })
     const state = parseSessionListState(

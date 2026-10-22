@@ -72,7 +72,7 @@ router = APIRouter()
 # Re-export schemas for backward compatibility
 __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
 
-_SESSION_SORT_FIELDS = {"status", "project", "agent", "time", "last_active", "admin_share", "admin_duration"}
+_SESSION_SORT_FIELDS = {"status", "project", "agent", "time", "last_active", "admin_share", "admin_tokens", "admin_duration"}
 _SESSION_SORT_DIRECTIONS = {"asc", "desc"}
 
 
@@ -481,7 +481,7 @@ async def list_sessions(
     accounting_end: Annotated[datetime | None, Query(description="Exclusive tool-accounting end")] = None,
     sort_by: Annotated[
         str,
-        Query(description="Sort field: status, project, agent, time, last_active, admin_share, admin_duration"),
+        Query(description="Sort field: status, project, agent, time, last_active, admin_share, admin_tokens, admin_duration"),
     ] = "status",
     sort_direction: Annotated[str, Query(description="Sort direction: asc or desc")] = "asc",
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,

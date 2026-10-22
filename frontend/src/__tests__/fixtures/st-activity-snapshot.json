@@ -295,6 +295,24 @@
         },
         "model": null,
         "work_role": null,
+        "context_split": {
+          "admin_tokens_estimate": 295,
+          "other_tokens_estimate": 17,
+          "unknown_tokens_estimate": 9,
+          "argument_tokens_estimate": 41,
+          "returned_tokens_estimate": 271,
+          "tools_sampled": 4,
+          "tools_missing_output": 1,
+          "tokenized_argument_calls": 4,
+          "estimated_argument_calls": 0,
+          "denominator_tokens_estimate": 312,
+          "admin_share": 0.9455128205128205,
+          "other_share": 0.05448717948717949,
+          "unknown_share": 0.028846153846153848,
+          "events_truncated": false,
+          "input_token_encoding": "cl100k_base",
+          "output_characters_per_token": 4
+        },
         "duration_split": {
           "admin_seconds": 10.0,
           "other_seconds": 0,
@@ -380,6 +398,24 @@
     "duration_coverage": 0.75,
     "events_truncated": false
   },
+  "context_split": {
+    "admin_tokens_estimate": 295,
+    "other_tokens_estimate": 17,
+    "unknown_tokens_estimate": 9,
+    "argument_tokens_estimate": 41,
+    "returned_tokens_estimate": 271,
+    "tools_sampled": 4,
+    "tools_missing_output": 1,
+    "tokenized_argument_calls": 4,
+    "estimated_argument_calls": 0,
+    "denominator_tokens_estimate": 312,
+    "admin_share": 0.9455128205128205,
+    "other_share": 0.05448717948717949,
+    "unknown_share": 0.028846153846153848,
+    "events_truncated": false,
+    "input_token_encoding": "cl100k_base",
+    "output_characters_per_token": 4
+  },
   "by_project": [
     {
       "project_id": "project",
@@ -398,6 +434,24 @@
         "cash_known_calls": 0,
         "api_equiv_usd": null,
         "cash_usd": null
+      },
+      "context_split": {
+        "admin_tokens_estimate": 295,
+        "other_tokens_estimate": 17,
+        "unknown_tokens_estimate": 9,
+        "argument_tokens_estimate": 41,
+        "returned_tokens_estimate": 271,
+        "tools_sampled": 4,
+        "tools_missing_output": 1,
+        "tokenized_argument_calls": 4,
+        "estimated_argument_calls": 0,
+        "denominator_tokens_estimate": 312,
+        "admin_share": 0.9455128205128205,
+        "other_share": 0.05448717948717949,
+        "unknown_share": 0.028846153846153848,
+        "events_truncated": false,
+        "input_token_encoding": "cl100k_base",
+        "output_characters_per_token": 4
       },
       "coverage": {
         "usage_sessions": 0,
@@ -437,6 +491,24 @@
         "api_equiv_usd": null,
         "cash_usd": null
       },
+      "context_split": {
+        "admin_tokens_estimate": 295,
+        "other_tokens_estimate": 17,
+        "unknown_tokens_estimate": 9,
+        "argument_tokens_estimate": 41,
+        "returned_tokens_estimate": 271,
+        "tools_sampled": 4,
+        "tools_missing_output": 1,
+        "tokenized_argument_calls": 4,
+        "estimated_argument_calls": 0,
+        "denominator_tokens_estimate": 312,
+        "admin_share": 0.9455128205128205,
+        "other_share": 0.05448717948717949,
+        "unknown_share": 0.028846153846153848,
+        "events_truncated": false,
+        "input_token_encoding": "cl100k_base",
+        "output_characters_per_token": 4
+      },
       "coverage": {
         "usage_sessions": 0,
         "missing_usage_sessions": 1
@@ -474,6 +546,24 @@
         "cash_known_calls": 0,
         "api_equiv_usd": null,
         "cash_usd": null
+      },
+      "context_split": {
+        "admin_tokens_estimate": 295,
+        "other_tokens_estimate": 17,
+        "unknown_tokens_estimate": 9,
+        "argument_tokens_estimate": 41,
+        "returned_tokens_estimate": 271,
+        "tools_sampled": 4,
+        "tools_missing_output": 1,
+        "tokenized_argument_calls": 4,
+        "estimated_argument_calls": 0,
+        "denominator_tokens_estimate": 312,
+        "admin_share": 0.9455128205128205,
+        "other_share": 0.05448717948717949,
+        "unknown_share": 0.028846153846153848,
+        "events_truncated": false,
+        "input_token_encoding": "cl100k_base",
+        "output_characters_per_token": 4
       },
       "coverage": {
         "usage_sessions": 0,

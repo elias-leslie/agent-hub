@@ -6,11 +6,27 @@ import json
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import case, func, or_
+
 # These fields are added by Hub/native projection, rather than sent as tool arguments.
 _PROJECTION_FIELDS = {
     "call_id", "wrapper_candidate_call_id", "wrapper_correlation", "native_tool_hints",
     "nested_exec_commands", "native_turn_id", "ordering", "source",
 }
+
+
+def returned_characters_expression(event):
+    """Measure one retained result string without returning its contents."""
+    def length(key):
+        value = event.tool_output[key]
+        return case((func.jsonb_typeof(func.to_jsonb(value)) == "string", func.length(value.as_string())), else_=None)
+
+    return func.coalesce(
+        length("result"), length("content"), length("output"), length("message"),
+        case((or_(length("stdout").is_not(None), length("stderr").is_not(None)),
+              func.coalesce(length("stdout"), 0) + func.coalesce(length("stderr"), 0)), else_=None),
+        func.length(event.content),
+    ).label("returned_characters")
 
 
 def number(value: Any) -> int:
@@ -21,15 +37,19 @@ def number(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-def argument_characters(event: Any) -> int:
+def argument_text(event: Any) -> str:
     data = event.tool_input
     if not isinstance(data, dict) or event.event_type != "tool_use":
-        return 0
+        return ""
     arguments = {key: value for key, value in data.items() if key not in _PROJECTION_FIELDS}
     # Opaque custom calls retain their original text in raw, without JSON framing.
     if arguments.get("format") == "opaque" and isinstance(arguments.get("raw"), str):
-        return len(arguments["raw"])
-    return len(json.dumps(arguments, ensure_ascii=False, separators=(",", ":")))
+        return arguments["raw"]
+    return json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
+
+
+def argument_characters(event: Any) -> int:
+    return len(argument_text(event))
 
 
 def transcript_view(rows: list[dict]) -> dict:

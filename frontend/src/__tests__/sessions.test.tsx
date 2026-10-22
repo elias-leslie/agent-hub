@@ -166,7 +166,26 @@ describe('SessionsPage', () => {
     nav.reset(
       'kind=all&subagents=1&benchmarks=1&accounting_start=2026-10-21T12:00:00Z&accounting_end=2026-10-22T12:00:00Z&work_role=implementation&harness=pi&sort=admin_share',
     )
+    const context = {
+      admin_tokens_estimate: 0,
+      other_tokens_estimate: 10,
+      unknown_tokens_estimate: 0,
+      denominator_tokens_estimate: 10,
+      argument_tokens_estimate: 10,
+      returned_tokens_estimate: 0,
+      admin_share: 0,
+      other_share: 1,
+      unknown_share: 0,
+      tools_sampled: 1,
+      tools_missing_output: 0,
+      tokenized_argument_calls: 1,
+      estimated_argument_calls: 0,
+      events_truncated: false,
+      input_token_encoding: 'fixture',
+      output_characters_per_token: 4,
+    }
     const split = {
+      context_split: context,
       admin_seconds: 0,
       other_seconds: 10,
       denominator_seconds: 10,
@@ -188,6 +207,13 @@ describe('SessionsPage', () => {
               ...claudeRow,
               activity_accounting: {
                 ...split,
+                context_split: {
+                  ...context,
+                  admin_tokens_estimate: 10,
+                  other_tokens_estimate: 0,
+                  admin_share: 1,
+                  other_share: 0,
+                },
                 admin_seconds: 10,
                 other_seconds: 0,
                 admin_share: 1,

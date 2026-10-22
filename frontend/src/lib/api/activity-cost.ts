@@ -1,3 +1,4 @@
+import { type ContextSplit, isContextSplit } from './context-split'
 import {
   type DurationSplit,
   isDurationSplit,
@@ -102,6 +103,7 @@ export interface SessionEfficiencyData {
   sessions_total: number
   status_counts: Record<EfficiencyStatus, number>
   rows: (ActivityRanking & {
+    context_split?: ContextSplit
     session_id: string
     provider: string
     model: string | null
@@ -121,6 +123,7 @@ export interface SessionEfficiencyData {
 }
 
 export interface ActivityCost {
+  context_split?: ContextSplit
   duration_split?: DurationSplit
   by_project?: (ActivityComparison & { project_id: string })[]
   by_work_role?: (ActivityComparison & { work_role_id: string })[]
@@ -187,6 +190,7 @@ export interface ActivityCost {
 }
 
 export interface ActivityComparison {
+  context_split?: ContextSplit
   label: string
   sessions: number
   duration_split: DurationSplit
@@ -409,6 +413,8 @@ function sessionEfficiency(value: unknown) {
         strings(row, ['session_id', 'provider', 'usage_source']) &&
         (row.model === null || typeof row.model === 'string') &&
         toolTime(row.tool_time) &&
+        (row.context_split === undefined ||
+          isContextSplit(row.context_split)) &&
         numbers(row, [
           'tools_sampled',
           'tools_missing_duration',
@@ -530,6 +536,8 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
 }
 
 function activityComparisons(value: Record<string, unknown>): boolean {
+  if (value.context_split !== undefined && !isContextSplit(value.context_split))
+    return false
   if (
     value.duration_split !== undefined &&
     !isDurationSplit(value.duration_split)
@@ -557,6 +565,8 @@ function activityComparisons(value: Record<string, unknown>): boolean {
           strings(row, [id, 'label']) &&
           numbers(row, ['sessions']) &&
           isDurationSplit(row.duration_split) &&
+          (row.context_split === undefined ||
+            isContextSplit(row.context_split)) &&
           (row.usage === undefined || usage(row.usage)) &&
           (row.coverage === undefined ||
             (record(row.coverage) &&

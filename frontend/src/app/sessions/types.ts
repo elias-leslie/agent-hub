@@ -5,6 +5,7 @@ export type SortField =
   | 'last_active'
   | 'status'
   | 'admin_share'
+  | 'admin_tokens'
   | 'admin_duration'
 export type SortDirection = 'asc' | 'desc'
 

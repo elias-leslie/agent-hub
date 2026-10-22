@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { contextTokens } from '@/lib/api/context-split'
 import { durationPercent, durationSeconds } from '@/lib/api/duration-split'
 import type { SessionListItem } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
@@ -16,7 +17,7 @@ import { StatusCell } from './StatusCell'
 /** Column template shared by the header and rows so they always line up. */
 export function sessionGridClass() {
   // Title is the only flexible column; branch appears only on wide screens.
-  return 'xl:grid xl:grid-cols-[84px_minmax(8rem,1fr)_100px_90px_110px_36px_112px_150px_60px_60px] 2xl:grid-cols-[84px_minmax(10rem,1fr)_100px_90px_110px_100px_36px_112px_150px_60px_60px]'
+  return 'xl:grid xl:grid-cols-[84px_minmax(8rem,1fr)_100px_90px_110px_36px_112px_220px_60px_60px] 2xl:grid-cols-[84px_minmax(10rem,1fr)_100px_90px_110px_100px_36px_112px_220px_60px_60px]'
 }
 
 function absolute(value: string) {
@@ -47,6 +48,7 @@ export const SessionRow = memo(function SessionRow({
     new Date(lastActive).getTime() - new Date(session.created_at).getTime()
   const source = getSessionSourceLabel(session)
   const accounting = session.activity_accounting
+  const context = accounting?.context_split
   const children = session.child_session_count ?? 0
   const activeChildren = session.active_child_session_count ?? 0
   const modelTitle = identity.showRequested
@@ -146,21 +148,25 @@ export const SessionRow = memo(function SessionRow({
         <span
           className="text-[11px] text-slate-300 xl:text-right"
           title={
-            accounting
-              ? `${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded non-wait tool time; unknown ${durationPercent(accounting.unknown_share)}; duration on ${accounting.tools_sampled - accounting.tools_missing_duration}/${accounting.tools_sampled} calls${accounting.events_truncated ? '; sample capped' : ''}.`
-              : 'Tool-time accounting unavailable from this server.'
+            context
+              ? `${contextTokens(context.admin_tokens_estimate)} admin / ${contextTokens(context.denominator_tokens_estimate)} added tool text. Unknown ${durationPercent(context.unknown_share)} included in Other. Output on ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled} calls. Excludes prose, system instructions, repeated context reads and compaction. Resident context is unavailable here; provider usage is cumulative. Missing or truncated output has unknown size.${context.events_truncated ? ' Capped sample.' : ''}${accounting ? ` Tool time: ${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded.` : ''}`
+              : 'Estimated tool context unavailable from this server.'
           }
         >
           <span className="block tabular-nums">
-            Admin {durationPercent(accounting?.admin_share)} · Other{' '}
-            {durationPercent(accounting?.other_share)}
+            Admin {durationPercent(context?.admin_share)} · Other{' '}
+            {durationPercent(context?.other_share)}
           </span>
+          {context && (
+            <span className="block text-slate-400">
+              {contextTokens(context.denominator_tokens_estimate)} · unknown{' '}
+              {durationPercent(context.unknown_share)}
+            </span>
+          )}
           <span className="block text-slate-400">
             {session.work_role?.label ?? 'Unknown'}
-            {accounting &&
-            (accounting.tools_missing_duration > 0 ||
-              accounting.events_truncated)
-              ? ' · partial'
+            {context
+              ? ` · retained output ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled}${context.tools_missing_output > 0 || context.events_truncated ? ' · partial' : ''}`
               : ''}
           </span>
         </span>
@@ -199,8 +205,8 @@ export function SessionListHeader() {
       <span className="text-right" title="Sub-agents">
         Sub
       </span>
-      <span className="text-right">Tokens</span>
-      <span className="text-right">Tool time · role</span>
+      <span className="text-right">Provider in/out</span>
+      <span className="text-right">Est. tool context · role</span>
       <span className="text-right">Active</span>
       <span className="hidden text-right lg:block">Duration</span>
     </div>
