@@ -238,7 +238,11 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_start", async (_event, ctx) => { await sync(ctx, "working"); });
-	pi.on("agent_end", async (_event, ctx) => { await sync(ctx, "idle"); });
+	// Pi persists the assistant and tool results before turn_end. Fresh sessions
+	// may have no transcript at agent_start; long runs must not wait until idle.
+	pi.on("turn_end", async (_event, ctx) => { await sync(ctx, "working"); });
+	// agent_end can precede automatic retries, recovery, or queued work.
+	pi.on("agent_settled", async (_event, ctx) => { await sync(ctx, "idle"); });
 
 	pi.on("input", async (event, ctx) => {
 		// Steering/follow-up input belongs to an agent turn whose exact canonical

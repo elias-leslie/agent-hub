@@ -1197,9 +1197,12 @@ async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_pat
         "const ctx = {cwd: '/fixture', hasUI:false, model:{provider:'openai-codex',id:'gpt-6.1-sol'},\n"
         "sessionManager:{getSessionId:()=>id,getSessionFile:()=>process.env.SYNC_TRANSCRIPT}};\n"
         "await handlers.get('session_start')({},ctx);\n"
+        "await handlers.get('agent_start')({},ctx);\n"
         "if(existsSync(process.env.SYNC_LOG)) throw new Error('synced before transcript existed');\n"
         "writeFileSync(process.env.SYNC_TRANSCRIPT,'{}\\n');\n"
-        "for(const event of ['agent_start','agent_end','session_shutdown']) await handlers.get(event)({},ctx);\n"
+        "for(const event of ['turn_end','agent_end','agent_start','turn_end','agent_settled','session_shutdown']) {\n"
+        "  if(handlers.has(event)) await handlers.get(event)({},ctx);\n"
+        "}\n"
         "id = '00000000-0000-4000-8000-000000000002'; await handlers.get('session_start')({},ctx);\n"
         "console.log(process.env.PI_SESSION_ID);\n")
     code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
@@ -1209,7 +1212,10 @@ async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_pat
         "AICO_SESSION_ID": "widget-session", "AICO_PROJECT_ID": "agent-hub"})
     assert code == 0, stderr
     calls = [json.loads(line) for line in log.read_text().splitlines()]
-    assert [call[call.index("--phase") + 1] for call in calls] == ["working", "idle", "shutdown", "idle"]
+    # A retry can follow agent_end; only settlement means the session is idle.
+    assert [call[call.index("--phase") + 1] for call in calls] == [
+        "working", "working", "working", "idle", "shutdown", "idle",
+    ]
     assert all(call[0] == "sync-pi" and call[call.index("--aico-session") + 1] == "widget-session" for call in calls)
     assert calls[-1][calls[-1].index("--session") + 1] == stdout.strip()
 

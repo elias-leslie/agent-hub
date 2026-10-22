@@ -116,7 +116,7 @@ async def test_pi_fork_does_not_charge_copied_history(transcript):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("work_role", [None, {"id": "implementation", "source": "tether:root:fixture"}])
-@pytest.mark.parametrize("phase,status", [("idle", "active"), ("shutdown", "completed")])
+@pytest.mark.parametrize("phase,status", [("working", "active"), ("idle", "active"), ("shutdown", "completed")])
 async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, monkeypatch, phase, status, work_role):
     from app.services.session_ingestion import pi_sync
 
@@ -144,5 +144,7 @@ async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, 
     assert ingest.await_args.args[2].provider == "pi"
     assert receipt["events_appended"] == 7
     heartbeat.assert_awaited_once()
-    assert heartbeat.await_args is not None and heartbeat.await_args.args[2].status == status
+    assert heartbeat.await_args is not None
+    assert heartbeat.await_args.args[2].status == status
+    assert heartbeat.await_args.args[2].phase == phase
     assert _adapter_for_provider("pi").provider_name == "pi"
