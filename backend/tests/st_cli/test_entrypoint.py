@@ -74,6 +74,10 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
             if isinstance(node, ast.Import):
                 imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                if path.name == "lab_credentials.py" and node.module == "app.cli.lab_credentials":
+                    # Fixed local owner backend, loaded only by command execution.
+                    assert [alias.name for alias in node.names] == ["run_lab_operation"]
+                    continue
                 if path.name == "native_sessions.py" and node.module == "app.services.session_ingestion.native_operator":
                     # The local owner command binds the fixed Agent Hub backend
                     # before loading its own authority. This is not an import of
@@ -87,7 +91,7 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
 
 def test_public_helper_contract_is_versioned_and_importable() -> None:
     assert agent_hub_st.PUBLIC_HELPER_API_VERSION == 1
-    assert agent_hub_st.__version__ == "0.2.2"
+    assert agent_hub_st.__version__ == "0.2.5"
     assert all(
         callable(helper)
         for helper in (

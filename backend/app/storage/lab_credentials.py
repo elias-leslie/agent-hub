@@ -1,7 +1,7 @@
-"""Inert prototype: scoped lab references in the existing encrypted credential store.
+"""Scoped lab references in the existing encrypted credential store.
 
 The caller must supply a trusted target scope. This module authenticates no caller,
-exposes no endpoint, persists nothing and never falls back to host/provider sources.
+exposes no endpoint and never falls back to host/provider sources.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Credential
@@ -25,6 +25,34 @@ _FIELD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 class LabCredentialError(ValueError):
     """A fixed diagnostic that never includes credential contents."""
+
+
+def decode_lab_json(value: str | bytes) -> object:
+    """Reject ambiguous JSON without including input in diagnostics."""
+    def unique_pairs(pairs):
+        result = {}
+        for key, item in pairs:
+            if key in result:
+                raise LabCredentialError("Duplicate lab JSON key")
+            result[key] = item
+        return result
+
+    try:
+        return json.loads(value, object_pairs_hook=unique_pairs)
+    except (ValueError, UnicodeError):
+        raise LabCredentialError("Invalid lab credential JSON") from None
+
+
+def lab_reference(target: str, actor: str) -> str:
+    reference = f"secret://lab/{target}/{actor}"
+    _identity(reference)
+    return reference
+
+
+def _provider(target: str) -> str:
+    if not isinstance(target, str) or not re.fullmatch(_TARGET, target):
+        raise LabCredentialError("Invalid target scope")
+    return f"{LAB_PROVIDER_PREFIX}{target}"
 
 
 @dataclass(frozen=True)
@@ -91,7 +119,7 @@ def prepare_lab_credential(
     expires_at: datetime | None = None,
     now: datetime | None = None,
 ) -> Credential:
-    """Prepare an encrypted ORM row for future owner enrollment; do not persist it."""
+    """Prepare an encrypted ORM row without persisting it."""
     target, actor = _identity(reference)
     payload = {
         "schema_version": 1,
@@ -111,6 +139,51 @@ def prepare_lab_credential(
     )
 
 
+async def enroll_lab_credential(
+    db: AsyncSession,
+    reference: str,
+    values: dict[str, str],
+    *,
+    kind: str,
+    expires_at: datetime | None = None,
+) -> str:
+    """Insert once under a PostgreSQL writer lock; own the transaction.
+
+    No replacement/rotation is offered. The lock covers all credential writers,
+    since the existing table has no unique target/actor constraint.
+    """
+    target, actor = _identity(reference)
+    async with db.begin():
+        await db.execute(text("LOCK TABLE credentials IN SHARE ROW EXCLUSIVE MODE"))
+        existing = await db.execute(select(Credential.id).where(
+            Credential.provider == _provider(target), Credential.credential_type == actor,
+        ))
+        if existing.all():
+            raise LabCredentialError("Lab credential reference already exists or is ambiguous")
+        # Validate expiry after acquiring the lock, which may have waited.
+        credential = prepare_lab_credential(reference, values, kind=kind, expires_at=expires_at)
+        db.add(credential)
+        await db.flush()
+    return reference
+
+
+async def list_lab_credential_refs(db: AsyncSession, target: str) -> list[str]:
+    """Read identity columns only; never fetch ciphertext or decrypt values."""
+    provider = _provider(target)
+    result = await db.execute(select(Credential.provider, Credential.credential_type).where(
+        Credential.provider == provider,
+    ).order_by(Credential.credential_type))
+    refs: list[str] = []
+    for row_provider, actor in result.all():
+        if row_provider != provider:
+            raise LabCredentialError("Lab credential outside target scope")
+        reference = lab_reference(target, actor)
+        if reference in refs:
+            raise LabCredentialError("Lab credential lookup ambiguous or outside scope")
+        refs.append(reference)
+    return refs
+
+
 async def resolve_lab_credentials(
     db: AsyncSession,
     target: str,
@@ -123,8 +196,7 @@ async def resolve_lab_credentials(
     A future broker must derive target from the authenticated launch assignment,
     never from a sandbox's self-asserted request. Nothing is returned on failure.
     """
-    if not re.fullmatch(_TARGET, target):
-        raise LabCredentialError("Invalid target scope")
+    _provider(target)
     actors: list[str] = []
     for request in requests:
         request_target, actor = _identity(request.reference)
@@ -132,7 +204,7 @@ async def resolve_lab_credentials(
             raise LabCredentialError("Lab credential outside target scope")
         if actor in actors or not request.fields or len(set(request.fields)) != len(request.fields):
             raise LabCredentialError("Duplicate actor or invalid field selection")
-        if any(not _FIELD.fullmatch(name) for name in request.fields):
+        if any(not isinstance(name, str) or not _FIELD.fullmatch(name) for name in request.fields):
             raise LabCredentialError("Invalid lab credential field selection")
         actors.append(actor)
     if not actors:
@@ -155,7 +227,7 @@ async def resolve_lab_credentials(
     resolved: list[ResolvedLabCredential] = []
     for request, actor in zip(requests, actors, strict=True):
         try:
-            payload = json.loads(decrypt_value(rows[actor].value_encrypted))
+            payload = decode_lab_json(decrypt_value(rows[actor].value_encrypted))
         except (EncryptionError, ValueError, UnicodeError):
             raise LabCredentialError("Lab credential could not be decoded") from None
         # The lookup and decryption may outlive a temporary credential.
