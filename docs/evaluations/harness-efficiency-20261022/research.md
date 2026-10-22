@@ -40,4 +40,4 @@ The primary diagnostic is administrative **context and token use**. Track the es
 
 If complete comparable provider usage is missing, the 20% cost goal cannot be marked achieved. A narrower observation about estimated admin-context reduction or tool time must be labeled as such; it cannot substitute for the cost-per-accepted-outcome goal. Its percentage must come from our sessions, not from unrelated token-saving papers. Initial Pi hunting runs with setup friction or classifier refusals are failed attempts to count, not evidence that Codex is the better hunting harness. A hunting harness choice needs comparable authorized hunts, accepted findings, complete token cost and setup cost; the ordinary-coding fixture cannot settle it.
 
-Status: public research complete; local trials, independent verification and measured goal achievement remain open.
+Status: public research and the bounded local trials are complete and independently checked; the matched follow-up saved only 6.4% all-in, so the 20% goal remains open. Routine accepted work with complete coordinator and subject usage is needed to test a durable improvement.
