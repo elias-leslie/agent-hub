@@ -1,0 +1,115 @@
+{
+  "observed_date": "2026-10-22",
+  "calls": [
+    {
+      "harness": "pi",
+      "harness_version": "1.4.0",
+      "provider": "opencode",
+      "model": "deepseek-v4.1-flash-free",
+      "native_session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "wall_seconds": 0.337,
+      "provider_duration_ms": 137,
+      "cli_exit_code": 0,
+      "stop_reason": "error",
+      "error": "403: {\"type\":\"FreeTierError\",\"message\":\"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.\"}",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "assistant_output_empty": true
+    },
+    {
+      "harness": "pi",
+      "harness_version": "1.4.0",
+      "provider": "opencode",
+      "model": "glm-5.3-flash-free",
+      "native_session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "wall_seconds": 0.404,
+      "provider_duration_ms": 199,
+      "cli_exit_code": 0,
+      "stop_reason": "error",
+      "error": "403: {\"type\":\"FreeTierError\",\"message\":\"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.\"}",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "assistant_output_empty": true
+    },
+    {
+      "harness": "opencode",
+      "harness_version": "2.1.3",
+      "provider": "opencode",
+      "model": "deepseek-v4.1-flash-free",
+      "native_session_id": "ses_e9b7eaf28ffe8tNP2PHeo4iwsa",
+      "wall_seconds": 0.74,
+      "cli_exit_code": 1,
+      "error": {
+        "type": "provider.auth",
+        "message": "OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.",
+        "status": 403,
+        "response": {
+          "body": "{\"type\":\"error\",\"error\":{\"type\":\"FreeTierError\",\"message\":\"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.\"}}"
+        }
+      },
+      "authentication": "none",
+      "usage_reported": false
+    },
+    {
+      "harness": "opencode",
+      "harness_version": "2.1.3",
+      "provider": "opencode",
+      "model": "glm-5.3-flash-free",
+      "native_session_id": "ses_e9b7e3fdeffeUiefegIOqR6tyl",
+      "wall_seconds": 0.708,
+      "cli_exit_code": 1,
+      "error": {
+        "type": "provider.auth",
+        "message": "Reconnect OpenCode Console to continue.",
+        "status": 403,
+        "response": {
+          "body": "{\"error\":{\"type\":\"authentication_error\",\"message\":\"Reconnect OpenCode Console to continue.\"}}"
+        }
+      },
+      "authentication": "service API key in process environment only",
+      "usage_reported": false
+    }
+  ],
+  "console_observation": {
+    "cost_usd_display": "0.00",
+    "recorded_requests": 0,
+    "recorded_tokens": 0,
+    "timing": "after all four attempts"
+  },
+  "credential_cleanup": {
+    "both_new_keys_revoked": true,
+    "pi_opencode_entry_removed": true,
+    "auth_mode": "0600",
+    "existing_providers_preserved": true
+  },
+  "limitations": [
+    "No successful model response; response quality and inference latency cannot be assessed.",
+    "Pi exit code 0 does not imply model success; both assistant records contain stopReason=error.",
+    "Zero Pi usage is native failure metadata, corroborated by current Console display; not a paid billing reconciliation.",
+    "No client identity spoofing, paid fallback, or Neri target data."
+  ]
+}
