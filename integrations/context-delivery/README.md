@@ -111,3 +111,28 @@ Antigravity's installed CLI stores imported plugins below `~/.gemini/config/`
 its native import registration and links the rule and manifest to these sources.
 The public plugin documentation currently lists a different staging path; the
 installed client and an actual retrieval test determine this adapter's layout.
+
+### Pi session ingestion
+
+The Pi extension uses the native session UUID for ingestion and retains the Aico
+session ID as correlation metadata. It syncs the JSONL transcript on session start,
+agent start/end, and shutdown through `agent-hub-context-client sync-pi` and the
+existing canonical ingestion service. The same source-linked installer provides
+the extension: `python3 integrations/context-delivery/install.py --surface pi`;
+use `--home PATH` for an isolated installation and `--check` to verify it.
+
+Pi's selected provider/model is stored separately in `pi_selection`. Assistant
+messages retain Pi's native provider/model label; these labels do not establish
+that a remote server used that model. Native response usage feeds the existing
+session usage rollup, including nested usage on tool-result messages without
+inventing a model attribution for those calls. Input includes Pi's input, cache-read and cache-write counts;
+output and cached input remain separate. Native costs are retained as evidence,
+not recomputed or inserted into a second cost ledger. Error responses with zero
+usage stay zero. A fork's copied parent entries are excluded from fresh ingestion.
+If its parent transcript cannot be read inside the configured native roots, sync
+fails visibly rather than charging inherited history again.
+
+`AGENT_HUB_PI_SESSIONS` overrides Pi's native session directories;
+`AGENT_HUB_TRANSCRIPT_ROOTS` still replaces all transcript roots. Sync never calls
+a model or changes credentials. Failures preserve native Pi input and context.
+Live delivery and authenticated model readiness require separate runtime evidence.

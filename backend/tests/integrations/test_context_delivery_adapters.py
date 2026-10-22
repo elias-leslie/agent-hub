@@ -940,7 +940,7 @@ async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
         "  getActiveTools: () => JSON.parse(process.env.ACTIVE_TOOLS),\n"
         "});\n"
         "const ctx = {cwd: process.cwd(), hasUI: false,\n"
-        "  sessionManager: {getSessionFile: () => '/tmp/pi-check.jsonl'}};\n"
+        "  sessionManager: {getSessionId: () => '00000000-0000-4000-8000-000000000001', getSessionFile: () => '/tmp/pi-check.jsonl'}};\n"
         "await handlers.get('session_start')({}, ctx);\n"
         "const input = await handlers.get('input')({text: 'check'}, ctx);\n"
         "const result = await handlers.get('before_agent_start')(\n"
@@ -971,6 +971,53 @@ async def test_pi_guidance_matches_active_tools_and_preserves_native_prompt(
     assert ("--capability" in arguments) == ("bash" in active_tools)
     if "bash" in active_tools:
         assert arguments[arguments.index("--capability") + 1] == "bash"
+
+
+async def test_pi_sync_client_forwards_native_metadata(tmp_path: Path, fake_context_cli: Path) -> None:
+    log = tmp_path / "argv.json"
+    code, _stdout, stderr = await _run(
+        sys.executable, str(CLIENT), "sync-pi", "--surface", "pi", "--cwd", str(tmp_path),
+        "--session", "native-session", "--project", "agent-hub", "--phase", "idle",
+        "--transcript", str(tmp_path / "native.jsonl"), "--provider", "openai-codex",
+        "--model", "gpt-6.1-sol", "--aico-session", "widget-session",
+        env={**os.environ, "AGENT_HUB_CONTEXT_CLI": str(fake_context_cli), "FAKE_ARGV_LOG": str(log)},
+    )
+    assert code == 0, stderr
+    arguments = json.loads(log.read_text())
+    assert arguments[0] == "sync-pi"
+    assert arguments[arguments.index("--session") + 1] == "native-session"
+    assert arguments[arguments.index("--provider") + 1] == "openai-codex"
+    assert arguments[arguments.index("--aico-session") + 1] == "widget-session"
+
+
+async def test_pi_extension_syncs_native_session_at_lifecycle_boundaries(tmp_path: Path) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    _, version, _ = await _run(node, "--version")
+    if int(version.lstrip("v").split(".")[0]) < 24:
+        pytest.skip("Node 24 required for built-in TypeScript execution")
+    log = tmp_path / "sync.jsonl"
+    client = _executable(tmp_path / "client", "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "with open(os.environ['SYNC_LOG'], 'a') as f: f.write(json.dumps(sys.argv[1:]) + '\\n')\n")
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    harness = _executable(tmp_path / "sync.mjs",
+        "import install from " + json.dumps(extension.as_uri()) + ";\n"
+        "const handlers = new Map(); install({on:(n,h)=>handlers.set(n,h),registerCommand:()=>{}});\n"
+        "let id = '00000000-0000-4000-8000-000000000001';\n"
+        "const ctx = {cwd: '/fixture', hasUI:false, model:{provider:'openai-codex',id:'gpt-6.1-sol'},\n"
+        "sessionManager:{getSessionId:()=>id,getSessionFile:()=>'/fixture/native.jsonl'}};\n"
+        "for(const event of ['session_start','agent_start','agent_end','session_shutdown']) await handlers.get(event)({},ctx);\n"
+        "id = '00000000-0000-4000-8000-000000000002'; await handlers.get('session_start')({},ctx);\n"
+        "console.log(process.env.PI_SESSION_ID);\n")
+    code, stdout, stderr = await _run(node, str(harness), env={**os.environ,
+        "AGENT_HUB_CONTEXT_CLIENT": str(client), "SYNC_LOG": str(log),
+        "AICO_SESSION_ID": "widget-session", "AICO_PROJECT_ID": "agent-hub"})
+    assert code == 0, stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert [call[call.index("--phase") + 1] for call in calls] == ["idle", "working", "idle", "shutdown", "idle"]
+    assert all(call[0] == "sync-pi" and call[call.index("--aico-session") + 1] == "widget-session" for call in calls)
+    assert calls[-1][calls[-1].index("--session") + 1] == stdout.strip()
 
 
 def test_claude_sources_do_not_add_parallel_model_context() -> None:

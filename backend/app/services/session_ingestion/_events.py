@@ -24,6 +24,7 @@ from app.services.event_storage import (
 from .adapters.base import ProviderSessionRef as ProviderSessionRef  # re-exported
 from .adapters.claude_code import ClaudeCodeTranscriptAdapter
 from .adapters.codex import CodexTranscriptAdapter
+from .adapters.pi import PiTranscriptAdapter
 from .models import AppendNormalizedEventsResult, NormalizedEvent
 
 if TYPE_CHECKING:
@@ -128,13 +129,15 @@ def _source_event_fingerprint(
     ).encode()).hexdigest()
 
 
-def _adapter_for_provider(provider: str) -> ClaudeCodeTranscriptAdapter | CodexTranscriptAdapter:
+def _adapter_for_provider(provider: str) -> ClaudeCodeTranscriptAdapter | CodexTranscriptAdapter | PiTranscriptAdapter:
     """Resolve the transcript adapter for a provider."""
     normalized = provider.lower()
     if normalized in {"claude", "anthropic", "claude_code"}:
         return ClaudeCodeTranscriptAdapter()
     if normalized == "codex":
         return CodexTranscriptAdapter()
+    if normalized == "pi":
+        return PiTranscriptAdapter()
     raise ValueError(f"Unsupported transcript ingestion provider: {provider}")
 
 

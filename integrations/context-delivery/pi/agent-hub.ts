@@ -9,8 +9,6 @@
  */
 
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -81,11 +79,7 @@ function runClient(args: string[]): Promise<CommandResult> {
 }
 
 function sessionId(ctx: ExtensionContext): string {
-	const file = ctx.sessionManager.getSessionFile();
-	if (!file) return randomUUID();
-	const stem = basename(file).replace(/\.jsonl$/, "");
-	const uuid = stem.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-	return uuid?.[0] ?? stem;
+	return ctx.sessionManager.getSessionId();
 }
 
 function validateContract(value: unknown): DeliveryContract {
@@ -165,14 +159,38 @@ export default function agentHubContext(pi: ExtensionAPI) {
 	let pendingContract: DeliveryContract | undefined;
 	let pendingFailure: string | undefined;
 
+	const sync = async (ctx: ExtensionContext, phase: string) => {
+		const file = ctx.sessionManager.getSessionFile();
+		if (!file || !ctx.model) return;
+		const args = ["sync-pi", "--surface", "pi", "--cwd", ctx.cwd,
+			"--session", sessionId(ctx), "--transcript", file,
+			"--provider", ctx.model.provider, "--model", ctx.model.id, "--phase", phase];
+		if (process.env.AICO_PROJECT_ID) args.push("--project", process.env.AICO_PROJECT_ID);
+		if (process.env.AICO_SESSION_ID) args.push("--aico-session", process.env.AICO_SESSION_ID);
+		try {
+			const result = await runClient(args);
+			if (result.code !== 0) throw new Error("sync failed");
+			if (ctx.hasUI) ctx.ui.setStatus("agent-hub-sync", undefined);
+		} catch {
+			// Failed ingestion never consumes input or changes provider selection.
+			if (ctx.hasUI) ctx.ui.setStatus("agent-hub-sync", "AH: sync unavailable");
+			else process.stderr.write("Pi session sync unavailable\n");
+		}
+	};
+
 	pi.on("session_start", async (_event, ctx) => {
 		currentSessionId = sessionId(ctx);
+		process.env.PI_SESSION_ID = currentSessionId;
 		lastHash = "";
 		lastStatus = "idle";
 		pendingContract = undefined;
 		pendingFailure = undefined;
 		if (ctx.hasUI) ctx.ui.setStatus("agent-hub", "AH: ready");
+		await sync(ctx, "idle");
 	});
+
+	pi.on("agent_start", async (_event, ctx) => { await sync(ctx, "working"); });
+	pi.on("agent_end", async (_event, ctx) => { await sync(ctx, "idle"); });
 
 	pi.on("input", async (event, ctx) => {
 		// Steering/follow-up input belongs to an agent turn whose exact canonical
@@ -233,6 +251,7 @@ export default function agentHubContext(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		await sync(ctx, "shutdown");
 		if (ctx.hasUI) ctx.ui.setStatus("agent-hub", undefined);
 	});
 

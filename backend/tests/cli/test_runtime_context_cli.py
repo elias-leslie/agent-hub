@@ -71,3 +71,18 @@ def test_consumer_profile_legacy_alias_remains_supported() -> None:
     )
 
     assert args.consumer_profile == "agent_startup"
+
+
+def test_pi_sync_parser_and_failure_receipt(monkeypatch, capsys) -> None:
+    from unittest.mock import AsyncMock
+
+    from app.cli import runtime_context
+
+    arguments = ["sync-pi", "--session", "native", "--transcript", "/fixture/pi.jsonl",
+                 "--cwd", "/fixture", "--provider", "openai-codex", "--model", "gpt-6.1-sol"]
+    assert _build_parser().parse_args(arguments).project is None
+    monkeypatch.setattr(runtime_context, "_sync_pi", AsyncMock(side_effect=ValueError("private detail")))
+    assert runtime_context.main(arguments) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == "Pi session sync unavailable\n"

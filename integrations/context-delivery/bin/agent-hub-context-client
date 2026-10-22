@@ -73,6 +73,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    sync = subparsers.add_parser("sync-pi", help="Sync a native Pi transcript through canonical ingestion.")
+    _common_arguments(sync)
+    sync.add_argument("--transcript", required=True)
+    sync.add_argument("--aico-session")
+
     deliver = subparsers.add_parser("deliver", help="Deliver context and persist artifacts.")
     _common_arguments(deliver)
     deliver.add_argument(
@@ -768,6 +773,25 @@ def _native_degraded_output(event: str) -> dict[str, Any]:
 
 
 async def _main(args: argparse.Namespace) -> int:
+    if args.command == "sync-pi":
+        try:
+            metadata = await _resolve_metadata(args, {})
+            cli = await _canonical_cli()
+            command = [cli, "sync-pi", "--transcript", args.transcript]
+            for field in ("session", "project", "cwd", "provider", "model", "phase"):
+                if metadata.get(field):
+                    command.extend(("--" + field, metadata[field]))
+            if args.aico_session:
+                command.extend(("--aico-session", args.aico_session))
+            code, stdout, _stderr = await _run(*command)
+            if code == 0:
+                sys.stdout.buffer.write(stdout)
+            else:
+                sys.stderr.write("Pi session sync unavailable\n")
+            return code
+        except Exception:
+            sys.stderr.write("Pi session sync unavailable\n")
+            return 2
     if args.command == "bind":
         hook: dict[str, Any] = {}
         try:

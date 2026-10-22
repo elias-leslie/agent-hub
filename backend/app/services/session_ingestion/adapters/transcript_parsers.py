@@ -16,11 +16,12 @@ from app.services.session_ingestion.models import (
     TranscriptSourceHealth,
     TranscriptSourceIssue,
 )
-from app.utils.native_homes import claude_project_roots, codex_session_roots
+from app.utils.native_homes import claude_project_roots, codex_session_roots, pi_session_roots
 
 from ._event_builders import _ParseState, append_normalized_events
 from .codex_model_evidence import observe_model_record
 from .native_metadata import append_native_metadata
+from .pi import PI_RECORD_TYPES, append_pi_events
 
 JsonObject = dict[str, object]
 PARSER_VERSION = "agent-hub.transcript-jsonl.v5"
@@ -36,7 +37,7 @@ def transcript_roots() -> tuple[str, ...]:
     configured = os.environ.get("AGENT_HUB_TRANSCRIPT_ROOTS")
     if configured:
         return tuple(os.path.realpath(root) for root in configured.split(os.pathsep) if root)
-    return tuple(os.path.realpath(root) for root in (*codex_session_roots(), *claude_project_roots()))
+    return tuple(os.path.realpath(root) for root in (*codex_session_roots(), *claude_project_roots(), *pi_session_roots()))
 
 
 def contained_transcript_path(transcript_path: str) -> Path | None:
@@ -64,6 +65,7 @@ _KNOWN_TOP_LEVEL_TYPES = {
     "turn_context",
     "user",
     "world_state",
+    *PI_RECORD_TYPES,
 }
 _KNOWN_CODEX_RESPONSE_TYPES = {
     "agent_message",
@@ -167,6 +169,8 @@ def _unsupported_record_issue(obj: JsonObject) -> str | None:
     elif entry_type in {"user", "assistant"}:
         if not isinstance(obj.get("message"), dict):
             return "unsupported_record_shape"
+    elif entry_type == "message" and not isinstance(obj.get("message"), dict):
+        return "unsupported_record_shape"
     elif entry_type == "system" and obj.get("subtype") != "compact_boundary":
         return "unsupported_system_record"
     return None
@@ -199,6 +203,8 @@ def parse_transcript_events(lines: list[str]) -> list[NormalizedEvent]:
             state.set_source(obj, f"line:{index}")
             append_normalized_events(obj, state)
             append_native_metadata(obj, state)
+            if obj.get("type") in PI_RECORD_TYPES:
+                append_pi_events(obj, state)
     return state.events
 
 
@@ -298,6 +304,8 @@ def read_incremental_transcript_events(
                     observe_model_record(state.codex_model_state, obj, line_count)
                     append_normalized_events(obj, state)
                     append_native_metadata(obj, state)
+                    if obj.get("type") in PI_RECORD_TYPES:
+                        append_pi_events(obj, state)
                 else:
                     parse_issue_counts["non_object_json"] = (
                         parse_issue_counts.get("non_object_json", 0) + 1

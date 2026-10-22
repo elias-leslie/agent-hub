@@ -36,3 +36,7 @@ def codex_session_roots() -> list[Path]:
 
 def claude_project_roots() -> list[Path]:
     return _roots("AGENT_HUB_CLAUDE_PROJECTS", ".claude", "projects")
+
+
+def pi_session_roots() -> list[Path]:
+    return _roots("AGENT_HUB_PI_SESSIONS", ".pi", "agent", "sessions")

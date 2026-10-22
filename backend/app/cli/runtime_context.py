@@ -19,6 +19,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render runtime context for external agentic CLIs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    sync = subparsers.add_parser("sync-pi", help="Ingest a native Pi transcript without model calls.")
+    for field in ("session", "transcript", "cwd", "provider", "model"):
+        sync.add_argument("--" + field, required=True)
+    sync.add_argument("--project")
+    sync.add_argument("--phase", choices=("idle", "working", "shutdown"), default="idle")
+    sync.add_argument("--aico-session")
+
     maintenance = subparsers.add_parser("maintenance", help="Inspect retained historical context maintenance records.")
     maintenance.add_argument("--request-file", help="JSON MaintenanceRequest file; use - for stdin. Omit to list relevant items.")
     maintenance.add_argument("--project")
@@ -186,6 +193,14 @@ async def _feedback(args: argparse.Namespace) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "sync-pi":
+        try:
+            print(json.dumps(asyncio.run(_sync_pi(args))))
+            return 0
+        except Exception:
+            # Database exceptions can contain private connection information.
+            print("Pi session sync unavailable", file=sys.stderr)
+            return 2
     if args.command == "maintenance":
         from app.services.context_maintenance_actions import MaintenanceRequest
         if args.schema:
@@ -227,6 +242,20 @@ def main(argv: list[str] | None = None) -> int:
         ]
         print("\n".join(chunk for chunk in chunks if chunk))
     return 0 if response.status == "ok" else 2
+
+
+async def _sync_pi(args: argparse.Namespace) -> dict:
+    from app.services.runtime_context import _resolve_canonical_project_id
+    from app.services.session_ingestion.pi_sync import sync_pi_session
+
+    project_id = await _resolve_canonical_project_id(CanonicalContextDeliveryRequest(
+        consumer_surface="pi", project_id=args.project, cwd=args.cwd))
+    if not project_id:
+        raise ValueError("Pi session cwd is outside registered projects")
+    async with async_session() as db:
+        return await sync_pi_session(db, session_id=args.session, transcript=args.transcript,
+            project_id=project_id, cwd=args.cwd, provider=args.provider, model=args.model,
+            phase=args.phase, aico_session_id=args.aico_session)
 
 
 async def _maintenance(args: argparse.Namespace) -> dict:
