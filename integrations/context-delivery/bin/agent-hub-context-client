@@ -777,6 +777,42 @@ def _native_degraded_output(event: str) -> dict[str, Any]:
     }
 
 
+def _launch_work_role() -> dict[str, str] | None:
+    """Only Tether's explicit creation environment is declaration evidence."""
+    role = os.getenv("ST_WORK_ROLE")
+    source = os.getenv("ST_WORK_ROLE_SOURCE")
+    if not role or not source:
+        return None
+    declaration = {"id": role, "source": source}
+    display_name = os.getenv("ST_WORK_ROLE_DISPLAY_NAME")
+    if display_name:
+        declaration["display_name"] = display_name
+    return declaration
+
+
+async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any]) -> None:
+    # Child hooks carry their parent's environment. Never turn that into a
+    # declaration for a child, or use the widget/artifact correlation as UUID.
+    role = _launch_work_role()
+    event = getattr(args, "hook_event", None) or hook.get("hook_event_name")
+    native = _string(hook.get("session_id")) or _string(hook.get("conversation_id"))
+    if (role is None or event != "SessionStart" or args.surface not in {"codex", "claude_code"}
+            or not native or any(hook.get(key) for key in (
+                "agent_id", "subagent_id", "subagent_type", "agent_type", "parent_session_id"))):
+        return
+    metadata = await _resolve_metadata(args, hook)
+    cli = await _canonical_cli()
+    command = [cli, "bind-native-work-role", "--surface", args.surface,
+               "--session", native, "--cwd", metadata["cwd"],
+               "--work-role-json", json.dumps(role, separators=(",", ":"))]
+    for field in ("project", "model"):
+        if metadata.get(field):
+            command.extend(("--" + field, metadata[field]))
+    code, _stdout, _stderr = await _run(*command)
+    if code:
+        raise ContractError("Native session work role registration unavailable")
+
+
 async def _main(args: argparse.Namespace) -> int:
     if args.command == "sync-pi":
         try:
@@ -788,6 +824,9 @@ async def _main(args: argparse.Namespace) -> int:
                     command.extend(("--" + field, metadata[field]))
             if args.aico_session:
                 command.extend(("--aico-session", args.aico_session))
+            role = _launch_work_role()
+            if role is not None:
+                command.extend(("--work-role-json", json.dumps(role, separators=(",", ":"))))
             code, stdout, _stderr = await _run(*command)
             if code == 0:
                 sys.stdout.buffer.write(stdout)
@@ -801,6 +840,11 @@ async def _main(args: argparse.Namespace) -> int:
         hook: dict[str, Any] = {}
         try:
             hook = await _read_hook_input()
+            # Registration does not depend on supplemental prompt delivery.
+            try:
+                await _bind_native_work_role(args, hook)
+            except Exception:
+                sys.stderr.write("Native session work role registration unavailable\n")
             await _bind_preinjected(args, hook)
         except Exception as exc:
             metadata = await _resolve_metadata(args, hook)

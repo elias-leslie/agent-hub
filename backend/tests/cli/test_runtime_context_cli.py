@@ -108,3 +108,53 @@ def test_pi_sync_parser_and_failure_receipt(monkeypatch, capsys) -> None:
     output = capsys.readouterr()
     assert output.out == ""
     assert output.err == "Pi session sync unavailable\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("surface", ["codex", "claude_code"])
+@pytest.mark.parametrize("child", [False, True])
+async def test_native_work_role_binding_uses_canonical_upsert(monkeypatch, surface, child):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.cli import runtime_context
+    from app.services import runtime_context as service_context
+    from app.services import session_ingestion
+
+    sid = "00000000-0000-4000-8000-000000000001"
+    role = {"id": "implementation", "source": "tether:root:fixture"}
+    existing = SimpleNamespace(provider="codex" if surface == "codex" else "anthropic",
+        model="observed/model", session_type="agent", parent_session_id="parent" if child else None)
+    db = AsyncMock()
+    db.execute.return_value.scalar_one_or_none = MagicMock(return_value=existing)
+    scope = AsyncMock()
+    scope.__aenter__.return_value = db
+    monkeypatch.setattr(runtime_context, "async_session", MagicMock(return_value=scope))
+    monkeypatch.setattr(service_context, "_resolve_canonical_project_id", AsyncMock(return_value="fixture"))
+    upsert = AsyncMock()
+    monkeypatch.setattr(session_ingestion, "upsert_session", upsert)
+    args = _build_parser().parse_args(["bind-native-work-role", "--surface", surface,
+        "--session", sid, "--cwd", "/fixture", "--work-role-json", json.dumps(role)])
+    await runtime_context._bind_native_work_role(args)
+    if child:
+        upsert.assert_not_awaited()
+    else:
+        assert upsert.await_args is not None
+        request = upsert.await_args.args[1]
+        assert request.session_id == sid
+        assert request.model == "observed/model"
+        assert request.provider_metadata["work_role"] == role
+
+
+def test_native_work_role_failure_is_content_free(monkeypatch, capsys):
+    from unittest.mock import AsyncMock
+
+    from app.cli import runtime_context
+
+    monkeypatch.setattr(runtime_context, "_bind_native_work_role", AsyncMock(side_effect=ValueError("private detail")))
+    assert runtime_context.main(["bind-native-work-role", "--surface", "codex", "--session", "invalid",
+        "--cwd", "/fixture", "--work-role-json", "{} "]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Native session work role registration unavailable\n"

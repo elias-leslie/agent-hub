@@ -115,8 +115,9 @@ async def test_pi_fork_does_not_charge_copied_history(transcript):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("work_role", [None, {"id": "implementation", "source": "tether:root:fixture"}])
 @pytest.mark.parametrize("phase,status", [("idle", "active"), ("shutdown", "completed")])
-async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, monkeypatch, phase, status):
+async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, monkeypatch, phase, status, work_role):
     from app.services.session_ingestion import pi_sync
 
     db = AsyncMock()
@@ -131,11 +132,12 @@ async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, 
     monkeypatch.setattr(pi_sync, "ingest_transcript_events", ingest)
     monkeypatch.setattr(pi_sync, "heartbeat_session", heartbeat)
     receipt = await sync_pi_session(db, session_id=SID, transcript=str(transcript), project_id="agent-hub",
-        cwd="/fixture/project", provider=PROVIDER, model=MODEL, phase=phase, aico_session_id="widget-session")
+        cwd="/fixture/project", provider=PROVIDER, model=MODEL, phase=phase, aico_session_id="widget-session", work_role=work_role)
     assert upsert.await_args is not None
     request = upsert.await_args.args[1]
     assert request.session_id == SID and request.session_type == "pi"
     assert request.provider == PROVIDER and request.model == f"{PROVIDER}/unknown"
+    assert request.provider_metadata.get("work_role") == work_role
     assert request.provider_metadata["aico_session_id"] == "widget-session"
     assert request.provider_metadata["pi_selection"] == {"provider": PROVIDER, "model": MODEL}
     assert ingest.await_args is not None

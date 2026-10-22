@@ -16,7 +16,8 @@ from .service import heartbeat_session, ingest_transcript_events, upsert_session
 
 async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
                           project_id: str, cwd: str, provider: str, model: str,
-                          phase: str = "idle", aico_session_id: str | None = None) -> dict:
+                          phase: str = "idle", aico_session_id: str | None = None,
+                          work_role: dict[str, str] | None = None) -> dict:
     path, header = await asyncio.to_thread(pi_header, transcript, session_id)
     existing = (await db.execute(select(Session).where(Session.id == session_id))).scalar_one_or_none()
     if existing is not None:
@@ -28,6 +29,7 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
         model=existing.model if existing is not None else f"{provider}/unknown",
         session_type="pi", cwd=cwd, request_source="pi-extension",
         provider_metadata={
+            **({"work_role": work_role} if work_role is not None else {}),
             "transcript_path": str(path), "harness": "pi", "native_session_id": session_id,
             "aico_session_id": aico_session_id, "cwd": header.get("cwd", cwd),
             "pi_selection": {"provider": provider, "model": model},

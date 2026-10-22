@@ -25,6 +25,15 @@ def _build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--project")
     sync.add_argument("--phase", choices=("idle", "working", "shutdown"), default="idle")
     sync.add_argument("--aico-session")
+    sync.add_argument("--work-role-json", help="Explicit immutable launch declaration")
+
+    bind = subparsers.add_parser("bind-native-work-role", help="Bind an explicit launch role to its native session.")
+    bind.add_argument("--surface", required=True, choices=("codex", "claude_code"))
+    bind.add_argument("--session", required=True)
+    bind.add_argument("--cwd", required=True)
+    bind.add_argument("--project")
+    bind.add_argument("--model")
+    bind.add_argument("--work-role-json", required=True)
 
     maintenance = subparsers.add_parser("maintenance", help="Inspect retained historical context maintenance records.")
     maintenance.add_argument("--request-file", help="JSON MaintenanceRequest file; use - for stdin. Omit to list relevant items.")
@@ -200,6 +209,13 @@ async def _feedback(args: argparse.Namespace) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "bind-native-work-role":
+        try:
+            asyncio.run(_bind_native_work_role(args))
+            return 0
+        except Exception:
+            print("Native session work role registration unavailable", file=sys.stderr)
+            return 2
     if args.command == "sync-pi":
         try:
             print(json.dumps(asyncio.run(_sync_pi(args))))
@@ -262,7 +278,43 @@ async def _sync_pi(args: argparse.Namespace) -> dict:
     async with async_session() as db:
         return await sync_pi_session(db, session_id=args.session, transcript=args.transcript,
             project_id=project_id, cwd=args.cwd, provider=args.provider, model=args.model,
-            phase=args.phase, aico_session_id=args.aico_session)
+            phase=args.phase, aico_session_id=args.aico_session,
+            work_role=json.loads(args.work_role_json) if args.work_role_json else None)
+
+
+async def _bind_native_work_role(args: argparse.Namespace) -> None:
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.models import Session
+    from app.services.runtime_context import _resolve_canonical_project_id
+    from app.services.session_ingestion import SessionUpsertRequest, upsert_session
+
+    # A supported native hook supplies the actual UUID. Correlation labels
+    # (including AICO_SESSION_ID) are never accepted as session subjects.
+    if str(uuid.UUID(args.session)) != args.session:
+        raise ValueError("Expected exact native UUID")
+    project_id = await _resolve_canonical_project_id(CanonicalContextDeliveryRequest(
+        consumer_surface=args.surface, project_id=args.project, cwd=args.cwd))
+    if not project_id:
+        raise ValueError("Native session cwd is outside registered projects")
+    async with async_session() as db:
+        existing = (await db.execute(select(Session).where(Session.id == args.session))).scalar_one_or_none()
+        if existing is not None and existing.parent_session_id is not None:
+            return  # A native child never inherits its launcher's declaration.
+        # Preserve the native producer's provider/model and existing identity.
+        # Role immutability and provenance are enforced by canonical upsert.
+        provider = existing.provider if existing else ("codex" if args.surface == "codex" else "anthropic")
+        await upsert_session(db, SessionUpsertRequest(
+            session_id=args.session, project_id=project_id, provider=provider,
+            model=existing.model if existing else (args.model or f"{provider}/unknown"),
+            session_type=existing.session_type if existing else ("agent" if args.surface == "codex" else "claude_code"),
+            parent_session_id=existing.parent_session_id if existing else None,
+            cwd=args.cwd, request_source="native-session-start",
+            provider_metadata={"work_role": json.loads(args.work_role_json),
+                               "harness": "codex_cli" if args.surface == "codex" else "claude_code"},
+        ))
 
 
 async def _maintenance(args: argparse.Namespace) -> dict:

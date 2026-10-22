@@ -171,3 +171,29 @@ compaction calls, plus policy preservation and ingestion. The optional installed
 Pi transport check skips when the managed Pi runtime is absent; it never calls a
 remote provider. A harmless authenticated request and live delivery observation
 are separate owner-run qualifications.
+
+
+### Fixed native session work roles
+
+Tether root creation supplies `ST_WORK_ROLE`, `ST_WORK_ROLE_SOURCE`, and an
+optional `ST_WORK_ROLE_DISPLAY_NAME` from immutable root creation metadata.
+The existing Codex and Claude `bind` SessionStart hook projects that declaration
+through `bind-native-work-role` and canonical ingestion to the hook's actual
+native UUID. This registration runs even when supplemental context binding is
+unavailable. SubagentStart, child markers, and known native children do not
+inherit the root declaration. Logical Aico IDs remain provenance only.
+
+Pi's existing `sync-pi` route forwards the same declaration with its native
+session UUID. The extension and its provider import remain unchanged. Canonical
+upsert owns validation, first declaration, same-role retry and different-role
+conflict. A resumed native UUID keeps its first role and provenance. No polling,
+role database, title inference, prompt addition or per-command telemetry is added.
+Without explicit launch metadata or a supported native UUID, the session remains
+Unknown. Direct launches and legacy owner widgets are therefore undeclared.
+
+Integrate these producers with the Agent Hub work-role DTO/immutable-upsert
+checkpoint and Tether launcher checkpoint. Rebuild through the existing managed
+services and verify the installed context-adapter source links before launching
+a fresh root with `st aico create ... --work-role implementation`. Existing
+processes need their normal native resume/extension reload before using updated
+producer code; no live activation or deployment is performed by this checkpoint.
