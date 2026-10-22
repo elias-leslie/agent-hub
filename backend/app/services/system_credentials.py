@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 SYSTEM_PROVIDER_PREFIX = "_system_"
+LAB_PROVIDER_PREFIX = "_lab_"
 
 
 def is_system_credential_provider(provider: str) -> bool:
     """Return whether a provider ID is reserved for internal credentials."""
     return provider.startswith(SYSTEM_PROVIDER_PREFIX)
+
+
+def is_lab_credential_provider(provider: str) -> bool:
+    """Reserved namespace for target-scoped lab credentials, never provider keys."""
+    return provider.startswith(LAB_PROVIDER_PREFIX)
