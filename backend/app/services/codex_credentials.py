@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -119,12 +120,35 @@ async def _publish_cache(oauth_token: str, refresh_token: str) -> None:
     await reset_provider_cooldown_after_credential_change("codex", "oauth_token")
 
 
-async def replace_codex_credentials(credentials: CodexCredentials) -> None:
-    """Atomically replace Agent Hub's complete Codex OAuth pair."""
+async def replace_codex_credentials(
+    credentials: CodexCredentials,
+    *,
+    expected_current: CodexCredentials | None = None,
+    validate_replacement: Callable[[], None] | None = None,
+) -> None:
+    """Atomically replace Agent Hub's complete Codex OAuth pair.
+
+    Explicit imports can require the observed account/token pair to remain
+    current and revalidate their source synchronously under the refresh lock.
+    OAuth exchanges omit these guards and keep their existing behavior.
+    """
     async with _process_lock:
         async with async_session() as db:
             await _acquire_refresh_lock(db)
             rows = await _locked_rows(db)
+            if expected_current is not None:
+                try:
+                    current = _credentials_from_rows(rows)
+                except (RuntimeError, ValueError):
+                    raise CodexAuthError("Codex credentials changed before replacement") from None
+                if (
+                    current.account_id != expected_current.account_id
+                    or current.access_token != expected_current.access_token
+                    or current.refresh_token != expected_current.refresh_token
+                ):
+                    raise CodexAuthError("Codex credentials changed before replacement")
+            if validate_replacement is not None:
+                validate_replacement()
             oauth_token, refresh_token = _write_pair(db, rows, credentials)
             await db.commit()
         await _publish_cache(oauth_token, refresh_token)

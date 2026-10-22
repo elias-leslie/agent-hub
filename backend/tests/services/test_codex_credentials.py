@@ -135,6 +135,127 @@ async def test_replace_credentials_does_not_publish_cache_when_commit_fails(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["access", "refresh", "account", "deleted", "invalid"])
+async def test_guarded_replace_refuses_credentials_changed_while_waiting_for_lock(
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    expected = _credentials(_jwt(account_id="account", expires_at=time.time() - 300))
+    assert expected.refresh_token is not None
+    rows = {
+        "oauth_token": SimpleNamespace(value_encrypted=expected.access_token.encode()),
+        "refresh_token": SimpleNamespace(value_encrypted=expected.refresh_token.encode()),
+    }
+
+    async def concurrent_change(_db) -> None:
+        if change in {"access", "account"}:
+            token = _jwt(
+                account_id="other-account" if change == "account" else "account",
+                expires_at=time.time() + 3600,
+            )
+            rows["oauth_token"].value_encrypted = token.encode()
+        elif change == "refresh":
+            rows["refresh_token"].value_encrypted = b"another-refresh"
+        elif change == "deleted":
+            rows.clear()
+        else:
+            rows["oauth_token"].value_encrypted = b"invalid-jwt"
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    write_pair = MagicMock(return_value=("stored-access", "stored-refresh"))
+    publish = AsyncMock()
+    validate = MagicMock()
+    monkeypatch.setattr(codex_credentials, "async_session", _session_factory(db))
+    monkeypatch.setattr(codex_credentials, "_acquire_refresh_lock", concurrent_change)
+    monkeypatch.setattr(codex_credentials, "_locked_rows", AsyncMock(return_value=rows))
+    monkeypatch.setattr(codex_credentials, "decrypt_value", lambda value: value.decode())
+    monkeypatch.setattr(codex_credentials, "_write_pair", write_pair)
+    monkeypatch.setattr(codex_credentials, "_publish_cache", publish)
+
+    with pytest.raises(CodexAuthError, match="changed before replacement"):
+        await codex_credentials.replace_codex_credentials(
+            _credentials("replacement"),
+            expected_current=expected,
+            validate_replacement=validate,
+        )
+
+    validate.assert_not_called()
+    write_pair.assert_not_called()
+    db.commit.assert_not_awaited()
+    publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_guarded_replace_rechecks_source_after_waiting_for_database_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = _credentials("expected")
+    source_changed = False
+
+    async def wait_for_lock(_db) -> None:
+        nonlocal source_changed
+        source_changed = True
+
+    def validate_source() -> None:
+        assert source_changed, "Source must be checked after acquiring the database lock"
+        raise ValueError("source changed")
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    write_pair = MagicMock(return_value=("stored-access", "stored-refresh"))
+    publish = AsyncMock()
+    monkeypatch.setattr(codex_credentials, "async_session", _session_factory(db))
+    monkeypatch.setattr(codex_credentials, "_acquire_refresh_lock", wait_for_lock)
+    monkeypatch.setattr(codex_credentials, "_locked_rows", AsyncMock(return_value={}))
+    monkeypatch.setattr(codex_credentials, "_credentials_from_rows", lambda _rows: expected)
+    monkeypatch.setattr(codex_credentials, "_write_pair", write_pair)
+    monkeypatch.setattr(codex_credentials, "_publish_cache", publish)
+
+    with pytest.raises(ValueError, match="source changed"):
+        await codex_credentials.replace_codex_credentials(
+            _credentials("replacement"),
+            expected_current=expected,
+            validate_replacement=validate_source,
+        )
+
+    write_pair.assert_not_called()
+    db.commit.assert_not_awaited()
+    publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_guarded_replace_validates_before_writing_and_publishing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = _credentials("expected")
+    events = []
+    db = MagicMock()
+    db.commit = AsyncMock(side_effect=lambda: events.append("commit"))
+    monkeypatch.setattr(codex_credentials, "async_session", _session_factory(db))
+    monkeypatch.setattr(codex_credentials, "_acquire_refresh_lock", AsyncMock())
+    monkeypatch.setattr(codex_credentials, "_locked_rows", AsyncMock(return_value={}))
+    monkeypatch.setattr(codex_credentials, "_credentials_from_rows", lambda _rows: expected)
+
+    def write_pair(*_args):
+        events.append("write")
+        return "stored-access", "stored-refresh"
+
+    monkeypatch.setattr(codex_credentials, "_write_pair", write_pair)
+    monkeypatch.setattr(
+        codex_credentials, "_publish_cache", AsyncMock(side_effect=lambda *_args: events.append("publish"))
+    )
+
+    await codex_credentials.replace_codex_credentials(
+        _credentials("replacement"),
+        expected_current=expected,
+        validate_replacement=lambda: events.append("validate"),
+    )
+
+    assert events == ["validate", "write", "commit", "publish"]
+
+
+@pytest.mark.asyncio
 async def test_rejected_stale_token_adopts_pair_rotated_by_another_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
