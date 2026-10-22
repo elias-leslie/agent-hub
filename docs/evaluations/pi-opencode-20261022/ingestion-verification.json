@@ -1,0 +1,214 @@
+{
+  "deployment": {
+    "job_id": "694271ec48244fc7b0808fde1eea782c",
+    "state": "succeeded",
+    "exit_code": 0,
+    "source_commit": "9a116b46ba83c49dc35105fdfd53264c6ee8cf10",
+    "deployment_id": "75126048bff51f523d822eb90581811052265b7605633d866a28b80b42d6f8c4",
+    "migrations": "succeeded"
+  },
+  "rpc_resumptions": [
+    {
+      "exit_code": 0,
+      "elapsed_seconds": 4.977,
+      "requested_session": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "state_response_success": true,
+      "native_session": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "selected_provider": "opencode",
+      "selected_model": "deepseek-v4.1-flash-free",
+      "stderr": "",
+      "extension_statuses": [
+        {
+          "key": "agent-hub",
+          "text": "AH: ready"
+        },
+        {
+          "key": "agent-hub-sync",
+          "text": null
+        },
+        {
+          "key": "agent-hub-sync",
+          "text": null
+        },
+        {
+          "key": "agent-hub",
+          "text": null
+        }
+      ],
+      "model_call_requested": false
+    },
+    {
+      "exit_code": 0,
+      "elapsed_seconds": 4.898,
+      "requested_session": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "state_response_success": true,
+      "native_session": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "selected_provider": "opencode",
+      "selected_model": "glm-5.3-flash-free",
+      "stderr": "",
+      "extension_statuses": [
+        {
+          "key": "agent-hub",
+          "text": "AH: ready"
+        },
+        {
+          "key": "agent-hub-sync",
+          "text": null
+        },
+        {
+          "key": "agent-hub-sync",
+          "text": null
+        },
+        {
+          "key": "agent-hub",
+          "text": null
+        }
+      ],
+      "model_call_requested": false
+    }
+  ],
+  "sessions": [
+    {
+      "id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "session_type": "pi",
+      "provider": "opencode",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "status": "completed",
+      "harness": "pi",
+      "native_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "pi_selection": {
+        "provider": "opencode",
+        "model": "deepseek-v4.1-flash-free"
+      }
+    },
+    {
+      "id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "session_type": "pi",
+      "provider": "opencode",
+      "model": "opencode/glm-5.3-flash-free",
+      "status": "completed",
+      "harness": "pi",
+      "native_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "pi_selection": {
+        "provider": "opencode",
+        "model": "glm-5.3-flash-free"
+      }
+    }
+  ],
+  "event_counts_after_replay": [
+    {
+      "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "event_type": "error",
+      "events": 1
+    },
+    {
+      "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "event_type": "usage",
+      "events": 1
+    },
+    {
+      "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "event_type": "user_message",
+      "events": 1
+    },
+    {
+      "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "event_type": "error",
+      "events": 1
+    },
+    {
+      "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "event_type": "usage",
+      "events": 1
+    },
+    {
+      "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "event_type": "user_message",
+      "events": 1
+    }
+  ],
+  "usage": [
+    {
+      "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "source": "pi.transcript",
+      "input": "0",
+      "output": "0",
+      "cached": "0",
+      "native_cost": "0"
+    },
+    {
+      "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "source": "pi.transcript",
+      "input": "0",
+      "output": "0",
+      "cached": "0",
+      "native_cost": "0"
+    }
+  ],
+  "replay_receipts": [
+    {
+      "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+      "exit_code": 0,
+      "receipt": {
+        "session_id": "01a1647d-764f-719a-aa3b-9eb882e0c998",
+        "events_appended": 0,
+        "events_skipped": 0,
+        "phase": "shutdown"
+      },
+      "stderr": ""
+    },
+    {
+      "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+      "exit_code": 0,
+      "receipt": {
+        "session_id": "01a1647d-bfb6-7087-9c39-3d0fe20ee577",
+        "events_appended": 0,
+        "events_skipped": 0,
+        "phase": "shutdown"
+      },
+      "stderr": ""
+    }
+  ],
+  "separate_coordinator_visible_probe": {
+    "identity": {
+      "id": "01a16493-5942-731c-be22-6f8285d02581",
+      "provider": "openai",
+      "session_type": "pi",
+      "aico": "aico-widget-00520653",
+      "harness": "pi"
+    },
+    "event_counts": [
+      {
+        "event_type": "assistant_message",
+        "events": 2
+      },
+      {
+        "event_type": "thinking",
+        "events": 1
+      },
+      {
+        "event_type": "tool_result",
+        "events": 5
+      },
+      {
+        "event_type": "tool_use",
+        "events": 5
+      },
+      {
+        "event_type": "usage",
+        "events": 5
+      },
+      {
+        "event_type": "user_message",
+        "events": 1
+      }
+    ],
+    "usage": {
+      "usage_events": 5,
+      "input": 49459,
+      "output": 723,
+      "cached": 33024
+    },
+    "note": "Coordinator launched this OpenAI session separately. No model call was requested by this verification."
+  }
+}

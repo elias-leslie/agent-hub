@@ -1,6 +1,6 @@
 # Pi and OpenCode free-model verification — 2026-10-22
 
-Task: `task-f8c962cd93df4abf`. The requested free models are discoverable in Pi 1.4.0, but neither produced a response through the tested paths. Do not route Neri workflows to them on this evidence. No Neri target data, paid fallback, client-identity spoofing, deployment, or publication was performed in this evaluation.
+Task: `task-f8c962cd93df4abf`. The requested free models are discoverable in Pi 1.4.0, but neither produced a response through the tested paths. Do not route Neri workflows to them on this evidence. No Neri target data, paid fallback, or client-identity spoofing was used. The evaluator did not deploy or publish; the coordinator deployed the reviewed ingestion fixes for live verification.
 
 ## Service and configuration
 
@@ -40,7 +40,7 @@ The logged-in Console account was used. Its pre-existing key was expired. New ke
 
 After the failed tests, the replacement was also revoked and its revoked state verified in Console. Only the `opencode` entry was removed from Pi's auth store; the existing Anthropic, MiniMax, and OpenAI entries were preserved. `pi auth check --provider opencode --json --no-refresh` now reports `credentials_not_configured`, and the file remains 0600. No active test grant remains. Existing account logins were preserved.
 
-Scratch CLI/config/raw synthetic output is under `/srv/scratch/pi-opencode-synthetic-20261022`; it contains no retained API key. Native Pi transcripts remain in Pi's normal session store for ingestion verification. Scratch data is disposable after final verification; this report and content-free results are the durable evidence.
+The disposable CLI and native XDG state were removed after checking that no open files used them. Small raw synthetic outputs remain under `/srv/scratch/pi-opencode-synthetic-20261022`; a content scan found no credential-pattern matches. Native Pi transcripts remain in Pi's normal session store for ingestion verification. Remaining scratch output is disposable after final verification; this report and content-free results are the durable evidence.
 
 ## Agent Hub ingestion defect and fix
 
@@ -55,5 +55,16 @@ Validation in the isolated checkout:
 - `st check pytest -- tests/services/session_ingestion/test_pi.py`: 7 passed.
 - `st check ruff -- backend/app/models/session.py backend/alembic/versions/e3a7c9d1f502_add_pi_session_type.py backend/tests/integration/test_pi_session_type.py`: passed.
 - Independent native review requested as `gpt-6.1-sol` at `xhigh`: accepted by the client, no blocking findings. The reviewer inspected the three scoped code/test files and the raw red/green test logs without edits or deployment. Separate delivered-model telemetry was unavailable.
+- `st commit` quick gate: passed, including 704 tests (8 integration tests skipped), types, Ruff, Biome, and credential scanning. The two focused PostgreSQL tests above were run separately with integration enabled.
 
-Post-deployment ingestion evidence is recorded with the final checkpoint. Unit/integration passes do not establish that production has received the migration. Live attribution remains unverified until the coordinator lands/deploys and reruns native transcript sync.
+The coordinator separately fixed stale-checkpoint refresh in Pi upserts. Independent xhigh review caught an initial gate on `provider=pi`, which does not match native Pi's selected model provider. Corrected commit `9a116b46ba83c49dc35105fdfd53264c6ee8cf10` gates on `session_type=pi` and tests `provider=openai/session_type=pi`; bounded recheck passed. Its regression covers a deterministic stale-row interleaving, not simultaneous lock contention.
+
+The coordinator landed the enum fix and deployed combined source `9a116b46ba83c49dc35105fdfd53264c6ee8cf10`, job `694271ec48244fc7b0808fde1eea782c`. The durable managed result reports successful migrations and health checks. A production enum query independently confirmed `pi` is present.
+
+[ingestion-verification.json](ingestion-verification.json) retains content-free live evidence. Fresh Pi RPC processes resumed the two original native UUIDs with the canonical extension loaded, issued only `get_state`, and shut down orderly. Both exited 0 with no sync-failure status or stderr; no model call was requested. Production contains two completed `pi` sessions with the matching native UUIDs, `opencode` provider, native model labels, and separate `pi_selection`. Each has exactly one user-message event, one error event, and one `pi.transcript` usage event with zero input/output/cache tokens and zero native cost. Labels on rejected responses do not prove upstream model execution.
+
+Explicit replay returned `events_appended=0` and `events_skipped=0` at the saved EOF checkpoint for each transcript; production event counts remained three per session. Prompt text was not queried or copied into these artifacts.
+
+The coordinator separately launched a fresh visible OpenAI Pi session. Its initially transient sync warning cleared after its turn. Independent read-only metadata verification confirmed provider `openai`, type/harness `pi`, Aico widget correlation, five tool calls/results, and five usage events: 49,459 inclusive input tokens, 33,024 cached input tokens, and 723 output tokens. Net uncached input is 16,435, consistent with the coordinator's observed footer. This separate session validates the fresh Aico ingestion path; it provides no quality or pricing evidence for either OpenCode free model.
+
+The supported Pi ingestion paths and replay accounting are verified. The OpenCode free-model setup remains unavailable through the tested authorization paths, with no response-quality qualification. No active test credential remains, and no owner action is required for this completed evaluation.
