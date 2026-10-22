@@ -8,9 +8,10 @@ from types import SimpleNamespace as Row
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects import postgresql, sqlite
 
 from app.services.admin_activity_cost import build_activity_cost_snapshot, summarize_activity_cost
+from app.services.event_storage import _extract_tool_result_content
 
 NOW = datetime(2026, 10, 22, 12, tzinfo=UTC)
 
@@ -196,7 +197,11 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
     assert "LIMIT" in statements[0]
     assert "length(session_events.content)" in statements[0]
     assert "returned_characters" in statements[0]
-    assert "json_typeof" in statements[0]
+    assert "jsonb_typeof" in statements[0]
+    postgres_query = str(db.execute.call_args_list[0].args[0].compile(dialect=postgresql.dialect()))
+    assert "jsonb_typeof" in postgres_query
+    assert "session_events.tool_output" in postgres_query
+    assert "json_typeof" not in postgres_query
     assert "sessions.updated_at BETWEEN" in statements[3]
     assert "usage_calls.agent_id" in statements[2]
     # Execute the actual aggregate queries against an isolated in-memory DB:
@@ -215,17 +220,21 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
             tool_name TEXT, tool_input JSON, usage JSON, duration_ms INT,
             source_timestamp TEXT, created_at TEXT, content TEXT, tool_output JSON
         )""")
-        def json_typeof(value):
+        def jsonb_typeof(value):
             parsed = json.loads(value) if value is not None else None
             return "string" if isinstance(parsed, str) else "object" if isinstance(parsed, dict) else "null"
-        sql.create_function("json_typeof", 1, json_typeof)
+        sql.create_function("jsonb_typeof", 1, jsonb_typeof)
         timestamp = "2026-10-22 11:59:00.000000"
+        long_output = {"output": "x" * 10000}
+        clipped_content = _extract_tool_result_content(long_output)
+        assert clipped_content is not None and len(clipped_content) == 2000
         for index, (content, output) in enumerate([
             ("same", {"output": "same"}),
             (None, {"output": ""}),
             (None, {"stdout": "é", "stderr": "bad"}),
             (None, {"output": {"image": "opaque"}}),
             (None, {"content": "claude text"}),
+            (clipped_content, long_output),
         ]):
             sql.execute("INSERT INTO session_events VALUES (?, 's', 1, ?, 'tool_result', ?, NULL, NULL, NULL, 0, ?, ?, ?, ?)",
                         (str(index), index, str(index), timestamp, timestamp, content, json.dumps(output)))
@@ -239,7 +248,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
         compiled = str(event_query.limit(10).compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
         cursor = sql.execute(compiled)
         extracted = [dict(zip([column[0] for column in cursor.description], row, strict=True)) for row in cursor.fetchall()]
-        assert [row["returned_characters"] for row in extracted] == [4, 0, 4, None, 11]
+        assert [row["returned_characters"] for row in extracted] == [4, 0, 4, None, 11, 10000]
         sql.execute("INSERT INTO cost_logs VALUES (?, 10, 20, 30, 40, ?)", ("cached", timestamp))
         cost_query = db.execute.call_args_list[1].args[0]
         compiled = str(cost_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))

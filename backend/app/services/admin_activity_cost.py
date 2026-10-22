@@ -400,13 +400,16 @@ async def build_activity_cost_snapshot(db: AsyncSession, *, cutoff: datetime, no
 
     def text_length(key: str):
         value = output[key]
-        return case((func.json_typeof(value) == "string", func.length(value.as_string())), else_=None)
+        return case((func.jsonb_typeof(value) == "string", func.length(value.as_string())), else_=None)
 
     returned_characters = func.coalesce(
-        func.length(SessionEvent.content), text_length("output"), text_length("content"),
+        # The content column is a redacted summary capped at 2,000 characters.
+        # Prefer one complete retained string in the same order as event storage.
+        text_length("result"), text_length("content"), text_length("output"), text_length("message"),
         # Native command records retain separate stdout/stderr. Empty text is known zero.
         case((or_(text_length("stdout").is_not(None), text_length("stderr").is_not(None)),
               func.coalesce(text_length("stdout"), 0) + func.coalesce(text_length("stderr"), 0)), else_=None),
+        func.length(SessionEvent.content),
     ).label("returned_characters")
     events = (await db.execute(select(
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
