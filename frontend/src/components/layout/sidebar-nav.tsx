@@ -112,7 +112,7 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   {
     href: '/admin',
-    label: 'Admin',
+    label: 'Activity',
     icon: Activity,
     description: 'Work & admin activity',
   },

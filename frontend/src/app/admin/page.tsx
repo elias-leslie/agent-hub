@@ -58,19 +58,23 @@ export default function AdminPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">Admin</h1>
-            <span className="text-xs text-slate-400">
-              {isRefreshing ? 'Refreshing…' : 'Refreshes every 30s'}
-            </span>
+        <div className="px-6 lg:px-8 min-h-12 py-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Shield className="h-5 w-5 shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold text-slate-100">
+                Work and admin activity
+              </h1>
+              <span className="text-xs text-slate-400">
+                {isRefreshing ? 'Refreshing…' : 'Refreshes every 30s'}
+              </span>
+            </div>
           </div>
 
           <button
             onClick={refresh}
             disabled={isRefreshing}
-            aria-label="Refresh admin data"
+            aria-label="Refresh activity data"
             className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
             title="Refresh"
           >

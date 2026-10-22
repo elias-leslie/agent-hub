@@ -19,6 +19,9 @@ describe('SidebarNav', () => {
   it('groups the agent pages under one Agents section', () => {
     render(<SidebarNav isCollapsed={false} pathname="/dashboard" />)
 
+    expect(
+      screen.getByRole('link', { name: 'Activity Work & admin activity' }),
+    ).toHaveAttribute('href', '/admin')
     const group = agentsGroup()
     const links = within(group).getAllByRole('link')
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
@@ -61,6 +64,10 @@ describe('SidebarNav', () => {
     render(<SidebarNav isCollapsed={true} pathname="/memory" />)
 
     const group = agentsGroup()
+    expect(screen.getByRole('link', { name: 'Activity' })).toHaveAttribute(
+      'href',
+      '/admin',
+    )
     const memory = within(group).getByRole('link', { name: 'Memory' })
     expect(memory).toHaveAttribute('title', 'Memory')
     expect(memory).toHaveAttribute('data-active', 'true')

@@ -33,14 +33,21 @@ const hotspots: SessionHotspots = {
 
 beforeEach(() => vi.resetAllMocks())
 
-describe('Admin activity loading', () => {
+describe('Activity page loading', () => {
   it('loads activity when unrelated request-block stats fail', async () => {
     vi.mocked(fetchRequestBlockStats).mockRejectedValue(
       new Error('blocks unavailable'),
     )
     vi.mocked(fetchSessionHotspots).mockResolvedValue(hotspots)
     render(<AdminPage />)
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Work and admin activity',
+      }),
+    ).toBeInTheDocument()
     expect(await screen.findByText('50s / 100s')).toBeInTheDocument()
+    expect(screen.getByText('Admin + support')).toBeInTheDocument()
     expect(
       screen.getByText(/Request block stats could not be refreshed/),
     ).toBeInTheDocument()
@@ -65,10 +72,12 @@ describe('Admin activity loading', () => {
     expect(await screen.findByText('50s / 100s')).toBeInTheDocument()
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Refresh admin data' }),
+        screen.getByRole('button', { name: 'Refresh activity data' }),
       ).not.toBeDisabled(),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh admin data' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Refresh activity data' }),
+    )
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Showing the last loaded snapshot',
     )
