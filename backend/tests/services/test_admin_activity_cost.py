@@ -1,5 +1,6 @@
 """Conservative activity attribution over real hotspot inputs, without providers."""
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -19,7 +20,8 @@ def event(kind="tool_use", *, sid="s", turn=1, call="c", seconds=0, at=10, **kw)
         id=f"{kind}:{sid}:{call}:{at}", session_id=sid, turn=turn, sequence=at,
         event_type=kind, call_id=call, tool_name=kw.pop("tool_name", "Bash"),
         tool_input=kw.pop("tool_input", {"command": "st context task-123"}),
-        usage=kw.pop("usage", None), duration_ms=seconds * 1000 or None,
+        usage=kw.pop("usage", None), duration_ms=kw.pop("duration_ms", seconds * 1000 or None),
+        returned_characters=kw.pop("returned_characters", None),
         source_timestamp=NOW - timedelta(seconds=at), created_at=NOW - timedelta(seconds=at),
         native_turn_id=kw.pop("native_turn_id", None), native_status=kw.pop("native_status", None),
         **kw,
@@ -192,8 +194,9 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
     assert result["missing_usage_sessions"] == 1
     statements = [str(call.args[0]) for call in db.execute.call_args_list]
     assert "LIMIT" in statements[0]
-    assert "session_events.content" not in statements[0]
-    assert "session_events.tool_output" not in statements[0]
+    assert "length(session_events.content)" in statements[0]
+    assert "returned_characters" in statements[0]
+    assert "json_typeof" in statements[0]
     assert "sessions.updated_at BETWEEN" in statements[3]
     assert "usage_calls.agent_id" in statements[2]
     # Execute the actual aggregate queries against an isolated in-memory DB:
@@ -207,11 +210,40 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
                 input_tokens INT, cached_input_tokens INT, cache_write_tokens INT,
                 output_tokens INT, occurred_at TEXT);
         """)
+        sql.execute("""CREATE TABLE session_events (
+            id TEXT, session_id TEXT, turn INT, sequence INT, event_type TEXT, call_id TEXT,
+            tool_name TEXT, tool_input JSON, usage JSON, duration_ms INT,
+            source_timestamp TEXT, created_at TEXT, content TEXT, tool_output JSON
+        )""")
+        def json_typeof(value):
+            parsed = json.loads(value) if value is not None else None
+            return "string" if isinstance(parsed, str) else "object" if isinstance(parsed, dict) else "null"
+        sql.create_function("json_typeof", 1, json_typeof)
         timestamp = "2026-10-22 11:59:00.000000"
+        for index, (content, output) in enumerate([
+            ("same", {"output": "same"}),
+            (None, {"output": ""}),
+            (None, {"stdout": "é", "stderr": "bad"}),
+            (None, {"output": {"image": "opaque"}}),
+            (None, {"content": "claude text"}),
+        ]):
+            sql.execute("INSERT INTO session_events VALUES (?, 's', 1, ?, 'tool_result', ?, NULL, NULL, NULL, 0, ?, ?, ?, ?)",
+                        (str(index), index, str(index), timestamp, timestamp, content, json.dumps(output)))
+        event_query = db.execute.call_args_list[0].args[0]
+        compiled = str(event_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
+        cursor = sql.execute(compiled)
+        extracted = [dict(zip([column[0] for column in cursor.description], row, strict=True)) for row in cursor.fetchall()]
+        assert [row["returned_characters"] for row in extracted] == [4, 0, 4]
+        assert "content" not in extracted[0] and "tool_output" not in extracted[0]
+        # The query is capped at three by this test. Exercise the remaining shapes separately.
+        compiled = str(event_query.limit(10).compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
+        cursor = sql.execute(compiled)
+        extracted = [dict(zip([column[0] for column in cursor.description], row, strict=True)) for row in cursor.fetchall()]
+        assert [row["returned_characters"] for row in extracted] == [4, 0, 4, None, 11]
         sql.execute("INSERT INTO cost_logs VALUES (?, 10, 20, 30, 40, ?)", ("cached", timestamp))
         cost_query = db.execute.call_args_list[1].args[0]
         compiled = str(cost_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
-        assert sql.execute(compiled).fetchall() == [("cached", 80, 20, 1)]
+        assert sql.execute(compiled).fetchall() == [("cached", 80, 20, 1, 30, 40)]
         sql.executemany("INSERT INTO sessions VALUES (?, ?, ?)", [
             ("claude-native", "anthropic", "claude_code"),
             ("claude-legacy", "openai", "claude_code"),
@@ -226,9 +258,10 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
         ])
         ledger_query = db.execute.call_args_list[2].args[0]
         compiled = str(ledger_query.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))
-        assert sorted(sql.execute(compiled).fetchall()) == [
-            ("claude-legacy", 60, 40, 1), ("claude-native", 60, 40, 1), ("codex-child", 60, 40, 1),
-        ]
+        assert set(sql.execute(compiled).fetchall()) == {
+            ("claude-legacy", 60, 40, 1, 20, 30), ("claude-native", 60, 40, 1, 20, 30), ("codex-child", 60, 40, 1, 20, 30),
+            (None, 60, 40, 1, 20, 30),
+        }
 
 
 def test_orphan_result_and_no_call_id_runtime_keep_unknown_time_visible():
@@ -253,3 +286,63 @@ def test_repeat_projects_and_task_drills_are_source_backed_bounded_and_counted()
     assert result["tools_sampled"] == 2
     assert result["tools_missing_duration"] == 0
     assert result["unlinked_sessions"] == 1
+
+
+def test_recorded_zero_duration_is_known_zero_not_missing():
+    result = snapshot([
+        event(call="zero"), event("tool_result", call="zero", duration_ms=0, returned_characters=0),
+        event(call="missing"), event("tool_result", call="missing"),
+        event(call="bad"), event("tool_result", call="bad", duration_ms=-1),
+    ])
+    assert result["tools_sampled"] == 3
+    assert result["tools_missing_duration"] == 2
+    assert result["tool_time"]["denominator_seconds"] == 0
+    assert result["transcript"]["calls_with_returned_text"] == 1
+
+
+def test_transcript_estimate_uses_actual_return_lengths_and_deduplicates_wrappers():
+    private = "private-returned-text"
+    result = snapshot([
+        event(call="wrapper", tool_name="exec", tool_input={"raw": private}),
+        event("tool_result", call="wrapper", returned_characters=9999),
+        event(call="native", tool_input={"command": "st list", "wrapper_candidate_call_id": "wrapper", "wrapper_correlation": "nested_command_digest"}),
+        event("tool_result", call="native", returned_characters=100),
+        event(call="edit", tool_name="apply_patch", tool_input={"raw": "patch", "format": "opaque"}),
+        event("tool_result", call="edit", returned_characters=0),
+        event("tool_result", call="orphan", tool_input=None, returned_characters=40),
+    ])
+    transcript = result["transcript"]
+    assert transcript["argument_characters"] == len('{"command":"st list"}') + len('patch')
+    assert transcript["returned_characters"] == 140
+    assert transcript["characters"] == transcript["argument_characters"] + 140
+    assert transcript["calls_with_returned_text"] == 3
+    assert buckets(transcript["breakdown"], "characters") == {
+        "administration": len('{"command":"st list"}') + 100, "substantive": 5, "unknown": 40,
+    }
+    assert result["wrappers_excluded"] == 1
+    assert private not in str(result)
+    assert result["tokens"]["denominator"] == 0
+
+
+def test_native_partitions_global_unmatched_coverage_and_rankings_reconcile():
+    sessions = [Row(id="s", project_id="p1", provider="codex"), Row(id="old", project_id="p2", provider="anthropic")]
+    result = snapshot([
+        event(), event("tool_result", returned_characters=500),
+    ], ledger=[
+        Row(session_id="s", input_tokens=Decimal("1000"), output_tokens=20, cache_read_tokens=800, cache_write_tokens=0, calls=1),
+        Row(session_id="old", input_tokens=2000, output_tokens=100, cache_read_tokens=1500, cache_write_tokens=200, calls=2),
+        Row(session_id=None, input_tokens=100, output_tokens=10, cache_read_tokens=50, cache_write_tokens=0, calls=1),
+    ], sessions=sessions, bindings=[Row(session_id="s", project_id="p1", task_id="t")], limit=1)
+    assert result["tokens"]["denominator"] == 3230
+    assert result["usage"] == {"input_tokens": 3100, "output_tokens": 130, "cache_read_tokens": 2350, "cache_write_tokens": 200, "cache_detail_input_tokens": 3100}
+    assert result["unmatched_accounting_tokens"] == 110
+    assert result["unmatched_accounting_calls"] == 1
+    assert result["session_rankings_total"] == 2
+    assert result["session_rankings"][0]["session_id"] == "old"
+    assert result["project_rankings_total"] == 2
+    assert result["project_rankings"][0]["project_id"] == "p2"
+    task = result["task_rollups"][0]
+    assert task["tokens"] == 1020
+    assert task["usage"]["cache_read_tokens"] == 800
+    assert task["transcript"] == result["transcript"]
+    assert result["unlinked_tokens"] == 2210

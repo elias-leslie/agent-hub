@@ -1,4 +1,24 @@
-import type { ActivityCost } from '@/lib/api/activity-cost'
+import type { ActivityCost, ActivityTranscript } from '@/lib/api/activity-cost'
+
+const usage = {
+  input_tokens: 1000,
+  output_tokens: 200,
+  cache_read_tokens: 800,
+  cache_write_tokens: 20,
+  cache_detail_input_tokens: 1000,
+}
+const transcript: ActivityTranscript = {
+  characters: 400,
+  argument_characters: 100,
+  returned_characters: 300,
+  calls_with_returned_text: 7,
+  calls_missing_returned_text: 3,
+  breakdown: [
+    { category: 'substantive', characters: 100, share: 0.25 },
+    { category: 'administration', characters: 200, share: 0.5 },
+    { category: 'unknown', characters: 100, share: 0.25 },
+  ],
+}
 
 export const activityFixture: ActivityCost = {
   window_start: '2026-10-21T12:00:00Z',
@@ -13,7 +33,39 @@ export const activityFixture: ActivityCost = {
   unlinked_sessions: 3,
   unlinked_tokens: 900,
   unlinked_tool_seconds: 75,
-  tokens: { denominator: 1200 },
+  tokens: {
+    denominator: 1200,
+    unclassified_share: 1,
+    sources: [{ source: 'usage_calls', sessions: 3, tokens: 1200 }],
+  },
+  usage,
+  transcript,
+  wrappers_excluded: 2,
+  unmatched_accounting_tokens: 0,
+  unmatched_accounting_calls: 0,
+  project_rankings: [
+    {
+      project_id: 'project/one',
+      sessions: 4,
+      missing_usage_sessions: 1,
+      tokens: 1200,
+      usage,
+      transcript,
+    },
+  ],
+  project_rankings_total: 1,
+  session_rankings: [
+    {
+      project_id: 'project/one',
+      session_id: 's&1',
+      provider: 'codex',
+      usage_source: 'usage_calls',
+      tokens: 1200,
+      usage,
+      transcript,
+    },
+  ],
+  session_rankings_total: 4,
   tool_time: {
     denominator_seconds: 100,
     explicit_wait_seconds: 10,
@@ -47,6 +99,9 @@ export const activityFixture: ActivityCost = {
     {
       project_id: 'project/one',
       task_id: 'task-real',
+      missing_usage_sessions: 0,
+      usage,
+      transcript,
       sessions: 1,
       tokens: 300,
       sample_session_id: 's&1',

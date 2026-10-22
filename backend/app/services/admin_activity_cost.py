@@ -9,7 +9,6 @@ from __future__ import annotations
 import shlex
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -17,6 +16,8 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall
+from app.services.activity_accounting import argument_characters, transcript_view, usage_partitions
+from app.services.activity_accounting import number as _number
 
 EVENT_LIMIT = 20_000
 CATEGORIES = ("substantive", "necessary_support", "administration", "mixed", "unknown")
@@ -92,14 +93,6 @@ def _tool_family(event: Any) -> tuple[str, str]:
     if tool in {"sleep", "wait", "wait_agent"} or (tool == "write_stdin" and not data.get("chars")):
         return "explicit_wait", "wait"
     return "unknown", "unknown"
-
-
-def _number(value: Any) -> int:
-    # PostgreSQL SUM(bigint) is NUMERIC, returned as Decimal by asyncpg.
-    # Keep exact integer ledger sums instead of silently presenting zero usage.
-    if isinstance(value, Decimal) and value.is_finite() and value >= 0 and value == value.to_integral_value():
-        return int(value)
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 def _token_view(counts: dict[str, int], sources: list[dict] | None = None) -> dict:
@@ -181,20 +174,28 @@ def summarize_activity_cost(
     intervals: dict[str, list] = defaultdict(list)
     patterns: dict[str, dict] = {}
     missing_duration = 0
+    transcript_rows: dict[str, list[dict]] = defaultdict(list)
     for key, tool in tools.items():
         family, category = _tool_family(tool)
         turn_categories[(tool.session_id, tool.turn)].add("unknown" if category == "wait" else category)
         result = results.get(key)
-        seconds = _number(result.duration_ms if result is not None else tool.duration_ms) / 1000
+        duration = result.duration_ms if result is not None else tool.duration_ms
+        valid_duration = isinstance(duration, int) and not isinstance(duration, bool) and duration >= 0
+        seconds = _number(duration) / 1000
         end_event = result or tool
         timestamp = end_event.source_timestamp or end_event.created_at
-        measured = seconds > 0 and isinstance(timestamp, datetime)
+        measured = valid_duration and isinstance(timestamp, datetime)
         if measured:
             end = min(timestamp.astimezone(UTC), now)
             start = max(timestamp.astimezone(UTC) - timedelta(seconds=seconds), cutoff)
             intervals[tool.session_id].append((start, end, category))
         else:
             missing_duration += 1
+        returned = getattr(result, "returned_characters", None) if result is not None else None
+        transcript_rows[tool.session_id].append({
+            "category": category, "argument_characters": argument_characters(tool),
+            "returned_characters": _number(returned), "has_returned_text": returned is not None,
+        })
         if category in {"administration", "necessary_support"}:
             pattern = patterns.setdefault(family, {"family": family, "category": "administration", "calls": 0, "session_ids": set(), "intervals": defaultdict(list), "projects": {}})
             pattern["calls"] += 1
@@ -211,6 +212,7 @@ def summarize_activity_cost(
             if measured:
                 pattern["intervals"][tool.session_id].append((start, end, category))
 
+    response_usage: dict[str, dict] = defaultdict(lambda: dict.fromkeys(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens"), 0))
     response_counts: dict[str, dict[str, int]] = defaultdict(lambda: dict.fromkeys(CATEGORIES, 0))
     seen_responses: set[tuple[str, str]] = set()
     native_ids: dict[tuple[str, int], set[str]] = defaultdict(set)
@@ -232,6 +234,12 @@ def summarize_activity_cost(
         if key in seen_responses:
             continue
         seen_responses.add(key)
+        response_usage[event.session_id]["input_tokens"] += usage["input_tokens"]
+        response_usage[event.session_id]["output_tokens"] += usage["output_tokens"]
+        cache = usage.get("cached_input_tokens")
+        if isinstance(cache, int) and not isinstance(cache, bool) and 0 <= cache <= usage["input_tokens"]:
+            response_usage[event.session_id]["cache_read_tokens"] += cache
+            response_usage[event.session_id]["cache_detail_input_tokens"] += usage["input_tokens"]
         category = _combined(turn_categories[(event.session_id, event.turn)])
         if len(native_ids[(event.session_id, event.turn)]) > 1:
             category = "mixed"
@@ -255,11 +263,14 @@ def summarize_activity_cost(
         source = available[0] if available else "missing"
         overlaps += max(len(available) - 1, 0)
         counts = dict.fromkeys(CATEGORIES, 0)
+        partitions = dict.fromkeys(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens"), 0)
         if source in {"cost_logs", "usage_calls"}:
             row = costs[sid] if source == "cost_logs" else ledger[sid]
-            counts["unknown"] = _number(row.input_tokens) + _number(row.output_tokens)
+            partitions = usage_partitions(row)
+            counts["unknown"] = partitions["input_tokens"] + partitions["output_tokens"]
         elif source == "response_events":
             counts = observed
+            partitions = response_usage[sid]
         else:
             missing_usage += 1
         amount = sum(counts.values())
@@ -267,7 +278,7 @@ def summarize_activity_cost(
         coverage["sessions"] += 1
         coverage["tokens"] += amount
         occupancy = _occupancy(intervals[sid])
-        per_session[sid] = {"counts": counts, "seconds": occupancy}
+        per_session[sid] = {"source": source, "counts": counts, "seconds": occupancy, "usage": partitions, "transcript": transcript_view(transcript_rows[sid])}
         for category in CATEGORIES:
             tokens[category] += counts[category]
         for category, duration in occupancy.items():
@@ -289,9 +300,13 @@ def summarize_activity_cost(
             unlinked_tool_seconds += sum(metrics["seconds"].get(category, 0) for category in CATEGORIES)
             continue
         project, task = next(iter(links))
-        row = tasks.setdefault((project, task), {"project_id": project, "task_id": task, "sample_session_id": sid, "sessions": 0, "tokens": 0, "counts": dict.fromkeys(CATEGORIES, 0), "seconds": defaultdict(float)})
+        row = tasks.setdefault((project, task), {"project_id": project, "task_id": task, "sample_session_id": sid, "sessions": 0, "tokens": 0, "counts": dict.fromkeys(CATEGORIES, 0), "seconds": defaultdict(float), "missing_usage_sessions": 0, "transcript_rows": [], "usage": dict.fromkeys(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens"), 0)})
         row["sessions"] += 1
+        row["missing_usage_sessions"] += metrics["source"] == "missing"
         row["tokens"] += sum(metrics["counts"].values())
+        row["transcript_rows"].extend(transcript_rows[sid])
+        for field, value in metrics["usage"].items():
+            row["usage"][field] += value
         for category, amount in metrics["counts"].items():
             row["counts"][category] += amount
         for category, amount in metrics["seconds"].items():
@@ -307,22 +322,61 @@ def summarize_activity_cost(
 
     repeats = [{"family": family, "category": row["category"], "calls": row["calls"], "sessions": len(row["session_ids"]), "measured_tool_seconds": round(sum(sum(_occupancy(spans).values()) for spans in row["intervals"].values()), 3), "avoidable": None, "projects": project_rows(row), "projects_total": len(row["projects"])} for family, row in patterns.items() if row["calls"] > 1]
     repeats.sort(key=lambda row: (row["measured_tool_seconds"], row["calls"]), reverse=True)
-    task_rows = [{"sample_session_id": row["sample_session_id"], "project_id": row["project_id"], "task_id": row["task_id"], "sessions": row["sessions"], "tokens": row["tokens"], "token_breakdown": _token_view(row["counts"])["breakdown"], "tool_time": _time_view(row["seconds"])} for row in tasks.values()]
+    task_rows = [{"sample_session_id": row["sample_session_id"], "project_id": row["project_id"], "task_id": row["task_id"], "sessions": row["sessions"], "tokens": row["tokens"], "token_breakdown": _token_view(row["counts"])["breakdown"], "missing_usage_sessions": row["missing_usage_sessions"], "usage": row["usage"], "transcript": transcript_view(row["transcript_rows"]), "tool_time": _time_view(row["seconds"])} for row in tasks.values()]
     task_rows.sort(key=lambda row: (row["tokens"], row["tool_time"]["denominator_seconds"]), reverse=True)
+    session_rows = [{"session_id": sid, "project_id": by_session[sid].project_id, "provider": by_session[sid].provider,
+                     "tokens": sum(metrics["counts"].values()), "usage_source": metrics["source"], "usage": metrics["usage"], "transcript": metrics["transcript"]}
+                    for sid, metrics in per_session.items()]
+    session_rows.sort(key=lambda row: (row["tokens"], row["session_id"]), reverse=True)
+    projects: dict[str, dict] = {}
+    for sid, metrics in per_session.items():
+        project = by_session[sid].project_id
+        row = projects.setdefault(project, {"project_id": project, "sessions": 0, "tokens": 0, "missing_usage_sessions": 0, "usage": dict.fromkeys(metrics["usage"], 0), "transcript_rows": []})
+        row["sessions"] += 1
+        row["missing_usage_sessions"] += metrics["source"] == "missing"
+        row["tokens"] += sum(metrics["counts"].values())
+        row["transcript_rows"].extend(transcript_rows[sid])
+        for field, value in metrics["usage"].items():
+            row["usage"][field] += value
+    project_rankings = [{key: value for key, value in row.items() if key != "transcript_rows"} | {"transcript": transcript_view(row["transcript_rows"])} for row in projects.values()]
+    project_rankings.sort(key=lambda row: (row["tokens"], row["project_id"]), reverse=True)
+    unmatched_rows = [("cost_logs", row) for row in cost_rows if row.session_id not in by_session] + [("usage_calls", row) for row in usage_rows if row.session_id not in by_session]
+    unmatched_usage = dict.fromkeys(("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens"), 0)
+    unmatched_calls = 0
+    for source, row in unmatched_rows:
+        partitions = usage_partitions(row)
+        amount = partitions["input_tokens"] + partitions["output_tokens"]
+        tokens["unknown"] += amount
+        unlinked_tokens += amount
+        unmatched_calls += _number(row.calls)
+        coverage = token_sources.setdefault(source, {"source": source, "sessions": 0, "tokens": 0})
+        coverage["tokens"] += amount
+        for field, value in partitions.items():
+            unmatched_usage[field] += value
+    usage_totals = {field: sum(metrics["usage"][field] for metrics in per_session.values()) + unmatched_usage[field] for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cache_detail_input_tokens")}
+    transcript = transcript_view([row for rows in transcript_rows.values() for row in rows])
     tool_time = _time_view(seconds)
     shares = {row["category"]: row["share"] for row in tool_time["breakdown"]}
     summary = "No measured tool-runtime intervals in this window."
     if tool_time["denominator_seconds"]:
         summary = f"Of {tool_time['denominator_seconds']:g} measured active tool seconds: {shares['substantive']:.0%} substantive, {shares['administration']:.0%} administration including support, {shares['unknown']:.0%} unknown including mixed. Thinking and idle time are unmeasured."
     return {
-        "scope": "All Hub sessions created/updated or with observed events/accounting in the window, across providers. Sessions without usage remain visible.",
+        "scope": "Windowed recorded usage across providers, including accounting without a matching Hub session. Hub sessions created/updated or with events/accounting in the window remain visible even without usage. Rankings cover Hub-linked usage only.",
         "window_start": cutoff.isoformat(), "window_end": now.isoformat(),
         "sessions": len(by_session), "events_sampled": len(events), "event_limit": EVENT_LIMIT,
         "events_truncated": truncated, "missing_usage_sessions": missing_usage,
         "unlinked_sessions": unlinked, "overlapping_sources_excluded": overlaps,
         "unlinked_tokens": unlinked_tokens, "unlinked_tool_seconds": round(unlinked_tool_seconds, 3),
         "tokens": _token_view(tokens, list(token_sources.values())),
-        "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
+        "usage": usage_totals,
+        "unmatched_accounting_tokens": unmatched_usage["input_tokens"] + unmatched_usage["output_tokens"],
+        "unmatched_accounting_calls": unmatched_calls,
+        "transcript": transcript,
+        "transcript_basis": "Estimate of sampled tool text added to history: normalized call arguments plus retained returned text, once per call. Exact nested-command wrapper correlations are suppressed. Characters are not model tokens, resident context, or causal spend. Excludes prose, system instructions, images, protocol framing and unretained output; compaction and repeated reads are not modeled.",
+        "wrappers_excluded": len(suppressed & {(event.session_id, event.call_id) for event in events if event.event_type in {"tool_use", "tool_result"}}),
+        "project_rankings": project_rankings[:limit], "project_rankings_total": len(project_rankings),
+        "session_rankings": session_rows[:limit], "session_rankings_total": len(session_rows),
+        "token_basis": "One source per session, in order: cost_logs, matched usage_calls, response events. Unmatched ledger calls add to unknown globally and are excluded from Hub rankings. Ledger tokens remain unknown without a stable turn/response join. Ledger input adds disjoint cache-read/write tokens; native response input already includes cache and output includes reasoning.",
         "response_tokens": _token_view(responses),
         "response_token_basis": "Separate overlapping evidence, never added to the primary denominator: unique response IDs, scope=response, input+output (Codex input includes cache; output includes reasoning). Category describes all observed tools in the normalized user turn, not exact per-command cost or the intent of every token.",
         "tool_time": tool_time, "tools_missing_duration": missing_duration, "tools_sampled": len(tools),
@@ -342,15 +396,28 @@ def summarize_activity_cost(
 async def build_activity_cost_snapshot(db: AsyncSession, *, cutoff: datetime, now: datetime, limit: int) -> dict[str, Any]:
     """Bound event memory, aggregate ledgers in SQL, and include old-but-active sessions."""
     event_time = func.coalesce(SessionEvent.source_timestamp, SessionEvent.created_at)
+    output = SessionEvent.tool_output
+
+    def text_length(key: str):
+        value = output[key]
+        return case((func.json_typeof(value) == "string", func.length(value.as_string())), else_=None)
+
+    returned_characters = func.coalesce(
+        func.length(SessionEvent.content), text_length("output"), text_length("content"),
+        # Native command records retain separate stdout/stderr. Empty text is known zero.
+        case((or_(text_length("stdout").is_not(None), text_length("stderr").is_not(None)),
+              func.coalesce(text_length("stdout"), 0) + func.coalesce(text_length("stderr"), 0)), else_=None),
+    ).label("returned_characters")
     events = (await db.execute(select(
         SessionEvent.id, SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence,
         SessionEvent.event_type, SessionEvent.call_id, SessionEvent.tool_name, SessionEvent.tool_input,
-        SessionEvent.usage, SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at,
+        returned_characters, SessionEvent.usage, SessionEvent.duration_ms, SessionEvent.source_timestamp, SessionEvent.created_at,
     ).where(event_time >= cutoff, event_time <= now, SessionEvent.event_type.in_(["tool_use", "tool_result", "usage"]))
         .order_by(event_time.desc(), SessionEvent.id).limit(EVENT_LIMIT + 1))).all()
     cost_rows = (await db.execute(select(
         CostLog.session_id, func.sum(CostLog.input_tokens + CostLog.cache_read_tokens + CostLog.cache_write_tokens).label("input_tokens"),
         func.sum(CostLog.output_tokens).label("output_tokens"), func.count().label("calls"),
+        func.sum(CostLog.cache_read_tokens).label("cache_read_tokens"), func.sum(CostLog.cache_write_tokens).label("cache_write_tokens"),
     ).where(CostLog.created_at >= cutoff, CostLog.created_at <= now).group_by(CostLog.session_id))).all()
     # Collector root/agent identity is explicit. A root's child usage must never also count in its root.
     native_id = case((UsageCall.agent_id != "", UsageCall.agent_id), else_=UsageCall.session_id)
@@ -366,7 +433,8 @@ async def build_activity_cost_snapshot(db: AsyncSession, *, cutoff: datetime, no
         Session.id.label("session_id"),
         func.sum(UsageCall.input_tokens + UsageCall.cached_input_tokens + UsageCall.cache_write_tokens).label("input_tokens"),
         func.sum(UsageCall.output_tokens).label("output_tokens"), func.count().label("calls"),
-    ).select_from(UsageCall).join(Session, (Session.id == native_id) & (native_provider == UsageCall.provider))
+        func.sum(UsageCall.cached_input_tokens).label("cache_read_tokens"), func.sum(UsageCall.cache_write_tokens).label("cache_write_tokens"),
+    ).select_from(UsageCall).outerjoin(Session, (Session.id == native_id) & (native_provider == UsageCall.provider))
         .where(UsageCall.occurred_at >= cutoff, UsageCall.occurred_at <= now).group_by(Session.id))).all()
     ids = {row.session_id for row in [*events[:EVENT_LIMIT], *cost_rows, *usage_rows]}
     sessions = (await db.execute(select(Session.id, Session.project_id, Session.provider).where(or_(

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Ghost, Repeat2, Wallet } from 'lucide-react'
+import { AlertTriangle, Ghost, Repeat2 } from 'lucide-react'
 import type { SessionHotspots } from '@/lib/api'
 
 interface SessionHotspotsPanelProps {
@@ -45,8 +45,8 @@ export function SessionHotspotsPanel({
       </div>
 
       {isLoading || !hotspots ? (
-        <div className="grid gap-4 lg:grid-cols-4">
-          {[...Array(4)].map((_, index) => (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {[...Array(3)].map((_, index) => (
             <div
               key={index}
               className="h-28 animate-pulse rounded-xl bg-slate-800/50"
@@ -55,21 +55,7 @@ export function SessionHotspotsPanel({
         </div>
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
-              <div className="flex items-center gap-2 text-slate-400">
-                <Wallet className="h-4 w-4 text-emerald-400" />
-                <span className="text-sm">Window Cost</span>
-              </div>
-              <div className="mt-3 text-3xl font-bold text-slate-100">
-                {formatCost(hotspots.totals.total_cost_usd)}
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                {formatTokens(hotspots.totals.input_tokens)} in /{' '}
-                {formatTokens(hotspots.totals.output_tokens)} out
-              </p>
-            </div>
-
+          <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-5">
               <div className="flex items-center gap-2 text-amber-300">
                 <Repeat2 className="h-4 w-4" />

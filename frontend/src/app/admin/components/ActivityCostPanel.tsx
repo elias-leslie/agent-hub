@@ -6,6 +6,7 @@ import {
   type ActivityCost,
   activitySessionsHref,
 } from '@/lib/api/activity-cost'
+import { ActivityAccounting } from './ActivityAccounting'
 
 const LABELS: Record<ActivityCategory, string> = {
   substantive: 'Substantive',
@@ -79,6 +80,10 @@ export function ActivityCostPanel({
         )
       ) : (
         <>
+          <ActivityAccounting activity={activity} />
+          <h3 className="text-sm font-semibold text-slate-100">
+            Observed tool time
+          </h3>
           <p className="text-sm text-slate-300">
             Measured tool time:{' '}
             <strong>
@@ -117,10 +122,9 @@ export function ActivityCostPanel({
             </dl>
           )}
           <p className="section-copy">
-            Admin includes necessary checks, commits and builds. Repetition
-            alone does not show waste. Thinking, idle time and unrecorded work
-            are unmeasured; these are tool-time shares, not token, spend or
-            total-work shares.
+            Repetition alone does not show waste. Thinking, idle time and
+            unrecorded work are unmeasured; these are tool-time shares, not
+            token, spend or total-work shares.
           </p>
           <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-4 text-sm text-slate-300 space-y-2">
             <h3 className="font-semibold text-slate-100">Coverage and gaps</h3>
@@ -145,7 +149,8 @@ export function ActivityCostPanel({
               reliable task link:{' '}
               {activitySeconds(activity.unlinked_tool_seconds)} measured tool
               time and {activity.unlinked_tokens.toLocaleString()} recorded
-              tokens remain unlinked.
+              tokens remain unlinked, including accounting without a Hub
+              session.
             </p>
             <p>
               {activity.missing_usage_sessions.toLocaleString()} /{' '}
@@ -245,10 +250,15 @@ export function ActivityCostPanel({
                     {row.project_id} · {row.task_id}
                   </p>
                   <p className="text-slate-300">
-                    {row.sessions.toLocaleString()} linked sessions ·{' '}
-                    {activitySeconds(row.tool_time.denominator_seconds)}{' '}
+                    {row.sessions.toLocaleString()} linked sessions (
+                    {row.missing_usage_sessions.toLocaleString()} without usage)
+                    · {activitySeconds(row.tool_time.denominator_seconds)}{' '}
                     measured tool time · {row.tokens.toLocaleString()} recorded
-                    tokens
+                    tokens ·{' '}
+                    {row.transcript.breakdown
+                      .find((part) => part.category === 'administration')
+                      ?.characters.toLocaleString()}{' '}
+                    admin transcript characters
                   </p>
                   <Link
                     href={activitySessionsHref(
