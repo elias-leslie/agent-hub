@@ -100,10 +100,12 @@ async def upsert_session(
     await _validate_project_id(request.project_id)
     _validate_external_id(request.external_id)
 
+    incoming_metadata = _merge_metadata({}, request.provider_metadata)
     if request.work_role is not None:
-        request = request.model_copy(update={"provider_metadata": _merge_metadata(
-            request.provider_metadata, {"work_role": request.work_role.model_dump(exclude_none=True)},
-        )})
+        incoming_metadata = _merge_metadata(incoming_metadata, {
+            "work_role": request.work_role.model_dump(exclude_none=True),
+        })
+    request = request.model_copy(update={"provider_metadata": incoming_metadata})
     existing, is_existing = await get_or_create_session(db, request.session_id)
     if is_existing and existing is not None and existing.project_id != request.project_id:
         raise SessionIngestionConflict(

@@ -551,6 +551,14 @@ async def test_work_role_is_fixed_across_upsert_resume_heartbeat_and_conflict(
         conflict = await api.post(path, json=update)
         assert conflict.status_code == 409, conflict.text
         assert conflict.json()["error"] == "session_work_role_immutable"
+    nested = {key: value for key, value in payload.items() if key != "work_role"}
+    nested["session_id"] = "nested-role"
+    nested["provider_metadata"] = {"work_role": payload["work_role"], "cwd": "/fixture"}
+    response = await api.post("/api/session-ingestion/sessions/upsert", json=nested)
+    assert response.status_code == 200, response.text
+    assert response.json()["session"]["work_role"]["id"] == "implementation"
+    assert response.json()["session"]["work_role"]["source"] == "explicit-launch"
+    assert response.json()["session"]["work_role"]["declared_at"]
     await pg_db.rollback()  # conflict paths leave the transaction open, without writes
 
 
