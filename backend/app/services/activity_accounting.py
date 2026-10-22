@@ -21,8 +21,9 @@ def returned_characters_expression(event):
         value = event.tool_output[key]
         return case((func.jsonb_typeof(func.to_jsonb(value)) == "string", func.length(value.as_string())), else_=None)
 
+    # Pi's native adapter stores its rendered result text under "text".
     return func.coalesce(
-        length("result"), length("content"), length("output"), length("message"),
+        length("result"), length("content"), length("output"), length("text"), length("message"),
         case((or_(length("stdout").is_not(None), length("stderr").is_not(None)),
               func.coalesce(length("stdout"), 0) + func.coalesce(length("stderr"), 0)), else_=None),
         func.length(event.content),

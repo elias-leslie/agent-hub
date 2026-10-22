@@ -689,3 +689,24 @@ async def test_context_counts_retained_summary_without_claiming_full_output(
     # Coverage means retained text exists; this summary is not the full output.
     assert context["tools_sampled"] == 1 and context["tools_missing_output"] == 0
     assert context["returned_tokens_estimate"] == 500
+
+
+@pytest.mark.parametrize("retained,expected", [("", 0), ("private-fixture" * 40, 150)])
+async def test_pi_tool_result_text_counts_without_returning_its_body(
+    api: httpx.AsyncClient, pg_db: AsyncSession, retained: str, expected: int,
+) -> None:
+    await add_session(pg_db, "pi-text", minutes=1, session_type="pi")
+    await add_event(pg_db, "pi-text", 1, 1, "tool_use", call_id="call",
+                    tool_name="bash", tool_input={"command": "st context fixture"})
+    await add_event(pg_db, "pi-text", 1, 2, "tool_result", call_id="call",
+                    tool_output={"text": retained, "isError": False})
+    params = {"accounting_start": BASE.isoformat(), "accounting_end": (BASE + timedelta(hours=1)).isoformat()}
+    response = await api.get("/api/sessions", params=params)
+    assert response.status_code == 200, response.text
+    context = response.json()["sessions"][0]["activity_accounting"]["context_split"]
+    assert context["tools_sampled"] == 1 and context["tools_missing_output"] == 0
+    assert context["returned_tokens_estimate"] == expected
+    activity = await api.get("/api/admin/session-efficiency", params=params)
+    assert activity.status_code == 200, activity.text
+    assert activity.json()["context_split"] == context
+    assert "private-fixture" not in response.text + activity.text
