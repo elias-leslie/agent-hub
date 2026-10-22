@@ -35,6 +35,7 @@ if sys.argv[1:3] == ['session','export']:
     assert result.returncode == 0, result.stderr
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     assert calls[0][:2] == ['api', 'session.create']
+    assert json.loads(calls[0][-1])['permissions'] == [{'action': '*', 'resource': '*', 'effect': 'allow'}]
     assert calls[1][:3] == ['run', '--session', 'ses_native_allocated']
     assert '--standalone' not in calls[1]
     assert calls[1][-1] == 'hello'

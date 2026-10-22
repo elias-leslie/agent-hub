@@ -1,6 +1,7 @@
 """OpenCode snapshots retain native evidence without promoting selection to execution."""
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -97,3 +98,75 @@ async def test_child_export_does_not_double_count_inherited_history():
     payload['info']['parentID'] = 'ses_parent'
     with pytest.raises(ValueError, match='child and fork accounting'):
         await sync_opencode_export(AsyncMock(), payload)
+
+
+@pytest.mark.asyncio
+async def test_retirement_is_exact_and_idempotent(monkeypatch):
+    from app.services.session_ingestion import opencode_sync
+    db = AsyncMock()
+    session = MagicMock(id='ses_fixture', status='active')
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [session]
+    db.execute.return_value = result
+    native = AsyncMock(side_effect=[b'{}', b'{}', json.dumps(export()).encode()])
+    monkeypatch.setattr(opencode_sync, '_native_command', native)
+    async def sync(_db, payload, *, retired_by_tether=False):
+        assert retired_by_tether
+        assert payload['phase'] == 'shutdown'
+        assert payload['aico_session_id'] == 'aico-widget-12345678'
+        session.status = 'completed'
+    monkeypatch.setattr(opencode_sync, 'sync_opencode_export', sync)
+    first = await opencode_sync.retire_opencode_sessions(db, 'aico-widget-12345678')
+    assert first['closed_session_ids'] == ['ses_fixture']
+    assert native.call_args_list[0].args[:2] == ('api', 'session.interrupt')
+    assert native.call_args_list[-1].args == ('session', 'export', 'ses_fixture')
+    assert (await opencode_sync.retire_opencode_sessions(db, 'aico-widget-12345678'))['closed_session_ids'] == []
+    assert native.call_count == 3
+    with pytest.raises(ValueError, match='exact Tether'):
+        await opencode_sync.retire_opencode_sessions(db, 'another-owner')
+
+
+@pytest.mark.asyncio
+async def test_retirement_refuses_a_different_native_export(monkeypatch):
+    from app.services.session_ingestion import opencode_sync
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [MagicMock(id='ses_fixture', status='active')]
+    db.execute.return_value = result
+    monkeypatch.setattr(opencode_sync, '_native_command', AsyncMock(side_effect=[b'{}', b'{}', b'{"info":{"id":"ses_other"}}']))
+    sync = AsyncMock()
+    monkeypatch.setattr(opencode_sync, 'sync_opencode_export', sync)
+    with pytest.raises(ValueError, match='identity differs'):
+        await opencode_sync.retire_opencode_sessions(db, 'aico-widget-12345678')
+    sync.assert_not_called()
+
+
+def test_native_tool_content_and_duration_are_retained_without_rewriting_v1_events():
+    message = NativeMessage(id='msg_tool', type='assistant', time={'created': 1000, 'completed': 2000},
+        content=[{'type': 'tool', 'id': 'call', 'name': 'shell', 'state': {'status': 'completed',
+                  'input': {'command': 'printf fixture'}, 'content': [{'type': 'text', 'text': 'fixture'}],
+                  'metadata': {'exit': 0}}, 'time': {'ran': 1100, 'completed': 1200}}])
+    result = normalize_messages([message])[-1]
+    assert result.tool_output is not None
+    assert result.tool_output['content'] == [{'type': 'text', 'text': 'fixture'}]
+    assert result.duration_ms == 100
+    assert normalize_messages([message], event_version=1)[-1].tool_output == {'output': None, 'error': None}
+
+
+@pytest.mark.asyncio
+async def test_late_idle_snapshot_cannot_reopen_a_retired_tether_conversation(monkeypatch):
+    module = 'app.services.session_ingestion.opencode_sync'
+    session = MagicMock(id='ses_fixture', model='opencode/glm-5.3-flash-free', provider_metadata={
+        'harness': 'opencode', 'tether_retired': True, 'aico_session_id': 'aico-widget-12345678'})
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = session
+    db.execute.return_value = result
+    monkeypatch.setattr(module + '._resolve_canonical_project_id', AsyncMock(return_value='agent-hub'))
+    monkeypatch.setattr(module + '.upsert_session', AsyncMock(return_value=(session, None)))
+    monkeypatch.setattr(module + '.append_normalized_events', AsyncMock(return_value=MagicMock(events_appended=0, events_skipped=3)))
+    heartbeat = AsyncMock()
+    monkeypatch.setattr(module + '.heartbeat_session', heartbeat)
+    await sync_opencode_export(db, export())
+    assert heartbeat.call_args.args[2].status == 'completed'
+    assert heartbeat.call_args.args[2].phase == 'shutdown'

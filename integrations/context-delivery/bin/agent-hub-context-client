@@ -83,6 +83,10 @@ def _parser() -> argparse.ArgumentParser:
     sync_opencode = subparsers.add_parser("sync-opencode", help="Sync an OpenCode native export from stdin.")
     _common_arguments(sync_opencode)
 
+    retire = subparsers.add_parser("retire-opencode", help="Finalize an exactly retired Tether OpenCode session.")
+    _common_arguments(retire)
+    retire.add_argument("--aico-session", required=True)
+
     deliver = subparsers.add_parser("deliver", help="Deliver context and persist artifacts.")
     _common_arguments(deliver)
     deliver.add_argument(
@@ -817,6 +821,18 @@ async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any])
 
 
 async def _main(args: argparse.Namespace) -> int:
+    if args.command == "retire-opencode":
+        try:
+            cli = await _canonical_cli()
+            code, stdout, _stderr = await _run(cli, "retire-opencode", "--aico-session", args.aico_session)
+            if code:
+                sys.stderr.write("OpenCode retirement sync unavailable\n")
+            else:
+                sys.stdout.buffer.write(stdout)
+            return code
+        except Exception:
+            sys.stderr.write("OpenCode retirement sync unavailable\n")
+            return 2
     if args.command == "sync-opencode":
         try:
             payload = json.loads(sys.stdin.read(16 * 1024 * 1024 + 1))

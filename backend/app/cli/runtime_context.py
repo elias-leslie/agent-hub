@@ -21,6 +21,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("sync-opencode", help="Ingest an OpenCode native export from stdin.")
 
+    retire = subparsers.add_parser("retire-opencode", help="Finalize OpenCode sessions for an exactly retired Tether ownership ID.")
+    retire.add_argument("--aico-session", required=True)
+
     sync = subparsers.add_parser("sync-pi", help="Ingest a native Pi transcript without model calls.")
     for field in ("session", "transcript", "cwd", "provider", "model"):
         sync.add_argument("--" + field, required=True)
@@ -217,6 +220,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         except Exception:
             print("Native session work role registration unavailable", file=sys.stderr)
+            return 2
+    if args.command == "retire-opencode":
+        try:
+            from app.services.session_ingestion.opencode_sync import retire_opencode_sessions
+            async def run_retirement() -> dict:
+                async with async_session() as db:
+                    return await retire_opencode_sessions(db, args.aico_session)
+            print(json.dumps(asyncio.run(run_retirement())))
+            return 0
+        except Exception:
+            print("OpenCode retirement sync unavailable", file=sys.stderr)
             return 2
     if args.command == "sync-opencode":
         try:

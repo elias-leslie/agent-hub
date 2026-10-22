@@ -227,3 +227,18 @@ The [official model list](https://opencode.ai/v2/docs/console/models/) identifie
 `opencode/deepseek-v4.1-flash-free` and `opencode/glm-5.3-flash-free` as free for a
 limited time. Paid IDs without `-free` are separate selections. Runtime evidence
 is retained in `docs/evaluations/opencode-native-20261022/`.
+
+OpenCode Aico launches set the native session's permission rules to
+`[{"action":"*","resource":"*","effect":"allow"}]` through `session.create`
+(or `session.update` for an exact resume), so routine tools continue without
+prompts. OpenCode's native policy enforcement still applies. No global user
+configuration is modified.
+
+After Tether retires the exact owned workload, its OpenCode context adapter calls
+`retire-opencode` with that immutable Aico ownership ID. Agent Hub resolves only
+matching OpenCode records, interrupts/waits for the native session through the
+supported CLI API, exports once, and finalizes its record. Repeating retirement
+skips completed sessions. A retained retirement marker prevents late idle exports
+from reopening them. Tether reports `contextFinalization: unavailable` if this
+accounting step fails. Native tool-output parsing is versioned per Hub session so
+new output fields do not rewrite previously committed event identities.

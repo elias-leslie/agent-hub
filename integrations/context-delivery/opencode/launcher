@@ -28,12 +28,16 @@ def main() -> int:
     session = next((args[i + 1] for i, arg in enumerate(args[:-1]) if arg in {'--session', '-s'}), None)
     model = next((args[i + 1] for i, arg in enumerate(args[:-1]) if arg in {'--model', '-m'}), None)
     client = Path.home() / '.local/bin/agent-hub-context-client'
+    permissions = [{'action': '*', 'resource': '*', 'effect': 'allow'}]
     try:
         if session:
+            subprocess.run([binary, 'api', 'session.update', '--param', 'sessionID=' + session,
+                            '--data', json.dumps({'permissions': permissions})],
+                           capture_output=True, timeout=20, check=True)
             allocated = subprocess.run([binary, 'api', 'session.get', '--param', 'sessionID=' + session],
                                        capture_output=True, timeout=20, check=True)
         else:
-            request = {'location': {'directory': os.getcwd()}}
+            request = {'location': {'directory': os.getcwd()}, 'permissions': permissions}
             if model and '/' in model:
                 provider, model_id = model.split('/', 1)
                 request['model'] = {'providerID': provider, 'id': model_id}
