@@ -166,6 +166,7 @@ async def _create(db: AsyncSession, req: SessionRequest) -> SessionResult:
             current_branch=req.current_branch,
             cwd=req.working_dir,
             parent_session_id=req.parent_session_id,
+            provider_metadata={"harness": "agent_hub"},
         ),
     )
     _apply_trace_id(session, req.trace_id)

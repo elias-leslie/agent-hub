@@ -11,6 +11,18 @@ from app.api.complete.types import CompletionInternalResult
 from app.routing.resolution import apply_mention_override
 
 
+@pytest.mark.asyncio
+async def test_completion_session_declares_agent_hub_harness():
+    from app.api.complete.session_repo import SessionRequest, _create
+
+    session = SimpleNamespace(id="synthetic-session", provider_metadata={})
+    with patch("app.api.complete.session_repo.upsert_session", new=AsyncMock(return_value=(session, True))) as upsert:
+        await _create(AsyncMock(), SessionRequest(None, "portfolio-ai", "codex", "gpt-6-sol"))
+    call = upsert.await_args
+    assert call is not None
+    assert call.kwargs["request"].provider_metadata["harness"] == "agent_hub"
+
+
 def test_explicit_sdk_model_is_honored_without_prompt_directives():
     request = CompletionRequest(agent_slug="chat", project_id="portfolio-ai", model="gemini-3.8-flash", messages=[{"role": "user", "content": "hello"}])
     model, provider = apply_mention_override(request, "gemini-3.1-flash-lite-preview")
