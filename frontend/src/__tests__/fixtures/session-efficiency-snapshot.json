@@ -1083,6 +1083,10 @@
       "label": "Pi"
     },
     {
+      "id": "opencode",
+      "label": "OpenCode"
+    },
+    {
       "id": "unknown",
       "label": "Unknown"
     }

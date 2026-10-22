@@ -1,0 +1,87 @@
+{
+  "verified_at": "2026-10-22",
+  "cli_version": "2.1.3",
+  "tether_commit": "f1cd32d7d4557df076637969ecce06ae4c345874",
+  "agent_hub_commit": "218d695ac2dc2c1f11b9b3a99f35bdecfaa1fd9a",
+  "records": [
+    {
+      "widget_id": "7814484b",
+      "aico_session_id": "aico-widget-7814484b",
+      "native_session_id": "ses_e9a32f59bffeLzAjSovodPrTwt",
+      "requested_model": "opencode/deepseek-v4.1-flash-free",
+      "native_response_model": {
+        "id": "deepseek-v4.1-flash-free",
+        "providerID": "opencode",
+        "variant": "high"
+      },
+      "native_outcome": "succeeded",
+      "native_tokens": {
+        "input": 85,
+        "output": 8,
+        "reasoning": 0,
+        "cache": {
+          "read": 12800,
+          "write": 0
+        }
+      },
+      "native_cost_usd": 0,
+      "native_ui_elapsed_s": 5.6,
+      "context": {
+        "status": "ok",
+        "payload_hash": "acdc5385522ffc243d2092a64a68a7d58200eaefd908965b9fd1b30fd611d32b",
+        "rendered_chars": 19602,
+        "artifact": "/home/kasadis/.local/state/agent-hub/context-deliveries/opencode/agent-hub/ses_e9a32f59bffeLzAjSovodPrTwt/20261022T224843.552579Z-acdc5385522ffc24-4a491354.json"
+      },
+      "repeat_sync": {
+        "session_id": "ses_e9a32f59bffeLzAjSovodPrTwt",
+        "events_appended": 0,
+        "events_skipped": 3
+      },
+      "native_export_ms": 51.35,
+      "repeat_sync_ms": 2426.88
+    },
+    {
+      "widget_id": "90abd5cf",
+      "aico_session_id": "aico-widget-90abd5cf",
+      "native_session_id": "ses_e9a32e487ffehYT3F5I5qNJlHv",
+      "requested_model": "opencode/glm-5.3-flash-free",
+      "native_response_model": {
+        "id": "glm-5.3-flash-free",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "native_outcome": "succeeded",
+      "native_tokens": {
+        "input": 12474,
+        "output": 7,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "native_cost_usd": 0,
+      "native_ui_elapsed_s": 6.0,
+      "context": {
+        "status": "ok",
+        "payload_hash": "acdc5385522ffc243d2092a64a68a7d58200eaefd908965b9fd1b30fd611d32b",
+        "rendered_chars": 19602,
+        "artifact": "/home/kasadis/.local/state/agent-hub/context-deliveries/opencode/agent-hub/ses_e9a32e487ffehYT3F5I5qNJlHv/20261022T224843.554608Z-acdc5385522ffc24-1e5b3736.json"
+      },
+      "repeat_sync": {
+        "session_id": "ses_e9a32e487ffehYT3F5I5qNJlHv",
+        "events_appended": 0,
+        "events_skipped": 3
+      },
+      "native_export_ms": 53.4,
+      "repeat_sync_ms": 2424.24
+    }
+  ],
+  "one_shot_context_delivery_ms": 2300.79,
+  "credential_access": "native OpenCode authentication only; no credential values read by adapter",
+  "limitations": [
+    "Native response labels do not independently verify the upstream model.",
+    "Native child/fork accounting and crash catchup are unsupported.",
+    "Tether OpenCode activity state remains unknown; native UI and native session outcome are separate observations."
+  ]
+}
