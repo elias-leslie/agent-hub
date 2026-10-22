@@ -33,7 +33,17 @@ async def main(root):
             # No prompt, response body, thinking, or tool arguments in receipts.
             receipt = result.model_dump(exclude={"content", "progress_log", "tool_calls", "memory_uuids", "cited_uuids"})
     except Exception as exc:
-        receipt = {"error_type": type(exc).__name__, "error": str(exc)}
+        message = str(exc)
+        category = "request_failed_details_not_retained"
+        for needle, label in [
+            ("Codex token refresh rejected (HTTP 401", "codex_token_refresh_rejected_401"),
+            ("outside the known project roots", "working_dir_outside_allowed_roots"),
+            ("thinking_level", "request_thinking_level_validation"),
+        ]:
+            if needle in message:
+                category = label
+                break
+        receipt = {"error_type": type(exc).__name__, "error_category": category}
     receipt.update(started=started, ended=time.time(), whole_seconds=time.time() - started)
     (root / "result.json").write_text(json.dumps(receipt, indent=2))
     print(json.dumps(receipt))
