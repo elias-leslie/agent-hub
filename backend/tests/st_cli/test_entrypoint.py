@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -63,6 +64,18 @@ def test_all_owned_apps_have_static_help_without_running_callbacks() -> None:
     assert "list" in descriptions["models"]["help"]
     assert "save" in descriptions["memory"]["help"]
     assert "audit" in descriptions["skills"]["help"]
+
+
+def test_shipped_agents_manifest_discovers_local_credential_commands() -> None:
+    root = Path(__file__).resolve().parents[3]
+    manifest = json.loads((root / "st-extensions/agents.json").read_text())
+    assert manifest["id"] == "agent-hub.agents"
+    for operation in ("enroll", "refs", "run"):
+        assert f"credentials {operation}" in manifest["help"]
+        assert any(
+            usage["surface"] == f"st.agents.credentials.{operation}"
+            for usage in manifest["usage"]
+        )
 
 
 def test_owner_package_has_no_reverse_summitflow_imports() -> None:
