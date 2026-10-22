@@ -687,5 +687,55 @@
     "The event sample can omit tool/response associations; truncation makes response attribution unknown. Missing usage and tool duration have unknown size; token shares cover recorded tokens only. Family time can overlap other families.",
     "Explicit waits are observed wait-only tool occupancy, not all waiting. Native turn wall spans include thinking and waits; neither elapsed time nor tool occupancy measures total active thinking time.",
     "Task linkage uses only one unambiguous project/task session binding. External IDs and inferred task names are not task evidence."
-  ]
+  ],
+  "hunter_responses": {
+    "method": "linked-provider-responses-v1",
+    "responses": 0,
+    "tokens": 0,
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_detail_input_tokens": 0
+    },
+    "breakdown": [
+      {
+        "category": "investigation_only",
+        "responses": 0,
+        "response_share": null,
+        "tokens": 0,
+        "token_share": null
+      },
+      {
+        "category": "mixed",
+        "responses": 0,
+        "response_share": null,
+        "tokens": 0,
+        "token_share": null
+      },
+      {
+        "category": "support_coordination",
+        "responses": 0,
+        "response_share": null,
+        "tokens": 0,
+        "token_share": null
+      },
+      {
+        "category": "unknown",
+        "responses": 0,
+        "response_share": null,
+        "tokens": 0,
+        "token_share": null
+      }
+    ],
+    "sessions_total": 0,
+    "sessions_without_usage": 0,
+    "duplicate_usage_events": 0,
+    "unusable_usage_events": 0,
+    "tools_without_response": 0,
+    "events_truncated": false,
+    "rows": [],
+    "basis": "Separate overlapping response evidence, never added to ledger totals. Unique provider response IDs; tokens are inclusive reported input plus output. Pi tools join only by their source message ID. Categories describe linked observed invocations, not thought-token purpose, successful execution, a bug finding or accepted outcome. Mixed responses are never split. Unsupported or missing links stay unknown; a capped event sample makes all response categories unknown. Source read/search recognizes configured source paths or extensions; other reads and opaque lab commands stay unknown. Response numbers are within this window's sample; earlier actions may be absent. First/peak input is per response, not the cumulative repeated-input total or proof of resident context."
+  }
 }
