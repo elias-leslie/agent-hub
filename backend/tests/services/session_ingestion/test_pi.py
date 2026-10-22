@@ -160,7 +160,8 @@ async def test_pi_retirement_is_exact_and_idempotent(transcript, monkeypatch):
         "pi_selection": {"provider": PROVIDER, "model": MODEL}})
     db = AsyncMock()
     result = MagicMock()
-    result.scalars.return_value.all.return_value = [session]
+    legacy = SimpleNamespace(id="legacy", provider_metadata={})
+    result.scalars.return_value.all.return_value = [legacy, session]
     db.execute.return_value = result
 
     async def sync(_db, **kwargs):
@@ -171,7 +172,9 @@ async def test_pi_retirement_is_exact_and_idempotent(transcript, monkeypatch):
 
     sync_mock = AsyncMock(side_effect=sync)
     monkeypatch.setattr(pi_sync, "sync_pi_session", sync_mock)
-    assert (await pi_sync.retire_pi_sessions(db, owner))["closed_session_ids"] == [SID]
+    first = await pi_sync.retire_pi_sessions(db, owner)
+    assert first["closed_session_ids"] == [SID]
+    assert first["unavailable_session_ids"] == ["legacy"]
     query = db.execute.await_args.args[0]
     assert set(query.compile().params.values()) >= {owner, "pi", "harness", "aico_session_id"}
     assert (await pi_sync.retire_pi_sessions(db, owner))["closed_session_ids"] == []

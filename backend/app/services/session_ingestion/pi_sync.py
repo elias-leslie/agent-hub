@@ -66,14 +66,21 @@ async def retire_pi_sessions(db: AsyncSession, aico_session_id: str) -> dict:
         Session.provider_metadata["aico_session_id"].as_string() == aico_session_id,
     ))).scalars().all()
     closed: list[str] = []
+    unavailable: list[str] = []
     for session in sessions:
         metadata = session.provider_metadata or {}
         if metadata.get("tether_retired") is True:
             continue
-        selection = metadata["pi_selection"]
+        selection = metadata.get("pi_selection")
+        if (not isinstance(selection, dict)
+                or not all(isinstance(selection.get(key), str) and selection[key] for key in ("provider", "model"))
+                or not all(isinstance(metadata.get(key), str) and metadata[key] for key in ("transcript_path", "cwd"))):
+            unavailable.append(session.id)
+            continue
         await sync_pi_session(db, session_id=session.id, transcript=metadata["transcript_path"],
             project_id=session.project_id, cwd=metadata["cwd"],
             provider=selection["provider"], model=selection["model"], phase="shutdown",
             aico_session_id=aico_session_id, retired_by_tether=True)
         closed.append(session.id)
-    return {"aico_session_id": aico_session_id, "closed_session_ids": closed}
+    return {"aico_session_id": aico_session_id, "closed_session_ids": closed,
+            "unavailable_session_ids": unavailable}

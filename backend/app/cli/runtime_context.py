@@ -233,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
                 async with async_session() as db:
                     retire_sessions = retire_pi_sessions if args.command == "retire-pi" else retire_opencode_sessions
                     return await retire_sessions(db, args.aico_session)
-            print(json.dumps(asyncio.run(run_retirement())))
+            result = asyncio.run(run_retirement())
+            print(json.dumps(result))
+            if result.get("unavailable_session_ids"):
+                print(f"{surface_name} retirement sync unavailable", file=sys.stderr)
+                return 2
             return 0
         except Exception:
             print(f"{surface_name} retirement sync unavailable", file=sys.stderr)
