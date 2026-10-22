@@ -54,4 +54,19 @@ At run end, keep the outcome and evidence pointers in the existing Neri investig
 
 ## Verification
 
-Integration and exact live evidence are appended after deployment. No raw transcript copies or credential values are retained in this report.
+Executable checkpoint `01e8e6c53dd00ca79d2b9ae029283616a7eb638d` passed full managed acceptance: **4,489 backend tests passed (3 skipped), 258 frontend tests passed**, plus lint, types and local security gates. The managed rebuild succeeded, including backend/frontend health and active workers. Deployment receipt: `/home/kasadis/.summitflow/services/jobs/ac83f6d5d16344f6a78aae3510ebb1fa.deployment.json`.
+
+Exact content-free results are retained in [.st/provider-audit-live-results.json](../../.st/provider-audit-live-results.json); the acceptance/deployment/live-check reference is [.st/provider-audit-final-evidence.json](../../.st/provider-audit-final-evidence.json). These are local evidence artifacts, also referenced by task closeout; no raw transcript copies or credential values were retained.
+
+| Live check | Observed result |
+| --- | --- |
+| Claude source projection | All 184 original IDs preserved; final 209 events; native tool identities 50 → 61. Removed 123 proven duplicate mount aliases while preserving every surviving payload. Source transcripts remain intact, so the derived rows are recoverable. Repeated supported repair changes nothing. |
+| Native accounting | Named replay finished with 6,111 source cursors marked and `replay_pending=0`. Historical Codex ledger exactly matches 442 native calls/input 75,770,874/output 435,857; Claude final output is 191. Repeated pass consumes only new live tails. Replay performs no retention pruning or owner alerts. |
+| Stop comparison | Native session `01a160a3-c588-72e0-9268-237877f74767`: 6 completed turns and 1 `cyber_policy` stop among 7 terminal turns; native stop time `2026-10-21T23:08:09.571Z`. The neighboring completed turn has the same recorded model/settings. This sample establishes no classifier cause. |
+| External subscription | Original cost rows 47769/47780/47787 retained; missing equivalent values filled through identical ingest retries; cash remains $0. |
+| Global 1-hour view | HTTP 200 in 0.458s; 20 sessions, 117,426,407 recorded tokens, 4 sessions missing usage and 20 unlinked. Of 1,261.574 measured tool seconds, 689.181 (55%) are admin/support and 572.393 (45%) unknown/mixed. Token activity is 100% unknown in this sample; this is not evidence of zero substantive work. |
+| Global 24-hour view | HTTP 200 in 0.884s; 187 sessions, 954,307,961 recorded tokens, 30 missing usage and 187 unlinked. Event sampling is capped, so its 47% admin/support tool share is a sampled trend, not a complete-day activity allocation. |
+
+The largest observed administrative families were checks, service operations, commits and session management. Avoidability remains unknown; the concrete simplification for the next run is to batch repeated session/status queries and reuse same-source check receipts where the existing workflow permits. Keep required checks and verification. Compare the next equivalent bounded window before claiming improvement.
+
+The standard `st service observe` route rejected this project because no trusted native observation extension is configured. The successful managed deployment receipt and explicit source-bound live probes above provide the actual runtime evidence; no replacement observation system was built.
