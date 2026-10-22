@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import {
   type ActivityCost,
+  activitySessionParams,
   activitySessionsHref,
   type EfficiencyStatus,
 } from '@/lib/api/activity-cost'
@@ -19,7 +20,14 @@ const percent = (value: number | null) =>
 const seconds = (value: number) =>
   `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}s`
 
-export function SessionEfficiency({ activity }: { activity: ActivityCost }) {
+export function SessionEfficiency({
+  activity,
+  sessionParams,
+}: {
+  activity: ActivityCost
+  sessionParams?: URLSearchParams
+}) {
+  const scope = activitySessionParams(activity, sessionParams)
   const data = activity.session_efficiency
   if (!data)
     return (
@@ -33,11 +41,13 @@ export function SessionEfficiency({ activity }: { activity: ActivityCost }) {
         Session efficiency
       </h3>
       <p className="text-sm text-slate-300">
-        Proposed local-trial goal: at least{' '}
+        Local trial goal: at least{' '}
         {percent(data.trial_goal.relative_cost_reduction_target)} lower full
         API-equivalent cost per accepted outcome, with acceptance criteria and
-        checks unchanged. Awaiting matched trial results; this view does not
-        assess that goal.
+        checks unchanged. Matched local trials found lower costs for Pi in
+        qualified runs, but the full experiment did not meet this goal after
+        optimization costs. These tool-time shares do not establish cost savings
+        or token purpose.
       </p>
       <p className="section-copy">
         {data.goal.admin_share_target === null
@@ -164,7 +174,7 @@ export function SessionEfficiency({ activity }: { activity: ActivityCost }) {
               </p>
             ))}
             <Link
-              href={activitySessionsHref(row.project_id, row.session_id)}
+              href={activitySessionsHref(row.project_id, row.session_id, scope)}
               className="inline-block text-amber-300 underline focus-ring-amber"
             >
               Review session {row.session_id}

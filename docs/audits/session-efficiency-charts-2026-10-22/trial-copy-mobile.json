@@ -1,0 +1,158 @@
+{
+  "bodyWidth": 390,
+  "capturedAt": "2026-10-22T19:08:46.887Z",
+  "controls": [
+    {
+      "label": "Tool-time windowLast hourLast dayLast week",
+      "value": "24"
+    },
+    {
+      "label": "Work roleAllCoordinatorImplementationResearchReviewReconHuntingOperationsOtherUnknown",
+      "value": ""
+    },
+    {
+      "label": "HarnessAllCodex CLIAgent HubClaude CodeAntigravityPiUnknown",
+      "value": ""
+    },
+    {
+      "label": "ProjectAll projectsp1p2",
+      "value": ""
+    }
+  ],
+  "darkReader": false,
+  "details": [
+    {
+      "open": false,
+      "summary": "Coverage and recorded usage"
+    },
+    {
+      "open": false,
+      "summary": "Coverage and recorded usage"
+    },
+    {
+      "open": true,
+      "summary": "Usage, coverage and session evidence"
+    },
+    {
+      "open": false,
+      "summary": "p1 \u00b7 a \u00b7 Admin + support 100.0% of 10s \u00b7 Admin target unset"
+    },
+    {
+      "open": false,
+      "summary": "p1 \u00b7 b \u00b7 Admin + support 0.0% of 90s \u00b7 Admin target unset"
+    },
+    {
+      "open": false,
+      "summary": "p2 \u00b7 c \u00b7 Admin + support 0.0% of 20s \u00b7 Limited coverage for admin share"
+    },
+    {
+      "open": false,
+      "summary": "p2 \u00b7 empty \u00b7 Admin + support Unavailable of 0s \u00b7 No measured tool time"
+    },
+    {
+      "open": false,
+      "summary": "Lean session review routine"
+    },
+    {
+      "open": false,
+      "summary": "Top ST families and coverage"
+    }
+  ],
+  "documentWidth": 390,
+  "filter": "none",
+  "focus": {
+    "boxShadow": "none",
+    "outline": "oklab(0.556 0 0 / 0.5) none 3px",
+    "tag": "BUTTON",
+    "text": "Work roles"
+  },
+  "links": [
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration",
+      "text": "Browse sessions"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration",
+      "text": "Edit session filters"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_share&work_role=implementation",
+      "text": "Implementation"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_share&work_role=unknown",
+      "text": "Unknown"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=b",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=empty",
+      "text": ""
+    },
+    {
+      "href": "/costs",
+      "text": "Open spend and pricing coverage"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1",
+      "text": "p1"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2",
+      "text": "p2"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=b",
+      "text": "p1 \u00b7 b"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": "p1 \u00b7 a"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=empty",
+      "text": "p2 \u00b7 empty"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": "p2 \u00b7 c"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": "Open st.context session in p1"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1",
+      "text": "All p1 sessions"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": "Open st.context session in p2"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2",
+      "text": "All p2 sessions"
+    }
+  ],
+  "renderedText": "Work and admin activity\n\nRecorded interval and filters below\n\nBrowse sessions\nTool-time window\nLast hour\nLast day\nLast week\nWork role\nAll\nCoordinator\nImplementation\nResearch\nReview\nRecon\nHunting\nOperations\nOther\nUnknown\nHarness\nAll\nCodex CLI\nAgent Hub\nClaude Code\nAntigravity\nPi\nUnknown\nProject\nAll projects\np1\np2\nEdit session filters\n\nTool-time interval: 10/21/2026, 3:06:32 PM \u2013 10/22/2026, 3:06:32 PM. Admin and Other use recorded non-wait tool time. Other includes substantive + unknown.\n\ncoding, chat, completion, image \u00b7 including sub-agents \u00b7 including benchmarks\n\nRecorded tool time\nAdmin\n8.3%\n10s\nOther\n91.7%\n110s\n\n120s recorded non-wait tool time \u00b7 4 sessions. Other includes substantive + unknown. Admin includes necessary support.\n\nUnknown 16.7% \u00b7 duration on 3/4 calls \u00b7 Capped sample: incomplete coverage.\n\nCompare tool time\nProjects\nWork roles\nHarnesses\n\nShares use each group\u2019s total recorded seconds, weighted by time. Same interval and filters. Lower admin share alone does not establish better results.\n\nImplementation\n2 sessions \u00b7 100s\n\nAdmin 10.0% \u00b7 Other 90.0%\n\nCoverage and recorded usage\nUnknown\n2 sessions \u00b7 20s\n\nAdmin 0.0% \u00b7 Other 100.0%\n\nCoverage and recorded usage\n\nTool-time shares do not allocate provider tokens or cost. Token purpose remains unknown.\n\nUsage, coverage and session evidence\nSession efficiency\n\nLocal trial goal: at least 20.0% lower full API-equivalent cost per accepted outcome, with acceptance criteria and checks unchanged. Matched local trials found lower costs for Pi in qualified runs, but the full experiment did not meet this goal after optimization costs. These tool-time shares do not establish cost savings or token purpose.\n\nAdmin-share target is unset. Substantive tool work is a productive-work signal; completion and tool class do not prove a useful outcome. Admin + support includes necessary work; avoidability needs session review.\n\nAdmin-share assessment, if a target is selected, requires an uncapped sample, duration on at least 80.0% of calls and at most 20.0% unknown/mixed time. Missing time still has unknown size. 0 within admin target \u00b7 0 above admin target \u00b7 1 limited coverage \u00b7 1 unmeasured \u00b7 2 awaiting admin target.\n\nShowing 4 of 4 sessions, ranked by admin + support seconds. Compare equal windows with the same project, provider, model and method; check coverage before calling a change a regression.\n\np1 \u00b7 a \u00b7 Admin + support 100.0% of 10s \u00b7 Admin target unset\np1 \u00b7 b \u00b7 Admin + support 0.0% of 90s \u00b7 Admin target unset\np2 \u00b7 c \u00b7 Admin + support 0.0% of 20s \u00b7 Limited coverage for admin share\np2 \u00b7 empty \u00b7 Admin + support Unavailable of 0s \u00b7 No measured tool time\nLean session review routine\nRecorded tokens\n\n440\n\n400 input \u00b7 40 output\n\nInput includes 0 cache read and 0 cache write tokens. Cache detail covers 0 / 400 input tokens.\n\n100.0% with unknown or mixed tool evidence. Native usage measures repeated context reads, not unique history text. Admin spend and resident context share are unavailable.\n\nOpen spend and pricing coverage\nAdmin transcript estimate\n\n66 characters \u00b7 94.3%\n\nShare of 70 sampled tool transcript characters: normalized call arguments plus retained returned text. Admin includes necessary checks, commits and builds.\n\nThis estimates text added to history. It does not measure model tokens, causal spend or context still resident after compaction. Prose, instructions, images, protocol framing and unretained text are excluded.\n\n70 argument characters + 0 returned characters. Returned text retained for 0 / 4 sampled calls; missing or opaque text has unknown size. 0 correlated wrappers excluded.\n\nUnknown or mixed calls: 2 characters. Shares cover this sampled text only. Ledger totals cover the full window; event-only usage may be capped. Ambiguous wrapper matches can still duplicate text.\n\nST command time and text\n\n2 ST commands in sampled calls \u00b7 10s elapsed \u00b7 ~10 input text tokens \u00b7 Output estimate unavailable\n\n2 admin + support \u00b7 0 substantive \u00b7 0 unknown commands. Text estimates describe command input and retained output added once to history. They are separate from provider usage, billed tokens and context still resident after compaction.\n\nTime known for 1/2; output known for 0/2. 0 commands share shell results and may not have run; their time and output stay unallocated. Event sample capped; earlier calls may be missing.\n\nInput tokenized for 2/2 commands; the rest use a character estimate to bound refresh cost.\n\nTop ST families and coverage\nUsage sources and gaps\n\ncost_logs: 110 tokens \u00b7 1 linked Hub sessions\n\nusage_calls: 330 tokens \u00b7 1 linked Hub sessions\n\nmissing: 0 tokens \u00b7 2 linked Hub sessions\n\nOne source per Hub session: completion logs, native ledger, then response events. Overlapping evidence is excluded; partial histories can still omit usage. This is recorded usage, not a reconciled bill.\n\n0 tokens from 0 accounting calls have no matching Hub session. Included in global unknown usage; excluded from project, session and task rankings.\n\nProjects by recorded tokens\n\nShowing 2 of 2. Admin characters are a transcript proxy, not allocated usage.\n\np1\n\n440 tokens \u00b7 2 sessions (0 without usage) \u00b7 33 admin characters\n\np2\n\n0 tokens \u00b7 2 sessions (2 without usage) \u00b7 33 admin characters\n\nSessions by recorded tokens\n\nShowing 4 of 4. Sessions without retained usage are labelled unavailable.\n\np1 \u00b7 b\n\nfixture \u00b7 330 tokens \u00b7 0 admin characters\n\np1 \u00b7 a\n\nfixture \u00b7 110 tokens \u00b7 33 admin characters\n\np2 \u00b7 empty\n\nfixture \u00b7 Usage unavailable \u00b7 0 admin characters\n\np2 \u00b7 c\n\nfixture \u00b7 Usage unavailable \u00b7 33 admin characters\n\nObserved tool time\n\nMeasured tool time: 120s across 4 sessions. Intervals are merged within each session; concurrent sessions add. Wait-only time is excluded.\n\nSubstantive\n75.0%\n90s / 120s\nAdmin + support\n8.3%\n10s / 120s\nUnknown + mixed\n16.7%\n20s / 120s\n\nRepetition alone does not show waste. Thinking, idle time and unrecorded work are unmeasured; these are tool-time shares, not token, spend or total-work shares.\n\nCoverage and gaps\n\n4 events sampled \u00b7 cap 20,000 \u00b7 CAPPED: recent events only; earlier activity may be omitted.\n\n1 / 4 observed tool calls lack usable duration. Missing time has unknown size. Excluded wait-only time: 0s. Mixed time within unknown: 0s.\n\n4 / 4 sessions have no single reliable task link: 120s measured tool time and 440 recorded tokens remain unlinked, including accounting without a Hub session.\n\n2 / 4 sessions lack usage. 440 tokens recorded using one source per session; this is not a reconciled billing total. Provider usage is not allocated to individual commands.\n\nWindow: 10/21/2026, 3:06:32 PM \u2013 10/22/2026, 3:06:32 PM. Tool interval placement may be approximate.\n\nRepeated admin and support families\n\nShowing 1 of 1 families, ranked by measured tool time. Family times can overlap; do not add them. Open a recorded session to judge whether repetition was needed.\n\nst.context\n\n2 calls \u00b7 2 sessions \u00b7 10s\n\nProjects shown: 2 / 2\n\np1 \u00b7 1 calls \u00b7 10s\n\nOpen st.context session in p1\nAll p1 sessions\n\np2 \u00b7 1 calls \u00b7 0s\n\nOpen st.context session in p2\nAll p2 sessions\nReliably linked tasks\n\nShowing 0 of 0 tasks, ranked by recorded tokens. Only sessions with one durable project/task binding qualify. Session totals do not prove all work served that task.\n\nNo unambiguous task links in this window. Use the project sessions above; task attribution remains unknown.",
+  "theme": "dark",
+  "url": "http://127.0.0.1:4328/admin?accounting_start=2026-10-21T19%3A06%3A32.952Z&accounting_end=2026-10-22T19%3A06%3A32.952Z&sort=admin_duration",
+  "viewport": {
+    "height": 844,
+    "width": 390
+  }
+}

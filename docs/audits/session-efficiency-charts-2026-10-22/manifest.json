@@ -1,0 +1,256 @@
+{
+  "created_at": "2026-10-22T19:14:40.507261+00:00",
+  "source_base": "50ec966aa2376fb4a4277617295a277bb9248fd9",
+  "source_files_sha256": [
+    {
+      "path": "frontend/src/__tests__/activity-cost-api.test.ts",
+      "digest_sha256": "8b5ee7d1cdbfb11a7a44153f6977f815bba1e963e7eba70c6dde4b528698e774"
+    },
+    {
+      "path": "frontend/src/__tests__/activity-cost.test.tsx",
+      "digest_sha256": "ef5fb2f2f85bdcbad83bf98849310c6384a7a8b54d335923de7eca537e4a1708"
+    },
+    {
+      "path": "frontend/src/__tests__/admin-page.test.tsx",
+      "digest_sha256": "ce48c989fb040dcf90529b9bb9244592f792035906dab7dd2dbd15f695d5ff30"
+    },
+    {
+      "path": "frontend/src/__tests__/efficiency-charts.test.tsx",
+      "digest_sha256": "d2bcafeb8ff21f99003f390633e278a1dca0a6d713d88f85be83ddb952979fdc"
+    },
+    {
+      "path": "frontend/src/__tests__/session-efficiency.test.tsx",
+      "digest_sha256": "1fe95302fa9d68026a5403dabf5971427bfa0133a9401ce1d45098044b4f745c"
+    },
+    {
+      "path": "frontend/src/__tests__/sessions.test.tsx",
+      "digest_sha256": "70e8d6f33f1be6ced9d8cadfc83a1aabef5c24f6a24b03a83cfb30bbab8b353a"
+    },
+    {
+      "path": "frontend/src/app/admin/components/ActivityAccounting.tsx",
+      "digest_sha256": "a5504735bea4f80f3eb5b2ef0c0b51bb4f3ccce581f11e40894da24cc72a3776"
+    },
+    {
+      "path": "frontend/src/app/admin/components/ActivityCostPanel.tsx",
+      "digest_sha256": "b4bc7a8d134e5fc589e449d960476ef8d1fc0e23d7720a9758c27afd8f719333"
+    },
+    {
+      "path": "frontend/src/app/admin/components/ActivitySection.tsx",
+      "digest_sha256": "838eccf71e0b64da791d8906d98cc9d1f6533554c5f9c26a4c6f3af6911dbb76"
+    },
+    {
+      "path": "frontend/src/app/admin/components/EfficiencyOverview.tsx",
+      "digest_sha256": "d00f1ebb7d1e74f7681747f96b545ac1ce8c164c47ceecc7458e6e9107539516"
+    },
+    {
+      "path": "frontend/src/app/admin/components/SessionEfficiency.tsx",
+      "digest_sha256": "e397a07a15e86a8f423ee9cf36d2c5b32ee1a2309407d8a2fb799f5f5a824743"
+    },
+    {
+      "path": "frontend/src/app/admin/components/StCommandActivity.tsx",
+      "digest_sha256": "67814ecfe1c637aefb9e0ad112ac75b40c4c7a42b2866bb794559c94d64a2930"
+    },
+    {
+      "path": "frontend/src/app/admin/page.tsx",
+      "digest_sha256": "681a37059c96b96038dd6623d2df798732ebebb8670d2701c63b9baeafeb3387"
+    },
+    {
+      "path": "frontend/src/app/sessions/components/AccountingControls.tsx",
+      "digest_sha256": "a416e83a50b69d3dbd3f877ac3b6fc14d1abf9f8ad1ac4cb9784439fa58484d8"
+    },
+    {
+      "path": "frontend/src/app/sessions/components/SessionRow.tsx",
+      "digest_sha256": "e86ca3b1a0bcd92fe901e17b00360d3de9805125a1a34e8434876266daf88a48"
+    },
+    {
+      "path": "frontend/src/app/sessions/components/SessionsToolbar.tsx",
+      "digest_sha256": "752335bcf6fa5a5c1df1266e298d9907909d252318779f9477f4a691a4a2931c"
+    },
+    {
+      "path": "frontend/src/app/sessions/hooks/useSessionListState.ts",
+      "digest_sha256": "b21ac71304348180527859c5f112d90ace301eece6ad6d39e10f0566ba30282c"
+    },
+    {
+      "path": "frontend/src/app/sessions/hooks/useSessionsData.ts",
+      "digest_sha256": "8bad7892f808735a69c1ba882b836be1baa5a39d914baddd2c8e6d4ee24f7887"
+    },
+    {
+      "path": "frontend/src/app/sessions/page.tsx",
+      "digest_sha256": "15dea6217149f64ffb1582798489f3f6df2d2649009da68f9d386524ecdd6879"
+    },
+    {
+      "path": "frontend/src/app/sessions/types.ts",
+      "digest_sha256": "3c2cfded6650099eacda5b5eef58c6b02d5d677719b9ddfc0c64257d1c6d9f0d"
+    },
+    {
+      "path": "frontend/src/lib/api/activity-cost.ts",
+      "digest_sha256": "782832662338346d866e1c40081a436c08a6e6eaa6959cd0fda384aa6cdabaa9"
+    },
+    {
+      "path": "frontend/src/lib/api/admin.ts",
+      "digest_sha256": "f0c2de1e0f79e8509ebfc7de3dba2bbdb9ad638ed3620bdfce85063edb7b07fc"
+    },
+    {
+      "path": "frontend/src/lib/api/duration-split.ts",
+      "digest_sha256": "d064abd22208b14e3bcde33284b64660bde6946c27345232c9f9bf5f97582fe7"
+    },
+    {
+      "path": "frontend/src/lib/api/sessions.ts",
+      "digest_sha256": "dbcc54abcaf1b6519655f117ddbc814175b18f089c6154346cbe42f1357c76ad"
+    }
+  ],
+  "fixture_kind": "Actual page components and product CSS under Vite, synthetic API and navigation adapter; no Next shell, hydration, authentication or live-data claim",
+  "fixture_activity_source": "/srv/workspaces/agent-reviews/contracts/session-accounting-synthetic-activity.json",
+  "fixture_activity_sha256": "6ac7a9664f094b2971b96dd3ec0cdc33c56d4b8654588c6523833bc45affb1fa",
+  "fixture_sessions_parser_source": "/srv/workspaces/agent-reviews/contracts/session-accounting-synthetic-sessions.json",
+  "fixture_sessions_sha256": "42968e490171836eb0447c47c4fe3a6518256196997b8a483fc618cb542f20b3",
+  "fixture_runtime_sha256": "27422a4565dd45f5aa9ef36e2645aa9da823e21c45d99401578a60d7bdc03351",
+  "guide": "shared-product-design revision 3",
+  "copy_profile": "No Agent Hub profile selected; owner voice",
+  "theme": "Product dark class, no Dark Reader or CSS filter",
+  "css_zoom": {
+    "percent": 200,
+    "viewport": [
+      1440,
+      1000
+    ],
+    "document_width": 1440,
+    "body_width": 720,
+    "native_browser_zoom_tested": false
+  },
+  "keyboard": {
+    "disclosure_enter": true,
+    "tab_to_source_link": "2px amber outline",
+    "session_j": "next row focused, 2px amber inset ring",
+    "session_enter_escape": "expands/collapses without dropping interval, harness or sort"
+  },
+  "artifacts": [
+    {
+      "screenshot": "activity-desktop.png",
+      "rendered_record": "harness-desktop.json",
+      "captured_at": "2026-10-22T19:07:02.174Z",
+      "viewport": {
+        "height": 1000,
+        "width": 1440
+      },
+      "document_width": 1440,
+      "screenshot_sha256": "1f0189d5344e2dd2935285e2fa3ac9a7118c9125d79297a9f1945c78611faac5",
+      "rendered_record_sha256": "0c898c0a8b356012e858c4aece90d26dc788feda81d0907cc225c2a093e141fa"
+    },
+    {
+      "screenshot": "harness-coverage-desktop.png",
+      "rendered_record": "harness-coverage-desktop.json",
+      "captured_at": "2026-10-22T19:07:04.296Z",
+      "viewport": {
+        "height": 1000,
+        "width": 1440
+      },
+      "document_width": 1440,
+      "screenshot_sha256": "daed21825dd51a5c568508f648c8c051d71bb89ce9c1894be51c4193abebdb2c",
+      "rendered_record_sha256": "e915a4bdb45b8e1d93df3b5ee98e68b428d5abfa2aab558262d6cfe96cbbd8de"
+    },
+    {
+      "screenshot": "roles-desktop.png",
+      "rendered_record": "roles-desktop.json",
+      "captured_at": "2026-10-22T19:07:31.417Z",
+      "viewport": {
+        "height": 1000,
+        "width": 1440
+      },
+      "document_width": 1440,
+      "screenshot_sha256": "3cb492c40832662235cfd125403ef1343ced22ceb0a55d8ffef039033d02f846",
+      "rendered_record_sha256": "a094381a2e39c05ec50c79ff9efa3f79efc3424a0b1af8fa91f8f19f7fb237f0"
+    },
+    {
+      "screenshot": "activity-mobile.png",
+      "rendered_record": "activity-mobile.json",
+      "captured_at": "2026-10-22T19:04:17.503Z",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      },
+      "document_width": 390,
+      "screenshot_sha256": "5dcf25017cfdd16fbf0a25b4a6436e12da262af039556c514de04b166b7ba12c",
+      "rendered_record_sha256": "7cca950c91ac4655b54de3d30e8e9aac7393965ca6f955d37193cc7d32f0ff41"
+    },
+    {
+      "screenshot": "activity-overview-mobile.png",
+      "rendered_record": "activity-capped-mobile.json",
+      "captured_at": "2026-10-22T19:07:35.025Z",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      },
+      "document_width": 390,
+      "screenshot_sha256": "f629729edb1f57183b59c943f18e8674dc531aef604e680316bfec3e6156f09d",
+      "rendered_record_sha256": "9fa1c83737b35b0453b61a7060e4f7b4143c7a71ce3d625b3a5f116d90801d57"
+    },
+    {
+      "screenshot": "sessions-desktop.png",
+      "rendered_record": "sessions-desktop.json",
+      "captured_at": "2026-10-22T19:13:49.429Z",
+      "viewport": {
+        "height": 1000,
+        "width": 1440
+      },
+      "document_width": 1440,
+      "screenshot_sha256": "6a11842a08dca720045dbfe5b2df28b0f045e28665de634b463dc276eb30afaa",
+      "rendered_record_sha256": "f1b8b7ea8c590e7a516af24f15a50193b34d03f5bba9ae908c6af342749f1e8d"
+    },
+    {
+      "screenshot": "sessions-filtered-desktop.png",
+      "rendered_record": "sessions-filtered-desktop.json",
+      "captured_at": "2026-10-22T19:13:19.596Z",
+      "viewport": {
+        "height": 1000,
+        "width": 1440
+      },
+      "document_width": 1440,
+      "screenshot_sha256": "7a20c220bf26a6d1cede1c5c079a5ebb589ba8110c34fa5c7edf0ff5fb84769e",
+      "rendered_record_sha256": "29715f418dae9acbb86c7bb172b0994c7209633014ae3c713063a0d33a5788d6"
+    },
+    {
+      "screenshot": "sessions-mobile.png",
+      "rendered_record": "sessions-mobile.json",
+      "captured_at": "2026-10-22T19:13:50.897Z",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      },
+      "document_width": 390,
+      "screenshot_sha256": "6d52d24e682764b7ac241c05091a35a32825e17295b53b6955e1d577240a1a6d",
+      "rendered_record_sha256": "f030e083e9e41e44f0eaea62e4a9bbf3588caba5e4ecf26fe240615288750661"
+    },
+    {
+      "screenshot": "sessions-filters-mobile.png",
+      "rendered_record": "sessions-filters-mobile.json",
+      "captured_at": "2026-10-22T19:13:52.387Z",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      },
+      "document_width": 390,
+      "screenshot_sha256": "d0b7c2c0a3de12e8de887d5b25ee4460ece68fcca928f4fc6b3059c7d60960c7",
+      "rendered_record_sha256": "598a1585e35dce56f85e7af08b8ec753900ad3a9610177dee6ee1473ff19dc98"
+    },
+    {
+      "screenshot": "trial-copy-mobile.png",
+      "rendered_record": "trial-copy-mobile.json",
+      "captured_at": "2026-10-22T19:08:46.887Z",
+      "viewport": {
+        "height": 844,
+        "width": 390
+      },
+      "document_width": 390,
+      "screenshot_sha256": "4515febec1cd2d14fb26ab90913828341fa7870cbe71596171307d644ff3034f",
+      "rendered_record_sha256": "c4959ef2174919be2623ada4dcc0d614daaed6199d6ec6b10bd856d30c6ec20c"
+    }
+  ],
+  "remaining_live_checks": [
+    "integrated rebuild",
+    "authenticated Next /admin and /sessions at desktop and phone widths",
+    "live project/role/harness filters and 1/24/168 hour windows",
+    "admin share/duration sort and next cursor across more than one page, unavailable shares last",
+    "deployed registry and coverage agreement"
+  ]
+}

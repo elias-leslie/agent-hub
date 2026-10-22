@@ -1,0 +1,304 @@
+{
+  "source": "isolated synthetic fixture HTTP requests, not live API",
+  "requests": [
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "pi",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "pi",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "harness": "codex_cli",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    },
+    {
+      "path": "/api/sessions",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image",
+        "sort_by": "admin_share",
+        "sort_direction": "desc",
+        "page_size": "100"
+      }
+    },
+    {
+      "path": "/api/sessions/facets",
+      "query": {
+        "accounting_start": "2026-10-21T12:00:00Z",
+        "accounting_end": "2026-10-22T12:00:00Z",
+        "kind": "coding,chat,completion,image"
+      }
+    }
+  ]
+}

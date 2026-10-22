@@ -29,8 +29,10 @@ const LABELS = {
 export function StCommandActivity({
   commands,
   sampleCapped,
+  sessionParams,
 }: {
   commands: StCommandSummary | null | undefined
+  sessionParams?: URLSearchParams
   sampleCapped: boolean
 }) {
   return (
@@ -113,6 +115,7 @@ export function StCommandActivity({
                       href={activitySessionsHref(
                         row.sample_project_id,
                         row.sample_session_id,
+                        sessionParams,
                       )}
                       className="inline-block text-xs text-amber-300 underline focus-ring-amber"
                     >

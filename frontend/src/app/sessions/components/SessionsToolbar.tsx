@@ -1,6 +1,7 @@
 import { RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { type RefObject, useEffect, useRef, useState } from 'react'
+import type { WorkRoleOption } from '@/lib/api/duration-split'
 import {
   SESSION_KINDS,
   type SessionFacets,
@@ -15,6 +16,7 @@ import {
   type SortField,
   STATUS_OPTIONS,
 } from '../types'
+import { AccountingControls } from './AccountingControls'
 import { CloseSettingsPanel } from './CloseSettingsPanel'
 import { ModelFilterBadge } from './ModelFilterBadge'
 
@@ -62,6 +64,8 @@ export function SessionsToolbar({
   searchRef,
   onChange,
   onRefresh,
+  workRoles = [],
+  harnesses = [],
 }: {
   state: SessionListState
   facets: SessionFacets | null
@@ -70,6 +74,8 @@ export function SessionsToolbar({
   searchRef: RefObject<HTMLInputElement | null>
   onChange: (patch: Partial<SessionListState>) => void
   onRefresh: () => void
+  workRoles?: WorkRoleOption[]
+  harnesses?: WorkRoleOption[]
 }) {
   const [query, setQuery] = useState(state.q)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -85,6 +91,8 @@ export function SessionsToolbar({
     state.since !== 'all',
     state.project !== '',
     state.model !== '',
+    state.workRole !== '',
+    state.harness !== '',
     state.includeSubagents,
     state.includeBenchmarks,
   ].filter(Boolean).length
@@ -190,6 +198,12 @@ export function SessionsToolbar({
           filtersOpen ? 'flex' : 'hidden',
         )}
       >
+        <AccountingControls
+          state={state}
+          roles={workRoles}
+          harnesses={harnesses}
+          onChange={onChange}
+        />
         <fieldset className="flex flex-wrap items-center gap-1">
           <legend className="sr-only">Kind</legend>
           {SESSION_KINDS.map((kind) => {
@@ -306,6 +320,8 @@ export function SessionsToolbar({
           >
             <option value="last_active">Last active</option>
             <option value="status">Status</option>
+            <option value="admin_share">Admin share · highest first</option>
+            <option value="admin_duration">Admin time · longest first</option>
           </select>
         </label>
 

@@ -2,11 +2,23 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPage from '@/app/admin/page'
 import { fetchSessionHotspots, type SessionHotspots } from '@/lib/api'
-import { fetchRequestBlockStats } from '@/lib/api/admin'
+import { fetchRequestBlockStats, fetchSessionEfficiency } from '@/lib/api/admin'
 import { activityFixture } from './activity-cost-fixture'
+import { createQueryClientWrapper } from './test-utils'
 
 vi.mock('@/lib/api', () => ({ fetchSessionHotspots: vi.fn() }))
-vi.mock('@/lib/api/admin', () => ({ fetchRequestBlockStats: vi.fn() }))
+vi.mock('@/lib/api/admin', () => ({
+  fetchRequestBlockStats: vi.fn(),
+  fetchSessionEfficiency: vi.fn(),
+}))
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/admin',
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () =>
+    new URLSearchParams(
+      'accounting_start=2026-10-21T12:00:00Z&accounting_end=2026-10-22T12:00:00Z',
+    ),
+}))
 vi.mock('@/app/admin/components/SessionHotspotsPanel', () => ({
   SessionHotspotsPanel: () => <div>Existing session diagnostics</div>,
 }))
@@ -31,7 +43,20 @@ const hotspots: SessionHotspots = {
   activity_cost: activityFixture,
 }
 
-beforeEach(() => vi.resetAllMocks())
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(fetchSessionEfficiency).mockResolvedValue(activityFixture)
+  vi.mocked(fetchSessionHotspots).mockResolvedValue(hotspots)
+})
+
+function mount() {
+  const Wrapper = createQueryClientWrapper()
+  return render(
+    <Wrapper>
+      <AdminPage />
+    </Wrapper>,
+  )
+}
 
 describe('Activity page loading', () => {
   it('loads activity when unrelated request-block stats fail', async () => {
@@ -39,7 +64,7 @@ describe('Activity page loading', () => {
       new Error('blocks unavailable'),
     )
     vi.mocked(fetchSessionHotspots).mockResolvedValue(hotspots)
-    render(<AdminPage />)
+    mount()
     expect(
       screen.getByRole('heading', {
         level: 1,
@@ -60,11 +85,11 @@ describe('Activity page loading', () => {
       unknown_client_requests_today: 0,
       total_requests_today: 1,
     })
-    vi.mocked(fetchSessionHotspots)
+    vi.mocked(fetchSessionEfficiency)
       .mockRejectedValueOnce(new Error('Forbidden (403)'))
-      .mockResolvedValueOnce(hotspots)
+      .mockResolvedValueOnce(activityFixture)
       .mockRejectedValue(new Error('Offline'))
-    render(<AdminPage />)
+    mount()
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Activity could not be loaded',
     )

@@ -24,10 +24,17 @@ type FilterQuery = Omit<
 
 export function toFilterQuery(state: SessionListState): FilterQuery {
   return {
+    accounting_start: state.accountingWindow?.start,
+    accounting_end: state.accountingWindow?.end,
+    work_role: state.workRole || undefined,
+    harness: state.harness || undefined,
     q: state.q.trim() || undefined,
     kind: state.kinds,
     status: state.status || undefined,
-    since: sinceToIso(state.since),
+    since: sinceToIso(
+      state.since,
+      state.accountingWindow ? new Date(state.accountingWindow.end) : undefined,
+    ),
     project_id: state.project || undefined,
     model: state.model || undefined,
     roots_only: !state.includeSubagents,
@@ -46,6 +53,9 @@ function filterKey(state: SessionListState) {
     model: state.model,
     subagents: state.includeSubagents,
     benchmarks: state.includeBenchmarks,
+    accountingWindow: state.accountingWindow,
+    workRole: state.workRole,
+    harness: state.harness,
   }
 }
 
@@ -105,5 +115,9 @@ export function useSessionsData(state: SessionListState) {
     refetch: list.refetch,
     facets: facets.data ?? null,
     facetsError: facets.error,
+    accountingWindow:
+      list.data?.pages[0]?.accounting_window ?? state.accountingWindow,
+    workRoles: facets.data?.work_roles ?? list.data?.pages[0]?.work_roles ?? [],
+    harnesses: facets.data?.harnesses ?? list.data?.pages[0]?.harnesses ?? [],
   }
 }

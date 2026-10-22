@@ -1,15 +1,17 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, RefreshCw, Shield, Zap } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { fetchSessionHotspots, type SessionHotspots } from '@/lib/api'
 import { fetchRequestBlockStats, type RequestBlockStats } from '@/lib/api/admin'
 import { cn } from '@/lib/utils'
-import { ActivityCostPanel } from './components/ActivityCostPanel'
+import { ActivitySection } from './components/ActivitySection'
 import { SessionHotspotsPanel } from './components/SessionHotspotsPanel'
 
 export default function AdminPage() {
+  const queryClient = useQueryClient()
   const [blockStats, setBlockStats] = useState<RequestBlockStats | null>(null)
   const [hotspots, setHotspots] = useState<SessionHotspots | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -19,6 +21,7 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true)
+    void queryClient.invalidateQueries({ queryKey: ['session-efficiency'] })
     try {
       const [blocks, activity] = await Promise.allSettled([
         fetchRequestBlockStats(),
@@ -41,7 +44,7 @@ export default function AdminPage() {
       setIsRefreshing(false)
       setIsLoading(false)
     }
-  }, [])
+  }, [queryClient])
 
   useEffect(() => {
     refresh()
@@ -86,12 +89,14 @@ export default function AdminPage() {
       </header>
 
       <main className="px-6 lg:px-8 py-8 space-y-8 relative">
-        <ActivityCostPanel
-          activity={hotspots?.activity_cost ?? null}
-          isLoading={isLoading}
-          error={activityError}
-          onRetry={refresh}
-        />
+        <Suspense fallback={<p className="section-copy">Loading activity…</p>}>
+          <ActivitySection />
+        </Suspense>
+        {activityError && (
+          <p role="alert" className="section-copy">
+            Session diagnostics could not be refreshed. {activityError}
+          </p>
+        )}
 
         {blockError && (
           <p role="alert" className="text-sm text-amber-300">

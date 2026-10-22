@@ -1,0 +1,158 @@
+{
+  "bodyWidth": 390,
+  "capturedAt": "2026-10-22T19:04:17.503Z",
+  "controls": [
+    {
+      "label": "Tool-time windowLast hourLast dayLast week",
+      "value": "168"
+    },
+    {
+      "label": "Work roleAllCoordinatorImplementationResearchReviewReconHuntingOperationsOtherUnknown",
+      "value": ""
+    },
+    {
+      "label": "HarnessAllCodex CLIAgent HubClaude CodeAntigravityPiUnknown",
+      "value": "codex_cli"
+    },
+    {
+      "label": "ProjectAll projectsp1p2",
+      "value": ""
+    }
+  ],
+  "darkReader": false,
+  "details": [
+    {
+      "open": false,
+      "summary": "Coverage and recorded usage"
+    },
+    {
+      "open": false,
+      "summary": "Coverage and recorded usage"
+    },
+    {
+      "open": false,
+      "summary": "Usage, coverage and session evidence"
+    },
+    {
+      "open": false,
+      "summary": "p1 \u00b7 a \u00b7 Admin + support 100.0% of 10s \u00b7 Admin target unset"
+    },
+    {
+      "open": false,
+      "summary": "p1 \u00b7 b \u00b7 Admin + support 0.0% of 90s \u00b7 Admin target unset"
+    },
+    {
+      "open": false,
+      "summary": "p2 \u00b7 c \u00b7 Admin + support 0.0% of 20s \u00b7 Limited coverage for admin share"
+    },
+    {
+      "open": false,
+      "summary": "p2 \u00b7 empty \u00b7 Admin + support Unavailable of 0s \u00b7 No measured tool time"
+    },
+    {
+      "open": false,
+      "summary": "Lean session review routine"
+    },
+    {
+      "open": false,
+      "summary": "Top ST families and coverage"
+    }
+  ],
+  "documentWidth": 390,
+  "filter": "none",
+  "focus": {
+    "boxShadow": "none",
+    "outline": "oklab(0.556 0 0 / 0.5) none 3px",
+    "tag": "BODY",
+    "text": "Work and admin activityRefreshes every 30sWork and admin activityRecorded interval and filters belowBrowse sessionsTool-time windowLast hourLast dayLast weekWor"
+  },
+  "links": [
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration",
+      "text": "Browse sessions"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration",
+      "text": "Edit session filters"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_share&project=p1",
+      "text": "p1"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_share&project=p2",
+      "text": "p2"
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=b",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=empty",
+      "text": ""
+    },
+    {
+      "href": "/costs",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=b",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=empty",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1&sel=a",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p1",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2&sel=c",
+      "text": ""
+    },
+    {
+      "href": "/sessions?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration&project=p2",
+      "text": ""
+    }
+  ],
+  "renderedText": "Work and admin activity\n\nRecorded interval and filters below\n\nBrowse sessions\nTool-time window\nLast hour\nLast day\nLast week\nWork role\nAll\nCoordinator\nImplementation\nResearch\nReview\nRecon\nHunting\nOperations\nOther\nUnknown\nHarness\nAll\nCodex CLI\nAgent Hub\nClaude Code\nAntigravity\nPi\nUnknown\nProject\nAll projects\np1\np2\nEdit session filters\n\nTool-time interval: 10/15/2026, 3:01:12 PM \u2013 10/22/2026, 3:01:12 PM. Admin and Other use recorded non-wait tool time. Other includes substantive + unknown.\n\ncoding, chat, completion, image \u00b7 including sub-agents \u00b7 including benchmarks\n\nRecorded tool time\nAdmin\n8.3%\n10s\nOther\n91.7%\n110s\n\n120s recorded non-wait tool time \u00b7 4 sessions. Other includes substantive + unknown. Admin includes necessary support.\n\nUnknown 16.7% \u00b7 duration on 3/4 calls.\n\nCompare tool time\nProjects\nWork roles\nHarnesses\n\nShares use each group\u2019s total recorded seconds, weighted by time. Same interval and filters. Lower admin share alone does not establish better results.\n\np1\n2 sessions \u00b7 100s\n\nAdmin 10.0% \u00b7 Other 90.0%\n\nCoverage and recorded usage\np2\n2 sessions \u00b7 20s\n\nAdmin 0.0% \u00b7 Other 100.0%\n\nCoverage and recorded usage\n\nTool-time shares do not allocate provider tokens or cost. Token purpose remains unknown.\n\nUsage, coverage and session evidence",
+  "theme": "dark",
+  "url": "http://127.0.0.1:4328/admin?accounting_start=2026-10-15T19%3A01%3A12.757Z&accounting_end=2026-10-22T19%3A01%3A12.757Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_duration#activity",
+  "viewport": {
+    "height": 844,
+    "width": 390
+  }
+}

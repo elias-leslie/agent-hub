@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SessionEfficiency } from '@/app/admin/components/SessionEfficiency'
 import {
   type ActivityCost,
+  activitySessionParams,
   activitySessionsHref,
   parseActivityCost,
 } from '@/lib/api/activity-cost'
@@ -42,7 +43,10 @@ describe('session efficiency review', () => {
     expect(screen.getAllByText(/Provider usage unavailable/)).toHaveLength(3)
     expect(
       screen.getByRole('link', { name: 'Review session admin' }),
-    ).toHaveAttribute('href', activitySessionsHref('project', 'admin'))
+    ).toHaveAttribute(
+      'href',
+      activitySessionsHref('project', 'admin', activitySessionParams(activity)),
+    )
     const routine = screen.getByText('Lean session review routine')
     fireEvent.click(routine)
     expect(routine.closest('details')).toHaveAttribute('open')

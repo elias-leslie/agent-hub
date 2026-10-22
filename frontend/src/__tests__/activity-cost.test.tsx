@@ -4,6 +4,7 @@ import { ActivityCostPanel } from '@/app/admin/components/ActivityCostPanel'
 import { SessionHotspotsPanel } from '@/app/admin/components/SessionHotspotsPanel'
 import { parseSessionListState } from '@/app/sessions/hooks/useSessionListState'
 import {
+  activitySessionParams,
   activitySessionsHref,
   parseActivityCost,
 } from '@/lib/api/activity-cost'
@@ -63,7 +64,14 @@ describe('activity observations', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'project/one · s&1' }),
-    ).toHaveAttribute('href', activitySessionsHref('project/one', 's&1'))
+    ).toHaveAttribute(
+      'href',
+      activitySessionsHref(
+        'project/one',
+        's&1',
+        activitySessionParams(activity),
+      ),
+    )
     expect(
       screen.getByRole('heading', { name: 'Projects by recorded tokens' }),
     ).toBeInTheDocument()
@@ -121,7 +129,10 @@ describe('activity observations', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Open a linked session for task-real' }),
-    ).toHaveAttribute('href', activitySessionsHref('p1', 's'))
+    ).toHaveAttribute(
+      'href',
+      activitySessionsHref('p1', 's', activitySessionParams(backendSnapshot)),
+    )
   })
 
   it('displays the backend ST sample with measured and estimated coverage separate', () => {
@@ -154,7 +165,10 @@ describe('activity observations', () => {
     expect(screen.getAllByText(/Time unavailable/)).toHaveLength(2)
     expect(
       screen.getByRole('link', { name: 'Open an observed st.context session' }),
-    ).toHaveAttribute('href', activitySessionsHref('project', 's'))
+    ).toHaveAttribute(
+      'href',
+      activitySessionsHref('project', 's', activitySessionParams(stSnapshot)),
+    )
     expect(screen.queryByText('task-synthetic')).not.toBeInTheDocument()
     expect(
       screen.getByText(/separate from provider usage, billed tokens/),

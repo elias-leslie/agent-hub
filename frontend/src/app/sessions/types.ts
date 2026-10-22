@@ -1,6 +1,11 @@
+import type { AccountingWindow } from '@/lib/api/duration-split'
 import type { SessionKind } from '@/lib/api/sessions'
 
-export type SortField = 'last_active' | 'status'
+export type SortField =
+  | 'last_active'
+  | 'status'
+  | 'admin_share'
+  | 'admin_duration'
 export type SortDirection = 'asc' | 'desc'
 
 export type StatusFilter = '' | 'running' | 'completed' | 'failed'
@@ -8,6 +13,9 @@ export type SincePreset = 'today' | '7d' | '30d' | 'all'
 
 /** Everything the list shows is derived from this; it round-trips through the URL. */
 export interface SessionListState {
+  accountingWindow: AccountingWindow | null
+  workRole: string
+  harness: string
   q: string
   kinds: SessionKind[]
   status: StatusFilter
@@ -23,6 +31,9 @@ export interface SessionListState {
 export const DEFAULT_KINDS: SessionKind[] = ['coding', 'chat']
 
 export const DEFAULT_LIST_STATE: SessionListState = {
+  accountingWindow: null,
+  workRole: '',
+  harness: '',
   q: '',
   kinds: DEFAULT_KINDS,
   status: '',

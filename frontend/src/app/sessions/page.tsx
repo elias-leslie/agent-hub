@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react'
 import { cn } from '@/lib/utils'
+import { AccountingWindowLabel } from './components/AccountingControls'
 import { EmptyState } from './components/EmptyState'
 import { ErrorAlert } from './components/ErrorAlert'
 import { InfiniteScrollFooter } from './components/InfiniteScrollFooter'
@@ -21,6 +22,7 @@ import { SessionsToolbar } from './components/SessionsToolbar'
 import { useSessionKeyboard } from './hooks/useSessionKeyboard'
 import {
   isDefaultFilterState,
+  sessionScopeParams,
   useSessionListState,
 } from './hooks/useSessionListState'
 import { useSessionsData } from './hooks/useSessionsData'
@@ -140,6 +142,8 @@ function SessionsView() {
             searchRef={searchRef}
             onChange={update}
             onRefresh={() => void data.refetch()}
+            workRoles={data.workRoles}
+            harnesses={data.harnesses}
           />
         </div>
       </header>
@@ -147,11 +151,12 @@ function SessionsView() {
       <main className="relative px-0 md:px-4 lg:px-8">
         <div className="page-container">
           <Link
-            href="/admin#activity"
+            href={`/admin?${sessionScopeParams(state)}#activity`}
             className="inline-block text-sm text-amber-300 underline focus-ring-amber my-3"
           >
             Work and admin activity across projects
           </Link>
+          <AccountingWindowLabel window={data.accountingWindow} />
           <div className="min-w-0 py-3">
             {data.error ? (
               <ErrorAlert

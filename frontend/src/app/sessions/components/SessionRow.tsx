@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { durationPercent, durationSeconds } from '@/lib/api/duration-split'
 import type { SessionListItem } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
 import {
@@ -15,7 +16,7 @@ import { StatusCell } from './StatusCell'
 /** Column template shared by the header and rows so they always line up. */
 export function sessionGridClass() {
   // Title is the only flexible column; branch appears only on wide screens.
-  return 'md:grid md:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_36px_112px_60px] lg:grid-cols-[84px_minmax(10rem,1fr)_112px_96px_132px_36px_112px_60px_60px] 2xl:grid-cols-[84px_minmax(12rem,1fr)_112px_96px_132px_120px_36px_112px_60px_60px]'
+  return 'xl:grid xl:grid-cols-[84px_minmax(8rem,1fr)_100px_90px_110px_36px_112px_150px_60px_60px] 2xl:grid-cols-[84px_minmax(10rem,1fr)_100px_90px_110px_100px_36px_112px_150px_60px_60px]'
 }
 
 function absolute(value: string) {
@@ -45,6 +46,7 @@ export const SessionRow = memo(function SessionRow({
   const durationMs =
     new Date(lastActive).getTime() - new Date(session.created_at).getTime()
   const source = getSessionSourceLabel(session)
+  const accounting = session.activity_accounting
   const children = session.child_session_count ?? 0
   const activeChildren = session.active_child_session_count ?? 0
   const modelTitle = identity.showRequested
@@ -60,7 +62,7 @@ export const SessionRow = memo(function SessionRow({
       data-testid="session-row"
       onClick={() => onClick(session.id)}
       className={cn(
-        'cursor-pointer gap-2 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors md:h-9 md:items-center md:py-0',
+        'cursor-pointer gap-2 border-b border-slate-800/50 px-3 py-2 text-[13px] outline-none transition-colors xl:min-h-12 xl:items-center',
         sessionGridClass(),
         isSelected
           ? 'bg-slate-800/60'
@@ -71,15 +73,15 @@ export const SessionRow = memo(function SessionRow({
       )}
     >
       {/* Phone: line 1 is title + status */}
-      <div className="flex min-w-0 items-center gap-2 md:contents">
-        <div className="order-2 shrink-0 md:order-none">
+      <div className="flex min-w-0 items-center gap-2 xl:contents">
+        <div className="order-2 shrink-0 xl:order-none">
           <StatusCell
             status={session.status}
             liveActivity={session.live_activity}
             showLabel
           />
         </div>
-        <div className="order-1 flex min-w-0 flex-1 items-baseline gap-2 md:order-none">
+        <div className="order-1 flex min-w-0 flex-1 items-baseline gap-2 xl:order-none">
           <span className="truncate text-slate-100" title={title}>
             {title}
           </span>
@@ -92,7 +94,7 @@ export const SessionRow = memo(function SessionRow({
       </div>
 
       {/* Phone: line 2 is project · kind · last active · tokens */}
-      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-[12px] text-slate-400 md:contents">
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-[12px] text-slate-400 xl:contents">
         <span className="truncate md:text-[13px] md:text-slate-300">
           {session.project_id}
         </span>
@@ -142,6 +144,27 @@ export const SessionRow = memo(function SessionRow({
           {usage.label}
         </span>
         <span
+          className="text-[11px] text-slate-300 xl:text-right"
+          title={
+            accounting
+              ? `${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded non-wait tool time; unknown ${durationPercent(accounting.unknown_share)}; duration on ${accounting.tools_sampled - accounting.tools_missing_duration}/${accounting.tools_sampled} calls${accounting.events_truncated ? '; sample capped' : ''}.`
+              : 'Tool-time accounting unavailable from this server.'
+          }
+        >
+          <span className="block tabular-nums">
+            Admin {durationPercent(accounting?.admin_share)} · Other{' '}
+            {durationPercent(accounting?.other_share)}
+          </span>
+          <span className="block text-slate-400">
+            {session.work_role?.label ?? 'Unknown'}
+            {accounting &&
+            (accounting.tools_missing_duration > 0 ||
+              accounting.events_truncated)
+              ? ' · partial'
+              : ''}
+          </span>
+        </span>
+        <span
           className="font-mono text-[12px] tabular-nums text-slate-400 md:text-right"
           title={`Last active ${absolute(lastActive)}`}
         >
@@ -163,7 +186,7 @@ export function SessionListHeader() {
     <div
       aria-hidden="true"
       className={cn(
-        'hidden h-8 items-center gap-2 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
+        'hidden xl:grid h-8 items-center gap-2 border-b border-slate-800 px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500',
         sessionGridClass(),
       )}
     >
@@ -177,6 +200,7 @@ export function SessionListHeader() {
         Sub
       </span>
       <span className="text-right">Tokens</span>
+      <span className="text-right">Tool time · role</span>
       <span className="text-right">Active</span>
       <span className="hidden text-right lg:block">Duration</span>
     </div>

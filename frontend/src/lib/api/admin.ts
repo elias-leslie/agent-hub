@@ -2,6 +2,7 @@
 
 import { fetchApi } from '@/lib/api-config'
 import { type ActivityCost, parseActivityCost } from './activity-cost'
+import { type SessionListQuery, sessionListSearchParams } from './sessions'
 
 export interface HotspotTotals {
   sessions: number
@@ -95,4 +96,24 @@ export async function fetchSessionHotspots(
     throw new Error(`Could not load activity and session data (${res.status})`)
   const data: SessionHotspots = await res.json()
   return { ...data, activity_cost: parseActivityCost(data.activity_cost) }
+}
+
+export async function fetchSessionEfficiency(
+  query: SessionListQuery,
+): Promise<ActivityCost> {
+  const res = await fetchApi(
+    `/api/admin/session-efficiency?${sessionListSearchParams(query)}`,
+  )
+  if (!res.ok) throw new Error(`Could not load activity (${res.status})`)
+  const activity = parseActivityCost(await res.json())
+  if (!activity) throw new Error('Activity data is unavailable')
+  if (
+    (query.accounting_start &&
+      Date.parse(query.accounting_start) !==
+        Date.parse(activity.window_start)) ||
+    (query.accounting_end &&
+      Date.parse(query.accounting_end) !== Date.parse(activity.window_end))
+  )
+    throw new Error('Activity returned a different accounting interval')
+  return activity
 }

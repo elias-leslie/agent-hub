@@ -162,6 +162,94 @@ afterEach(() => {
 })
 
 describe('SessionsPage', () => {
+  it('keeps the accounting scope for server sorting, paging and navigation', async () => {
+    nav.reset(
+      'kind=all&subagents=1&benchmarks=1&accounting_start=2026-10-21T12:00:00Z&accounting_end=2026-10-22T12:00:00Z&work_role=implementation&harness=pi&sort=admin_share',
+    )
+    const split = {
+      admin_seconds: 0,
+      other_seconds: 10,
+      denominator_seconds: 10,
+      admin_share: 0,
+      other_share: 1,
+      unknown_seconds: 0,
+      unknown_share: 0,
+      tools_sampled: 1,
+      tools_missing_duration: 0,
+      duration_coverage: 1,
+      events_truncated: false,
+    }
+    vi.mocked(querySessions)
+      .mockResolvedValueOnce(
+        listResponse(
+          [
+            { ...codexRow, activity_accounting: split },
+            {
+              ...claudeRow,
+              activity_accounting: {
+                ...split,
+                admin_seconds: 10,
+                other_seconds: 0,
+                admin_share: 1,
+                other_share: 0,
+              },
+            },
+          ],
+          'server-cursor',
+        ),
+      )
+      .mockResolvedValueOnce(listResponse([]))
+    mount()
+    await screen.findByText('Fix the dispatcher retry loop')
+    const rows = screen.getAllByTestId('session-row')
+    // The server order is authoritative, even when this page's shares increase.
+    expect(rows[0]).toHaveTextContent('Admin 0.0% · Other 100.0%')
+    expect(rows[1]).toHaveTextContent('Admin 100.0% · Other 0.0%')
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() =>
+      expect(querySessions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cursor: 'server-cursor',
+          accounting_start: '2026-10-21T12:00:00Z',
+          accounting_end: '2026-10-22T12:00:00Z',
+          sort_by: 'admin_share',
+          sort_direction: 'desc',
+          work_role: 'implementation',
+          harness: 'pi',
+        }),
+      ),
+    )
+    const link =
+      screen
+        .getByRole('link', { name: 'Work and admin activity across projects' })
+        .getAttribute('href') ?? ''
+    const scope = parseSessionListState(
+      new URL(link, 'https://example.test').searchParams,
+    )
+    expect(scope).toMatchObject({
+      accountingWindow: {
+        start: '2026-10-21T12:00:00Z',
+        end: '2026-10-22T12:00:00Z',
+      },
+      workRole: 'implementation',
+      harness: 'pi',
+      sort: 'admin_share',
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort' }), {
+      target: { value: 'admin_duration' },
+    })
+    await waitFor(() =>
+      expect(querySessions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          cursor: undefined,
+          sort_by: 'admin_duration',
+          accounting_start: '2026-10-21T12:00:00Z',
+          accounting_end: '2026-10-22T12:00:00Z',
+        }),
+      ),
+    )
+  })
+
   it('asks the server for recent root coding and chat sessions by default', async () => {
     mount()
     await screen.findByText('Fix the dispatcher retry loop')
@@ -244,9 +332,12 @@ describe('SessionsPage', () => {
     } as never)
     mount()
     fireEvent.click(await screen.findByText('Fix the dispatcher retry loop'))
-    expect(nav.push).toHaveBeenCalledWith(`/sessions?sel=${codexRow.id}`, {
-      scroll: false,
-    })
+    expect(nav.push).toHaveBeenCalledWith(
+      expect.stringContaining(`&sel=${codexRow.id}`),
+      {
+        scroll: false,
+      },
+    )
     const panel = await screen.findByTestId('session-inline')
     // The panel sits directly after its row.
     const row = screen
@@ -274,7 +365,8 @@ describe('SessionsPage', () => {
     expect(screen.queryByRole('link', { name: /Open/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse session' }))
-    expect(nav.replace).toHaveBeenLastCalledWith('/sessions', { scroll: false })
+    expect(new URLSearchParams(nav.search).get('sel')).toBeNull()
+    expect(new URLSearchParams(nav.search).get('accounting_end')).toBeTruthy()
   })
 
   it('restores filters and selection from the URL', async () => {
@@ -299,13 +391,16 @@ describe('SessionsPage', () => {
       fireEvent.change(screen.getByLabelText('Search sessions'), {
         target: { value: 'task-66a9' },
       })
-      expect(nav.replace).not.toHaveBeenCalled()
+      expect(new URLSearchParams(nav.search).get('q')).toBeNull()
       await act(async () => {
         vi.advanceTimersByTime(300)
       })
-      expect(nav.replace).toHaveBeenCalledWith('/sessions?q=task-66a9', {
-        scroll: false,
-      })
+      expect(nav.replace).toHaveBeenCalledWith(
+        expect.stringContaining('&q=task-66a9'),
+        {
+          scroll: false,
+        },
+      )
       expect(nav.push).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -321,7 +416,7 @@ describe('SessionsPage', () => {
     expect(completions).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(completions)
     expect(nav.replace).toHaveBeenCalledWith(
-      '/sessions?kind=coding%2Cchat%2Ccompletion',
+      expect.stringContaining('&kind=coding%2Cchat%2Ccompletion'),
       { scroll: false },
     )
   })
@@ -334,7 +429,8 @@ describe('SessionsPage', () => {
       await screen.findByText('No sessions match these filters.'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(nav.replace).toHaveBeenCalledWith('/sessions', { scroll: false })
+    expect(new URLSearchParams(nav.search).get('q')).toBeNull()
+    expect(new URLSearchParams(nav.search).get('accounting_start')).toBeTruthy()
   })
 
   it('shows a retryable error', async () => {
@@ -383,9 +479,12 @@ describe('SessionsPage', () => {
 
     second.focus()
     fireEvent.keyDown(second, { key: ' ' })
-    expect(nav.push).toHaveBeenCalledWith(`/sessions?sel=${claudeRow.id}`, {
-      scroll: false,
-    })
+    expect(nav.push).toHaveBeenCalledWith(
+      expect.stringContaining(`&sel=${claudeRow.id}`),
+      {
+        scroll: false,
+      },
+    )
   })
 })
 

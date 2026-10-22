@@ -1,5 +1,6 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { isAccountingWindow } from '@/lib/api/duration-split'
 import { SESSION_KINDS, type SessionKind } from '@/lib/api/sessions'
 import {
   DEFAULT_KINDS,
@@ -12,10 +13,18 @@ import {
   type StatusFilter,
 } from '../types'
 
-const SORT_FIELDS: readonly SortField[] = ['last_active', 'status']
+const SORT_FIELDS: readonly SortField[] = [
+  'last_active',
+  'status',
+  'admin_share',
+  'admin_duration',
+]
 
-function parseKinds(raw: string | null): SessionKind[] {
-  if (raw === null) return DEFAULT_KINDS
+function parseKinds(
+  raw: string | null,
+  fallback = DEFAULT_KINDS,
+): SessionKind[] {
+  if (raw === null) return fallback
   if (raw === 'all') return [...SESSION_KINDS]
   const kinds = raw
     .split(',')
@@ -31,13 +40,21 @@ function sameKinds(a: readonly SessionKind[], b: readonly SessionKind[]) {
 
 export function parseSessionListState(
   params: Pick<URLSearchParams, 'get'>,
+  defaults = DEFAULT_LIST_STATE,
 ): SessionListState {
   const status = params.get('status') ?? ''
   const since = params.get('since') ?? ''
   const sort = params.get('sort') ?? ''
+  const window = {
+    start: params.get('accounting_start'),
+    end: params.get('accounting_end'),
+  }
   return {
+    accountingWindow: isAccountingWindow(window) ? window : null,
+    workRole: params.get('work_role') ?? '',
+    harness: params.get('harness') ?? '',
     q: params.get('q') ?? '',
-    kinds: parseKinds(params.get('kind')),
+    kinds: parseKinds(params.get('kind'), defaults.kinds),
     status: STATUS_OPTIONS.some((option) => option.value === status)
       ? (status as StatusFilter)
       : DEFAULT_LIST_STATE.status,
@@ -46,8 +63,14 @@ export function parseSessionListState(
       : DEFAULT_LIST_STATE.since,
     project: params.get('project') ?? '',
     model: params.get('model') ?? '',
-    includeSubagents: params.get('subagents') === '1',
-    includeBenchmarks: params.get('benchmarks') === '1',
+    includeSubagents:
+      params.get('subagents') !== null
+        ? params.get('subagents') === '1'
+        : defaults.includeSubagents,
+    includeBenchmarks:
+      params.get('benchmarks') !== null
+        ? params.get('benchmarks') === '1'
+        : defaults.includeBenchmarks,
     sort: SORT_FIELDS.includes(sort as SortField)
       ? (sort as SortField)
       : DEFAULT_LIST_STATE.sort,
@@ -58,10 +81,17 @@ export function parseSessionListState(
 /** Only non-default values are written, so the bare /sessions URL is the default view. */
 export function serializeSessionListState(
   state: SessionListState,
+  defaults = DEFAULT_LIST_STATE,
 ): URLSearchParams {
   const params = new URLSearchParams()
+  if (state.accountingWindow) {
+    params.set('accounting_start', state.accountingWindow.start)
+    params.set('accounting_end', state.accountingWindow.end)
+  }
+  if (state.workRole) params.set('work_role', state.workRole)
+  if (state.harness) params.set('harness', state.harness)
   if (state.q) params.set('q', state.q)
-  if (!sameKinds(state.kinds, DEFAULT_KINDS)) {
+  if (!sameKinds(state.kinds, defaults.kinds)) {
     params.set(
       'kind',
       sameKinds(state.kinds, SESSION_KINDS) ? 'all' : state.kinds.join(','),
@@ -71,8 +101,10 @@ export function serializeSessionListState(
   if (state.since !== DEFAULT_LIST_STATE.since) params.set('since', state.since)
   if (state.project) params.set('project', state.project)
   if (state.model) params.set('model', state.model)
-  if (state.includeSubagents) params.set('subagents', '1')
-  if (state.includeBenchmarks) params.set('benchmarks', '1')
+  if (state.includeSubagents !== defaults.includeSubagents)
+    params.set('subagents', state.includeSubagents ? '1' : '0')
+  if (state.includeBenchmarks !== defaults.includeBenchmarks)
+    params.set('benchmarks', state.includeBenchmarks ? '1' : '0')
   if (state.sort !== DEFAULT_LIST_STATE.sort) params.set('sort', state.sort)
   if (state.selected) params.set('sel', state.selected)
   return params
@@ -86,35 +118,67 @@ export function isDefaultFilterState(state: SessionListState): boolean {
     state.since === DEFAULT_LIST_STATE.since &&
     !state.project &&
     !state.model &&
+    !state.workRole &&
+    !state.harness &&
     !state.includeSubagents &&
     !state.includeBenchmarks
   )
+}
+
+/** Cross-route links make default scope explicit as routes have different defaults. */
+export function sessionScopeParams(state: SessionListState): URLSearchParams {
+  const params = serializeSessionListState(state)
+  params.set(
+    'kind',
+    sameKinds(state.kinds, SESSION_KINDS) ? 'all' : state.kinds.join(','),
+  )
+  params.set('subagents', state.includeSubagents ? '1' : '0')
+  params.set('benchmarks', state.includeBenchmarks ? '1' : '0')
+  return params
 }
 
 /**
  * The URL is the only store for list state. Filter edits replace the current
  * history entry; opening a preview pushes one so Back closes it.
  */
-export function useSessionListState() {
+export function useSessionListState(defaults = DEFAULT_LIST_STATE) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const searchKey = searchParams.toString()
+  const [initialWindow] = useState(() => accountingWindowForHours(24))
 
-  const state = useMemo(
-    () => parseSessionListState(new URLSearchParams(searchKey)),
-    [searchKey],
-  )
+  const state = useMemo(() => {
+    const parsed = parseSessionListState(
+      new URLSearchParams(searchKey),
+      defaults,
+    )
+    return {
+      ...parsed,
+      accountingWindow: parsed.accountingWindow ?? initialWindow,
+    }
+  }, [searchKey, defaults, initialWindow])
 
   const navigate = useCallback(
     (next: SessionListState, mode: 'push' | 'replace') => {
-      const query = serializeSessionListState(next).toString()
+      const query = serializeSessionListState(next, defaults).toString()
       const href = query ? `${pathname}?${query}` : pathname
       if (mode === 'push') router.push(href, { scroll: false })
       else router.replace(href, { scroll: false })
     },
-    [pathname, router],
+    [pathname, router, defaults],
   )
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchKey)
+    if (
+      !isAccountingWindow({
+        start: params.get('accounting_start'),
+        end: params.get('accounting_end'),
+      })
+    )
+      navigate(state, 'replace')
+  }, [navigate, searchKey, state])
 
   const update = useCallback(
     (patch: Partial<SessionListState>) => {
@@ -135,10 +199,23 @@ export function useSessionListState() {
 
   const clearFilters = useCallback(() => {
     navigate(
-      { ...DEFAULT_LIST_STATE, sort: state.sort, selected: state.selected },
+      {
+        ...defaults,
+        accountingWindow: state.accountingWindow,
+        sort: state.sort,
+        selected: state.selected,
+      },
       'replace',
     )
-  }, [navigate, state.selected, state.sort])
+  }, [navigate, defaults, state.accountingWindow, state.selected, state.sort])
 
   return { state, update, select, clearFilters }
+}
+
+export function accountingWindowForHours(hours: number) {
+  const end = new Date()
+  return {
+    start: new Date(end.getTime() - hours * 3_600_000).toISOString(),
+    end: end.toISOString(),
+  }
 }

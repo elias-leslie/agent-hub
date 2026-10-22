@@ -1,3 +1,10 @@
+import {
+  type DurationSplit,
+  isDurationSplit,
+  isWorkRoleOption,
+  type WorkRoleOption,
+} from './duration-split'
+
 /** Recorded usage and separate, explicitly estimated ST text footprint. */
 export type ActivityCategory = 'substantive' | 'administration' | 'unknown'
 
@@ -114,6 +121,12 @@ export interface SessionEfficiencyData {
 }
 
 export interface ActivityCost {
+  duration_split?: DurationSplit
+  by_project?: (ActivityComparison & { project_id: string })[]
+  by_work_role?: (ActivityComparison & { work_role_id: string })[]
+  by_harness?: (ActivityComparison & { harness_id: string })[]
+  work_roles?: WorkRoleOption[]
+  harnesses?: WorkRoleOption[]
   window_start: string
   window_end: string
   sessions: number
@@ -171,6 +184,21 @@ export interface ActivityCost {
     transcript: ActivityTranscript
   }[]
   task_rollups_total: number
+}
+
+export interface ActivityComparison {
+  label: string
+  sessions: number
+  duration_split: DurationSplit
+  usage?: ActivityUsage
+  cost?: {
+    recorded_calls: number
+    api_equiv_known_calls: number
+    cash_known_calls: number
+    api_equiv_usd: number | null
+    cash_usd: number | null
+  }
+  coverage?: { usage_sessions: number; missing_usage_sessions: number }
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -444,6 +472,7 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
     !transcript(value.transcript) ||
     !stCommands(value.st_commands) ||
     !sessionEfficiency(value.session_efficiency) ||
+    !activityComparisons(value) ||
     !Array.isArray(value.project_rankings) ||
     !value.project_rankings.every(
       (row) =>
@@ -500,16 +529,90 @@ export function parseActivityCost(value: unknown): ActivityCost | null {
   return value as unknown as ActivityCost
 }
 
+function activityComparisons(value: Record<string, unknown>): boolean {
+  if (
+    value.duration_split !== undefined &&
+    !isDurationSplit(value.duration_split)
+  )
+    return false
+  for (const key of ['work_roles', 'harnesses']) {
+    if (
+      value[key] !== undefined &&
+      (!Array.isArray(value[key]) || !value[key].every(isWorkRoleOption))
+    )
+      return false
+  }
+  for (const [key, id] of [
+    ['by_project', 'project_id'],
+    ['by_work_role', 'work_role_id'],
+    ['by_harness', 'harness_id'],
+  ]) {
+    const rows = value[key]
+    if (rows === undefined) continue
+    if (
+      !Array.isArray(rows) ||
+      !rows.every(
+        (row: unknown) =>
+          record(row) &&
+          strings(row, [id, 'label']) &&
+          numbers(row, ['sessions']) &&
+          isDurationSplit(row.duration_split) &&
+          (row.usage === undefined || usage(row.usage)) &&
+          (row.coverage === undefined ||
+            (record(row.coverage) &&
+              numbers(row.coverage, [
+                'usage_sessions',
+                'missing_usage_sessions',
+              ]))) &&
+          (row.cost === undefined ||
+            (record(row.cost) &&
+              numbers(row.cost, [
+                'recorded_calls',
+                'api_equiv_known_calls',
+                'cash_known_calls',
+              ]) &&
+              ['api_equiv_usd', 'cash_usd'].every(
+                (key) =>
+                  row.cost !== null &&
+                  record(row.cost) &&
+                  (row.cost[key] === null || numbers(row.cost, [key])),
+              ) &&
+              Number(row.cost.api_equiv_known_calls) <=
+                Number(row.cost.recorded_calls) &&
+              Number(row.cost.cash_known_calls) <=
+                Number(row.cost.recorded_calls))),
+      )
+    )
+      return false
+  }
+  return true
+}
+
+export function activitySessionParams(
+  activity: Pick<ActivityCost, 'window_start' | 'window_end'>,
+  scope?: URLSearchParams,
+): URLSearchParams {
+  const params = new URLSearchParams(
+    scope ?? { kind: 'all', subagents: '1', benchmarks: '1', since: 'all' },
+  )
+  params.set('accounting_start', activity.window_start)
+  params.set('accounting_end', activity.window_end)
+  return params
+}
+
 export function activitySessionsHref(
   project?: string,
   session?: string,
+  scope?: URLSearchParams,
 ): string {
-  const params = new URLSearchParams({
-    kind: 'all',
-    subagents: '1',
-    benchmarks: '1',
-    since: 'all',
-  })
+  const params = new URLSearchParams(
+    scope ?? {
+      kind: 'all',
+      subagents: '1',
+      benchmarks: '1',
+      since: 'all',
+    },
+  )
   if (project) params.set('project', project)
   if (session) params.set('sel', session)
   return `/sessions?${params.toString()}`

@@ -4,6 +4,17 @@
 
 import type { SessionEventsResponse, TimelineEvent } from '@/types/events'
 import { fetchApi, getApiBaseUrl } from '../api-config'
+import {
+  type AccountingWindow,
+  type DurationSplit,
+  isAccountingWindow,
+  isDurationSplit,
+  isRecord,
+  isSessionWorkRole,
+  isWorkRoleOption,
+  type SessionWorkRole,
+  type WorkRoleOption,
+} from './duration-split'
 
 export type SessionTimelineEvent = TimelineEvent
 export type { SessionEventsResponse }
@@ -78,6 +89,7 @@ export interface LiveActivity {
 }
 
 export interface Session {
+  work_role?: SessionWorkRole | null
   id: string
   project_id: string
   provider: string
@@ -136,6 +148,8 @@ export interface Session {
 }
 
 export interface SessionListItem {
+  work_role?: SessionWorkRole | null
+  activity_accounting?: DurationSplit | null
   id: string
   project_id: string
   provider: string
@@ -184,6 +198,9 @@ export interface SessionListItem {
 }
 
 export interface SessionListResponse {
+  accounting_window?: AccountingWindow
+  work_roles?: WorkRoleOption[]
+  harnesses?: WorkRoleOption[]
   sessions: SessionListItem[]
   total: number
   page: number
@@ -201,6 +218,10 @@ export const SESSION_KINDS: readonly SessionKind[] = [
 ]
 
 export interface SessionListQuery {
+  accounting_start?: string
+  accounting_end?: string
+  work_role?: string
+  harness?: string
   q?: string
   kind?: readonly SessionKind[]
   status?: string
@@ -211,13 +232,15 @@ export interface SessionListQuery {
   exclude_benchmarks?: boolean
   parent_session_id?: string
   /** time = coalesce(last_activity_at, updated_at, created_at). */
-  sort_by?: 'last_active' | 'status' | 'time'
+  sort_by?: 'last_active' | 'status' | 'time' | 'admin_share' | 'admin_duration'
   sort_direction?: 'asc' | 'desc'
   cursor?: string
   page_size?: number
 }
 
 export interface SessionFacets {
+  work_roles?: WorkRoleOption[]
+  harnesses?: WorkRoleOption[]
   status: Record<string, number>
   kind: Record<SessionKind, number>
   projects: { project_id: string; count: number }[]
@@ -233,8 +256,18 @@ export interface SessionEventsSummary {
   usage_cached_input_tokens?: number | null
 }
 
-function sessionListSearchParams(query: SessionListQuery): URLSearchParams {
+export function sessionListSearchParams(
+  query: SessionListQuery,
+): URLSearchParams {
   const params = new URLSearchParams()
+  for (const key of [
+    'accounting_start',
+    'accounting_end',
+    'work_role',
+    'harness',
+  ] as const) {
+    if (query[key]) params.set(key, query[key])
+  }
   if (query.q) params.set('q', query.q)
   if (query.kind?.length) params.set('kind', query.kind.join(','))
   if (query.status) params.set('status', query.status)
@@ -262,7 +295,33 @@ export async function querySessions(
   if (!response.ok) {
     throw new Error(`Sessions fetch failed: ${response.status}`)
   }
-  return response.json()
+  return parseSessionListResponse(await response.json())
+}
+
+/** Validate additive accounting fields; older servers keep them unavailable. */
+export function parseSessionListResponse(value: unknown): SessionListResponse {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.sessions) ||
+    typeof value.total !== 'number' ||
+    !value.sessions.every(
+      (row: unknown) =>
+        isRecord(row) &&
+        typeof row.id === 'string' &&
+        (row.activity_accounting == null ||
+          isDurationSplit(row.activity_accounting)) &&
+        (row.work_role == null || isSessionWorkRole(row.work_role)),
+    ) ||
+    (value.accounting_window !== undefined &&
+      !isAccountingWindow(value.accounting_window)) ||
+    ['work_roles', 'harnesses'].some(
+      (key) =>
+        value[key] !== undefined &&
+        (!Array.isArray(value[key]) || !value[key].every(isWorkRoleOption)),
+    )
+  )
+    throw new Error('Session accounting data is incomplete or invalid')
+  return value as unknown as SessionListResponse
 }
 
 /** Facet counts for the same filters; each facet ignores its own filter. */
@@ -278,7 +337,17 @@ export async function fetchSessionFacets(
   if (!response.ok) {
     throw new Error(`Session facets fetch failed: ${response.status}`)
   }
-  return response.json()
+  const value: unknown = await response.json()
+  if (
+    !isRecord(value) ||
+    ['work_roles', 'harnesses'].some(
+      (key) =>
+        value[key] !== undefined &&
+        (!Array.isArray(value[key]) || !value[key].every(isWorkRoleOption)),
+    )
+  )
+    throw new Error('Session filters are incomplete or invalid')
+  return value as unknown as SessionFacets
 }
 
 export async function fetchSessionEventsSummary(

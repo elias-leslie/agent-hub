@@ -1,0 +1,48 @@
+{
+  "bodyWidth": 1440,
+  "capturedAt": "2026-10-22T19:13:19.596Z",
+  "controls": [
+    {
+      "label": "Tool-time windowLast hourLast dayLast week",
+      "value": "24"
+    },
+    {
+      "label": "Work roleAllCoordinatorImplementationResearchReviewReconHuntingOperationsOtherUnknown",
+      "value": ""
+    },
+    {
+      "label": "HarnessAllCodex CLIAgent HubClaude CodeAntigravityPiUnknown",
+      "value": "codex_cli"
+    },
+    {
+      "label": "ActiveToday7 days30 daysAll time",
+      "value": "all"
+    },
+    {
+      "label": "ProjectAll projectsp1 (1)",
+      "value": ""
+    },
+    {
+      "label": "SortLast activeStatusAdmin share \u00b7 highest firstAdmin time \u00b7 longest first",
+      "value": "admin_share"
+    }
+  ],
+  "darkReader": false,
+  "details": [],
+  "documentWidth": 1440,
+  "filter": "none",
+  "focus": {
+    "boxShadow": "none",
+    "outline": "oklab(0.556 0 0 / 0.5) none 3px",
+    "tag": "BODY",
+    "text": "Sessions1 matchingFilters (4)ClosingWhen sessions closeTool-time windowLast hourLast dayLast weekWork roleAllCoordinatorImplementationResearchReviewReconHunting"
+  },
+  "links": [],
+  "renderedText": "Work and admin activity across projects\n\nTool-time interval: 10/21/2026, 8:00:00 AM \u2013 10/22/2026, 8:00:00 AM. Admin and Other use recorded non-wait tool time. Other includes substantive + unknown.\n\nSTATUS\nSESSION\nPROJECT\nSOURCE\nMODEL\nSUB\nTOKENS\nTOOL TIME \u00b7 ROLE\nACTIVE\nDURATION\nCompleted\nReview recorded activity\nfixture-\np1\ncodex\nstored-model\n\u2014\nnot captured\nAdmin 80.0% \u00b7 Other 20.0%\nImplementation \u00b7 partial\n7h ago\n1h 0m\nAll 1 shown\nTokens in 0 \u00b7 out 0 across 0 of 1 loaded with usage",
+  "theme": "dark",
+  "url": "http://127.0.0.1:4328/sessions?accounting_start=2026-10-21T12%3A00%3A00Z&accounting_end=2026-10-22T12%3A00%3A00Z&harness=codex_cli&kind=all&subagents=1&benchmarks=1&sort=admin_share",
+  "viewport": {
+    "height": 1000,
+    "width": 1440
+  }
+}

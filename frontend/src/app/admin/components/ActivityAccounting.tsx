@@ -4,6 +4,7 @@ import Link from 'next/link'
 import {
   type ActivityCost,
   type ActivityTranscript,
+  activitySessionParams,
   activitySessionsHref,
 } from '@/lib/api/activity-cost'
 import { StCommandActivity } from './StCommandActivity'
@@ -19,7 +20,14 @@ function percent(value: number | null) {
   return value === null ? 'Unavailable' : `${(value * 100).toFixed(1)}%`
 }
 
-export function ActivityAccounting({ activity }: { activity: ActivityCost }) {
+export function ActivityAccounting({
+  activity,
+  sessionParams,
+}: {
+  activity: ActivityCost
+  sessionParams?: URLSearchParams
+}) {
+  const scope = activitySessionParams(activity, sessionParams)
   const admin = activity.transcript.breakdown.find(
     (row) => row.category === 'administration',
   )
@@ -104,6 +112,7 @@ export function ActivityAccounting({ activity }: { activity: ActivityCost }) {
       <StCommandActivity
         commands={activity.st_commands}
         sampleCapped={activity.events_truncated}
+        sessionParams={scope}
       />
       <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4 space-y-2 text-sm text-slate-300">
         <h3 className="font-semibold text-slate-100">Usage sources and gaps</h3>
@@ -144,7 +153,7 @@ export function ActivityAccounting({ activity }: { activity: ActivityCost }) {
               className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-1"
             >
               <Link
-                href={activitySessionsHref(row.project_id)}
+                href={activitySessionsHref(row.project_id, undefined, scope)}
                 className="text-sm text-amber-300 underline focus-ring-amber break-words"
               >
                 {row.project_id}
@@ -177,7 +186,11 @@ export function ActivityAccounting({ activity }: { activity: ActivityCost }) {
               className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 space-y-1"
             >
               <Link
-                href={activitySessionsHref(row.project_id, row.session_id)}
+                href={activitySessionsHref(
+                  row.project_id,
+                  row.session_id,
+                  scope,
+                )}
                 className="text-sm text-amber-300 underline focus-ring-amber break-all"
               >
                 {row.project_id} · {row.session_id}
