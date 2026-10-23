@@ -30,6 +30,10 @@ const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, 'id'>> = {
   xai: { name: 'xAI', hint: 'xAI (Grok) API key' },
   typesafe: { name: 'TypeSafe', hint: 'Typed judgment API credential' },
   nvidia: { name: 'NVIDIA NIM', hint: 'NVIDIA developer API key (nvapi-…)' },
+  'opencode-go': {
+    name: 'OpenCode Go',
+    hint: 'Go plan API key. Used for the limits card on Costs.',
+  },
   cloudflare: {
     name: 'Cloudflare',
     hint: 'Workers AI account ID and API token',
@@ -169,6 +173,11 @@ export const PROVIDER_COLORS: Record<string, ProviderColor> = {
   gemini: { dot: 'bg-blue-400', bg: 'border-blue-500/20', chart: '#3b82f6' },
   local: { dot: 'bg-slate-400', bg: 'border-slate-500/20', chart: '#94a3b8' },
   nvidia: { dot: 'bg-lime-400', bg: 'border-lime-500/20', chart: '#84cc16' },
+  'opencode-go': {
+    dot: 'bg-orange-400',
+    bg: 'border-orange-500/20',
+    chart: '#fb923c',
+  },
   typesafe: { dot: 'bg-teal-400', bg: 'border-teal-500/20', chart: '#14b8a6' },
   xai: { dot: 'bg-red-400', bg: 'border-red-500/20', chart: '#ef4444' },
 }

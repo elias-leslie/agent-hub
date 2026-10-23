@@ -135,6 +135,10 @@ class ModelsResponse(BaseModel):
         default_factory=dict,
         description="Provider id -> display name for all providers present in models",
     )
+    credential_only_providers: dict[str, str] = Field(
+        default_factory=dict,
+        description="Provider id -> display name for key-only providers that never route workloads",
+    )
     last_sync: datetime | None = None
     last_model_review: datetime | None = None
     catalog_health: CatalogHealthInfo | None = None

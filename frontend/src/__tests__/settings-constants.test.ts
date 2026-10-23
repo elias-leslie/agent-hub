@@ -19,6 +19,7 @@ const LIVE_PROVIDERS = [
   'gemini',
   'local',
   'nvidia',
+  'opencode-go',
   'typesafe',
   'xai',
 ]

@@ -27,7 +27,7 @@ from app.constants.models import PROVIDER_NAMES
 from app.core.request_actor import current_request_actor
 from app.db import get_db
 from app.middleware.access_control_auth import require_service_client
-from app.routing.registry import is_workload_provider
+from app.routing.registry import CREDENTIAL_ONLY_PROVIDERS, is_workload_provider
 from app.services._enrichment_normalizers import _bare_model_id
 
 if TYPE_CHECKING:
@@ -305,6 +305,9 @@ async def list_models() -> ModelsResponse:
     return ModelsResponse(
         models=models,
         providers=providers,
+        credential_only_providers={
+            p: PROVIDER_NAMES.get(p, p.capitalize()) for p in sorted(CREDENTIAL_ONLY_PROVIDERS)
+        },
         last_sync=last_sync,
         last_model_review=last_model_review,
         catalog_health=catalog_health,

@@ -38,7 +38,11 @@ import type {
 export function useProvidersTab() {
   const queryClient = useQueryClient()
   const catalog = useModelsWithSync()
-  const liveProviderNames = catalog.providers
+  // Key-only providers (no routable models) are live too, not retired.
+  const liveProviderNames = {
+    ...catalog.credentialOnlyProviders,
+    ...catalog.providers,
+  }
   const liveProviderIds = Object.keys(liveProviderNames)
   const oauthProviderIds = liveProviderIds.filter(isOAuthProvider)
 

@@ -41,6 +41,7 @@ export interface ModelOption {
 export interface ModelsApiResponse {
   models: ModelOption[]
   providers: Record<string, string>
+  credential_only_providers?: Record<string, string>
   last_sync: string | null
   last_model_review: string | null
   catalog_health: CatalogHealth | null
@@ -77,6 +78,7 @@ export function useModelsWithSync() {
   return {
     models: query.data?.models ?? [],
     providers: query.data?.providers ?? {},
+    credentialOnlyProviders: query.data?.credential_only_providers ?? {},
     lastSync: query.data?.last_sync ?? null,
     lastModelReview: query.data?.last_model_review ?? null,
     catalogHealth: query.data?.catalog_health ?? null,

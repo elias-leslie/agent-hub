@@ -8,7 +8,11 @@ import pytest
 
 from app.constants import catalog
 from app.routing import availability
-from app.routing.registry import get_provider_for_model, list_credential_providers
+from app.routing.registry import (
+    get_provider_for_model,
+    is_workload_provider,
+    list_credential_providers,
+)
 from app.services.model_runtime_health import classify_runtime_failure
 from tests.model_ids import MODEL_CATALOG
 
@@ -44,6 +48,11 @@ async def test_inactive_and_uncatalogued_models_are_unavailable(inactive_minimax
 
 def test_inactive_providers_still_accept_credentials(inactive_minimax) -> None:
     assert "minimax" in list_credential_providers()
+
+
+def test_opencode_go_accepts_a_key_but_never_routes() -> None:
+    assert "opencode-go" in list_credential_providers()
+    assert not is_workload_provider("opencode-go")
 
 
 @pytest.mark.asyncio
