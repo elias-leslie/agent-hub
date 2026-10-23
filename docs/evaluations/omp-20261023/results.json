@@ -1,0 +1,98 @@
+{
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "quota_before": {
+    "note": "first probe lacked User-Agent and x-opencode-session headers and returned HTTP 403; with both headers the endpoint returned 200"
+  },
+  "pi": {
+    "harness": "pi",
+    "exit": 0,
+    "wall_s": 6.67,
+    "correct": true,
+    "expected": {
+      "sum": 1921,
+      "above50": 19
+    },
+    "got": {
+      "sum": 1921,
+      "above50": 19
+    },
+    "assistant_turns": 3,
+    "tool_calls": 2,
+    "usage": {
+      "input": 1779,
+      "output": 190,
+      "cacheRead": 2688,
+      "cacheWrite": 0,
+      "cost": 0.00038891399999999997
+    },
+    "last_stop": "stop",
+    "first_call_inclusive_input": 1329
+  },
+  "omp": {
+    "harness": "omp",
+    "exit": 0,
+    "wall_s": 10.41,
+    "correct": true,
+    "expected": {
+      "sum": 1921,
+      "above50": 19
+    },
+    "got": {
+      "sum": 1921,
+      "above50": 19
+    },
+    "assistant_turns": 4,
+    "tool_calls": 3,
+    "usage": {
+      "input": 4332,
+      "output": 343,
+      "cacheRead": 11136,
+      "cacheWrite": 0,
+      "cost": 0.000889008
+    },
+    "last_stop": "stop",
+    "first_call_inclusive_input": 3658
+  },
+  "quota_after": {
+    "note": "first probe lacked User-Agent and x-opencode-session headers and returned HTTP 403; with both headers the endpoint returned 200"
+  },
+  "quota_probe_with_headers": {
+    "http_status": 200,
+    "windows": {
+      "rolling": {
+        "status": "ok",
+        "percent": 0
+      },
+      "weekly": {
+        "status": "ok",
+        "percent": 7
+      },
+      "monthly": {
+        "status": "ok",
+        "percent": 3
+      }
+    },
+    "note": "read after both runs; integer percent too coarse to show the ~$0.0013 combined run cost"
+  },
+  "versions": {
+    "pi": "1.4.0 (@earendil-works/pi-coding-agent)",
+    "omp": "18.12.6 (release binary omp-linux-x64, SHA-256 verified against SHA256SUMS.txt)",
+    "omp_upstream_main": "0b5c27ab24"
+  },
+  "settings": {
+    "thinking": "low",
+    "tools": "read,bash,write",
+    "pi_flags": "--no-extensions --no-skills --no-prompt-templates --no-context-files --no-approve --no-session",
+    "omp_flags": "--no-extensions --no-skills --no-rules --no-lsp --no-title --no-session; isolated HOME/PI_CONFIG_DIR/XDG dirs"
+  },
+  "rpc_smoke": {
+    "command": "get_state",
+    "exit": 0,
+    "wall_s": 0.51,
+    "success": true,
+    "model_reported": "deepseek-v4.1-flash",
+    "inference": false
+  },
+  "pi_state_unchanged": true,
+  "repeats": 1
+}
