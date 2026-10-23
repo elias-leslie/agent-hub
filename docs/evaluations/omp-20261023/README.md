@@ -101,7 +101,8 @@ Read-only audits covered Pi, OpenCode and `st aico` coordination. The owner then
 ## Owner items
 - Checked by the owner: "Extra usage" is off, and the workspace already allows Global regions.
 - The workspace has $0 credits and no auto-recharge, so the key can't spend beyond the Go plan.
-- Lock-down options for the `Pi-Go` key were reviewed in the console (the key currently has full workspace permissions); changes are pending owner approval.
+- With owner approval, the `Pi-Go` key (used by Pi and Agent Hub) was changed in place from All to Restricted: Models = Request, Usage = Read, everything else None. Afterwards a Pi call on `opencode-go/deepseek-v4.1-flash` and the quota route both worked.
+- Left as is: no IP restriction (residential Frontier IPv4 that may change), no expiry, no SSO (single-member workspace), no spending policy ($0 credits, no auto-recharge, Extra usage off).
 
 ## Cost of this work
 Measured from transcripts (deduplicated by message id), priced at Agent Hub `model_catalog.json` rates (Opus 5.5 $4/$20, cache read $0.20 / write $5; Sonnet 5.5 $2/$10, $0.10 / $2.50 per M), API-equivalent:
