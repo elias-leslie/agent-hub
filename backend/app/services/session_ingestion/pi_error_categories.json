@@ -5,6 +5,7 @@
     {"id": "content_flagged", "contains": ["flagged for possible", "cybersecurity risk"]},
     {"id": "region_unavailable", "contains": ["requires global regions"]},
     {"id": "free_tier_restricted", "contains": ["freetiererror", "free tier"]},
+    {"id": "usage_limit", "contains": ["usage limit", "quota"]},
     {"id": "request_timeout", "contains": ["timed out", "timeout"]},
     {"id": "rate_limited", "contains": ["rate limit", "too many requests"]},
     {"id": "request_aborted", "contains": ["request was aborted", "aborted"]},

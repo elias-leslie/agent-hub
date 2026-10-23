@@ -228,6 +228,7 @@ def test_pi_error_events_are_counted_with_a_content_free_category():
     assert classify_pi_error("Request timed out.") == "request_timeout"
     assert classify_pi_error('400: {"message":"This Go model requires Global regions."}') == "region_unavailable"
     assert classify_pi_error('403: {"type":"FreeTierError"}') == "free_tier_restricted"
+    assert classify_pi_error("The ChatGPT user has reached their Subscription Sharing usage limit.") == "usage_limit"
     assert classify_pi_error("something new") == "request_failed"
     assert summarize_pi_errors(0, "ignored") is None
     summary = summarize_pi_errors(3, "Request timed out.\n" + "x" * 500)
