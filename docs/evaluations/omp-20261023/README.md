@@ -95,14 +95,13 @@ Read-only audits covered Pi, OpenCode and `st aico` coordination. The owner then
 - The Costs page has an "OpenCode Go limits used" card below Plans and credits, showing 5 hours, Week and Month with percent, status and reset time. A line says the endpoint is unofficial.
 - Route: `GET /analytics/subscriptions/opencode-go/usage`. It caches for 60 s; TTL, URL and timeout are config. Any HTTP or parse failure shows "unavailable".
 - The session id is a persisted UUID in `~/.local/state/agent-hub/opencode-session-id`.
-- The key resolves through the existing `get_env_api_key("opencode-go")`: `OPENCODE_API_KEY`, then the Agent Hub credential store. Neither holds it yet, so the live card shows "Not set up". The key was not copied out of Pi's store.
-- A process-local run of the deployed code matched a direct GET: 0% / 7% / 3%.
+- The key resolves through the existing `get_env_api_key("opencode-go")`: `OPENCODE_API_KEY`, then the Agent Hub credential store. At the owner's request the Pi key was copied into the encrypted credential store (never printed). After a restart, the live route returned 0% / 7% / 3%, matching a direct GET.
+- OpenCode Go is listed in Settings → LLM Providers as a key-only provider (`99b46aa58`): it accepts a key but never routes workloads, like TypeSafe.
 
 ## Owner items
-- **To turn on the quota card:** add the OpenCode Go key as an `opencode-go` API key in Agent Hub Credentials. The card shows live numbers within about a minute.
-- The OpenCode Console account and key still exist remotely. Revoke them if Zen won't be used.
-- The Go "requires Global regions" errors come from the OpenCode workspace's privacy setting.
-- Check whether "Extra usage" is on. If it is, Go spends the pay-as-you-go balance after the limits instead of blocking.
+- Checked by the owner: "Extra usage" is off, and the workspace already allows Global regions.
+- The workspace has $0 credits and no auto-recharge, so the key can't spend beyond the Go plan.
+- Lock-down options for the `Pi-Go` key were reviewed in the console (the key currently has full workspace permissions); changes are pending owner approval.
 
 ## Cost of this work
 Measured from transcripts (deduplicated by message id), priced at Agent Hub `model_catalog.json` rates (Opus 5.5 $4/$20, cache read $0.20 / write $5; Sonnet 5.5 $2/$10, $0.10 / $2.50 per M), API-equivalent:
