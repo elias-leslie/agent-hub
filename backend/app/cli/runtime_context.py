@@ -19,11 +19,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render runtime context for external agentic CLIs.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("sync-opencode", help="Ingest an OpenCode native export from stdin.")
-
-    retire = subparsers.add_parser("retire-opencode", help="Finalize OpenCode sessions for an exactly retired Tether ownership ID.")
-    retire.add_argument("--aico-session", required=True)
-
     retire_pi = subparsers.add_parser("retire-pi", help="Finalize Pi sessions for an exactly retired Tether ownership ID.")
     retire_pi.add_argument("--aico-session", required=True)
 
@@ -224,35 +219,20 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             print("Native session work role registration unavailable", file=sys.stderr)
             return 2
-    if args.command in {"retire-opencode", "retire-pi"}:
-        surface_name = "Pi" if args.command == "retire-pi" else "OpenCode"
+    if args.command == "retire-pi":
         try:
-            from app.services.session_ingestion.opencode_sync import retire_opencode_sessions
             from app.services.session_ingestion.pi_sync import retire_pi_sessions
             async def run_retirement() -> dict:
                 async with async_session() as db:
-                    retire_sessions = retire_pi_sessions if args.command == "retire-pi" else retire_opencode_sessions
-                    return await retire_sessions(db, args.aico_session)
+                    return await retire_pi_sessions(db, args.aico_session)
             result = asyncio.run(run_retirement())
             print(json.dumps(result))
             if result.get("unavailable_session_ids"):
-                print(f"{surface_name} retirement sync unavailable", file=sys.stderr)
+                print("Pi retirement sync unavailable", file=sys.stderr)
                 return 2
             return 0
         except Exception:
-            print(f"{surface_name} retirement sync unavailable", file=sys.stderr)
-            return 2
-    if args.command == "sync-opencode":
-        try:
-            from app.services.session_ingestion.opencode_sync import sync_opencode_export
-            payload = json.loads(sys.stdin.read(16 * 1024 * 1024 + 1))
-            async def run_sync() -> dict:
-                async with async_session() as db:
-                    return await sync_opencode_export(db, payload)
-            print(json.dumps(asyncio.run(run_sync())))
-            return 0
-        except Exception:
-            print("OpenCode session sync unavailable", file=sys.stderr)
+            print("Pi retirement sync unavailable", file=sys.stderr)
             return 2
     if args.command == "sync-pi":
         try:

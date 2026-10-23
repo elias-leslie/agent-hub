@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SURFACES = ("claude_code", "codex", "pi", "antigravity", "opencode")
+SURFACES = ("claude_code", "codex", "pi", "antigravity")
 
 
 def _parser() -> argparse.ArgumentParser:

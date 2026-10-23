@@ -29,7 +29,8 @@ payloads that each TUI otherwise spills from native hook output into truncated
 previews. Their native SessionStart/SubagentStart hooks only bind the immutable
 launch artifact to real session/subagent IDs, preventing a second context copy.
 
-OpenCode, Hermes CLI, Claude GPT, and Gemini CLI are retired. Historical delivery metadata
+The OpenCode CLI integration (removed 2026-10-23; OpenCode Go is used only through
+Pi), Hermes CLI, Claude GPT, and Gemini CLI are retired. Historical delivery metadata
 and saved sessions remain readable. The installer removes the old Claude GPT
 launcher/settings links; it does not revive retired clients.
 
@@ -197,48 +198,3 @@ services and verify the installed context-adapter source links before launching
 a fresh root with `st aico create ... --work-role implementation`. Existing
 processes need their normal native resume/extension reload before using updated
 producer code; no live activation or deployment is performed by this checkpoint.
-
-### OpenCode v2 native free models
-
-Install the source-linked plugin and launcher with
-`python3 integrations/context-delivery/install.py --surface opencode`.
-Tether exposes `opencode-deepseek-free` and `opencode-glm-free` as ordinary Aico
-and A-Term tools. The launcher resolves the official CLI on PATH or under
-`~/.opencode/bin`, uses its authenticated service, and allocates native sessions
-with `opencode api session.create` before launching `mini --model`.
-
-The [v2 plugin context hook](https://opencode.ai/v2/docs/build/plugins) appends the
-canonical contract to the native system instructions before each main agent
-model request. The adapter stores the exact delivery artifact and uses native
-session get/context APIs after idle to ingest completed messages. Orderly launcher
-exit also syncs a native session export. Context and sync failures are visible;
-OpenCode retains its native session for later export. The adapter never reads
-credentials, sets provider headers, or substitutes inference endpoints.
-
-Selection is retained in `opencode_selection`; completed assistant model labels
-and message token/cost fields are separate native evidence. Native labels are not
-independent proof of the upstream model. Response input includes uncached input,
-cache reads and cache writes; the original native fields remain retained. Stable
-message identities make repeat sync idempotent. Tether root resume and crash catchup are not yet implemented; child/fork exports fail closed for accounting.
-Resume requires an exact `--session`; continue-last and fork through the launcher
-are rejected because they can change the identity being recorded.
-
-The [official model list](https://opencode.ai/v2/docs/console/models/) identifies
-`opencode/deepseek-v4.1-flash-free` and `opencode/glm-5.3-flash-free` as free for a
-limited time. Paid IDs without `-free` are separate selections. Runtime evidence
-is retained in `docs/evaluations/opencode-native-20261022/`.
-
-OpenCode Aico launches set the native session's permission rules to
-`[{"action":"*","resource":"*","effect":"allow"}]` through `session.create`
-(or `session.update` for an exact resume), so routine tools continue without
-prompts. OpenCode's native policy enforcement still applies. No global user
-configuration is modified.
-
-After Tether retires the exact owned workload, its OpenCode context adapter calls
-`retire-opencode` with that immutable Aico ownership ID. Agent Hub resolves only
-matching OpenCode records, interrupts/waits for the native session through the
-supported CLI API, exports once, and finalizes its record. Repeating retirement
-skips completed sessions. A retained retirement marker prevents late idle exports
-from reopening them. Tether reports `contextFinalization: unavailable` if this
-accounting step fails. Native tool-output parsing is versioned per Hub session so
-new output fields do not rewrite previously committed event identities.

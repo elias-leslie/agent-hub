@@ -79,8 +79,8 @@ async def test_pi_sync_forwards_launch_declaration_on_existing_sync_seam(client,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("surface", ["pi", "opencode"])
-async def test_retirement_forwards_only_exact_owner_to_canonical_cli(client, monkeypatch, surface):
+async def test_retirement_forwards_only_exact_owner_to_canonical_cli(client, monkeypatch):
+    surface = "pi"
     run = AsyncMock(return_value=(0, b"", b""))
     globals_ = client["_main"].__globals__
     monkeypatch.setitem(globals_, "_run", run)

@@ -75,16 +75,6 @@
       "surface": "antigravity",
       "source": "integrations/context-delivery/antigravity/rules/canonical-context.md",
       "target": ".gemini/config/plugins/agent-hub-context/rules/canonical-context.md"
-    },
-    {
-      "surface": "opencode",
-      "source": "integrations/context-delivery/opencode/agent-hub.js",
-      "target": ".config/opencode/plugins/agent-hub.js"
-    },
-    {
-      "surface": "opencode",
-      "source": "integrations/context-delivery/opencode/launcher",
-      "target": ".local/bin/agent-hub-opencode"
     }
   ],
   "retired": [
