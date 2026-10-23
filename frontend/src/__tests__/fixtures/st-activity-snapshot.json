@@ -356,7 +356,8 @@
         "sampled_event_span_seconds": 0.0,
         "goal_status": "insufficient_coverage",
         "repeat_admin_patterns": [],
-        "repeat_admin_patterns_total": 0
+        "repeat_admin_patterns_total": 0,
+        "request_errors": null
       }
     ]
   },
