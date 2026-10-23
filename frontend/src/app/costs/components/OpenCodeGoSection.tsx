@@ -22,7 +22,9 @@ function WindowRow({ w }: { w: OpenCodeGoWindow }) {
       <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
         <span className="text-slate-200">
           {w.label} <span className="font-mono">{w.percent}%</span>
-          {limited && <span className="ml-2 text-red-300">Rate limited</span>}
+          {limited && (
+            <span className="ml-2 font-medium text-red-400">Rate limited</span>
+          )}
         </span>
         <span className="text-xs text-slate-400">
           {reset ? `Resets ${reset}` : ''}
