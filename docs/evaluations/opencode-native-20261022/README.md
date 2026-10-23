@@ -1,5 +1,7 @@
 # Native OpenCode free-model integration — 2026-10-22
 
+> The OpenCode CLI integration evaluated here was removed on 2026-10-23 by owner decision (commit ecd8656c8). OpenCode Go is used only through Pi.
+
 Both free models succeeded in real ordinary Aico windows through OpenCode v2.1.3.
 The authenticated native CLI supplies inference; Agent Hub supplies additive
 canonical context and retains native session, response-model and usage evidence.
