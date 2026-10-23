@@ -32,6 +32,7 @@ from app.services._session_metadata_helpers import (
     source_path,
     working_dir,
 )
+from app.services.session_health import retained_request_errors
 from app.services.session_live_activity import build_live_activity_response
 from app.services.session_roles import session_work_role
 from app.services.session_scope import resolve_scope_confidence
@@ -135,6 +136,7 @@ def _session_summary_kwargs(
         "external_identity": external_session_identity(session),
         "external_id": optional_str(session.external_id),
         "work_role": session_work_role(session),
+        "request_errors": retained_request_errors(provider_metadata),
         "client_id": optional_str(session.client_id),
         "request_source": optional_str(session.request_source),
         "source_client": source_client(session),

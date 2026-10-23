@@ -23,6 +23,13 @@ def record(kind, id, **fields):
     return {"type": kind, "id": id, "parentId": None, "timestamp": "2026-10-22T12:00:00Z", **fields}
 
 
+@pytest.fixture(autouse=True)
+def no_error_rows(monkeypatch):
+    from app.services.session_ingestion import pi_sync
+
+    monkeypatch.setattr(pi_sync, "pi_request_errors", AsyncMock(return_value=None))
+
+
 @pytest.fixture
 def transcript(tmp_path):
     rows = [
@@ -122,7 +129,7 @@ async def test_pi_sync_uses_canonical_ingestion_and_native_identity(transcript, 
 
     db = AsyncMock()
     result = MagicMock()
-    session = SimpleNamespace(id=SID, provider_metadata={})
+    session = SimpleNamespace(id=SID, provider_metadata={}, model=f"{PROVIDER}/unknown", models_used=[])
     result.scalar_one_or_none.side_effect = [None, session]
     db.execute.return_value = result
     upsert = AsyncMock(return_value=(session, None))
@@ -189,8 +196,9 @@ async def test_late_idle_sync_cannot_reopen_retired_pi_or_drop_correlation(trans
     from app.services.session_ingestion import pi_sync
 
     metadata = {"transcript_path": str(transcript), "aico_session_id": "aico-widget-12345678"}
-    existing = SimpleNamespace(id=SID, session_type="pi", model=f"{PROVIDER}/{MODEL}", provider_metadata=metadata)
-    latest = SimpleNamespace(id=SID, provider_metadata={**metadata, "tether_retired": not retired_by_tether})
+    existing = SimpleNamespace(id=SID, session_type="pi", model=f"{PROVIDER}/{MODEL}", models_used=[], provider_metadata=metadata)
+    latest = SimpleNamespace(id=SID, model=f"{PROVIDER}/{MODEL}", models_used=[f"{PROVIDER}/{MODEL}"],
+                             provider_metadata={**metadata, "tether_retired": not retired_by_tether})
     db = AsyncMock()
     result = MagicMock()
     result.scalar_one_or_none.side_effect = [existing, latest]
@@ -211,3 +219,76 @@ async def test_late_idle_sync_cannot_reopen_retired_pi_or_drop_correlation(trans
     assert heartbeat.await_args.args[2].provider_metadata == ({"tether_retired": True} if retired_by_tether else {})
     assert heartbeat.await_args.kwargs["session"] is latest
     assert db.execute.await_args.args[0]._for_update_arg is not None
+
+
+def test_pi_error_events_are_counted_with_a_content_free_category():
+    from app.services.session_ingestion.pi_errors import classify_pi_error, summarize_pi_errors
+
+    assert classify_pi_error("This content was flagged for possible cybersecurity risk. Try again.") == "content_flagged"
+    assert classify_pi_error("Request timed out.") == "request_timeout"
+    assert classify_pi_error('400: {"message":"This Go model requires Global regions."}') == "region_unavailable"
+    assert classify_pi_error('403: {"type":"FreeTierError"}') == "free_tier_restricted"
+    assert classify_pi_error("something new") == "request_failed"
+    assert summarize_pi_errors(0, "ignored") is None
+    summary = summarize_pi_errors(3, "Request timed out.\n" + "x" * 500)
+    assert summary is not None
+    assert summary["count"] == 3 and summary["last_category"] == "request_timeout"
+    assert len(summary["last_message"]) == 120 and "\n" not in summary["last_message"]
+
+
+@pytest.mark.asyncio
+async def test_pi_request_errors_derive_from_retained_events_so_replay_is_stable():
+    from app.services.session_ingestion.pi_errors import pi_request_errors
+
+    def rows(count, last):
+        counted, newest = MagicMock(), MagicMock()
+        counted.scalar_one.return_value = count
+        newest.scalar_one_or_none.return_value = last
+        return [counted, newest]
+
+    db = AsyncMock()
+    db.execute.side_effect = rows(2, "Request timed out.") + rows(2, "Request timed out.")
+    first = await pi_request_errors(db, SID)
+    second = await pi_request_errors(db, SID)
+    assert first == second == {"count": 2, "last_category": "request_timeout", "last_message": "Request timed out."}
+    db.execute.side_effect = rows(0, None)[:1]
+    assert await pi_request_errors(db, SID) is None
+
+
+@pytest.mark.asyncio
+async def test_pi_sync_records_request_errors_and_qualifies_bare_models(transcript, monkeypatch):
+    from app.services.session_ingestion import pi_sync
+
+    errors = {"count": 4, "last_category": "request_timeout", "last_message": "Request timed out."}
+    monkeypatch.setattr(pi_sync, "pi_request_errors", AsyncMock(return_value=errors))
+    metadata = {"transcript_path": str(transcript)}
+    existing = SimpleNamespace(id=SID, session_type="pi", model="gpt-6.1-sol", provider_metadata=metadata,
+                               models_used=["openai/gpt-6.1-sol", "gpt-6.1-sol"])
+    latest = SimpleNamespace(id=SID, model="gpt-6.1-sol", provider_metadata=metadata,
+                             models_used=["openai/gpt-6.1-sol", "gpt-6.1-sol"])
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.side_effect = [existing, latest]
+    db.execute.return_value = result
+    upsert = AsyncMock(return_value=(existing, None))
+    monkeypatch.setattr(pi_sync, "upsert_session", upsert)
+    monkeypatch.setattr(pi_sync, "ingest_transcript_events", AsyncMock(return_value=SimpleNamespace(events_appended=0, events_skipped=9)))
+    heartbeat = AsyncMock()
+    monkeypatch.setattr(pi_sync, "heartbeat_session", heartbeat)
+    receipt = await sync_pi_session(db, session_id=SID, transcript=str(transcript), project_id="agent-hub",
+        cwd="/fixture/project", provider="openai", model="gpt-6.1-sol", phase="idle")
+    assert upsert.await_args is not None and heartbeat.await_args is not None
+    assert upsert.await_args.args[1].model == "openai/gpt-6.1-sol"
+    assert latest.model == "openai/gpt-6.1-sol" and latest.models_used == ["openai/gpt-6.1-sol"]
+    assert heartbeat.await_args.args[2].provider_metadata == {"request_errors": errors}
+    assert receipt["request_errors"] == 4 and receipt["events_appended"] == 0
+
+
+def test_session_summary_exposes_only_valid_retained_request_errors():
+    from app.services.session_health import retained_request_errors
+
+    kept = {"count": 2, "last_category": "request_timeout", "last_message": "Request timed out."}
+    assert retained_request_errors({"request_errors": kept}) == kept
+    assert retained_request_errors({"request_errors": {"count": 0}}) is None
+    assert retained_request_errors({"request_errors": "bad"}) is None
+    assert retained_request_errors(None) is None

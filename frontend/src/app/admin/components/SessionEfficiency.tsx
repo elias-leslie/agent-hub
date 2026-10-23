@@ -2,6 +2,10 @@
 
 import Link from 'next/link'
 import {
+  RequestErrorsBadge,
+  requestErrorsText,
+} from '@/app/sessions/components/RequestErrorsBadge'
+import {
   type ActivityCost,
   activitySessionParams,
   activitySessionsHref,
@@ -89,6 +93,12 @@ export function SessionEfficiency({
             {row.context_split?.denominator_tokens_estimate.toLocaleString() ??
               'Unavailable'}{' '}
             est. tokens
+            {row.request_errors ? (
+              <>
+                {' '}
+                · <RequestErrorsBadge errors={row.request_errors} />
+              </>
+            ) : null}
           </summary>
           <div className="mt-3 space-y-2 text-xs text-slate-300">
             <p>
@@ -100,6 +110,12 @@ export function SessionEfficiency({
               calls. Tool-time assessment: {STATUS[row.goal_status]} ·{' '}
               {seconds(row.tool_time.denominator_seconds)} measured.
             </p>
+            {row.request_errors ? (
+              <p>
+                {requestErrorsText(row.request_errors).long} ·{' '}
+                {requestErrorsText(row.request_errors).last}
+              </p>
+            ) : null}
             <p>
               {row.provider} · Stored model: {row.model ?? 'Unavailable'} ·{' '}
               {row.usage_source === 'missing'

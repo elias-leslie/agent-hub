@@ -227,6 +227,14 @@ class DurationAccounting(BaseModel):
     events_truncated: bool
 
 
+class SessionRequestErrors(BaseModel):
+    """Failed provider requests the harness recorded while still exiting normally."""
+
+    count: int
+    last_category: str
+    last_message: str
+
+
 class SessionSummaryFields(BaseModel):
     """Fields shared by session list items and session detail responses.
 
@@ -240,6 +248,9 @@ class SessionSummaryFields(BaseModel):
     model_evidence: SessionModelEvidence | None = None
     work_role: SessionWorkRole | None = None
     activity_accounting: DurationAccounting | None = None
+    request_errors: SessionRequestErrors | None = Field(
+        default=None, description="Failed requests (count, last category, short message); no prompt content",
+    )
     requested_provider: str | None = Field(default=None, description="Originally requested provider")
     requested_model: str | None = Field(default=None, description="Originally requested model")
     effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")

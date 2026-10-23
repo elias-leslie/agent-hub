@@ -5,6 +5,7 @@ import {
   isWorkRoleOption,
   type WorkRoleOption,
 } from './duration-split'
+import type { RequestErrors } from './sessions'
 
 /** Recorded usage and separate, explicitly estimated ST text footprint. */
 export type ActivityCategory = 'substantive' | 'administration' | 'unknown'
@@ -156,6 +157,7 @@ export interface SessionEfficiencyData {
     session_id: string
     provider: string
     model: string | null
+    request_errors?: RequestErrors | null
     usage_source: string
     tool_time: ToolTime
     tools_sampled: number
@@ -550,6 +552,10 @@ function sessionEfficiency(value: unknown) {
         ranking(row) &&
         strings(row, ['session_id', 'provider', 'usage_source']) &&
         (row.model === null || typeof row.model === 'string') &&
+        (row.request_errors == null ||
+          (record(row.request_errors) &&
+            numbers(row.request_errors, ['count']) &&
+            strings(row.request_errors, ['last_category', 'last_message']))) &&
         toolTime(row.tool_time) &&
         (row.context_split === undefined ||
           isContextSplit(row.context_split)) &&

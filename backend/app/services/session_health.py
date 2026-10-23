@@ -32,6 +32,15 @@ def health_detail_for_error(error: BaseException | str) -> str:
     return "model_error"
 
 
+def retained_request_errors(provider_metadata: dict | None) -> dict | None:
+    """Failed-request summary a harness ingestion retained (count, last category, short message)."""
+    value = (provider_metadata or {}).get("request_errors")
+    if not isinstance(value, dict) or not isinstance(value.get("count"), int) or value["count"] <= 0:
+        return None
+    return {"count": value["count"], "last_category": str(value.get("last_category") or "request_failed"),
+            "last_message": str(value.get("last_message") or "")}
+
+
 async def update_session_health(
     db: AsyncSession,
     session_id: str,

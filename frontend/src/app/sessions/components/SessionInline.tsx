@@ -16,6 +16,7 @@ import {
   getUsageSummary,
 } from '../utils'
 import { CopyIdButton } from './CopyIdButton'
+import { RequestErrorsBadge, requestErrorsText } from './RequestErrorsBadge'
 import { hasText, isUsefulLiveSummary, liveWarnings } from './SessionEvidence'
 import { StatusCell } from './StatusCell'
 
@@ -122,6 +123,17 @@ function Facts({
         {formatRelativeTime(lastActive)}
       </Fact>
       <Fact label="ran">{formatDurationMs(duration)}</Fact>
+      {source.request_errors ? (
+        <Fact
+          label="errors"
+          title={requestErrorsText(source.request_errors).last}
+        >
+          <RequestErrorsBadge errors={source.request_errors} />{' '}
+          <span className="text-slate-400">
+            {requestErrorsText(source.request_errors).last}
+          </span>
+        </Fact>
+      ) : null}
       <Fact label="tokens" title={usage.title}>
         {usage.known ? (
           `in ${usage.input.toLocaleString()} · out ${usage.output.toLocaleString()}${usage.cached ? ` · cached ${usage.cached.toLocaleString()}` : ''}`

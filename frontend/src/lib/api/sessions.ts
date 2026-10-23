@@ -88,7 +88,14 @@ export interface LiveActivity {
   reapable_reason?: string | null
 }
 
+export interface RequestErrors {
+  count: number
+  last_category: string
+  last_message: string
+}
+
 export interface Session {
+  request_errors?: RequestErrors | null
   work_role?: SessionWorkRole | null
   id: string
   project_id: string
@@ -148,6 +155,7 @@ export interface Session {
 }
 
 export interface SessionListItem {
+  request_errors?: RequestErrors | null
   work_role?: SessionWorkRole | null
   activity_accounting?: DurationSplit | null
   id: string

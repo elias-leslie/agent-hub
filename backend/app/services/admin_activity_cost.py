@@ -32,6 +32,7 @@ from app.services.session_harnesses import (
     harness_predicate,
     session_harness,
 )
+from app.services.session_health import retained_request_errors
 from app.services.session_roles import role_predicate, session_work_role, work_role_options
 from app.services.st_activity import (
     POLICY,
@@ -558,6 +559,7 @@ def summarize_activity_cost(
         efficiency_rows.append(row | {
             "model": getattr(by_session[sid], "model", None),
             "work_role": session_work_role(by_session[sid]),
+            "request_errors": retained_request_errors(getattr(by_session[sid], "provider_metadata", None)),
             "context_split": per_session[sid]["context_split"],
             "duration_split": duration_split(per_session[sid]["seconds"], calls=tool_counts[sid], missing=missing_durations[sid], truncated=truncated),
             "tool_time": measured_time, "tools_sampled": tool_counts[sid],

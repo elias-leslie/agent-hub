@@ -29,7 +29,9 @@ def sample(*, truncated=False, limit=5):
                     source_timestamp=NOW - timedelta(seconds=60 - index * 20), created_at=NOW,
                     returned_characters=100 if kind == "tool_result" else None, usage=None))
     return summarize_activity_cost(events, [], [Row(session_id="tokens", input_tokens=1000, output_tokens=10, calls=1)],
-        [Row(id=sid, project_id="project", provider="codex", model="fixture-model") for sid in ("admin", "tokens", "unknown", "empty")],
+        [Row(id=sid, project_id="project", provider="codex", model="fixture-model",
+             provider_metadata={"request_errors": {"count": 2, "last_category": "request_timeout", "last_message": "Request timed out."}}
+             if sid == "admin" else {}) for sid in ("admin", "tokens", "unknown", "empty")],
         [], cutoff=NOW - timedelta(hours=1), now=NOW, limit=limit, truncated=truncated)
 
 

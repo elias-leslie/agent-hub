@@ -12,6 +12,7 @@ import {
   getSessionTitle,
   getUsageSummary,
 } from '../utils'
+import { RequestErrorsBadge } from './RequestErrorsBadge'
 import { StatusCell } from './StatusCell'
 
 /** Column template shared by the header and rows so they always line up. */
@@ -92,6 +93,7 @@ export const SessionRow = memo(function SessionRow({
               {shortId}
             </span>
           )}
+          <RequestErrorsBadge errors={session.request_errors} />
         </div>
       </div>
 

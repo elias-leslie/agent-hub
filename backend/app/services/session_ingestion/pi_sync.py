@@ -12,7 +12,24 @@ from app.models import Session
 
 from .adapters.pi import pi_header
 from .models import SessionHeartbeatRequest, SessionUpsertRequest, TranscriptIngestRequest
+from .pi_errors import pi_request_errors
 from .service import heartbeat_session, ingest_transcript_events, upsert_session
+
+
+def canonical_pi_model(model: str | None, provider: str, models_used: list[str] | None = None) -> str:
+    """Labels from other writers may be bare; Pi rows carry provider/model, preferring the transcript's provider."""
+    if not model or model == f"{provider}/unknown":
+        return f"{provider}/unknown"
+    if "/" in model:
+        return model
+    seen = [used for used in models_used or [] if isinstance(used, str) and used.endswith(f"/{model}")]
+    return seen[-1] if seen else f"{provider}/{model}"
+
+
+def _drop_bare_duplicates(models: list[str] | None) -> list[str]:
+    values = list(models or [])
+    qualified = {value.rsplit("/", 1)[-1] for value in values if "/" in value}
+    return [value for value in values if "/" in value or value not in qualified]
 
 
 async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
@@ -28,7 +45,8 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
             raise ValueError("Pi sync cannot replace another native session or transcript")
     session, _ = await upsert_session(db, SessionUpsertRequest(
         session_id=session_id, project_id=project_id, provider=provider,
-        model=existing.model if existing is not None else f"{provider}/unknown",
+        model=canonical_pi_model(existing.model if existing is not None else None, provider,
+                           existing.models_used if existing is not None else None),
         session_type="pi", cwd=cwd, request_source="pi-extension",
         provider_metadata={
             **({"work_role": work_role} if work_role is not None else {}),
@@ -46,14 +64,20 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
                               .execution_options(populate_existing=True))).scalar_one_or_none()
     if latest is None:
         raise ValueError("Pi session disappeared before heartbeat")
+    latest.model = canonical_pi_model(latest.model, provider, latest.models_used)
+    latest.models_used = _drop_bare_duplicates(latest.models_used)
+    await db.flush()
+    request_errors = await pi_request_errors(db, session.id)
     retired = retired_by_tether or (latest.provider_metadata or {}).get("tether_retired") is True
     final_phase = "shutdown" if retired else phase
     await heartbeat_session(db, session.id, SessionHeartbeatRequest(
         cwd=cwd, phase=final_phase, status="completed" if final_phase == "shutdown" else "active",
-        provider_metadata={"tether_retired": True} if retired_by_tether else {},
+        provider_metadata={**({"tether_retired": True} if retired_by_tether else {}),
+                           **({"request_errors": request_errors} if request_errors else {})},
         request_source="pi-extension"), session=latest)
     return {"session_id": session.id, "events_appended": result.events_appended,
-            "events_skipped": result.events_skipped, "phase": final_phase}
+            "events_skipped": result.events_skipped, "phase": final_phase,
+            "request_errors": (request_errors or {}).get("count", 0)}
 
 
 async def retire_pi_sessions(db: AsyncSession, aico_session_id: str) -> dict:

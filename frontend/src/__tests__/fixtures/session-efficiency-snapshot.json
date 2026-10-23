@@ -422,6 +422,11 @@
         },
         "model": "fixture-model",
         "work_role": null,
+        "request_errors": {
+          "count": 2,
+          "last_category": "request_timeout",
+          "last_message": "Request timed out."
+        },
         "context_split": {
           "admin_tokens_estimate": 64,
           "other_tokens_estimate": 30,
@@ -530,6 +535,7 @@
         },
         "model": "fixture-model",
         "work_role": null,
+        "request_errors": null,
         "context_split": {
           "admin_tokens_estimate": 0,
           "other_tokens_estimate": 30,
@@ -632,6 +638,7 @@
         },
         "model": "fixture-model",
         "work_role": null,
+        "request_errors": null,
         "context_split": {
           "admin_tokens_estimate": 0,
           "other_tokens_estimate": 30,
@@ -734,6 +741,7 @@
         },
         "model": "fixture-model",
         "work_role": null,
+        "request_errors": null,
         "context_split": {
           "admin_tokens_estimate": 0,
           "other_tokens_estimate": 0,
