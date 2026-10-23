@@ -1,6 +1,7 @@
 """Subscription accounting API.
 
 GET  /analytics/costs/accounting           cash, credits, utilization and API-equivalent value (kept separate)
+GET  /analytics/subscriptions/opencode-go/usage  OpenCode Go 5-hour, weekly and monthly quota
 GET  /analytics/subscriptions/plans        plan history
 POST /analytics/subscriptions/plans        start a new plan period (closes the provider's open period)
 GET  /analytics/subscriptions/credit-lots  credit lots
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models import CreditLot, SubscriptionPlan
-from app.services.subscription_accounting import collector
+from app.services.subscription_accounting import collector, opencode_go
 from app.services.subscription_accounting.summary import build_summary
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,12 @@ async def get_cost_accounting(
     summary = await build_summary(db, days=days)
     summary["collector"] = collected
     return summary
+
+
+@router.get("/subscriptions/opencode-go/usage")
+async def get_opencode_go_usage() -> dict[str, Any]:
+    """OpenCode Go quota windows as OpenCode reports them (cached ~60s); never raises on upstream trouble."""
+    return await opencode_go.get_usage()
 
 
 class PlanIn(BaseModel):

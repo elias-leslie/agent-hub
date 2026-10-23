@@ -302,3 +302,30 @@ export async function fetchTruncations(params?: {
   }
   return response.json()
 }
+
+export interface OpenCodeGoWindow {
+  key: 'rolling' | 'weekly' | 'monthly'
+  label: string
+  status: string
+  percent: number
+  resets_at: string | null
+}
+
+/** OpenCode Go quota as OpenCode reports it; `reason` explains anything but `ok`. */
+export interface OpenCodeGoUsage {
+  provider: 'opencode-go'
+  state: 'ok' | 'unavailable' | 'not_configured'
+  reason: string | null
+  windows: OpenCodeGoWindow[]
+  fetched_at: string
+}
+
+export async function fetchOpenCodeGoUsage(): Promise<OpenCodeGoUsage> {
+  const response = await fetchApi(
+    `${API_BASE}/analytics/subscriptions/opencode-go/usage`,
+  )
+  if (!response.ok) {
+    throw new Error(`OpenCode Go usage fetch failed: ${response.status}`)
+  }
+  return response.json()
+}

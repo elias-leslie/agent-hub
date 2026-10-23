@@ -46,6 +46,7 @@ vi.mock('@/lib/api/analytics', async (original) => ({
   ...(await original<typeof import('@/lib/api/analytics')>()),
   fetchSpend: vi.fn(),
   fetchSpendItem: vi.fn(),
+  fetchOpenCodeGoUsage: vi.fn(() => new Promise(() => {})),
 }))
 
 vi.mock('@/lib/api', () => ({

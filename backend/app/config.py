@@ -173,6 +173,11 @@ class Settings(BaseSettings):
     cloudflare_api_key: str = ""
     cloudflare_account_id: str = ""
 
+    # OpenCode Go subscription quota (unofficial endpoint; reported as-is, never faked).
+    opencode_go_usage_url: str = "https://opencode.ai/zen/go/v1/usage"
+    opencode_go_usage_cache_seconds: float = Field(default=60.0, ge=0)
+    opencode_go_usage_timeout_seconds: float = Field(default=10.0, gt=0)
+
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"
     local_openai_api_key: str = ""
