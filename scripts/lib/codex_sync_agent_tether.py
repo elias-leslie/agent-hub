@@ -27,8 +27,9 @@ from codex_sync_transcripts import (
     transcript_roots,
 )
 
-# Same default as SummitFlow's TETHER_AGENT_SOCKET_DEFAULT; AGENT_HUB_TETHER_SOCKETS (os.pathsep-separated, empty: none).
-DEFAULT_SOCKETS = ("/run/tether/agent/default/control.sock",)
+# The agent-user Tether is retired (agents run as the owner), so none by default;
+# AGENT_HUB_TETHER_SOCKETS (os.pathsep-separated) names any to ask.
+DEFAULT_SOCKETS: tuple[str, ...] = ()
 TETHER_TIMEOUT_S = 3.0
 BODY_LIMIT = 1024 * 1024
 HEADER_LIMIT = 1024 * 1024
