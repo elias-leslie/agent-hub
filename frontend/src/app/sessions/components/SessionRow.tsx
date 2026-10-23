@@ -77,12 +77,13 @@ export const SessionRow = memo(function SessionRow({
     >
       {/* Phone: line 1 is title + status */}
       <div className="flex min-w-0 items-center gap-2 xl:contents">
-        <div className="order-2 shrink-0 xl:order-none">
+        <div className="order-2 flex shrink-0 items-center gap-2 xl:order-none xl:flex-col xl:items-start xl:gap-0.5">
           <StatusCell
             status={session.status}
             liveActivity={session.live_activity}
             showLabel
           />
+          <RequestErrorsBadge errors={session.request_errors} />
         </div>
         <div className="order-1 flex min-w-0 flex-1 items-baseline gap-2 xl:order-none">
           <span className="truncate text-slate-100" title={title}>
@@ -93,7 +94,6 @@ export const SessionRow = memo(function SessionRow({
               {shortId}
             </span>
           )}
-          <RequestErrorsBadge errors={session.request_errors} />
         </div>
       </div>
 
