@@ -15,12 +15,10 @@ _SCORE_LABELS = {
     "design": "D",
     "finance": "F",
     "verification": "V",
-    "jenny": "J",
 }
 _FIT_WEIGHTS = {
     "finance": {"reasoning": 0.60, "planning": 0.25, "instruction": 0.15},
     "verification": {"reasoning": 0.55, "instruction": 0.25, "tool_use": 0.20},
-    "jenny": {"planning": 0.45, "reasoning": 0.35, "tool_use": 0.20},
 }
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -45,8 +43,6 @@ def focus_score_key(agent: dict[str, Any]) -> str:
     slug = str(agent.get("slug") or "").lower()
     text = f"{slug} {agent.get('name', '')} {agent.get('description', '')}".lower()
     words = set(_WORD_RE.findall(text))
-    if slug == "persona" or words & {"jenny"}:
-        return "jenny"
     if slug == "verifier" or words & {"verifier", "verification"}:
         return "verification"
     if words & {"design", "ui", "ux", "mockup", "site", "visual", "image", "designer"}:

@@ -117,13 +117,10 @@ def test_list_agents_focus_matching_uses_words_not_substrings() -> None:
     assert " D " not in result.output
 
 
-def test_list_agents_scores_use_workload_fit_for_persona_and_verifier() -> None:
+def test_list_agents_scores_use_workload_fit_for_verifier() -> None:
     agents_payload = {
-        "agents": [
-            _agent("persona", "codex/gpt-5.5", name="Jenny"),
-            _agent("verifier", "codex/gpt-5.5", name="Verifier"),
-        ],
-        "total": 2,
+        "agents": [_agent("verifier", "codex/gpt-5.5", name="Verifier")],
+        "total": 1,
     }
     models_payload = {
         "models": [
@@ -144,9 +141,6 @@ def test_list_agents_scores_use_workload_fit_for_persona_and_verifier() -> None:
         result = runner.invoke(app, ["list"])
 
     assert result.exit_code == 0
-    assert "persona" in result.output
-    assert " J " in result.output
-    assert " 87 " in result.output
     assert "verifier" in result.output
     assert " V " in result.output
     assert " 85 " in result.output

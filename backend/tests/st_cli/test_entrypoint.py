@@ -28,7 +28,6 @@ EXPECTED_NAMESPACES = {
     "models",
     "native-sessions",
     "note",
-    "persona",
     "prompt",
     "skills",
 }
