@@ -16,7 +16,7 @@ import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
 
 interface ChatPanelProps {
-  agentSlug?: string;
+  agentSlug: string;
   sessionId?: string;
   workingDir?: string;
   toolsEnabled?: boolean;
@@ -206,7 +206,7 @@ export function ChatPanel({
               </h1>
               <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-muted-foreground md:flex">
                 <span>{currentSessionId ? `session ${currentSessionId.slice(0, 8)}` : "new session"}</span>
-                {agentSlug ? <span>agent {agentSlug}</span> : null}
+                <span>agent {agentSlug}</span>
                 {workingDir ? <span className="truncate">cwd {workingDir}</span> : null}
                 {toolsEnabled ? <span>tools on</span> : null}
                 {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}

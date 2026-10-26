@@ -73,8 +73,6 @@ async function captureAll() {
   const pages = [
     { route: "/", name: "landing" },
     { route: "/dashboard", name: "dashboard" },
-    { route: "/persona", name: "persona-workspace" },
-    { route: "/persona/settings", name: "persona-settings" },
     { route: "/sessions", name: "sessions-list" },
   ];
 

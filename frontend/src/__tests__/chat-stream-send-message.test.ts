@@ -18,7 +18,7 @@ describe('chat stream sendMessage', () => {
 
     await sendMessage({
       content: 'Inspect repo and fix the issue.',
-      agentSlug: 'persona',
+      agentSlug: 'assistant',
       messages: [],
       temperature: 0.2,
       toolsEnabled: true,
@@ -37,7 +37,7 @@ describe('chat stream sendMessage', () => {
       preferencesEndpoint: '/api/preferences',
       projectId: 'summitflow',
       memoryGroupPrefix: 'agent:',
-      includeRoles: ['system', 'persona-personality', 'persona-user-context'],
+      includeRoles: ['system', 'system-extra', 'user-context'],
       promptMode: 'chat',
       externalId: 'task-123',
       parentSessionId: 'parent-session',
@@ -57,18 +57,14 @@ describe('chat stream sendMessage', () => {
     })
 
     expect(mockProcessStreamWithReconnect).toHaveBeenCalledWith(
-      'persona',
+      'assistant',
       expect.any(String),
       expect.any(AbortController),
       expect.objectContaining({
         project_id: 'summitflow',
         tools_enabled: true,
         execute_tools: true,
-        include_roles: [
-          'system',
-          'persona-personality',
-          'persona-user-context',
-        ],
+        include_roles: ['system', 'system-extra', 'user-context'],
         prompt_mode: 'chat',
         external_id: 'task-123',
         parent_session_id: 'parent-session',

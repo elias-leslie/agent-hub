@@ -25,7 +25,6 @@ export {
 } from './api/agent-detail'
 // Re-export all agents-related exports (list & metrics)
 export {
-  fetchAgentBenchmarkRunDetail,
   fetchAgentMetrics,
   fetchAgents,
 } from './api/agents'

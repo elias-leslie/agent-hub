@@ -94,10 +94,10 @@ describe('fetchApi', () => {
 
     const { fetchApi } = await import('./api-config')
 
-    await fetchApi('http://localhost:8003/api/persona')
+    await fetchApi('http://localhost:8003/api/preferences')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8003/api/persona',
+      'http://localhost:8003/api/preferences',
       expect.objectContaining({
         headers: expect.objectContaining({
           'X-Client-Id': 'agent-hub-dashboard',

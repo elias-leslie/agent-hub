@@ -5,8 +5,8 @@ import { AgentPreviewPanel } from '@/app/agents/[slug]/components/AgentPreviewPa
 import type { AgentPreview, PreviewScenario } from '@/app/agents/[slug]/types'
 
 const preview: AgentPreview = {
-  slug: 'persona',
-  name: 'Persona',
+  slug: 'assistant',
+  name: 'Assistant',
   combined_prompt: '<system>system only</system>',
   full_context:
     '<system>system only</system>\n\n<task>Review this outcome</task>',

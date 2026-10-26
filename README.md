@@ -9,7 +9,7 @@ Agent Hub is a self-hosted control plane for developers and operators running AI
 ## What it does
 
 - Routes completions and SSE streams through a model catalog, per-agent fallbacks, circuit breakers, and provider health checks.
-- Stores semantic memory, session history/branches, named personas, and versioned prompts. Memory episodes can be archived (kept but never injected) and restored.
+- Stores semantic memory, session history/branches, named agents, and versioned prompts. Memory episodes can be archived (kept but never injected) and restored.
 - Runs an agentic tool loop with server-side tools (shell, files, code search, web research) that can delegate work to other agents as child sessions, plus a committee roundtable that combines several agents' views on one question.
 - Governs context from one place: a single selector and renderer decide which prompts and memory reach Claude Code, Codex, Pi, Google's Antigravity CLI, MCP clients and internal agents, with exact previews, revision-checked saves, and undo ([details](docs/architecture/context-governance.md)).
 - Accounts for cost: metered spend, subscription plans (Claude/Codex plan cost, limits, Codex credits, API-equivalent value), and an idempotent ingest endpoint (`POST /api/analytics/costs/ingest`) for model calls that external clients paid for outside Agent Hub.

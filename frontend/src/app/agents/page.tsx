@@ -118,8 +118,7 @@ export default function AgentsPage() {
   }, [archiveCandidate, refetch])
 
   const hasSearch = searchQuery.trim().length > 0
-  const catalogAgents =
-    data?.agents?.filter((agent) => agent.slug !== 'persona') ?? []
+  const catalogAgents = data?.agents ?? []
   const visibleCount = filteredAgents.length
   const totalCount = catalogAgents.length
   const activeCount = catalogAgents.filter((agent) => agent.is_active).length

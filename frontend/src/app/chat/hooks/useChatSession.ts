@@ -162,7 +162,7 @@ export function useChatSession(
   const handleNewSession = useCallback(() => {
     // Clear the session in place via replaceState (NOT router.push). A push
     // remounts the Suspense tree on the /chat page, which resets selectedAgent
-    // and falls back to the default agent (persona/Jenny). replaceState drops
+    // and falls back to the default agent. replaceState drops
     // session_id from the URL while preserving the current agent selection.
     setActiveSessionId(null)
     storeSessionId(null, contextKey)

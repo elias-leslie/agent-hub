@@ -46,7 +46,7 @@ export function useVoicePreferences({
     return () => { cancelled = true; };
   }, [ttsBaseUrl]);
 
-  // Fetch preferences — supports both /api/preferences and /api/persona
+  // Fetch preferences from the /api/preferences endpoint
   useEffect(() => {
     if (!preferencesEndpoint) {
       setLoading(false);
@@ -59,13 +59,8 @@ export function useVoicePreferences({
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled) {
-          // Support both old preferences format and new persona format
-          const voiceId = data.voice_id || data.tts_voice;
-          const enabled = typeof data.voice_enabled === "boolean"
-            ? data.voice_enabled
-            : data.tts_enabled;
-          if (voiceId) setSelectedVoice(voiceId);
-          if (typeof enabled === "boolean") setTtsEnabled(enabled);
+          if (data.tts_voice) setSelectedVoice(data.tts_voice);
+          if (typeof data.tts_enabled === "boolean") setTtsEnabled(data.tts_enabled);
         }
       } catch {
         // Non-critical
@@ -77,18 +72,14 @@ export function useVoicePreferences({
     return () => { cancelled = true; };
   }, [preferencesEndpoint, fetchFn]);
 
-  // Debounced save — auto-detects persona vs preferences format
+  // Debounced save
   const savePreferences = useCallback(
     (voice: string, enabled: boolean) => {
       if (!preferencesEndpoint) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(async () => {
         try {
-          // Detect persona endpoint by URL path
-          const isPersona = preferencesEndpoint.includes("/persona");
-          const body = isPersona
-            ? { voice_id: voice, voice_enabled: enabled }
-            : { tts_voice: voice, tts_enabled: enabled };
+          const body = { tts_voice: voice, tts_enabled: enabled };
 
           await fetchFn(preferencesEndpoint, {
             method: "PUT",

@@ -22,10 +22,10 @@ function agent(slug: string, name: string): Agent {
 }
 
 describe('agent list filtering', () => {
-  it('lists the persona agent like any other agent', () => {
+  it('lists agents sorted by name', () => {
     const { result } = renderHook(() =>
       useAgentFiltering({
-        agents: [agent('persona', 'Persona'), agent('builder', 'Builder')],
+        agents: [agent('assistant', 'Assistant'), agent('builder', 'Builder')],
         searchQuery: '',
         sortField: 'name',
         sortDirection: 'asc',
@@ -33,6 +33,6 @@ describe('agent list filtering', () => {
       }),
     )
 
-    expect(result.current.map((a) => a.slug)).toEqual(['builder', 'persona'])
+    expect(result.current.map((a) => a.slug)).toEqual(['assistant', 'builder'])
   })
 })

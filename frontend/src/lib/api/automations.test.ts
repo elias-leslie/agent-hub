@@ -27,8 +27,8 @@ describe('central Automations API contract', () => {
 
     await createAutomationProfile({
       project_id: 'agent-hub',
-      subject_id: 'persona:one',
-      workflow_key: 'agent-hub.persona_job',
+      subject_id: 'example:one',
+      workflow_key: 'agent-hub.example_job',
       label: 'Daily check',
       schedule_type: 'every',
       schedule_value: '3600000',

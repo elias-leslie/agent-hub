@@ -48,8 +48,8 @@ export function AgentsTable({
           {hasSearch
             ? 'Try a different name, slug, or description search.'
             : showInactive
-              ? 'Only the persona agent is configured right now, or the current list is empty.'
-              : 'Inactive agents are hidden by default, and the persona agent is managed from Persona Settings.'}
+              ? 'No agents are configured right now, or the current list is empty.'
+              : 'Inactive agents are hidden by default.'}
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {hasSearch && (

@@ -22,8 +22,7 @@
   into completions, with citation tracking.
 - Stateful sessions with full history, branching, ingestion, LLM-generated
   summaries, and token accounting.
-- Named agents/personas with version history, per-agent model routing, and a
-  benchmark dashboard. Agents can dispatch background agent runs ("wakes"),
+- Named agents with version history and per-agent model routing. Agents can dispatch background agent runs ("wakes"),
   each in its own session.
 - Memory archive: an episode can be archived and restored. Archived episodes
   stay stored but are never injected into context.

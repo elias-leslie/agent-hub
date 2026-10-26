@@ -80,7 +80,7 @@ export function normalizeThinkingLevel(
 
 interface ChatPanelProps {
   agent?: Agent
-  agentSlug?: string
+  agentSlug: string
   sessionId?: string
   workingDir?: string
   toolsEnabled?: boolean

@@ -31,7 +31,7 @@ describe('useChatStream project binding', () => {
 
     const { result } = renderHook(() =>
       useChatStream({
-        agentSlug: 'persona',
+        agentSlug: 'assistant',
         sessionId: 'sess-summitflow',
         loadInitialSession: true,
         toolsEnabled: true,
@@ -100,7 +100,7 @@ describe('useChatStream project binding', () => {
     const { result, rerender } = renderHook(
       ({ currentSessionId }: { currentSessionId: string }) =>
         useChatStream({
-          agentSlug: 'persona',
+          agentSlug: 'assistant',
           sessionId: currentSessionId,
           loadInitialSession: true,
           toolsEnabled: true,
@@ -168,7 +168,7 @@ describe('useChatStream project binding', () => {
     const { result, rerender } = renderHook(
       ({ currentSessionId }: { currentSessionId: string }) =>
         useChatStream({
-          agentSlug: 'persona',
+          agentSlug: 'assistant',
           sessionId: currentSessionId,
           loadInitialSession: true,
           toolsEnabled: true,
@@ -249,7 +249,7 @@ describe('useChatStream project binding', () => {
     const { result, rerender } = renderHook(
       ({ currentSessionId }: { currentSessionId: string }) =>
         useChatStream({
-          agentSlug: 'persona',
+          agentSlug: 'assistant',
           sessionId: currentSessionId,
           loadInitialSession: true,
           toolsEnabled: true,
@@ -306,7 +306,7 @@ describe('useChatStream project binding', () => {
 
     const { result } = renderHook(() =>
       useChatStream({
-        agentSlug: 'persona',
+        agentSlug: 'assistant',
         sessionId: undefined,
         loadInitialSession: false,
         toolsEnabled: true,

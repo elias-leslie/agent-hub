@@ -11,7 +11,7 @@ const fallback = {
   reference_index_enabled: false,
   continuity_enabled: false,
   continuity_max_sessions: 7,
-  audience_tags: ['persona'],
+  audience_tags: ['assistant'],
   exclude_tags: ['draft'],
   exclude_memory_uuids: [],
 }

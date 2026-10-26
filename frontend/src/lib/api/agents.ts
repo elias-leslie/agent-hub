@@ -3,7 +3,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type {
-  AgentBenchmarkRunDetail,
   AgentListResponse,
   AgentMetrics,
   AgentMetricsResponse,
@@ -38,17 +37,6 @@ export async function fetchAgentMetrics(
 
     // Return empty metrics on error - don't fail the whole page
     return { metrics: {} }
-  }
-  return res.json()
-}
-
-export async function fetchAgentBenchmarkRunDetail(
-  slug: string,
-  runId: string,
-): Promise<AgentBenchmarkRunDetail> {
-  const res = await fetchApi(`/api/agents/${slug}/benchmarks/${runId}`)
-  if (!res.ok) {
-    throw new Error('Failed to fetch benchmark run details')
   }
   return res.json()
 }

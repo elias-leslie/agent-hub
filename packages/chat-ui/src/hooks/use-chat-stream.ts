@@ -28,7 +28,7 @@ export interface ChatStreamApiConfig {
 }
 
 interface UseChatStreamOptions {
-  agentSlug?: string;
+  agentSlug: string;
   sessionId?: string;
   temperature?: number;
   workingDir?: string;
@@ -58,10 +58,10 @@ interface UseChatStreamReturn {
  * Hook for managing chat streaming with SSE and cancellation support.
  */
 export function useChatStream(
-  options: UseChatStreamOptions = {},
+  options: UseChatStreamOptions,
 ): UseChatStreamReturn {
   const {
-    agentSlug = "persona",
+    agentSlug,
     sessionId,
     temperature = 1.0,
     workingDir,

@@ -8,10 +8,10 @@ import type { Agent } from '@/app/agents/[slug]/types'
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: 1,
-    slug: 'persona',
-    name: 'Persona',
-    description: 'Primary persona agent',
-    system_prompt: 'You are persona.',
+    slug: 'assistant',
+    name: 'Assistant',
+    description: 'Primary assistant agent',
+    system_prompt: 'You are assistant.',
     primary_model_id: 'claude-sonnet-5-5',
     fallback_models: ['gemini-3-flash-preview'],
     escalation_model_id: null,
@@ -51,7 +51,7 @@ describe('agent form helpers', () => {
   it('creates editable form data from an agent', () => {
     const formData = createAgentFormData(makeAgent())
 
-    expect(formData.name).toBe('Persona')
+    expect(formData.name).toBe('Assistant')
     expect(formData.primary_model_id).toBe('claude-sonnet-5-5')
     expect(formData.effective_memory_config).toEqual(
       makeAgent().effective_memory_config,

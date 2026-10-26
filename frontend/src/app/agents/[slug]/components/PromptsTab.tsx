@@ -7,7 +7,6 @@ import { fetchProjectConfigs } from '@/app/chat/hooks/useProjectContext'
 import {
   type AgentPromptAssignment,
   fetchAgentPrompts,
-  fetchOptionalPrompt,
   fetchPrompts,
   type Prompt,
   updateAssignment,
@@ -21,7 +20,6 @@ import type {
 import { AgentPreviewPanel } from './AgentPreviewPanel'
 import { AssignPromptForm } from './prompts/AssignPromptForm'
 import { CreatePromptForm } from './prompts/CreatePromptForm'
-import { LinkedPromptCard } from './prompts/LinkedPromptCard'
 import { PromptAssignmentCard } from './prompts/PromptAssignmentCard'
 
 interface PromptsTabProps {
@@ -37,17 +35,6 @@ interface PromptsTabProps {
   onPreviewScenarioChange?: (updates: Partial<PreviewScenario>) => void
   refetchPreview?: () => void
 }
-
-const PERSONA_WORKFLOW_PROMPT_SLUGS = [
-  'persona-focus-harness',
-  'persona-wake-guidance',
-  'persona-onboarding-bootstrap',
-  'persona-onboarding-continuation',
-  'persona-onboarding-pending-approval',
-  'persona-onboarding-review',
-  'persona-evolution-guidelines',
-  'persona-improvement-review',
-]
 
 const DEFAULT_ROLES = ['system', 'autocode', 'context', 'guardrail']
 
@@ -80,17 +67,6 @@ export function PromptsTab({
     queryKey: ['prompts'],
     queryFn: () => fetchPrompts(),
     enabled: showAssignForm,
-  })
-
-  const { data: personaWorkflowPrompts = [] } = useQuery<Prompt[]>({
-    queryKey: ['persona-workflow-prompts'],
-    enabled: agentSlug === 'persona',
-    queryFn: async () => {
-      const prompts = await Promise.all(
-        PERSONA_WORKFLOW_PROMPT_SLUGS.map((slug) => fetchOptionalPrompt(slug)),
-      )
-      return prompts.filter((prompt): prompt is Prompt => prompt !== null)
-    },
   })
 
   const { data: previewProjects = [] } = useQuery<PreviewProjectOption[]>({
@@ -260,29 +236,6 @@ export function PromptsTab({
           </div>
         )}
       </div>
-
-      {agentSlug === 'persona' && personaWorkflowPrompts.length > 0 ? (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-100">
-              Workflow Prompt Docs
-            </h3>
-            <p className="mt-1 text-xs text-slate-400">
-              Persona-specific workflow prompts that are used outside the
-              ordered system prompt stack.
-            </p>
-          </div>
-          <div className="space-y-3">
-            {personaWorkflowPrompts.map((prompt) => (
-              <LinkedPromptCard
-                key={prompt.slug}
-                prompt={prompt}
-                onUpdated={() => undefined}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }

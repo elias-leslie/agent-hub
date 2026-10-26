@@ -44,7 +44,7 @@ describe('SidebarNav', () => {
 
   it.each([
     ['/admin', '/admin'],
-    ['/agents/persona', '/agents'],
+    ['/agents/assistant', '/agents'],
     ['/memory', '/memory'],
     ['/runtime-context', '/runtime-context'],
     ['/models/claude-opus', '/models'],
