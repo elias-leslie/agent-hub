@@ -111,7 +111,7 @@ def test_binding_rejects_contradictory_native_identity_before_snapshot_write(tmp
     monkeypatch.setattr(codex_sync_runner, "_transcript_infos", lambda *_: [info])
     writes = []
     monkeypatch.setattr(codex_sync_runner, "save_project_bindings_locked", lambda _: writes.append("binding"))
-    monkeypatch.setattr(codex_sync_runner, "save_state", lambda _: writes.append("state"))
+    monkeypatch.setattr(codex_sync_runner, "save_state_if_changed", lambda *_: writes.append("state"))
     monkeypatch.setattr(codex_sync_runner, "upsert_session", lambda *_, **__: writes.append("remote"))
     result = codex_sync_runner.run_sync(_args(bind_session="root", bind_project="a-loom", project_root=info.cwd),
         api_url="http://agent-hub.test/api", client_id="summitflow", source_path="/sync", log_fn=lambda _: None)
@@ -1011,7 +1011,7 @@ def test_binding_is_persisted_before_remote_sync_failure(
 
     monkeypatch.setattr(codex_sync_runner, "save_project_bindings_locked", save_bindings)
     monkeypatch.setattr(codex_sync_runner, "_sync_infos", remote_sync)
-    monkeypatch.setattr(codex_sync_runner, "save_state", lambda _state: None)
+    monkeypatch.setattr(codex_sync_runner, "save_state_if_changed", lambda *_: None)
 
     result = codex_sync_runner.run_sync(
         _args(

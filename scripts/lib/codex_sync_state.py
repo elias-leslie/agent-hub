@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -28,8 +29,37 @@ def load_state() -> dict[str, object]:
     return data
 
 
+def serialize_state(state: dict[str, object]) -> str:
+    """Canonical text for the state; compact, since the file is rewritten whole."""
+    return json.dumps(state, sort_keys=True, allow_nan=False, separators=(",", ":")) + "\n"
+
+
+def save_state_if_changed(state: dict[str, object], baseline: str) -> bool:
+    """Persist only when the state differs from `baseline` (serialize_state at load time).
+
+    The collector runs every two minutes and most runs change nothing; rewriting
+    the whole multi-megabyte file plus two fsyncs each time was gigabytes a day.
+    """
+    if serialize_state(state) == baseline:
+        return False
+    save_state(state)
+    return True
+
+
+def _remove_stale_temporaries(max_age_seconds: float = 3600.0) -> None:
+    """Drop temp files left behind by a run that was killed mid-save."""
+    cutoff = time.time() - max_age_seconds
+    for leftover in STATE_PATH.parent.glob(f".{STATE_PATH.name}.*.tmp"):
+        try:
+            if leftover.stat().st_mtime < cutoff:
+                leftover.unlink()
+        except OSError:
+            continue
+
+
 def save_state(state: dict[str, object]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _remove_stale_temporaries()
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -41,8 +71,7 @@ def save_state(state: dict[str, object]) -> None:
             delete=False,
         ) as handle:
             temporary_path = Path(handle.name)
-            json.dump(state, handle, indent=2, sort_keys=True, allow_nan=False)
-            handle.write("\n")
+            handle.write(serialize_state(state))
             handle.flush()
             os.fchmod(handle.fileno(), 0o600)
             os.fsync(handle.fileno())
@@ -197,6 +226,29 @@ def iter_nonterminal_paths(state: dict[str, object]) -> list[Path]:
             continue
         paths.append(Path(raw_path))
     return paths
+
+
+def prune_inert_missing_entries(state: dict[str, object]) -> int:
+    """Forget finished entries whose transcript file is gone; returns how many.
+
+    Terminal, skipped and permanently rejected entries are never revisited, and
+    a deleted transcript cannot sync again, so keeping them only inflates the
+    state file that every run reads.
+    """
+    entries = _transcripts_map(state)
+    if entries is None:
+        return 0
+    stale = [
+        raw_path
+        for raw_path, raw_entry in entries.items()
+        if isinstance(raw_path, str)
+        and isinstance(raw_entry, dict)
+        and (raw_entry.get("status") in {"terminal", "skipped"} or entry_is_permanent_error(raw_entry))
+        and not Path(raw_path).exists()
+    ]
+    for raw_path in stale:
+        del entries[raw_path]
+    return len(stale)
 
 
 def get_checkpoint(path: Path, state: dict[str, object]) -> str | None:

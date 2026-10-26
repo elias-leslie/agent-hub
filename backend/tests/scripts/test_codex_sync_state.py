@@ -184,3 +184,50 @@ def test_state_round_trip_is_atomic_and_corruption_fails_closed(
     state_path.write_text("{broken", encoding="utf-8")
     with pytest.raises(ValueError, match="unreadable"):
         codex_sync_state.load_state()
+
+
+def test_save_state_if_changed_skips_identical_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(codex_sync_state, "STATE_PATH", tmp_path / "state.json")
+    payload: dict[str, object] = {"transcripts": {"/tmp/a.jsonl": {"status": "active"}}}
+    baseline = codex_sync_state.serialize_state(payload)
+
+    assert not codex_sync_state.save_state_if_changed(payload, baseline)
+    assert not (tmp_path / "state.json").exists()
+
+    payload["transcripts"] = {"/tmp/a.jsonl": {"status": "terminal"}}
+    assert codex_sync_state.save_state_if_changed(payload, baseline)
+    assert codex_sync_state.load_state() == payload
+
+
+def test_save_state_removes_stale_temporaries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(codex_sync_state, "STATE_PATH", tmp_path / "state.json")
+    stale = tmp_path / ".state.json.old.tmp"
+    fresh = tmp_path / ".state.json.new.tmp"
+    stale.write_text("x", encoding="utf-8")
+    fresh.write_text("x", encoding="utf-8")
+    old = datetime.now(UTC).timestamp() - 7200
+    import os
+
+    os.utime(stale, (old, old))
+
+    codex_sync_state.save_state({"transcripts": {}})
+
+    assert not stale.exists()
+    assert fresh.exists()
+
+
+def test_prune_inert_missing_entries_keeps_live_and_unfinished(tmp_path: Path) -> None:
+    present = tmp_path / "present.jsonl"
+    present.write_text("{}", encoding="utf-8")
+    gone_terminal = tmp_path / "gone-terminal.jsonl"
+    gone_active = tmp_path / "gone-active.jsonl"
+    state: dict[str, object] = {
+        "transcripts": {
+            str(present): {"status": "terminal"},
+            str(gone_terminal): {"status": "terminal"},
+            str(gone_active): {"status": "active"},
+        }
+    }
+
+    assert codex_sync_state.prune_inert_missing_entries(state) == 1
+    assert set(cast(dict[str, object], state["transcripts"])) == {str(present), str(gone_active)}

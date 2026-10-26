@@ -31,7 +31,9 @@ from codex_sync_state import (
     get_state_entry,
     iter_nonterminal_paths,
     load_state,
-    save_state,
+    prune_inert_missing_entries,
+    save_state_if_changed,
+    serialize_state,
     should_heartbeat,
     should_sync,
     update_state_entry,
@@ -82,6 +84,8 @@ def run_sync(
         except (OSError, ValueError) as exc:
             log_fn(f"[WARN] Invalid Codex sync state: {exc}")
             return 2
+        state_baseline = serialize_state(state)
+        prune_inert_missing_entries(state)
         try:
             project_bindings = load_project_bindings()
         except (OSError, ValueError) as exc:
@@ -125,7 +129,7 @@ def run_sync(
         )
         if inherited_bindings_changed:
             save_project_bindings_locked(project_bindings)
-        save_state(state)
+        save_state_if_changed(state, state_baseline)
         if binding_request is not None and not binding_synced:
             return 2
         return 0
