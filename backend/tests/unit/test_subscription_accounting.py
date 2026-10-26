@@ -224,7 +224,7 @@ async def test_usage_replay_can_skip_existing_retention_pruning(prune: bool) -> 
     assert db.execute.await_count == (3 if prune else 0)
 
 
-async def test_usage_collect_replay_uses_initialized_collector_without_spend_alerts(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_usage_collect_replay_uses_initialized_collector(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.cli import usage_collect
 
     db = object()
@@ -243,14 +243,11 @@ async def test_usage_collect_replay_uses_initialized_collector_without_spend_ale
         calls.append("collect")
         return {"replay_pending": 0}
 
-    alerts = AsyncMock()
     monkeypatch.setattr(usage_collect, "async_session", session)
     monkeypatch.setattr(usage_collect, "refresh_runtime_model_catalog", refresh)
     monkeypatch.setattr(usage_collect, "collect", collect)
-    monkeypatch.setattr(usage_collect, "spend_alerts", alerts)
     assert await usage_collect.run(replay="native-usage-test") == {"replay_pending": 0}
     assert calls == ["catalog", "collect"]
-    alerts.assert_not_awaited()
 
 
 @pytest.mark.integration

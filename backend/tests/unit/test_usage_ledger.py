@@ -230,35 +230,6 @@ async def test_sessions_without_native_usage_fall_back_to_the_ledger() -> None:
     assert "empty" not in rollups
 
 
-def _hour_rows(now: datetime, days: int, job_daily: float, rate_hourly: float) -> list[tuple]:
-    rows = []
-    for d in range(1, days + 1):
-        rows.append((now - timedelta(days=d, hours=1), "job:nightly", "nightly audit", job_daily))
-    for h in range(2, days * 24):
-        rows.append(((now - timedelta(hours=h)).replace(minute=0, second=0, microsecond=0), None, None, rate_hourly))
-    return rows
-
-
-def test_spend_alert_fires_only_against_a_jobs_own_history() -> None:
-    now = datetime(2026, 10, 18, 12, 30, tzinfo=UTC)
-    calm = _hour_rows(now, 10, 4.0, 1.0)
-    assert usage_costs.evaluate_spend_alerts([*calm, (now - timedelta(hours=3), "job:nightly", "nightly audit", 5.0)], now) == []
-    hot = usage_costs.evaluate_spend_alerts([*calm, (now - timedelta(hours=3), "job:nightly", "nightly audit", 30.0)], now)
-    assert [a.key for a in hot] == ["spend-job:job:nightly"]
-    assert "nightly audit spent $30" in hot[0].message and "item=job%3Anightly" in hot[0].open_url
-    # A brand-new job has no normal yet: no alert from this check.
-    fresh = usage_costs.evaluate_spend_alerts([(now - timedelta(hours=1), "job:new", "new", 500.0)], now)
-    assert [a.key for a in fresh] == []
-
-
-def test_spend_rate_alert_compares_the_last_hour_with_busy_hours() -> None:
-    now = datetime(2026, 10, 18, 12, 30, tzinfo=UTC)
-    calm = _hour_rows(now, 10, 0.0, 3.0)
-    assert usage_costs.evaluate_spend_alerts([*calm, (now.replace(minute=0), None, None, 8.0)], now) == []
-    hot = usage_costs.evaluate_spend_alerts([*calm, (now.replace(minute=0), None, None, 40.0)], now)
-    assert [a.key for a in hot] == ["spend-rate"]
-
-
 def test_chart_windows_align_to_local_bucket_edges() -> None:
     now = datetime(2026, 10, 18, 12, 34, tzinfo=UTC)
     win = usage_costs.window_for("24h", now)

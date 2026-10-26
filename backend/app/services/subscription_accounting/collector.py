@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import time
 from collections import defaultdict
 from collections.abc import Iterator
@@ -40,7 +39,6 @@ from app.models import (
     UsageSession,
 )
 from app.utils.native_homes import claude_project_roots, codex_session_roots, native_homes
-from app.utils.safe_subprocess import create_process
 
 from . import rates
 
@@ -889,25 +887,3 @@ async def _persist_ledger(db: AsyncSession, result: PassResult) -> None:
                 "job": func.coalesce(ex.job, table.c.job),
             },
         ))
-
-
-async def _alert(
-    message: str, *, title: str, key: str | None = None, cooldown: int = 0,
-    open_url: str | None = None,
-) -> None:
-    """Owner alert through Nightshift's push (the only owner-alert path)."""
-    binary = shutil.which("nightshift")
-    if binary is None:
-        logger.warning("nightshift not found; alert not sent: %s", message)
-        return
-    args = ["push", "--severity", "warning", "--title", title, "--key", key or f"alert:{message[:60]}",
-            "--cooldown", str(cooldown)]
-    if open_url:
-        args += ["--open", open_url]
-    try:
-        process = await create_process(
-            binary, *args, "--", message, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await asyncio.wait_for(process.wait(), timeout=20)
-    except (OSError, TimeoutError) as exc:
-        logger.warning("owner alert failed: %s", exc)
