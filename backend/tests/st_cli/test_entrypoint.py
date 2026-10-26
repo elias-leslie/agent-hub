@@ -69,7 +69,7 @@ def test_shipped_agents_manifest_discovers_local_credential_commands() -> None:
     root = Path(__file__).resolve().parents[3]
     manifest = json.loads((root / "st-extensions/agents.json").read_text())
     assert manifest["id"] == "agent-hub.agents"
-    for operation in ("enroll", "refs", "run"):
+    for operation in ("enroll", "refresh", "refs", "run"):
         assert f"credentials {operation}" in manifest["help"]
         assert any(
             usage["surface"] == f"st.agents.credentials.{operation}"
@@ -103,7 +103,7 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
 
 def test_public_helper_contract_is_versioned_and_importable() -> None:
     assert agent_hub_st.PUBLIC_HELPER_API_VERSION == 1
-    assert agent_hub_st.__version__ == "0.2.5"
+    assert agent_hub_st.__version__ == "0.3.1"
     assert all(
         callable(helper)
         for helper in (

@@ -1,7 +1,7 @@
 {
   "id": "agent-hub.agents",
   "owner": "agent-hub",
-  "version": "0.2.5",
+  "version": "0.3.1",
   "st_contract_versions": [
     1
   ],
@@ -16,7 +16,7 @@
   ],
   "namespace": "agents",
   "help": {
-    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list         List agents.\n  get          Get one agent by slug.\n  versions     Show compact agent version history.\n  activity     Show recent agent sessions and request logs.\n  create       Create an agent using the Agent Hub API.\n  preview      Show the effective runtime prompt/context preview for an...\n  update       Update an agent using the Agent Hub API.\n  credentials  Owner enrollment, metadata refs and trusted local lab handoff",
+    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list         List agents.\n  get          Get one agent by slug.\n  versions     Show compact agent version history.\n  activity     Show recent agent sessions and request logs.\n  create       Create an agent using the Agent Hub API.\n  preview      Show the effective runtime prompt/context preview for an...\n  update       Update an agent using the Agent Hub API.\n  credentials  Authorized local lab enrollment, refresh, refs and trusted...",
     "list": "Usage: agents list [OPTIONS]\n\n  List agents.\n\nOptions:\n  --active-only / --all         [default: active-only]\n  --coding-only / --non-coding\n  --limit <int range>           [default: 100; 1<=x<=500]\n  --offset <int range>          [default: 0; x>=0]\n  --json                        Print full API payload.\n  --scores                      Show compact assignment rows with all score\n                                dimensions.\n  --by-model                    Group active agents by primary model.\n  --help                        Show this message and exit.",
     "get": "Usage: agents get [OPTIONS] {slug}\n\n  Get one agent by slug.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --json  Print full API payload.\n  --help  Show this message and exit.",
     "versions": "Usage: agents versions [OPTIONS] {slug}\n\n  Show compact agent version history.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --limit <int range>  [default: 20; 1<=x<=100]\n  --json               Print full API payload.\n  --help               Show this message and exit.",
@@ -24,10 +24,11 @@
     "create": "Usage: agents create [OPTIONS] {slug} {name}\n\n  Create an agent using the Agent Hub API.\n\nArguments:\n  slug  Agent slug  [required]\n  name  Display name  [required]\n\nOptions:\n  --primary-model <str>           Primary model id.  [required]\n  --system-prompt-file <path>     System prompt file.  [required]\n  --description <str>\n  --temperature <float range>     [default: 0.1; 0.0<=x<=2.0]\n  --timeout-seconds <float range>\n                                  [x>=1.0]\n  --thinking-level <str>\n  --verbosity-level <str>\n  --active / --inactive           [default: active]\n  --coding-agent / --non-coding-agent\n                                  [default: non-coding-agent]\n  --fallback-model <str>\n  --escalation-model <str>\n  --memory-config-file <path>\n  --help                          Show this message and exit.",
     "preview": "Usage: agents preview [OPTIONS] {slug}\n\n  Show the effective runtime prompt/context preview for an agent.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  -m, --mode <str>     Preview mode: chat, review  [default: chat]\n  -P, --project <str>  Optional project scope\n  --phase <str>        Optional phase/event hint\n  --input <str>        Optional task input placeholder\n  --json               Print raw JSON response\n  --full-context-only  Print only the effective full context\n  --show-content       Print full section bodies plus full context.\n  --help               Show this message and exit.",
     "update": "Usage: agents update [OPTIONS] {slug}\n\n  Update an agent using the Agent Hub API.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --name <str>\n  --description <str>\n  --primary-model <str>\n  --escalation-model <str>\n  --temperature <float range>     [0.0<=x<=2.0]\n  --timeout-seconds <float range>\n                                  [x>=1.0]\n  --thinking-level <str>\n  --active / --inactive\n  --coding-agent / --non-coding-agent\n  --fallback-model <str>\n  --clear-fallback-models\n  --system-prompt-file <path>\n  --memory-config-file <path>\n  --clear-memory-config\n  --memory-enabled / --memory-disabled\n  --include-mandates / --no-include-mandates\n  --include-guardrails / --no-include-guardrails\n  --include-references / --no-include-references\n  --continuity-enabled / --no-continuity-enabled\n  --continuity-max-sessions <int range>\n                                  [1<=x<=20]\n  --audience-tags <str>\n  --add-audience-tags <str>\n  --remove-audience-tags <str>\n  --clear-audience-tags\n  --exclude-tags <str>\n  --add-exclude-tags <str>\n  --remove-exclude-tags <str>\n  --clear-exclude-tags\n  --change-reason <str>\n  --help                          Show this message and exit.",
-    "credentials": "Usage: agents credentials [OPTIONS] COMMAND [ARGS]...\n\n  Owner enrollment, metadata refs and trusted local lab handoff\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  enroll  Insert an owner-classified lab actor once; no overwrite or...\n  refs    List identity metadata only; presence does not establish validity.\n  run     Launch one trusted child with selected fields; suppress child...",
-    "credentials enroll": "Usage: agents credentials enroll [OPTIONS]\n\n  Insert an owner-classified lab actor once; no overwrite or rotation.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --kind <str>        [required]\n  --input <str>       Owner-owned private JSON file, or - for piped stdin\n                      [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
+    "credentials": "Usage: agents credentials [OPTIONS] COMMAND [ARGS]...\n\n  Authorized local lab enrollment, refresh, refs and trusted handoff\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  enroll   Insert an authorized lab actor once; use refresh for known...\n  refresh  Replace an existing synthetic bundle in full; never reset a...\n  refs     List identity metadata only; presence does not establish...\n  run      Launch one trusted local adapter with selected fields;...",
+    "credentials enroll": "Usage: agents credentials enroll [OPTIONS]\n\n  Insert an authorized lab actor once; use refresh for known synthetic actors.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --kind <str>        [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
+    "credentials refresh": "Usage: agents credentials refresh [OPTIONS]\n\n  Replace an existing synthetic bundle in full; never reset a target account.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
     "credentials refs": "Usage: agents credentials refs [OPTIONS]\n\n  List identity metadata only; presence does not establish validity.\n\nOptions:\n  --target <str>  [required]\n  --help          Show this message and exit.",
-    "credentials run": "Usage: agents credentials run [OPTIONS] {command}...\n\n  Launch one trusted child with selected fields; suppress child output.\n\nArguments:\n  command...  Absolute trusted child executable and nonsecret arguments\n              [required]\n\nOptions:\n  --target <str>    [required]\n  --request <path>  [required]\n  --help            Show this message and exit."
+    "credentials run": "Usage: agents credentials run [OPTIONS] {command}...\n\n  Launch one trusted local adapter with selected fields; suppress its output.\n\n  Read JSON through EOF from the descriptor in AGENT_HUB_LAB_CREDENTIAL_FD:\n  {schema_version: 1, target: TARGET, credentials: [{reference: REF, values:\n  FIELDS}]}. Only PATH and the descriptor number reach the child's\n  environment. Close the descriptor after reading. A trusted login adapter may\n  drive an isolated browser; an API token does not establish its browser\n  session. Never use a shell, model harness or general browser executable as\n  the recipient.\n\nArguments:\n  command...  Absolute trusted child executable and nonsecret arguments\n              [required]\n\nOptions:\n  --target <str>    [required]\n  --request <path>  [required]\n  --help            Show this message and exit."
   },
   "usage": [
     {
@@ -78,7 +79,14 @@
       "surface": "st.agents.credentials.enroll",
       "tier": "reference",
       "cmd": "st agents credentials enroll --target TARGET --actor ACTOR --kind synthetic|temporary --input FILE|- [--expires-at ISO]",
-      "when": "owner enrolls approved lab fields from private file or piped stdin; never pass values in arguments",
+      "when": "enroll approved lab fields; agents may enroll synthetic actors under existing local lab authority; private file or piped stdin only",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.credentials.refresh",
+      "tier": "reference",
+      "cmd": "st agents credentials refresh --target TARGET --actor ACTOR --input FILE|- [--expires-at ISO]",
+      "when": "replace a known synthetic bundle under existing lab authority after local credential or session renewal; never pass values in arguments",
       "on_demand": "agent administration"
     },
     {
@@ -92,7 +100,7 @@
       "surface": "st.agents.credentials.run",
       "tier": "reference",
       "cmd": "st agents credentials run --target TARGET --request FILE -- /absolute/trusted-child [ARGS]",
-      "when": "trusted owner launcher supplies explicitly selected lab fields in an inherited descriptor",
+      "when": "trusted local launcher supplies selected lab fields in an inherited descriptor; API tokens do not establish browser sessions",
       "on_demand": "agent administration"
     }
   ],

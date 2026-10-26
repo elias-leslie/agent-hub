@@ -5,7 +5,7 @@ the package README.  The command modules remain importable for trusted ST
 registration, while integrations should depend only on the documented helpers.
 """
 
-__version__ = "0.2.5"
+__version__ = "0.3.1"
 PUBLIC_HELPER_API_VERSION = 1
 
 __all__ = ["PUBLIC_HELPER_API_VERSION", "__version__"]

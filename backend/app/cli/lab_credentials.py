@@ -1,4 +1,4 @@
-"""Local owner enrollment and trusted child delivery. No HTTP or resolver API."""
+"""Authorized local lab enrollment, refresh and trusted child delivery."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from app.storage.lab_credentials import (
     enroll_lab_credential,
     lab_reference,
     list_lab_credential_refs,
+    refresh_lab_credential,
     resolve_lab_credentials,
 )
 
@@ -98,6 +99,8 @@ async def _database_action(action: str, target: str, **arguments: Any) -> Any:
     async with async_session() as db:
         if action == "enroll":
             return await enroll_lab_credential(db, **arguments)
+        if action == "refresh":
+            return await refresh_lab_credential(db, **arguments)
         if action == "refs":
             return await list_lab_credential_refs(db, target)
         if action == "run":
@@ -111,7 +114,7 @@ def run_lab_operation(action: str, *, target: str, **arguments: Any) -> dict[str
     File reads and child waits stay outside the async database runtime. Resolved
     values leave the database session only as value-opaque snapshots.
     """
-    if action == "enroll":
+    if action in {"enroll", "refresh"}:
         reference = lab_reference(target, arguments["actor"])
         values = _read_document(arguments["input_file"], protected=True)
         if not isinstance(values, dict):
@@ -121,9 +124,10 @@ def run_lab_operation(action: str, *, target: str, **arguments: Any) -> dict[str
             expires_at = datetime.fromisoformat(expiry) if expiry is not None else None
         except ValueError:
             raise LabCredentialError("Invalid lab credential expiry") from None
+        options = {"kind": arguments["kind"]} if action == "enroll" else {}
         enrolled = asyncio.run(_database_action(
-            "enroll", target, reference=reference, values=values,
-            kind=arguments["kind"], expires_at=expires_at,
+            action, target, reference=reference, values=values,
+            expires_at=expires_at, **options,
         ))
         return {"reference": enrolled}
     if action == "refs":

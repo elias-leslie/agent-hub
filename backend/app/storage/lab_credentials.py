@@ -80,7 +80,9 @@ def _timestamp(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _validate_payload(payload: object, reference: str, now: datetime) -> dict[str, str]:
+def _validate_payload(
+    payload: object, reference: str, now: datetime, *, allow_expired: bool = False,
+) -> dict[str, str]:
     if not isinstance(payload, dict) or set(payload) != {
         "schema_version", "reference", "kind", "expires_at", "values",
     }:
@@ -95,7 +97,7 @@ def _validate_payload(payload: object, reference: str, now: datetime) -> dict[st
             expires_at = datetime.fromisoformat(expiry)
         except (TypeError, ValueError):
             raise LabCredentialError("Invalid lab credential expiry") from None
-        if _timestamp(expires_at) <= now:
+        if _timestamp(expires_at) <= now and not allow_expired:
             raise LabCredentialError("Lab credential expired")
     elif payload["kind"] == "temporary":
         raise LabCredentialError("Temporary lab credentials require an expiry")
@@ -149,7 +151,7 @@ async def enroll_lab_credential(
 ) -> str:
     """Insert once under a PostgreSQL writer lock; own the transaction.
 
-    No replacement/rotation is offered. The lock covers all credential writers,
+    Enrollment never replaces a row. The lock covers all credential writers,
     since the existing table has no unique target/actor constraint.
     """
     target, actor = _identity(reference)
@@ -163,6 +165,45 @@ async def enroll_lab_credential(
         # Validate expiry after acquiring the lock, which may have waited.
         credential = prepare_lab_credential(reference, values, kind=kind, expires_at=expires_at)
         db.add(credential)
+        await db.flush()
+    return reference
+
+
+async def refresh_lab_credential(
+    db: AsyncSession,
+    reference: str,
+    values: dict[str, str],
+    *,
+    expires_at: datetime | None = None,
+) -> str:
+    """Replace one known synthetic bundle, including an expired one, in place.
+
+    The trusted local operator supplies authority; neither a reference nor the
+    synthetic label grants permission to change an account on a target.
+    """
+    target, actor = _identity(reference)
+    async with db.begin():
+        await db.execute(text("LOCK TABLE credentials IN SHARE ROW EXCLUSIVE MODE"))
+        result = await db.execute(select(Credential).where(
+            Credential.provider == _provider(target), Credential.credential_type == actor,
+        ))
+        rows = result.scalars().all()
+        if (len(rows) != 1 or rows[0].provider != _provider(target)
+                or rows[0].credential_type != actor):
+            raise LabCredentialError("Lab credential unavailable or ambiguous")
+        from app.storage.credentials import EncryptionError, decrypt_value
+
+        try:
+            payload = decode_lab_json(decrypt_value(rows[0].value_encrypted))
+        except (EncryptionError, ValueError, UnicodeError):
+            raise LabCredentialError("Lab credential could not be decoded") from None
+        _validate_payload(payload, reference, datetime.now(UTC), allow_expired=True)
+        if not isinstance(payload, dict) or payload["kind"] != "synthetic":
+            raise LabCredentialError("Only known synthetic lab credentials can be refreshed")
+        replacement = prepare_lab_credential(
+            reference, values, kind="synthetic", expires_at=expires_at,
+        )
+        rows[0].value_encrypted = replacement.value_encrypted
         await db.flush()
     return reference
 
