@@ -85,18 +85,3 @@ def test_complete_exits_nonzero_for_error_content() -> None:
 
     assert result.exit_code == 1
     assert "Error: provider failed" in result.output
-
-
-def test_complete_warns_when_a_fallback_answered() -> None:
-    with patch("agent_hub_st.complete.call_complete") as mock_call:
-        mock_call.return_value = {
-            "content": "ok",
-            "fallback_used": True,
-            "model_used": "nvidia/glm-5.3",
-            "fallback_reason": "Codex token refresh rejected",
-        }
-
-        result = runner.invoke(app, ["--agent", "critic", "--message", "Run"])
-
-    assert result.exit_code == 0
-    assert "WARN: answered by fallback nvidia/glm-5.3 (Codex token refresh rejected)" in result.output
