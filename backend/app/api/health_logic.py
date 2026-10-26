@@ -47,8 +47,13 @@ async def recent_completion_outcomes(
         RequestLog.created_at >= cutoff,
         RequestLog.model.isnot(None),
     )
-    # Provider-attributable failure: a 5xx or a 429; other 4xx are caller errors.
-    failed = or_(RequestLog.status_code >= 500, RequestLog.status_code == 429)
+    # Provider-attributable failure: a 5xx, a 429, or a call another model had to serve
+    # (the row keeps the requested model); other 4xx are caller errors.
+    failed = or_(
+        RequestLog.status_code >= 500,
+        RequestLog.status_code == 429,
+        RequestLog.used_fallback.is_(True),
+    )
     per_model = (
         await db.execute(
             select(
@@ -82,7 +87,13 @@ async def recent_completion_outcomes(
 
     failures = (
         await db.execute(
-            select(RequestLog.model, RequestLog.status_code, RequestLog.created_at)
+            select(
+                RequestLog.model,
+                RequestLog.status_code,
+                RequestLog.created_at,
+                RequestLog.used_fallback,
+                RequestLog.fallback_model,
+            )
             .where(*in_window, failed)
             .order_by(RequestLog.created_at.desc())
         )
@@ -94,7 +105,11 @@ async def recent_completion_outcomes(
         agg = outcomes[provider]
         if agg.last_failure is None:
             agg.last_failure = row.created_at
-            agg.last_failure_label = f"HTTP {row.status_code} from {row.model}"
+            agg.last_failure_label = (
+                f"{row.model} fell back to {row.fallback_model or 'another model'}"
+                if row.used_fallback and (row.status_code or 0) < 500 and row.status_code != 429
+                else f"HTTP {row.status_code} from {row.model}"
+            )
         if agg.last_success is None or row.created_at > agg.last_success:
             agg.consecutive_failures += 1
     return outcomes

@@ -25,6 +25,9 @@ def _output_result(result: dict[str, Any], stream: bool, raw: bool) -> None:
         output_json(result)
     else:
         typer.echo(result.get("content", ""))
+        if result.get("fallback_used"):
+            reason = result.get("fallback_reason") or "no reason given"
+            typer.echo(f"WARN: answered by fallback {result.get('model_used')} ({reason})", err=True)
 
 
 _completion_failed = completion_failed

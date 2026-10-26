@@ -110,6 +110,16 @@ async def test_requests_by_day_zero_fills_the_window() -> None:
     ]
 
 
+def _failure(model: str, status_code: int, created_at: datetime, fallback_model: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        model=model,
+        status_code=status_code,
+        created_at=created_at,
+        used_fallback=fallback_model is not None,
+        fallback_model=fallback_model,
+    )
+
+
 @pytest.fixture
 def two_providers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "list_workload_providers", lambda: ["codex", "gemini"])
@@ -148,9 +158,9 @@ async def test_provider_status_includes_recent_completion_failures(two_providers
         ),
         _result(
             rows=[
-                SimpleNamespace(model="codex/gpt-5.5", status_code=502, created_at=now),
-                SimpleNamespace(model="codex/gpt-5.5", status_code=500, created_at=now - timedelta(hours=1)),
-                SimpleNamespace(model="not-a-catalog-model", status_code=500, created_at=now),
+                _failure("codex/gpt-5.5", 502, now),
+                _failure("codex/gpt-5.5", 500, now - timedelta(hours=1)),
+                _failure("not-a-catalog-model", 500, now),
             ]
         ),
     )
@@ -158,7 +168,10 @@ async def test_provider_status_includes_recent_completion_failures(two_providers
     statuses = {s.name: s for s in await health_logic.provider_statuses(db)}
 
     failure_sql = _sql(db.execute.await_args_list[1].args[0])
-    assert "request_logs.status_code >= 500 OR request_logs.status_code = 429" in failure_sql
+    assert (
+        "request_logs.status_code >= 500 OR request_logs.status_code = 429 OR request_logs.used_fallback IS true"
+        in failure_sql
+    )
     assert "request_logs.endpoint = '/api/complete'" in failure_sql
     codex = statuses["codex"].health
     assert codex is not None
@@ -168,6 +181,34 @@ async def test_provider_status_includes_recent_completion_failures(two_providers
     assert codex.latency_ms == 500
     assert codex.last_error == "HTTP 502 from codex/gpt-5.5"
     assert statuses["gemini"].health is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_served_call_marks_requested_provider_degraded(two_providers) -> None:
+    now = datetime.now(UTC)
+    db = _db(
+        _result(
+            rows=[
+                SimpleNamespace(
+                    model="codex/gpt-5.5",
+                    calls=3,
+                    failures=3,
+                    latency_total=900,
+                    latency_samples=3,
+                    last_call=now,
+                    last_success=None,
+                )
+            ]
+        ),
+        _result(rows=[_failure("codex/gpt-5.5", 200, now, fallback_model="nvidia/glm-5.3")]),
+    )
+
+    codex = {s.name: s for s in await health_logic.provider_statuses(db)}["codex"].health
+
+    assert codex is not None
+    assert codex.state == "degraded"
+    assert codex.availability == 0
+    assert codex.last_error == "codex/gpt-5.5 fell back to nvidia/glm-5.3"
 
 
 @pytest.mark.asyncio
