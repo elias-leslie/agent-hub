@@ -275,7 +275,7 @@ Browser extension bubble:
 - Receives agent messages, browser callouts, artifact refs, and permission state.
 - Does not persist secrets or normal profile data.
 
-Codex, Claude Code, Jenny, and other TUIs:
+Codex, Claude Code, and other TUIs:
 
 - Transitional adapters.
 - Translate native events into `session_events`.
@@ -355,6 +355,6 @@ Backend slice:
 
 Adapter slice:
 
-- Define thin adapters for Codex, Claude Code, Jenny, and future clients.
+- Define thin adapters for Codex, Claude Code, and future clients.
 - Normalize external streams into Agent Hub events.
 - Keep artifact extraction in Agent Hub finalization.

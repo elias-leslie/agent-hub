@@ -186,7 +186,7 @@ async def _check_bash_tool(
 def create_cross_project_permission_hook(session_project_id: str) -> PreToolUseHook:
     """Return a pre-hook that enforces cross-project file access permissions.
 
-    When a session runs under one project (e.g. persona-sandbox) but accesses
+    When a session runs under one project (e.g. a sandbox project) but accesses
     files in another project's directory, this hook checks the *target*
     project's permission tier and enforces read/write/deny accordingly.
 

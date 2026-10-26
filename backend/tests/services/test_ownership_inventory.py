@@ -383,45 +383,6 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
 
 
 @pytest.mark.asyncio
-async def test_query_project_ownership_skips_unscoped_persona_heartbeat_even_with_task_lane_metadata() -> None:
-    now = datetime.now(UTC)
-    session = SimpleNamespace(
-        id="sess-persona-heartbeat",
-        project_id="agent-hub",
-        created_at=now - timedelta(minutes=2),
-        updated_at=now - timedelta(minutes=1),
-        agent_slug="persona",
-        request_source="heartbeat",
-        external_id="task-269134f1",
-        current_branch="task-269134f1/main",
-        status="active",
-        workstream_status=None,
-        workstream_note=None,
-        declared_scope_paths=[],
-        observed_read_paths=[],
-        observed_write_paths=[],
-        scope_confidence=None,
-        provider_metadata={"cwd": "/repo/.checkpoints/task-269134f1"},
-    )
-
-    db = AsyncMock()
-
-    with (
-        patch(
-            "app.services.ownership_inventory._fetch_candidate_sessions",
-            new=AsyncMock(return_value=[session]),
-        ),
-        patch(
-            "app.services.ownership_inventory._fetch_scope_events",
-            new=AsyncMock(return_value={}),
-        ),
-    ):
-        owners = await query_project_ownership(db, "agent-hub")
-
-    assert owners == []
-
-
-@pytest.mark.asyncio
 async def test_query_project_ownership_upgrades_unknown_scope_confidence_from_declared_paths() -> None:
     now = datetime.now(UTC)
     session = SimpleNamespace(
@@ -461,21 +422,21 @@ async def test_query_project_ownership_upgrades_unknown_scope_confidence_from_de
 
 
 @pytest.mark.asyncio
-async def test_query_project_ownership_keeps_scoped_persona_heartbeat_lane() -> None:
+async def test_query_project_ownership_keeps_scoped_heartbeat_lane() -> None:
     now = datetime.now(UTC)
     session = SimpleNamespace(
-        id="sess-persona-lane",
+        id="sess-heartbeat-lane",
         project_id="agent-hub",
         created_at=now - timedelta(minutes=2),
         updated_at=now - timedelta(minutes=1),
-        agent_slug="persona",
+        agent_slug="worker",
         request_source="heartbeat",
         external_id="task-269134f1",
         current_branch="task-269134f1/main",
         status="active",
         workstream_status=None,
         workstream_note=None,
-        declared_scope_paths=["frontend/src/app/persona/components/workspace-cards.tsx"],
+        declared_scope_paths=["frontend/src/app/example/components/workspace-cards.tsx"],
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence="declared",
@@ -504,30 +465,6 @@ async def test_query_project_ownership_keeps_scoped_persona_heartbeat_lane() -> 
 @pytest.mark.asyncio
 async def test_query_project_active_specialists_excludes_dead_candidate_sessions() -> None:
     now = datetime.now(UTC)
-    persona_session = SimpleNamespace(
-        id="sess-persona",
-        project_id="agent-hub",
-        created_at=now - timedelta(minutes=3),
-        updated_at=now - timedelta(minutes=1),
-        agent_slug="persona",
-        parent_session_id=None,
-        request_source="heartbeat",
-        status="active",
-        external_id=None,
-        current_branch=None,
-        provider_metadata={
-            "live_activity": {
-                "phase": "waiting_for_model",
-                "status": "active",
-                "summary": "Heartbeat running",
-                "last_event_type": "heartbeat",
-                "last_event_at": now.isoformat(),
-                "last_model_activity_at": now.isoformat(),
-                "outstanding_tool_calls": 0,
-                "tool_calls_count": 1,
-            }
-        },
-    )
     live_session = SimpleNamespace(
         id="sess-live",
         project_id="agent-hub",
@@ -581,7 +518,7 @@ async def test_query_project_active_specialists_excludes_dead_candidate_sessions
     db = AsyncMock()
     mock_result = MagicMock()
     mock_scalars = MagicMock()
-    mock_scalars.all.return_value = [persona_session, live_session, dead_candidate]
+    mock_scalars.all.return_value = [live_session, dead_candidate]
     mock_result.scalars.return_value = mock_scalars
     db.execute.return_value = mock_result
 

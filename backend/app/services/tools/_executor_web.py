@@ -44,7 +44,7 @@ DEFAULT_FETCH_ACCEPT = (
     "text/plain;q=0.7, application/json;q=0.5, */*;q=0.1"
 )
 DEFAULT_USER_AGENT = (
-    "agent-hub/1.0 (+http://localhost:3003; persona web research tool)"
+    "agent-hub/1.0 (+http://localhost:3003; agent web research tool)"
 )
 JINA_READER_BASE_URL = "https://r.jina.ai"
 _SEARCH_TYPES = frozenset({"text", "news"})

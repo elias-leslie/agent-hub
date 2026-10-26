@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -199,7 +198,7 @@ class TestInjectAgentMandates:
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_project_permissions_block_lists_visible_tools_for_non_persona(
+    async def test_project_permissions_block_lists_visible_tools(
         self,
         mock_agent: AgentDTO,
     ) -> None:
@@ -226,112 +225,6 @@ class TestInjectAgentMandates:
         assert (
             "Allowed tools: read_file"
             in result.system_content
-        )
-
-    @pytest.mark.asyncio
-    async def test_persona_project_permissions_block_renders_runtime_tool_names(self) -> None:
-        persona_agent = AgentDTO(
-            id=9,
-            slug="persona",
-            name="Persona",
-            description=None,
-            system_prompt="Persona prompt",
-            primary_model_id=CODEX_GPT_6_1_SOL,
-            fallback_models=[],
-            escalation_model_id=None,
-            strategies={},
-            temperature=0.1,
-            thinking_level="low",
-            verbosity_level=None,
-            is_active=True,
-            is_coding_agent=True,
-            memory_config=None,
-            max_concurrency=None,
-            max_subagent_concurrency=None,
-            daily_token_budget=None,
-            hourly_request_limit=None,
-            version=1,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        perm = SimpleNamespace(project_id="agent-hub", permission_tier="full")
-
-        with patch(
-            "app.services.agent_routing_utils._fetch_permissions",
-            new=AsyncMock(return_value=(perm, [perm])),
-        ):
-            result = await inject_agent_mandates(persona_agent, project_id="agent-hub")
-
-        assert "Allowed tools:" in result.system_content
-        assert "read_file" in result.system_content
-        assert "write_file" in result.system_content
-        assert "query_sessions" not in result.system_content
-        assert "dispatch_agent" not in result.system_content
-
-    @pytest.mark.asyncio
-    async def test_persona_runtime_uses_shared_runtime_prompt_stack(self) -> None:
-        from datetime import UTC, datetime
-
-        persona_agent = AgentDTO(
-            id=9,
-            slug="persona",
-            name="Persona",
-            description=None,
-            system_prompt="Legacy persona system prompt",
-            primary_model_id=CODEX_GPT_6_1_SOL,
-            fallback_models=[],
-            escalation_model_id=None,
-            strategies={},
-            temperature=0.3,
-            thinking_level="medium",
-            verbosity_level=None,
-            is_active=True,
-            is_coding_agent=False,
-            memory_config=None,
-            max_concurrency=None,
-            max_subagent_concurrency=None,
-            daily_token_budget=None,
-            hourly_request_limit=None,
-            version=1,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-
-        mock_db = AsyncMock()
-        with (
-            patch(
-                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
-                new=AsyncMock(return_value="<persona_system>core</persona_system>"),
-            ) as collect_runtime_prompt_sections,
-            patch(
-                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
-                return_value=(
-                    "<persona_system>core</persona_system>\n\n"
-                    "<persona_context>\n<personality>Persona</personality>\n</persona_context>"
-                ),
-            ),
-        ):
-            result = await inject_agent_mandates(
-                persona_agent,
-                mock_db,
-                task_type="heartbeat",
-            )
-
-        assert result.system_content == (
-            "<persona_system>core</persona_system>\n\n"
-            "<persona_context>\n<personality>Persona</personality>\n</persona_context>"
-        )
-        collect_runtime_prompt_sections.assert_awaited_once_with(
-            mock_db,
-            persona_agent,
-            include_roles=None,
-            task_type="heartbeat",
-            project_id=None,
-            prompt_mode="full",
-            include_global_prompts=False,
-            include_mandates=True,
-            include_guardrails=True,
-            include_persona_context=True,
         )
 
     @pytest.mark.asyncio
@@ -363,11 +256,8 @@ class TestInjectAgentMandates:
             updated_at=datetime.now(UTC),
         )
 
-        assert get_runtime_excluded_prompt_roles(
-            agent_slug="refactor",
-            prompt_mode="full",
-            task_type="wake",
-        ) == ["autocode"]
+        assert get_runtime_excluded_prompt_roles(task_type="wake") == ["autocode"]
+        assert get_runtime_excluded_prompt_roles(task_type="autocode") == []
 
         mock_db = AsyncMock()
         with (
@@ -393,72 +283,9 @@ class TestInjectAgentMandates:
             include_roles=None,
             task_type="wake",
             project_id=None,
-            prompt_mode="full",
             include_global_prompts=False,
             include_mandates=True,
             include_guardrails=True,
-            include_persona_context=True,
-        )
-
-    @pytest.mark.asyncio
-    async def test_inject_agent_mandates_chat_mode_skips_full_persona_context(self):
-        from datetime import UTC, datetime
-
-        agent = AgentDTO(
-            id=9,
-            slug="persona",
-            name="Jenny",
-            description=None,
-            system_prompt="Coordinate work.",
-            primary_model_id=CODEX_GPT_6_1_SOL,
-            fallback_models=[],
-            escalation_model_id=None,
-            strategies={},
-            temperature=0.2,
-            thinking_level="medium",
-            verbosity_level=None,
-            is_active=True,
-            is_coding_agent=False,
-            memory_config=None,
-            max_concurrency=None,
-            max_subagent_concurrency=None,
-            daily_token_budget=None,
-            hourly_request_limit=None,
-            version=1,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-
-        mock_db = AsyncMock()
-        with (
-            patch(
-                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
-                new=AsyncMock(return_value=[]),
-            ) as collect_runtime_prompt_sections,
-            patch(
-                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
-                return_value="<agent_persona>chat</agent_persona>",
-            ),
-        ):
-            result = await inject_agent_mandates(
-                agent,
-                mock_db,
-                include_roles=["system", "persona-personality", "persona-user-context"],
-                prompt_mode="chat",
-            )
-
-        assert result.system_content == "<agent_persona>chat</agent_persona>"
-        collect_runtime_prompt_sections.assert_awaited_once_with(
-            mock_db,
-            agent,
-            include_roles=["system", "persona-personality", "persona-user-context"],
-            task_type=None,
-            project_id=None,
-            prompt_mode="chat",
-            include_global_prompts=False,
-            include_mandates=True,
-            include_guardrails=True,
-            include_persona_context=False,
         )
 
     @pytest.mark.asyncio

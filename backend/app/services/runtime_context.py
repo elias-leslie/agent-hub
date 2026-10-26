@@ -1230,7 +1230,7 @@ async def _compute_auxiliary_blocks(
         # External TUI/MCP capabilities describe the actual caller. Internal
         # agent permissions neither enable nor disable that caller's shell.
         bash_available = "bash" in capabilities or "shell" in capabilities
-    if bash_available is False or (agent_slug == "persona" and bash_available is not True):
+    if bash_available is False:
         diagnostics.append(CanonicalComponentDiagnostic(
             component="tool_capabilities", state="inapplicable", reason="shell_unavailable",
         ))

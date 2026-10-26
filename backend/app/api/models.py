@@ -292,7 +292,6 @@ async def list_models() -> ModelsResponse:
             row = await db.execute(
                 select(func.max(AgentPerformanceLog.created_at)).where(
                     AgentPerformanceLog.task_type == "model_review",
-                    AgentPerformanceLog.logged_by == "persona",
                 )
             )
             last_model_review = row.scalar_one_or_none()

@@ -48,8 +48,8 @@ async def vote_item(item_id: str | None, comment: str | None) -> str:
             if not full_id:
                 return f"Error: No feedback item found matching '{item_id}'"
             vote = await vote_on_item(
-                db, item_id=full_id, session_id="persona-heartbeat",
-                comment=comment, agent_slug="persona",
+                db, item_id=full_id, session_id="manage-feedback-tool",
+                comment=comment, agent_slug="agent",
             )
             await db.commit()
 

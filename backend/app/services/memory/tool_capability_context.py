@@ -123,8 +123,6 @@ def format_tool_capability_context(
     optional usage scores select additional relevant commands. Missing command
     output remains empty so the delivery contract can report it as unavailable.
     """
-    if agent_slug == "persona" and bash_available is not True:
-        return ""
     if bash_available is False:
         return ""
     effective_task, _ = _profile_filters(consumer_profile, task_type)

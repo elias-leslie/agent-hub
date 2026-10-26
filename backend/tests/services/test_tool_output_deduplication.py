@@ -20,7 +20,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import Session as ORMSession
 
-from app.api.persona.stream_builders import _event_has_issue_signal, _stringify_preview
 from app.db import get_db
 from app.main import app
 from app.models.session import SessionEvent
@@ -78,8 +77,6 @@ def test_persisted_text_once_full_response_and_readers(row_db: ORMSession) -> No
     assert response["tool_output"] == payload
     assert response["source_event_id"] == "native-event"
     assert "tool_output_from_content" not in response
-    assert json.loads(_stringify_preview(event.tool_output, limit=None)) == payload
-    assert _event_has_issue_signal(event)
     assert build_condensed_transcript([event]) == f"RESULT: {content[:200]}"
 
 

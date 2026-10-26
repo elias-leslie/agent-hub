@@ -211,7 +211,7 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
     await_args = service.update.await_args
     assert await_args is not None
     kwargs = await_args.kwargs
-    assert kwargs["changed_by"] == "persona"
+    assert kwargs["changed_by"] == "agent"
     assert kwargs["memory_config"] == {
         "injection_enabled": True,
         "project_index_enabled": True,

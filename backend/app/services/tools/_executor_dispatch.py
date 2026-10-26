@@ -85,7 +85,7 @@ def _check_duplicate_campaign(
         (
             s for s in specialists
             if getattr(s, "agent_slug", None) == agent_slug
-            and getattr(s, "request_source", None) == "persona_wake:dispatch_campaign"
+            and getattr(s, "request_source", None) == "agent_wake:dispatch_campaign"
         ),
         None,
     )

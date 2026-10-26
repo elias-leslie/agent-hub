@@ -48,9 +48,6 @@ _redis: aioredis.Redis | None = None
 
 # Reason strings for tool permission results
 _REASON_ALLOWED = "allowed"
-_REASON_PERSONA_EXEMPT = "persona-internal tool (tier-exempt)"
-_REASON_TIER_OFF = "project permission tier is off"
-_REASON_DIRECT_HELPER_DISABLED = "direct helper tool disabled; use bash with st"
 
 # Reason strings for execution permission results
 _EXEC_REASON_ALLOWED = "allowed"
@@ -78,50 +75,6 @@ def _get_redis() -> aioredis.Redis:
 # ---------------------------------------------------------------------------
 # Tier → tool mapping (cumulative)
 # ---------------------------------------------------------------------------
-
-# Persona-internal tools that modify persona-owned config, not the project.
-# Always allowed regardless of project tier (except "off").
-_PERSONA_INTERNAL: frozenset[str] = frozenset({
-    "read_personality",
-    "write_personality",
-    "read_user_context",
-    "write_user_context",
-    "submit_onboarding",
-    "mark_memory_relevant",
-    "mark_memory_irrelevant",
-    "manage_memory_tags",
-    "manage_model_config",
-    "log_agent_performance",
-    "review_agent_performance",
-    "manage_feedback",
-})
-
-# Persona-operational tools — agency capabilities that do not directly modify
-# project code. Safe coordination tools stay tier-exempt so persona workflows
-# can operate regardless of read/full tier. Legacy direct dispatch/task helpers
-# are blocked below; project work goes through bash-invoked `st`.
-_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
-    "manage_tasks",
-    "manage_backups",
-    "steer_consultation",
-    "list_consultations",
-    "cancel_consultation",
-    "dispatch_agent",
-    "query_sessions",
-    "inspect_session",
-    "search_persona_history",
-})
-
-_PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
-
-_SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
-    "manage_backups",
-    "steer_consultation",
-    "cancel_consultation",
-    "query_sessions",
-    "inspect_session",
-    "search_persona_history",
-})
 
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
@@ -168,8 +121,7 @@ def get_tools_for_tier(tier: str) -> frozenset[str]:
 def get_visible_tools_for_tier(tier: str) -> frozenset[str]:
     """Return tools that should be exposed up front for a project tier.
 
-    Runtime permission checks still recognize persona-internal tools, but they
-    are not part of the default model-visible project tool surface.
+    This is the model-visible project tool surface for the tier.
     """
     canonical_tier = normalize_permission_tier(tier)
     return get_tools_for_tier(canonical_tier or "")
@@ -620,23 +572,6 @@ async def _resolve_project_tier(
 # Tool permission checks (hot path)
 # ---------------------------------------------------------------------------
 
-async def _check_persona_tool_allowed(
-    project_id: str,
-    tool_name: str,
-    tool_input: dict[str, Any] | None,
-    db: AsyncSession | None,
-) -> tuple[bool, str]:
-    """Persona tools are blocked at off; mutating actions are further tier-gated."""
-    tier = await _resolve_project_tier(project_id, db)
-    if tier == "off":
-        return False, _REASON_TIER_OFF
-    if tool_name in _PERSONA_INTERNAL or tool_name in _SAFE_PERSONA_OPERATIONAL:
-        return True, _REASON_PERSONA_EXEMPT
-    if tool_name in {"manage_tasks", "dispatch_agent"}:
-        return False, _REASON_DIRECT_HELPER_DISABLED
-    return True, _REASON_PERSONA_EXEMPT
-
-
 async def check_tool_allowed(
     project_id: str,
     tool_name: str,
@@ -653,9 +588,6 @@ async def check_tool_allowed(
         (allowed, reason) tuple.  Never raises.
     """
     try:
-        if tool_name in _PERSONA_TOOLS:
-            return await _check_persona_tool_allowed(project_id, tool_name, tool_input, db)
-
         # Regular tool: cache → DB → check
         cached_tier = await _get_cached_tier(project_id)
         tier = normalize_permission_tier(cached_tier)

@@ -229,51 +229,6 @@ class TestAgentService:
         assert refreshed.system_prompt == "authoritative owned prompt"
 
     @pytest.mark.asyncio
-    async def test_get_by_slug_overrides_cached_persona_name(self, service, mock_db):
-        """Persona display name should resolve from the persona row, not cached agent config."""
-        cached_dto = AgentDTO(
-            id=1,
-            slug="persona",
-            name="Persona",
-            description=None,
-            system_prompt="prompt",
-            primary_model_id=CLAUDE_SONNET,
-            fallback_models=[],
-            escalation_model_id=None,
-            strategies={},
-            temperature=0.7,
-            thinking_level=None,
-            verbosity_level=None,
-            is_active=True,
-            is_coding_agent=False,
-            memory_config=None,
-            max_concurrency=None,
-            max_subagent_concurrency=None,
-            daily_token_budget=None,
-            hourly_request_limit=None,
-            version=1,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-
-        with (
-            patch.object(service._cache, "get", return_value=cached_dto),
-            patch(
-                "app.services.agent_service._resolve_system_prompt",
-                new=AsyncMock(return_value="prompt"),
-            ),
-            patch(
-                "app.services.agent_service.get_persona_display_name",
-                new=AsyncMock(return_value="Avery"),
-            ),
-        ):
-            result = await service.get_by_slug(mock_db, "persona")
-
-        assert result is not None
-        assert result.slug == "persona"
-        assert result.name == "Avery"
-
-    @pytest.mark.asyncio
     async def test_get_by_id_returns_agent(self, service, mock_db, mock_agent):
         """Test get_by_id returns agent when found."""
         mock_result = MagicMock()
@@ -288,8 +243,8 @@ class TestAgentService:
     @pytest.mark.asyncio
     async def test_list_agents_returns_active_only(self, service, mock_db, mock_agent):
         """Test list_agents with active_only=True."""
-        mock_agent.slug = "persona"
-        mock_agent.name = "Persona"
+        mock_agent.slug = "coder"
+        mock_agent.name = "Coder"
         mock_agent2 = MagicMock()
         mock_agent2.id = 2
         mock_agent2.slug = "reviewer"
@@ -315,18 +270,14 @@ class TestAgentService:
         with (
             patch(
                 "app.services.agent_service._resolve_system_prompt",
-                new=AsyncMock(side_effect=["You are persona.", "Review code"]),
-            ),
-            patch(
-                "app.services.agent_service.get_persona_display_name",
-                new=AsyncMock(return_value="Avery"),
+                new=AsyncMock(side_effect=["You are a coder.", "Review code"]),
             ),
         ):
             result = await service.list_agents(mock_db, active_only=True)
 
         assert len(result) == 2
-        assert result[0].slug == "persona"
-        assert result[0].name == "Avery"
+        assert result[0].slug == "coder"
+        assert result[0].name == "Coder"
         assert result[1].slug == "reviewer"
         assert result[1].name == "Reviewer"
 

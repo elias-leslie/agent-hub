@@ -143,8 +143,8 @@ async def update_agent_model(
                 else None,
                 temperature=temperature,
                 thinking_level=thinking_level,
-                changed_by="persona",
-                change_reason=change_reason or "Agent model assignment update by persona",
+                changed_by="agent",
+                change_reason=change_reason or "Agent model assignment update by agent",
             )
             await db.commit()
 

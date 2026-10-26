@@ -11,11 +11,11 @@ from typing import Any
 from app.hatchet_app import _install_hatchet_shutdown_404_guard, hatchet
 from app.services.tools.command_guard import warm_shared_command_guard
 from app.worker_diagnostics import install_asyncio_task_dump_signal
+from app.workflows.agent_wake import agent_wake_task
 from app.workflows.automation_clock import automation_clock_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
-from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
     data_retention_task,
     feedback_cleanup_task,

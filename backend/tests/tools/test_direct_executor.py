@@ -81,7 +81,6 @@ class TestDirectToolExecutor:
         assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "rebuild.sh --detach agent-hub"
         assert mock_run.await_args.kwargs == {
-            "agent_slug": None,
             "session_id": None,
             "max_output_size": None,
         }
@@ -111,7 +110,7 @@ class TestDirectToolExecutor:
         self,
         tmp_path: Path,
     ) -> None:
-        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
 
         with patch(
             "app.services.tools.direct_executor_core.run_bash",
@@ -126,7 +125,6 @@ class TestDirectToolExecutor:
         assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "restart.sh --detach agent-hub"
         assert mock_run.await_args.kwargs == {
-            "agent_slug": "persona",
             "session_id": None,
             "max_output_size": None,
         }
@@ -136,7 +134,7 @@ class TestDirectToolExecutor:
         self,
         tmp_path: Path,
     ) -> None:
-        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
 
         with patch(
             "app.services.tools.direct_executor_core.run_bash",
@@ -166,7 +164,6 @@ class TestDirectToolExecutor:
         mock_run.assert_awaited_once()
         assert mock_run.await_args is not None
         assert mock_run.await_args.kwargs == {
-            "agent_slug": "coder",
             "session_id": None,
             "max_output_size": None,
         }
@@ -230,7 +227,6 @@ class TestDirectToolExecutor:
         assert mock_run.await_args is not None
         assert mock_run.await_args.args == ("echo ok", tmp_path.resolve(), executor._env)
         assert mock_run.await_args.kwargs == {
-            "agent_slug": None,
             "session_id": None,
             "max_output_size": None,
         }

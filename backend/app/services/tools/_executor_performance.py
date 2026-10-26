@@ -25,7 +25,7 @@ async def log_agent_performance(
     output_tokens: int | None = None,
     tool_calls_count: int | None = None,
     turns: int | None = None,
-    logged_by: str = "persona",
+    logged_by: str = "agent",
 ) -> str:
     """Log a performance observation for an agent/model combination."""
     if feedback_type not in VALID_FEEDBACK_TYPES:

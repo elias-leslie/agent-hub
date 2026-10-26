@@ -338,7 +338,7 @@ class SessionEvent(Base):
         The explicit flag distinguishes an omitted output from an output backed by
         content without reserving or overwriting a key in native tool metadata.
         Class-level expressions continue to address the stored JSON column;
-        full-text queries must include content, as the persona stream already does.
+        full-text queries must include content.
         """
         if self.tool_output_from_content and isinstance(self.content, str):
             return {**(self._tool_output or {}), "output": self.content}

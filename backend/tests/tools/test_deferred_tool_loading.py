@@ -50,14 +50,14 @@ def test_build_deferred_toolset_adds_virtual_catalog_tools() -> None:
     ]
 
 
-def test_persona_deferred_operator_surface_is_filtered_before_catalog_loading() -> None:
-    """Persona provisioning owns the operator surface before deferred cataloging."""
+def test_visible_tool_names_filter_before_catalog_loading() -> None:
+    """The project-visible tool set is applied before deferred cataloging."""
     from app.api.complete.tool_provisioner import provision_standard_tools
 
     provisioned = provision_standard_tools(
         True,
         None,
-        agent_slug="persona",
+        agent_slug="coder",
         project_id="agent-hub",
         defer_tool_loading=True,
         visible_tool_names={

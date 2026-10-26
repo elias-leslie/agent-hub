@@ -24,7 +24,6 @@ from app.config import settings
 from app.models import Agent
 from app.models.model_catalog import ModelAlias, ModelCatalogEntry
 from app.models.prompt import AgentPrompt, Prompt
-from app.services.persona_identity import DEFAULT_PERSONA_DISPLAY_NAME, PERSONA_SLUG
 from app.services.prompt_catalog import build_agent_system_prompt_slug
 
 logging.basicConfig(level=logging.WARNING)
@@ -49,15 +48,14 @@ PUBLIC_AGENT_SLUGS = frozenset({
     "complexity-assessor", "context-compactor", "critic", "debugger", "designer",
     "equity-analyst", "explorer", "git-agent", "image-gen", "investment-committee",
     "learning-extractor", "market-pulse-scout", "memory-rater", "note-formatter",
-    "note-titler", "optimizer", "persona", "planner", "prompt-builder",
+    "note-titler", "optimizer", "planner", "prompt-builder",
     "provider-liveness-probe", "reasoner", "refactor", "researcher", "reviewer",
     "risk-manager", "specifier", "summarizer", "supervisor", "test-writer", "tester",
     "triager", "ui-mockup-designer", "ux-polisher", "validator", "verifier",
     "voice-responder", "worker",
 })
 PUBLIC_PROMPT_SLUGS = frozenset({
-    "coding-golden-rule", "graphify-workspace-map", "jenny-autonomy-policy",
-    "narration-tags", "persona-agent-routing-catalog", "persona-safety",
+    "coding-golden-rule", "graphify-workspace-map", "narration-tags",
     "workspace-search-discipline",
 })
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
@@ -75,8 +73,6 @@ def _serialize_agent(agent: Agent, system_prompt_override: str | None) -> dict:
         value = getattr(agent, field, None)
         if field == "system_prompt" and system_prompt_override is not None:
             value = system_prompt_override
-        if field == "name" and agent.slug == PERSONA_SLUG:
-            value = DEFAULT_PERSONA_DISPLAY_NAME
         if value is not None:
             data[field] = value
     return data

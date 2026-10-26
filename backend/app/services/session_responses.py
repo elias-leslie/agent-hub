@@ -23,7 +23,6 @@ from app.services.ownership_inventory import (
     query_project_active_specialists,
     query_project_ownership,
 )
-from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.session_queries import (
     AgentTokenAggregate,
     SessionUsageRollup,
@@ -78,11 +77,6 @@ async def _resolve_agent_display_names(
         slug, name = _row_slug_and_name(row)
         if slug and name:
             names[slug] = name
-    if PERSONA_SLUG in slugs:
-        names[PERSONA_SLUG] = await get_persona_display_name(
-            db,
-            fallback=names.get(PERSONA_SLUG),
-        )
     return names
 
 

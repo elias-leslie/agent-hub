@@ -66,7 +66,6 @@ async def test_collect_runtime_prompt_sections_adds_agent_system_prompt_when_una
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert len(sections) == 1
@@ -100,7 +99,6 @@ async def test_collect_runtime_prompt_sections_avoids_duplicate_fallback_when_ow
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert len(sections) == 1
@@ -135,7 +133,6 @@ async def test_collect_runtime_prompt_sections_respects_disabled_owned_prompt() 
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert sections == []
@@ -166,7 +163,6 @@ async def test_disabled_owned_prompt_without_assignment_still_suppresses_mirror(
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert sections == []
@@ -197,7 +193,6 @@ async def test_enabled_owned_prompt_without_assignment_renders_canonical_row() -
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert len(sections) == 1
@@ -231,7 +226,6 @@ async def test_collect_runtime_prompt_sections_skips_global_prompt_assignment() 
             AsyncMock(),
             agent,
             include_global_prompts=False,
-            include_persona_context=False,
         )
 
     assert [section.source_id for section in sections] == ["note-titler"]
@@ -272,7 +266,6 @@ async def test_collect_runtime_prompt_sections_delegates_global_selection_to_can
             agent,
             include_mandates=False,
             include_guardrails=False,
-            include_persona_context=False,
         )
 
     source_ids = [section.source_id for section in sections]
@@ -294,9 +287,9 @@ def test_dedupe_runtime_prompt_sections_drops_exact_duplicate_content() -> None:
         content="same block",
     )
     duplicate = RuntimePromptSection(
-        label="Persona Context",
-        source_kind="persona_context",
-        source_id="persona",
+        label="Memory Context",
+        source_kind="memory_context",
+        source_id="memory",
         content="same block",
     )
 
@@ -305,7 +298,7 @@ def test_dedupe_runtime_prompt_sections_drops_exact_duplicate_content() -> None:
     assert kept == [original]
     assert len(removed) == 1
     assert removed[0].duplicate_of == "global_prompt:platform-context"
-    assert removed[0].source_kind == "persona_context"
+    assert removed[0].source_kind == "memory_context"
 
 
 def test_dedupe_runtime_prompt_sections_drops_whitespace_only_duplicates() -> None:

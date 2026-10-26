@@ -16,7 +16,6 @@ from app.services.ownership_lanes import (
     infer_task_id,
     prioritize_scope_paths,
 )
-from app.services.persona_identity import PERSONA_SLUG
 from app.services.session_live_activity import is_session_actionably_active
 from app.services.session_scope import (
     extract_tool_scope_paths,
@@ -92,17 +91,13 @@ def _should_skip_owner_session(
     observed_write_paths: list[str],
     observed_read_paths: list[str],
 ) -> bool:
-    if session.agent_slug != PERSONA_SLUG:
-        return (
-            not task_id
-            and not has_working_dir
-            and bool(session.current_branch)
-            and not (declared_scope_paths or observed_write_paths or observed_read_paths)
-            and not is_session_actionably_active(session, has_owner_lane=True)
-        )
-    if session.request_source != "heartbeat":
-        return False
-    return not (declared_scope_paths or observed_write_paths or observed_read_paths)
+    return (
+        not task_id
+        and not has_working_dir
+        and bool(session.current_branch)
+        and not (declared_scope_paths or observed_write_paths or observed_read_paths)
+        and not is_session_actionably_active(session, has_owner_lane=True)
+    )
 
 
 def _extract_scope_paths(events: list[SessionEvent], working_dir: str | None) -> tuple[list[str], list[str]]:
@@ -182,7 +177,6 @@ async def _fetch_active_specialists(db: AsyncSession, project_id: str) -> list[A
                     Session.project_id == project_id,
                     Session.status == "active",
                     Session.agent_slug.isnot(None),
-                    Session.agent_slug != PERSONA_SLUG,
                     Session.created_at >= cutoff,
                     Session.external_id.is_(None),
                     Session.current_branch.is_(None),
@@ -194,8 +188,6 @@ async def _fetch_active_specialists(db: AsyncSession, project_id: str) -> list[A
     ).scalars().all()
     specialists: list[ActiveSpecialistSession] = []
     for session in rows:
-        if session.agent_slug == PERSONA_SLUG:
-            continue
         if not is_session_actionably_active(session, has_specialist_lane=True):
             continue
         specialists.append(

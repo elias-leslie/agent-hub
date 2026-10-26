@@ -45,7 +45,7 @@ def _log_codex_auth_dead(model_id: str, error: Exception) -> None:
     """Log an error and notify SummitFlow when the Codex OAuth chain dies.
 
     Without this, refresh-token death silently degrades every call to fallback
-    models (observed 2026-06: five days of MiniMax answering persona chat).
+    models (observed 2026-06: five days of MiniMax answering chat).
     """
     from app.adapters.codex_auth import CodexAuthError
 

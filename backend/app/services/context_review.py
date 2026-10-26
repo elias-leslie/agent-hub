@@ -82,7 +82,7 @@ async def prepare_review(db: AsyncSession, request: ContextReviewRequest) -> dic
         from app.services.prompt_service import get_agent_prompts, get_runtime_excluded_prompt_roles
         agent_id = (await db.execute(select(Agent.id).where(Agent.slug == request.context.agent_slug))).scalar_one_or_none()
         if agent_id is not None:
-            assignments = await get_agent_prompts(db, agent_id, exclude_roles=get_runtime_excluded_prompt_roles(agent_slug=request.context.agent_slug))
+            assignments = await get_agent_prompts(db, agent_id, exclude_roles=get_runtime_excluded_prompt_roles())
             assigned = {a.prompt.slug for a in assignments if a.prompt.enabled}
     for source in view["sources"]:
         if not source["enabled"] or source.get("state") == "excluded here":

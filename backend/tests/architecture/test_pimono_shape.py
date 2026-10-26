@@ -46,7 +46,6 @@ RESULT_SHAPE_ALLOWLIST = {
     (APP / "api" / "admin_schemas.py", "LowYieldSessionRow"),
     (APP / "api" / "complete" / "response_schemas.py", "CompletionResponse"),
     (APP / "api" / "complete" / "response_schemas.py", "StreamingChunk"),
-    (APP / "models" / "agent_benchmark.py", "AgentBenchmarkAttempt"),
     (APP / "models" / "agent_performance_log.py", "AgentPerformanceLog"),
     (APP / "models" / "session.py", "NativeContinuationTurn"),
     (APP / "models" / "subscription_accounting.py", "UsageCall"),

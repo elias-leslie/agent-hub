@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
+
 from ._executor_consultation_helpers import (
     _build_consultation_messages,
-    _consultation_max_turns,
     _consultation_tools,
     cancel_consultation,
     inspect_session,
@@ -27,7 +28,6 @@ from ._executor_dispatch import (
     parse_specialist_dispatch_request,
     prepare_specialist_dispatch,
 )
-from ._executor_persona_history import search_persona_history
 
 __all__ = [
     "cancel_consultation",
@@ -36,7 +36,6 @@ __all__ = [
     "inspect_session",
     "list_consultations",
     "query_sessions",
-    "search_persona_history",
     "steer_consultation",
 ]
 
@@ -56,7 +55,7 @@ async def dispatch_agent(
     try:
         from app.db import async_session
         from app.services.agent_routing_utils import resolve_agent
-        from app.workflows.persona_wake import dispatch_wake
+        from app.workflows.agent_wake import dispatch_wake
 
         async with async_session() as db:
             block_reason = await parent_dispatch_limit_block(db, parent_session_id)
@@ -122,7 +121,6 @@ async def consult_agent(
                 resolved.agent, db, prompt_mode="minimal", project_id=project_id,
             )
             consultation_tools = _consultation_tools(agent_slug)
-            consultation_max_turns = await _consultation_max_turns(db)
             messages = _build_consultation_messages(mandate.system_content, prompt)
             result = await complete_internal(
                 messages=messages, model=resolved.model, provider=resolved.provider,
@@ -130,7 +128,7 @@ async def consult_agent(
                 db=db, agent_slug=agent_slug, request_source="consultation",
                 use_memory=True, memory_group_id=f"project:{project_id}",
                 parent_session_id=parent_session_id,
-                max_turns=consultation_max_turns,
+                max_turns=DEFAULT_AGENTIC_MAX_TURNS,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,
             )
@@ -162,7 +160,6 @@ async def steer_consultation(project_id: str | None, session_id: str, message: s
 
             resolved = await resolve_agent(session.agent_slug, db)
             consultation_tools = _consultation_tools(session.agent_slug)
-            consultation_max_turns = await _consultation_max_turns(db)
             result = await complete_internal(
                 messages=[{"role": "user", "content": message}],
                 model=resolved.model,
@@ -174,7 +171,7 @@ async def steer_consultation(project_id: str | None, session_id: str, message: s
                 use_memory=True,
                 memory_group_id=f"project:{project_id}",
                 thinking_level=resolved.agent.thinking_level,
-                max_turns=consultation_max_turns,
+                max_turns=DEFAULT_AGENTIC_MAX_TURNS,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,
             )

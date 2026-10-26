@@ -31,7 +31,6 @@ from app.services.agent_crud import (
 from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import normalize_memory_config
 from app.services.owned_prompt_service import sync_agent_system_prompt
-from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.prompt_catalog import build_agent_system_prompt_slug
 from app.services.prompt_service import get_prompt_by_slug
 
@@ -49,16 +48,6 @@ async def _resolve_system_prompt(db: AsyncSession, agent: Any) -> str:
         # not-yet-migrated row may use the Agent compatibility mirror.
         return prompt.content.strip() if prompt.enabled else ""
     return agent.system_prompt
-
-
-async def _apply_display_name_overrides(db: AsyncSession, dto: AgentDTO) -> AgentDTO:
-    """Resolve shared display names from their live authority rows."""
-    if dto.slug != PERSONA_SLUG:
-        return dto
-    display_name = await get_persona_display_name(db, fallback=dto.name)
-    if display_name == dto.name:
-        return dto
-    return replace(dto, name=display_name)
 
 
 def _canonicalize_model_id(model_id: str | None) -> str | None:
@@ -108,7 +97,7 @@ class AgentService:
                         system_prompt=resolved_system_prompt,
                     )
                     await self._cache.set(cached)
-                return await _apply_display_name_overrides(db, cached)
+                return cached
 
         agent = await get_agent_by_slug(db, slug, active_only=active_only)
         if agent:
@@ -116,7 +105,6 @@ class AgentService:
                 agent,
                 system_prompt_override=await _resolve_system_prompt(db, agent),
             )
-            dto = await _apply_display_name_overrides(db, dto)
             if active_only:
                 await self._cache.set(dto)
             return dto
@@ -132,7 +120,7 @@ class AgentService:
             agent,
             system_prompt_override=await _resolve_system_prompt(db, agent),
         )
-        return await _apply_display_name_overrides(db, dto)
+        return dto
 
     async def list_agents(
         self,
@@ -154,7 +142,7 @@ class AgentService:
             )
             for agent in agents
         ]
-        return [await _apply_display_name_overrides(db, dto) for dto in dtos]
+        return dtos
 
     async def create(
         self,

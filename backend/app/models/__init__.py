@@ -12,12 +12,6 @@ Tables:
 from __future__ import annotations
 
 from .agent import Agent, AgentVersion
-from .agent_benchmark import (
-    AgentBenchmarkAttempt,
-    AgentBenchmarkExperiment,
-    AgentBenchmarkRun,
-    AgentRegressionCluster,
-)
 from .agent_performance_log import AgentPerformanceLog
 from .automation import (
     AutomationDefinition,
@@ -51,7 +45,6 @@ from .native_observation import (
     NativeProtocolProfile,
     NativeUserIdentity,
 )
-from .persona import Persona
 from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt, PromptRevision
 from .runtime_context import RuntimeContextOverride
@@ -81,12 +74,8 @@ from .workflow_schedule_control import WorkflowScheduleControl
 __all__ = [
     "APIKey",
     "Agent",
-    "AgentBenchmarkAttempt",
-    "AgentBenchmarkExperiment",
-    "AgentBenchmarkRun",
     "AgentPerformanceLog",
     "AgentPrompt",
-    "AgentRegressionCluster",
     "AgentVersion",
     "AutomationDefinition",
     "AutomationProfile",
@@ -123,7 +112,6 @@ __all__ = [
     "NativeProjectionState",
     "NativeProtocolProfile",
     "NativeUserIdentity",
-    "Persona",
     "ProjectPermission",
     "Prompt",
     "PromptRevision",

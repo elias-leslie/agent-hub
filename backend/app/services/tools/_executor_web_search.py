@@ -13,7 +13,7 @@ DEFAULT_SEARCH_REGION = "wt-wt"
 DEFAULT_SEARXNG_TIMEOUT = 8.0
 DEFAULT_SEARXNG_PORT = 18900
 DEFAULT_USER_AGENT = (
-    "agent-hub/1.0 (+http://localhost:3003; persona web research tool)"
+    "agent-hub/1.0 (+http://localhost:3003; agent web research tool)"
 )
 _SEARXNG_TIMELIMITS = {
     "d": "day",

@@ -59,7 +59,7 @@ async def build_session_and_messages(
     messages_dict, memory_facts_injected, loaded_memory_uuids = await inject_memory(
         request, messages_dict, session_id, resolved_agent, db
     )
-    # Canonical operator context precedes agent-specific prompt/persona layers.
+    # Canonical operator context precedes agent-specific prompt layers.
     messages_dict = inject_agent_system_prompt(messages_dict, mandate)
     messages_dict, _was_compacted = await compact_context_if_needed(
         db, session_id, resolved_model, messages_dict

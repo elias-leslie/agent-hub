@@ -1,4 +1,4 @@
-"""Backup and restore helpers for persona operational tooling."""
+"""Backup and restore helpers for the manage_backups tool."""
 
 from __future__ import annotations
 

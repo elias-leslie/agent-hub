@@ -97,17 +97,6 @@ def test_format_tool_capability_context_returns_empty_when_bash_unavailable() ->
     mocked.assert_not_called()
 
 
-def test_format_tool_capability_context_fails_closed_for_persona_without_bash() -> None:
-    rendered = tcc.format_tool_capability_context(
-        consumer_profile="agent_runtime",
-        task_type="wake",
-        project_id="agent-hub",
-        bash_available=None,
-        agent_slug="persona",
-    )
-    assert rendered == ""
-
-
 def test_format_tool_capability_context_returns_empty_when_manifest_empty() -> None:
     with patch.object(tcc, "run_process", return_value=_stub_run(stdout="")):
         rendered = tcc.format_tool_capability_context(

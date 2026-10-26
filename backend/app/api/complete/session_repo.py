@@ -10,7 +10,7 @@ Collapses ``session_manager.py`` + ``_session_helpers.py`` +
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -24,7 +24,6 @@ from app.services.events import publish_session_start
 from app.services.llm_messages import Message
 from app.services.session_ingestion import SessionUpsertRequest, upsert_session
 from app.services.session_live_activity import (
-    mark_session_completed,
     mark_session_execution_start,
 )
 
@@ -137,19 +136,6 @@ async def update_session_metadata(
     )
 
 
-async def _maybe_reset_persona(db: AsyncSession, session: DBSession) -> bool:
-    from app.services.persona_service import should_reset_persona_session
-
-    if not await should_reset_persona_session(db, session):
-        return False
-    mark_session_completed(
-        session, summary="Persona session auto-reset", termination_reason="persona_session_reset"
-    )
-    await db.commit()
-    logger.info("Persona session %s auto-reset", session.id)
-    return True
-
-
 async def _create(db: AsyncSession, req: SessionRequest) -> SessionResult:
     session, _ = await upsert_session(
         db=db,
@@ -209,8 +195,6 @@ async def get_or_create_session(
         )
         session = result.scalar_one_or_none()
         if session is not None:
-            if req.agent_slug == "persona" and await _maybe_reset_persona(db, session):
-                return await _create(db, replace(req, session_id=None, agent_slug="persona"))
             await _update_metadata(db, session, req)
             _sync_sequencer(session)
             _apply_trace_id(session, req.trace_id)

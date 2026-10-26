@@ -1,39 +1,15 @@
 """Canonical prompt slugs used by runtime workflows and UI."""
 
+from __future__ import annotations
+
 
 def build_agent_system_prompt_slug(agent_slug: str) -> str:
     return f"{agent_slug}-system-prompt"
 
 
-PERSONA_PERSONALITY_PROMPT_SLUG = "persona-personality-document"
-PERSONA_USER_CONTEXT_PROMPT_SLUG = "persona-user-context"
 PLATFORM_CONTEXT_PROMPT_SLUG = "platform-context"
-PERSONA_FOCUS_HARNESS_PROMPT_SLUG = "persona-focus-harness"
-PERSONA_WAKE_GUIDANCE_PROMPT_SLUG = "persona-wake-guidance"
-PERSONA_ONBOARDING_BOOTSTRAP_PROMPT_SLUG = "persona-onboarding-bootstrap"
-PERSONA_ONBOARDING_CONTINUATION_PROMPT_SLUG = "persona-onboarding-continuation"
-PERSONA_ONBOARDING_PENDING_APPROVAL_PROMPT_SLUG = "persona-onboarding-pending-approval"
-PERSONA_ONBOARDING_REVIEW_PROMPT_SLUG = "persona-onboarding-review"
-PERSONA_EVOLUTION_GUIDELINES_PROMPT_SLUG = "persona-evolution-guidelines"
-PERSONA_CHAT_USAGE_CONTEXT_PROMPT_SLUG = "persona-chat-usage-context"
-PERSONA_IMPROVEMENT_REVIEW_PROMPT_SLUG = "persona-improvement-review"
-COMPLETION_REVIEW_PROMPT_SLUG = "completion-review-prompt"
-COMPLETION_REVIEW_RULES_PROMPT_SLUG = "completion-review-rules"
 
 __all__ = [
-    "COMPLETION_REVIEW_PROMPT_SLUG",
-    "COMPLETION_REVIEW_RULES_PROMPT_SLUG",
-    "PERSONA_CHAT_USAGE_CONTEXT_PROMPT_SLUG",
-    "PERSONA_EVOLUTION_GUIDELINES_PROMPT_SLUG",
-    "PERSONA_FOCUS_HARNESS_PROMPT_SLUG",
-    "PERSONA_IMPROVEMENT_REVIEW_PROMPT_SLUG",
-    "PERSONA_ONBOARDING_BOOTSTRAP_PROMPT_SLUG",
-    "PERSONA_ONBOARDING_CONTINUATION_PROMPT_SLUG",
-    "PERSONA_ONBOARDING_PENDING_APPROVAL_PROMPT_SLUG",
-    "PERSONA_ONBOARDING_REVIEW_PROMPT_SLUG",
-    "PERSONA_PERSONALITY_PROMPT_SLUG",
-    "PERSONA_USER_CONTEXT_PROMPT_SLUG",
-    "PERSONA_WAKE_GUIDANCE_PROMPT_SLUG",
     "PLATFORM_CONTEXT_PROMPT_SLUG",
     "build_agent_system_prompt_slug",
 ]

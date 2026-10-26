@@ -317,15 +317,14 @@ async def test_ephemeral_completion_still_loads_canonical_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once() -> None:
+async def test_owned_prompt_reaches_provider_exactly_once() -> None:
     """Canonical prepending must not duplicate the agent-specific prompt layer."""
-    owned_prompt_marker = "DISTINCT_OWNED_PERSONA_SYSTEM_PROMPT"
-    persona_row_marker = "DISTINCT_NATIVE_PERSONA_ROW_CONTEXT"
+    owned_prompt_marker = "DISTINCT_OWNED_AGENT_SYSTEM_PROMPT"
     canonical_marker = "DISTINCT_CANONICAL_OPERATOR_CONTEXT"
     agent = SimpleNamespace(
         id=9,
-        slug="persona",
-        name="Jenny",
+        slug="coder",
+        name="Coder",
         system_prompt="STALE_AGENT_SYSTEM_PROMPT_MIRROR",
     )
     assignment = SimpleNamespace(
@@ -335,22 +334,16 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
             enabled=True,
             is_global=False,
             prompt_type=AGENT_SYSTEM_PROMPT_TYPE,
-            name="Persona System Prompt",
-            slug="persona-system-prompt",
+            name="Coder System Prompt",
+            slug="coder-system-prompt",
             owner_agent_id=9,
             content=f"<agent_persona>{owned_prompt_marker}</agent_persona>",
             updated_at=None,
         ),
     )
-    with (
-        patch(
-            "app.services.runtime_prompt_stack.get_agent_prompts",
-            new=AsyncMock(return_value=[assignment]),
-        ),
-        patch(
-            "app.services.persona_service.get_persona_context_for_agent",
-            new=AsyncMock(return_value=persona_row_marker),
-        ),
+    with patch(
+        "app.services.runtime_prompt_stack.get_agent_prompts",
+        new=AsyncMock(return_value=[assignment]),
     ):
         mandate = await inject_agent_mandates(
             agent,
@@ -359,7 +352,6 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
         )
 
     assert mandate.system_content.count(owned_prompt_marker) == 1
-    assert mandate.system_content.count(persona_row_marker) == 1
     assert "STALE_AGENT_SYSTEM_PROMPT_MIRROR" not in mandate.system_content
 
     captured: dict[str, str] = {}
@@ -394,8 +386,8 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
                 temperature=0.0,
                 project_id="agent-hub",
                 db=None,
-                session_id="persona:exact-once",
-                agent_slug="persona",
+                session_id="coder:exact-once",
+                agent_slug="coder",
                 use_memory=True,
                 memory_config=None,
                 enable_caching=False,
@@ -410,7 +402,6 @@ async def test_persona_owned_prompt_and_row_context_reach_provider_exactly_once(
         provider_system_prompt = captured["system_prompt"]
         assert provider_system_prompt.count(canonical_marker) == 1
         assert provider_system_prompt.count(owned_prompt_marker) == 1
-        assert provider_system_prompt.count(persona_row_marker) == 1
         assert provider_system_prompt.count("<agent-hub-context ") == 1
     finally:
         reg.unregister()

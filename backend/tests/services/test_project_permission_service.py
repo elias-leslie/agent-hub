@@ -10,9 +10,6 @@ import pytest
 
 from app.models.project_permission import ProjectPermission
 from app.services.project_permission_service import (
-    _PERSONA_INTERNAL,
-    _PERSONA_OPERATIONAL,
-    _PERSONA_TOOLS,
     TIER_TOOLS,
     check_execution_permission,
     check_tool_allowed,
@@ -779,28 +776,11 @@ class TestCheckToolAllowed:
 
 
 # ---------------------------------------------------------------------------
-# Persona tool tier exemptions
+# Visible tool surface and tier gating
 # ---------------------------------------------------------------------------
 
 
-class TestPersonaToolSets:
-    """Verify persona tool set composition and membership."""
-
-    def test_internal_and_operational_are_disjoint(self):
-        assert frozenset() == _PERSONA_INTERNAL & _PERSONA_OPERATIONAL
-
-    def test_persona_tools_is_union(self):
-        assert _PERSONA_TOOLS == _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
-
-    def test_internal_contains_identity_tools(self):
-        for tool in (
-            "read_personality",
-            "write_personality",
-            "read_user_context",
-            "write_user_context",
-        ):
-            assert tool in _PERSONA_INTERNAL
-
+class TestVisibleToolsAndTierGating:
     def test_visible_read_tier_stays_core_only(self):
         tools = get_visible_tools_for_tier("read")
 
@@ -818,135 +798,15 @@ class TestPersonaToolSets:
             "start_research",
         })
 
-    def test_operational_contains_agency_tools(self):
-        for tool in (
-            "manage_tasks",
-            "steer_consultation",
-            "list_consultations",
-            "cancel_consultation",
-            "inspect_session",
-        ):
-            assert tool in _PERSONA_OPERATIONAL
-
-class TestPersonaToolTierExemption:
-    """Persona tools bypass project tier (except 'off')."""
-
     @pytest.mark.asyncio
-    async def test_internal_tool_allowed_at_read_tier(self):
-        """write_personality is not in _READ_TOOLS but is tier-exempt."""
+    @pytest.mark.parametrize("tool", ["review_memory_system", "dispatch_agent", "manage_tasks", "bash"])
+    async def test_non_core_tools_denied_at_read_tier(self, tool):
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "write_personality")
-            assert allowed is True
-            assert "persona-internal" in reason
-
-    @pytest.mark.asyncio
-    async def test_memory_review_tool_is_not_tier_exempt(self):
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, _ = await check_tool_allowed("proj", "review_memory_system")
-            assert allowed is False
-
-    @pytest.mark.asyncio
-    async def test_safe_operational_tool_allowed_at_read_tier(self):
-        """Safe persona-ops like consultation steering remain tier-exempt at read tier."""
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
-            assert allowed is True
-            assert "persona-internal" in reason
-
-    @pytest.mark.asyncio
-    async def test_operational_tool_allowed_at_legacy_write_tier(self):
-        """steer_consultation should tolerate legacy write alias."""
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="write",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
-            assert allowed is True
-            assert "persona-internal" in reason
-
-    @pytest.mark.asyncio
-    async def test_manage_tasks_overview_denied_at_read_tier(self):
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, reason = await check_tool_allowed(
-                "proj", "manage_tasks", tool_input={"action": "overview"},
-            )
-            assert allowed is False
-            assert "direct helper tool disabled" in reason
-
-    @pytest.mark.asyncio
-    async def test_manage_tasks_dispatch_denied_at_read_tier(self):
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, reason = await check_tool_allowed(
-                "proj", "manage_tasks", tool_input={"action": "dispatch"},
-            )
-            assert allowed is False
-            assert "direct helper tool disabled" in reason
-
-    @pytest.mark.asyncio
-    async def test_dispatch_agent_denied_at_read_tier(self):
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "dispatch_agent")
-            assert allowed is False
-            assert "direct helper tool disabled" in reason
-
-    @pytest.mark.asyncio
-    async def test_persona_tool_denied_at_off_tier(self):
-        """Even persona tools are blocked when tier is 'off'."""
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="off",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "write_personality")
-            assert allowed is False
-            assert "off" in reason
-
-    @pytest.mark.asyncio
-    async def test_operational_tool_denied_at_off_tier(self):
-        """Operational persona tools are also blocked at 'off'."""
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="off",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "steer_consultation")
-            assert allowed is False
-            assert "off" in reason
-
-    @pytest.mark.asyncio
-    async def test_non_persona_tool_still_gated_by_tier(self):
-        """bash is NOT a persona tool and should still be gated normally."""
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
-        ):
-            allowed, reason = await check_tool_allowed("proj", "bash")
+            allowed, reason = await check_tool_allowed("proj", tool)
             assert allowed is False
             assert "not permitted" in reason
 

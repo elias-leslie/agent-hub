@@ -387,24 +387,9 @@ async def get_agent_prompts(
     return list(result.scalars().all())
 
 
-def get_runtime_excluded_prompt_roles(
-    *,
-    agent_slug: str | None,
-    prompt_mode: str = "full",
-    task_type: str | None = None,
-) -> list[str]:
+def get_runtime_excluded_prompt_roles(*, task_type: str | None = None) -> list[str]:
     """Return prompt-assignment roles that should not be injected twice at runtime."""
-    excluded: list[str] = []
-    if task_type != "autocode":
-        excluded.append("autocode")
-    if prompt_mode == "full" and agent_slug == "persona":
-        excluded.extend(
-            [
-                "persona-personality",
-                "persona-user-context",
-            ]
-        )
-    return excluded
+    return [] if task_type == "autocode" else ["autocode"]
 
 
 async def assign_prompt(

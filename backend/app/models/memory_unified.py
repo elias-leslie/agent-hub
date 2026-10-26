@@ -130,7 +130,7 @@ class Memory(Base):
         "metadata", JSONB, server_default="{}", nullable=True
     )
     # feedback: {component, feedback_type, votes: [], resolution: {}, severity}
-    # journal: {entry_type, persona_id}
+    # journal: {entry_type}
     # continuity: {session_id, is_session_summary}
 
     # Reference time (when the memory was valid, not just created)

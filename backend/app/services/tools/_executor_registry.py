@@ -214,23 +214,12 @@ def build_tool_registry(
         inspect_session,
         list_consultations,
         query_sessions,
-        search_persona_history,
         steer_consultation,
     )
     from app.services.tools._executor_feedback import manage_feedback
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
-    )
-    from app.services.tools._executor_persona import (
-        manage_memory_tags,
-        mark_memory_irrelevant,
-        mark_memory_relevant,
-        read_personality,
-        read_user_context,
-        submit_onboarding,
-        write_personality,
-        write_user_context,
     )
 
     return {
@@ -239,14 +228,6 @@ def build_tool_registry(
         "cancel_consultation": cancel_consultation,
         "log_agent_performance": log_agent_performance,
         "review_agent_performance": review_agent_performance,
-        "read_personality": read_personality,
-        "write_personality": write_personality,
-        "write_user_context": write_user_context,
-        "read_user_context": read_user_context,
-        "mark_memory_relevant": mark_memory_relevant,
-        "mark_memory_irrelevant": mark_memory_irrelevant,
-        "manage_memory_tags": manage_memory_tags,
-        "submit_onboarding": submit_onboarding,
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_backups": _make_manage_backups_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
@@ -254,5 +235,4 @@ def build_tool_registry(
         "precision_code_search": _make_precision_code_search_bound(project_id),
         "query_sessions": query_sessions,
         "inspect_session": inspect_session,
-        "search_persona_history": search_persona_history,
     }

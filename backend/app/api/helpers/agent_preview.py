@@ -38,7 +38,7 @@ from app.services.token_counter import count_tokens
 
 _PREVIEW_PROMPT_WARN_TOKENS = 3_200
 _PREVIEW_PROMPT_DANGER_TOKENS = 4_500
-_PREVIEW_LOW_YIELD_SOURCE_KINDS = {"persona_context", "memory_context", "task_prompt"}
+_PREVIEW_LOW_YIELD_SOURCE_KINDS = {"memory_context", "task_prompt"}
 _PREVIEW_LOW_YIELD_SHARE_WARN = 0.45
 _PREVIEW_SECTION_SHARE_WARN = 0.2
 
@@ -68,7 +68,7 @@ def _build_budget_telemetry(
         )
     if low_yield_tokens and total_tokens and low_yield_tokens / total_tokens >= _PREVIEW_LOW_YIELD_SHARE_WARN:
         warnings.append(
-            f"Low-yield pressure high: persona/memory/task sections use {low_yield_tokens}/{total_tokens} tokens."
+            f"Low-yield pressure high: memory/task sections use {low_yield_tokens}/{total_tokens} tokens."
         )
     if dropped_sections:
         warnings.append(
@@ -143,15 +143,6 @@ async def _build_task_prompt_preview(
 ) -> str | None:
     if task_type in (None, "", "chat"):
         return None
-
-    if task_type == "review":
-        from app.workflows._completion_review import _build_review_prompt
-
-        return await _build_review_prompt(
-            completion_content=prompt_input or "HEARTBEAT_OK — Preview placeholder.",
-            cleanup_status="(preview placeholder cleanup status)",
-            workstream_inventory=phase or "(preview placeholder workstream inventory)",
-        )
 
     return prompt_input
 
@@ -268,7 +259,6 @@ async def build_agent_preview(
         task_type=None if task_type == "chat" else task_type,
         project_id=project_id,
         include_global_prompts=False,
-        include_persona_context=True,
     )
     preview_sections = [*canonical_sections, *agent_sections]
     if task_prompt_section:

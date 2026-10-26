@@ -236,8 +236,8 @@ async def _do_update_agent_model(
             escalation_model_id=resolved_escalation,
             temperature=temperature,
             thinking_level=thinking_level,
-            changed_by="persona",
-            change_reason=change_reason or "Model config update by persona",
+            changed_by="agent",
+            change_reason=change_reason or "Model config update by agent",
         )
     return updated
 
@@ -284,7 +284,7 @@ async def _do_update_agent_memory(
         updated = await agent_service.update(
             db, agent.id,
             memory_config=updated_config,
-            changed_by="persona",
-            change_reason=change_reason or "Memory config update by persona",
+            changed_by="agent",
+            change_reason=change_reason or "Memory config update by agent",
         )
     return updated, updated_config

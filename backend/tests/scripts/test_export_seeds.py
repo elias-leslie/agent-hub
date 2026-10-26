@@ -5,28 +5,7 @@ from types import SimpleNamespace
 from scripts.export_seeds import _normalized_seed_payload, _serialize_agent, _serialize_prompt
 
 
-def test_serialize_agent_normalizes_persona_name_for_seed_defaults() -> None:
-    agent = SimpleNamespace(
-        slug="persona",
-        name="Persona",
-        description="Primary persona",
-        system_prompt="You are the persona.",
-        primary_model_id="codex/gpt-5.4",
-        fallback_models=[],
-        escalation_model_id=None,
-        strategies={},
-        temperature=0.2,
-        thinking_level="medium",
-        is_coding_agent=False,
-        memory_config=None,
-    )
-
-    exported = _serialize_agent(agent, None)
-
-    assert exported["name"] == "Persona"
-
-
-def test_serialize_agent_keeps_non_persona_names() -> None:
+def test_serialize_agent_keeps_agent_names() -> None:
     agent = SimpleNamespace(
         slug="coder",
         name="Code Generator",
@@ -56,7 +35,7 @@ def test_normalized_seed_payload_ignores_generated_at() -> None:
             "generator": "scripts/export_seeds.py",
             "agent_count": 36,
         },
-        "agents": [{"slug": "persona"}],
+        "agents": [{"slug": "coder"}],
         "deactivate_slugs": ["worker"],
     }
     regenerated = {
@@ -65,7 +44,7 @@ def test_normalized_seed_payload_ignores_generated_at() -> None:
             "generator": "scripts/export_seeds.py",
             "agent_count": 36,
         },
-        "agents": [{"slug": "persona"}],
+        "agents": [{"slug": "coder"}],
         "deactivate_slugs": ["worker"],
     }
 
@@ -74,8 +53,8 @@ def test_normalized_seed_payload_ignores_generated_at() -> None:
 
 def test_serialize_prompt_preserves_owner_slug() -> None:
     prompt = SimpleNamespace(
-        slug="persona-agent-routing-catalog",
-        name="Persona Agent Routing Catalog",
+        slug="workspace-search-discipline",
+        name="Workspace Search Discipline",
         content="Use routing catalog.",
         description="Routing help",
         is_global=True,
@@ -85,10 +64,10 @@ def test_serialize_prompt_preserves_owner_slug() -> None:
         deletion_locked=False,
     )
 
-    exported = _serialize_prompt(prompt, "persona")
+    exported = _serialize_prompt(prompt, "coder")
 
-    assert exported["slug"] == "persona-agent-routing-catalog"
-    assert exported["owner_agent_slug"] == "persona"
+    assert exported["slug"] == "workspace-search-discipline"
+    assert exported["owner_agent_slug"] == "coder"
     assert exported["is_global"] is True
 
 

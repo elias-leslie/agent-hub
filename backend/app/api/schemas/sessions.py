@@ -66,7 +66,7 @@ class MessageResponse(BaseModel):
         default=None, description="Human-readable model name from catalog"
     )
     agent_display_name: str | None = Field(
-        default=None, description="Resolved display name for the agent (e.g. persona name)"
+        default=None, description="Resolved display name for the agent (e.g. agent name)"
     )
     thinking: str | None = Field(
         default=None, description="Extended thinking content for this turn"

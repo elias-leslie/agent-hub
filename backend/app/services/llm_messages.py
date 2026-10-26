@@ -99,7 +99,7 @@ def prepend_system_context_dicts(
     """Return one leading system message with new context placed first.
 
     This is reserved for Agent Hub canonical operator context, whose
-    guardrails and mandates must precede Agent Hub-owned agent/persona prompt
+    guardrails and mandates must precede Agent Hub-owned agent prompt
     content. Provider-native base instructions stay outside this message layer.
     """
     existing_system_contents = [

@@ -15,6 +15,7 @@ from hatchet_sdk import Context
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 from app.hatchet_app import hatchet
 from app.models.session import Session
 from app.workflows._session_postprocess import (
@@ -38,7 +39,7 @@ LOGGED_BY_SYSTEM = "system"
 FEEDBACK_TYPE_FRICTION = "friction"
 OUTCOME_PARTIAL = "partial"
 TAG_OBSERVATION_PREFIX = "Wake tagging contract gap: "
-REQUEST_SOURCE_PREFIX = "persona_wake:"
+REQUEST_SOURCE_PREFIX = "agent_wake:"
 
 
 async def log_agent_performance(*args: Any, **kwargs: Any) -> str:
@@ -125,15 +126,6 @@ async def _log_wake_tag_observation(
         logger.debug("Failed to log wake tagging observation", exc_info=True)
 
 
-async def _build_wake_prompt(prompt: str) -> str:
-    """Prefix wake prompts with concise operational hints to reduce CLI thrash."""
-    from app.services.persona_prompt_service import get_persona_wake_guidance
-
-    prompt = prompt.strip()
-    wake_guidance = await get_persona_wake_guidance()
-    return f"{wake_guidance}\nTask:\n{prompt}" if prompt else wake_guidance.strip()
-
-
 def _resolve_wake_working_dir(project_id: str, working_dir: str | None) -> str | None:
     """Prefer explicit working_dir, else fall back to the project's canonical root."""
     if working_dir:
@@ -175,17 +167,6 @@ async def _find_existing_wake_session(
     return result.scalar_one_or_none()
 
 
-async def _resolve_max_turns(db: Any, input: WakeInput) -> int:
-    """Return explicit max_turns or fall back to the persona's configured limit."""
-    if input.max_turns:
-        return input.max_turns
-    from app.services._persona_crud import get_persona_limit
-    from app.services.persona_service import get_persona
-
-    persona = await get_persona(db)
-    return get_persona_limit(persona, "max_turns")
-
-
 async def _check_permission_tier(project_id: str) -> bool:
     """Return True if the project is allowed to run wake workflows."""
     from app.db import async_session
@@ -218,7 +199,7 @@ async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | N
     from app.api.complete.core import complete_internal
 
     return await complete_internal(
-        messages=[{"role": "user", "content": await _build_wake_prompt(input.prompt)}],
+        messages=[{"role": "user", "content": input.prompt.strip()}],
         model=input.model,
         provider=input.provider,
         temperature=input.temperature,
@@ -274,7 +255,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
                 error=f"duplicate_step_run:{existing.id}",
                 summary_stored=bool(existing.summary_oneliner or existing.summary_generated_at),
             ).model_dump()
-        max_turns = await _resolve_max_turns(db, input)
+        max_turns = input.max_turns or DEFAULT_AGENTIC_MAX_TURNS
         result = await _run_complete_guarded(db, input, external_id, max_turns)
 
     summary_stored = await ensure_session_summary(result.session_id, result.content or "", agent_id=input.agent_slug)

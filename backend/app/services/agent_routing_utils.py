@@ -60,7 +60,7 @@ async def inject_agent_mandates(
     project_id: str | None = None,
     task_type: str | None = None,
 ) -> MandateInjection:
-    """Build only agent-specific prompt/persona/permission content.
+    """Build only agent-specific prompt/permission content.
 
     Shared operator prompts and memory are injected once through the canonical
     context delivery path later in request setup.
@@ -81,11 +81,9 @@ async def inject_agent_mandates(
             include_roles=include_roles,
             task_type=task_type,
             project_id=project_id,
-            prompt_mode=prompt_mode,
             include_global_prompts=False,
             include_mandates=include_mandates,
             include_guardrails=include_guardrails,
-            include_persona_context=(prompt_mode == "full"),
         )
         system_content = join_runtime_prompt_sections(runtime_sections)
         return MandateInjection(system_content=system_content, injected_uuids=[])
@@ -93,9 +91,7 @@ async def inject_agent_mandates(
     if agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
     if project_id:
-        perm_block = await _build_project_permissions_block(
-            project_id, None, agent_slug=agent.slug,
-        )
+        perm_block = await _build_project_permissions_block(project_id, None)
         if perm_block:
             sections.append(perm_block)
     return MandateInjection(system_content="\n\n".join(sections), injected_uuids=[])
@@ -158,8 +154,6 @@ def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
 async def _build_project_permissions_block(
     project_id: str,
     db: AsyncSession | None,
-    *,
-    agent_slug: str | None = None,
 ) -> str | None:
     try:
         from app.models.project_permission import normalize_permission_tier
@@ -169,15 +163,8 @@ async def _build_project_permissions_block(
         if perm is None:
             return None
         tier = normalize_permission_tier(perm.permission_tier) or perm.permission_tier
-        if agent_slug == "persona":
-            from app.services.tools.persona_tool_surface import (
-                format_persona_operator_tools_for_tier,
-            )
-
-            tools_list = format_persona_operator_tools_for_tier(tier)
-        else:
-            visible_tool_names = await get_visible_tools_for_project(project_id, db)
-            tools_list = ", ".join(sorted(visible_tool_names)) or "none"
+        visible_tool_names = await get_visible_tools_for_project(project_id, db)
+        tools_list = ", ".join(sorted(visible_tool_names)) or "none"
         lines = [
             "<project_permissions>",
             f"Current project: {project_id}",

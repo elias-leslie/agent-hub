@@ -143,7 +143,7 @@ def session_attribution(session: Session) -> dict[str, str | None]:
         }
 
     if request_source and (
-        request_source.startswith("persona_wake:")
+        request_source.startswith(("agent_wake:", "persona_wake:"))
         or request_source == "codex-transcript-sync"
     ):
         return {

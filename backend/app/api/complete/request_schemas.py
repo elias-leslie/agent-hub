@@ -260,9 +260,8 @@ class CompletionRequest(BaseModel):
         default=None,
         pattern="^(full|chat|none)$",
         description=(
-            "Runtime prompt profile. full includes persona context; chat uses assigned "
-            "prompt roles without heavyweight persona/evolution context; none disables "
-            "agent prompt injection."
+            "Runtime prompt profile. full and chat both use the agent's assigned prompt "
+            "roles; none disables agent prompt injection."
         ),
     )
     stream: bool = Field(

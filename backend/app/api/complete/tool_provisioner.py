@@ -85,35 +85,6 @@ def _filter_tools_by_tier(
     visible_tool_names: set[str] | frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Filter tools by project permission tier using Redis cache (best-effort)."""
-    if agent_slug == "persona":
-        from app.services.tools.persona_tool_surface import (
-            filter_persona_runtime_tool_dicts,
-            get_persona_runtime_tools_for_tier,
-        )
-
-        if visible_tool_names is not None:
-            return filter_persona_runtime_tool_dicts(
-                result,
-                visible_tool_names=visible_tool_names,
-            )
-
-        allowed: tuple[str, ...] = ()
-        try:
-            import json
-
-            import redis
-
-            from app.config import settings
-
-            r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
-            cached = r.get(f"agent-hub:project-perm:{project_id}")
-            r.close()
-            tier = json.loads(cached).get("tier") if cached else None
-            allowed = get_persona_runtime_tools_for_tier(tier)
-        except Exception as e:
-            logger.debug("Persona tool provisioning tier filter failed closed: %s", e)
-        return filter_persona_runtime_tool_dicts(result, visible_tool_names=allowed)
-
     if visible_tool_names is not None:
         before = len(result)
         allowed = set(visible_tool_names)
@@ -195,7 +166,7 @@ def provision_standard_tools(
     result = tools or []
 
     # Filter tools by project permission tier (soft enforcement at provisioning)
-    if result and (project_id or agent_slug == "persona"):
+    if result and project_id:
         result = _filter_tools_by_tier(
             result,
             project_id or "",

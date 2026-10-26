@@ -48,23 +48,21 @@ def test_stored_unknown_subagent_model_is_returned_as_no_model() -> None:
 
 class TestResolveAgentDisplayNames:
     @pytest.mark.asyncio
-    async def test_prefers_persona_display_name_from_persona_row(self) -> None:
+    async def test_maps_agent_slugs_to_agent_row_names(self) -> None:
         events = [
-            SimpleNamespace(agent_id="persona", agent_name=None),
+            SimpleNamespace(agent_id="reviewer", agent_name=None),
             SimpleNamespace(agent_id="coder", agent_name="coder"),
         ]
         agent_rows = MagicMock()
         agent_rows.all.return_value = [
-            SimpleNamespace(slug="persona", name="Legacy Persona"),
+            SimpleNamespace(slug="reviewer", name="Reviewer"),
             SimpleNamespace(slug="coder", name="Coder"),
         ]
-        persona_name = MagicMock()
-        persona_name.scalar_one_or_none.return_value = "Renamed Persona"
 
         db = AsyncMock()
-        db.execute = AsyncMock(side_effect=[agent_rows, persona_name])
+        db.execute = AsyncMock(return_value=agent_rows)
 
         result = await _resolve_agent_display_names(db, events)
 
-        assert result["persona"] == "Renamed Persona"
+        assert result["reviewer"] == "Reviewer"
         assert result["coder"] == "Coder"

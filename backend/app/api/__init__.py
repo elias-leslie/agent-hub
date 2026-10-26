@@ -27,7 +27,6 @@ from app.api.narration import router as narration_router
 from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.ownership import router as ownership_router
-from app.api.persona import router as persona_router
 from app.api.preferences import router as preferences_router
 from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
@@ -62,7 +61,6 @@ router.include_router(memory_router)  # Has its own prefix /memory and tags
 router.include_router(agents_router)  # Has its own prefix /agents and tags
 router.include_router(models_router, tags=["models"])
 router.include_router(narration_router)  # Has its own prefix /narration and tags
-router.include_router(persona_router)  # Has its own prefix /persona and tags
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(prompts_router)  # Has its own prefix /prompts and tags
 router.include_router(voice_router, prefix="/voice", tags=["voice"])

@@ -134,11 +134,9 @@ async def collect_runtime_prompt_sections(
     include_roles: list[str] | None = None,
     task_type: str | None = None,
     project_id: str | None = None,
-    prompt_mode: str = "full",
     include_global_prompts: bool = True,
     include_mandates: bool = True,
     include_guardrails: bool = True,
-    include_persona_context: bool = True,
     query: str = "startup context",
     consumer_profile: str = "agent_runtime",
     consumer_tags: list[str] | None = None,
@@ -195,11 +193,7 @@ async def collect_runtime_prompt_sections(
         db,
         agent.id,
         include_roles=include_roles,
-        exclude_roles=get_runtime_excluded_prompt_roles(
-            agent_slug=getattr(agent, "slug", None),
-            prompt_mode=prompt_mode,
-            task_type=task_type,
-        ),
+        exclude_roles=get_runtime_excluded_prompt_roles(task_type=task_type),
     )
     # Global prompt ownership is assembled once by canonical context. An old or
     # redundant AgentPrompt assignment must not duplicate that content in the
@@ -279,31 +273,10 @@ async def collect_runtime_prompt_sections(
             )
         )
 
-    if include_persona_context:
-        from app.services.persona_service import get_persona_context_for_agent
-
-        persona_context = await get_persona_context_for_agent(
-            db,
-            agent.id,
-            task_type=task_type,
-            mutate_phase=False,
-        )
-        if persona_context:
-            sections.append(
-                RuntimePromptSection(
-                    label="Persona Context",
-                    source_kind="persona_context",
-                    source_id=agent.slug,
-                    content=f"<persona_context>\n{persona_context}\n</persona_context>",
-                )
-            )
-
     if project_id:
         from app.services.agent_routing_utils import _build_project_permissions_block
 
-        permissions = await _build_project_permissions_block(
-            project_id, db, agent_slug=agent.slug,
-        )
+        permissions = await _build_project_permissions_block(project_id, db)
         if permissions:
             sections.append(
                 RuntimePromptSection(

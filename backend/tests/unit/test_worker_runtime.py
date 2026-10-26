@@ -10,11 +10,11 @@ from app.worker_runtime import (
     OPS_WORKFLOWS,
     init_worker_credentials,
 )
+from app.workflows.agent_wake import agent_wake_task
 from app.workflows.automation_clock import automation_clock_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
-from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
     data_retention_task,
     feedback_cleanup_task,
