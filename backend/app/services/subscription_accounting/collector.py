@@ -56,11 +56,6 @@ CODEX_CREDIT_STATE = "@codex_credits"
 SNAPSHOT_STATE = "@snapshots"
 CLAUDE_STATUSLINE_STATE = "@claude_statusline"
 CLAUDE_WINDOWS = {"five_hour": 300, "seven_day": 10080}
-# Runaway backstop: one transcript file is one session or subagent. The auto-compact settings keep
-# turns near 200K; a turn this big means compaction isn't holding, and this much value in a single
-# run means an agent is looping on a huge history. Each file alerts once per signal.
-RUNAWAY_TURN_CONTEXT = 400_000
-RUNAWAY_RUN_USD = 75.0
 # Per-call ledger (usage_calls). A cursor without this version is re-read from the start once so its
 # history lands in the ledger; lines before the old offset feed only the ledger (rollups already have them).
 # A replay also prices calls stored without a rate whose model has since gained one in the catalog,
@@ -178,7 +173,6 @@ class PassResult:
     snapshots: list[SnapshotEvent] = field(default_factory=list)
     files_read: int = 0
     bytes_read: int = 0
-    runaways: list[str] = field(default_factory=list)
     calls: list[UsageCallRow] = field(default_factory=list)
     sessions: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
     replay_pending: int = 0
@@ -248,26 +242,6 @@ def _add_call(result: PassResult, call: UsageCallRow, state: dict[str, Any], pro
 
 
 # ------------------------------------------------------------------ Codex
-
-
-def _track_run(
-    result: PassResult, path: Path, state: dict[str, Any], ts: datetime, context: int, usd: float, *, new_call: bool = True,
-) -> None:
-    """Per-transcript peak turn context and cumulative value; queue one alert per signal."""
-    state["max_ctx"] = max(int(state.get("max_ctx") or 0), context)
-    state["usd"] = float(state.get("usd") or 0.0) + usd
-    state["turns"] = int(state.get("turns") or 0) + int(new_call)
-    alerted: list[str] = state.setdefault("alerted", [])
-    for signal, hit, note in (
-        ("ctx", state["max_ctx"] >= RUNAWAY_TURN_CONTEXT, f"a single turn read {state['max_ctx'] // 1000}K tokens of context"),
-        ("usd", state["usd"] >= RUNAWAY_RUN_USD, f"one run is at ${state['usd']:.0f} API-equivalent"),
-    ):
-        if hit and signal not in alerted:
-            alerted.append(signal)
-            if datetime.now(UTC) - ts > timedelta(hours=2):
-                continue  # backfilled history: remember it, don't page for it
-            who = "subagent" if any(part.startswith("subagent") for part in path.parts) else "session"
-            result.runaways.append(f"A {who} transcript ({path.stem[:24]}) looks runaway: {note} after {state['turns']} turns.")
 
 
 def _codex_meta(payload: dict[str, Any], state: dict[str, Any]) -> None:
@@ -402,8 +376,6 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
             _add_call(result, call, state, "codex")
             if live:
                 _add_codex_rollup(result, call, project, speed)
-                _track_run(result, path, state, ts, call.input_tokens + call.cached_input_tokens,
-                           call.api_equiv_usd or 0.0)
         if live:
             _codex_rate_limits(result, ts, model, project, speed, payload.get("rate_limits") or {})
     _register_codex_root(result, state)
@@ -428,7 +400,6 @@ def _codex_native_call(path: Path, state: dict[str, Any], result: PassResult, pe
     _add_call(result, call, state, "codex")
     if pending["live"]:
         _add_codex_rollup(result, call, call.project, speed)
-        _track_run(result, path, state, ts, call.input_tokens + call.cached_input_tokens, call.api_equiv_usd or 0.0)
 
 
 def _register_codex_root(result: PassResult, state: dict[str, Any]) -> None:
@@ -575,9 +546,6 @@ def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassRes
                 roll = result.rollups[(_local_day(ts), "claude", model, project, speed)]
                 _rollup_usage(roll, previous, -1)
                 roll.requests -= 1
-            context = call.input_tokens + call.cached_input_tokens + call.cache_write_tokens
-            usd = (call.api_equiv_usd or 0.0) - ((previous[4] or 0.0) if previous else 0.0)
-            _track_run(result, path, state, ts, context, usd, new_call=previous is None)
     for ident in list(seen)[:-MAX_SEEN_IDS]:
         del seen[ident]
     return offset
@@ -707,12 +675,11 @@ def scan(
             live.append((path, reader, offset, dict(state), 0))
     replays.sort(key=lambda item: item[0], reverse=True)
     spent = 0
-    for _mtime, path, reader, offset, old in replays:
+    for _mtime, path, reader, offset, _old in replays:
         if spent >= byte_budget:
             result.replay_pending += 1
             continue
-        fresh = {k: old[k] for k in ("max_ctx", "usd", "turns", "alerted") if k in old}
-        live.append((path, reader, 0, fresh, offset))
+        live.append((path, reader, 0, {}, offset))
         spent += offset
     for path, reader, offset, state, live_from in live:
         state["ledger"] = LEDGER_VERSION
@@ -806,9 +773,6 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         result.cursors[SNAPSHOT_STATE] = (0, snap_state)
         await _persist(db, result, snapshots, new_lots, prune=replay is None)
         await db.commit()
-        if replay is None:
-            for message in result.runaways:
-                await _alert(message)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots), "calls": len(result.calls), "replay_pending": result.replay_pending}
 
@@ -928,7 +892,7 @@ async def _persist_ledger(db: AsyncSession, result: PassResult) -> None:
 
 
 async def _alert(
-    message: str, *, title: str = "Agent context runaway", key: str | None = None, cooldown: int = 0,
+    message: str, *, title: str, key: str | None = None, cooldown: int = 0,
     open_url: str | None = None,
 ) -> None:
     """Owner alert through Nightshift's push (the only owner-alert path)."""
@@ -936,7 +900,7 @@ async def _alert(
     if binary is None:
         logger.warning("nightshift not found; alert not sent: %s", message)
         return
-    args = ["push", "--severity", "warning", "--title", title, "--key", key or f"runaway:{message[:60]}",
+    args = ["push", "--severity", "warning", "--title", title, "--key", key or f"alert:{message[:60]}",
             "--cooldown", str(cooldown)]
     if open_url:
         args += ["--open", open_url]

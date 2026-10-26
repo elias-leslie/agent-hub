@@ -268,15 +268,6 @@ def clear_request_actor() -> None:
 
 
 @pytest.fixture(autouse=True)
-def never_push_to_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Committed test edits to global context must not reach the owner's phone through `nightshift push`."""
-    from app.services import global_context_notes
-
-    monkeypatch.setattr(global_context_notes, "create_process",
-                        AsyncMock(side_effect=OSError("tests never push to the owner")))
-
-
-@pytest.fixture(autouse=True)
 def allow_test_transcript_roots(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Let transcript fixtures under pytest's temp directory pass the root guard."""
     monkeypatch.setenv("AGENT_HUB_TRANSCRIPT_ROOTS", str(tmp_path_factory.getbasetemp()))

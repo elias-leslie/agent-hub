@@ -160,8 +160,6 @@ def test_claude_stream_final_usage_replaces_initial_usage(tmp_path: Path, split:
     else:
         final = first
     assert len(final.calls) == 1 and final.calls[0].output_tokens == 191
-    assert state["turns"] == 1
-    assert state["usd"] == pytest.approx(final.calls[0].api_equiv_usd)
     assert sum(r.requests for r in first.rollups.values()) == 1
     assert sum(r.output_tokens for r in first.rollups.values()) + (
         sum(r.output_tokens for r in final.rollups.values()) if split else 0) == 191
@@ -444,25 +442,6 @@ def test_rates_come_from_the_catalog_rows() -> None:
     long = rates.claude_api_equiv_usd("claude-haiku-5-5", input_tokens=100_001, output_tokens=0)
     assert short == pytest.approx(0.01)
     assert long == pytest.approx(100_001 * 0.10 / 1e6 * 5)
-
-
-def test_runaway_turn_context_alerts_once_and_backfill_stays_quiet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    claude = tmp_path / "claude"
-    monkeypatch.setenv("AGENT_HUB_CODEX_SESSIONS", str(tmp_path / "codex"))
-    monkeypatch.setenv("AGENT_HUB_CLAUDE_PROJECTS", str(claude))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-
-    def turn(ts: datetime, n: int, ctx: int) -> dict:
-        return {"timestamp": ts.isoformat(), "requestId": f"r{n}", "cwd": "/srv/workspaces/projects/x",
-                "message": {"id": f"m{n}", "model": "claude-opus-5-5",
-                            "usage": {"input_tokens": 5, "output_tokens": 10, "cache_read_input_tokens": ctx}}}
-
-    now = datetime.now(UTC)
-    _jsonl(claude / "p" / "subagents" / "agent-a.jsonl", [turn(now, 1, 100_000), turn(now, 2, 450_000), turn(now, 3, 460_000)])
-    _jsonl(claude / "p" / "old.jsonl", [turn(now - timedelta(days=3), 1, 900_000)])
-    result = collector.scan({}, now=now.timestamp())
-    assert len(result.runaways) == 1
-    assert "subagent" in result.runaways[0] and "450K" in result.runaways[0]
 
 
 def test_scan_reads_every_native_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

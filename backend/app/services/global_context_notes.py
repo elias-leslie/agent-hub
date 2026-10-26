@@ -1,9 +1,10 @@
-"""One Nightshift note for each change to context that every agent receives.
+"""One note for each change to context that every agent receives.
 
 Global prompts (the Safety Directive among them) and global-scope mandate
 memories reach every agent. Agents edit them legitimately, about daily, so a
-change is not an ask: it is one info note naming the calling client, with the
-diff, including any change to who receives it, when, or in what form
+change is neither an ask nor an owner notification (owner decision 2026-10-26: no
+unactionable pushes): it is one log line naming the calling client, with the
+diff (the revision history keeps the full change), including any change to who receives it, when, or in what form
 (targeting, triggers, workflows, render mode). Excluding one of them from a
 consumer profile through a runtime-context placement drops it just as surely,
 so a new exclusion sends a note too. Notes
@@ -16,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import difflib
 import logging
-import shutil
 import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -28,13 +28,11 @@ from sqlalchemy.orm import Session
 
 from app.models.memory_unified import Memory
 from app.models.prompt import Prompt
-from app.utils.safe_subprocess import create_process
 
 logger = logging.getLogger(__name__)
 
 _PENDING = "global_context_notes"
 _DIFF_LIMIT = 3000
-_SEND_TIMEOUT_S = 30.0
 _VERBS = {"create": "added", "delete": "deleted", "restore": "restored", "exclude": "excluded"}
 _ALWAYS_SENT = {"create", "delete", "exclude"}
 GLOBAL_PROMPT_TYPES = ("global_guardrail", "global_mandate")
@@ -110,28 +108,7 @@ def _drop_after_rollback(session: Session, previous_transaction: object) -> None
 
 
 async def send_note(note: GlobalContextNote) -> None:
-    binary = shutil.which("nightshift")
-    if binary is None:
-        logger.warning("nightshift not found; global context note for %s not sent", note.name)
-        return
-    try:
-        process = await create_process(
-            binary, "push", "--severity", "info", "--title", note.title,
-            "--key", note.key, "--cooldown", "0", "--", note.message(),
-            stdout=asyncio.subprocess.DEVNULL,
-        )
-    except OSError as exc:
-        logger.warning("Global context note for %s failed: %s", note.name, exc)
-        return
-    try:
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=_SEND_TIMEOUT_S)
-    except TimeoutError:
-        process.kill()
-        logger.warning("Global context note for %s timed out", note.name)
-        return
-    if process.returncode:
-        logger.warning("Global context note for %s failed (%s): %s", note.name, process.returncode,
-                       (stderr or b"").decode(errors="replace")[:300])
+    logger.info("%s: %s", note.title, note.message())
 
 
 def flag_changes(before: dict[str, object] | None, after: dict[str, object]) -> tuple[str, ...]:

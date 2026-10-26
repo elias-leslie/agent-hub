@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import contextvars
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
@@ -225,33 +224,14 @@ async def test_notes_go_out_after_commit_and_never_after_rollback() -> None:
     assert sent == [note]
 
 
-async def test_send_note_is_an_info_push_without_tap_or_cooldown() -> None:
-    process = MagicMock(returncode=0)
-    process.communicate = AsyncMock(return_value=(None, b""))
+async def test_send_note_logs_the_change_and_never_pushes(caplog: pytest.LogCaptureFixture) -> None:
     note = GlobalContextNote(kind="Global prompt", name="safety-directive", action="update", changed_by="c",
                              before="a", after="b")
-    with (patch.object(global_context_notes.shutil, "which", return_value="/bin/nightshift"),
-          patch.object(global_context_notes, "create_process", AsyncMock(return_value=process)) as create):
+    with caplog.at_level("INFO", logger=global_context_notes.logger.name):
         await global_context_notes.send_note(note)
 
-    assert create.await_args is not None
-    args = create.await_args.args
-    assert args[:2] == ("/bin/nightshift", "push")
-    assert args[args.index("--severity") + 1] == "info"
-    assert args[args.index("--cooldown") + 1] == "0"
-    assert args[args.index("--key") + 1] == "agent-hub.global-context.prompt.safety-directive"
-    assert args[-1] == note.message()
-
-
-@pytest.mark.parametrize("failure", [OSError("missing"), None])
-async def test_send_note_failure_never_raises(failure: OSError | None) -> None:
-    note = GlobalContextNote(kind="Global prompt", name="p", action="update", changed_by="c", before="a", after="b")
-    process = MagicMock(returncode=1)
-    process.communicate = AsyncMock(return_value=(None, b"boom"))
-    create = AsyncMock(side_effect=failure) if failure else AsyncMock(return_value=process)
-    with (patch.object(global_context_notes.shutil, "which", return_value="/bin/nightshift"),
-          patch.object(global_context_notes, "create_process", create)):
-        await global_context_notes.send_note(note)
+    assert "Global prompt edited" in caplog.text and "safety-directive was edited by c" in caplog.text
+    assert not hasattr(global_context_notes, "create_process")
 
 
 def test_actor_bound_in_middleware_reaches_the_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -274,27 +254,6 @@ def test_actor_bound_in_middleware_reaches_the_endpoint(monkeypatch: pytest.Monk
             "/api/whoami", headers={"X-Agent-Hub-Internal": "s3cret", "X-Client-Id": "c1", "X-Request-Source": "st-cli"}
         )
     assert response.json() == {"actor": "internal:c1/st-cli", "attributed": "internal:c1/st-cli"}
-
-
-async def test_send_note_ends_options_before_the_message() -> None:
-    """A summary like '--key=x' must stay the message, not become an option that drops the note."""
-    process = MagicMock(returncode=0)
-    process.communicate = AsyncMock(return_value=(None, b""))
-    note = GlobalContextNote(kind="Global mandate memory", name="--key=x (12345678)", action="update",
-                             changed_by="c", before="a", after="b")
-    with (patch.object(global_context_notes.shutil, "which", return_value="/bin/nightshift"),
-          patch.object(global_context_notes, "create_process", AsyncMock(return_value=process)) as create):
-        await global_context_notes.send_note(note)
-
-    assert create.await_args is not None
-    args = create.await_args.args
-    assert args[-2:] == ("--", note.message())
-    assert note.message().startswith("--key=x")
-    parser = argparse.ArgumentParser()  # same shape as `nightshift push`
-    for option in ("--severity", "--title", "--key", "--cooldown", "--open"):
-        parser.add_argument(option)
-    parser.add_argument("message")
-    assert parser.parse_args(list(args[2:])).message == note.message()
 
 
 def _db_returning(rows: list[object]) -> MagicMock:
