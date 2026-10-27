@@ -9,6 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .executors import EXECUTOR_KINDS
 
 
+class StepTestHooks(BaseModel):
+    """Step-level hooks for exercising the engine; honored only while ``workflow_test_hooks_enabled`` is on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # End the attempt with a refusal of this category once the model has taken this many turns.
+    refuse_after_turn: int | None = Field(None, ge=1)
+    refusal_category: str = Field("cyber", min_length=1, max_length=64)
+
+
 class StepDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -26,6 +36,7 @@ class StepDefinition(BaseModel):
     # Hard cap on attempts for the step; default is one attempt per chain model.
     max_attempts: int | None = Field(None, ge=1)
     workflow_ids: list[str] = Field(default_factory=list)
+    test_hooks: StepTestHooks | None = None
 
     @field_validator("executor")
     @classmethod

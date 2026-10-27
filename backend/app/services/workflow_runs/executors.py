@@ -143,3 +143,9 @@ class FauxExecutor:
 
 
 register_executor("faux", FauxExecutor)
+
+# Real executors register themselves on import (one line per executor module).
+from . import executor_agent_hub as _executor_agent_hub  # noqa: E402,F401
+from . import executor_claude_code as _executor_claude_code  # noqa: E402,F401
+from . import executor_codex as _executor_codex  # noqa: E402,F401
+from . import executor_pi as _executor_pi  # noqa: E402,F401

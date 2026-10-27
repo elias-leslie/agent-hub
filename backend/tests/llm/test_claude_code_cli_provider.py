@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.llm.model_resolver import resolve_llm_model
-from app.llm.provider_support import claude_sessions
+from app.llm.provider_support import claude_sessions, claude_stream
 from app.llm.provider_support.claude_code_cli import child_env
 from app.llm.providers import claude_code_cli as cli
 from app.llm.types import (
@@ -78,12 +78,12 @@ async def test_agent_hub_tools_fail_fast_for_the_fallback_chain() -> None:
 
 
 def test_failures_are_worded_for_runtime_classification() -> None:
-    signed_out = cli._result_error({"is_error": True, "result": "Not logged in · Please run /login"}, 1, "")
+    signed_out = claude_stream.result_error({"is_error": True, "result": "Not logged in · Please run /login"}, 1, "")
     assert classify_runtime_failure(RuntimeError(signed_out)).smoke_status == "auth_failed"
-    limited = cli._rate_limit_message({"status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1})
+    limited = claude_stream.rate_limit_message({"status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1})
     assert classify_runtime_failure(RuntimeError(limited)).smoke_status == "quota_or_rate_limited"
-    assert cli._rate_limit_message({"status": "allowed"}) is None
-    assert cli._result_error({"subtype": "success", "is_error": False}, 0, "") is None
+    assert claude_stream.rate_limit_message({"status": "allowed"}) is None
+    assert claude_stream.result_error({"subtype": "success", "is_error": False}, 0, "") is None
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "claude_code_cli"

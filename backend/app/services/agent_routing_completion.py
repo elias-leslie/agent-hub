@@ -228,6 +228,9 @@ def _thinking_level_for_provider(provider: str, thinking_level: str | None) -> s
     return thinking_level
 
 
+thinking_level_for_provider = _thinking_level_for_provider
+
+
 async def _try_fallbacks(
     messages: list[Message],
     agent: AgentDTO,

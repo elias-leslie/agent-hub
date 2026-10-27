@@ -33,7 +33,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import re
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -43,6 +42,7 @@ from ..api_registry import register_api_provider
 from ..event_stream import AssistantMessageEventStream
 from ..provider_support.claude_code_cli import claude_binary
 from ..provider_support.claude_sessions import ClaudeSession, claude_pool, pool_key
+from ..provider_support.claude_stream import SYNTHETIC_MODEL, ClaudeTurnObserver, result_error
 from ..types import (
     AssistantMessage,
     AudioContent,
@@ -66,12 +66,9 @@ from ..types import (
     Usage,
     UserMessage,
 )
-from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
+from ..utils.outcomes import ProviderOutcome, record_outcome
 
 API = "claude-code-cli"
-_SYNTHETIC_MODEL = "<synthetic>"
-_REFUSAL_TEXT = re.compile(r"safeguards (?:flagged|stopped)|can.t help with this", re.IGNORECASE)
-_REFUSAL_CATEGORY = re.compile(r"Details: `\[(\w+)\]`")
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -184,16 +181,6 @@ def _apply_usage(output: AssistantMessage, model: Model[Any], raw: dict[str, Any
     output.usage = usage
 
 
-def _rate_limit_message(info: dict[str, Any]) -> str | None:
-    status = str(info.get("status") or "")
-    if status in ("", "allowed", "allowed_warning"):
-        return None
-    window = info.get("rateLimitType") or "subscription"
-    resets_at = info.get("resetsAt")
-    reset = f"; resets at unix {resets_at}" if resets_at else ""
-    return f"429 rate limit: Claude {window} usage limit reached ({status}){reset}"
-
-
 class _TurnFailure(ClaudeCliError):
     """A failed turn whose cause is a typed provider outcome."""
 
@@ -206,79 +193,33 @@ class _Aborted(Exception):
     pass
 
 
-class _TurnState:
-    def __init__(self, stream: AssistantMessageEventStream, output: AssistantMessage) -> None:
+class _TurnState(ClaudeTurnObserver):
+    def __init__(self, stream: AssistantMessageEventStream, output: AssistantMessage, model: Model[Any]) -> None:
+        super().__init__()
         self.stream = stream
         self.output = output
+        self.model = model
         self.blocks: dict[int, int] = {}
-        self.rate_limit_info: dict[str, Any] | None = None
-        self.result: dict[str, Any] | None = None
-        self.served: set[str] = set()
-        self.refusal: dict[str, Any] | None = None
-        self.fallback: dict[str, Any] | None = None
-        self.answer_text: list[str] = []
 
-    def handle(self, event: dict[str, Any], model: Model[Any]) -> None:
-        kind = event.get("type")
-        if kind == "stream_event":
+    def handle(self, event: dict[str, Any]) -> None:
+        if event.get("type") == "stream_event":
             self._stream_event(event.get("event") or {})
-        elif kind == "assistant":
-            self._assistant(event)
-        elif kind == "system":
-            self._system(event)
-        elif kind == "rate_limit_event":
-            info = event.get("rate_limit_info") or {}
-            if _rate_limit_message(info):
-                self.rate_limit_info = info
-        elif kind == "result":
-            self.result = event
-            self.served.update(k for k in (event.get("modelUsage") or {}) if k != _SYNTHETIC_MODEL)
-            if isinstance(event.get("usage"), dict):
-                _apply_usage(self.output, model, event["usage"])
-            if (
-                event.get("stop_reason") == "refusal"
-                or "refus" in str(event.get("terminal_reason") or "")
-                or (event.get("safety_stops") or 0) > 0
-                or (event.get("is_error") and _REFUSAL_TEXT.search(str(event.get("result") or "")))
-            ):
-                self._note_refusal(str(event.get("result") or ""), None, None, None)
+        else:
+            super().handle(event)
 
-    def _note_refusal(self, text: str, category: str | None, explanation: str | None, request_id: str | None) -> None:
-        match = _REFUSAL_CATEGORY.search(text)
-        current = self.refusal or {}
-        self.refusal = {
-            "category": category or (match.group(1) if match else None) or current.get("category"),
-            "explanation": explanation or current.get("explanation"),
-            "request_id": request_id or current.get("request_id"),
-        }
+    def _result(self, event: dict[str, Any]) -> None:
+        super()._result(event)
+        if isinstance(event.get("usage"), dict):
+            _apply_usage(self.output, self.model, event["usage"])
 
     def _assistant(self, event: dict[str, Any]) -> None:
+        super()._assistant(event)
         message = event.get("message") or {}
         name = message.get("model")
-        if name and name != _SYNTHETIC_MODEL:
-            self.served.add(str(name))
+        if name and name != SYNTHETIC_MODEL:
             self.output.response_model = str(name)
-        if message.get("id") and name != _SYNTHETIC_MODEL:
-            self.output.response_id = str(message["id"])
-        text = "\n".join(
-            str(block.get("text") or "") for block in message.get("content") or [] if block.get("type") == "text"
-        )
-        details = message.get("stop_details") or {}
-        if (
-            message.get("stop_reason") == "refusal"
-            or details.get("type") == "refusal"
-            or (name == _SYNTHETIC_MODEL and _REFUSAL_TEXT.search(text))
-        ):
-            self._note_refusal(text, details.get("category"), details.get("explanation"), event.get("request_id"))
-        elif name != _SYNTHETIC_MODEL and text:
-            self.answer_text.append(text)
-
-    def _system(self, event: dict[str, Any]) -> None:
-        subtype = event.get("subtype")
-        if subtype == "model_refusal_fallback":
-            self.fallback = event
-        elif subtype == "informational" and _REFUSAL_TEXT.search(str(event.get("content") or "")):
-            self._note_refusal(str(event.get("content")), None, None, None)
+            if message.get("id"):
+                self.output.response_id = str(message["id"])
 
     def fill_from_message(self) -> None:
         """Use the final assistant message when the CLI streamed no partial blocks."""
@@ -289,38 +230,6 @@ class _TurnState:
         self.stream.push(TextStartEvent(content_index=0, partial=self.output))
         self.stream.push(TextDeltaEvent(content_index=0, delta=text, partial=self.output))
         self.stream.push(TextEndEvent(content_index=0, content=text, partial=self.output))
-
-    def outcome(self, model: Model[Any]) -> tuple[ProviderOutcome, str] | None:
-        """Classify a refusal, substitution or usage limit, with the error text for it."""
-        requested = model.id
-        if self.fallback is not None:
-            fb = self.fallback
-            served = fb.get("fallbackModel")
-            return ProviderOutcome(
-                kind="substituted", requested_model=requested, served_model=served,
-                category=fb.get("apiRefusalCategory"), explanation=fb.get("apiRefusalExplanation"),
-                request_id=fb.get("requestId"),
-            ), _substituted_text(requested, served, fb.get("apiRefusalCategory"))
-        if self.refusal is not None:
-            category = self.refusal["category"]
-            label = f" ({category})" if category else ""
-            return ProviderOutcome(
-                kind="refused", requested_model=requested, category=category,
-                explanation=self.refusal["explanation"], request_id=self.refusal["request_id"],
-            ), f"Claude refused the request: safeguards flagged it{label}; {requested} did not answer"
-        other = sorted(name for name in self.served if is_model_switch(requested, name))
-        if other:
-            return ProviderOutcome(kind="substituted", requested_model=requested, served_model=other[0]), (
-                _substituted_text(requested, other[0], None)
-            )
-        success = self.result is not None and not self.result.get("is_error") and self.result.get("subtype") == "success"
-        if self.rate_limit_info is not None and not success:
-            info = self.rate_limit_info
-            return ProviderOutcome(
-                kind="usage_limit", requested_model=requested,
-                window=info.get("rateLimitType"), resets_at=info.get("resetsAt"),
-            ), _rate_limit_message(info) or "Claude usage limit reached"
-        return None
 
     def _stream_event(self, event: dict[str, Any]) -> None:
         kind = event.get("type")
@@ -361,26 +270,6 @@ class _TurnState:
                 self.output.stop_reason = "length"
 
 
-def _substituted_text(requested: str, served: str | None, category: str | None) -> str:
-    why = f" after a {category} safeguard flag" if category else ""
-    return f"Claude Code CLI served {served or 'another model'} instead of {requested}{why}; the requested model did not answer"
-
-
-def _result_error(result: dict[str, Any] | None, returncode: int | None, stderr: str) -> str | None:
-    if result is not None and not result.get("is_error") and result.get("subtype") == "success":
-        return None
-    detail = ""
-    if result is not None:
-        detail = str(result.get("result") or "; ".join(map(str, result.get("errors") or [])) or result.get("subtype") or "")
-    detail = detail or stderr.strip()[-2_000:] or f"exit status {returncode}"
-    lowered = detail.lower()
-    if "not logged in" in lowered or "/login" in lowered or ("oauth" in lowered and "expired" in lowered):
-        return f"401 unauthorized: Claude Code CLI is not signed in ({detail})"
-    if "issue with the selected model" in lowered:
-        return f"model_not_found: {detail}"
-    return f"Claude Code CLI failed: {detail}"
-
-
 async def _read_line(stdout: asyncio.StreamReader, abort: asyncio.Event | None) -> bytes:
     """Read one stdout line; raise ``_Aborted`` as soon as ``abort`` is set."""
     if abort is None:
@@ -400,7 +289,7 @@ async def _read_line(stdout: asyncio.StreamReader, abort: asyncio.Event | None) 
     return read.result()
 
 
-async def _read_turn(session: ClaudeSession, state: _TurnState, model: Model[Any], abort: asyncio.Event | None) -> None:
+async def _read_turn(session: ClaudeSession, state: _TurnState, abort: asyncio.Event | None) -> None:
     """Feed stdout events to ``state`` until the turn's ``result`` event (or EOF)."""
     assert session.process.stdout is not None
     while line := await _read_line(session.process.stdout, abort):
@@ -409,7 +298,7 @@ async def _read_turn(session: ClaudeSession, state: _TurnState, model: Model[Any
         except json.JSONDecodeError:
             continue
         if isinstance(event, dict):
-            state.handle(event, model)
+            state.handle(event)
             if event.get("type") == "result":
                 return
 
@@ -462,20 +351,20 @@ async def _run(
             )
             await claude_pool.add(session)
         turn = json.dumps(_user_turn(replace(context, messages=messages[-1:]) if continued else context)) + "\n"
-        state = _TurnState(stream, output)
+        state = _TurnState(stream, output, model)
         process = session.process
         assert process.stdin is not None
         process.stdin.write(turn.encode("utf-8"))
         await process.stdin.drain()
         timeout = options.timeout_ms / 1000 if options and options.timeout_ms else None
         async with asyncio.timeout(timeout):
-            await _read_turn(session, state, model, options.signal if options else None)
+            await _read_turn(session, state, options.signal if options else None)
             if state.result is None:
                 await process.wait()
-        typed = state.outcome(model)
+        typed = state.outcome(model.id)
         if typed is not None:
             raise _TurnFailure(typed[1], typed[0])
-        error = _result_error(state.result, process.returncode, session.stderr_tail)
+        error = result_error(state.result, process.returncode, session.stderr_tail)
         if error is not None:
             raise ClaudeCliError(error)
         state.fill_from_message()

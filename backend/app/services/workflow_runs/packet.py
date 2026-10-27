@@ -8,6 +8,7 @@ window. Notes that do not fit stay on disk in the run directory and are listed b
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +16,21 @@ from typing import Any
 from app.services.memory.budget import count_tokens
 
 HANDOFF_FIELDS = ("summary", "decisions", "files", "open_questions")
+HANDOFF_FENCE = "handoff"
+_HANDOFF_BLOCK = re.compile(rf"```{HANDOFF_FENCE}[ \t]*\r?\n(.*?)\r?\n[ \t]*```", re.DOTALL)
+
+
+def parse_handoff(text: str) -> dict[str, Any] | None:
+    """The machine-readable handoff block of a final message (the last one wins); ``None`` when absent or malformed."""
+
+    for body in reversed(_HANDOFF_BLOCK.findall(text or "")):
+        try:
+            note = normalize_handoff(json.loads(body))
+        except ValueError:
+            continue
+        if note is not None:
+            return note
+    return None
 
 
 def normalize_handoff(note: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -65,6 +81,16 @@ class PartialProgress:
 
 
 @dataclass(frozen=True)
+class AttemptRef:
+    """Which attempt (child session of the run) a packet is for; executors that run Agent Hub's own loop need it."""
+
+    session_id: str
+    run_id: str
+    project_id: str
+    agent_slug: str
+
+
+@dataclass(frozen=True)
 class HandoffPacket:
     run_goal: str
     step_key: str
@@ -79,6 +105,11 @@ class HandoffPacket:
     partial: PartialProgress | None = None
     # Canonical context delivery (system/developer channel); kept out of the user-visible packet budget.
     context: str = ""
+    # Step ``test_hooks`` the engine let through (workflow_test_hooks_enabled); None in normal runs.
+    test_hooks: Mapping[str, Any] | None = None
+    attempt: AttemptRef | None = None
+    # The step agent's configured thinking level; executors map it to their harness's effort setting.
+    thinking_level: str | None = None
     budget_tokens: int = 0
     estimated_tokens: int = 0
     over_budget: bool = False
@@ -119,7 +150,12 @@ class HandoffPacket:
             f"# Run directory\nFull earlier-step notes and transcript references: {self.run_dir}"
         )
         lines.append(
-            "# Required output\nEnd with a handoff note: summary, decisions, files touched, open questions."
+            "# Required output\nEnd your final message with a handoff note: a fenced block labelled "
+            f"`{HANDOFF_FENCE}` holding one JSON object with the keys summary (string), decisions (list of "
+            "strings), files (list of files touched) and open_questions (list of strings).\n"
+            f"```{HANDOFF_FENCE}\n"
+            '{"summary": "...", "decisions": [], "files": [], "open_questions": []}\n'
+            "```"
         )
         return "\n\n".join(lines)
 

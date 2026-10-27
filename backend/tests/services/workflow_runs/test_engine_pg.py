@@ -30,7 +30,7 @@ from app.services.workflow_runs.engine import (
 )
 from app.services.workflow_runs.executors import FauxAction, FauxExecutor
 from app.services.workflow_runs.policy import Unavailable
-from app.services.workflow_runs.schemas import OwnerDecision, RunDefinition
+from app.services.workflow_runs.schemas import OwnerDecision, RunDefinition, StepTestHooks
 
 pytestmark = pytest.mark.integration
 
@@ -110,6 +110,9 @@ class World:
             for model in (OPUS, OPUS_OLD) if provider == "claude" else (CODEX,):
                 self.unavailable[model] = Unavailable("cooldown", seconds)
 
+        async def thinking(_slug: str) -> str | None:
+            return "medium"
+
         async def context(**_kw: Any) -> tuple[str, str]:
             return "", "ok"
 
@@ -121,6 +124,7 @@ class World:
             trip_cooldown=trip,
             provider_of=lambda m: "codex" if m.startswith("codex/") else "claude",
             context_provider=context,
+            agent_thinking_level=thinking,
             owner_only_categories=lambda: {"reasoning_extraction", "frontier_llm"},
             clock=lambda: self.clock,
         )
@@ -261,6 +265,30 @@ async def test_chain_exhaustion_goes_to_the_owner_with_each_model_tried_once(
     assert world.faux.calls[3]["model"] == CODEX
     with pytest.raises(WorkflowRunError, match="not waiting for the owner"):
         await resume_run(pg_db, run_id, OwnerDecision(action="skip"), deps=world.deps)
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_step_test_hooks_reach_the_executor_only_when_enabled(
+    pg_db, repo, world_factory, enabled
+) -> None:
+    world = world_factory({})
+    chains(world)
+    world.deps.test_hooks_on = lambda: enabled
+    seen: list[Any] = []
+    inner = world.faux.run
+
+    async def capture(packet, *args, **kwargs):
+        seen.append(packet.test_hooks)
+        assert packet.thinking_level == "medium" and packet.attempt.agent_slug
+        return await inner(packet, *args, **kwargs)
+
+    world.faux.run = capture
+    definition = example("plan-implement-review-fix", repo)
+    definition.steps[0].test_hooks = StepTestHooks(refuse_after_turn=2, refusal_category="bio")
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await advance_run(run_id, deps=world.deps)
+    hooks = {"refuse_after_turn": 2, "refusal_category": "bio"}
+    assert seen[0] == (hooks if enabled else None)
 
 
 async def test_owner_only_refusal_category_is_not_handed_to_the_chain(

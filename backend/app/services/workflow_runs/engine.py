@@ -20,7 +20,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable, Collection
 from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,7 +34,7 @@ from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.session_live_activity import mark_session_completed
 
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
-from .packet import GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
+from .packet import AttemptRef, GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
 from .policy import (
     AttemptResult,
     Decision,
@@ -193,6 +193,8 @@ class EngineDeps:
     context_window_of: Callable[[str], int | None] = default_context_window
     context_provider: ContextProvider | None = None
     owner_only_categories: Callable[[], Collection[str]] | None = None
+    test_hooks_on: Callable[[], bool] | None = None
+    agent_thinking_level: Callable[[str], Awaitable[str | None]] | None = None
     clock: Callable[[], float] = time.time
 
     def factory(self) -> SessionFactory:
@@ -201,6 +203,28 @@ class EngineDeps:
         from app.db import async_session
 
         return async_session
+
+    async def thinking_level_of(self, agent_slug: str) -> str | None:
+        """The agent's configured thinking level; none when it cannot be read (the executor default applies)."""
+
+        if self.agent_thinking_level is not None:
+            return await self.agent_thinking_level(agent_slug)
+        from app.services.agent_service import get_agent_service
+
+        try:
+            async with self.factory()() as db:
+                agent = await get_agent_service().get_by_slug(db, agent_slug)
+            return agent.thinking_level if agent is not None else None
+        except Exception:
+            logger.warning("thinking level of agent %s unavailable", agent_slug, exc_info=True)
+            return None
+
+    def test_hooks_enabled(self) -> bool:
+        if self.test_hooks_on is not None:
+            return self.test_hooks_on()
+        from app.config import get_settings
+
+        return get_settings().workflow_test_hooks_enabled
 
     def owner_only(self) -> Collection[str]:
         if self.owner_only_categories is not None:
@@ -482,6 +506,7 @@ class _Heartbeat:
 
 @dataclass
 class _Intent:
+    run_id: str
     step_id: str
     step_key: str
     position: int
@@ -609,6 +634,7 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
             db, attempt, SessionEventType.CHILD_SESSION_STARTED
         )
         intent = _Intent(
+            run_id=run_id,
             step_id=step.id,
             step_key=step.step_key,
             position=step.position,
@@ -683,6 +709,18 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
             retry_label=f"takeover: {_describe_hop(intent.hop)}" if intent.hop else None,
             **partial_kwargs,
         )
+        packet = replace(
+            packet,
+            thinking_level=await deps.thinking_level_of(intent.definition["agent_slug"]),
+            attempt=AttemptRef(
+                intent.attempt_id,
+                intent.run_id,
+                intent.project_id,
+                intent.definition["agent_slug"],
+            ),
+        )
+        if deps.test_hooks_enabled() and intent.definition.get("test_hooks"):
+            packet = replace(packet, test_hooks=intent.definition["test_hooks"])
         stem = f"packets/{intent.position:02d}-{intent.step_key}-a{intent.attempt_no}"
         info["packet_path"] = await workspace.write_note(f"{stem}.md", packet.render())
         info["packet"] = packet.as_dict()
