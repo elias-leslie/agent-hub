@@ -1,0 +1,363 @@
+[
+ {
+  "answered_by": [
+   "gpt-6.1-sol"
+  ],
+  "arm": "3b",
+  "cache_read": 43776,
+  "cache_write": 0,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.031,
+  "desc": "Agent Hub harness (coder) / gpt-6.1-sol",
+  "error": null,
+  "handoff_summary": "Implemented both fixes and inspection answers; deterministic acceptance passed 16/16 checks.",
+  "input": 6957,
+  "label": "3b",
+  "model": "codex/gpt-6.1-sol",
+  "native_session_id": "5202caaf-a497-487a-b248-58dbb5f528e1",
+  "outcome": null,
+  "output": 1270,
+  "passed": 16,
+  "reasoning": 0,
+  "status": "completed",
+  "tool_calls": 14,
+  "tool_failed": "unknown",
+  "total": 16,
+  "wall_s": 54.3
+ },
+ {
+  "answered_by": [
+   "gpt-6.1-sol"
+  ],
+  "arm": "2",
+  "cache_read": 50304,
+  "cache_write": 0,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0619,
+  "desc": "Codex / gpt-6.1-sol",
+  "error": null,
+  "handoff_summary": "Implemented fixes and passed all 16 acceptance checks.",
+  "input": 24279,
+  "label": "2",
+  "model": "codex/gpt-6.1-sol",
+  "native_session_id": "01a17fc3-64d0-7572-b59e-2cafba64aa06",
+  "outcome": null,
+  "output": 832,
+  "passed": 16,
+  "reasoning": 167,
+  "status": "completed",
+  "tool_calls": 4,
+  "tool_failed": 0,
+  "total": 16,
+  "wall_s": 20.2
+ },
+ {
+  "answered_by": [
+   "gpt-6.1-sol"
+  ],
+  "arm": "3",
+  "cache_read": 18304,
+  "cache_write": 0,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0187,
+  "desc": "Pi / gpt-6.1-sol",
+  "error": null,
+  "handoff_summary": "Implemented the fixes and inspection answers; deterministic acceptance passed 16/16 checks.",
+  "input": 4159,
+  "label": "3",
+  "model": "codex/gpt-6.1-sol",
+  "native_session_id": "01a17fc3-b4f1-7096-a16b-0fc5d9c381db",
+  "outcome": null,
+  "output": 853,
+  "passed": 16,
+  "reasoning": 34,
+  "status": "completed",
+  "tool_calls": 9,
+  "tool_failed": 0,
+  "total": 16,
+  "wall_s": 41.9
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "1",
+  "cache_read": 71482,
+  "cache_write": 11160,
+  "claude_5h_delta_pts": 0.0,
+  "cost_usd": 0.1026,
+  "desc": "Claude Code / Opus 5.5",
+  "error": null,
+  "handoff_summary": "Fixed merge_windows (sort a copy, merge overlapping/touching windows with max end, handle empty input) and collect_pages (stop only on None cursor, raise ValueError before fetching a repeated cursor); wrote inspection.json. Acceptance passed 16/16.",
+  "input": 8,
+  "label": "1",
+  "model": "claude-opus-5-5",
+  "native_session_id": "b24c0642-b946-46bc-a97a-4d9442600124",
+  "outcome": null,
+  "output": 1626,
+  "passed": 16,
+  "reasoning": 115,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "total": 16,
+  "wall_s": 16.9
+ },
+ {
+  "answered_by": [
+   [
+    "claude-opus-5-5"
+   ],
+   [
+    "gpt-6.1-sol"
+   ]
+  ],
+  "arm": "4",
+  "attempts": [
+   {
+    "cost_usd": 0.1386,
+    "error": null,
+    "model": "claude-opus-5-5",
+    "packet_chars": 1318,
+    "packet_tokens": 329,
+    "partial_progress": false,
+    "seconds": 18.4,
+    "served": [
+     "claude-opus-5-5"
+    ],
+    "status": "completed",
+    "step": "implement",
+    "tool_calls": 3,
+    "usage": {
+     "by_model": {
+      "claude-opus-5-5": {
+       "cacheCreationEphemeral1hInputTokens": 17975,
+       "cacheCreationEphemeral5mInputTokens": 0,
+       "cacheCreationInputTokens": 17975,
+       "cacheReadInputTokens": 92380,
+       "canonicalModel": "claude-opus-5-5",
+       "contextWindow": 1000000,
+       "costBasis": "list",
+       "costUSD": 0.192488,
+       "inputTokens": 8,
+       "maxOutputTokens": 128000,
+       "outputTokens": 1509,
+       "provider": "firstParty",
+       "thinkingTokens": 116,
+       "webSearchRequests": 0
+      }
+     },
+     "cache_read_tokens": 92380,
+     "cache_write_tokens": 17975,
+     "duration_ms": 17984,
+     "input_tokens": 8,
+     "num_turns": 4,
+     "output_tokens": 1509,
+     "reasoning_tokens": 116,
+     "total_cost_usd": 0.192488,
+     "total_tokens": 111872
+    }
+   },
+   {
+    "cost_usd": 0.0539,
+    "error": null,
+    "model": "codex/gpt-6.1-sol",
+    "packet_chars": 1961,
+    "packet_tokens": 490,
+    "partial_progress": false,
+    "seconds": 20.2,
+    "served": [
+     "gpt-6.1-sol"
+    ],
+    "status": "completed",
+    "step": "review_fix",
+    "tool_calls": 6,
+    "usage": {
+     "cache_read_tokens": 124288,
+     "cache_write_tokens": 0,
+     "input_tokens": 17856,
+     "output_tokens": 578,
+     "reasoning_tokens": 26,
+     "total_tokens": 142722
+    }
+   }
+  ],
+  "cache_read": 216668,
+  "cache_write": 17975,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.1925,
+  "desc": "Workflow: Claude Code/Opus implement -> Codex/gpt-6.1-sol review_fix",
+  "failure": null,
+  "input": 17864,
+  "label": "4",
+  "output": 2087,
+  "passed": 16,
+  "pause": null,
+  "run_id": "27c5dec8-6c34-49ea-89f3-53bed1c0f8f2",
+  "status": "completed",
+  "step2_rewrote_lines": 0,
+  "step_states": [
+   [
+    "implement",
+    "completed",
+    1,
+    []
+   ],
+   [
+    "review_fix",
+    "completed",
+    1,
+    []
+   ]
+  ],
+  "tool_calls": 9,
+  "tool_failed": 1,
+  "total": 16,
+  "wall_s": 41.0,
+  "worktree_kept": true
+ },
+ {
+  "answered_by": [
+   [
+    "gpt-6.1-sol"
+   ]
+  ],
+  "arm": "5",
+  "attempts": [
+   {
+    "cost_usd": 0.0699,
+    "error": "Claude refused the request: safeguards flagged it (cyber); claude-opus-5-5 did not answer",
+    "model": "claude-opus-5-5",
+    "packet_chars": 1318,
+    "packet_tokens": 329,
+    "partial_progress": false,
+    "seconds": 5.5,
+    "served": [
+     "claude-opus-5-5"
+    ],
+    "status": "failed",
+    "step": "implement",
+    "tool_calls": 1,
+    "usage": {
+     "cache_read_tokens": 11277,
+     "cache_write_tokens": 13467,
+     "input_tokens": 2,
+     "output_tokens": 16,
+     "reasoning_tokens": 0,
+     "total_tokens": 24762
+    }
+   },
+   {
+    "cost_usd": 0.0516,
+    "error": null,
+    "model": "codex/gpt-6.1-sol",
+    "packet_chars": 1736,
+    "packet_tokens": 434,
+    "partial_progress": true,
+    "seconds": 18.2,
+    "served": [
+     "gpt-6.1-sol"
+    ],
+    "status": "completed",
+    "step": "implement",
+    "tool_calls": 6,
+    "usage": {
+     "cache_read_tokens": 98688,
+     "cache_write_tokens": 0,
+     "input_tokens": 16506,
+     "output_tokens": 867,
+     "reasoning_tokens": 60,
+     "total_tokens": 116061
+    }
+   }
+  ],
+  "cache_read": 109965,
+  "cache_write": 13467,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.1215,
+  "desc": "Workflow: Claude Code/Opus + injected refusal after turn 1 -> chain takeover",
+  "failure": null,
+  "input": 16508,
+  "label": "5",
+  "output": 883,
+  "passed": 16,
+  "pause": null,
+  "refusal_to_next_first_event_s": 0.3,
+  "run_id": "612919ab-5ae2-4b61-becd-97cbc43881c5",
+  "status": "completed",
+  "step_states": [
+   [
+    "implement",
+    "completed",
+    2,
+    [
+     {
+      "category": "cyber",
+      "from_model": "claude-opus-5-5",
+      "kind": "refused",
+      "to_model": "codex/gpt-6.1-sol"
+     }
+    ]
+   ]
+  ],
+  "tool_calls": 7,
+  "tool_failed": 1,
+  "total": 16,
+  "wall_s": 24.2,
+  "worktree_kept": true
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "1",
+  "cache_read": 71442,
+  "cache_write": 11114,
+  "claude_5h_delta_pts": null,
+  "cli_cost_usd": 0.1366524,
+  "cost_usd": 0.1033,
+  "desc": "Claude Code / Opus 5.5",
+  "error": null,
+  "handoff_summary": "Fixed merge_windows (sort a copy, merge overlapping/touching windows keeping the larger end, empty input returns []) and collect_pages (stop only when next_cursor is None, raise ValueError before fetching a repeated cursor); wrote inspection.json from catalog.py. Acceptance check: accepted, 16/16.",
+  "input": 8,
+  "label": "1-r2",
+  "model": "claude-opus-5-5",
+  "native_session_id": "f5e7a6ba-5bdf-4cf6-9f4b-8b653a365de5",
+  "outcome": null,
+  "output": 1671,
+  "passed": 16,
+  "reasoning": 77,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "total": 16,
+  "wall_s": 16.0
+ },
+ {
+  "answered_by": [
+   "gpt-6.1-sol"
+  ],
+  "arm": "2",
+  "cache_read": 80128,
+  "cache_write": 0,
+  "claude_5h_delta_pts": null,
+  "cli_cost_usd": null,
+  "cost_usd": 0.0404,
+  "desc": "Codex / gpt-6.1-sol",
+  "error": null,
+  "handoff_summary": "Implemented both fixes and inspection answers; acceptance passed 16/16 checks.",
+  "input": 12321,
+  "label": "2-r2",
+  "model": "codex/gpt-6.1-sol",
+  "native_session_id": "01a17fc6-3ed4-76a1-a3eb-eab63304786d",
+  "outcome": null,
+  "output": 779,
+  "passed": 16,
+  "reasoning": 64,
+  "status": "completed",
+  "tool_calls": 5,
+  "tool_failed": 0,
+  "total": 16,
+  "wall_s": 22.2
+ }
+]
