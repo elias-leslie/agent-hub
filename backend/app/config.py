@@ -71,6 +71,10 @@ class Settings(BaseSettings):
 
     # Redis
     agent_hub_redis_url: str = f"redis://localhost:{REDIS_PORT}/2"
+    # How long a chat session reuses its first canonical context delivery so the
+    # provider prompt cache keeps hitting (0 disables). Keep it at or above the
+    # provider cache lifetime; the delivery is rebuilt once it expires.
+    agent_hub_context_freeze_ttl_seconds: int = 3600
 
     # Hatchet
     hatchet_client_token: str = ""

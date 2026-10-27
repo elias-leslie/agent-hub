@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import async_session
 from app.services.llm_messages import prepend_system_context_dicts
 
+from . import context_freeze
 from .context_builder import ProgressiveContext
 from .context_builder_settings import (
     resolve_continuity_settings,
@@ -190,42 +191,49 @@ async def _build_delivery(
     effective_project_id = project_id or (
         scope_id if scope == MemoryScope.PROJECT else None
     )
-    delivery = await build_canonical_context_delivery(
-        db,
-        CanonicalContextDeliveryRequest(
-            consumer_surface=consumer_surface,
-            consumer_profile=consumer_profile or "agent_runtime",
-            agent_slug=consumer_agent_slug,
-            consumer_tags=resolved_tags,
-            project_id=effective_project_id,
-            session_id=session_id,
-            task=query,
-            query=query,
-            task_type=task_type,
-            phase=phase,
-            current_branch=current_branch,
-            include_global=True,
-            include_prompts=include_prompts,
-            include_memories=include_memories,
-            include_mandates=include_mandates,
-            include_guardrails=include_guardrails,
-            include_references=include_references,
-            include_reference_index=resolve_reference_index_enabled(memory_config),
-            exclude_tags=exclude_tags,
-            exclude_memory_uuids=resolve_excluded_memory_uuids(memory_config),
-            include_project_index=resolve_project_index_enabled(memory_config),
-            include_tool_capabilities=resolve_tool_capabilities_enabled(memory_config),
-            include_continuity=include_continuity and continuity_enabled,
-            continuity_max_sessions=max_sessions,
-            continuity_cross_project=cross_project,
-            continuity_live_sessions=live_sessions,
-            variant=variant_value,
-            client_metadata={
-                "external_id": external_id or "",
-                "message_count": str(len(messages)),
-            },
-        ),
+    request = CanonicalContextDeliveryRequest(
+        consumer_surface=consumer_surface,
+        consumer_profile=consumer_profile or "agent_runtime",
+        agent_slug=consumer_agent_slug,
+        consumer_tags=resolved_tags,
+        project_id=effective_project_id,
+        session_id=session_id,
+        task=query,
+        query=query,
+        task_type=task_type,
+        phase=phase,
+        current_branch=current_branch,
+        include_global=True,
+        include_prompts=include_prompts,
+        include_memories=include_memories,
+        include_mandates=include_mandates,
+        include_guardrails=include_guardrails,
+        include_references=include_references,
+        include_reference_index=resolve_reference_index_enabled(memory_config),
+        exclude_tags=exclude_tags,
+        exclude_memory_uuids=resolve_excluded_memory_uuids(memory_config),
+        include_project_index=resolve_project_index_enabled(memory_config),
+        include_tool_capabilities=resolve_tool_capabilities_enabled(memory_config),
+        include_continuity=include_continuity and continuity_enabled,
+        continuity_max_sessions=max_sessions,
+        continuity_cross_project=cross_project,
+        continuity_live_sessions=live_sessions,
+        variant=variant_value,
+        client_metadata={
+            "external_id": external_id or "",
+            "message_count": str(len(messages)),
+        },
     )
+    # Reuse the session's first delivery so the prompt prefix stays byte-identical
+    # across turns and provider prompt caches keep hitting.
+    freeze_key = await context_freeze.freeze_key(db, request)
+    delivery = (
+        await context_freeze.load_frozen_delivery(freeze_key) if freeze_key else None
+    )
+    if delivery is None:
+        delivery = await build_canonical_context_delivery(db, request)
+        if freeze_key:
+            await context_freeze.store_frozen_delivery(freeze_key, delivery)
     return require_canonical_context(delivery), variant_value
 
 
