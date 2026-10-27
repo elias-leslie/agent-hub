@@ -22,7 +22,7 @@ NERI_PAYLOAD_CONTRACT_HASH = "2c6ad1d8636d7653b26d0d1783868eafdebfff37106b83e903
 def _request(**changes: object) -> CompletionRequest:
     values = {
         "agent_slug": "neri-hunter",
-        "project_id": "neri-hunters",
+        "project_id": "neri",
         "session_id": "11111111-1111-4111-8111-111111111111",
         "messages": [{"role": "user", "content": '{"state":"selected snapshot"}'}],
         "system_prompt": "Use only selected evidence.",
@@ -155,11 +155,11 @@ def test_neri_reporter_payload_contract_vector() -> None:
 
 
 @pytest.mark.asyncio
-async def test_native_roles_belong_to_neri_hunters_not_coordination() -> None:
+async def test_native_roles_belong_to_neri_hunters_not_clean_coordination() -> None:
     db = AsyncMock()
     with pytest.raises(HTTPException, match="Neri Hunters inference roles"):
         await execute_native_continuation(
-            _request(project_id="neri"),
+            _request(project_id="neri-clean"),
             provider="codex",
             resolved_model="codex/gpt-5.6-sol-daybreak-blue",
             resolved_agent=None,
@@ -184,7 +184,7 @@ async def test_native_evidence_mentions_do_not_override_or_mutate_routing() -> N
     )
     http_request = SimpleNamespace(
         state=SimpleNamespace(
-            allowed_projects={"neri-hunters"}, client_id="neri-client", request_source="neri-lab"
+            allowed_projects={"neri"}, client_id="neri-client", request_source="neri-lab"
         )
     )
     resolution = (

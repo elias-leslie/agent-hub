@@ -517,8 +517,8 @@ async def execute_native_continuation(
             status_code=400, detail="Native continuation is available only for Codex models."
         )
     expected_agent = f"neri-{continuation.role}"
-    # Case-work roles belong to Neri Hunters; plain neri is coordination only.
-    if request.project_id != "neri-hunters" or agent_used != expected_agent:
+    # Case-work roles belong to neri (Neri Hunters); neri-clean is coordination only.
+    if request.project_id != "neri" or agent_used != expected_agent:
         raise HTTPException(
             status_code=400,
             detail=(

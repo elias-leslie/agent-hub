@@ -12,7 +12,7 @@
     "relative_cost_reduction_target": 0.2
   },
   "hunter_responses": {
-    "project_ids": ["neri-hunters", "neri"],
+    "project_id": "neri",
     "work_roles": ["hunting", "recon"],
     "shell_tools": ["bash", "exec_command", "run_command"],
     "source_read_tools": ["read", "read_file"],
