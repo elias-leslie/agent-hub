@@ -477,6 +477,17 @@ def test_hunter_scope_is_explicit_and_non_pi_tools_are_not_joined_by_user_turn()
     assert data["tools_without_response"] == 1
 
 
+def test_hunter_scope_covers_neri_hunters_and_keeps_pre_split_neri_sessions_labeled():
+    sessions = [hunter_session(sid="current", project="neri-hunters"), hunter_session(sid="historical"),
+                hunter_session(sid="neri-coordination", role="coordinator")]
+    rows = [usage(sid=session.id, response="r") for session in sessions]
+    data = snapshot(rows, sessions=sessions)["hunter_responses"]
+    assert data["sessions_total"] == 2
+    assert {row["session_id"]: row["project_id"] for row in data["rows"]} == {
+        "current": "neri-hunters", "historical": "neri",
+    }
+
+
 def test_hunter_cutoff_and_cap_do_not_claim_a_lifetime_first_or_complete_purpose():
     rows = [
         event(at=100, call="old", tool_name="read", tool_input={"path": "old.py"}, source_event_id="message:old:0"),

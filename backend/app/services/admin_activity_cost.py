@@ -113,7 +113,8 @@ def _response_usage(usage: dict) -> dict:
 def hunter_response_activity(events: list[Any], tools: dict, sessions: dict, *, cutoff: datetime, now: datetime, limit: int, truncated: bool) -> dict:
     """Separate response evidence; never add it to ledger totals or infer a turn join."""
     policy = POLICY["hunter_responses"]
-    selected = {sid: session for sid, session in sessions.items() if session.project_id == policy["project_id"]
+    # neri-hunters owns hunter work; neri stays listed for pre-split sessions, each row keeps its project.
+    selected = {sid: session for sid, session in sessions.items() if session.project_id in policy["project_ids"]
                 and (session_work_role(session) or {}).get("id") in policy["work_roles"]}
     responses: dict[str, dict[str, dict]] = defaultdict(dict)
     duplicate_usage = unusable_usage = 0

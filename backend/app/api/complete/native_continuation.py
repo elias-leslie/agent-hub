@@ -517,11 +517,12 @@ async def execute_native_continuation(
             status_code=400, detail="Native continuation is available only for Codex models."
         )
     expected_agent = f"neri-{continuation.role}"
-    if request.project_id != "neri" or agent_used != expected_agent:
+    # Case-work roles belong to Neri Hunters; plain neri is coordination only.
+    if request.project_id != "neri-hunters" or agent_used != expected_agent:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Native continuation is limited to registered Neri inference roles."
+                "Native continuation is limited to registered Neri Hunters inference roles."
             ),
         )
     if request.model is not None or not request.disable_agent_fallbacks:
