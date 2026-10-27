@@ -34,7 +34,10 @@ def load_defaults(path: Path = DEFAULTS_FILE) -> dict[str, Any]:
 def child_env(defaults: Mapping[str, Any]) -> dict[str, str]:
     """Only the variables the harness needs to find its login; backend secrets never reach the agent."""
 
-    return {k: os.environ[k] for k in defaults["env_passthrough"] if k in os.environ}
+    env = {k: os.environ[k] for k in defaults["env_passthrough"] if k in os.environ}
+    # `codex`/`claude` on PATH may be Agent Hub's context launchers; the packet already carries the context.
+    env["AGENT_HUB_CONTEXT_BYPASS"] = "1"
+    return env
 
 
 def thinking_level(packet: HandoffPacket, model: Any, defaults: Mapping[str, Any]) -> str:

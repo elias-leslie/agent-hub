@@ -13,6 +13,7 @@ from app.llm.utils.outcomes import ProviderOutcome
 from app.services.workflow_runs.executor_codex import CodexExecutor
 from app.services.workflow_runs.executor_common import (
     FALLBACK_NOTE,
+    child_env,
     classify_failure,
     load_defaults,
 )
@@ -318,3 +319,12 @@ def test_classify_failure_reads_codes_json_bodies_and_plain_limit_text():
     soon = classify_failure("m", '{"error":{"type":"usage_limit_reached","resets_in_seconds":60}}', now=1000.0)
     assert soon is not None and soon.resets_at == 1060
     assert classify_failure("m", "connection reset") is None
+
+
+def test_child_env_bypasses_context_launchers_and_drops_backend_secrets(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("HOME", "/home/someone")
+    monkeypatch.setenv("DATABASE_URL", "postgres://secret")
+
+    env = child_env({"env_passthrough": ["HOME"]})
+
+    assert env == {"HOME": "/home/someone", "AGENT_HUB_CONTEXT_BYPASS": "1"}
