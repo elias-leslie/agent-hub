@@ -11,17 +11,16 @@ from app.services.first_party_client_service import seed_automation_owner_client
 async def test_seed_only_adds_missing_owner_identity():
     db = AsyncMock()
     db.add = MagicMock()
-    db.get.side_effect = [object(), object(), None]
+    db.get.side_effect = [object(), None]
     with (
         patch("app.services.first_party_client_service.settings.portfolio_client_id", "portfolio-id"),
         patch("app.services.first_party_client_service.settings.jobinator_client_id", "jobinator-id"),
-        patch("app.services.first_party_client_service.settings.neri_client_id", "neri-id"),
     ):
         inserted = await seed_automation_owner_clients(db)
 
-    assert inserted == ["neri"]
+    assert inserted == ["jobinator-4000"]
     db.add.assert_called_once()
     client = db.add.call_args.args[0]
-    assert client.id == "neri-id"
-    assert client.allowed_projects == '["neri"]'
+    assert client.id == "jobinator-id"
+    assert client.allowed_projects == '["jobinator-4000"]'
     db.commit.assert_awaited_once()

@@ -114,7 +114,6 @@ async def seed_automation_owner_clients(db: AsyncSession) -> list[str]:
     specs = (
         (settings.portfolio_client_id, "portfolio-ai"),
         (settings.jobinator_client_id, "jobinator-4000"),
-        (settings.neri_client_id, "neri"),
     )
     inserted: list[str] = []
     for client_id, project_id in specs:

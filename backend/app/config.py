@@ -111,7 +111,6 @@ class Settings(BaseSettings):
     summitflow_client_id: str = ""
     portfolio_client_id: str = ""
     jobinator_client_id: str = "ea338be9-55b1-4aa6-921e-6493014f6f8e"
-    neri_client_id: str = "5de295c8-c426-447f-a6f9-7cb522df5fbc"
     monkey_fight_client_id: str = ""
     # Clients allowed to move context between scopes (into or out of global or an
     # agent, or across projects). summitflow_client_id (SummitFlow and st) always is.
