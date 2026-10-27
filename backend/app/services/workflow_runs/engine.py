@@ -262,7 +262,16 @@ def _step_state(step: WorkflowStep, chain: list[str] | None = None) -> StepState
         attempts=step.attempts,
         max_attempts=step.definition.get("max_attempts"),
         pinned_model=scratch.get("pinned_model"),
+        usage_limited=tuple(scratch.get("usage_limited", ())),
     )
+
+
+def _retry_after_limit(scratch: dict[str, Any]) -> None:
+    """Waiting out a usage limit: the limited models may run again once the pause ends."""
+
+    limited = set(scratch.get("usage_limited", ()))
+    scratch["tried"] = [m for m in scratch.get("tried", []) if m not in limited]
+    scratch["usage_limited"] = []
 
 
 def _run_state(meta: dict[str, Any]) -> RunState:
@@ -483,6 +492,7 @@ class _Intent:
     provider: str
     chain: list[str]
     tried: list[str]
+    usage_limited: list[str]
     executor: str | None
     reset: bool
     hop: dict[str, Any] | None
@@ -529,11 +539,13 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
                 return {"next": "stop", "reason": "no_agent_route"}, None
         state = _step_state(step, scratch["chain"])
         untried = [m for m in state.chain if m not in state.tried]
-        unavailable = await deps.availability(untried)
+        unavailable = await deps.availability([*untried, *state.usage_limited])
         choice = choose_attempt_model(state, unavailable, now)
         if choice.model is None:
-            step.outcome = scratch
             reason = "usage_limit_wait" if choice.wait_until is not None else "chain_exhausted"
+            if reason == "usage_limit_wait":
+                _retry_after_limit(scratch)
+            step.outcome = scratch
             _pause_for_step(run, step, meta, reason, now, resume_after=choice.wait_until)
             await db.commit()
             return {"next": "stop", "reason": reason, "resume_after": choice.wait_until}, None
@@ -607,6 +619,7 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
             provider=provider,
             chain=list(chain),
             tried=list(state.tried),
+            usage_limited=list(state.usage_limited),
             executor=executor,
             reset=reset,
             hop=hop,
@@ -694,6 +707,10 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
     return result, info
 
 
+def _usage_limited(result: StepResult) -> bool:
+    return result.outcome is not None and result.outcome.kind == "usage_limit"
+
+
 async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[str, Any]:
     """Run the next eligible step of a run. ``next`` tells the caller whether to enqueue another advance."""
 
@@ -746,8 +763,10 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
             usage_limit_cooldown(result.outcome, policy, now),
             f"usage_limit:{intent.provider}",
         )
+    limited = [*intent.usage_limited, *([intent.model] if _usage_limited(result) else [])]
     unavailable = await deps.availability(
         [m for m in intent.chain if m not in {*intent.tried, intent.model}]
+        + [m for m in dict.fromkeys(limited)]
     )
     return await _commit_outcome(
         run_id,
@@ -814,6 +833,10 @@ async def _commit_outcome(
             "attempt_session_id": intent.attempt_id,
         }
         scratch.update(last=last, tried=[*scratch.get("tried", []), intent.model])
+        if _usage_limited(result):
+            scratch["usage_limited"] = list(
+                dict.fromkeys([*scratch.get("usage_limited", []), intent.model])
+            )
         if decision.hop:
             scratch["hops"] = [*scratch.get("hops", []), decision.hop]
         if notes_path:
@@ -831,6 +854,8 @@ async def _commit_outcome(
             step.status = "failed"
             _fail_run(run, meta, steps, f"{intent.step_key}: {decision.reason}", now)
         else:
+            if decision.reason == "usage_limit_wait":
+                _retry_after_limit(scratch)
             _pause_for_step(
                 run,
                 step,
@@ -1087,7 +1112,7 @@ async def resume_run(
     if decision.action == "retry":
         # A fresh pass over the agent's chain (or the model the owner names); the worktree is kept.
         refusals = {k: v for k, v in meta.get("refusals", {}).items() if k != category}
-        scratch.update(tried=[], pinned_model=decision.model, hop=None)
+        scratch.update(tried=[], usage_limited=[], pinned_model=decision.model, hop=None)
         step.status, step.outcome = "pending", scratch
         _set_meta(run, {**meta, "state": "running", "pause": None, "refusals": refusals}, now=now)
     elif decision.action == "skip":

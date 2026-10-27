@@ -69,6 +69,8 @@ class StepState:
     attempts: int = 0
     max_attempts: int | None = None
     pinned_model: str | None = None  # restart or owner pin: run this model next
+    # Tried models whose attempt ended on a usage limit; their reset still counts as a way forward.
+    usage_limited: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,16 +95,24 @@ def choose_attempt_model(
         return ModelChoice(step.pinned_model)
     tried = {*step.tried, *([after] if after else [])}
     remaining = [m for m in step.chain if m not in tried]
-    if not remaining:
+    if not remaining and not step.usage_limited:
         return ModelChoice(None, exhausted=True)
     waits: list[float] = []
+    hard_blocked = False
     for model in remaining:
         blocked = unavailable.get(model)
         if blocked is None:
             return ModelChoice(model)
-        if blocked.retry_after is not None:
+        if blocked.retry_after is None:
+            hard_blocked = True
+        else:
             waits.append(now + blocked.retry_after)
-    if waits and len(waits) == len(remaining):
+    # Models that already ran into a usage limit come back at their reset; refused or failed ones do not.
+    for model in step.usage_limited:
+        blocked = unavailable.get(model)
+        if blocked is not None and blocked.retry_after is not None:
+            waits.append(now + blocked.retry_after)
+    if waits and not hard_blocked:
         return ModelChoice(None, wait_until=min(waits))
     return ModelChoice(None, exhausted=True)
 
@@ -150,7 +160,9 @@ def _move_on(
     now: float,
     refusals: dict[str, int],
 ) -> Decision:
-    choice = choose_attempt_model(replace_tried(step, model), unavailable, now)
+    choice = choose_attempt_model(
+        replace_tried(step, model, usage_limited=kind == "usage_limit"), unavailable, now
+    )
     common = {"kind": kind, "category": category, "refusals": refusals}
     if choice.model is not None:
         return Decision(
@@ -165,8 +177,14 @@ def _move_on(
     return Decision("needs_owner", "chain_exhausted", **common)
 
 
-def replace_tried(step: StepState, model: str) -> StepState:
-    return StepState(step.chain, (*step.tried, model), step.attempts, step.max_attempts)
+def replace_tried(step: StepState, model: str, *, usage_limited: bool = False) -> StepState:
+    return StepState(
+        step.chain,
+        (*step.tried, model),
+        step.attempts,
+        step.max_attempts,
+        usage_limited=(*step.usage_limited, model) if usage_limited else step.usage_limited,
+    )
 
 
 def decide_after_attempt(

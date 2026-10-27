@@ -122,6 +122,32 @@ def test_usage_limit_skips_the_provider_and_waits_when_nothing_else_is_left() ->
     assert (moved.action, moved.next_model, moved.hop["kind"]) == ("retry", CODEX, "usage_limit")
 
 
+def test_usage_limited_models_wait_for_the_earliest_reset_instead_of_exhausting_the_chain() -> None:
+    limit = AttemptResult(
+        "failed", ProviderOutcome("usage_limit", CODEX, resets_at=int(NOW) + 300), error="limit"
+    )
+    blocked = {OPUS: Unavailable("cooldown", 900.0), CODEX: Unavailable("cooldown", 300.0)}
+    both = decide(CODEX, limit, tried=[OPUS], chain=(OPUS, CODEX), unavailable=blocked,
+                  usage_limited=(OPUS,))
+    assert (both.action, both.reason, both.wait_until) == (
+        "needs_owner",
+        "usage_limit_wait",
+        NOW + 300,
+    )
+    only = decide(OPUS, limit, chain=(OPUS,), unavailable={OPUS: Unavailable("cooldown", 60.0)})
+    assert (only.reason, only.wait_until) == ("usage_limit_wait", NOW + 60)
+    # A refusal in the chain, or a model that cannot recover, keeps chain_exhausted.
+    refusal = decide(CODEX, refused(CODEX), tried=[OPUS], chain=(OPUS, CODEX))
+    assert refusal.reason == "chain_exhausted"
+    hard = decide(
+        OPUS,
+        limit,
+        chain=(OPUS, CODEX),
+        unavailable={OPUS: Unavailable("cooldown", 60.0), CODEX: Unavailable("inactive")},
+    )
+    assert hard.reason == "chain_exhausted"
+
+
 def test_usage_limit_cooldown_runs_until_reset_or_the_policy_default() -> None:
     assert (
         usage_limit_cooldown(

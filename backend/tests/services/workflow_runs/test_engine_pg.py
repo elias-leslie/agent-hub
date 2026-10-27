@@ -290,7 +290,7 @@ async def test_usage_limit_trips_shared_cooldown_and_resumes_after_reset(
     assert result["reason"] == "usage_limit_wait"
     view = await view_of(pg_db, run_id)
     assert (
-        view["pause"]["reason"] == "usage_limit_wait" and view["pause"]["resume_after"] == NOW + 660
+        view["pause"]["reason"] == "usage_limit_wait" and view["pause"]["resume_after"] == NOW + 600
     )
 
     assert await recover_stale_steps(world.deps) == []  # still cooling down
@@ -299,7 +299,30 @@ async def test_usage_limit_trips_shared_cooldown_and_resumes_after_reset(
     world.faux.script["research"] = [FauxAction("success")]
     assert await recover_stale_steps(world.deps) == [run_id]
     assert (await world.run_to_stop(run_id))["reason"] == "completed"
-    assert [c["model"] for c in world.faux.calls if c["step"] == "research"] == [OPUS, CODEX]
+    # The limited model is untried again once its limit has reset.
+    assert [c["model"] for c in world.faux.calls if c["step"] == "research"] == [OPUS, OPUS]
+
+
+async def test_every_model_usage_limited_waits_for_the_earliest_reset(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory(
+        {
+            "research": [
+                FauxAction("usage_limit", resets_at=int(NOW) + 900),
+                FauxAction("usage_limit", resets_at=int(NOW) + 300),
+            ]
+        }
+    )
+    world.chains["researcher"] = world.chains["verifier"] = [OPUS, CODEX]
+    run_id, _ = await create_run(pg_db, example("research-report-factcheck", repo), deps=world.deps)
+    result = await world.run_to_stop(run_id)
+    # Both models were tried and both hit a usage limit: wait for the sooner reset, not chain_exhausted.
+    assert [c["model"] for c in world.faux.calls] == [OPUS, CODEX]
+    assert result["reason"] == "usage_limit_wait"
+    view = await view_of(pg_db, run_id)
+    assert view["pause"]["reason"] == "usage_limit_wait"
+    assert view["pause"]["resume_after"] == NOW + 300
 
 
 async def test_stale_heartbeat_restarts_from_checkpoint_then_fails_at_the_limit(
