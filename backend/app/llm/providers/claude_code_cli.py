@@ -66,7 +66,7 @@ from ..types import (
     Usage,
     UserMessage,
 )
-from ..utils.outcomes import ProviderOutcome, record_outcome
+from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
 
 API = "claude-code-cli"
 _SYNTHETIC_MODEL = "<synthetic>"
@@ -308,7 +308,7 @@ class _TurnState:
                 kind="refused", requested_model=requested, category=category,
                 explanation=self.refusal["explanation"], request_id=self.refusal["request_id"],
             ), f"Claude refused the request: safeguards flagged it{label}; {requested} did not answer"
-        other = sorted(name for name in self.served if not name.startswith(requested))
+        other = sorted(name for name in self.served if is_model_switch(requested, name))
         if other:
             return ProviderOutcome(kind="substituted", requested_model=requested, served_model=other[0]), (
                 _substituted_text(requested, other[0], None)
