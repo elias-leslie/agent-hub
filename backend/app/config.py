@@ -150,6 +150,10 @@ class Settings(BaseSettings):
     # owner instead (WORKFLOW_OWNER_ONLY_REFUSAL_CATEGORIES, JSON array or comma-separated).
     workflow_owner_only_refusal_categories: Annotated[list[str], NoDecode] = ["reasoning_extraction", "frontier_llm"]
 
+    # Lets a workflow step definition inject a refusal after turn N (``test_hooks``) without contacting a provider's
+    # safety classifier. Off outside tests; the engine ignores the option while this is false.
+    workflow_test_hooks_enabled: bool = False
+
     @field_validator(
         "cors_origins", "agent_hub_trusted_hosts", "workflow_owner_only_refusal_categories", mode="before"
     )
@@ -197,6 +201,15 @@ class Settings(BaseSettings):
     # app/llm/headroom_compress.py:compression_enabled_for.
     headroom_compress_tool_results: bool = False
     headroom_compress_agent_slugs: str = ""
+
+    # Direct-tool output budgets (chars). Bash output above the inline limit is spilled to a
+    # searchable scratch artifact and only a tail-weighted preview stays in context (Pi/opencode
+    # keep the tail of command output; failures and summaries are at the end). read_file stops at
+    # the byte cap with a continuation offset instead of returning an unbounded page.
+    tool_output_inline_chars: int = Field(default=50_000, ge=1_000)
+    tool_output_preview_chars: int = Field(default=4_000, ge=500)
+    tool_output_preview_tail_share: float = Field(default=0.75, ge=0.0, le=1.0)
+    tool_read_file_max_bytes: int = Field(default=50_000, ge=1_000)
 
     # Persistent Claude Code CLI sessions (app/llm/provider_support/claude_sessions.py).
     claude_session_idle_seconds: float = Field(default=600.0, gt=0)

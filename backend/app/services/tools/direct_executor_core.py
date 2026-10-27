@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any, ClassVar
 
+from app.config import settings
 from app.services.tools._executor_bash import (
     MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
 )
@@ -278,8 +279,9 @@ class DirectToolExecutor:
             working_dir=self.working_dir,
         )
 
-    async def _bash_result(self, command: str, *, threshold: int = MAX_OUTPUT_SIZE) -> ScratchOutputResult:
+    async def _bash_result(self, command: str, *, threshold: int | None = None) -> ScratchOutputResult:
         """Execute a bash command with safety checks and scratch indexing."""
+        threshold = settings.tool_output_inline_chars if threshold is None else threshold
         auto_detached = _rewrite_in_band_agent_hub_restart(command)
         if auto_detached:
             rewritten_command, message = auto_detached

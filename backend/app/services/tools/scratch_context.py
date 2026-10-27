@@ -11,7 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-DEFAULT_PREVIEW_CHARS = 4_000
+from app.config import settings
+
 DEFAULT_SEARCH_LIMIT = 5
 MAX_SEARCH_LIMIT = 20
 MAX_CONTEXT_LINES = 8
@@ -57,11 +58,13 @@ def _clamp_text(text: str, limit: int) -> str:
     return text[: max(0, limit - 28)].rstrip() + "\n... [truncated]"
 
 
-def _preview(text: str, limit: int = DEFAULT_PREVIEW_CHARS) -> str:
+def _preview(text: str, limit: int | None = None, tail_share: float | None = None) -> str:
+    limit = limit or settings.tool_output_preview_chars
     if len(text) <= limit:
         return text
-    head = max(1, (limit * 2) // 3)
-    tail = max(1, limit - head)
+    share = settings.tool_output_preview_tail_share if tail_share is None else tail_share
+    tail = max(1, int(limit * share))
+    head = max(1, limit - tail)
     return (
         text[:head].rstrip()
         + "\n... [scratch preview truncated; search artifact for full output] ...\n"

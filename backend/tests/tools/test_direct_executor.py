@@ -241,6 +241,33 @@ class TestDirectToolExecutor:
         assert "line2" in result
 
     @pytest.mark.asyncio
+    async def test_read_file_byte_cap_stops_at_line_boundary_with_resume_offset(
+        self, executor: DirectToolExecutor, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("app.config.settings.tool_read_file_max_bytes", 2_000)
+        (tmp_path / "big.txt").write_text("\n".join(f"line-{i:04d}" + "x" * 40 for i in range(500)))
+
+        result = await executor.read_file("big.txt")
+
+        assert len(result.encode()) < 2_300
+        assert "output capped at 2000 bytes" in result
+        resume = int(result.rsplit("offset=", 1)[1].rstrip(")"))
+        follow_up = await executor.read_file("big.txt", offset=resume, limit=2)
+        assert f"line-{resume:04d}" in follow_up
+        assert f"line-{resume - 1:04d}" in result
+
+    @pytest.mark.asyncio
+    async def test_read_file_under_byte_cap_is_unchanged(
+        self, executor: DirectToolExecutor, tmp_path: Path
+    ) -> None:
+        (tmp_path / "ok.txt").write_text("a\nb\nc")
+
+        result = await executor.read_file("ok.txt")
+
+        assert "capped" not in result
+        assert result.splitlines()[-1].endswith("c")
+
+    @pytest.mark.asyncio
     async def test_read_file_absolute_path(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
         """Test reading a file with absolute path."""
         test_file = tmp_path / "test.txt"

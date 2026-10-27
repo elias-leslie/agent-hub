@@ -13,13 +13,14 @@ import signal
 from contextlib import suppress
 from pathlib import Path
 
+from app.config import settings
 from app.services.tools.command_guard import get_command_guard_block_reason
 from app.utils.safe_subprocess import create_bash_process
 
 logger = logging.getLogger(__name__)
 
-# Maximum output size to return
-MAX_OUTPUT_SIZE = 100_000
+# Inline output budget; larger bash output is spilled to a scratch artifact.
+MAX_OUTPUT_SIZE = settings.tool_output_inline_chars
 PROCESS_CANCEL_GRACE_SECONDS = 2.0
 
 

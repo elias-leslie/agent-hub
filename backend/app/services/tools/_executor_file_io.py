@@ -11,6 +11,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 LARGE_OVERWRITE_MIN_BYTES = 16_000
@@ -50,10 +52,20 @@ async def read_file(
         total_lines = len(lines)
         selected = lines[offset : offset + limit]
 
-        result_lines = [
-            f"{i:6}\t{line.rstrip()}"
-            for i, line in enumerate(selected, start=offset + 1)
-        ]
+        result_lines: list[str] = []
+        used = 0
+        max_bytes = settings.tool_read_file_max_bytes
+        for i, line in enumerate(selected, start=offset + 1):
+            rendered = f"{i:6}\t{line.rstrip()}"[:max_bytes]
+            used += len(rendered.encode("utf-8")) + 1
+            if used > max_bytes and result_lines:
+                # Byte cap (Pi/opencode: 50 KB): stop at a line boundary and say where to resume.
+                return (
+                    "\n".join(result_lines)
+                    + f"\n... (output capped at {max_bytes} bytes; {total_lines - (i - 1)} more lines, "
+                    f"continue with offset={i - 1})"
+                )
+            result_lines.append(rendered)
 
         result = "\n".join(result_lines)
 

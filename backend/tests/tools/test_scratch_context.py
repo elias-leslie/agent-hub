@@ -172,3 +172,41 @@ async def test_batch_execute_rejects_too_many_commands(tmp_path: Path) -> None:
     result = await executor.batch_execute(["echo x"] * 9)
 
     assert result == "Error: batch_execute accepts at most 8 commands."
+
+
+@pytest.mark.asyncio
+async def test_bash_output_between_old_and_new_inline_limit_is_spilled_tail_first(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENT_HUB_SCRATCH_CONTEXT_DIR", str(tmp_path / "scratch"))
+    monkeypatch.setattr("app.config.settings.tool_output_inline_chars", 20_000)
+    monkeypatch.setattr("app.config.settings.tool_output_preview_chars", 1_000)
+    monkeypatch.setattr("app.config.settings.tool_output_preview_tail_share", 0.75)
+    executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", session_id="session-1")
+    command = "python3 -c \"[print(f'row {i:05d}') for i in range(4000)]\""
+
+    result = await executor.bash(command)
+
+    assert "SCRATCH_ARTIFACT_INDEXED" in result
+    preview = result.split("preview:\n", 1)[1]
+    assert len(preview) < 1_200
+    assert "row 03999" in preview  # the tail (where failures/summaries live) is kept
+    assert "row 00000" in preview  # a head sliver stays for orientation
+    assert preview.index("row 00000") < preview.index("row 03999")
+    assert preview.count("row ") < 120  # tail-weighted: most of the budget is the tail
+
+
+@pytest.mark.asyncio
+async def test_bash_output_under_inline_limit_is_not_spilled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENT_HUB_SCRATCH_CONTEXT_DIR", str(tmp_path / "scratch"))
+    monkeypatch.setattr("app.config.settings.tool_output_inline_chars", 20_000)
+    executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", session_id="session-1")
+
+    result = await executor.bash("python3 -c \"print('x' * 15000)\"")
+
+    assert "SCRATCH_ARTIFACT_INDEXED" not in result
+    assert len(result.strip()) == 15_000
