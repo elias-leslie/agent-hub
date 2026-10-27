@@ -29,7 +29,6 @@ from .context_governance import (
     ContextMaintenanceItem,
     ContextRecord,
 )
-from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
 from .model_catalog import ModelAlias, ModelCatalogEntry
@@ -92,8 +91,6 @@ __all__ = [
     "CostLog",
     "Credential",
     "CreditLot",
-    "FeedbackItem",
-    "FeedbackVote",
     "Memory",
     "MemoryInjectionMetric",
     "MemoryReviewRun",

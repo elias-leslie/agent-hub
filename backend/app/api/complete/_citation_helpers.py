@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from app.models.feedback import FeedbackItem
 from app.services.memory import (
     extract_uuid_prefixes,
     parse_memory_group_id,
@@ -37,103 +36,6 @@ async def _resolve_cited_uuids(content: str, memory_group_id: str | None) -> lis
         return []
     group_id = _build_group_id(memory_group_id)
     return list((await resolve_full_uuids(cited_prefixes, group_id)).values())
-
-
-async def _resolve_project_id(db: AsyncSession, session_id: str) -> str:
-    """Query and return project_id for a session, defaulting to 'unknown'."""
-    from app.models import Session
-
-    row = await db.execute(select(Session.project_id).where(Session.id == session_id))
-    return row.scalar_one_or_none() or "unknown"
-
-
-async def _get_existing_feedback_keys(
-    db: AsyncSession, session_id: str
-) -> set[tuple[str, str]]:
-    """Return set of (component_id, feedback_type) already stored for session."""
-    existing_query = select(FeedbackItem.component_id, FeedbackItem.feedback_type).where(
-        FeedbackItem.created_by_session_id == session_id
-    )
-    existing_rows = await db.execute(existing_query)
-    return {(r.component_id, r.feedback_type) for r in existing_rows}
-
-
-async def _create_new_feedback_items(
-    db: AsyncSession,
-    tags: list,
-    existing_keys: set[tuple[str, str]],
-    project_id: str,
-    session_id: str,
-    agent_id: str | None,
-    model_used: str | None,
-) -> tuple[int, int]:
-    """Create feedback items for tags not already in existing_keys.
-
-    Cross-session dedup: if a similar open item already exists, vote on it
-    instead of creating a duplicate.
-
-    Returns (created_count, voted_count).
-    """
-    from app.services.feedback_storage import (
-        create_feedback_item,
-        find_duplicate_candidates,
-        vote_on_item,
-    )
-
-    created = 0
-    voted = 0
-    for tag in tags:
-        key = (tag.component_id, tag.feedback_type)
-        if key in existing_keys:
-            continue
-
-        title = tag.description[:120] if tag.description else f"{tag.feedback_type} on {tag.component_id}"
-
-        # Cross-session dedup: check for existing similar items
-        try:
-            duplicates = await find_duplicate_candidates(
-                db,
-                component_id=tag.component_id,
-                feedback_type=tag.feedback_type,
-                project_id=project_id,
-                title=title,
-                limit=1,
-            )
-            if duplicates:
-                vote = await vote_on_item(
-                    db,
-                    item_id=str(duplicates[0].id),
-                    session_id=session_id,
-                    comment=tag.description,
-                    agent_slug=agent_id,
-                    model_used=model_used,
-                )
-                existing_keys.add(key)
-                logger.debug(
-                    "Dedup vote: %s/%s → existing %s",
-                    tag.component_id, tag.feedback_type, str(duplicates[0].id)[:8],
-                )
-                if vote is not None:
-                    voted += 1
-                continue
-        except Exception:
-            logger.debug("Dedup check failed, creating new item", exc_info=True)
-
-        await create_feedback_item(
-            db,
-            component_id=tag.component_id,
-            feedback_type=tag.feedback_type,
-            title=title,
-            description=tag.description or None,
-            project_id=project_id,
-            session_id=session_id,
-            agent_slug=agent_id,
-            model_used=model_used,
-            session_type="inline_tag",
-        )
-        existing_keys.add(key)
-        created += 1
-    return created, voted
 
 
 async def _track_memory_citations(

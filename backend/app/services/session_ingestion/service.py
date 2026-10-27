@@ -262,12 +262,11 @@ async def finalize_session(
     session_id: str,
     request: FinalizeSessionRequest | None = None,
 ) -> FinalizeSessionResult:
-    """Finalize a session by extracting citations, feedback, and summaries."""
+    """Finalize a session by extracting citations and summaries."""
     payload = request or FinalizeSessionRequest()
     result = await analyze_session(
         session_id=session_id,
         citation_prefixes=payload.citation_prefixes,
-        feedback_tags=payload.feedback_tags,
         summary_tags=payload.summary_tags,
         git_context=payload.git_context,
         branch=payload.branch,
@@ -277,7 +276,6 @@ async def finalize_session(
         session_id=result.session_id,
         citations_found=result.citations_found,
         citations_credited=result.citations_credited,
-        feedback_created=result.feedback_created,
         summary_stored=result.summary_stored,
     )
 

@@ -81,7 +81,6 @@ class TestAnalyzeEndpoint:
                 session_id="test-session",
                 citations_found=1,
                 citations_credited=1,
-                feedback_created=1,
                 summary_stored=True,
             ),
         ) as mock_analyze:
@@ -92,6 +91,7 @@ class TestAnalyzeEndpoint:
 
         assert response.status_code == 200
         assert response.json()["summary_stored"] is True
+        assert mock_analyze.await_args is not None
         request_arg = mock_analyze.await_args.kwargs["request"]
         assert request_arg is not None
         assert request_arg.transcript_path == "/tmp/codex-session.jsonl"

@@ -5,15 +5,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.services.memory.citation_parser import parse_feedback_tags, parse_summary_tags
+from app.services.memory.citation_parser import parse_summary_tags
 from app.services.session_display_summary import extract_outcome_summary
 
 from ._citation_helpers import (
-    _create_new_feedback_items,
-    _get_existing_feedback_keys,
     _record_citation_metrics,
     _resolve_cited_uuids,
-    _resolve_project_id,
     _store_cite_event,
     _track_memory_citations,
 )
@@ -22,38 +19,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
-
-
-async def track_inline_feedback(
-    content: str,
-    db: AsyncSession,
-    session_id: str,
-    agent_id: str | None = None,
-    model_used: str | None = None,
-    project_id: str | None = None,
-) -> int:
-    """Parse [F:type:component] tags and create deduplicated feedback items.
-
-    Returns count of feedback items created.
-    """
-    result = parse_feedback_tags(content)
-    if not result.tags:
-        return 0
-    if not project_id:
-        project_id = await _resolve_project_id(db, session_id)
-    existing_keys = await _get_existing_feedback_keys(db, session_id)
-    created, voted = await _create_new_feedback_items(
-        db, result.tags, existing_keys, project_id, session_id, agent_id, model_used
-    )
-    if created or voted:
-        await db.commit()
-        logger.info(
-            "Tracked inline feedback for session %s: created=%d voted=%d",
-            session_id,
-            created,
-            voted,
-        )
-    return created
 
 
 async def track_inline_summaries(
@@ -122,13 +87,8 @@ async def _track_inline_tags(
     db: AsyncSession,
     session_id: str,
     agent_id: str | None,
-    model_used: str | None,
 ) -> None:
-    """Run inline feedback and summary tracking, suppressing non-fatal errors."""
-    try:
-        await track_inline_feedback(content, db, session_id, agent_id=agent_id, model_used=model_used)
-    except Exception as e:
-        logger.warning("Inline feedback tracking failed (continuing): %s", e)
+    """Run inline summary tracking, suppressing non-fatal errors."""
     summary_stored = False
     try:
         summary_stored = await track_inline_summaries(content, db, session_id, agent_id=agent_id)
@@ -154,7 +114,7 @@ async def track_citations(
     """Track memory citations in content. Returns list of cited UUIDs."""
     if not content:
         return []
-    await _track_inline_tags(content, db, session_id, agent_id, model_used)
+    await _track_inline_tags(content, db, session_id, agent_id)
     if not loaded_memory_uuids:
         return []
     try:
@@ -182,7 +142,7 @@ async def track_citations_with_metrics(
     if not content:
         return []
     if db:
-        await _track_inline_tags(content, db, session_id, agent_id, model_used)
+        await _track_inline_tags(content, db, session_id, agent_id)
     if not loaded_memory_uuids:
         return []
     try:

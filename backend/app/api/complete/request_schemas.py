@@ -86,7 +86,6 @@ class WorkContext(BaseModel):
     task_id: str | None = Field(default=None, max_length=100)
     task_title: str | None = Field(default=None, max_length=500)
     task_summary: str | None = Field(default=None, max_length=5000)
-    feedback_id: str | None = Field(default=None, max_length=100)
     design_id: str | None = Field(default=None, max_length=100)
     artifact_summary: str | None = Field(default=None, max_length=5000)
     surface: str | None = Field(default=None, max_length=100)

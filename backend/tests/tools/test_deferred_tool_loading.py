@@ -65,7 +65,6 @@ def test_visible_tool_names_filter_before_catalog_loading() -> None:
             "query_sessions",
             "inspect_session",
             "schedule_job",
-            "manage_feedback",
         },
     )
 

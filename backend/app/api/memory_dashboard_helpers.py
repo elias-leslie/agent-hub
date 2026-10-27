@@ -95,8 +95,8 @@ async def run_sync_summarize(
             transcript_path=transcript_path,
             git_context=git_context,
         )
-        # Fire transcript-aware session analysis after summary storage so citations,
-        # feedback tags, and inline summaries are persisted for dashboard analytics.
+        # Fire transcript-aware session analysis after summary storage so citations
+        # and inline summaries are persisted for dashboard analytics.
         task = asyncio.create_task(analyze_session(session_id, transcript_path=transcript_path))
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)

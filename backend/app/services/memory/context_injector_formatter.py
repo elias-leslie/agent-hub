@@ -37,10 +37,6 @@ MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer retrieved memory over pre-
 - If the request says the rule is vague, remembered, or not exact, treat that as a trigger to open the exact episode first
 - Use `st memory search <query>` for adjacent guidance when the current summary is not enough"""
 
-MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
-    MEMORY_CONTEXT_HEADER_BASE
-    + "\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)"
-)
 STARTUP_FALLBACK_LINE = (
     "- If local memory lookup is unavailable in this shell, treat the full-text startup-critical rules below as authoritative for command-shape and workflow questions. Use repo-local evidence for implementation facts or explicit local overrides, not to dilute these rules."
 )
@@ -48,7 +44,7 @@ STARTUP_FALLBACK_LINE = (
 CODEX_STARTUP_FALLBACK_LINE = STARTUP_FALLBACK_LINE
 
 # Keep for backward compatibility
-MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
+MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_BASE
 
 __all__ = [
     "CHARS_PER_TOKEN",
@@ -56,7 +52,6 @@ __all__ = [
     "MANDATE_DIRECTIVE",
     "MEMORY_CONTEXT_HEADER",
     "MEMORY_CONTEXT_HEADER_BASE",
-    "MEMORY_CONTEXT_HEADER_WITH_CITATIONS",
     "REFERENCE_DIRECTIVE",
     "format_progressive_context",
     "format_relevance_debug_block",
@@ -145,8 +140,7 @@ def _build_memory_context_header(
     include_citations: bool,
     profile: MemoryConsumerProfile,
 ) -> str:
-    header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
-    lines = header.splitlines()
+    lines = MEMORY_CONTEXT_HEADER_BASE.splitlines()
     if getattr(context, "mandates", []) or getattr(context, "guardrails", []):
         lines.insert(1, "- Mandates/Guardrails below are authoritative - follow them exactly")
         if include_citations:

@@ -25,7 +25,6 @@ _DEFAULTS: dict[str, object] = {
     "track_referenced_batch": None,
     "store_cite_event": None,
     "update_citation_metrics": 1,
-    "_process_feedback_tags": 0,
     "_process_summary_tags": False,
 }
 
@@ -87,9 +86,9 @@ class TestAnalyzeSession:
     async def test_analyze_session_empty_prefixes_returns_zero(self) -> None:
         """Empty citation list returns zero counts."""
         with patch(
-            "app.services.memory.session_analysis._process_feedback_tags",
+            "app.services.memory.session_analysis._process_summary_tags",
             new_callable=AsyncMock,
-            return_value=0,
+            return_value=False,
         ):
             result = await analyze_session(
                 session_id="test-session",
@@ -156,15 +155,14 @@ class TestAnalyzeSession:
 
     @pytest.mark.asyncio
     async def test_analyze_session_extracts_artifacts_from_transcript_path(self, tmp_path: Path) -> None:
-        """transcript_path fallback extracts citations, feedback, and summary tags."""
+        """transcript_path fallback extracts citations and summary tags."""
         transcript = tmp_path / "codex-session.jsonl"
         transcript.write_text(
             "\n".join(
                 [
                     (
                         '{"type":"response_item","payload":{"type":"message","role":"assistant",'
-                        '"content":[{"type":"output_text","text":"Applied: [M:abc12345] '
-                        '[[F:idea:ah.hooks:add codex transcript support]]"}]}}'
+                        '"content":[{"type":"output_text","text":"Applied: [M:abc12345]"}]}}'
                     ),
                     (
                         '{"type":"response_item","payload":{"type":"message","role":"assistant",'
@@ -176,11 +174,9 @@ class TestAnalyzeSession:
 
         with _patched(
             resolve_full_uuids={"abc12345": "abc12345-full"},
-            _process_feedback_tags=1,
             _process_summary_tags=True,
         ) as mocks:
             mock_resolve = mocks["resolve_full_uuids"]
-            mock_feedback = mocks["_process_feedback_tags"]
             mock_summary = mocks["_process_summary_tags"]
             result = await analyze_session(
                 session_id="test-session",
@@ -188,13 +184,8 @@ class TestAnalyzeSession:
             )
 
         assert result.citations_found == 1
-        assert result.feedback_created == 1
         assert result.summary_stored is True
         mock_resolve.assert_called_once_with(["abc12345"], group_id="global")
-        mock_feedback.assert_called_once_with(
-            "test-session",
-            ["[[F:idea:ah.hooks:add codex transcript support]]"],
-        )
         mock_summary.assert_called_once_with(
             "test-session",
             ["[[S:completed:wired codex transcript parsing]]"],
@@ -209,7 +200,7 @@ class TestAnalyzeSession:
         transcript.write_text(
             '{"type":"response_item","payload":{"type":"message","role":"assistant",'
             '"content":[{"type":"output_text","text":"Applied: [M:abc12345] '
-            '[[F:praise:ah.memory:replay worked]] [[S:completed:replayed analysis]]"}]}}'
+            '[[S:completed:replayed analysis]]"}]}}'
         )
 
         mock_result = MagicMock()
@@ -230,21 +221,14 @@ class TestAnalyzeSession:
             patch(f"{_MODULE}._get_session_factory", return_value=mock_factory),
             _patched(
                 resolve_full_uuids={"abc12345": "abc12345-full"},
-                _process_feedback_tags=1,
                 _process_summary_tags=True,
             ) as mocks,
         ):
-            mock_feedback = mocks["_process_feedback_tags"]
             mock_summary = mocks["_process_summary_tags"]
             result = await analyze_session(session_id="test-session")
 
         assert result.citations_found == 1
-        assert result.feedback_created == 1
         assert result.summary_stored is True
-        mock_feedback.assert_called_once_with(
-            "test-session",
-            ["[[F:praise:ah.memory:replay worked]]"],
-        )
         mock_summary.assert_called_once_with(
             "test-session",
             ["[[S:completed:replayed analysis]]"],

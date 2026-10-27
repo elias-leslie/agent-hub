@@ -197,7 +197,6 @@ def build_tool_registry(
         query_sessions,
         steer_consultation,
     )
-    from app.services.tools._executor_feedback import manage_feedback
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
@@ -212,7 +211,6 @@ def build_tool_registry(
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_backups": _make_manage_backups_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
-        "manage_feedback": manage_feedback,
         "query_sessions": query_sessions,
         "inspect_session": inspect_session,
     }

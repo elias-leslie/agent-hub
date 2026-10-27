@@ -24,10 +24,6 @@ class AnalyzeRequest(BaseModel):
         default=None,
         description="8-char hex UUID prefixes from CC transcript (optional for API sessions)",
     )
-    feedback_tags: list[str] | None = Field(
-        default=None,
-        description="Raw feedback tag strings from CC transcript (optional)",
-    )
     summary_tags: list[str] | None = Field(
         default=None,
         description="Raw [[S:outcome:description]] strings from CC transcript (optional)",
@@ -52,7 +48,6 @@ class AnalyzeResponse(BaseModel):
     session_id: str
     citations_found: int
     citations_credited: int
-    feedback_created: int = 0
     summary_stored: bool = False
 
 
@@ -113,7 +108,6 @@ async def analyze_session(
             session_id=session_id,
             request=FinalizeSessionRequest(
                 citation_prefixes=request.citation_prefixes if request else None,
-                feedback_tags=request.feedback_tags if request else None,
                 summary_tags=request.summary_tags if request else None,
                 git_context=request.git_context if request else None,
                 branch=request.branch if request else None,
@@ -124,7 +118,6 @@ async def analyze_session(
             session_id=result.session_id,
             citations_found=result.citations_found,
             citations_credited=result.citations_credited,
-            feedback_created=result.feedback_created,
             summary_stored=result.summary_stored,
         )
     except Exception as e:

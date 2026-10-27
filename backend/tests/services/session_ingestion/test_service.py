@@ -1142,7 +1142,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
                         "exec_command",
                         {
                             "cmd": (
-                                'st feedback report infra '
+                                'st create -t bug '
                                 '"Detached rebuilds stayed active while agent-hub-frontend stop timed out '
                                 'and was SIGKILLed before restart. Health recovered, but systemctl status '
                                 'looked hung until the transient unit disappeared, which made runtime '

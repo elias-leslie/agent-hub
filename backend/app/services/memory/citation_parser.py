@@ -1,23 +1,17 @@
 """Citation parser for extracting rule IDs from LLM responses.
 
-Parses [M:uuid8], [G:uuid8], [R:uuid8] citations and inline [[F:...]] / [[S:...]] tags.
+Parses [M:uuid8], [G:uuid8], [R:uuid8] citations and inline [[S:...]] summary tags.
 Data models and regex patterns live in _citation_types.py; this module contains logic.
 """
 
 import logging
-import re
 
 from ._citation_types import (
     CITATION_PATTERN,
-    FEEDBACK_TAG_PATTERN,
-    FEEDBACK_TAG_PATTERN_LEGACY,
     SUMMARY_TAG_PATTERN,
-    VALID_FEEDBACK_TYPES,
     VALID_SUMMARY_OUTCOMES,
     Citation,
     CitationType,
-    FeedbackParseResult,
-    FeedbackTag,
     ParseResult,
     SummaryParseResult,
     SummaryTag,
@@ -26,13 +20,9 @@ from ._citation_types import (
 __all__ = [
     "Citation",
     "CitationType",
-    "FeedbackParseResult",
-    "FeedbackTag",
     "ParseResult",
     "SummaryParseResult",
     "SummaryTag",
-    "extract_feedback_tag_strings",
-    "extract_feedback_tags",
     "extract_summary_tag_strings",
     "extract_summary_tags",
     "extract_uuid_prefixes",
@@ -42,7 +32,6 @@ __all__ = [
     "format_reference_citation",
     "normalize_terminal_summary_tag",
     "parse_citations",
-    "parse_feedback_tags",
     "parse_summary_tags",
     "resolve_full_uuids",
 ]
@@ -150,57 +139,6 @@ def format_guardrail_citation(uuid: str) -> str:
 def format_reference_citation(uuid: str) -> str:
     """Format a reference citation."""
     return format_citation(uuid, CitationType.REFERENCE)
-
-
-def _parse_feedback_with_pattern(
-    response_text: str, pattern: re.Pattern[str],
-) -> list[FeedbackTag]:
-    """Parse feedback tags using a specific regex pattern."""
-    tags: list[FeedbackTag] = []
-    for match in pattern.finditer(response_text):
-        feedback_type = match.group(1).lower()
-        component_id = match.group(2).lower()
-        description = match.group(3).strip()
-        if feedback_type not in VALID_FEEDBACK_TYPES:
-            continue
-        tags.append(FeedbackTag(
-            feedback_type=feedback_type,
-            component_id=component_id,
-            description=description,
-        ))
-    return tags
-
-
-def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
-    """Parse feedback tags from response text (new [[F:...]] then legacy [F:...] format)."""
-    if not response_text:
-        return FeedbackParseResult(tags=[])
-
-    tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN)
-    if not tags:
-        tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN_LEGACY)
-
-    counts = {t: sum(1 for tag in tags if tag.feedback_type == t) for t in VALID_FEEDBACK_TYPES}
-    logger.debug("Parsed %d feedback tags from response", len(tags))
-    return FeedbackParseResult(tags=tags, friction_count=counts["friction"],
-        praise_count=counts["praise"], idea_count=counts["idea"],
-        improvement_count=counts["improvement"])
-
-
-def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
-    """Convenience: extract feedback tags as list."""
-    return parse_feedback_tags(response_text).tags
-
-
-def extract_feedback_tag_strings(response_text: str) -> list[str]:
-    """Extract raw feedback tag strings from response text."""
-    if not response_text:
-        return []
-
-    tags = [match.group(0) for match in FEEDBACK_TAG_PATTERN.finditer(response_text)]
-    if tags:
-        return tags
-    return [match.group(0).strip() for match in FEEDBACK_TAG_PATTERN_LEGACY.finditer(response_text)]
 
 
 def normalize_terminal_summary_tag(response_text: str) -> str:

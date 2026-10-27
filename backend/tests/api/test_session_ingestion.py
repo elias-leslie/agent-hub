@@ -584,7 +584,6 @@ class TestSessionIngestionAPI:
                 session_id="session-123",
                 citations_found=3,
                 citations_credited=2,
-                feedback_created=1,
                 summary_stored=True,
             ),
         ):

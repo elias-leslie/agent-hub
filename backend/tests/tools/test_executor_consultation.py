@@ -217,7 +217,7 @@ async def test_inspect_session_returns_summary_and_latest_message() -> None:
         session_id="sess-1",
         event_type="tool_use",
         content=None,
-        tool_name="manage_feedback",
+        tool_name="query_sessions",
         turn=1,
         sequence=2,
     )
@@ -237,7 +237,7 @@ async def test_inspect_session_returns_summary_and_latest_message() -> None:
     assert "Session: sess-1" in result
     assert "Agent: governance-auditor" in result
     assert "Summary: Governance audit found a tool gap" in result
-    assert "Recent tools: manage_feedback" in result
+    assert "Recent tools: query_sessions" in result
     assert "VERDICT: action_needed" in result
 
 

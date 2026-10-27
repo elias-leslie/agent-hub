@@ -91,7 +91,6 @@ export interface CompletionRequest {
     task_id?: string;
     task_title?: string;
     task_summary?: string;
-    feedback_id?: string;
     design_id?: string;
     artifact_summary?: string;
     surface?: string;

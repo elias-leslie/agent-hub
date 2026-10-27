@@ -286,17 +286,17 @@ async def _track_citations(
     agent_id: str | None = None,
     model_used: str | None = None,
 ) -> None:
-    """Track inline tags (feedback, summaries, citations) in streaming content."""
+    """Track inline tags (summaries, citations) in streaming content."""
     if not accumulated_content:
         return
-    # Process inline feedback + summary tags through the shared non-streaming path.
+    # Process inline summary tags through the shared non-streaming path.
     try:
         from app.db import async_session
 
         from .citation_tracker import _track_inline_tags
 
         async with async_session() as db:
-            await _track_inline_tags(accumulated_content, db, session_id, agent_id, model_used)
+            await _track_inline_tags(accumulated_content, db, session_id, agent_id)
             await db.commit()
     except Exception as exc:
         logger.warning("Streaming inline tag tracking failed: %s", exc)

@@ -54,7 +54,6 @@ async def upsert_session_binding(
     pane_id: str | None = None,
     project_id: str | None = None,
     task_id: str | None = None,
-    feedback_id: str | None = None,
     design_id: str | None = None,
     source_client: str | None = None,
     work_context: dict[str, Any] | None = None,
@@ -68,7 +67,6 @@ async def upsert_session_binding(
             SessionBinding.session_id == session_id,
             SessionBinding.project_id == project_id,
             SessionBinding.task_id == task_id,
-            SessionBinding.feedback_id == feedback_id,
             SessionBinding.design_id == design_id,
         )
     binding = (await db.execute(stmt.limit(1))).scalar_one_or_none()
@@ -78,7 +76,6 @@ async def upsert_session_binding(
     binding.session_id = session_id
     binding.project_id = project_id
     binding.task_id = task_id
-    binding.feedback_id = feedback_id
     binding.design_id = design_id
     binding.source_client = source_client
     binding.work_context = work_context or {}
@@ -108,7 +105,6 @@ async def bind_request_context(
         pane_id=str(pane_id) if pane_id else None,
         project_id=context.get("project_id") or session.project_id,
         task_id=context.get("task_id") or session.external_id,
-        feedback_id=context.get("feedback_id"),
         design_id=context.get("design_id"),
         source_client=source.get("source_client"),
         work_context=context,

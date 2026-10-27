@@ -18,7 +18,8 @@ _APPLIED_CITATION_RE = re.compile(
     r"\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?",
     re.IGNORECASE,
 )
-_FEEDBACK_RE = re.compile(r"\[\[F:.*?(?:\]\]|$)", re.IGNORECASE)
+# Agent feedback tags are retired, but stored session events still contain them.
+_LEGACY_FEEDBACK_TAG_RE = re.compile(r"\[\[F:.*?(?:\]\]|$)", re.IGNORECASE)
 _SUMMARY_RE = re.compile(r"\[\[S:.*?(?:\]\]|$)", re.IGNORECASE)
 _HEARTBEAT_PREFIX_RE = re.compile(r"^\s*HEARTBEAT_(?:OK|ACTION)\s*-?\s*", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -97,7 +98,7 @@ def clean_display_summary_text(text: str | None) -> str | None:
     )
     cleaned = _NARRATION_TAG_RE.sub(" ", cleaned)
     cleaned = _APPLIED_CITATION_RE.sub(" ", cleaned)
-    cleaned = _FEEDBACK_RE.sub(" ", cleaned)
+    cleaned = _LEGACY_FEEDBACK_TAG_RE.sub(" ", cleaned)
     cleaned = _SUMMARY_RE.sub(" ", cleaned)
     cleaned = _HEARTBEAT_PREFIX_RE.sub(" ", cleaned)
     cleaned = (

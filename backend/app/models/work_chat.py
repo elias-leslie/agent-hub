@@ -27,7 +27,6 @@ class SessionBinding(Base):
     pane_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     task_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    feedback_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     design_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     source_client: Mapped[str | None] = mapped_column(String(100), nullable=True)
     work_context: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=dict)

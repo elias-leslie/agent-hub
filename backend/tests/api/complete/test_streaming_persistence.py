@@ -39,7 +39,6 @@ async def test_track_citations_reuses_shared_inline_tag_tracker() -> None:
         db,
         "session-123",
         "coder",
-        "codex/gpt-5.4",
     )
     db.commit.assert_awaited_once()
 

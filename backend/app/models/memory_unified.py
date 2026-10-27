@@ -1,7 +1,7 @@
 """Unified memory system models — PostgreSQL + pgvector.
 
 Tables:
-- memories: All memory types (mandate, guardrail, reference, feedback, journal, continuity)
+- memories: All memory types (mandate, guardrail, reference, journal, continuity)
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from .base import Base
 
 
 class Memory(Base):
-    """Unified memory record — stores mandates, guardrails, references, feedback, journal, continuity."""
+    """Unified memory record — stores mandates, guardrails, references, journal, continuity."""
 
     __tablename__ = "memories"
 
@@ -54,7 +54,7 @@ class Memory(Base):
     # Classification
     memory_type: Mapped[str] = mapped_column(
         String(20), nullable=False
-    )  # mandate, guardrail, reference, feedback, journal, continuity
+    )  # mandate, guardrail, reference, journal, continuity
     scope: Mapped[str] = mapped_column(
         String(100), nullable=False, server_default="global"
     )  # global, project:<id>, agent:<slug>
@@ -129,7 +129,6 @@ class Memory(Base):
     metadata_: Mapped[dict | None] = mapped_column(
         "metadata", JSONB, server_default="{}", nullable=True
     )
-    # feedback: {component, feedback_type, votes: [], resolution: {}, severity}
     # journal: {entry_type}
     # continuity: {session_id, is_session_summary}
 

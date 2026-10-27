@@ -201,7 +201,6 @@ class FinalizeSessionRequest(BaseModel):
     """Canonical finalization request."""
 
     citation_prefixes: list[str] | None = None
-    feedback_tags: list[str] | None = None
     summary_tags: list[str] | None = None
     git_context: str | None = None
     branch: str | None = None
@@ -214,7 +213,6 @@ class FinalizeSessionResult(BaseModel):
     session_id: str
     citations_found: int
     citations_credited: int
-    feedback_created: int = 0
     summary_stored: bool = False
 
 

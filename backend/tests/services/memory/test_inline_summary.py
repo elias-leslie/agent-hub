@@ -187,11 +187,6 @@ class TestAnalyzeSessionSummaryIntegration:
         """analyze_session forwards summary_tags and returns summary_stored."""
         with (
             patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
-            patch(
                 "app.services.memory.session_analysis._process_summary_tags",
                 new_callable=AsyncMock,
                 return_value=True,
@@ -217,11 +212,6 @@ class TestAnalyzeSessionSummaryIntegration:
     async def test_analyze_session_without_summary_tags(self) -> None:
         """analyze_session works without summary_tags (backward compat)."""
         with (
-            patch(
-                "app.services.memory.session_analysis._process_feedback_tags",
-                new_callable=AsyncMock,
-                return_value=0,
-            ),
             patch(
                 "app.services.memory.session_analysis._process_summary_tags",
                 new_callable=AsyncMock,

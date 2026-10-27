@@ -266,7 +266,7 @@ async def finalize_session_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
     request: FinalizeSessionRequest | None = None,
 ) -> FinalizeSessionResult:
-    """Finalize a session by extracting citations, feedback, and summaries."""
+    """Finalize a session by extracting citations and summaries."""
     if not getattr(http_request.state, "is_internal", False):
         try:
             session = await get_session_or_404(db, session_id)

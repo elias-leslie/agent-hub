@@ -17,7 +17,6 @@ from app.services._session_metadata_helpers import metadata_paths
 from app.services.ownership_lanes import infer_task_id
 
 from .citation_parser import (
-    extract_feedback_tags,
     extract_summary_tag_strings,
     extract_uuid_prefixes,
 )
@@ -53,36 +52,6 @@ async def extract_citations_from_events(session_id: str) -> list[str]:
             all_prefixes.update(prefixes)
 
     return list(all_prefixes)
-
-
-async def extract_feedback_from_events(session_id: str) -> list[dict]:
-    """Extract inline feedback tags from session_events assistant messages.
-
-    Returns list of dicts with feedback_type, component_id, description.
-    """
-    session_factory = _get_session_factory()
-
-    async with session_factory() as db:
-        query = (
-            select(SessionEvent.content)
-            .where(SessionEvent.session_id == session_id)
-            .where(SessionEvent.event_type == "assistant_message")
-        )
-        result = await db.execute(query)
-        rows = result.scalars().all()
-
-    all_tags: list[dict] = []
-    seen: set[tuple[str, str]] = set()
-    for content in rows:
-        if content:
-            tags = extract_feedback_tags(content)
-            for tag in tags:
-                key = (tag.component_id, tag.feedback_type)
-                if key not in seen:
-                    all_tags.append(tag.model_dump())
-                    seen.add(key)
-
-    return all_tags
 
 
 async def extract_summary_tags_from_events(session_id: str) -> list[str]:

@@ -12,8 +12,6 @@ import pytest
 import typer
 from agent_hub_st import __main__ as entrypoint
 from agent_hub_st.completion import call_complete
-from agent_hub_st.feedback_api import feedback_request
-from agent_hub_st.feedback_helpers import build_report_body
 from agent_hub_st.memory_api import agent_hub_request
 from agent_hub_st.prompt_api import prompt_api
 from st_sdk.runtime import describe_app
@@ -22,7 +20,6 @@ EXPECTED_NAMESPACES = {
     "agents",
     "automations",
     "complete",
-    "feedback",
     "mandates",
     "memory",
     "models",
@@ -102,14 +99,12 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
 
 
 def test_public_helper_contract_is_versioned_and_importable() -> None:
-    assert agent_hub_st.PUBLIC_HELPER_API_VERSION == 1
-    assert agent_hub_st.__version__ == "0.3.1"
+    assert agent_hub_st.PUBLIC_HELPER_API_VERSION == 2
+    assert agent_hub_st.__version__ == "0.4.0"
     assert all(
         callable(helper)
         for helper in (
             call_complete,
-            feedback_request,
-            build_report_body,
             agent_hub_request,
             prompt_api,
         )

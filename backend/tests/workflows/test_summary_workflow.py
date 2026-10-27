@@ -28,7 +28,6 @@ async def test_run_sync_summarize_passes_transcript_path_to_background_analysis(
             new_callable=AsyncMock,
             return_value=SimpleNamespace(
                 citations_credited=1,
-                feedback_created=1,
                 summary_stored=True,
             ),
         ) as mock_analyze,
@@ -53,7 +52,7 @@ async def test_run_sync_summarize_passes_transcript_path_to_background_analysis(
 
 @pytest.mark.asyncio
 async def test_session_summary_task_runs_transcript_aware_analysis() -> None:
-    """Async summary task must persist citations/feedback from transcript-only sessions."""
+    """Async summary task must persist citations/summaries from transcript-only sessions."""
     from app.workflows.summary import SummaryInput, session_summary_task
 
     summary_result = SimpleNamespace(
@@ -65,7 +64,6 @@ async def test_session_summary_task_runs_transcript_aware_analysis() -> None:
     )
     analysis_result = SimpleNamespace(
         citations_credited=3,
-        feedback_created=2,
         summary_stored=True,
     )
 
@@ -102,5 +100,4 @@ async def test_session_summary_task_runs_transcript_aware_analysis() -> None:
         branch="main",
     )
     assert result["citations_credited"] == 3
-    assert result["feedback_created"] == 2
     assert result["summary_stored"] is True

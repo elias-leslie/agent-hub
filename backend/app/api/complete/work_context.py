@@ -18,7 +18,6 @@ _LABELS: dict[str, str] = {
     "task_id": "task",
     "task_title": "task_title",
     "task_summary": "task_summary",
-    "feedback_id": "feedback",
     "design_id": "design",
     "artifact_summary": "artifact_summary",
     "surface": "surface",

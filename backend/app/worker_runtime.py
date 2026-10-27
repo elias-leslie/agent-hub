@@ -18,7 +18,6 @@ from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.scheduled import (
     data_retention_task,
-    feedback_cleanup_task,
     memory_cleanup_task,
     memory_governance_task,
     session_cleanup_task,
@@ -46,7 +45,6 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     tier_optimizer_task,
     memory_cleanup_task,
     memory_governance_task,
-    feedback_cleanup_task,
     data_retention_task,
     session_summary_task,
     observation_processing_task,

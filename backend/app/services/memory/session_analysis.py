@@ -11,13 +11,11 @@ from app.db import _get_session_factory
 from app.models import Session
 
 from .citation_parser import (
-    extract_feedback_tag_strings,
     extract_summary_tag_strings,
     extract_uuid_prefixes,
     resolve_full_uuids,
 )
 from .metrics_collector import update_citation_metrics
-from .session_analysis_feedback import fetch_feedback_tag_dicts, persist_feedback_items
 from .session_analysis_summary import build_git_digest
 from .session_queries import (
     extract_citations_from_events,
@@ -40,7 +38,6 @@ class AnalysisResult:
     session_id: str
     citations_found: int
     citations_credited: int
-    feedback_created: int = 0
     summary_stored: bool = False
 
 
@@ -57,7 +54,6 @@ class TaskOutcomeResult:
 @dataclass(frozen=True)
 class _TranscriptArtifacts:
     citation_prefixes: list[str]
-    feedback_tags: list[str]
     summary_tags: list[str]
 
 
@@ -90,16 +86,15 @@ async def _load_summary_context(session_id: str) -> _SummaryContext | None:
 
 
 def _load_transcript_artifacts(transcript_path: str | None) -> _TranscriptArtifacts | None:
-    """Load inline citations, feedback, and summaries from a transcript file."""
+    """Load inline citations and summaries from a transcript file."""
     if not transcript_path:
         return None
     from .summary_transcript import read_transcript_text
     transcript_text = read_transcript_text(transcript_path)
     if not transcript_text:
-        return _TranscriptArtifacts(citation_prefixes=[], feedback_tags=[], summary_tags=[])
+        return _TranscriptArtifacts(citation_prefixes=[], summary_tags=[])
     return _TranscriptArtifacts(
         citation_prefixes=extract_uuid_prefixes(transcript_text),
-        feedback_tags=extract_feedback_tag_strings(transcript_text),
         summary_tags=extract_summary_tag_strings(transcript_text),
     )
 
@@ -129,27 +124,6 @@ async def _credit_citations(session_id: str, resolved_uuids: list[str]) -> int:
     all_cited_uuids = list(dict.fromkeys([*sorted(existing_uuids), *resolved_uuids]))
     await update_citation_metrics(session_id=session_id, memories_cited=all_cited_uuids)
     return len(new_uuids)
-
-
-async def _process_feedback_tags(
-    session_id: str,
-    feedback_tags: list[str] | None = None,
-) -> int:
-    """Process feedback tags from CC transcript or session events."""
-    tag_dicts = await fetch_feedback_tag_dicts(session_id, feedback_tags)
-    if not tag_dicts:
-        return 0
-    async with _get_session_factory()() as db:
-        row = await db.execute(
-            select(Session.project_id, Session.agent_slug).where(Session.id == session_id)
-        )
-        session_info = row.one_or_none()
-        if not session_info:
-            logger.warning("Session %s not found for feedback processing", session_id)
-            return 0
-        return await persist_feedback_items(
-            db, session_id, tag_dicts, session_info.project_id, session_info.agent_slug,
-        )
 
 
 async def _process_summary_tags(
@@ -196,27 +170,20 @@ def _apply_summary_context(
 async def _process_session_tags(
     session_id: str,
     artifacts: _TranscriptArtifacts | None,
-    feedback_tags: list[str] | None,
     summary_tags: list[str] | None,
     git_context: str | None,
     branch: str | None,
-) -> tuple[int, bool]:
-    """Run feedback and summary tag processing; return (feedback_created, summary_stored)."""
-    effective_feedback = feedback_tags if feedback_tags is not None else (
-        artifacts.feedback_tags if artifacts is not None else None
-    )
+) -> bool:
+    """Run summary tag processing; return whether a summary was stored."""
     effective_summary = summary_tags if summary_tags is not None else (
         artifacts.summary_tags if artifacts is not None else await extract_summary_tags_from_events(session_id)
     )
-    feedback_created = await _process_feedback_tags(session_id, effective_feedback)
-    summary_stored = await _process_summary_tags(session_id, effective_summary, git_context, branch)
-    return feedback_created, summary_stored
+    return await _process_summary_tags(session_id, effective_summary, git_context, branch)
 
 
 async def analyze_session(
     session_id: str,
     citation_prefixes: list[str] | None = None,
-    feedback_tags: list[str] | None = None,
     summary_tags: list[str] | None = None,
     git_context: str | None = None,
     branch: str | None = None,
@@ -231,28 +198,27 @@ async def analyze_session(
 
     artifacts = _load_transcript_artifacts(transcript_path)
     prefixes = await _resolve_prefixes(session_id, citation_prefixes, artifacts)
-    feedback_created, summary_stored = await _process_session_tags(
-        session_id, artifacts, feedback_tags, summary_tags, git_context, branch,
+    summary_stored = await _process_session_tags(
+        session_id, artifacts, summary_tags, git_context, branch,
     )
 
     if not prefixes:
         return AnalysisResult(
             session_id=session_id, citations_found=0, citations_credited=0,
-            feedback_created=feedback_created, summary_stored=summary_stored,
+            summary_stored=summary_stored,
         )
 
     group_id = await get_session_group_id(session_id)
     resolved_uuids = list((await resolve_full_uuids(prefixes, group_id=group_id)).values())
     citations_credited = await _credit_citations(session_id, resolved_uuids)
     logger.info(
-        "Session %s: found %d citation prefixes, credited %d, feedback %d, summary %s",
-        session_id, len(prefixes), citations_credited, feedback_created, summary_stored,
+        "Session %s: found %d citation prefixes, credited %d, summary %s",
+        session_id, len(prefixes), citations_credited, summary_stored,
     )
     return AnalysisResult(
         session_id=session_id,
         citations_found=len(prefixes),
         citations_credited=citations_credited,
-        feedback_created=feedback_created,
         summary_stored=summary_stored,
     )
 

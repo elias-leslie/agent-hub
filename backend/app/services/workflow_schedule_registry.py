@@ -69,13 +69,6 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
         category="memory",
     ),
     WorkflowScheduleDefinition(
-        schedule_id="feedback_cleanup",
-        label="Feedback cleanup",
-        description="Archives and purges aged feedback lifecycle data.",
-        cron="30 3 * * *",
-        category="maintenance",
-    ),
-    WorkflowScheduleDefinition(
         schedule_id="memory_governance",
         label="Memory governance",
         description="Collects memory-governance health and policy drift snapshots.",

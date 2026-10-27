@@ -88,7 +88,7 @@ class DirectToolExecutor:
         "research_web", "search_web", "fetch_web_page", "tool_search",
         "propose_thorough", "propose_committee", "propose_honing", "start_research",
         "steer_consultation", "list_consultations", "cancel_consultation",
-        "manage_tasks", "manage_backups", "manage_model_config", "manage_feedback",
+        "manage_tasks", "manage_backups", "manage_model_config",
         "log_agent_performance", "review_agent_performance",
         "query_sessions", "inspect_session",
     })

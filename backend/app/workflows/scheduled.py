@@ -48,12 +48,6 @@ class MemoryCleanupResult(BaseModel):
     reason: str = ""
 
 
-class FeedbackCleanupResult(BaseModel):
-    status: str
-    archived: int = 0
-    purged: int = 0
-
-
 class DataRetentionResult(BaseModel):
     status: str
     request_logs_deleted: int = 0
@@ -185,36 +179,6 @@ async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     ctx.log(
         f"Memory cleanup: retired={result.retired}, consolidated={result.consolidated}, "
         f"suggestions={result.redundancy_suggestions}, skipped={result.skipped}"
-    )
-    return result.model_dump()
-
-
-@hatchet.task(
-    name="feedback-cleanup",
-    input_validator=EmptyInput,
-    execution_timeout="180s",
-    concurrency=ConcurrencyExpression(
-        expression="'feedback_cleanup'",
-        max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
-    ),
-)
-async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
-    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
-    from app.tasks.feedback_cleanup import cleanup_feedback_lifecycle
-
-    if not await is_workflow_schedule_enabled("feedback_cleanup", automation_run_id=input.automation_run_id):
-        ctx.log("Feedback cleanup skipped (schedule disabled)")
-        return _disabled_schedule_result("feedback_cleanup")
-
-    result_data = await cleanup_feedback_lifecycle()
-    result = FeedbackCleanupResult(
-        status="success",
-        archived=int(result_data.get("archived", 0)),
-        purged=int(result_data.get("purged", 0)),
-    )
-    ctx.log(
-        f"Feedback cleanup: archived={result.archived}, purged={result.purged}"
     )
     return result.model_dump()
 

@@ -92,7 +92,7 @@ def default_context_kind(memory_type: str | None, tier: int | str | None) -> Mem
     memory_type_value = (memory_type or "").strip().lower()
     if memory_type_value == "continuity":
         return MemoryContextKind.CONTINUITY
-    if memory_type_value in {"feedback", "journal"}:
+    if memory_type_value == "journal":
         return MemoryContextKind.SIGNAL
 
     if isinstance(tier, str):

@@ -18,7 +18,6 @@ from app.api.db import router as db_router
 # Endpoints from app.api.endpoints
 from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
-from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
@@ -64,7 +63,6 @@ router.include_router(narration_router)  # Has its own prefix /narration and tag
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(prompts_router)  # Has its own prefix /prompts and tags
 router.include_router(voice_router, prefix="/voice", tags=["voice"])
-router.include_router(feedback_router)  # Has its own prefix /feedback and tags
 router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 router.include_router(ownership_router)
 router.include_router(providers_router)  # Has its own prefix /providers and tags

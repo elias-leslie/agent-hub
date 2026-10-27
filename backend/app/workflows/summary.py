@@ -67,7 +67,6 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
     ctx.log(
         f"Session analysis for {input.session_id}: "
         f"credited={analysis_result.citations_credited} "
-        f"feedback={analysis_result.feedback_created} "
         f"summary={analysis_result.summary_stored}"
     )
 
@@ -161,7 +160,6 @@ def _build_result(
         "summary": result.summary[:200],
         "git_digest": result.git_digest[:200] if result.git_digest else "",
         "citations_credited": analysis_result.citations_credited,
-        "feedback_created": analysis_result.feedback_created,
         "summary_stored": analysis_result.summary_stored,
         **rating_info,
     }
