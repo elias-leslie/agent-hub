@@ -50,7 +50,7 @@ def record_provider_success(_provider: str, _latency_ms: float | None = None) ->
     """Compatibility hook after deleting the legacy active health prober."""
 
 
-def _format_fallback_reason(error: BaseException | None) -> str | None:
+def format_fallback_reason(error: BaseException | None) -> str | None:
     """Return a compact, user-visible explanation for a fallback trigger."""
     if error is None:
         return None
@@ -77,6 +77,11 @@ def _runtime_failure_cooldown(error: BaseException) -> float | None:
     if isinstance(error, RateLimitError):
         return _resolve_retry_after_seconds(error)
     return classify_runtime_failure(error).cooldown_seconds
+
+
+async def trip_provider_cooldown(provider: str, cooldown_seconds: float, error_signature: str) -> None:
+    """Open the shared provider cooldown for a known window (rate limit, usage limit)."""
+    await _RATE_LIMIT_BREAKER.trip(provider, cooldown_seconds=cooldown_seconds, error_signature=error_signature)
 
 
 async def get_provider_rate_limit_cooldown_remaining(provider: str) -> float | None:
@@ -116,14 +121,40 @@ async def _record_completion_error(
     """Record provider failure and rate-limit state for a completion error."""
     cooldown_seconds = _runtime_failure_cooldown(error)
     if cooldown_seconds is not None:
-        await _RATE_LIMIT_BREAKER.trip(
-            provider,
-            cooldown_seconds=cooldown_seconds,
-            error_signature=f"runtime_failure:{provider}:{type(error).__name__}",
+        await trip_provider_cooldown(
+            provider, cooldown_seconds, f"runtime_failure:{provider}:{type(error).__name__}"
         )
     await record_model_runtime_failure(db, model_id=model, provider=provider, error=error)
     record_provider_failure(provider, str(error), (time.monotonic() - start) * 1000)
     logger.warning("Model %s failed: %s", model, error)
+
+
+async def route_preflight_error(model: str, allow_provider_cooldown_probe: bool = False) -> ProviderError | None:
+    """Why ``model`` cannot be called right now (credential-only provider, inactive, no credential, cooldown)."""
+    provider = get_provider_for_model(model)
+    if not is_workload_provider(provider):
+        return ProviderError(
+            provider=provider,
+            message=(
+                f"Provider {provider!r} is credential-only and cannot execute "
+                "Agent Hub workloads."
+            ),
+            status_code=400,
+        )
+    unavailable = await route_unavailable_reason(model)
+    if unavailable is not None:
+        logger.info("Skipping model %s: %s", model, unavailable)
+        return ProviderError(provider=provider, message=unavailable, status_code=503)
+    cooldown_error = None if allow_provider_cooldown_probe else await _active_cooldown_error(provider)
+    if cooldown_error is not None:
+        logger.warning(
+            "Skipping model %s because provider %s is cooling down for %.0fs",
+            model,
+            provider,
+            cooldown_error.retry_after or 0,
+        )
+        return cooldown_error
+    return None
 
 
 async def _try_model(
@@ -149,28 +180,9 @@ async def _try_model(
     from app.api.complete.core import complete_internal
 
     provider = get_provider_for_model(model)
-    if not is_workload_provider(provider):
-        return None, ProviderError(
-            provider=provider,
-            message=(
-                f"Provider {provider!r} is credential-only and cannot execute "
-                "Agent Hub workloads."
-            ),
-            status_code=400,
-        )
-    unavailable = await route_unavailable_reason(model)
-    if unavailable is not None:
-        logger.info("Skipping model %s: %s", model, unavailable)
-        return None, ProviderError(provider=provider, message=unavailable, status_code=503)
-    cooldown_error = None if allow_provider_cooldown_probe else await _active_cooldown_error(provider)
-    if cooldown_error is not None:
-        logger.warning(
-            "Skipping model %s because provider %s is cooling down for %.0fs",
-            model,
-            provider,
-            cooldown_error.retry_after or 0,
-        )
-        return None, cooldown_error
+    preflight_error = await route_preflight_error(model, allow_provider_cooldown_probe)
+    if preflight_error is not None:
+        return None, preflight_error
     start = time.monotonic()
     try:
         message_dicts = _messages_as_dicts(messages)
@@ -413,7 +425,7 @@ async def complete_with_fallback(
             for fallback_model in agent.fallback_models or []
         ):
             cooldown_probe_provider = primary_provider
-    primary_reason = _format_fallback_reason(primary_error)
+    primary_reason = format_fallback_reason(primary_error)
 
     fallback_result = await _try_fallbacks(
         messages,

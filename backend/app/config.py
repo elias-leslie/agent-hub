@@ -146,7 +146,13 @@ class Settings(BaseSettings):
     # Host names the backend answers to (AGENT_HUB_TRUSTED_HOSTS); any other Host is refused (DNS rebinding).
     agent_hub_trusted_hosts: Annotated[list[str], NoDecode] = ["localhost", "127.0.0.1", "::1"]
 
-    @field_validator("cors_origins", "agent_hub_trusted_hosts", mode="before")
+    # Refusal categories a workflow run never hands to the next model in the agent chain; the step goes to the
+    # owner instead (WORKFLOW_OWNER_ONLY_REFUSAL_CATEGORIES, JSON array or comma-separated).
+    workflow_owner_only_refusal_categories: Annotated[list[str], NoDecode] = ["reasoning_extraction", "frontier_llm"]
+
+    @field_validator(
+        "cors_origins", "agent_hub_trusted_hosts", "workflow_owner_only_refusal_categories", mode="before"
+    )
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         """Parse CORS_ORIGINS / AGENT_HUB_TRUSTED_HOSTS from a JSON array, comma-separated string, or list."""
