@@ -1,0 +1,2 @@
+{"id": "state", "type": "response", "command": "get_state", "success": true, "data": {"sessionId": "01a17fb3-0951-72db-aa30-454af0df29cc", "sessionFile": "/fixture/pi/session.jsonl", "model": {"id": "gpt-6.1-sol", "provider": "openai"}}}
+{"id": "prompt", "type": "response", "command": "prompt", "success": false, "error": "Model not found: openai/none"}

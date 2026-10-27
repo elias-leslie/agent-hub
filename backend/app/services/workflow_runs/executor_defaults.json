@@ -1,0 +1,28 @@
+{
+  "env_passthrough": ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TERM", "TMPDIR", "CODEX_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR"],
+  "max_seconds": 3600,
+  "terminate_grace_seconds": 5,
+  "stderr_tail_chars": 2000,
+  "progress_items": 12,
+  "progress_output_chars": 1500,
+  "default_thinking_level": "high",
+  "codex": {
+    "binary": "codex",
+    "catalog_provider": "codex",
+    "sandbox": "workspace-write",
+    "approval_policy": "never",
+    "default_cyber_program": "standard"
+  },
+  "pi": {
+    "binary": "pi",
+    "provider_for_catalog_provider": {"codex": "openai", "claude": "anthropic"},
+    "flags": ["--no-extensions", "--approve"],
+    "tools": null
+  },
+  "claude_code": {
+    "catalog_provider": "claude",
+    "permission_mode": "bypassPermissions",
+    "setting_sources": "project",
+    "settings": {"switchModelsOnFlag": false}
+  }
+}

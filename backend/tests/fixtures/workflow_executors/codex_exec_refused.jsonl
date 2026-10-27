@@ -1,0 +1,6 @@
+{"type": "thread.started", "thread_id": "thread-refused"}
+{"type": "turn.started"}
+{"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": "Looking at the target first."}}
+{"type": "item.completed", "item": {"id": "item_1", "type": "command_execution", "command": "/bin/bash -lc 'ls'", "aggregated_output": "README.md\n", "exit_code": 0, "status": "completed"}}
+{"type": "error", "message": "This content was flagged for possible cybersecurity risk. If this seems wrong, try rephrasing your request."}
+{"type": "turn.failed", "error": {"message": "This content was flagged for possible cybersecurity risk. If this seems wrong, try rephrasing your request."}}
