@@ -1,0 +1,2 @@
+{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793155200,"rateLimitType":"five_hour"}}
+{"type":"result","subtype":"success","is_error":true,"result":"You've hit your limit"}

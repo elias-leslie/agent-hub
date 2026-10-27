@@ -192,6 +192,10 @@ class Settings(BaseSettings):
     headroom_compress_tool_results: bool = False
     headroom_compress_agent_slugs: str = ""
 
+    # Persistent Claude Code CLI sessions (app/llm/provider_support/claude_sessions.py).
+    claude_session_idle_seconds: float = Field(default=600.0, gt=0)
+    claude_session_pool_max: int = Field(default=8, ge=1)
+
 
 
 @lru_cache
