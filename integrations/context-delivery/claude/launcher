@@ -304,7 +304,9 @@ def _exec_native_degraded(real: str, argv: list[str], error: object) -> NoReturn
 
 async def _main(argv: list[str]) -> None:
     real = await _real_claude()
-    if _is_passthrough(argv):
+    # Agent Hub's own Claude provider builds the full system prompt itself; adding
+    # the global delivery there would duplicate context and cost a delivery per spawn.
+    if _is_passthrough(argv) or os.environ.get("AGENT_HUB_CONTEXT_BYPASS") == "1":
         os.execve(real, [real, *argv], os.environ.copy())
 
     try:

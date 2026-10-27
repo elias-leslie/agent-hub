@@ -1667,6 +1667,28 @@ async def test_claude_launcher_honors_explicit_binary_override(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
+async def test_claude_launcher_bypass_runs_native_without_context(tmp_path: Path) -> None:
+    native = _executable(tmp_path / "native", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+    client = _executable(tmp_path / "context-client", f"#!/bin/sh\ntouch {tmp_path / 'called'}\nexit 1\n")
+
+    code, stdout, stderr = await _run(
+        str(CLAUDE_LAUNCHER),
+        "-p",
+        "--append-system-prompt-file",
+        "agent.md",
+        env={
+            **os.environ,
+            "CLAUDE_REAL": str(native),
+            "AGENT_HUB_CONTEXT_CLIENT": str(client),
+            "AGENT_HUB_CONTEXT_BYPASS": "1",
+        },
+    )
+    assert code == 0, stderr
+    assert stdout.split() == ["-p", "--append-system-prompt-file", "agent.md"]
+    assert not (tmp_path / "called").exists()
+
+
+@pytest.mark.asyncio
 async def test_claude_launcher_uses_lossless_additive_directory_and_preserves_user_prompts(
     tmp_path: Path,
 ) -> None:

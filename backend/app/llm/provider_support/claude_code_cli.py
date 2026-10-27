@@ -32,6 +32,8 @@ def child_env() -> dict[str, str]:
     env = {key: os.environ[key] for key in _PASSTHROUGH_ENV if key in os.environ}
     env.setdefault("LANG", "C.UTF-8")
     env["DISABLE_AUTOUPDATER"] = "1"
+    # `claude` on PATH may be Agent Hub's context launcher; this process already carries its context.
+    env["AGENT_HUB_CONTEXT_BYPASS"] = "1"
     # A safeguard-flagged request must fail, never silently re-run on another model.
     env["CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK"] = "1"
     return env
