@@ -69,6 +69,7 @@ def completion_options(
     thinking_level: str | None,
     max_tokens: int | None = None,
     signal: asyncio.Event | None = None,
+    session_id: str | None = None,
 ) -> SimpleStreamOptions:
     """One options mapping for HTTP streaming, single-turn and tool execution."""
     # Agent rows store "none" for reasoning off (app/models/agent.py).
@@ -80,6 +81,8 @@ def completion_options(
         reasoning=cast(ThinkingLevel | None, reasoning),
         max_tokens=max_tokens,
         signal=signal,
+        # Providers key prompt caches and persistent sessions on this.
+        session_id=session_id,
     )
 
 

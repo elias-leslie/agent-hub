@@ -458,7 +458,11 @@ async def stream_completion(
                     llm_model,
                     context,
                     options=completion_options(
-                        temperature, thinking_level, max_tokens, signal=ctx.cancel_event
+                        temperature,
+                        thinking_level,
+                        max_tokens,
+                        signal=ctx.cancel_event,
+                        session_id=ctx.session_id,
                     ),
                     execute_tools=execute_tools,
                     run_tool=run_tool,

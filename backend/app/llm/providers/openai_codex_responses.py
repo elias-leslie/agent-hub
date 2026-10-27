@@ -33,6 +33,7 @@ from app.services.llm_errors import (
 
 from ..api_registry import register_api_provider
 from ..event_stream import AssistantMessageEventStream
+from ..transform_messages import transform_messages
 from ..types import (
     AssistantMessage,
     Context,
@@ -61,6 +62,8 @@ _CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
 _DEFAULT_INSTRUCTIONS = "You are a concise assistant."
 _background_tasks: set[asyncio.Task[None]] = set()
 _ID_PART_RE = re.compile(r"[^a-zA-Z0-9_-]")
+# OpenAI rejects prompt_cache_key values longer than this.
+_PROMPT_CACHE_KEY_MAX_LENGTH = 64
 
 
 class _CodexCredentialStore:
@@ -85,8 +88,8 @@ class _CodexCredentialStore:
 _credential_store = _CodexCredentialStore()
 
 
-def _headers(credentials: CodexCredentials) -> dict[str, str]:
-    return {
+def _headers(credentials: CodexCredentials, cache_key: str | None = None) -> dict[str, str]:
+    headers = {
         "Authorization": f"Bearer {credentials.access_token}",
         "chatgpt-account-id": credentials.account_id,
         "Content-Type": "application/json",
@@ -94,6 +97,17 @@ def _headers(credentials: CodexCredentials) -> dict[str, str]:
         "Accept": "text/event-stream",
         "originator": "agent-hub",
     }
+    if cache_key:
+        # Session affinity keeps a conversation on the backend that holds its prompt cache.
+        headers["session-id"] = cache_key
+        headers["x-client-request-id"] = cache_key
+    return headers
+
+
+def _cache_key(options: SimpleStreamOptions | None) -> str | None:
+    if options is None or options.cache_retention == "none" or not options.session_id:
+        return None
+    return options.session_id[:_PROMPT_CACHE_KEY_MAX_LENGTH]
 
 
 def _text_from_user_content(content: str | list[TextContent | ImageContent]) -> str:
@@ -170,8 +184,23 @@ def _responses_tool_item_id(tool_call_id: str) -> str:
     return normalized[:64].rstrip("_")
 
 
+def _reasoning_item(block: ThinkingContent) -> dict[str, Any] | None:
+    # Same-model reasoning keeps the full Responses item, encrypted content included.
+    if not block.thinking_signature or not block.thinking_signature.startswith("{"):
+        return None
+    try:
+        item = json.loads(block.thinking_signature)
+    except json.JSONDecodeError:
+        return None
+    return item if isinstance(item, dict) and item.get("type") == "reasoning" else None
+
+
 def _assistant_message_items(message: AssistantMessage) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = [
+        item
+        for block in message.content
+        if isinstance(block, ThinkingContent) and (item := _reasoning_item(block)) is not None
+    ]
     text = "".join(block.text for block in message.content if isinstance(block, TextContent))
     if text:
         msg_id, phase = _assistant_message_id(message)
@@ -200,10 +229,14 @@ def _assistant_message_items(message: AssistantMessage) -> list[dict[str, Any]]:
     return items
 
 
-def _input_from_context(context: Context) -> tuple[list[dict[str, Any]], str]:
+def _input_from_context(
+    context: Context, model: Model[Any] | None = None
+) -> tuple[list[dict[str, Any]], str]:
     items: list[dict[str, Any]] = []
     instructions = context.system_prompt or _DEFAULT_INSTRUCTIONS
-    for message in context.messages:
+    # Drops other models' reasoning and failed turns, and closes orphaned tool calls.
+    messages = transform_messages(context.messages, model) if model is not None else context.messages
+    for message in messages:
         if isinstance(message, ToolResultMessage):
             call_id, _item_id = _split_responses_tool_call_id(message.tool_call_id)
             items.append(
@@ -228,6 +261,19 @@ def _input_from_context(context: Context) -> tuple[list[dict[str, Any]], str]:
                 }
             )
     return items, instructions
+
+
+def _thinking_blocks(
+    thinking_by_id: dict[str, list[str]], reasoning_items: dict[str, dict[str, Any]]
+) -> list[ThinkingContent]:
+    blocks: list[ThinkingContent] = []
+    for item_id in dict.fromkeys([*thinking_by_id, *reasoning_items]):
+        thinking = "".join(thinking_by_id.get(item_id, [])).strip()
+        item = reasoning_items.get(item_id)
+        signature = json.dumps(item, separators=(",", ":")) if item and item.get("encrypted_content") else None
+        if thinking or signature:
+            blocks.append(ThinkingContent(thinking=thinking, thinking_signature=signature))
+    return blocks
 
 
 def _tools(tools: list[Tool] | None) -> list[dict[str, Any]] | None:
@@ -262,7 +308,7 @@ def _body(
     context: Context,
     options: SimpleStreamOptions | None,
 ) -> dict[str, Any]:
-    input_items, instructions = _input_from_context(context)
+    input_items, instructions = _input_from_context(context, model)
     body: dict[str, Any] = {
         "model": model.id,
         "instructions": instructions,
@@ -270,6 +316,8 @@ def _body(
         "stream": True,
         "store": False,
     }
+    if cache_key := _cache_key(options):
+        body["prompt_cache_key"] = cache_key
     if model.access_programs:
         # Program-gated models (Daybreak Blue) reject requests that omit their program.
         body["access_programs"] = dict(model.access_programs)
@@ -285,6 +333,8 @@ def _body(
         if effort is None:
             raise ValueError(f"{model.id} does not support {options.reasoning} reasoning")
         body["reasoning"] = {"effort": effort, "summary": "auto"}
+        # With store=false, replaying encrypted reasoning is the only way the next call keeps it.
+        body["include"] = ["reasoning.encrypted_content"]
     return body
 
 
@@ -391,6 +441,7 @@ async def _authenticated_response(
     client: httpx.AsyncClient,
     model: Model[Any],
     body: dict[str, Any],
+    cache_key: str | None = None,
 ):
     """Open a Codex stream, recovering once from a pre-stream HTTP 401."""
     credentials = await _credential_store.ensure_fresh()
@@ -399,7 +450,7 @@ async def _authenticated_response(
             "POST",
             model.base_url or _CODEX_API_URL,
             json=body,
-            headers=_headers(credentials),
+            headers=_headers(credentials, cache_key),
         )
         response = await response_context.__aenter__()
         try:
@@ -429,6 +480,7 @@ async def _run(
     current_message_phase: str | None = None
     text_parts: list[str] = []
     thinking_by_id: dict[str, list[str]] = {}
+    reasoning_items: dict[str, dict[str, Any]] = {}
     tool_args_by_call_id: dict[str, str] = {}
     tool_calls: list[ToolCall] = []
     output = AssistantMessage(
@@ -446,7 +498,7 @@ async def _run(
         body = _body(model, context, options)
         async with (
             httpx.AsyncClient(timeout=_stream_timeout(options)) as client,
-            _authenticated_response(client, model, body) as response,
+            _authenticated_response(client, model, body, _cache_key(options)) as response,
         ):
                 if response.status_code >= 400:
                     error_body = (await response.aread()).decode("utf-8", errors="replace")
@@ -503,7 +555,9 @@ async def _run(
                             tool_args_by_call_id[targets[0]] += str(event.get("delta") or "")
                     elif event_type == "response.output_item.done":
                         item = _as_dict(event.get("item"))
-                        if item.get("type") == "function_call":
+                        if item.get("type") == "reasoning":
+                            reasoning_items[str(item.get("id", ""))] = item
+                        elif item.get("type") == "function_call":
                             call_id = str(item.get("call_id") or "")
                             raw_args = tool_args_by_call_id.get(call_id) or str(item.get("arguments") or "{}")
                             try:
@@ -552,10 +606,7 @@ async def _run(
                                     partial=output,
                                 )
                             )
-                        for chunks in thinking_by_id.values():
-                            thinking = "".join(chunks).strip()
-                            if thinking:
-                                output.content.insert(0, ThinkingContent(thinking=thinking))
+                        output.content[0:0] = _thinking_blocks(thinking_by_id, reasoning_items)
                         output.stop_reason = "toolUse" if tool_calls else "stop"
                         stream.push(DoneEvent(reason="toolUse" if tool_calls else "stop", message=output))
                         return

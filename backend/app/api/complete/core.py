@@ -218,7 +218,7 @@ async def complete_internal(
     result = await run_completion(
         llm_model,
         context,
-        options=completion_options(temperature, thinking_level),
+        options=completion_options(temperature, thinking_level, session_id=session_id),
         execute_tools=execute_tools,
         run_tool=run_tool,
         max_turns=max_turns,

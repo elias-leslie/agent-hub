@@ -16,7 +16,16 @@ from app.llm.providers.openai_codex_responses import (
     _input_from_context,
     _raise_codex_http_error,
 )
-from app.llm.types import AssistantMessage, Context, TextContent, ToolCall, ToolResultMessage, Usage
+from app.llm.types import (
+    AssistantMessage,
+    Context,
+    SimpleStreamOptions,
+    TextContent,
+    ThinkingContent,
+    ToolCall,
+    ToolResultMessage,
+    Usage,
+)
 from app.llm.utils.outcomes import outcome_of
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
@@ -369,3 +378,49 @@ async def test_other_codex_failures_stay_untyped(monkeypatch: pytest.MonkeyPatch
     )
 
     assert (result.stop_reason, result.error_message, outcome_of(result)) == ("error", "boom", None)
+
+
+def test_session_requests_carry_cache_key_affinity_and_encrypted_reasoning() -> None:
+    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
+    options = SimpleStreamOptions(session_id="s" * 80, reasoning="high")
+
+    body = openai_codex_responses._body(model, Context(messages=[]), options)
+    headers = openai_codex_responses._headers(
+        CodexCredentials(access_token="t", refresh_token=None, account_id="a"), openai_codex_responses._cache_key(options)
+    )
+
+    assert body["prompt_cache_key"] == "s" * 64
+    assert body["include"] == ["reasoning.encrypted_content"]
+    assert headers["session-id"] == headers["x-client-request-id"] == "s" * 64
+
+
+def test_cache_retention_none_sends_no_cache_key() -> None:
+    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
+    options = SimpleStreamOptions(session_id="session-1", cache_retention="none")
+
+    assert "prompt_cache_key" not in openai_codex_responses._body(model, Context(messages=[]), options)
+    assert "session-id" not in openai_codex_responses._headers(CodexCredentials(access_token="t", refresh_token=None, account_id="a"))
+
+
+@pytest.mark.asyncio
+async def test_encrypted_reasoning_replays_to_the_same_model_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    reasoning = {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "opaque"}
+    result = await _run_events(
+        monkeypatch,
+        [
+            {"type": "response.output_item.added", "item": {"type": "reasoning", "id": "rs_1"}},
+            {"type": "response.reasoning_summary_text.delta", "item_id": "rs_1", "delta": "plan"},
+            {"type": "response.output_item.done", "item": reasoning},
+            {"type": "response.completed", "response": {"model": "gpt-6.1-sol"}},
+        ],
+    )
+    assert isinstance(result.content[0], ThinkingContent)
+    assert result.content[0].thinking == "plan"
+
+    replayed = replace(result, content=[*result.content, TextContent(text="done")])
+    same, _ = _input_from_context(Context(messages=[replayed]), resolve_llm_model("codex/gpt-6.1-sol", "codex"))
+    other, _ = _input_from_context(Context(messages=[replayed]), replace(resolve_llm_model("codex/gpt-6.1-sol", "codex"), id="gpt-5.4"))
+
+    assert same[0] == reasoning
+    assert same[1]["type"] == "message"
+    assert all(item.get("type") != "reasoning" for item in other)
