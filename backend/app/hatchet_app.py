@@ -37,11 +37,14 @@ def _wrap_hatchet_shutdown_404_guard(
         return pause_worker
 
     @wraps(pause_worker)
-    async def guarded_pause_worker(*args: Any, **kwargs: Any) -> Any:
+    async def guarded_pause_worker(workers_client: Any, worker_id: str, *args: Any, **kwargs: Any) -> Any:
         try:
-            return await pause_worker(*args, **kwargs)
+            return await pause_worker(workers_client, worker_id, *args, **kwargs)
         except not_found_exception:
-            logger.debug("Hatchet worker already removed during shutdown pause; suppressing 404")
+            logger.debug(
+                "Hatchet worker %s already removed during shutdown pause; suppressing 404",
+                worker_id,
+            )
             return None
 
     setattr(guarded_pause_worker, _HATCHET_SHUTDOWN_404_GUARD_ATTR, True)
@@ -52,21 +55,20 @@ def _install_hatchet_shutdown_404_guard() -> None:
     """Treat shutdown-time Hatchet worker 404s as an already-complete pause.
 
     During SIGTERM/SIGQUIT shutdown races, Hatchet can evict the worker record
-    before the graceful-shutdown pause reaches the REST update. That 404 is
+    before the graceful-shutdown pause (``Worker._pause_task_assignment()`` ->
+    ``WorkersClient.aio_pause()``) reaches the REST update. That 404 is
     effectively "already paused / already gone" and should not surface as a
-    shutdown error. hatchet-sdk 1.23 pauses via
-    ``WorkerActionListenerProcess.pause_task_assignment()`` (SummitFlow's newer
-    SDK goes through ``WorkersClient.aio_pause()``).
+    shutdown error.
     """
 
     from hatchet_sdk.clients.rest.exceptions import NotFoundException
-    from hatchet_sdk.worker.action_listener_process import WorkerActionListenerProcess
+    from hatchet_sdk.features.workers import WorkersClient
 
     guarded_pause_worker = _wrap_hatchet_shutdown_404_guard(
-        WorkerActionListenerProcess.pause_task_assignment,
+        WorkersClient.aio_pause,
         not_found_exception=NotFoundException,
     )
-    type.__setattr__(WorkerActionListenerProcess, "pause_task_assignment", guarded_pause_worker)
+    type.__setattr__(WorkersClient, "aio_pause", guarded_pause_worker)
 
 
 def _prime_hatchet_env() -> None:

@@ -19,7 +19,7 @@ dependencies = [
     "trafilatura>=2.0.0",
     "lxml>=6.0.0", # Preserve article headings, lists and tables in web extraction
     # Background tasks
-    "hatchet-sdk>=1.22.0",
+    "hatchet-sdk>=1.43.1",
     "redis>=5.0.0",
     # AI integrations
     "anthropic>=0.40.0",

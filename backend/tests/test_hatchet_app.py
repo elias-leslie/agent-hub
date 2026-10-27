@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from hatchet_sdk.features.workers import WorkersClient
 from hatchet_sdk.runnables.types import TaskDefaults
-from hatchet_sdk.worker.action_listener_process import WorkerActionListenerProcess
 
 from app.hatchet_app import (
     _HATCHET_SHUTDOWN_404_GUARD_ATTR,
@@ -96,46 +96,45 @@ def test_shutdown_guard_swallows_worker_not_found() -> None:
     class FakeNotFound(Exception):
         pass
 
-    calls: list[object] = []
+    call_log: list[str] = []
 
-    async def raise_not_found(listener: object) -> None:
-        calls.append(listener)
+    async def raise_not_found(_workers_client: object, worker_id: str) -> None:
+        call_log.append(worker_id)
         raise FakeNotFound()
 
     guarded = _wrap_hatchet_shutdown_404_guard(raise_not_found, not_found_exception=FakeNotFound)
-    listener = SimpleNamespace()
 
-    assert asyncio.run(guarded(listener)) is None
-    assert calls == [listener]
+    assert asyncio.run(guarded(SimpleNamespace(), "worker-123")) is None
+    assert call_log == ["worker-123"]
 
 
 def test_shutdown_guard_preserves_unexpected_errors() -> None:
     class FakeNotFound(Exception):
         pass
 
-    async def raise_unexpected(_listener: object) -> None:
+    async def raise_unexpected(_workers_client: object, _worker_id: str) -> None:
         raise RuntimeError("boom")
 
     guarded = _wrap_hatchet_shutdown_404_guard(raise_unexpected, not_found_exception=FakeNotFound)
 
     with pytest.raises(RuntimeError, match="boom"):
-        asyncio.run(guarded(SimpleNamespace()))
+        asyncio.run(guarded(SimpleNamespace(), "worker-123"))
 
 
 def test_shutdown_guard_is_idempotent_and_passes_results() -> None:
     class FakeNotFound(Exception):
         pass
 
-    async def pause_ok(_listener: object) -> str:
-        return "paused"
+    async def pause_ok(_workers_client: object, worker_id: str) -> str:
+        return f"paused:{worker_id}"
 
     guarded = _wrap_hatchet_shutdown_404_guard(pause_ok, not_found_exception=FakeNotFound)
 
-    assert asyncio.run(guarded(SimpleNamespace())) == "paused"
+    assert asyncio.run(guarded(SimpleNamespace(), "worker-123")) == "paused:worker-123"
     assert _wrap_hatchet_shutdown_404_guard(guarded, not_found_exception=FakeNotFound) is guarded
 
 
-def test_worker_runtime_import_installs_guard_on_sdk_listener() -> None:
-    import app.worker_runtime  # noqa: F401  # the spawned listener child installs the guard by importing this
+def test_worker_runtime_import_installs_guard_on_sdk_worker_pause() -> None:
+    import app.worker_runtime  # noqa: F401  # the worker process installs the guard by importing this
 
-    assert getattr(WorkerActionListenerProcess.pause_task_assignment, _HATCHET_SHUTDOWN_404_GUARD_ATTR, False) is True
+    assert getattr(WorkersClient.aio_pause, _HATCHET_SHUTDOWN_404_GUARD_ATTR, False) is True

@@ -29,8 +29,8 @@ from app.workflows.summary import session_summary_task
 
 logger = logging.getLogger(__name__)
 
-# Hatchet runs its action listener in a spawned child that re-imports the worker
-# entry module (and so this module), not get_hatchet(); install the guard here.
+# The worker pauses itself on shutdown through WorkersClient.aio_pause() in this
+# process; install the guard at import so every worker entry point has it.
 _install_hatchet_shutdown_404_guard()
 
 WorkflowDef = Any
