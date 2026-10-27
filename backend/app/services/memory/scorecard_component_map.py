@@ -81,13 +81,13 @@ COMPONENTS: dict[str, ComponentInfo] = {
         id="sf.frontend",
         name="Frontend UI",
         project="summitflow",
-        description="Task views, explorer, kanban, health panels",
+        description="Task views, kanban, health panels",
     ),
     "sf.search": ComponentInfo(
         id="sf.search",
         name="Precision Code Search",
         project="summitflow",
-        description="st search, symbol/text/endpoint search, explorer index",
+        description="st search: local symbol and text search",
     ),
     "sf.scripts": ComponentInfo(
         id="sf.scripts",
