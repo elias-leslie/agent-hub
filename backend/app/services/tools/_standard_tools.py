@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from app.services.tools._executor_precision_code_search import (
-    DEFAULT_PRECISION_SEARCH_BUDGET,
-)
 from app.services.tools._executor_web import (
     DEFAULT_WEB_FETCH_MAX_CHARS,
     DEFAULT_WEB_SEARCH_RESULTS,
@@ -199,7 +196,7 @@ CONSULT_AGENT_TOOL = Tool(
     description=(
         "Consult another agent for expert review, a second opinion, or strategic guidance. "
         "Consultations can use read-only research tools such as `read_file`, "
-        "`precision_code_search`, `search_web`, and `fetch_web_page`, but not bash, writes, "
+        "`research_web`, `search_web`, and `fetch_web_page`, but not bash, writes, "
         "or autonomous dispatch. Check direct sources first. Do not use it for exact rule text "
         "or file/project facts you can retrieve with `st memory get/search`, `read_file`, or "
         "search tools. Your agent roster shows available agents. Use consult_agent only for "
@@ -227,34 +224,6 @@ CONSULT_AGENT_TOOL = Tool(
     category="agents",
     search_keywords=["second opinion", "review", "strategy"],
     usage_examples=["Ask the reviewer agent for risk-focused feedback after inspecting the code."],
-)
-
-PRECISION_CODE_SEARCH_TOOL = Tool(
-    name="precision_code_search",
-    description=(
-        "Retrieve focused code context for symbol and implementation lookup. "
-        "When this tool is explicitly provisioned, use it for functions, classes, "
-        "components, handlers, endpoints, schemas, or implementation lookup. "
-        "In shell-first coding lanes, prefer `bash` with `st search`."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Code-navigation query or symbol name to retrieve",
-            },
-            "budget": {
-                "type": "integer",
-                "description": f"Approximate token budget for returned context (default {DEFAULT_PRECISION_SEARCH_BUDGET})",
-                "default": DEFAULT_PRECISION_SEARCH_BUDGET,
-            },
-        },
-        "required": ["query"],
-    },
-    category="workspace",
-    search_keywords=["symbol search", "implementation lookup", "code navigation", "find handler"],
-    usage_examples=["Look up `get_file_tree` before reading whole files."],
 )
 
 RESEARCH_WEB_TOOL = Tool(

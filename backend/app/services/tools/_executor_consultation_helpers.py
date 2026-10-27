@@ -107,7 +107,6 @@ def _tool_spec_to_api_tool(tool: Tool) -> dict[str, Any]:
 def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
     from app.services.tools._standard_tools import (
         FETCH_WEB_PAGE_TOOL,
-        PRECISION_CODE_SEARCH_TOOL,
         READ_FILE_TOOL,
         RESEARCH_WEB_TOOL,
         SEARCH_WEB_TOOL,
@@ -117,7 +116,6 @@ def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
 
     source_tools = [
         READ_FILE_TOOL,
-        PRECISION_CODE_SEARCH_TOOL,
         RESEARCH_WEB_TOOL,
         SEARCH_WEB_TOOL,
         FETCH_WEB_PAGE_TOOL,

@@ -43,7 +43,6 @@ class TestTierTools:
         assert "search_web" in tools
         assert "fetch_web_page" in tools
         assert "search_scratch_context" not in tools
-        assert "precision_code_search" not in tools
         assert "write_file" not in tools
         assert "bash" not in tools
 

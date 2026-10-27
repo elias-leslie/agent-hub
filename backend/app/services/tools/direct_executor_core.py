@@ -85,7 +85,7 @@ class DirectToolExecutor:
         "bash", "read_file", "write_file", "search_scratch_context", "batch_execute",
         "edit_file",
         "consult_agent", "dispatch_agent",
-        "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
+        "research_web", "search_web", "fetch_web_page", "tool_search",
         "propose_thorough", "propose_committee", "propose_honing", "start_research",
         "steer_consultation", "list_consultations", "cancel_consultation",
         "manage_tasks", "manage_backups", "manage_model_config", "manage_feedback",

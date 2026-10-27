@@ -35,7 +35,7 @@
   (`/api/orchestration/committee`) that runs several agents on one question
   and synthesizes their views.
 - Server-side tool execution inside that loop: shell, file read/write/edit,
-  precision code search, and web search/research/fetch (backed by SearXNG and a
+  and web search/research/fetch (backed by SearXNG and a
   CDP browser).
 
 **Operability and access control**
