@@ -99,8 +99,9 @@ selected prompt revision in its blocks. Also run the installer with `--check` to
 verify each native adapter is present. These checks establish generation and
 adapter installation only; record binding, retrieval, provider delivery and
 actual agent behavior separately. The Agent Hub DB owns the activation prompt,
-the central skill owns the review procedure, and SlopMiner's scoped guides own
-approved design direction. This adapter does not duplicate those instructions.
+the central skill owns the review procedure, and each product's uilint
+`ui-spec.json` and Agent Hub project standards own approved design direction.
+This adapter does not duplicate those instructions.
 
 Optional project index, tool guide, and continuity diagnostics distinguish
 included, inapplicable, and unavailable components. Optional failures do not
