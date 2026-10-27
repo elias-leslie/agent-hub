@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from itertools import pairwise
 from pathlib import Path
 
 from app.config import settings
@@ -119,6 +120,40 @@ async def write_file(
         return f"Error writing file: {e}"
 
 
+def _apply_edits(current: str, edits: list[tuple[str, str]], path: str) -> tuple[str, int] | str:
+    """Apply several exact replacements all-or-nothing (Pi tools/edit.ts semantics).
+
+    Every old text is matched against the original content, must occur exactly once, and
+    must not overlap another edit, so edit order never changes the outcome.
+    """
+    spans: list[tuple[int, int, str]] = []
+    for index, (old_text, new_text) in enumerate(edits, start=1):
+        label = f"edits[{index}]"
+        if not old_text:
+            return f"Error: {label}.old_text must be non-empty (no changes applied)"
+        match_count = current.count(old_text)
+        if match_count == 0:
+            return f"Error: {label}.old_text not found in {path} (no changes applied)"
+        if match_count > 1:
+            return (
+                f"Error: {label}.old_text matched {match_count} times in {path}; provide more "
+                "surrounding context (no changes applied)"
+            )
+        start = current.index(old_text)
+        spans.append((start, start + len(old_text), new_text))
+    spans.sort()
+    for (_, previous_end, _), (start, _, _) in pairwise(spans):
+        if start < previous_end:
+            return f"Error: edits overlap in {path}; merge them into one edit (no changes applied)"
+    pieces: list[str] = []
+    cursor = 0
+    for start, end, new_text in spans:
+        pieces.extend((current[cursor:start], new_text))
+        cursor = end
+    pieces.append(current[cursor:])
+    return "".join(pieces), len(spans)
+
+
 async def edit_file(
     path: str,
     old_text: str,
@@ -127,15 +162,24 @@ async def edit_file(
     allowed_root: Path | None,
     *,
     replace_all: bool = False,
+    edits: list[tuple[str, str]] | None = None,
     content_guard: Callable[[str], Awaitable[str | None]] | None = None,
 ) -> str:
-    """Edit an existing file by replacing exact text."""
+    """Edit an existing file by replacing exact text.
+
+    ``edits`` applies several unique-match replacements in one call, all-or-nothing; a
+    single ``old_text``/``new_text`` pair is added to them when both are given.
+    """
     file_path = _resolve_path(path, working_dir)
 
     if not _is_path_allowed(file_path, allowed_root, extra_roots=(working_dir,)):
         return f"Error: Path outside allowed project root: {path}"
-    if not old_text:
+    if edits:
+        batch = ([(old_text, new_text)] if old_text else []) + list(edits)
+    elif not old_text:
         return "Error: old_text must be non-empty"
+    else:
+        batch = None
 
     def _prepare() -> tuple[str, int, int] | str:
         if not file_path.exists():
@@ -144,6 +188,11 @@ async def edit_file(
             return f"Error: Path is a directory: {path}"
 
         current = file_path.read_text(encoding="utf-8", errors="replace")
+        if batch is not None:
+            applied = _apply_edits(current, batch, path)
+            if isinstance(applied, str):
+                return applied
+            return applied[0], applied[1], len(current)
         match_count = current.count(old_text)
         if match_count == 0:
             return f"Error: old_text not found in {path}"

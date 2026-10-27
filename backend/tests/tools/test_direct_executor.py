@@ -327,6 +327,55 @@ class TestDirectToolExecutor:
         assert test_file.read_text() == "status\nstatus\n"
 
     @pytest.mark.asyncio
+    async def test_edit_file_edits_batch_applies_all_matches_against_original(
+        self, executor: DirectToolExecutor, tmp_path: Path
+    ) -> None:
+        f = tmp_path / "m.py"
+        f.write_text("a = 1\nb = 2\nc = 3\n")
+
+        result = await executor.dispatch(
+            "edit_file",
+            {"path": "m.py", "edits": [
+                {"old_text": "c = 3", "new_text": "c = 30"},
+                {"old_text": "a = 1", "new_text": "a = 10\nb = 2"},  # new text may contain another old_text
+            ]},
+        )
+
+        assert "replaced 2 occurrence(s)" in result
+        assert f.read_text() == "a = 10\nb = 2\nb = 2\nc = 30\n"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("edits", "message"),
+        [
+            ([{"old_text": "a = 1", "new_text": "x"}, {"old_text": "zzz", "new_text": "y"}], "edits[2].old_text not found"),
+            ([{"old_text": "= ", "new_text": "x"}], "edits[1].old_text matched 3 times"),
+            ([{"old_text": "a = 1\nb", "new_text": "x"}, {"old_text": "b = 2", "new_text": "y"}], "overlap"),
+            ([{"old_text": "", "new_text": "y"}], "must be non-empty"),
+        ],
+    )
+    async def test_edit_file_edits_batch_is_all_or_nothing(
+        self, executor: DirectToolExecutor, tmp_path: Path, edits: list[dict[str, str]], message: str
+    ) -> None:
+        f = tmp_path / "m.py"
+        f.write_text("a = 1\nb = 2\nc = 3\n")
+
+        result = await executor.edit_file("m.py", edits=edits)
+
+        assert message in result
+        assert "no changes applied" in result
+        assert f.read_text() == "a = 1\nb = 2\nc = 3\n"
+
+    @pytest.mark.asyncio
+    async def test_edit_file_single_pair_form_still_requires_old_text(
+        self, executor: DirectToolExecutor, tmp_path: Path
+    ) -> None:
+        (tmp_path / "m.py").write_text("a = 1\n")
+
+        assert await executor.edit_file("m.py") == "Error: old_text must be non-empty"
+        assert "edits must be a list" in await executor.edit_file("m.py", edits=[{"old_text": 1}])  # type: ignore[list-item]
+
+    @pytest.mark.asyncio
     async def test_write_file_blocks_large_truncation(
         self,
         executor: DirectToolExecutor,

@@ -178,7 +178,7 @@ class DirectToolExecutor:
             )
         if name == "edit_file":
             return await self.edit_file(
-                **{k: v for k, v in args.items() if k in ("path", "old_text", "new_text", "replace_all")}
+                **{k: v for k, v in args.items() if k in ("path", "old_text", "new_text", "replace_all", "edits")}
             )
         if name == "search_scratch_context":
             return await self.search_scratch_context(
@@ -409,11 +409,20 @@ class DirectToolExecutor:
     async def edit_file(
         self,
         path: str,
-        old_text: str,
-        new_text: str,
+        old_text: str = "",
+        new_text: str = "",
         replace_all: bool = False,
+        edits: list[dict[str, Any]] | None = None,
     ) -> str:
-        """Edit an existing file by replacing exact text."""
+        """Edit an existing file by replacing exact text (one pair, or an ``edits`` batch)."""
+        pairs: list[tuple[str, str]] | None = None
+        if edits:
+            if not isinstance(edits, list) or not all(
+                isinstance(e, dict) and isinstance(e.get("old_text"), str) and isinstance(e.get("new_text"), str)
+                for e in edits
+            ):
+                return "Error: edits must be a list of {old_text, new_text} objects"
+            pairs = [(e["old_text"], e["new_text"]) for e in edits]
         allowed_root, permission_block = await self._allowed_root_for_file_tool(path, write=True)
         if permission_block:
             return f"Error: {permission_block}"
@@ -433,6 +442,7 @@ class DirectToolExecutor:
             self.working_dir,
             allowed_root,
             replace_all=replace_all,
+            edits=pairs,
             content_guard=_guard,
         )
 

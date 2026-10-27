@@ -130,7 +130,9 @@ EDIT_FILE_TOOL = Tool(
     name="edit_file",
     description=(
         "Edit an existing file by replacing exact old_text with new_text. "
-        "Use this for targeted source changes, especially in large files."
+        "Use this for targeted source changes, especially in large files. "
+        "For several changes to one file, pass `edits` (a list of {old_text, new_text}) in one call: "
+        "all are applied or none, and each old_text must match exactly once in the original file."
     ),
     input_schema={
         "type": "object",
@@ -152,8 +154,23 @@ EDIT_FILE_TOOL = Tool(
                 "description": "Replace all matches. Default false rejects ambiguous old_text.",
                 "default": False,
             },
+            "edits": {
+                "type": "array",
+                "description": (
+                    "Multiple replacements for this file, applied together (all-or-nothing). "
+                    "Use instead of old_text/new_text; each old_text must be unique and edits must not overlap."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "old_text": {"type": "string", "description": "Exact text to replace"},
+                        "new_text": {"type": "string", "description": "Replacement text"},
+                    },
+                    "required": ["old_text", "new_text"],
+                },
+            },
         },
-        "required": ["path", "old_text", "new_text"],
+        "required": ["path"],
     },
     category="workspace",
     search_keywords=["edit file", "replace text", "patch"],
