@@ -426,6 +426,7 @@ async def store_message_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> SessionEvent:
     """Store a message event (user, assistant, or system)."""
     event_type_map = {
@@ -439,7 +440,7 @@ async def store_message_event(
         role=role, content=content, tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
-        message_id=message_id, pane_id=pane_id, source_client=source_client,
+        message_id=message_id, pane_id=pane_id, source_client=source_client, usage=usage,
     )
 
 

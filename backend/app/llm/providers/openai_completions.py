@@ -68,6 +68,7 @@ from ..types import (
     UserMessage,
 )
 from ..utils.json_parse import parse_streaming_json
+from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.sanitize_unicode import sanitize_surrogates
 
 __all__ = [
@@ -1002,6 +1003,17 @@ def stream_openai_completions(
                     output.stop_reason = sr
                     if err:
                         output.error_message = err
+                    if finish_reason == "content_filter":
+                        record_outcome(
+                            output,
+                            ProviderOutcome(
+                                kind="refused",
+                                requested_model=model.id,
+                                served_model=output.response_model,
+                                category="content_filter",
+                                explanation=err,
+                            ),
+                        )
 
                 delta = getattr(choice, "delta", None)
                 if delta is None:

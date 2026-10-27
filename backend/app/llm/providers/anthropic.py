@@ -61,6 +61,7 @@ from ..types import (
     UserMessage,
 )
 from ..utils.json_parse import parse_streaming_json
+from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.sanitize_unicode import sanitize_surrogates
 
 # Re-export for downstream type-checkers that don't follow the `as` alias.
@@ -527,6 +528,31 @@ _STOP_REASON_MAP: dict[str, StopReason] = {
 }
 
 
+def _detail(details: Any, name: str) -> str | None:
+    value = details.get(name) if isinstance(details, dict) else getattr(details, name, None)
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _record_refusal(output: AssistantMessage, model: Model[Any], details: Any) -> None:
+    """Type a ``refusal`` stop with its ``stop_details`` category and explanation."""
+
+    category = _detail(details, "category")
+    explanation = _detail(details, "explanation")
+    output.error_message = explanation or (
+        f"The provider refused this request ({category})." if category else "The provider refused this request."
+    )
+    record_outcome(
+        output,
+        ProviderOutcome(
+            kind="refused",
+            requested_model=model.id,
+            served_model=output.response_model,
+            category=category,
+            explanation=explanation,
+        ),
+    )
+
+
 def _map_stop_reason(reason: str | None) -> StopReason:
     if reason is None:
         return "stop"
@@ -639,7 +665,7 @@ def stream_anthropic(
             if options and options.signal is not None and options.signal.is_set():
                 raise asyncio.CancelledError("Request was aborted")
             if output.stop_reason in ("aborted", "error"):
-                raise RuntimeError("An unknown error occurred")
+                raise RuntimeError(output.error_message or "An unknown error occurred")
 
             stream.push(DoneEvent(reason=_done_reason(output.stop_reason), message=output))
             stream.end()
@@ -770,6 +796,9 @@ def _handle_event(
         if message is None:
             return
         output.response_id = getattr(message, "id", None)
+        reported_model = getattr(message, "model", None)
+        if isinstance(reported_model, str) and reported_model.strip():
+            output.response_model = reported_model.strip()
         usage = getattr(message, "usage", None)
         if usage is not None:
             output.usage.input = getattr(usage, "input_tokens", 0) or 0
@@ -919,6 +948,8 @@ def _handle_event(
                 output.stop_reason = _map_stop_reason(stop_reason)
             except RuntimeError:
                 output.stop_reason = "error"
+            if stop_reason == "refusal":
+                _record_refusal(output, model, getattr(delta, "stop_details", None))
         usage = getattr(event, "usage", None)
         if usage is not None:
             input_tokens = getattr(usage, "input_tokens", None)

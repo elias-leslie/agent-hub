@@ -12,9 +12,12 @@ from app.api.complete.complete_orchestrator import _validate_and_resolve, orches
 from app.api.complete.native_continuation import (
     _cyber_access_program,
     _payload_hash,
+    _persist_db_usage,
     execute_native_continuation,
 )
 from app.api.complete.schemas import CompletionRequest
+from app.llm.utils.outcomes import ProviderOutcome, outcome_details
+from app.services.native_continuation_runtime import NativeTurnObservation, NativeTurnUsage
 
 NERI_PAYLOAD_CONTRACT_HASH = "2c6ad1d8636d7653b26d0d1783868eafdebfff37106b83e9032b4bbe2ef88a0f"
 
@@ -263,3 +266,24 @@ def test_cyber_access_program_defaults_to_the_catalog_requirement() -> None:
     assert _cyber_access_program(None, "codex/gpt-5.6-sol-daybreak-blue") == "daybreakBlue"
     assert _cyber_access_program(None, "codex/gpt-6.1-sol") is None
     assert _cyber_access_program("standard", "codex/gpt-6.1-sol") == "standard"
+
+
+@pytest.mark.asyncio
+async def test_native_reroute_is_stored_on_the_event_with_the_served_model() -> None:
+    outcome = ProviderOutcome(
+        kind="substituted", requested_model="gpt-5.5", served_model="gpt-5.4", category="cyber",
+    )
+    result = NativeTurnObservation(
+        answer_text="{}", thread_id="thread-1", turn_id="turn-1", observed_model="gpt-5.4",
+        usage=NativeTurnUsage(input_tokens=10, output_tokens=2, known=True), runtime="test", outcome=outcome,
+    )
+    with (
+        patch("app.api.complete.native_continuation.save_events", new_callable=AsyncMock) as save_events,
+        patch("app.services.context_tracker.log_token_usage", new_callable=AsyncMock),
+    ):
+        await _persist_db_usage(AsyncMock(), SimpleNamespace(id="s"), _request(), result, "codex/gpt-5.5")
+
+    call = save_events.await_args
+    assert call is not None
+    assert call.args[6] == "gpt-5.4"
+    assert call.kwargs["usage"] == {"provider_outcome": outcome_details(outcome)}

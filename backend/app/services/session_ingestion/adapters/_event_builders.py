@@ -8,9 +8,11 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from app.llm.utils.outcomes import ProviderOutcome, outcome_details
 from app.services.session_ingestion.models import NormalizedEvent
 
 JsonObject = dict[str, object]
+_SYNTHETIC_MODEL = "<synthetic>"
 _WEB_CALL_RE = re.compile(r"\btools\.web__run\s*\(")
 _CUA_CALL_RE = re.compile(r"\b(?:cua|tab|nodeRepl)\.[A-Za-z_][\w.]*\s*\(")
 _EXEC_COMMAND_LITERAL_RE = re.compile(
@@ -156,6 +158,15 @@ class _ParseState:
         self.pending_exec_wrappers = [dict(wrapper) for wrapper in pending_exec_wrappers]
         self.yielded_exec_wrapper_call_ids = list(yielded_exec_wrapper_call_ids)
         self.codex_model_state = dict(codex_model_state or {})
+        # Last real Claude Code model seen in this parse; names the model a later refusal was sent to.
+        self.last_model: str | None = None
+
+    def append_outcome(self, event_type: str, outcome: ProviderOutcome, content: str, **kwargs: Any) -> None:
+        """Append an event that carries a typed provider outcome in its ``usage`` payload."""
+        self.append(
+            event_type, role="system" if event_type == "system_message" else None, content=content,
+            usage={"provider_outcome": outcome_details(outcome)}, **kwargs,
+        )
 
     def retain_exec_wrapper(
         self,
@@ -340,7 +351,10 @@ def append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
     if entry_type == "assistant":
         message = obj.get("message")
         if isinstance(message, dict):
-            append_claude_assistant_message(message, state)
+            append_claude_assistant_message(message, state, request_id=obj.get("requestId"))
+        return
+    if entry_type == "system" and obj.get("subtype") == "model_refusal_fallback":
+        _append_claude_model_fallback(obj, state)
         return
     if entry_type == "response_item":
         _append_codex_response_item(obj.get("payload"), state)
@@ -445,15 +459,60 @@ def _append_assistant_content_block(
         )
 
 
+def _text_field(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _append_claude_model_fallback(obj: JsonObject, state: _ParseState) -> None:
+    """A refused request that Claude Code retried on another model."""
+    original = _text_field(obj.get("originalModel")) or state.last_model or "unknown"
+    fallback = _text_field(obj.get("fallbackModel"))
+    category = _text_field(obj.get("apiRefusalCategory"))
+    state.last_model = fallback or state.last_model
+    state.append_outcome(
+        "system_message",
+        ProviderOutcome(
+            kind="substituted", requested_model=original, served_model=fallback, category=category,
+            explanation=_text_field(obj.get("apiRefusalExplanation")),
+            request_id=_text_field(obj.get("requestId")),
+        ),
+        f"Model switched from {original} to {fallback or 'another model'}"
+        + (f" after a {category} refusal." if category else " after a refusal."),
+    )
+
+
 def append_claude_assistant_message(
     message: JsonObject,
     state: _ParseState,
     *,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    request_id: object = None,
 ) -> None:
     content = message.get("content")
-    model_used = message.get("model") if isinstance(message.get("model"), str) else None
+    model_used = _text_field(message.get("model"))
+    synthetic = model_used == _SYNTHETIC_MODEL
+    if synthetic:
+        # Claude Code's own placeholder turn, never a model that answered.
+        model_used = None
+    elif model_used:
+        state.last_model = model_used
+    if message.get("stop_reason") == "refusal":
+        details = message.get("stop_details")
+        details = details if isinstance(details, dict) else {}
+        category = _text_field(details.get("category"))
+        explanation = _text_field(details.get("explanation"))
+        state.append_outcome(
+            "error",
+            ProviderOutcome(
+                kind="refused", requested_model=state.last_model or "unknown", category=category,
+                explanation=explanation, request_id=_text_field(request_id),
+            ),
+            explanation or f"The provider refused this request{f' ({category})' if category else ''}.",
+            model_used=model_used, agent_id=agent_id, agent_name=agent_name,
+        )
+    if synthetic:
+        return  # The placeholder text only restates the refusal.
     if isinstance(content, str) and content.strip():
         state.append(
             "assistant_message",

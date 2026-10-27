@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,6 +19,7 @@ from app.services.native_continuation_runtime import (
     NativeTurnUsage,
     _login_with_agent_hub_auth,
     _Protocol,
+    _RetainedRuntime,
     _safe_provider_error,
     _turn_usage,
 )
@@ -406,3 +408,65 @@ async def test_manager_cancellation_closes_retained_runtime() -> None:
 
     runtime.close.assert_awaited_once()
     assert manager._runtimes == {}
+
+
+_FIXTURES = Path(__file__).parents[1] / "fixtures" / "provider_outcomes" / "codex"
+
+
+def test_real_rollout_cyber_policy_error_classifies_as_a_cyber_refusal() -> None:
+    error = json.loads((_FIXTURES / "rollout_task_complete_cyber_policy.json").read_text())["error"]
+
+    failure = _safe_provider_error(error)
+
+    assert (failure.code, failure.refusal_category) == ("native_provider_refusal", "cyber")
+
+
+@pytest.mark.parametrize(
+    ("info", "category"),
+    [("bioPolicy", "bio"), ("bio_policy", "bio"), ("tooManyDenials", "too_many_denials"), ("rateLimitExceeded", None)],
+)
+def test_refusal_category_comes_from_the_shared_code_map(info: str, category: str | None) -> None:
+    assert _safe_provider_error({"codexErrorInfo": info}).refusal_category == category
+
+
+class _ScriptedProtocol:
+    def __init__(self, notifications: list[dict[str, Any]]) -> None:
+        self.notifications = notifications
+
+    async def request(self, _method: str, _params: dict[str, Any]) -> dict[str, Any]:
+        return {"turn": {"id": "turn-1"}}
+
+    async def receive(self) -> dict[str, Any]:
+        raise AssertionError("script exhausted")
+
+
+def _retained(notifications: list[dict[str, Any]]) -> _RetainedRuntime:
+    return _RetainedRuntime(
+        key=_key(), tempdir=MagicMock(), process=MagicMock(), protocol=_ScriptedProtocol(notifications),
+        thread_id="thread-1", observed_model="gpt-5.5", runtime_name="test",
+    )
+
+
+@pytest.mark.asyncio
+async def test_model_reroute_is_recorded_as_a_substitution() -> None:
+    notifications = json.loads((_FIXTURES / "app_server_model_rerouted.json").read_text())["notifications"]
+
+    observation = await _retained(notifications).turn("go", None)
+
+    assert observation.observed_model == "gpt-5.4"
+    assert observation.outcome is not None
+    assert (observation.outcome.kind, observation.outcome.requested_model, observation.outcome.served_model,
+            observation.outcome.category) == ("substituted", "gpt-5.5", "gpt-5.4", "cyber")
+
+
+@pytest.mark.asyncio
+async def test_refused_turn_attaches_a_refusal_outcome_to_the_failure() -> None:
+    error = json.loads((_FIXTURES / "rollout_task_complete_cyber_policy.json").read_text())["error"]
+    notifications = [{"method": "turn/completed", "params": {"turn": {"status": "failed", "error": error}}}]
+
+    with pytest.raises(native_runtime.NativeRuntimeError) as raised:
+        await _retained(notifications).turn("go", None)
+
+    outcome = raised.value.observation.outcome  # type: ignore[union-attr]
+    assert outcome is not None
+    assert (outcome.kind, outcome.category, outcome.requested_model) == ("refused", "cyber", _key().model)

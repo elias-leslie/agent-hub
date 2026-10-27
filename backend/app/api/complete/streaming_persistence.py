@@ -33,6 +33,7 @@ async def save_messages_to_db(
     agent_used: str | None,
     stream_start: float,
     source_metadata: dict[str, object] | None = None,
+    usage: dict[str, object] | None = None,
 ) -> None:
     """Save streamed messages to the database using a fresh session."""
     if not accumulated_content:
@@ -53,6 +54,7 @@ async def save_messages_to_db(
                 agent_id=agent_used,
                 duration_ms=stream_duration_ms,
                 source_metadata=source_metadata,
+                usage=usage,
             )
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:

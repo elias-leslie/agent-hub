@@ -1,0 +1,25 @@
+{
+  "_source": "Codex app-server v2 notification shapes (no real model/rerouted sample exists in local rollouts); protocol fields only",
+  "notifications": [
+    {
+      "method": "model/rerouted",
+      "params": {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "fromModel": "gpt-5.5",
+        "toModel": "gpt-5.4",
+        "reason": "high_risk_cyber_activity"
+      }
+    },
+    {
+      "method": "turn/completed",
+      "params": {
+        "threadId": "thread-1",
+        "turn": {
+          "id": "turn-1",
+          "status": "completed"
+        }
+      }
+    }
+  ]
+}

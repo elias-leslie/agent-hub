@@ -171,7 +171,7 @@ def _unsupported_record_issue(obj: JsonObject) -> str | None:
             return "unsupported_record_shape"
     elif entry_type == "message" and not isinstance(obj.get("message"), dict):
         return "unsupported_record_shape"
-    elif entry_type == "system" and obj.get("subtype") != "compact_boundary":
+    elif entry_type == "system" and obj.get("subtype") not in {"compact_boundary", "model_refusal_fallback"}:
         return "unsupported_system_record"
     return None
 

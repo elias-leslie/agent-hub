@@ -274,8 +274,13 @@ def apply_execution_metadata(
     effective_model: str,
     fallback_used: bool,
     fallback_reason: str | None = None,
+    served_model: str | None = None,
 ) -> None:
-    """Align session row + provider metadata with the actual execution path."""
+    """Align session row + provider metadata with the actual execution path.
+
+    ``served_model`` is the provider-reported model when it differs from the
+    effective route model; the requested model stays in the metadata.
+    """
     from app.services.agent_routing import get_provider_for_model
 
     rp = get_provider_for_model(requested_model)
@@ -298,6 +303,8 @@ def apply_execution_metadata(
     )
     if fallback_reason:
         metadata["fallback_reason"] = fallback_reason
+    if served_model and served_model != effective_model:
+        metadata["served_model"] = served_model
     session.model = effective_model
     session.provider = ep
     session.models_used = models_used

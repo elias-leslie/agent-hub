@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.llm.model_resolver import upstream_model_id
 from app.llm.types import AssistantMessage, Usage, UsageCost
+from app.llm.utils.outcomes import is_model_switch, outcome_details, outcome_of
 
 if TYPE_CHECKING:
     from .types import CompletionInternalResult
@@ -31,8 +32,23 @@ def aggregate_message_usage(
     return replace(final, usage=usage)
 
 
+def _switched_to(message: AssistantMessage) -> str | None:
+    """The provider-reported model when it is a different model than the one requested."""
+    reported = (getattr(message, "response_model", None) or "").strip()
+    return reported if reported and is_model_switch(message.model, reported) else None
+
+
 def accounting_model(message: AssistantMessage, fallback: str) -> str:
-    """Keep catalog route identity when its upstream id matches the reported model."""
+    """Catalog identity of the model that answered, so pricing follows what ran.
+
+    A reported model that differs from the requested one wins when the catalog
+    knows it; otherwise route identity is kept when the upstream id matches.
+    """
+    switched = _switched_to(message)
+    if switched:
+        for key in (switched, f"{message.provider}/{switched}"):
+            if key in MODEL_CATALOG_BY_ID:
+                return key
     entry = MODEL_CATALOG_BY_ID.get(fallback)
     if entry and message.provider == entry.provider and message.model == upstream_model_id(fallback, entry.provider):
         return fallback
@@ -42,6 +58,17 @@ def accounting_model(message: AssistantMessage, fallback: str) -> str:
     if qualified in MODEL_CATALOG_BY_ID:
         return qualified
     return message.model or fallback
+
+
+def served_model(message: AssistantMessage, fallback: str) -> str:
+    """Model that actually answered, for session events: the provider-reported model when it differs."""
+    return (_switched_to(message) or accounting_model(message, fallback))[:100]
+
+
+def outcome_usage(message: AssistantMessage | None) -> dict[str, object] | None:
+    """Session-event ``usage`` payload carrying the message's typed provider outcome, if any."""
+    outcome = outcome_of(message) if message is not None else None
+    return {"provider_outcome": outcome_details(outcome)} if outcome else None
 
 
 async def persist_failed_attempt_usage(

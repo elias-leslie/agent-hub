@@ -54,6 +54,8 @@ from ..types import (
     ToolResultMessage,
     Usage,
 )
+from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
+from ..utils.refusal_codes import codex_refusal_category
 
 _CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
 _DEFAULT_INSTRUCTIONS = "You are a concise assistant."
@@ -308,6 +310,23 @@ def _usage(event: dict[str, Any], model: Model[Any]) -> Usage:
     return usage
 
 
+class _CodexRefusal(RuntimeError):
+    """A Codex safety refusal; ``category`` is the shared refusal category."""
+
+    def __init__(self, message: str, category: str) -> None:
+        super().__init__(message)
+        self.category = category
+
+
+def _event_error_code(event: dict[str, Any]) -> object:
+    event_type = event.get("type")
+    if event_type == "error":
+        return event.get("code") or _as_dict(event.get("error")).get("code")
+    if event_type == "response.failed":
+        return _as_dict(_as_dict(event.get("response")).get("error")).get("code")
+    return None
+
+
 def _event_error_message(event: dict[str, Any]) -> str | None:
     event_type = event.get("type")
     if event_type == "error":
@@ -439,6 +458,9 @@ async def _run(
                         return
                     error_message = _event_error_message(event)
                     if error_message:
+                        category = codex_refusal_category(_event_error_code(event))
+                        if category:
+                            raise _CodexRefusal(error_message, category)
                         raise RuntimeError(error_message)
 
                     event_type = event.get("type", "")
@@ -511,6 +533,15 @@ async def _run(
                         reported_model = response_payload.get("model")
                         if isinstance(reported_model, str) and reported_model.strip():
                             output.response_model = reported_model.strip()
+                            if is_model_switch(model.id, output.response_model):
+                                record_outcome(
+                                    output,
+                                    ProviderOutcome(
+                                        kind="substituted",
+                                        requested_model=model.id,
+                                        served_model=output.response_model,
+                                    ),
+                                )
                         if isinstance(response_payload.get("id"), str):
                             output.response_id = response_payload["id"]
                         if started_text:
@@ -531,6 +562,17 @@ async def _run(
         stream.push(DoneEvent(reason="stop", message=output))
     except Exception as exc:
         error = replace(output, stop_reason="error", error_message=str(exc))
+        if isinstance(exc, _CodexRefusal):
+            record_outcome(
+                error,
+                ProviderOutcome(
+                    kind="refused",
+                    requested_model=model.id,
+                    served_model=error.response_model,
+                    category=exc.category,
+                    explanation=str(exc),
+                ),
+            )
         stream.push(ErrorEvent(reason="error", error=error))
 
 

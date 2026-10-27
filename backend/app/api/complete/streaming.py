@@ -47,7 +47,7 @@ from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message, messages_to_dicts
 
 from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
-from .runtime_usage import accounting_model, aggregate_message_usage
+from .runtime_usage import accounting_model, aggregate_message_usage, outcome_usage, served_model
 from .schemas import MessageInput
 from .sse_writer import SseWriter, tool_result_text
 from .streaming_context import StreamContext
@@ -156,10 +156,11 @@ async def _persist_and_build_done_sse(
         accumulated_content=accumulated_content,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        model=effective_model,
+        model=served_model(message, effective_model),
         agent_used=ctx.agent_used,
         stream_start=ctx.stream_start,
         source_metadata=ctx.source_metadata,
+        usage=outcome_usage(message),
     )
     await track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
     if ctx.is_new_session and ctx.is_one_shot:

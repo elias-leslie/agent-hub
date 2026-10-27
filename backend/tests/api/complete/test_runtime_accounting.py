@@ -9,7 +9,7 @@ from app.api.complete.handler_helpers import save_and_track
 from app.api.complete.orchestrator import run_completion, run_completion_stream
 from app.api.complete.schemas import CompletionRequest, MessageInput
 from app.api.complete.sse_writer import SseWriter
-from app.api.complete.streaming import _emit_events
+from app.api.complete.streaming import _emit_events, _persist_and_build_done_sse
 from app.api.complete.types import CompletionInternalResult
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.llm.event_stream import create_assistant_message_event_stream
@@ -25,6 +25,7 @@ from app.llm.types import (
     Usage,
     UserMessage,
 )
+from app.llm.utils.outcomes import ProviderOutcome, outcome_details, record_outcome
 from app.services.token_counter import estimate_usage_cost
 from tests.api.stream_test_support import make_stream_ctx, patched_done_persistence
 from tests.model_ids import DEFAULT_GEMINI_MODEL, GEMINI_2_5_FLASH
@@ -359,3 +360,95 @@ async def test_response_cache_hits_save_history_without_rebilling_provider_usage
     quota.assert_not_awaited()
     assert session.health_detail == "completed"
     assert db.commit.await_count >= 2
+
+
+def _served_message(*, requested: str, reported: str | None, outcome: ProviderOutcome | None = None) -> AssistantMessage:
+    message = AssistantMessage(
+        content=[TextContent(text="done")], api="google-generative-ai", provider="gemini", model=requested,
+        usage=Usage(input=100, output=10, total_tokens=110), stop_reason="stop", timestamp=0,
+        response_model=reported,
+    )
+    if outcome is not None:
+        record_outcome(message, outcome)
+    return message
+
+
+async def _save_and_track(message: AssistantMessage, requested: str) -> tuple[SimpleNamespace, AsyncMock, AsyncMock]:
+    request = CompletionRequest(messages=[MessageInput(role="user", content="go")], project_id="agent-hub")
+    session = SimpleNamespace(
+        status="active", model=requested, provider="gemini", models_used=[], providers_used=[], provider_metadata={},
+    )
+    with (
+        patch("app.api.complete.handler_helpers.save_events", new_callable=AsyncMock) as save_events,
+        patch("app.api.complete.handler_helpers.persist_execution_observability", new_callable=AsyncMock),
+        patch("app.api.complete.handler_helpers.log_token_usage", new_callable=AsyncMock) as log_usage,
+        patch("app.api.complete.handler_helpers.publish_complete", new_callable=AsyncMock),
+        patch("app.services.project_budget.record_project_cost", new_callable=AsyncMock),
+    ):
+        await save_and_track(
+            AsyncMock(), session, "served", request, CompletionInternalResult(message=message), requested, False,
+        )
+    return session, save_events, log_usage
+
+
+@pytest.mark.asyncio
+async def test_served_catalog_model_lands_in_events_cost_logs_and_session_metadata() -> None:
+    outcome = ProviderOutcome(kind="substituted", requested_model=DEFAULT_GEMINI_MODEL, served_model=GEMINI_2_5_FLASH)
+    message = _served_message(requested=DEFAULT_GEMINI_MODEL, reported=GEMINI_2_5_FLASH, outcome=outcome)
+
+    session, save_events, log_usage = await _save_and_track(message, DEFAULT_GEMINI_MODEL)
+
+    saved, logged = save_events.await_args, log_usage.await_args
+    assert saved is not None and logged is not None
+    assert saved.args[6] == GEMINI_2_5_FLASH
+    assert saved.kwargs["usage"] == {"provider_outcome": outcome_details(outcome)}
+    assert logged.args[2] == GEMINI_2_5_FLASH
+    assert logged.args[5] == pytest.approx(
+        estimate_usage_cost(100, 10, GEMINI_2_5_FLASH).total_cost_usd
+    )
+    assert session.provider_metadata["requested_model"] == DEFAULT_GEMINI_MODEL
+    assert session.provider_metadata["served_model"] == GEMINI_2_5_FLASH
+
+
+@pytest.mark.asyncio
+async def test_unpriced_served_model_is_shown_on_the_event_but_cost_keeps_the_route_identity() -> None:
+    message = _served_message(requested=DEFAULT_GEMINI_MODEL, reported="aggregator-alias-7b")
+
+    _, save_events, log_usage = await _save_and_track(message, DEFAULT_GEMINI_MODEL)
+
+    saved, logged = save_events.await_args, log_usage.await_args
+    assert saved is not None and logged is not None
+    assert saved.args[6] == "aggregator-alias-7b"
+    assert saved.kwargs["usage"] is None
+    assert logged.args[2] == DEFAULT_GEMINI_MODEL
+
+
+@pytest.mark.asyncio
+async def test_matching_or_snapshot_response_model_changes_nothing() -> None:
+    message = _served_message(requested=DEFAULT_GEMINI_MODEL, reported=f"{DEFAULT_GEMINI_MODEL}-2026-04-23")
+
+    session, save_events, log_usage = await _save_and_track(message, DEFAULT_GEMINI_MODEL)
+
+    saved, logged = save_events.await_args, log_usage.await_args
+    assert saved is not None and logged is not None
+    assert saved.args[6] == DEFAULT_GEMINI_MODEL
+    assert logged.args[2] == DEFAULT_GEMINI_MODEL
+    assert "served_model" not in session.provider_metadata
+
+
+@pytest.mark.asyncio
+async def test_stream_done_saves_the_served_model_and_outcome() -> None:
+    outcome = ProviderOutcome(kind="refused", requested_model=DEFAULT_GEMINI_MODEL, category="content_filter")
+    message = _served_message(requested=DEFAULT_GEMINI_MODEL, reported=GEMINI_2_5_FLASH, outcome=outcome)
+    ctx = make_stream_ctx("s-served", model=DEFAULT_GEMINI_MODEL, agent_used="chat")
+
+    with patched_done_persistence() as mocks:
+        await _persist_and_build_done_sse(
+            writer=SseWriter(session_id="s-served"), ctx=ctx, message=message, accumulated_content="ok",
+        )
+
+    call = mocks.save_messages_to_db.await_args
+    assert call is not None
+    kwargs = call.kwargs
+    assert kwargs["model"] == GEMINI_2_5_FLASH
+    assert kwargs["usage"] == {"provider_outcome": outcome_details(outcome)}

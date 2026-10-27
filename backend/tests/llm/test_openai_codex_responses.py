@@ -17,6 +17,7 @@ from app.llm.providers.openai_codex_responses import (
     _raise_codex_http_error,
 )
 from app.llm.types import AssistantMessage, Context, TextContent, ToolCall, ToolResultMessage, Usage
+from app.llm.utils.outcomes import outcome_of
 from app.services.llm_errors import AuthenticationError, ProviderError, RateLimitError
 
 
@@ -306,3 +307,65 @@ def test_codex_stream_timeout_honors_request_timeout() -> None:
     timeout = openai_codex_responses._stream_timeout(SimpleStreamOptions(timeout_ms=5_000))
     assert timeout.read == 5.0
     assert timeout.connect == 5.0
+
+
+async def _run_events(monkeypatch: pytest.MonkeyPatch, events: list[dict]) -> AssistantMessage:
+    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
+
+    @asynccontextmanager
+    async def authenticated_response(*_args):
+        yield SimpleNamespace(status_code=200)
+
+    async def sse_lines(_response):
+        for event in events:
+            yield event
+
+    monkeypatch.setattr(openai_codex_responses, "_authenticated_response", authenticated_response)
+    monkeypatch.setattr(openai_codex_responses, "_parse_sse_lines", sse_lines)
+    return await openai_codex_responses.openai_codex_responses_provider.stream_simple(
+        model, Context(messages=[]),
+    ).result()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("served", ["gpt-5.4", "gpt-6.1-sol"])
+async def test_served_model_switch_is_typed_but_not_an_error(monkeypatch: pytest.MonkeyPatch, served: str) -> None:
+    result = await _run_events(monkeypatch, [{"type": "response.completed", "response": {"model": served}}])
+
+    assert result.stop_reason == "stop"
+    outcome = outcome_of(result)
+    if served == "gpt-6.1-sol":
+        assert outcome is None
+    else:
+        assert outcome is not None
+        assert (outcome.kind, outcome.requested_model, outcome.served_model) == ("substituted", "gpt-6.1-sol", served)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event", "category"),
+    [
+        ({"type": "response.failed", "response": {"error": {"code": "cyber_policy", "message": "flagged"}}}, "cyber"),
+        ({"type": "error", "code": "bio_policy", "message": "flagged"}, "bio"),
+        ({"type": "response.failed", "response": {"error": {"code": "misalignmentPolicyViolation", "message": "no"}}}, "misalignment"),
+    ],
+)
+async def test_codex_safety_failures_are_typed_refusals(
+    monkeypatch: pytest.MonkeyPatch, event: dict, category: str,
+) -> None:
+    result = await _run_events(monkeypatch, [event])
+
+    assert result.stop_reason == "error"
+    assert result.error_message
+    outcome = outcome_of(result)
+    assert outcome is not None
+    assert (outcome.kind, outcome.category, outcome.requested_model) == ("refused", category, "gpt-6.1-sol")
+
+
+@pytest.mark.asyncio
+async def test_other_codex_failures_stay_untyped(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = await _run_events(
+        monkeypatch, [{"type": "response.failed", "response": {"error": {"code": "server_error", "message": "boom"}}}],
+    )
+
+    assert (result.stop_reason, result.error_message, outcome_of(result)) == ("error", "boom", None)

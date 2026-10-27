@@ -293,3 +293,22 @@ def test_session_summary_exposes_only_valid_retained_request_errors():
     assert retained_request_errors({"request_errors": {"count": 0}}) is None
     assert retained_request_errors({"request_errors": "bad"}) is None
     assert retained_request_errors(None) is None
+
+
+def test_pi_response_model_switch_becomes_a_substituted_event_and_model_used() -> None:
+    """Synthetic Pi records: local Pi sessions predate ``responseModel``, so no real sample exists."""
+    from pathlib import Path
+
+    from app.services.session_ingestion.adapters.transcript_parsers import parse_transcript_events
+
+    path = Path(__file__).parents[2] / "fixtures" / "provider_outcomes" / "pi" / "response_model_switch.jsonl"
+    events = parse_transcript_events(path.read_text().splitlines())
+
+    switched = [event for event in events if event.usage and "provider_outcome" in event.usage]
+    assert [event.event_type for event in switched] == ["system_message"]
+    assert switched[0].usage is not None
+    outcome = switched[0].usage["provider_outcome"]
+    assert (outcome["kind"], outcome["requested_model"], outcome["served_model"]) == (
+        "substituted", "openai-codex/gpt-5.5", "openai-codex/gpt-5.4",
+    )
+    assert {event.model_used for event in events if event.event_type == "assistant_message"} == {"openai-codex/gpt-5.4"}

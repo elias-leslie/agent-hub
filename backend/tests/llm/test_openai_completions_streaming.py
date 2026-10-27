@@ -18,6 +18,7 @@ from app.llm.types import (
     ThinkingDeltaEvent,
     UserMessage,
 )
+from app.llm.utils.outcomes import outcome_of
 
 
 @pytest.mark.parametrize("reasoning_field", [None, "reasoning", "reasoning_content"])
@@ -90,3 +91,38 @@ async def test_qwen_completion_preserves_answer_and_separate_reasoning(
         ["Check the answer."] if reasoning_field else []
     )
     assert events[-1].type == "done"
+
+
+@pytest.mark.parametrize("finish_reason", ["content_filter", "length"])
+async def test_content_filter_is_a_typed_refusal_and_keeps_the_served_model(
+    monkeypatch: pytest.MonkeyPatch, finish_reason: str,
+) -> None:
+    """Synthetic SDK stream: an OpenAI-compatible route that filters its own output."""
+    monkeypatch.setattr(settings, "local_openai_base_url", "http://127.0.0.1:11434/v1")
+    model = resolve_llm_model("local/qwen3.8-27b-gsq-rco-iq3_s", "local")
+    chunk = {
+        "id": "completion-filter", "object": "chat.completion.chunk", "created": 1, "model": model.id,
+        "choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": finish_reason}],
+    }
+
+    def respond(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"},
+            content=f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n",
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http_client:
+        client = AsyncOpenAI(api_key="test", base_url=model.base_url, http_client=http_client)
+        monkeypatch.setattr(openai_completions, "create_client", lambda *args: client)
+        stream = openai_completions.stream_openai_completions(
+            model, Context(messages=[UserMessage(content="hi", timestamp=1)]), OpenAICompletionsOptions(),
+        )
+        result = await stream.result()
+
+    outcome = outcome_of(result)
+    if finish_reason == "length":
+        assert outcome is None
+        return
+    assert result.stop_reason == "error"
+    assert outcome is not None
+    assert (outcome.kind, outcome.category, outcome.served_model) == ("refused", "content_filter", model.id)

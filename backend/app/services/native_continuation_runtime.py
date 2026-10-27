@@ -14,6 +14,8 @@ from typing import Any, cast
 
 from app.adapters.codex_auth import CodexCredentials
 from app.llm.model_resolver import upstream_model_id
+from app.llm.utils.outcomes import ProviderOutcome
+from app.llm.utils.refusal_codes import codex_refusal_category, reroute_category
 from app.services.codex_credentials import ensure_fresh_codex_credentials
 from app.utils.safe_subprocess import create_process
 
@@ -59,6 +61,8 @@ class NativeRuntimeError(RuntimeError):
         self.code = code
         self.retryable = retryable
         self.observation: NativeTurnObservation | None = None
+        # Safety category when the provider declined the request (cyber, bio, ...).
+        self.refusal_category: str | None = None
         super().__init__(message)
 
 
@@ -104,6 +108,8 @@ class NativeTurnObservation:
     observed_model: str
     usage: NativeTurnUsage
     runtime: str | None
+    # Refusal, or a safety reroute to another model, seen during the turn.
+    outcome: ProviderOutcome | None = None
 
 
 def _runtime_binary() -> Path:
@@ -361,7 +367,7 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
     raw_data = value.get("data")
     data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
     fallback_info = data.get("codexErrorInfo", value.get("code"))
-    info = value.get("codexErrorInfo", fallback_info)
+    info = value.get("codexErrorInfo", value.get("codex_error_info", fallback_info))
     code = next(iter(info), None) if isinstance(info, dict) else info
     if value.get("misalignment") is not None:
         code = "misalignmentPolicyViolation"
@@ -393,16 +399,14 @@ def _safe_provider_error(error: object) -> NativeRuntimeError:
             code = "rateLimitExceeded"
         elif any(term in safe_text for term in ("overloaded", "unavailable", "disconnected")):
             code = "serverOverloaded"
+    refusal_category = codex_refusal_category(code)
+    if refusal_category:
+        refusal = NativeRuntimeError(
+            "native_provider_refusal", "The native provider declined this request."
+        )
+        refusal.refusal_category = refusal_category
+        return refusal
     known = {
-        "cyberPolicy": ("native_provider_refusal", "The native provider declined this request."),
-        "misalignmentPolicyViolation": (
-            "native_provider_refusal",
-            "The native provider declined this request.",
-        ),
-        "tooManyDenials": (
-            "native_provider_refusal",
-            "The native provider declined this request.",
-        ),
         "badRequest": (
             "native_bad_request",
             "The native provider rejected the request contract.",
@@ -532,7 +536,17 @@ class _RetainedRuntime:
         answer: str,
         turn_id: str | None,
         usage: NativeTurnUsage,
+        rerouted: ProviderOutcome | None = None,
     ) -> NativeRuntimeError:
+        outcome = rerouted
+        if failure.refusal_category:
+            outcome = ProviderOutcome(
+                kind="refused",
+                requested_model=self.key.model,
+                served_model=self.observed_model,
+                category=failure.refusal_category,
+                explanation=str(failure),
+            )
         failure.observation = NativeTurnObservation(
             answer_text=answer,
             thread_id=self.thread_id,
@@ -540,6 +554,7 @@ class _RetainedRuntime:
             observed_model=self.observed_model,
             usage=usage,
             runtime=self.runtime_name,
+            outcome=outcome,
         )
         return failure
 
@@ -559,6 +574,7 @@ class _RetainedRuntime:
         turn_id = (started.get("turn") or {}).get("id")
         answer = ""
         usage = NativeTurnUsage()
+        rerouted: ProviderOutcome | None = None
         turn_baseline = dict(self.total_usage)
         latest_total = dict(self.total_usage)
         while True:
@@ -575,7 +591,7 @@ class _RetainedRuntime:
                 if params.get("willRetry") is True and failure.code != "native_provider_refusal":
                     continue
                 raise self._attach_observation(
-                    failure, answer=answer, turn_id=turn_id, usage=usage
+                    failure, answer=answer, turn_id=turn_id, usage=usage, rerouted=rerouted
                 )
             if method == "item/started" and params.get("item", {}).get("type") not in (
                 "userMessage",
@@ -593,6 +609,12 @@ class _RetainedRuntime:
                 )
             elif method == "model/rerouted" and params.get("threadId") == self.thread_id:
                 self.observed_model = params.get("toModel") or self.observed_model
+                rerouted = ProviderOutcome(
+                    kind="substituted",
+                    requested_model=params.get("fromModel") or self.key.model,
+                    served_model=self.observed_model,
+                    category=reroute_category(params.get("reason")),
+                )
             elif method == "turn/completed":
                 raw_turn = params.get("turn")
                 turn: dict[str, Any] = raw_turn if isinstance(raw_turn, dict) else {}
@@ -602,6 +624,7 @@ class _RetainedRuntime:
                         answer=answer,
                         turn_id=turn_id,
                         usage=usage,
+                        rerouted=rerouted,
                     )
                 self.total_usage = latest_total
                 return NativeTurnObservation(
@@ -611,6 +634,7 @@ class _RetainedRuntime:
                     observed_model=self.observed_model,
                     usage=usage,
                     runtime=self.runtime_name,
+                    outcome=rerouted,
                 )
 
     async def close(self) -> None:

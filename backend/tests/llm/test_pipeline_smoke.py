@@ -26,7 +26,7 @@ import pytest
 from app.llm import tool_loop
 from app.llm.api_registry import get_api_provider
 from app.llm.event_stream import AssistantMessageEventStream
-from app.llm.providers import anthropic as anthropic_provider  # noqa: F401 — triggers registration
+from app.llm.providers import anthropic as anthropic_provider
 from app.llm.types import (
     AssistantMessage,
     Context,
@@ -402,3 +402,54 @@ async def test_tool_loop_raised_tool_error_reaches_model_as_text(monkeypatch: py
     error_text = result.content[0]
     assert isinstance(error_text, TextContent)
     assert "permission denied: /etc/shadow" in error_text.text
+
+
+class _FakeAnthropicStream:
+    def __init__(self, events: list[Any]) -> None:
+        self._events = events
+
+    async def __aenter__(self) -> _FakeAnthropicStream:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
+
+    async def __aiter__(self):
+        for event in self._events:
+            yield event
+
+
+@pytest.mark.asyncio
+async def test_anthropic_refusal_is_typed_with_stop_details_category() -> None:
+    """Synthetic SDK events shaped like a refusal stop with ``stop_details``."""
+    from types import SimpleNamespace
+
+    from app.llm.utils.outcomes import outcome_of
+
+    events = [
+        SimpleNamespace(type="message_start", message=SimpleNamespace(id="msg_1", model="claude-sonnet-5-5", usage=None)),
+        SimpleNamespace(
+            type="message_delta",
+            delta=SimpleNamespace(
+                stop_reason="refusal",
+                stop_details=SimpleNamespace(type="refusal", category="cyber", explanation="Blocked by usage policy."),
+            ),
+            usage=None,
+        ),
+        SimpleNamespace(type="message_stop"),
+    ]
+    client = SimpleNamespace(messages=SimpleNamespace(stream=lambda **_kw: _FakeAnthropicStream(events)))
+    model = _claude_model()
+
+    result = await anthropic_provider.stream_anthropic(
+        model, Context(messages=[UserMessage(content="hi", timestamp=0)]),
+        anthropic_provider.AnthropicOptions(client=client),
+    ).result()
+
+    assert result.stop_reason == "error"
+    assert result.error_message == "Blocked by usage policy."
+    outcome = outcome_of(result)
+    assert outcome is not None
+    assert (outcome.kind, outcome.category, outcome.explanation, outcome.served_model) == (
+        "refused", "cyber", "Blocked by usage policy.", "claude-sonnet-5-5",
+    )

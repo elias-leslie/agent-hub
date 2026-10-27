@@ -26,6 +26,7 @@ from app.api.complete.schemas import (
     UsageInfo,
 )
 from app.constants.catalog import get_model_entry
+from app.llm.utils.outcomes import outcome_details
 from app.models import NativeContinuationTurn, Session
 from app.routing.resolution import inject_agent_system_prompt
 from app.services.native_continuation_runtime import (
@@ -439,6 +440,7 @@ async def _persist_db_usage(
         agent_id=request.agent_slug,
         source_metadata=source_metadata,
         commit=False,
+        usage={"provider_outcome": outcome_details(result.outcome)} if result.outcome else None,
     )
     cost = estimate_cost(
         usage.input_tokens,

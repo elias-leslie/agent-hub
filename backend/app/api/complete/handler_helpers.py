@@ -21,7 +21,7 @@ from app.services.token_counter import build_output_usage, estimate_cost, estima
 from .event_helpers import save_events
 from .execution_observability import persist_execution_observability
 from .helpers import is_error_response
-from .runtime_usage import accounting_model
+from .runtime_usage import accounting_model, outcome_usage, served_model
 from .schemas import (
     CacheInfo,
     CompletionRequest,
@@ -60,6 +60,8 @@ async def save_and_track(
         else None
     )
     effective_model = model_used or resolved_model
+    final_message = getattr(result, "message", None)
+    answered_by = served_model(final_message, effective_model) if final_message is not None else effective_model
     tool_calls_count = getattr(result, "tool_calls_count", None)
     if tool_calls_count is None:
         tool_calls_count = len(getattr(result, "tool_calls", None) or [])
@@ -70,6 +72,7 @@ async def save_and_track(
         effective_model=effective_model,
         fallback_used=effective_model != resolved_model,
         fallback_reason=fallback_reason,
+        served_model=answered_by,
     )
     await persist_execution_observability(
         db,
@@ -86,11 +89,12 @@ async def save_and_track(
     )
     await save_events(
         db, session_id, request.messages, result.content,
-        result.input_tokens, result.output_tokens, effective_model,
+        result.input_tokens, result.output_tokens, answered_by,
         getattr(result, "thinking_content", None),
         getattr(result, "thinking_tokens", None),
         agent_id=request.agent_slug, duration_ms=duration_ms,
         source_metadata=source_metadata,
+        usage=outcome_usage(final_message),
     )
     if publish_messages:
         for msg in request.messages:

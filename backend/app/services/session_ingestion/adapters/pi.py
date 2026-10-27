@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.llm.utils.outcomes import ProviderOutcome, is_model_switch
 from app.services.session_ingestion.models import NormalizedEvent, SessionUpsertRequest
 
 from ._event_builders import _ParseState
@@ -122,6 +123,16 @@ def append_pi_events(obj: dict[str, Any], state: _ParseState) -> None:
     role = message.get("role")
     provider, model = message.get("provider"), message.get("model")
     model_used = f"{provider}/{model}" if isinstance(provider, str) and isinstance(model, str) else None
+    served = message.get("responseModel") if role == "assistant" else None
+    if model_used and isinstance(served, str) and served.strip():
+        served = served.strip()
+        if is_model_switch(model, served):
+            state.append_outcome(
+                "system_message",
+                ProviderOutcome(kind="substituted", requested_model=model_used, served_model=f"{provider}/{served}"),
+                f"Model switched from {model_used} to {provider}/{served}.",
+            )
+            model_used = f"{provider}/{served}"
     if role == "user":
         state.begin_user_turn()
         state.append("user_message", role="user", content=_text(message.get("content")))

@@ -1,0 +1,7 @@
+{
+  "_source": "Codex rollout event_msg/task_complete, protocol fields only",
+  "error": {
+    "message": "This content was flagged for possible cybersecurity risk. If this seems wrong, try rephrasing your request. Otherwise, confirm that the access_programs.cyber parameter is set to the appropriate tier, and note that some cybersecurity requests are still limited, even when Daybreak is on.",
+    "codex_error_info": "cyber_policy"
+  }
+}

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from app.services.session_ingestion.adapters.base import ProviderSessionRef
+from app.services.session_ingestion.adapters.claude_code import ClaudeCodeTranscriptAdapter
 from app.services.session_ingestion.adapters.transcript_parsers import (
     inspect_transcript_source,
     parse_transcript_events,
@@ -1052,3 +1054,71 @@ def test_unknown_material_record_is_a_blocking_source_issue(tmp_path: Path) -> N
     assert [(issue.code, issue.count) for issue in health.issues] == [
         ("unsupported_response_item", 1),
     ]
+
+
+_OUTCOME_FIXTURES = Path(__file__).parents[2] / "fixtures" / "provider_outcomes"
+
+
+def _fixture_lines(name: str) -> list[str]:
+    return (_OUTCOME_FIXTURES / name).read_text().splitlines()
+
+
+def _outcomes(events) -> list[tuple[str, str, dict]]:
+    return [
+        (event.event_type, event.usage["provider_outcome"]["kind"], event.usage["provider_outcome"])
+        for event in events
+        if event.usage and "provider_outcome" in event.usage
+    ]
+
+
+def test_claude_code_refusal_fallback_record_becomes_a_substituted_event() -> None:
+    """Real Claude Code transcript fields: Opus 5.5 refuses (cyber), Opus 4.8 answers."""
+    events = parse_transcript_events(_fixture_lines("claude_code/model_refusal_fallback.jsonl"))
+
+    outcomes = _outcomes(events)
+    assert [(event_type, kind) for event_type, kind, _ in outcomes] == [("error", "refused"), ("system_message", "substituted")]
+    refused, substituted = outcomes[0][2], outcomes[1][2]
+    assert (refused["requested_model"], refused["category"]) == ("claude-opus-5-5", "cyber")
+    assert (substituted["requested_model"], substituted["served_model"], substituted["category"]) == (
+        "claude-opus-5-5", "claude-opus-4-8", "cyber",
+    )
+    assert substituted["request_id"].startswith("req_")
+    assert [event.model_used for event in events if event.event_type == "assistant_message"] == [
+        "claude-opus-5-5", "claude-opus-4-8",
+    ]
+
+
+def test_claude_code_synthetic_refusal_is_a_refused_event_not_a_model() -> None:
+    events = parse_transcript_events(_fixture_lines("claude_code/synthetic_refusal.jsonl"))
+
+    outcomes = _outcomes(events)
+    assert [(kind, o["category"], o["requested_model"]) for _, kind, o in outcomes] == [
+        ("refused", "cyber", "claude-opus-5-5"), ("refused", "cyber", "claude-opus-5-5"),
+    ]
+    assert "<synthetic>" not in {event.model_used for event in events}
+    assert events[-1].event_type == "error"
+    assert not [event for event in events if event.content and event.content.startswith("API Error")]
+
+
+def test_model_refusal_fallback_record_is_not_a_parse_issue(tmp_path: Path) -> None:
+    transcript = tmp_path / "fallback.jsonl"
+    transcript.write_text("\n".join(_fixture_lines("claude_code/model_refusal_fallback.jsonl")) + "\n")
+
+    events, checkpoint = read_incremental_transcript_events(str(transcript))
+    health = inspect_transcript_source(str(transcript), checkpoint)
+
+    assert len(_outcomes(events)) == 2
+    assert "unsupported_system_record" not in {issue.code for issue in health.issues}
+
+
+@pytest.mark.asyncio
+async def test_claude_session_model_comes_from_the_first_real_assistant_message(tmp_path: Path) -> None:
+    transcript = tmp_path / "synthetic-first.jsonl"
+    synthetic = json.loads(_fixture_lines("claude_code/synthetic_refusal.jsonl")[-1])
+    real = json.loads(_fixture_lines("claude_code/model_refusal_fallback.jsonl")[3])
+    transcript.write_text(json.dumps(synthetic) + "\n" + json.dumps(real) + "\n")
+    ref = ProviderSessionRef(provider_session_id="c8ed3e78-529d-4e5d-aef1-e8597851c6ac", source_id=str(transcript))
+
+    request = await ClaudeCodeTranscriptAdapter().build_session_metadata(ref)
+
+    assert request.model == "claude-opus-4-8"
