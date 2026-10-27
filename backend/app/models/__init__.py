@@ -68,6 +68,7 @@ from .subscription_accounting import (
 from .telemetry import RequestLog, TruncationEvent
 from .work_chat import SessionBinding
 from .workflow_schedule_control import WorkflowScheduleControl
+from .workflow_step import WorkflowStep
 
 # Export all models for backward compatibility
 __all__ = [
@@ -129,4 +130,5 @@ __all__ = [
     "UsageSession",
     "UsageStatLog",
     "WorkflowScheduleControl",
+    "WorkflowStep",
 ]

@@ -1,0 +1,12 @@
+{
+  "restart_limit": 2,
+  "stale_after_seconds": 300,
+  "heartbeat_interval_seconds": 30,
+  "refusal_pause_threshold": 12,
+  "usage_limit_cooldown_seconds": 3600,
+  "packet_budget_fraction": 0.25,
+  "default_context_window": 128000,
+  "executor_for_provider": {"claude": "claude_code", "codex": "codex", "pi": "pi"},
+  "context": {"surface": "agent_runtime", "profile": "agent_startup"},
+  "git": {"user_name": "Agent Hub Workflow", "user_email": "workflow@agent-hub.local"}
+}

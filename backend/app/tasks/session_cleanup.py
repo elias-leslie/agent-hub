@@ -41,7 +41,9 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
     total_cleaned = 0
     active_sessions = (
         await db.execute(
-            select(Session).where(Session.status == "active").order_by(Session.created_at.desc())
+            select(Session)
+            .where(Session.status == "active", Session.session_type != "workflow")  # engine closes runs
+            .order_by(Session.created_at.desc())
         )
     ).scalars().all()
 

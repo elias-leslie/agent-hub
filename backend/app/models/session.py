@@ -113,6 +113,7 @@ class Session(Base):
             "agent",  # Long-running automated agent sessions (24h idle timeout)
             "claude_code",  # Claude Code CLI sessions
             "pi",  # Native Pi CLI sessions
+            "workflow",  # Durable multi-model workflow runs (workflow_steps)
             name="session_type_enum",
         ),
         default="completion",

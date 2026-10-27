@@ -1,0 +1,32 @@
+{
+  "goal": "Fix the intermittent timeout in the sync job (reports say it fails about one run in ten).",
+  "project_id": "example-project",
+  "repo_path": "/srv/workspaces/projects/example-project",
+  "request_id": "example-investigate-reproduce-fix-verify-1",
+  "steps": [
+    {
+      "key": "investigate",
+      "agent_slug": "debugger",
+      "instructions": "Find the likely cause of the timeout from logs, code and history. Record the evidence and the ranked hypotheses. Do not change code.",
+      "acceptance": []
+    },
+    {
+      "key": "reproduce",
+      "agent_slug": "tester",
+      "instructions": "Write a failing test or script that reproduces the top hypothesis. Commit it as a test only.",
+      "acceptance": ["make test-sync-repro"]
+    },
+    {
+      "key": "fix",
+      "agent_slug": "coder",
+      "instructions": "Fix the cause so the reproduction passes. Keep the change minimal.",
+      "acceptance": ["make test"]
+    },
+    {
+      "key": "verify",
+      "agent_slug": "verifier",
+      "instructions": "Run the full test suite and the reproduction 50 times. Report pass counts and anything still flaky.",
+      "acceptance": ["make test", "make test-sync-repro"]
+    }
+  ]
+}

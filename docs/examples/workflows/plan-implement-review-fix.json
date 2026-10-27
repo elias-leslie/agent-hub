@@ -1,0 +1,33 @@
+{
+  "goal": "Add a --json flag to the export command and keep existing output unchanged.",
+  "project_id": "example-project",
+  "repo_path": "/srv/workspaces/projects/example-project",
+  "request_id": "example-plan-implement-review-fix-1",
+  "steps": [
+    {
+      "key": "plan",
+      "agent_slug": "planner",
+      "instructions": "Read the export command and its tests. Write a short plan: files to change, the JSON shape, and the tests to add. Do not change code.",
+      "acceptance": []
+    },
+    {
+      "key": "implement",
+      "agent_slug": "coder",
+      "instructions": "Implement the plan from the previous step. Add tests for the new flag and for unchanged default output.",
+      "acceptance": ["make test"]
+    },
+    {
+      "key": "review",
+      "agent_slug": "reviewer",
+      "instructions": "Review the diff since the plan step against the plan. List concrete defects with file and line. Do not edit files.",
+      "acceptance": []
+    },
+    {
+      "key": "fix",
+      "agent_slug": "coder",
+      "instructions": "Fix every defect the review listed. If a finding is wrong, say why in the handoff note.",
+      "acceptance": ["make test", "make lint"],
+      "max_attempts": 3
+    }
+  ]
+}

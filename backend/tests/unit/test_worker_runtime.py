@@ -24,12 +24,14 @@ from app.workflows.scheduled import (
 )
 from app.workflows.session_reaper import session_reaper_task
 from app.workflows.summary import session_summary_task
+from app.workflows.workflow_run import workflow_run_advance_task, workflow_run_recovery_task
 
 
 def test_agent_workflows_match_long_lived_agent_runtime() -> None:
     assert (
         completion_task,
         agent_wake_task,
+        workflow_run_advance_task,
     ) == AGENT_WORKFLOWS
 
 
@@ -45,6 +47,7 @@ def test_ops_workflows_match_maintenance_runtime() -> None:
         observation_processing_task,
         model_enrichment_sync_task,
         session_reaper_task,
+        workflow_run_recovery_task,
     ) == OPS_WORKFLOWS
 
 

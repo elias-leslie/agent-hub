@@ -109,6 +109,7 @@ async def reap_stale_sessions(db, now, thresholds=None) -> tuple[int, int]:
     any_cutoff = now - timedelta(minutes=any_minutes)
     stale_query = select(Session).where(
         Session.status == "active",
+        Session.session_type != "workflow",  # workflow runs may wait on the owner; the engine closes them
         last_activity < any_cutoff,
     )
     if excluded_ids:

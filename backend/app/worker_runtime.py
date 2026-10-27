@@ -25,6 +25,7 @@ from app.workflows.scheduled import (
 )
 from app.workflows.session_reaper import session_reaper_task
 from app.workflows.summary import session_summary_task
+from app.workflows.workflow_run import workflow_run_advance_task, workflow_run_recovery_task
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ WorkflowDef = Any
 AGENT_WORKFLOWS: tuple[WorkflowDef, ...] = (
     completion_task,
     agent_wake_task,
+    workflow_run_advance_task,
 )
 
 OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
@@ -50,6 +52,7 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     observation_processing_task,
     model_enrichment_sync_task,
     session_reaper_task,
+    workflow_run_recovery_task,
 )
 
 ALL_WORKFLOWS: tuple[WorkflowDef, ...] = OPS_WORKFLOWS + AGENT_WORKFLOWS

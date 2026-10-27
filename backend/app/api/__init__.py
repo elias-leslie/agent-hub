@@ -37,6 +37,7 @@ from app.api.session_ingestion import router as session_ingestion_router
 from app.api.sessions import router as sessions_router
 from app.api.subscription_accounting import router as subscription_accounting_router
 from app.api.tasks import router as tasks_router
+from app.api.workflow_runs import router as workflow_runs_router
 
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
@@ -72,5 +73,6 @@ router.include_router(project_agent_context_router)  # GET /projects/{id}/agent-
 router.include_router(runtime_context_router)
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
+router.include_router(workflow_runs_router)  # Has its own prefix /workflow-runs
 
 __all__ = ["router"]
