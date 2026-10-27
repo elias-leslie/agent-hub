@@ -8,6 +8,12 @@ DEFAULT_TIMEOUT: int | None = None
 # Default line limit for read_file tool
 DEFAULT_READ_LIMIT: int = 2000
 
+# Read-only, stateless tools the tool loop may run concurrently when the model emits several in
+# one turn. Everything else (bash, writes, edits, consults, state-changing tools) stays serial.
+PARALLEL_SAFE_TOOLS: frozenset[str] = frozenset(
+    {"read_file", "search_scratch_context", "search_web", "fetch_web_page"}
+)
+
 # Schema type literals
 SCHEMA_TYPE_OBJECT = "object"
 SCHEMA_TYPE_STRING = "string"

@@ -9,6 +9,7 @@ from typing import Any
 
 from app.llm.tool_loop import ToolRunner
 from app.llm.types import TextContent, ToolCall, ToolResultMessage
+from app.services.tools._tool_constants import PARALLEL_SAFE_TOOLS
 from app.services.tools.base import ToolCall as ServiceToolCall
 from app.services.tools.base import ToolCaller
 from app.services.tools.catalog import build_deferred_toolset, build_tool_catalog
@@ -56,6 +57,7 @@ def build_direct_tool_runner(
             timestamp=int(time.time() * 1000),
         )
 
+    run_tool.is_parallel_safe = lambda call: call.name in PARALLEL_SAFE_TOOLS  # type: ignore[attr-defined]
     return run_tool
 
 

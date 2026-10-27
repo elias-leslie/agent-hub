@@ -24,6 +24,7 @@ translates this loop's events into SSE in
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -88,6 +89,41 @@ class ToolLoopResult:
     errored: bool = False
 
 
+ParallelSafe = Callable[[ToolCall], bool]
+
+
+def _batches(calls: list[ToolCall], is_parallel_safe: ParallelSafe | None) -> list[list[ToolCall]]:
+    """Group consecutive parallel-safe calls; every other call is its own serial batch."""
+    batches: list[list[ToolCall]] = []
+    previous_safe = False
+    for call in calls:
+        safe = bool(is_parallel_safe and is_parallel_safe(call))
+        if safe and previous_safe:
+            batches[-1].append(call)
+        else:
+            batches.append([call])
+        previous_safe = safe
+    return batches
+
+
+async def _run_one(run_tool: ToolRunner, tool_call: ToolCall) -> tuple[ToolResultMessage, str | None]:
+    """Run one tool; a raise becomes an error result the next turn can see."""
+    try:
+        return await run_tool(tool_call), None
+    except Exception as exc:
+        error_msg = str(exc) or type(exc).__name__
+        return (
+            ToolResultMessage(
+                tool_call_id=tool_call.id,
+                tool_name=tool_call.name,
+                content=[TextContent(text=f"Tool execution failed: {error_msg}")],
+                is_error=True,
+                timestamp=int(time.time() * 1000),
+            ),
+            error_msg,
+        )
+
+
 async def run(
     model: Model[Any],
     context: Context,
@@ -96,6 +132,7 @@ async def run(
     max_turns: int = 32,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
+    is_parallel_safe: ParallelSafe | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Run the multi-turn tool loop.
 
@@ -172,29 +209,21 @@ async def run(
             )
             continue
 
-        for tool_call in tool_calls:
-            tool_calls_count += 1
-            yield ToolRunStart(tool_call=tool_call)
+        parallel_safe = is_parallel_safe or getattr(run_tool, "is_parallel_safe", None)
+        for batch in _batches(tool_calls, parallel_safe):
+            tool_calls_count += len(batch)
+            for tool_call in batch:
+                yield ToolRunStart(tool_call=tool_call)
 
-            try:
-                result = await run_tool(tool_call)
-            except Exception as exc:
-                error_msg = str(exc) or type(exc).__name__
-                # Build a synthetic error result so the next turn sees it.
-                import time as _time
-
-                result = ToolResultMessage(
-                    tool_call_id=tool_call.id,
-                    tool_name=tool_call.name,
-                    content=[TextContent(text=f"Tool execution failed: {error_msg}")],
-                    is_error=True,
-                    timestamp=int(_time.time() * 1000),
-                )
-                yield ToolRunError(tool_call=tool_call, result=result, error=error_msg)
-            else:
-                yield ToolRunComplete(tool_call=tool_call, result=result)
-
-            context.messages.append(result)
+            # A batch is one mutating call, or a run of consecutive parallel-safe calls
+            # (read-only tools) that execute concurrently. Results land in call order.
+            outcomes = await asyncio.gather(*(_run_one(run_tool, call) for call in batch))
+            for tool_call, (result, error_msg) in zip(batch, outcomes, strict=True):
+                if error_msg is None:
+                    yield ToolRunComplete(tool_call=tool_call, result=result)
+                else:
+                    yield ToolRunError(tool_call=tool_call, result=result, error=error_msg)
+                context.messages.append(result)
 
     # max_turns exhausted while the model still wanted tools (every other
     # exit returns inside the loop). Without this, the caller's "final"
@@ -222,6 +251,7 @@ async def run(
 
 
 __all__ = [
+    "ParallelSafe",
     "ToolLoopEvent",
     "ToolLoopResult",
     "ToolRunComplete",
