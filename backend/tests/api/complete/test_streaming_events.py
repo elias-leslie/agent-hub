@@ -128,3 +128,35 @@ async def test_emit_events_reports_a_failed_tool_run_as_an_error_result() -> Non
     assert chunks[1]["tool_status"] == "error"
     assert chunks[1]["tool_result"] == "permission denied"
     _assert_seq_strictly_increasing(chunks)
+
+
+@pytest.mark.asyncio
+async def test_emit_events_persists_a_refused_attempt_with_its_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.complete import streaming, streaming_persistence
+    from app.llm.types import ErrorEvent
+    from app.llm.utils.outcomes import ProviderOutcome, record_outcome
+
+    refused = _message([], "error", Usage())
+    refused.error_message = "Claude refused the request: safeguards flagged it (cyber)"
+    record_outcome(refused, ProviderOutcome(kind="refused", requested_model=CLAUDE_SONNET, category="cyber"))
+    stored: list[tuple[str | None, dict[str, object]]] = []
+
+    async def no_usage(_ctx: object, _message: AssistantMessage) -> float:
+        return 0.0
+
+    async def capture(_ctx: object, message: AssistantMessage, usage: dict[str, object]) -> None:
+        stored.append((message.error_message, usage))
+
+    monkeypatch.setattr(streaming, "_record_stream_usage", no_usage)
+    monkeypatch.setattr(streaming_persistence, "mirror_stream_outcome_error", capture)
+
+    async def events() -> AsyncIterator[ToolLoopEvent]:
+        yield ErrorEvent(reason="error", error=refused)
+
+    chunks = await _emit(events(), "sess-refused")
+
+    assert [c["type"] for c in chunks] == ["error"]
+    assert stored == [(
+        refused.error_message,
+        {"provider_outcome": {"kind": "refused", "requested_model": CLAUDE_SONNET, "category": "cyber"}},
+    )]

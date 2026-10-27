@@ -549,12 +549,13 @@ async def store_error_event(
     agent_id: str | None = None,
     agent_name: str | None = None,
     model_used: str | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> SessionEvent:
     """Store an error event."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.ERROR,
         content=f"{error_type}: {error_message}",
-        agent_id=agent_id, agent_name=agent_name, model_used=model_used,
+        agent_id=agent_id, agent_name=agent_name, model_used=model_used, usage=usage,
     )
 
 

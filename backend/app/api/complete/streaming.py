@@ -282,6 +282,10 @@ async def _emit_events(
             continue
         if isinstance(event, ErrorEvent):
             await _record_stream_usage(ctx, event.error)
+            if (outcome := outcome_usage(event.error)) is not None:
+                from .streaming_persistence import mirror_stream_outcome_error
+
+                await mirror_stream_outcome_error(ctx, event.error, outcome)
             if retry_error_before_output and not bool(
                 attempt_output_started and attempt_output_started[0]
             ):

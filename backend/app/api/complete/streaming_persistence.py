@@ -7,6 +7,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
+from app.llm.types import AssistantMessage
 from app.models import Session as DBSession
 from app.models import SessionEventType
 from app.services.event_storage import store_child_session_lifecycle_event
@@ -178,6 +179,25 @@ async def mirror_stream_tool_result(
             model_used=ctx.model_used or ctx.model,
             agent_id=ctx.agent_used,
             **(ctx.source_metadata or {}),
+        )
+
+    await _with_fresh_session(ctx.session_id, _update)
+
+
+async def mirror_stream_outcome_error(ctx: StreamContext, message: AssistantMessage, usage: dict[str, object]) -> None:
+    """Persist a failed streaming attempt that carries a typed provider outcome (refusal, switch, limit)."""
+
+    async def _update(_session: DBSession, db) -> None:
+        from app.services.event_storage import store_error_event
+
+        await store_error_event(
+            db,
+            ctx.session_id,
+            "provider_outcome",
+            message.error_message or "Provider stream failed",
+            agent_id=ctx.agent_used,
+            model_used=message.model,
+            usage=usage,
         )
 
     await _with_fresh_session(ctx.session_id, _update)
