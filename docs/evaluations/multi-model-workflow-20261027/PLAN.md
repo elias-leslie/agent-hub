@@ -23,7 +23,7 @@ Reuse the small frozen coding fixture and its independent 16-check `acceptance.p
 
 Run 5 uses the executor's test hook to inject the refusal. We don't try to provoke a real safety classifier.
 
-**Repeats:** only if two of runs 1–3 come within 15% of each other on tokens or time (runs 1–3b). In that case those two arms run once more, and that's the limit.
+**Repeats:** only if two of runs 1–3b come within 15% of each other on tokens or time. In that case those two arms run once more, and that's the limit.
 
 ## Table columns
 
@@ -50,7 +50,7 @@ For runs 4 and 5, also record:
 
 ## Limits
 
-- **Claude Code only runs Opus on a subscription,** so run 1 compares whole setups, not the harness alone. Runs 2 and 3 are the harness-only comparison.
+- **Claude Code only runs Opus on a subscription,** so run 1 compares whole setups, not the harness alone. Runs 2, 3 and 3b are the harness-only comparison.
 - **One small fixture is descriptive,** not a benchmark. The long-session cost question was already settled by the Phase 0 measurement: per-turn cache writes fell from about 800–1,000 tokens and growing to about 80–160.
 
 Done when the table is in `README.md` here, with the raw harness outputs kept beside it.
