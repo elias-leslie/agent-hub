@@ -27,6 +27,7 @@ from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.ownership import router as ownership_router
 from app.api.preferences import router as preferences_router
+from app.api.project_agent_context import router as project_agent_context_router
 from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
@@ -67,6 +68,7 @@ router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 router.include_router(ownership_router)
 router.include_router(providers_router)  # Has its own prefix /providers and tags
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
+router.include_router(project_agent_context_router)  # GET /projects/{id}/agent-context (read-only)
 router.include_router(runtime_context_router)
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
