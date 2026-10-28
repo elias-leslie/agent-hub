@@ -46,6 +46,10 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
 
   if (run.state !== 'needs_owner' || !pause) return null
   const chain = step?.chain ?? []
+  // The finished steps failed to merge: the only actions are retrying the merge or ending the run.
+  const integration =
+    pause.reason === 'integration_conflict' ||
+    pause.reason === 'integration_failed'
 
   if (pause.reason === 'blocked_dependencies') {
     // Nothing to retry or skip: the plan itself has to change (the coordinator edits it through the API).
@@ -103,23 +107,25 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
         </ul>
       ) : null}
       <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-[11px] text-slate-400">
-          Retry on
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            disabled={resume.isPending}
-            className="h-8 rounded-md border border-slate-700 bg-slate-950 px-2 text-[12px] text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-          >
-            <option value="">The agent&apos;s model chain</option>
-            {chain.map((id) => (
-              <option key={id} value={id}>
-                {modelLabel(id)} ({id})
-              </option>
-            ))}
-          </select>
-        </label>
-        {atCap ? (
+        {integration ? null : (
+          <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+            Retry on
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={resume.isPending}
+              className="h-8 rounded-md border border-slate-700 bg-slate-950 px-2 text-[12px] text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
+            >
+              <option value="">The agent&apos;s model chain</option>
+              {chain.map((id) => (
+                <option key={id} value={id}>
+                  {modelLabel(id)} ({id})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {atCap && !integration ? (
           <label className="flex flex-col gap-1 text-[11px] text-slate-400">
             Add attempts (step is at {step?.attempts} of {step?.attempt_limit})
             <input
@@ -139,16 +145,18 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
           onClick={() => resume.mutate('retry')}
           className={`${button} border-amber-400/50 bg-amber-500/15 text-amber-50 hover:bg-amber-500/25`}
         >
-          Retry step
+          {integration ? 'Retry merge' : 'Retry step'}
         </button>
-        <button
-          type="button"
-          disabled={resume.isPending}
-          onClick={() => resume.mutate('skip')}
-          className={`${button} border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800`}
-        >
-          Skip step
-        </button>
+        {integration ? null : (
+          <button
+            type="button"
+            disabled={resume.isPending}
+            onClick={() => resume.mutate('skip')}
+            className={`${button} border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800`}
+          >
+            Skip step
+          </button>
+        )}
         {confirmEnd ? (
           <>
             <button
