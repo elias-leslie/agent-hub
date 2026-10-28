@@ -45,12 +45,19 @@ logger = logging.getLogger(__name__)
 
 
 class LoopLog:
-    """Collects what the tool loop reports while it runs: tool results by call id and interrupted-turn retries."""
+    """Collects what the tool loop reports while it runs: finished turns, tool results by call id and retries.
+
+    A timeout or crash ends the loop without a result, so this is what the transcript keeps of the partial run.
+    """
 
     def __init__(self) -> None:
         self.tool_results: dict[str, Any] = {}
         self.retries: list[tuple[int, str]] = []
-        self.turns = 0
+        self.messages: list[AssistantMessage] = []
+
+    @property
+    def turns(self) -> int:
+        return len(self.messages)
 
     def __call__(self, event: Any) -> None:
         kind = getattr(event, "type", None)
@@ -59,7 +66,9 @@ class LoopLog:
         elif kind == "turn_retry":
             self.retries.append((self.turns, event.reason))
         elif kind in ("done", "error"):
-            self.turns += 1
+            message = getattr(event, "message", None) if kind == "done" else getattr(event, "error", None)
+            if message is not None:
+                self.messages.append(message)
 
 
 async def load_agent(slug: str) -> Any:
@@ -125,6 +134,18 @@ class AgentHubExecutor:
         self._load_agent = agent_loader
         self._provision = tool_provisioner
         self._write_transcript = transcript_writer
+
+    @staticmethod
+    def _partial(transcript: Transcript, loop_log: LoopLog, error: str) -> Transcript:
+        """What the model did before the run died: the turns and tool results collected so far, then the error."""
+
+        return replace(
+            transcript,
+            turns=list(loop_log.messages),
+            tool_results=loop_log.tool_results,
+            retries=tuple(loop_log.retries),
+            error=error,
+        )
 
     async def _record(self, transcript: Transcript) -> None:
         """The transcript is evidence, not the step's outcome: a failed write is logged and the step carries on."""
@@ -193,11 +214,11 @@ class AgentHubExecutor:
             )
         except TimeoutError:
             error = f"timeout: no completion within {self.defaults['max_seconds']}s"
-            await self._record(replace(transcript, error=error))
+            await self._record(self._partial(transcript, loop_log, error))
             return StepResult("failed", error=error)
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
             error = clip(f"agent_hub_error: {exc!r}", 1000)
-            await self._record(replace(transcript, error=error))
+            await self._record(self._partial(transcript, loop_log, error))
             return StepResult("failed", error=error)
         await on_event({"type": "agent_hub_finished", "at": time.time()})
         turns = list(result.usage_messages or [result.message])
