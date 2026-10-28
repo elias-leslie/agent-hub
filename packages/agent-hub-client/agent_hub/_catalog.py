@@ -34,6 +34,10 @@ class CatalogOperationsMixin:
         """Return the live model catalog (``GET /api/models``)."""
         return _object(self._get_client().get("/api/models", headers=self._inject_tracking_headers("sdk.list_models")), "Model catalog")
 
+    def select_model(self, task_type: str, **options: Any) -> dict[str, Any]:
+        """Get metadata-only model advice; no task contents are accepted."""
+        return _object(self._get_client().post("/api/models/select", json={"task_type": task_type, **options}, headers=self._inject_tracking_headers("sdk.select_model")), "Model selection")
+
     def list_agents(
         self, *, active_only: bool = True, limit: int = 500, offset: int = 0, is_coding_agent: bool | None = None,
     ) -> dict[str, Any]:
@@ -67,6 +71,11 @@ class AsyncCatalogOperationsMixin:
         """Return the live model catalog (``GET /api/models``)."""
         client = await self._get_client()
         return _object(await client.get("/api/models", headers=self._inject_tracking_headers("sdk.list_models")), "Model catalog")
+
+    async def select_model(self, task_type: str, **options: Any) -> dict[str, Any]:
+        """Get metadata-only model advice; no task contents are accepted."""
+        client = await self._get_client()
+        return _object(await client.post("/api/models/select", json={"task_type": task_type, **options}, headers=self._inject_tracking_headers("sdk.select_model")), "Model selection")
 
     async def list_agents(
         self, *, active_only: bool = True, limit: int = 500, offset: int = 0, is_coding_agent: bool | None = None,

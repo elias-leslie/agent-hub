@@ -81,3 +81,22 @@ server adds rather than dropping it.
 `/api/orchestration/workflow`, so the call emits a `DeprecationWarning` and the
 method will be removed in 0.8.0. Compose `complete()` calls with an explicit
 `agent_slug` instead.
+
+### Model selection advice
+
+`await client.select_model("coding", mode="shadow", assigned_model="codex/gpt-6.1-sol")`
+returns model and effort advice for a generic task type, its source and date,
+current route preflight, catalog freshness, and a comparison to the assigned
+model. Supported task types are `general`, `coding`, `reasoning`,
+`visual_reasoning`, and `writing`. The selector rejects task contents. Supply
+both `override_model` and `override_effort` for an explicit choice; capability
+and availability checks still apply. The response is advice: it does not call
+a model or alter an agent's assigned chain. `mode="automatic"` returns
+`apply=true` only for a current task-specific benchmark qualification of the
+exact model and effort and a passing preflight. No route is currently qualified.
+An opting-in caller can apply a qualified decision through its existing model
+and effort override; it must check `apply` for every decision and retain its
+assigned route otherwise. Route preflight checks catalog status, credentials and
+provider cooldown, not entitlement or actual task success. Provider guidance
+and inherited catalog scores are not benchmark evidence. Cost is not ranked:
+subscription quota and metered API prices are not directly comparable.

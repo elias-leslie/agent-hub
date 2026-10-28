@@ -88,3 +88,12 @@ async def test_automation_owner_calls_require_and_send_the_internal_secret(httpx
         with pytest.raises(ValueError):
             await client.list_automation_profiles("jobs", internal_secret="")
     assert all(r.headers["X-Agent-Hub-Internal"] == "s" for r in httpx_mock.get_requests())
+
+
+@pytest.mark.asyncio
+async def test_model_selection_sdk_sends_only_metadata(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url=f"{BASE}/api/models/select", method="POST", json={"model": "codex/gpt-6.1-terra", "apply": False})
+    async with AsyncAgentHubClient(client_id="c", request_source="r") as client:
+        result = await client.select_model("visual_reasoning", mode="shadow", assigned_model="codex/gpt-6.1-sol")
+    assert result["apply"] is False
+    assert json.loads(httpx_mock.get_request().content) == {"task_type": "visual_reasoning", "mode": "shadow", "assigned_model": "codex/gpt-6.1-sol"}

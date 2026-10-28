@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "policies": {
+    "coding": {
+      "model": "codex/gpt-6.1-sol", "effort": "medium", "requires_tools": true,
+      "rationale": "Provider guidance describes Sol as suitable for complex coding; effort is an operator starting point.",
+      "source": "https://developers.openai.com/api/docs/guides/latest-model", "source_checked_at": "2026-10-28"
+    },
+    "reasoning": {
+      "model": "codex/gpt-6-astra", "effort": "high", "requires_tools": false,
+      "rationale": "Provider guidance positions Astra for demanding reasoning; effort is an operator starting point.",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-astra", "source_checked_at": "2026-10-28"
+    },
+    "visual_reasoning": {
+      "model": "codex/gpt-6.1-terra", "effort": "medium", "requires_vision": true,
+      "rationale": "Provider guidance identifies visual reasoning as a Terra use; effort is an operator starting point.",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra", "source_checked_at": "2026-10-28"
+    },
+    "writing": {
+      "model": "codex/gpt-6.1-terra", "effort": "medium", "rationale": "Provider guidance identifies writing as a Terra use; effort is an operator starting point.",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra", "source_checked_at": "2026-10-28"
+    },
+    "general": {
+      "model": "codex/gpt-6.1-sol", "effort": "medium", "rationale": "Provider guidance positions Sol for complex general work; effort is an operator starting point.",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol", "source_checked_at": "2026-10-28"
+    }
+  }
+}

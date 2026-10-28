@@ -27,6 +27,7 @@ from app.constants.models import PROVIDER_NAMES
 from app.core.request_actor import current_request_actor
 from app.db import get_db
 from app.middleware.access_control_auth import require_service_client
+from app.routing.model_selection import SelectionRequest
 from app.routing.registry import CREDENTIAL_ONLY_PROVIDERS, is_workload_provider
 from app.services._enrichment_normalizers import _bare_model_id
 
@@ -447,3 +448,18 @@ async def put_model_alias(
     await refresh_runtime_model_catalog(db)
     logger.info("Model alias %s -> %s by %s", key, payload.model_id, current_request_actor() or "unattributed")
     return {"alias": key, "model_id": payload.model_id}
+
+
+@router.post("/models/select")
+async def select_model_advice(request: SelectionRequest) -> dict:
+    """Select from a generic task type; never accepts task content or executes a model."""
+    from app.routing.model_selection import select_model
+
+    catalog = await list_models()
+    result = await select_model(request)
+    result["catalog_health"] = {
+        "is_stale": catalog.catalog_health.is_stale if catalog.catalog_health else None,
+        "last_sync": catalog.last_sync.isoformat() if catalog.last_sync else None,
+        "last_model_review": catalog.last_model_review.isoformat() if catalog.last_model_review else None,
+    }
+    return result
