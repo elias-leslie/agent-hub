@@ -238,6 +238,10 @@ def _dt(epoch: float) -> datetime:
     return datetime.fromtimestamp(epoch, UTC)
 
 
+def _iso(epoch: float | None) -> str | None:
+    return _dt(epoch).isoformat() if epoch else None
+
+
 # --- helpers over rows ---------------------------------------------------------------------------
 
 
@@ -1222,6 +1226,8 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "transcript_path": detail.get("transcript_path"),
                 "context_status": detail.get("context_status"),
                 "executor": detail.get("executor"),
+                "started_at": child.created_at.isoformat() if child.created_at else None,
+                "finished_at": _iso(detail.get("finished_at")),
             }
         )
     for history in attempts.values():
@@ -1241,6 +1247,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "failure": meta.get("failure"),
         "refusals": meta.get("refusals", {}),
         "created_at": run.created_at.isoformat() if run.created_at else None,
+        "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
         "steps": [
             {
                 "key": s.step_key,

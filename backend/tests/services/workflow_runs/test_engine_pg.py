@@ -7,13 +7,14 @@ import os
 import subprocess
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Enum, make_url, text
+from sqlalchemy import Enum, make_url, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
@@ -493,6 +494,12 @@ async def test_list_runs_newest_first_with_counts_usage_and_served_models(
         pg_db, example("plan-implement-review-fix", repo, request_id="second"), deps=world.deps
     )
 
+    # One test transaction gives both rows the same server clock; separate the start times explicitly.
+    for run_id, day in ((first, 1), (second, 2)):
+        await pg_db.execute(
+            update(Session).where(Session.id == run_id).values(created_at=datetime(2026, 1, day, tzinfo=UTC))
+        )
+
     listing = await list_runs(pg_db, limit=10, offset=0)
     assert listing["total"] == 2
     assert [r["id"] for r in listing["runs"]] == [second, first]
@@ -508,6 +515,9 @@ async def test_list_runs_newest_first_with_counts_usage_and_served_models(
     assert done["attempt_count"] == 5 and done["flagged_attempts"] == 2
     assert done["total_tokens"] == 5 * 120 and done["cost_usd"] is None
     assert done["served_models"][0] == CODEX and OPUS_OLD in done["served_models"]
+
+    attempt = (await view_of(pg_db, first))["steps"][0]["attempt_history"][0]
+    assert attempt["started_at"] and attempt["finished_at"] >= attempt["started_at"]
 
     page = await list_runs(pg_db, limit=1, offset=1)
     assert [r["id"] for r in page["runs"]] == [first] and page["total"] == 2
