@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator, SchemaError
 from jsonschema import ValidationError as JsonSchemaError
 from jsonschema import validate as validate_json
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -489,6 +489,41 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
     if await db.get(AutomationProjectPolicy, "agent-hub") is None:
         db.add(AutomationProjectPolicy(project_id="agent-hub", enabled=True, config={}, revision=1))
     await db.flush()
+    await retire_removed_agent_hub_schedules(db)
+
+
+_FINISHED_RUN_STATUSES = ("succeeded", "failed", "skipped", "cancelled", "rejected")
+
+
+async def retire_removed_agent_hub_schedules(db: AsyncSession) -> list[str]:
+    """Delete Agent Hub's own catalog entries whose static schedule left the code.
+
+    Their Hatchet task is gone, so the definition, its static profile (revisions
+    cascade) and its finished run receipts can never be used again. A definition
+    with a run still in flight is kept until that run finishes.
+    """
+    current = [f"agent-hub.{schedule.schedule_id}" for schedule in SCHEDULE_DEFINITIONS]
+    rows = (await db.execute(select(AutomationDefinition).where(
+        AutomationDefinition.owner_project_id == "agent-hub",
+        AutomationDefinition.dispatch_kind == "hatchet",
+        AutomationDefinition.workflow_key.not_in(current),
+    ))).scalars().all()
+    retired: list[str] = []
+    for key in sorted({row.workflow_key for row in rows}):
+        in_flight = await db.scalar(select(func.count()).select_from(AutomationRun).where(
+            AutomationRun.workflow_key == key,
+            AutomationRun.status.not_in(_FINISHED_RUN_STATUSES),
+        ))
+        if in_flight:
+            logger.warning("Keeping retired automation %s until %d run(s) finish", key, in_flight)
+            continue
+        await db.execute(delete(AutomationRun).where(AutomationRun.workflow_key == key))
+        await db.execute(delete(AutomationProfile).where(AutomationProfile.workflow_key == key))
+        await db.execute(delete(AutomationDefinition).where(AutomationDefinition.workflow_key == key))
+        retired.append(key)
+    if retired:
+        logger.info("Retired removed Agent Hub automations: %s", ", ".join(retired))
+    return retired
 
 
 class DefinitionRegistration(BaseModel):
