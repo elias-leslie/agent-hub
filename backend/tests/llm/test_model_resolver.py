@@ -89,6 +89,7 @@ def test_opencode_go_models_use_the_openai_gateway_with_deepseek_wire_format() -
     assert model.api == "openai-completions"
     assert model.id == "deepseek-v4.1-flash"
     assert model.base_url == "https://opencode.ai/inference/go/openai/v1"
+    assert set(model.headers or {}) == {"x-opencode-session"}
     assert model.reasoning and model.max_tokens > 0
     assert isinstance(model.compat, OpenAICompletionsCompat)
     assert model.compat.thinking_format == "deepseek"

@@ -81,7 +81,7 @@ def resolve_llm_model(
     entry = MODEL_CATALOG_BY_ID.get(resolved_id)
     api = _PROVIDER_API.get(provider, "openai-completions")
     base_url = _resolve_base_url(provider)
-    headers = {"User-Agent": "KimiCLI/1.5"} if provider in {"kimi-code", "kimi-coding"} else None
+    headers = _provider_headers(provider)
 
     if entry is None:
         # Catalog miss — return a minimal Model so the adapter can still try.
@@ -126,6 +126,17 @@ def resolve_llm_model(
         access_programs=entry.access_programs,
         compat=_provider_compat(provider, entry.family, base_url),
     )
+
+
+def _provider_headers(provider: str) -> dict[str, str] | None:
+    if provider in {"kimi-code", "kimi-coding"}:
+        return {"User-Agent": "KimiCLI/1.5"}
+    if provider == "opencode-go":
+        # OpenCode Go rejects inference requests (400 MissingSessionID) without a session header.
+        from app.services.subscription_accounting.opencode_go import install_session_id
+
+        return {"x-opencode-session": install_session_id()}
+    return None
 
 
 def _provider_compat(provider: str, family: str | None, base_url: str) -> OpenAICompletionsCompat | None:
