@@ -1060,6 +1060,59 @@
       "source": "seed"
     },
     {
+      "id": "codex/gpt-6.1-terra",
+      "alias": "codex-gpt-6.1-terra",
+      "name": "GPT-6.1 Terra",
+      "hint": "Visual reasoning, computer use and writing; inherited scores",
+      "provider": "codex",
+      "score_coding": 90,
+      "score_reasoning": 91,
+      "score_planning": 82,
+      "score_tool_use": 85,
+      "score_instruction": 91,
+      "score_design": 78,
+      "cost_input_per_m": 0.0,
+      "cost_output_per_m": 0.0,
+      "pricing_unit": "per_million_tokens",
+      "unit_price": null,
+      "service_tiers": {
+        "default": 1.0
+      },
+      "cache_read_per_million": null,
+      "cache_write_per_million": null,
+      "subscription_rates": null,
+      "context_window": 500000,
+      "speed_tier": "fast",
+      "can_generate_images": false,
+      "has_vision": true,
+      "can_edit_images": false,
+      "has_thinking": true,
+      "supports_pdf": false,
+      "supports_audio": false,
+      "supports_tool_execution": true,
+      "supports_verbosity": true,
+      "supports_xhigh": true,
+      "supports_session_cache": true,
+      "supports_chat": true,
+      "supports_typed_judgment": false,
+      "max_state_question_tokens": null,
+      "max_output_tokens": 128000,
+      "thinking_level_map": {
+        "minimal": "low"
+      },
+      "upstream_id": null,
+      "access_programs": {
+        "cyber": "standard"
+      },
+      "release_date": null,
+      "knowledge_cutoff": "2026-06-01",
+      "family": "gpt",
+      "availability": "codex_oauth; advertised_2026-10-28; entitlement_unverified; low_medium_high_xhigh_max_ultra",
+      "is_active": true,
+      "sort_order": 16,
+      "source": "seed"
+    },
+    {
       "id": "codex/gpt-6-astra",
       "alias": "codex-astra",
       "name": "GPT-6 Astra",
@@ -1112,6 +1165,59 @@
       "knowledge_cutoff": "2026-04-30",
       "family": "gpt",
       "availability": "codex_oauth_subscription; verified_2026-10-09",
+      "is_active": true,
+      "sort_order": 16,
+      "source": "seed"
+    },
+    {
+      "id": "openai/gpt-6.1-terra",
+      "alias": "gpt-6.1-terra",
+      "name": "GPT-6.1 Terra",
+      "hint": "Visual reasoning, computer use and writing; inherited scores",
+      "provider": "openai",
+      "score_coding": 90,
+      "score_reasoning": 91,
+      "score_planning": 82,
+      "score_tool_use": 85,
+      "score_instruction": 91,
+      "score_design": 78,
+      "cost_input_per_m": 1.0,
+      "cost_output_per_m": 5.0,
+      "pricing_unit": "per_million_tokens",
+      "unit_price": null,
+      "service_tiers": {
+        "flex": 0.5,
+        "default": 1.0,
+        "priority": 2.0
+      },
+      "cache_read_per_million": 0.05,
+      "cache_write_per_million": 1.25,
+      "subscription_rates": null,
+      "context_window": 1050000,
+      "speed_tier": "fast",
+      "can_generate_images": false,
+      "has_vision": true,
+      "can_edit_images": false,
+      "has_thinking": true,
+      "supports_pdf": false,
+      "supports_audio": false,
+      "supports_tool_execution": false,
+      "supports_verbosity": true,
+      "supports_xhigh": true,
+      "supports_session_cache": false,
+      "supports_chat": true,
+      "supports_typed_judgment": false,
+      "max_state_question_tokens": null,
+      "max_output_tokens": 128000,
+      "thinking_level_map": {
+        "minimal": "low"
+      },
+      "upstream_id": null,
+      "access_programs": null,
+      "release_date": null,
+      "knowledge_cutoff": "2026-06-01",
+      "family": "gpt",
+      "availability": "chat_completions_without_tools; api_entitlement_unverified; input_over_272k_bills_2x_input_1.5x_output",
       "is_active": true,
       "sort_order": 16,
       "source": "seed"
@@ -3250,6 +3356,12 @@
       "source": "seed"
     },
     {
+      "alias": "codex-gpt-6.1-terra",
+      "model_id": "codex/gpt-6.1-terra",
+      "alias_type": "canonical",
+      "source": "seed"
+    },
+    {
       "alias": "codex-luna",
       "model_id": "codex/gpt-5.6-luna",
       "alias_type": "canonical",
@@ -3320,6 +3432,12 @@
       "model_id": "opencode-go/minimax-m3.1-flash",
       "alias_type": "canonical",
       "source": "manual"
+    },
+    {
+      "alias": "gpt-6.1-terra",
+      "model_id": "openai/gpt-6.1-terra",
+      "alias_type": "canonical",
+      "source": "seed"
     },
     {
       "alias": "grok",

@@ -78,7 +78,7 @@ def test_migration_backfills_the_catalog_values() -> None:
     # b7f1c2d3e4a5 deactivated Fable and dropped it from the seed catalog.
     added -= {"claude-fable-5-1"}
     removed.add("codex/gpt-daybreak-blue-latest")
-    added.add("codex/gpt-5.6-sol-daybreak-blue")
+    added.update({"codex/gpt-5.6-sol-daybreak-blue", "codex/gpt-6.1-terra", "openai/gpt-6.1-terra"})
     assert set(migration._MINIMAL_AS_LOW_MODELS) - removed | added == {
         e.id for e in backfilled if e.capabilities.thinking_level_map
     }
@@ -101,3 +101,25 @@ def test_claude_models_route_through_the_cli_provider() -> None:
     model = resolve_llm_model("claude-sonnet-5-5", "claude")
     assert model.api == "claude-code-cli"
     assert model.thinking_level_map == {"minimal": "low"}
+
+
+def test_terra_routes_use_provider_specific_capabilities() -> None:
+    from app.constants.catalog import get_model_entry, resolve_model
+    from app.routing.capabilities import supports_tools
+
+    assert resolve_model("gpt-6.1-terra") == "openai/gpt-6.1-terra"
+    assert resolve_model("codex-gpt-6.1-terra") == "codex/gpt-6.1-terra"
+    for provider in ("openai", "codex"):
+        model_id = f"{provider}/gpt-6.1-terra"
+        entry = get_model_entry(model_id)
+        assert entry is not None and entry.capabilities.has_vision
+        model = resolve_llm_model(model_id, provider)
+        assert model.id == "gpt-6.1-terra"
+        assert model.input == ["text", "image"]
+        assert model.reasoning and model.max_tokens == 128000
+    assert not supports_tools("openai", "openai/gpt-6.1-terra")
+    assert supports_tools("codex", "codex/gpt-6.1-terra")
+    codex = resolve_llm_model("codex/gpt-6.1-terra", "codex")
+    assert codex.context_window == 500000
+    assert _body(codex, Context(messages=[]), SimpleStreamOptions(reasoning="xhigh"))["access_programs"] == {"cyber": "standard"}
+    assert resolve_llm_model("openai/gpt-6.1-terra", "openai").api == "openai-completions"
