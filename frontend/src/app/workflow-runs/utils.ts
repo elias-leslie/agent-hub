@@ -139,9 +139,22 @@ export function pauseExplanation(
   }
 }
 
+const TOKEN_PARTS = [
+  'input_tokens',
+  'cache_read_tokens',
+  'cache_write_tokens',
+  'output_tokens',
+] as const
+
+/** total_tokens when the executor reported it, else the sum of the parts it did report; null when unknown. */
 export function attemptTokens(attempt: WorkflowAttempt): number | null {
-  const total = attempt.usage?.total_tokens
-  return typeof total === 'number' ? total : null
+  const usage = attempt.usage
+  if (!usage) return null
+  if (typeof usage.total_tokens === 'number') return usage.total_tokens
+  const parts = TOKEN_PARTS.flatMap((key) =>
+    typeof usage[key] === 'number' ? [usage[key] as number] : [],
+  )
+  return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) : null
 }
 
 export function attemptCost(attempt: WorkflowAttempt): number | null {

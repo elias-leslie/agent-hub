@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   attemptDurationMs,
   attemptModels,
+  attemptTokens,
   isModelSwitch,
   modelLabel,
   pauseExplanation,
@@ -81,5 +82,18 @@ describe('attempt timing and pause copy', () => {
     )
     expect(text).toContain('Step "plan" is waiting for a usage limit to reset')
     expect(text).toContain('resumes by itself')
+  })
+})
+
+describe('attemptTokens', () => {
+  it('sums the reported parts when an executor gives no total, and is unknown without usage', () => {
+    expect(
+      attemptTokens(
+        attempt({ usage: { input_tokens: 100, output_tokens: 20 } }),
+      ),
+    ).toBe(120)
+    expect(attemptTokens(attempt({ usage: { total_tokens: 7 } }))).toBe(7)
+    expect(attemptTokens(attempt({ usage: {} }))).toBeNull()
+    expect(attemptTokens(attempt({ usage: null }))).toBeNull()
   })
 })

@@ -14,7 +14,7 @@ import { PausePanel } from '../components/PausePanel'
 import { StatusDot } from '../components/StatusDot'
 import { StepCard } from '../components/StepCard'
 import { useWorkflowRun } from '../hooks/useWorkflowRuns'
-import { attemptCost, runStateLabel } from '../utils'
+import { attemptCost, attemptTokens, runStateLabel } from '../utils'
 
 function clock(ms: number): string {
   return ms ? new Date(ms).toLocaleTimeString() : ''
@@ -22,9 +22,10 @@ function clock(ms: number): string {
 
 function totals(run: WorkflowRunDetail) {
   const attempts = run.steps.flatMap((s) => s.attempt_history)
-  const tokens = attempts.flatMap((a) =>
-    typeof a.usage?.total_tokens === 'number' ? [a.usage.total_tokens] : [],
-  )
+  const tokens = attempts.flatMap((a) => {
+    const count = attemptTokens(a)
+    return count === null ? [] : [count]
+  })
   const costs = attempts.flatMap((a) => {
     const cost = attemptCost(a)
     return cost === null ? [] : [cost]

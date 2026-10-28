@@ -23,9 +23,21 @@ def _cost_of(usage: dict[str, Any]) -> float | None:
     return None
 
 
+_TOKEN_PARTS = ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens")
+
+
+def _tokens_of(usage: dict[str, Any]) -> int | None:
+    """total_tokens when the executor reported it, else the sum of the token parts it did report."""
+
+    if isinstance(usage.get("total_tokens"), int):
+        return usage["total_tokens"]
+    parts = [usage[k] for k in _TOKEN_PARTS if isinstance(usage.get(k), int)]
+    return sum(parts) if parts else None
+
+
 def _usage_totals(attempts: list[dict[str, Any]]) -> dict[str, Any]:
     # Unknown is not zero: tokens/cost stay null when no attempt reported them.
-    tokens = [a["usage"]["total_tokens"] for a in attempts if isinstance(a["usage"].get("total_tokens"), int)]
+    tokens = [t for t in (_tokens_of(a["usage"]) for a in attempts) if t is not None]
     costs = [c for c in (_cost_of(a["usage"]) for a in attempts) if c is not None]
     return {
         "total_tokens": sum(tokens) if tokens else None,

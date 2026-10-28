@@ -11,6 +11,7 @@ import {
   attemptCost,
   attemptDurationMs,
   attemptModels,
+  attemptTokens,
   categoryText,
   executorLabel,
   formatResetTime,
@@ -98,7 +99,7 @@ export function AttemptCard({ attempt }: { attempt: WorkflowAttempt }) {
   const finished = Boolean(attempt.finished_at)
   const running = !finished && attempt.status === 'active'
   const duration = attemptDurationMs(attempt)
-  const tokens = attempt.usage?.total_tokens
+  const tokens = attemptTokens(attempt)
   const cost = attemptCost(attempt)
   const hop = attempt.hop_from
   const next = attempt.next_hop
