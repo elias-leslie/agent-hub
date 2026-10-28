@@ -89,7 +89,6 @@ export {
 } from './api/preferences'
 // Re-export all project-permissions-related exports
 export type {
-  ExecutionPermission,
   ProjectPermission,
   ProjectPermissionCreate,
   ProjectPermissionUpdate,
@@ -97,7 +96,6 @@ export type {
 } from './api/project-permissions'
 export {
   createProjectPermission,
-  fetchExecutionPermission,
   fetchProjectPermissions,
   fetchProjectRoots,
   updateProjectPermission,

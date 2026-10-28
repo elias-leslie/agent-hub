@@ -97,20 +97,12 @@ describe('ChatPage context binding', () => {
     mocks.fetchProjectPermissions.mockResolvedValue([
       {
         project_id: 'agent-hub',
-        permission_tier: 'full',
-        auto_exec_enabled: true,
-        execution_start_hour: 0,
-        execution_end_hour: 24,
         root_path: '/srv/workspaces/projects/agent-hub',
         created_at: '2026-04-29T00:00:00Z',
         updated_at: '2026-04-29T00:00:00Z',
       },
       {
         project_id: 'summitflow',
-        permission_tier: 'full',
-        auto_exec_enabled: true,
-        execution_start_hour: 0,
-        execution_end_hour: 24,
         root_path: '/home/demo/summitflow',
         created_at: '2026-04-29T00:00:00Z',
         updated_at: '2026-04-29T00:00:00Z',

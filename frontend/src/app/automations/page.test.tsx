@@ -6,11 +6,7 @@ import {
   fetchAutomationProfiles,
   fetchAutomationRegistry,
 } from '@/lib/api/automations'
-import {
-  fetchProjectCatalog,
-  fetchProjectPermission,
-  updateProjectPermission,
-} from '@/lib/api/project-permissions'
+import { fetchProjectCatalog } from '@/lib/api/project-permissions'
 import AutomationsPage from './page'
 
 vi.mock('@/lib/api/automations', () => ({
@@ -26,8 +22,6 @@ vi.mock('@/lib/api/automations', () => ({
 }))
 vi.mock('@/lib/api/project-permissions', () => ({
   fetchProjectCatalog: vi.fn(),
-  fetchProjectPermission: vi.fn(),
-  updateProjectPermission: vi.fn(),
 }))
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -66,45 +60,16 @@ describe('Automations project policy', () => {
       sync_pending: false,
       updated_at: null,
     })
-    vi.mocked(fetchProjectPermission).mockResolvedValue({
-      project_id: 'agent-hub',
-      permission_tier: 'full',
-      auto_exec_enabled: true,
-      execution_start_hour: 0,
-      execution_end_hour: 24,
-      root_path: null,
-      updated_at: '2026-09-23T00:00:00Z',
-      created_at: '2026-09-23T00:00:00Z',
-    })
-    vi.mocked(updateProjectPermission).mockResolvedValue({
-      project_id: 'agent-hub',
-      permission_tier: 'full',
-      auto_exec_enabled: false,
-      execution_start_hour: 0,
-      execution_end_hour: 24,
-      root_path: null,
-      updated_at: '2026-09-23T01:00:00Z',
-      created_at: '2026-09-23T00:00:00Z',
-    })
   })
 
-  it('saves execution permission from the central policy tab', async () => {
+  it('shows the central policy without a per-project execution section', async () => {
     render(<AutomationsPage />, { wrapper })
     fireEvent.click(screen.getByRole('button', { name: 'Project policy' }))
-    await screen.findByRole('heading', { name: 'Execution permission' })
-    expect(fetchProjectPermission).toHaveBeenCalledWith('agent-hub')
-    fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Allow automated execution' }),
-    )
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save execution permission' }),
-    )
     await waitFor(() => {
-      expect(updateProjectPermission).toHaveBeenCalledWith('agent-hub', {
-        auto_exec_enabled: false,
-        execution_start_hour: 0,
-        execution_end_hour: 24,
-      })
+      expect(fetchAutomationPolicy).toHaveBeenCalledWith('agent-hub')
     })
+    expect(
+      screen.queryByRole('heading', { name: 'Execution permission' }),
+    ).not.toBeInTheDocument()
   })
 })

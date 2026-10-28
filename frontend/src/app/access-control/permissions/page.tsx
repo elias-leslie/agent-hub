@@ -8,60 +8,22 @@ import {
   fetchProjectPermissions,
   type ProjectPermission,
   type ProjectPermissionCreate,
-  type ProjectPermissionUpdate,
-  updateProjectPermission,
 } from '@/lib/api'
-import { cn } from '@/lib/utils'
 import { PermissionRow } from './_components/PermissionRow'
-import {
-  normalizeTier,
-  TIER_CONFIG,
-  TIERS,
-  type Tier,
-} from './_components/tier-config'
-
-// ─── Header summary pills ─────────────────────────────────────────────────────
-
-function TierSummary({ tierCounts }: { tierCounts: Record<Tier, number> }) {
-  return (
-    <div className="flex items-center gap-2">
-      {TIERS.map((t) => {
-        const count = tierCounts[t] || 0
-        if (count === 0) return null
-        const tc = TIER_CONFIG[t]
-        return (
-          <span
-            key={t}
-            className={cn(
-              'flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium',
-              tc.bg,
-              tc.color,
-            )}
-          >
-            <span className={cn('h-1.5 w-1.5 rounded-full', tc.dot)} />
-            {count} {tc.label}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
 
 // ─── Permissions table ────────────────────────────────────────────────────────
 
 function PermissionsTable({
   permissions,
-  onUpdate,
 }: {
   permissions: ProjectPermission[]
-  onUpdate: (projectId: string, update: ProjectPermissionUpdate) => void
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-800/80">
       <table className="w-full">
         <thead className="bg-slate-800/50">
           <tr>
-            {['Project', 'Tier', 'Automations', 'Updated'].map((col) => (
+            {['Project', 'Automations', 'Updated'].map((col) => (
               <th
                 key={col}
                 className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
@@ -73,11 +35,7 @@ function PermissionsTable({
         </thead>
         <tbody className="divide-y divide-slate-800/50">
           {permissions.map((p) => (
-            <PermissionRow
-              key={p.project_id}
-              permission={p}
-              onUpdate={onUpdate}
-            />
+            <PermissionRow key={p.project_id} permission={p} />
           ))}
         </tbody>
       </table>
@@ -93,19 +51,13 @@ function AddProjectPermissionForm({
   isPending: boolean
 }) {
   const [projectId, setProjectId] = useState('')
-  const [tier, setTier] = useState<Tier>('read')
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalized = projectId.trim()
     if (!normalized) return
-    onCreate({
-      project_id: normalized,
-      permission_tier: tier,
-      auto_exec_enabled: false,
-    })
+    onCreate({ project_id: normalized })
     setProjectId('')
-    setTier('read')
   }
 
   return (
@@ -122,20 +74,6 @@ function AddProjectPermissionForm({
             placeholder="test2"
             className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500"
           />
-        </label>
-        <label className="flex w-full flex-col gap-1.5 text-xs text-slate-400 lg:w-40">
-          Tier
-          <select
-            value={tier}
-            onChange={(event) => setTier(event.target.value as Tier)}
-            className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none ring-0"
-          >
-            {TIERS.map((value) => (
-              <option key={value} value={value}>
-                {TIER_CONFIG[value].label}
-              </option>
-            ))}
-          </select>
         </label>
         <button
           type="submit"
@@ -166,38 +104,6 @@ export default function ProjectPermissionsPage() {
     refetchInterval: 30000,
   })
 
-  const mutation = useMutation({
-    mutationFn: ({
-      projectId,
-      update,
-    }: {
-      projectId: string
-      update: ProjectPermissionUpdate
-    }) => updateProjectPermission(projectId, update),
-    onMutate: async ({ projectId, update }) => {
-      await queryClient.cancelQueries({ queryKey: ['project-permissions'] })
-      const previous = queryClient.getQueryData<ProjectPermission[]>([
-        'project-permissions',
-      ])
-      queryClient.setQueryData<ProjectPermission[]>(
-        ['project-permissions'],
-        (old) =>
-          old?.map((p) =>
-            p.project_id === projectId ? { ...p, ...update } : p,
-          ),
-      )
-      return { previous }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['project-permissions'], context.previous)
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['project-permissions'] })
-    },
-  })
-
   const createMutation = useMutation({
     mutationFn: createProjectPermission,
     onSuccess: () => {
@@ -209,28 +115,12 @@ export default function ProjectPermissionsPage() {
     },
   })
 
-  const handleUpdate = useCallback(
-    (projectId: string, update: ProjectPermissionUpdate) => {
-      mutation.mutate({ projectId, update })
-    },
-    [mutation],
-  )
-
   const handleCreate = useCallback(
     (payload: ProjectPermissionCreate) => {
       setCreateError(null)
       createMutation.mutate(payload)
     },
     [createMutation],
-  )
-
-  const tierCounts = permissions?.reduce(
-    (acc, p) => {
-      const t = normalizeTier(p.permission_tier)
-      acc[t] = (acc[t] || 0) + 1
-      return acc
-    },
-    {} as Record<Tier, number>,
   )
 
   return (
@@ -250,7 +140,6 @@ export default function ProjectPermissionsPage() {
               </span>
             )}
           </div>
-          {tierCounts && <TierSummary tierCounts={tierCounts} />}
         </div>
       </header>
 
@@ -287,7 +176,7 @@ export default function ProjectPermissionsPage() {
             </p>
           </div>
         ) : permissions ? (
-          <PermissionsTable permissions={permissions} onUpdate={handleUpdate} />
+          <PermissionsTable permissions={permissions} />
         ) : null}
       </main>
     </div>

@@ -17,10 +17,6 @@ function permission(
 ): ProjectPermission {
   return {
     project_id: projectId,
-    permission_tier: 'read',
-    auto_exec_enabled: false,
-    execution_start_hour: 0,
-    execution_end_hour: 24,
     root_path: rootPath,
     updated_at: '2026-04-28T00:00:00Z',
     created_at: '2026-04-28T00:00:00Z',
