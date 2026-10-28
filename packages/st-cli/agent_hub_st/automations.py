@@ -17,7 +17,6 @@ from ._api_paths import (
     AUTOMATIONS_PROFILES_PATH,
     AUTOMATIONS_REGISTRY_PATH,
     AUTOMATIONS_RUNS_PATH,
-    PROJECT_PERMISSION_PATH,
 )
 from .memory_api import agent_hub_request
 
@@ -332,71 +331,6 @@ def policy_apply(
         raise typer.Exit(2)
     result = _api("PUT", AUTOMATIONS_POLICY_PATH.format(project_id=project_id), payload=payload)
     _emit(result, as_json=as_json, keys=("project_id", "revision", "enabled"))
-
-
-@app.command("execution")
-@usage(
-    surface="st.automations.execution",
-    cmd="st automations execution PROJECT_ID [--json]",
-    when="inspect the project execution permission gate and hours before changing automated work",
-    task_types=("automation-admin", "incident"),
-    on_demand="autonomous operations",
-)
-def execution_permission(
-    project_id: str,
-    as_json: Annotated[bool, typer.Option("--json")] = False,
-) -> None:
-    """Read the execution permission from its existing authorized API."""
-    result = _api("GET", PROJECT_PERMISSION_PATH.format(project_id=project_id))
-    if as_json:
-        output_json(result)
-    else:
-        for key in (
-            "project_id", "permission_tier", "auto_exec_enabled",
-            "execution_start_hour", "execution_end_hour",
-        ):
-            if key in result:
-                print(f"{key}:{json.dumps(result[key], ensure_ascii=True, sort_keys=True)}")
-
-
-@app.command("execution-set")
-@usage(
-    surface="st.automations.execution-set",
-    cmd="st automations execution-set PROJECT_ID [--auto-exec on|off] [--start-hour 0..23 --end-hour 1..24]",
-    when="change the project execution permission gate or hours through its existing authorized API",
-    task_types=("automation-admin",),
-    on_demand="autonomous operations",
-)
-def execution_permission_set(
-    project_id: str,
-    auto_exec: Annotated[str | None, typer.Option("--auto-exec")] = None,
-    start_hour: Annotated[int | None, typer.Option("--start-hour", min=0, max=23)] = None,
-    end_hour: Annotated[int | None, typer.Option("--end-hour", min=1, max=24)] = None,
-    as_json: Annotated[bool, typer.Option("--json")] = False,
-) -> None:
-    """Update only execution fields; access tier stays in Access Control."""
-    if auto_exec not in {None, "on", "off"}:
-        output_error("--auto-exec must be on or off")
-        raise typer.Exit(2)
-    if (start_hour is None) != (end_hour is None):
-        output_error("Provide both --start-hour and --end-hour")
-        raise typer.Exit(2)
-    if start_hour is not None and start_hour == end_hour:
-        output_error("Start and end hour cannot be the same")
-        raise typer.Exit(2)
-    payload: dict[str, Any] = {}
-    if auto_exec is not None:
-        payload["auto_exec_enabled"] = auto_exec == "on"
-    if start_hour is not None:
-        payload["execution_start_hour"] = start_hour
-        payload["execution_end_hour"] = end_hour
-    if not payload:
-        output_error("Set --auto-exec or an execution window")
-        raise typer.Exit(2)
-    result = _api("PATCH", PROJECT_PERMISSION_PATH.format(project_id=project_id), payload=payload)
-    _emit(result, as_json=as_json, keys=(
-        "project_id", "auto_exec_enabled", "execution_start_hour", "execution_end_hour",
-    ))
 
 
 @app.command("run")

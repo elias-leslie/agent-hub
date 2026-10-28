@@ -1,4 +1,4 @@
-"""Public read operations: model catalog, agents, prompts, health, execution permission and ownership."""
+"""Public read operations: model catalog, agents, prompts, health and ownership."""
 
 from typing import Any
 from urllib.parse import quote
@@ -56,14 +56,6 @@ class CatalogOperationsMixin:
         """Return the service health document (``GET /health``)."""
         return _object(self._get_client().get("/health", headers=self._inject_tracking_headers("sdk.health")), "Health")
 
-    def get_execution_permission(self, project_id: str) -> dict[str, Any]:
-        """Return whether autonomous work may run now (``GET /api/projects/{id}/execution-permission``).
-
-        Keys: ``allowed``, ``permission_tier``, ``auto_exec_enabled``, ``in_time_window``, ``reason``.
-        """
-        path = _project_path(project_id, "projects/{project}/execution-permission")
-        return _object(self._get_client().get(path, headers=self._inject_tracking_headers("sdk.get_execution_permission")), "Execution permission")
-
     def get_project_ownership(self, project_id: str) -> dict[str, Any]:
         """Return the project's live owners and specialists (``GET /api/ownership/projects/{id}/live``)."""
         path = _project_path(project_id, "ownership/projects/{project}/live")
@@ -102,12 +94,6 @@ class AsyncCatalogOperationsMixin:
         """Return the service health document (``GET /health``)."""
         client = await self._get_client()
         return _object(await client.get("/health", headers=self._inject_tracking_headers("sdk.health")), "Health")
-
-    async def get_execution_permission(self, project_id: str) -> dict[str, Any]:
-        """Return whether autonomous work may run now (``GET /api/projects/{id}/execution-permission``)."""
-        client = await self._get_client()
-        path = _project_path(project_id, "projects/{project}/execution-permission")
-        return _object(await client.get(path, headers=self._inject_tracking_headers("sdk.get_execution_permission")), "Execution permission")
 
     async def get_project_ownership(self, project_id: str) -> dict[str, Any]:
         """Return the project's live owners and specialists (``GET /api/ownership/projects/{id}/live``)."""

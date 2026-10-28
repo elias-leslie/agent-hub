@@ -172,7 +172,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { filename = "agent_hub_st-0.5.0-py3-none-any.whl", hash = "sha256:c04a8aff74c7006f447c073972f38447bd7b56572c941a7e3aa6ac1ed581fcd7" },
+    { filename = "agent_hub_st-0.5.0-py3-none-any.whl", hash = "sha256:da2e959d7ab3320f33f64fec77e9bf027f10320eb103216f6f9f921e1b71144b" },
 ]
 
 [package.metadata]

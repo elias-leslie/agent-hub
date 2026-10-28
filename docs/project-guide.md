@@ -53,9 +53,10 @@
   internal agents. Operators can preview the exact delivered context, save
   edits with revision checks, and undo a saved batch. See
   [context governance](architecture/context-governance.md).
-- Client registration and access control, per-project permissions, per-project
-  daily/monthly cost budgets, per-agent hourly request and daily token limits,
-  encrypted credential storage (Fernet at rest), and OAuth (Codex/PKCE).
+- Client registration and access control, the project registry (root paths),
+  per-project daily/monthly cost budgets, per-agent hourly request and daily
+  token limits, encrypted credential storage (Fernet at rest), and OAuth
+  (Codex/PKCE).
 - Optional web research, browser, and voice
   (faster-whisper STT → completion → edge-tts) integrations.
 - A Python SDK (`agent-hub-client`) with sync + async clients for completions,

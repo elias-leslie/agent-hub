@@ -39,23 +39,19 @@ def test_coding_agent_filter_and_project_reads(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         url=f"{BASE}/api/agents?active_only=true&limit=500&offset=0&is_coding_agent=true", json={"agents": []},
     )
-    httpx_mock.add_response(url=f"{BASE}/api/projects/a%2Fb/execution-permission", json={"allowed": True})
     httpx_mock.add_response(url=f"{BASE}/api/ownership/projects/p/live", json={"active_owners": []})
     with AgentHubClient() as client:
         assert client.list_agents(is_coding_agent=True) == {"agents": []}
-        assert client.get_execution_permission("a/b") == {"allowed": True}
         assert client.get_project_ownership("p") == {"active_owners": []}
 
 
 @pytest.mark.asyncio
 async def test_async_client_matches(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=f"{BASE}/api/projects/p/execution-permission", json={"allowed": False})
     httpx_mock.add_response(url=f"{BASE}/api/ownership/projects/p/live", json={"active_owners": []})
     httpx_mock.add_response(
         url=f"{BASE}/api/sessions?page=1&page_size=20&external_id=task-1",
         json={"sessions": [SESSION], "total": 1, "page": 1, "page_size": 20},
     )
     async with AsyncAgentHubClient() as client:
-        assert await client.get_execution_permission("p") == {"allowed": False}
         assert await client.get_project_ownership("p") == {"active_owners": []}
         assert (await client.list_sessions(external_id="task-1")).sessions[0].external_id == "task-1"
