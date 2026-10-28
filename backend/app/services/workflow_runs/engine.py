@@ -48,7 +48,7 @@ from .packet import (
     build_packet,
     normalize_handoff,
 )
-from .plan import Schedule, context_order, effective_deps, schedule
+from .plan import Schedule, context_order, leaf_steps, schedule
 from .policy import (
     TOOLS_UNAVAILABLE,
     AttemptResult,
@@ -86,11 +86,12 @@ ContextProvider = Callable[..., Awaitable[tuple[str, str]]]
 
 RUN_STATES = ("running", "needs_owner", "completed", "failed", "cancelled")
 FINISHED_RUN = ("completed", "failed", "cancelled")
-TERMINAL_STEP = ("completed", "skipped", "cancelled")
 # A step in any of these has nothing left to stop.
 FINISHED_STEP = ("completed", "failed", "refused", "skipped", "cancelled")
 # A step that ended without completing and without the owner's say-so: the run waits for the owner when nothing else can run.
 FAILED_STEP = ("failed", "refused")
+# Run-level pauses: the steps are done but putting their results together on the run branch did not work.
+INTEGRATION_PAUSES = ("integration_conflict", "integration_failed")
 
 
 class WorkflowRunError(Exception):
@@ -299,6 +300,22 @@ async def _lock_run(db: AsyncSession, run_id: str) -> Session | None:
     if row is not None:
         await db.refresh(row)
     return row
+
+
+async def _lock_step_and_attempt(
+    db: AsyncSession, step_id: str, attempt_id: str | None
+) -> tuple[WorkflowStep | None, Session | None]:
+    """Lock a step's row, then its current attempt's, fresh from the database.
+
+    Every writer of both rows takes them in this order (after the run's row where it takes that), so the heartbeat, the
+    outcome, recovery and the workspace record can never wait on each other in a circle. Nothing may be changed on
+    either row before this returns, or the flush a query triggers would update them in the other order.
+    """
+
+    step = await db.get(WorkflowStep, step_id, with_for_update=True, populate_existing=True)
+    if step is None or attempt_id is None:
+        return step, None
+    return step, await db.get(Session, attempt_id, with_for_update=True, populate_existing=True)
 
 
 async def _steps(db: AsyncSession, run_id: str) -> list[WorkflowStep]:
@@ -622,37 +639,35 @@ def _lane_parents(
 async def release_finished_run(run_id: str, deps: EngineDeps | None = None) -> dict[str, Any] | None:
     """Remove the worktree of a run that has ended (completed, failed or cancelled); the branch stays.
 
-    Runs after the run's state is committed and outside its row lock, under the repository lock. A worktree with
-    uncommitted changes is left and the reason is kept in the run's metadata (``worktree_release``). A run that
-    waits for the owner is never touched: resuming it needs the worktree. Failures are logged, never raised.
+    Runs after the run's state is committed. The run's row is locked, its state read again and the worktree removed
+    under that lock (then the repository lock, the order everything takes them in), so a run given new steps
+    meanwhile (``add_steps`` waits for the row) is seen as running and left alone, and never loses the directory a new
+    attempt is about to use. A worktree with uncommitted changes is left and the reason is kept in the run's metadata
+    (``worktree_release``). A run that waits for the owner is never touched: resuming it needs the worktree.
+    Failures are logged, never raised.
     """
 
     deps = deps or EngineDeps()
     try:
         async with deps.factory()() as db:
-            run = (
-                await db.execute(select(Session).where(Session.id == run_id, Session.session_type == "workflow"))
-            ).scalar_one_or_none()
-            meta = _meta(run) if run is not None else {}
-        if (
-            meta.get("state") not in FINISHED_RUN
-            or not meta.get("repo_path")
-            or (meta.get("worktree_release") or {}).get("state") == "removed"
-        ):
-            return None
-        try:
-            record = await RunWorkspace.from_meta(meta).release()
-        except Exception as exc:
-            logger.warning("workflow run %s: worktree not removed", run_id, exc_info=True)
-            record = {"state": "kept", "reason": "release_failed", "detail": repr(exc)[:300]}
-        if record.get("state") == "none":
-            return None
-        record = {**record, "at": _iso(deps.clock())}
-        async with deps.factory()() as db:
             run = await _lock_run(db, run_id)
-            if run is None or _meta(run).get("state") not in FINISHED_RUN:
-                return record  # taken up again meanwhile (a completed run given new steps): nothing to record
-            _set_meta(run, {**_meta(run), "worktree_release": record}, now=deps.clock())
+            meta = _meta(run) if run is not None else {}
+            if (
+                run is None
+                or meta.get("state") not in FINISHED_RUN
+                or not meta.get("repo_path")
+                or (meta.get("worktree_release") or {}).get("state") == "removed"
+            ):
+                return None
+            try:
+                record = await RunWorkspace.from_meta(meta).release()
+            except Exception as exc:
+                logger.warning("workflow run %s: worktree not removed", run_id, exc_info=True)
+                record = {"state": "kept", "reason": "release_failed", "detail": repr(exc)[:300]}
+            if record.get("state") == "none":
+                return None
+            record = {**record, "at": _iso(deps.clock())}
+            _set_meta(run, {**meta, "worktree_release": record}, now=deps.clock())
             await db.commit()
         return record
     except Exception:
@@ -668,12 +683,10 @@ async def _integrate_result(meta: dict[str, Any], steps: list[WorkflowStep]) -> 
 
     if not meta.get("parallel") or not meta.get("repo_path"):
         return None
-    done = [s for s in steps if s.status == "completed" and s.checkpoint_sha]
-    built_on = {dep for deps in effective_deps(steps).values() for dep in deps}
+    # Leaves are found among the completed steps only: a skipped or cancelled step took nothing from its dependencies.
     leaves = [
         LaneParent(s.step_key, s.checkpoint_sha or "")
-        for s in sorted(done, key=lambda s: s.position)
-        if s.step_key not in built_on
+        for s in leaf_steps(steps, has_result=lambda s: bool(s.checkpoint_sha))
     ]
     policy = load_policy(meta["policy"])
     identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
@@ -764,17 +777,14 @@ class _Heartbeat:
         liveness = await self._liveness()
         try:
             async with self.deps.factory()() as db:
-                step = await db.get(WorkflowStep, self.step_id)
+                step, attempt = await _lock_step_and_attempt(db, self.step_id, self.attempt_id)
                 if (
                     step is not None
                     and step.status == "running"
                     and step.current_attempt_session_id == self.attempt_id
                 ):
                     step.heartbeat_at = _dt(self._last)
-                    attempt = await db.get(Session, self.attempt_id, with_for_update=True)
-                    if (
-                        attempt is not None
-                    ):  # keeps the cleanup/reaper heuristics off a live attempt
+                    if attempt is not None:  # keeps the cleanup/reaper heuristics off a live attempt
                         attempt.last_heartbeat_at = attempt.last_activity_at = _dt(self._last)
                         if liveness is not None:
                             meta = dict(attempt.provider_metadata or {})
@@ -873,6 +883,36 @@ def blocked_pause(plan: Schedule) -> dict[str, Any]:
         "reason": "blocked_dependencies",
         "step_key": next(iter(blocked), None),
         "blocked": {key: r.as_dict() for key, r in blocked.items()},
+    }
+
+
+def integration_pause(result: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The pause for a run whose finished steps could not be brought together (None when they were)."""
+
+    if result.get("state") == "merged":
+        return None
+    branch = result.get("branch")
+    if result.get("state") == "conflict":
+        files = list(result.get("conflict_files") or [])
+        left = list(result.get("not_merged") or [])
+        return {
+            "reason": "integration_conflict",
+            "files": files,
+            "merged": list(result.get("merged") or []),
+            "not_merged": left,
+            "branch": branch,
+            "detail": (
+                f"{', '.join(left) or 'a finished step'} changes the same lines as the steps already merged"
+                f"{f' ({", ".join(files[:5])})' if files else ''}. Add a join step that depends on them to resolve it, "
+                "resume to try the merge again, or end the run."
+            ),
+        }
+    error = str(result.get("error") or "unknown error")[:300]
+    return {
+        "reason": "integration_failed",
+        "error": error,
+        "branch": branch,
+        "detail": f"The finished steps could not be put together on the run branch: {error}. Resume to try again, or end the run.",
     }
 
 
@@ -978,6 +1018,12 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         steps = await _steps(db, run_id)
         run_policy = load_policy(meta["policy"])
         running = any(s.status == "running" for s in steps)
+        if meta.get("cancel") is not None:  # a stop was asked for: nothing new starts, the last running step ends the run
+            if running:
+                return {"next": "stop", "reason": "step_running"}, None
+            _cancel_run(run, meta, steps, meta["cancel"], now)
+            await db.commit()
+            return {"next": "stop", "reason": "run_cancelled"}, None
         if not any(s.status == "pending" for s in steps):
             if running:
                 return {"next": "stop", "reason": "step_running"}, None
@@ -990,6 +1036,11 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
                 await db.commit()
                 return {"next": "stop", "reason": stranded["reason"]}, None
             result = await _integrate_result(meta, steps)
+            if result is not None and (blocked := integration_pause(result)) is not None:
+                # The work is not all on the run branch: the run is not done. Its worktree stays for the owner.
+                _pause_run(run, {**meta, "result": result}, blocked, now)
+                await db.commit()
+                return {"next": "stop", "reason": blocked["reason"]}, None
             _complete_run(run, {**meta, **({"result": result} if result else {})}, now)
             await db.commit()
             return {"next": "stop", "reason": "completed"}, None
@@ -1152,11 +1203,9 @@ async def _record_workspace(deps: EngineDeps, intent: _Intent, record: dict[str,
 
     async with deps.factory()() as db:
         await _lock_run(db, intent.run_id)  # taken in the order cancel and the outcome take it
-        step = await db.get(WorkflowStep, intent.step_id)
-        attempt = await db.get(Session, intent.attempt_id, with_for_update=True)
+        step, attempt = await _lock_step_and_attempt(db, intent.step_id, intent.attempt_id)
         if step is None or attempt is None:
             return
-        await db.refresh(step)
         scratch = _scratch(step)
         scratch["workspace"] = record
         step.outcome = scratch
@@ -1183,8 +1232,50 @@ async def _prepare_lane(intent: _Intent, workspace: RunWorkspace, deps: EngineDe
     return record
 
 
-async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, dict[str, Any]]:
-    """The external effect: prepare the worktree, build the packet, run the executor."""
+class _Attempt:
+    """What one committed attempt keeps from its start to its settled outcome: the processes it started, the live
+    status the executor reports, the heartbeat, and the executor's task.
+
+    The heartbeat is entered as soon as the attempt is committed as running and left only after the outcome is
+    committed, so recovery sees a live attempt through setup, the executor and settlement alike. Every process the
+    attempt starts in that time (git for the worktree and dependency merges, the harness, acceptance commands) goes
+    through ``tracker``: recorded on the attempt and marked, so recovery stops what a dead worker left behind.
+    """
+
+    def __init__(self, deps: EngineDeps, intent: _Intent, policy: RunPolicy) -> None:
+        self.grace = policy.process_stop_grace_seconds
+        self.tracker = ProcessTracker(
+            intent.attempt_id, lambda entry: _record_process(deps, intent.attempt_id, entry)
+        )
+        self.live = LiveStatus()
+        self.work: asyncio.Task[StepResult] | None = None
+        self.heartbeat = _Heartbeat(
+            deps,
+            intent.run_id,
+            intent.step_id,
+            intent.attempt_id,
+            policy.heartbeat_interval_seconds,
+            on_cancel=self.interrupt,
+            live=self.live,
+            tracker=self.tracker,
+        )
+
+    async def interrupt(self) -> None:
+        """Stop the attempt's processes (SIGTERM, then SIGKILL after the grace), then let the work finish or cancel it."""
+
+        await self.tracker.stop_all(self.grace)
+        if self.work is not None:
+            await asyncio.wait({self.work}, timeout=self.grace)
+            self.work.cancel()  # no-op when it has finished
+
+
+async def _run_effect(
+    intent: _Intent, deps: EngineDeps, attempt: _Attempt
+) -> tuple[StepResult, dict[str, Any]]:
+    """The external effect: prepare the worktree, build the packet, run the executor.
+
+    Runs inside ``attempt.heartbeat`` with ``attempt.tracker`` current (see ``advance_run``).
+    """
 
     meta, policy = intent.meta, load_policy(intent.meta["policy"])
     workspace = _workspace_of(intent, policy)
@@ -1284,12 +1375,7 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
     except Exception as exc:
         logger.exception("workflow step %s setup failed", intent.step_key)
         return StepResult("failed", error=f"setup_failed: {exc!r}"), info
-    tracker = ProcessTracker(
-        intent.attempt_id, lambda entry: _record_process(deps, intent.attempt_id, entry)
-    )
-    grace = policy.process_stop_grace_seconds
-    live = LiveStatus()
-    work: asyncio.Task[StepResult] | None = None
+    tracker, live, heartbeat, grace = attempt.tracker, attempt.live, attempt.heartbeat, attempt.grace
 
     async def run_step() -> StepResult:
         try:
@@ -1310,46 +1396,26 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
             )
         return result
 
-    async def interrupt() -> None:
-        """Stop the attempt's processes (SIGTERM, then SIGKILL after the grace), then let the work finish or cancel it."""
-
-        await tracker.stop_all(grace)
-        if work is not None:
-            await asyncio.wait({work}, timeout=grace)
-            work.cancel()  # no-op when it has finished
-
-    async with _Heartbeat(
-        deps,
-        intent.run_id,
-        intent.step_id,
-        intent.attempt_id,
-        policy.heartbeat_interval_seconds,
-        on_cancel=interrupt,
-        live=live,
-        tracker=tracker,
-    ) as heartbeat:
-        await heartbeat.beat()  # a stop asked for before the executor starts is seen now, not an interval later
-        if heartbeat.cancelled:
+    await heartbeat.beat()  # a stop asked for during setup is acted on now, not an interval later
+    if heartbeat.cancelled:
+        result = StepResult("failed", error="cancelled")
+    else:
+        live_token = current_live.set(live)
+        try:
+            attempt.work = asyncio.create_task(run_step())  # starts with a copy of this context: tracker and live status
+        finally:
+            current_live.reset(live_token)
+        try:
+            result = await attempt.work
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if not heartbeat.cancelled or (current is not None and current.cancelling()):
+                raise  # the worker itself is being stopped, not a step cancel
             result = StepResult("failed", error="cancelled")
-        else:
-            token = current_tracker.set(tracker)  # the executor's task starts with a copy of this context
-            live_token = current_live.set(live)
-            try:
-                work = asyncio.create_task(run_step())
-            finally:
-                current_tracker.reset(token)
-                current_live.reset(live_token)
-            try:
-                result = await work
-            except asyncio.CancelledError:
-                current = asyncio.current_task()
-                if not heartbeat.cancelled or (current is not None and current.cancelling()):
-                    raise  # the worker itself is being stopped, not a step cancel
-                result = StepResult("failed", error="cancelled")
-            finally:
-                await tracker.stop_all(grace)  # nothing the attempt started outlives it, however it ended
-            if heartbeat.cancelled:
-                result = replace(result, status="failed", handoff=None, error="cancelled")
+        finally:
+            await tracker.stop_all(grace)  # nothing the attempt started outlives it, however it ended
+        if heartbeat.cancelled:
+            result = replace(result, status="failed", handoff=None, error="cancelled")
     return result, info
 
 
@@ -1373,22 +1439,39 @@ def _usage_limited(result: StepResult) -> bool:
 async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[str, Any]:
     """Run the next eligible step of a run. ``next`` tells the caller whether to enqueue another advance."""
 
-    deps = deps or EngineDeps()
+    # A task queued from inside another attempt starts with a copy of that attempt's context: none of it is this one's.
+    token = current_tracker.set(None)
+    try:
+        return await _advance(run_id, deps or EngineDeps())
+    finally:
+        current_tracker.reset(token)
+
+
+async def _advance(run_id: str, deps: EngineDeps) -> dict[str, Any]:
     early, intent = await _commit_intent(run_id, deps)
     if intent is None:
         await release_finished_run(run_id, deps)
         return early
-    if intent.more:  # a ready step has a free slot: it gets an advance of its own and runs beside this one
-        try:
-            await deps.enqueue(run_id)
-        except Exception:
-            logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
-    result, info = await _run_effect(intent, deps)
     policy = load_policy(intent.meta["policy"])
-    # The step stays running until its outcome is committed: the checkpoint, the availability pre-flight and the
-    # commit are part of the attempt, so the heartbeat goes on through them (a slow one is not a stale step).
-    async with _Heartbeat(deps, run_id, intent.step_id, intent.attempt_id, policy.heartbeat_interval_seconds):
-        outcome = await _settle_attempt(run_id, intent, result, info, policy, deps)
+    attempt = _Attempt(deps, intent, policy)
+    # The step stays running until its outcome is committed, and the heartbeat covers all of it, from the commit of
+    # the intent on: worktree and dependency merges, context, packet, the executor, the checkpoint, the availability
+    # pre-flight and the commit. A slow one of these is not a stale step, and recovery never sees a gap.
+    current_tracker.set(attempt.tracker)  # every process from here on is the attempt's (see _git_rc, start_tracked)
+    try:
+        async with attempt.heartbeat:
+            if intent.more:  # a ready step has a free slot: it gets an advance of its own and runs beside this one
+                try:
+                    await deps.enqueue(run_id)
+                except Exception:
+                    logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
+            result, info = await _run_effect(intent, deps, attempt)
+            outcome = await _settle_attempt(run_id, intent, result, info, policy, deps)
+    finally:
+        # Whatever the attempt's commands left running goes with it, grandchildren that left the group included.
+        await attempt.tracker.stop_all(attempt.grace)
+        await stop_marked(intent.attempt_id, attempt.grace)
+        current_tracker.set(None)
     await release_finished_run(run_id, deps)  # a step's cancel can have ended the run
     return outcome
 
@@ -1490,11 +1573,9 @@ async def _commit_outcome(
     now = deps.clock()
     async with deps.factory()() as db:
         run = await _lock_run(db, run_id)
-        step = await db.get(WorkflowStep, intent.step_id)
-        attempt = await db.get(Session, intent.attempt_id)
+        step, attempt = await _lock_step_and_attempt(db, intent.step_id, intent.attempt_id)
         if run is None or step is None or attempt is None:
             return {"next": "stop", "reason": "missing"}
-        await db.refresh(step)
         if step.status != "running" or step.current_attempt_session_id != intent.attempt_id:
             return {"next": "stop", "reason": "attempt_abandoned"}
         meta = _meta(run)
@@ -1710,7 +1791,8 @@ async def recover_stale_steps(deps: EngineDeps | None = None) -> list[str]:
     """Charge stale running steps, retry or fail them, and return run ids that need another advance.
 
     Also returns runs paused on a usage limit whose window has reset (resumed here) and runs that are
-    "running" with pending steps but no live step and no recent activity (a lost enqueue).
+    "running" with no live step and no recent activity: a lost enqueue, whether pending steps are waiting to start or
+    the run only needs settling (completing, or pausing for the owner because a step failed).
     """
 
     deps = deps or EngineDeps()
@@ -1768,10 +1850,9 @@ async def _stop_orphans(attempt: Session | None, grace: float) -> list[dict[str,
 async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) -> bool:
     async with deps.factory()() as db:
         run = await _lock_run(db, run_id)
-        step = await db.get(WorkflowStep, step_id)
+        step = await db.get(WorkflowStep, step_id, with_for_update=True, populate_existing=True)
         if run is None or step is None:
             return False
-        await db.refresh(step)
         meta = _meta(run)
         if step.status != "running":
             return False
@@ -1780,7 +1861,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
         if now - heartbeat < policy.stale_after_seconds:
             return False
         attempt = (
-            await db.get(Session, step.current_attempt_session_id)
+            await db.get(Session, step.current_attempt_session_id, with_for_update=True, populate_existing=True)
             if step.current_attempt_session_id
             else None
         )
@@ -1900,11 +1981,9 @@ async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
             return False
         steps = await _steps(db, run_id)
         idle = now - (run.last_activity_at.timestamp() if run.last_activity_at else 0.0)
-        if not any(s.status == "running" for s in steps) and idle >= policy.stale_after_seconds:
-            return any(s.status == "pending" for s in steps) or all(
-                s.status in TERMINAL_STEP for s in steps
-            )
-        return False
+        # Nothing running: an advance starts what is pending, or settles the run (completes it, or pauses it for the
+        # owner when a step failed or waits). A run in that state with no advance coming lost its enqueue.
+        return not any(s.status == "running" for s in steps) and idle >= policy.stale_after_seconds
 
 
 # --- owner resume ------------------------------------------------------------------------------------
@@ -1938,6 +2017,8 @@ async def resume_run(
         )
     steps = await _steps(db, run_id)
     pause = meta.get("pause") or {}
+    if pause.get("reason") in INTEGRATION_PAUSES:
+        return await _resume_integration(db, run, meta, steps, decision, now, deps)
     key = decision.step_key or pause.get("step_key")
     # A step the owner is asked about waits as needs_owner; when the run waits because steps failed, those are the ones.
     waiting = ("failed", "refused") if pause.get("reason") == "step_failed" else ("needs_owner",)
@@ -2020,6 +2101,37 @@ async def resume_run(
         "step": step.step_key,
         "status": step.status,
     }
+
+
+async def _resume_integration(
+    db: AsyncSession,
+    run: Session,
+    meta: dict[str, Any],
+    steps: list[WorkflowStep],
+    decision: OwnerDecision,
+    now: float,
+    deps: EngineDeps,
+) -> dict[str, Any]:
+    """Resume a run whose results could not be put together: retry the merge, or end the run.
+
+    No step is waiting, so ``skip`` has nothing to apply to. A join step added through a plan revision resumes the
+    run by itself.
+    """
+
+    reason = (meta.get("pause") or {}).get("reason")
+    if decision.action == "skip":
+        raise WorkflowRunError(
+            "no_such_step",
+            f"the run waits on {reason}, not on a step: resume with retry to merge again, add a join step "
+            "through a plan revision, or end the run",
+        )
+    if decision.action == "retry":
+        _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
+    else:
+        _fail_run(run, meta, steps, f"{reason}: owner ended the run", now)
+    await db.commit()
+    await release_finished_run(run.id, deps)
+    return {"run_id": run.id, "state": _meta(run)["state"], "step": None, "status": None}
 
 
 # --- cancel ------------------------------------------------------------------------------------------

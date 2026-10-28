@@ -361,6 +361,8 @@ export interface RunPause {
   /** Unix seconds; a usage-limit pause resumes by itself after this. */
   resume_after?: number | null
   error?: string
+  /** For integration_conflict and integration_failed: what to do about it, in a sentence. */
+  detail?: string
   at?: number
 }
 

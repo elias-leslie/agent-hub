@@ -7,7 +7,13 @@ from typing import Any
 
 import pytest
 
-from app.services.workflow_runs.plan import context_order, effective_deps, schedule, validate_graph
+from app.services.workflow_runs.plan import (
+    context_order,
+    effective_deps,
+    leaf_steps,
+    schedule,
+    validate_graph,
+)
 
 
 @dataclass
@@ -84,3 +90,27 @@ def test_a_step_behind_a_blocked_step_is_blocked_and_the_reason_names_the_failed
     assert result.readiness["d"].reason == "blocked by c (blocked), because a (failed)"
     assert result.readiness["e"].waiting_on == ("b",) and result.readiness["e"].because == (("a", "failed"),)
     assert [s.step_key for s in result.start] == ["g"]  # independent work keeps being scheduled
+
+
+def leaves(*specs: tuple[str, str, list[str] | None]) -> list[str]:
+    return [s.step_key for s in leaf_steps(plan(*specs))]
+
+
+def test_a_completed_step_whose_only_dependent_never_completed_is_still_a_leaf() -> None:
+    # B depends on A and was skipped, cancelled or never started: A is the result, B took nothing from it.
+    for status in ("skipped", "cancelled", "pending", "failed", "needs_owner"):
+        assert leaves(("a", "completed", []), ("b", status, ["a"])) == ["a"]
+
+
+def test_leaves_are_found_among_completed_steps_looking_through_the_ones_that_did_not_complete() -> None:
+    # c is built on a through the skipped b, so a is not a leaf; d is independent.
+    assert leaves(("a", "completed", []), ("b", "skipped", ["a"]), ("c", "completed", ["b"]), ("d", "completed", [])) == ["c", "d"]
+    # A chain through two non-completed steps, and a completed step that nothing completed builds on.
+    assert leaves(
+        ("a", "completed", []), ("b", "cancelled", ["a"]), ("x", "pending", ["b"]), ("c", "completed", ["x"]), ("e", "completed", ["a"])
+    ) == ["c", "e"]
+    # The default chain looks through a skipped step on its own.
+    assert leaves(("a", "completed", None), ("b", "skipped", None), ("c", "completed", None)) == ["c"]
+    # A diamond: only the join is a leaf.
+    assert leaves(("a", "completed", []), ("b", "completed", ["a"]), ("c", "completed", ["a"]), ("j", "completed", ["b", "c"])) == ["j"]
+    assert leaves(("a", "pending", []), ("b", "skipped", ["a"])) == []

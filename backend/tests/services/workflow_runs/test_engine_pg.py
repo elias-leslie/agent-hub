@@ -56,7 +56,7 @@ from app.services.workflow_runs.schemas import (
     StepRevision,
     StepTestHooks,
 )
-from app.services.workflow_runs.workspace import RunWorkspace
+from app.services.workflow_runs.workspace import RunWorkspace, _repo_lock
 
 pytestmark = pytest.mark.integration
 
@@ -121,7 +121,7 @@ def repo(tmp_path: Path) -> Path:
 class World:
     """Everything a test controls: agent chains, availability, cooldown trips and the faux script."""
 
-    def __init__(self, pg_db: AsyncSession, faux: FauxExecutor) -> None:
+    def __init__(self, pg_db: AsyncSession | None, faux: FauxExecutor, factory: Any = None) -> None:
         self.chains: dict[str, list[str]] = {}
         self.unavailable: dict[str, Unavailable] = {}
         self.tripped: list[tuple[str, float, str]] = []
@@ -131,9 +131,12 @@ class World:
         self.lock = asyncio.Lock()
 
         @asynccontextmanager
-        async def factory() -> AsyncGenerator[AsyncSession]:
+        async def shared() -> AsyncGenerator[AsyncSession]:
             async with self.lock:
                 yield pg_db
+
+        # ``factory``: real sessions of their own (see ``live_pg``), for tests that need two transactions at once.
+        session_factory = factory or shared
 
         async def resolve(_db: AsyncSession, definition: dict[str, Any]) -> list[str]:
             chain = list(self.chains[definition["agent_slug"]])
@@ -161,7 +164,7 @@ class World:
         self.tasks: list[asyncio.Task[dict[str, Any]]] = []
         self.deps = EngineDeps(
             enqueue_advance=self.spawn,
-            session_factory=factory,
+            session_factory=session_factory,
             get_executor=lambda _kind: self.faux,
             resolve_chain=resolve,
             availability=availability,
@@ -211,8 +214,8 @@ def world_factory(pg_db: AsyncSession, tmp_path: Path, monkeypatch: pytest.Monke
 
     monkeypatch.setattr(engine_module, "get_workflow_run_settings", lambda: Settings)
 
-    def make(script: dict[str, list[FauxAction]] | None = None) -> World:
-        return World(pg_db, FauxExecutor(script))
+    def make(script: dict[str, list[FauxAction]] | None = None, factory: Any = None) -> World:
+        return World(pg_db, FauxExecutor(script), factory)
 
     return make
 
@@ -2776,3 +2779,353 @@ async def test_a_worktree_with_uncommitted_changes_is_kept_and_the_run_says_why(
     assert (release["state"], release["reason"], release["files"]) == ("kept", "uncommitted_changes", ["stray.txt"])
     assert view["result"] is not None and view["branch"] in branches(repo)
     assert str(workspace.worktree) in worktrees_of(repo)
+
+
+# --- the results of parallel steps are what the run ends with --------------------------------------------------
+
+
+async def test_a_completed_step_whose_only_dependent_was_skipped_is_still_in_the_result(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "b": [FauxAction("refuse", category="reasoning_extraction")]})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db, parallel(repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": ["a"]}), deps=world.deps
+    )
+    results = await world.drive(run_id)
+    assert "owner_only_category" in {r["reason"] for r in results}  # b waits for the owner; a is done
+    await resume_run(pg_db, run_id, OwnerDecision(action="skip", step_key="b"), deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and {s["key"]: s["status"] for s in view["steps"]} == {"a": "completed", "b": "skipped"}
+    assert (view["result"]["state"], view["result"]["merged"]) == ("merged", ["a"])
+    assert git_out(repo, "show", f"{view['branch']}:a.txt") == "a"  # a's work is on the run branch
+    assert view["result"]["sha"] == view["steps"][0]["checkpoint_sha"]
+
+
+async def test_two_parallel_steps_changing_the_same_line_pause_the_run_instead_of_completing_it(
+    pg_db, repo, world_factory
+) -> None:
+    commit_file(repo, "shared.txt", "one\ntwo\nthree\n")
+    world = world_factory(
+        {
+            "a": [FauxAction(write={"shared.txt": "one\nTWO by a\nthree\n"})],
+            "b": [FauxAction(write={"shared.txt": "one\nTWO by b\nthree\n"})],
+            "join": [FauxAction(write={"shared.txt": "one\nTWO by a and b\nthree\n"})],
+        }
+    )
+    chains(world)
+    run_id, _ = await create_run(pg_db, parallel(repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}), deps=world.deps)
+    results = await world.drive(run_id)
+    assert "integration_conflict" in {r["reason"] for r in results}
+    view = await view_of(pg_db, run_id)
+    pause = view["pause"]
+    assert view["state"] == "needs_owner" and view["worktree_release"] is None
+    assert (pause["reason"], pause["files"], pause["merged"], pause["not_merged"]) == (
+        "integration_conflict", ["shared.txt"], ["a"], ["b"],
+    )
+    assert "join step" in pause["detail"] and view["result"]["state"] == "conflict"
+    assert Path(view["worktree"]).exists()  # kept for the owner
+    assert {s["status"] for s in view["steps"]} == {"completed"}
+
+    # Retrying only merges again: the same conflict pauses the run again.
+    resumed = await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert (resumed["state"], resumed["step"]) == ("running", None)
+    assert "integration_conflict" in {r["reason"] for r in await world.drive(run_id)}
+    with pytest.raises(WorkflowRunError) as skipped:
+        await resume_run(pg_db, run_id, OwnerDecision(action="skip"), deps=world.deps)
+    assert skipped.value.code == "no_such_step"
+
+    # A join step added through a plan revision takes the run on; its result is the whole run's.
+    revised = await add_steps(
+        pg_db,
+        run_id,
+        AddSteps(steps=[{"key": "join", "instructions": "resolve", "agent_slug": "coder", "executor": "faux", "depends_on": ["a", "b"]}]),
+        deps=world.deps,
+    )
+    assert revised["state"] == "running" and revised["enqueue"]
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and view["pause"] is None
+    assert (view["result"]["state"], view["result"]["merged"]) == ("merged", ["join"])
+    assert git_out(repo, "show", f"{view['branch']}:shared.txt") == "one\nTWO by a and b\nthree"
+    assert view["worktree_release"]["state"] == "removed"
+
+
+async def test_ending_a_run_paused_on_a_conflict_fails_it_and_releases_the_worktree(pg_db, repo, world_factory) -> None:
+    commit_file(repo, "shared.txt", "one\ntwo\n")
+    world = world_factory({"a": [FauxAction(write={"shared.txt": "A\ntwo\n"})], "b": [FauxAction(write={"shared.txt": "B\ntwo\n"})]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, parallel(repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}), deps=world.deps)
+    await world.drive(run_id)
+    assert (await view_of(pg_db, run_id))["pause"]["reason"] == "integration_conflict"
+    ended = await resume_run(pg_db, run_id, OwnerDecision(action="fail"), deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert ended["state"] == view["state"] == "failed" and "integration_conflict: owner ended the run" in view["failure"]
+    assert not Path(view["worktree"]).exists() and view["worktree_release"]["state"] == "removed"
+
+
+async def test_an_error_while_putting_the_results_together_pauses_the_run_and_a_retry_finishes_it(
+    pg_db, repo, world_factory, monkeypatch
+) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "b": [FauxAction(write={"b.txt": "b\n"})]})
+    chains(world)
+    real = RunWorkspace.integrate
+
+    async def broken(self: RunWorkspace, leaves: Any) -> dict[str, Any]:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(RunWorkspace, "integrate", broken)
+    run_id, _ = await create_run(pg_db, parallel(repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}), deps=world.deps)
+    results = await world.drive(run_id)
+    assert "integration_failed" in {r["reason"] for r in results}
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and "disk full" in view["pause"]["error"] and view["worktree_release"] is None
+    monkeypatch.setattr(RunWorkspace, "integrate", real)
+    await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and view["result"]["merged"] == ["a", "b"]
+
+
+# --- recovery re-queues a run that only needs settling ---------------------------------------------------------
+
+
+async def test_recovery_requeues_a_running_run_whose_only_unresolved_step_failed(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction("error")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a", "max_attempts": 1}), deps=world.deps)
+    lost = await advance_run(run_id, deps=world.deps)  # the step fails; the enqueue that should follow is lost
+    assert (lost["next"], lost["run_state"]) == ("continue", "running")
+    world.clock += 1000
+    assert await recover_stale_steps(world.deps) == [run_id]
+    settled = await advance_run(run_id, deps=world.deps)
+    assert settled["reason"] == "step_failed"
+    view = await view_of(pg_db, run_id)
+    assert (view["state"], view["pause"]["reason"]) == ("needs_owner", "step_failed")
+
+
+# --- a long setup is not a stale step; its git processes belong to the attempt -----------------------------------
+
+
+async def test_the_heartbeat_runs_from_the_committed_intent_and_setup_git_processes_belong_to_the_attempt(
+    pg_db, repo, world_factory, tmp_path
+) -> None:
+    marker_file = tmp_path / "hook-marker"
+    hook = repo / ".git/hooks/post-checkout"
+    hook.write_text(f'#!/bin/sh\nprintenv {MARKER_ENV} > "{marker_file}"\n')
+    hook.chmod(0o755)
+    world = world_factory({})
+    chains(world)
+    beats: list[Any] = []
+
+    async def stored_heartbeat() -> Any:
+        async with world.lock:
+            return (await pg_db.execute(select(WorkflowStep.heartbeat_at))).scalars().first()
+
+    async def slow_context(**_kw: Any) -> tuple[str, str]:
+        # The worktree is made and the packet is not: setup, with the step already running.
+        beats.append(await stored_heartbeat())
+        world.clock += 500  # far past stale_after_seconds; only a live ticker moves the stored heartbeat
+        await asyncio.sleep(0.4)
+        beats.append(await stored_heartbeat())
+        return "", "ok"
+
+    world.deps.context_provider = slow_context
+    definition = graph(repo, {"key": "a"}, policy={"heartbeat_interval_seconds": 0.05, "stale_after_seconds": 100})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.run_to_stop(run_id)
+    assert len(beats) == 2 and beats[1] > beats[0]
+    view = await view_of(pg_db, run_id)
+    (attempt,) = view["steps"][0]["attempt_history"]
+    assert view["state"] == "completed"
+    assert marker_file.read_text().strip() == attempt["session_id"]  # the git command, and its hook, carried the attempt's marker
+
+
+# --- locks: one order everywhere, and the fence around releasing a worktree --------------------------------------
+
+
+@pytest_asyncio.fixture
+async def live_pg() -> AsyncGenerator[Any]:
+    """A throwaway schema with committed tables and sessions of their own, for tests that need two transactions at once."""
+
+    configured = os.environ.get("TEST_AGENT_HUB_DB_URL")
+    if not configured:
+        pytest.skip("TEST_AGENT_HUB_DB_URL is required")
+    url = make_url(configured).set(drivername="postgresql+asyncpg")
+    assert url.database and url.database.endswith("_test")
+    schema = f"workflow_locks_{uuid4().hex}"
+    engine = create_async_engine(url, connect_args={"server_settings": {"search_path": schema}})
+    async with engine.begin() as connection:
+        await connection.execute(text(f"CREATE SCHEMA {schema}"))
+
+        def create_tables(sync_connection: Any) -> None:
+            for table in (Session.__table__, SessionEvent.__table__, WorkflowStep.__table__, CostLog.__table__, SubscriptionUsageSnapshot.__table__):
+                for column in table.columns:
+                    if isinstance(column.type, Enum):
+                        column.type.create(sync_connection, checkfirst=True)
+                sync_connection.execute(CreateTable(table, include_foreign_key_constraints=[]))
+
+        await connection.run_sync(create_tables)
+
+    @asynccontextmanager
+    async def sessions() -> AsyncGenerator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    live = type("Live", (), {"engine": engine, "sessions": staticmethod(sessions), "schema": schema})
+    try:
+        yield live
+    finally:
+        await engine.dispose()
+        cleanup = create_async_engine(url)
+        async with cleanup.begin() as connection:
+            await connection.execute(text(f"DROP SCHEMA {schema} CASCADE"))
+        await cleanup.dispose()
+
+
+async def blocked_backends(live: Any) -> int:
+    async with live.engine.connect() as connection:
+        return int(
+            await connection.scalar(
+                text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
+            )
+            or 0
+        )
+
+
+async def until(condition: Any, timeout: float = 10.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not await condition():
+        assert asyncio.get_running_loop().time() < deadline, "condition never held"
+        await asyncio.sleep(0.02)
+
+
+async def row_is_locked(live: Any, table: Any, row_id: str) -> bool:
+    """Whether another transaction holds the row (probed with NOWAIT, which never waits)."""
+
+    async with live.engine.connect() as connection:
+        try:
+            await connection.execute(text(f"SELECT 1 FROM {table.name} WHERE id = :id FOR UPDATE NOWAIT"), {"id": row_id})
+        except Exception:
+            return True
+        finally:
+            await connection.rollback()
+    return False
+
+
+async def running_attempt(live: Any, world: World, repo: Path) -> tuple[str, Any]:
+    async with live.sessions() as db:
+        run_id, _ = await create_run(db, graph(repo, {"key": "a"}), deps=world.deps)
+    early, intent = await engine_module._commit_intent(run_id, world.deps)
+    assert intent is not None, early
+    return run_id, intent
+
+
+async def holding_row(live: Any, table: Any, row_id: str) -> Any:
+    connection = await live.engine.connect()
+    await connection.execute(text(f"SELECT 1 FROM {table.name} WHERE id = :id FOR UPDATE"), {"id": row_id})
+    return connection
+
+
+async def test_settling_an_outcome_and_recording_the_workspace_lock_the_step_before_its_attempt(
+    live_pg, repo, world_factory
+) -> None:
+    world = world_factory({}, factory=live_pg.sessions)
+    chains(world)
+    run_id, intent = await running_attempt(live_pg, world, repo)
+    outcome_args = (StepResult("failed", error="boom"), None, None, None, None, {}, {})
+
+    async def settle() -> Any:
+        return await engine_module._commit_outcome(run_id, intent, *outcome_args, world.deps)
+
+    async def record() -> Any:
+        return await engine_module._record_workspace(world.deps, intent, {"lane": None, "worktree": "w", "branch": "b"})
+
+    for work in (settle, record):
+        # Another transaction holds the step. The work takes the run, then waits for the step: it must not already
+        # hold the attempt, or a heartbeat (which locks step then attempt) and it would wait on each other.
+        holder = await holding_row(live_pg, WorkflowStep.__table__, intent.step_id)
+        try:
+            task = asyncio.create_task(work())
+            await until(lambda: _blocked(live_pg))
+            assert not await row_is_locked(live_pg, Session.__table__, intent.attempt_id)
+        finally:
+            await holder.rollback()
+            await holder.close()
+        await asyncio.wait_for(task, 10)
+
+
+async def _blocked(live: Any) -> bool:
+    return await blocked_backends(live) > 0
+
+
+async def test_a_heartbeat_locks_the_step_before_its_attempt(live_pg, repo, world_factory) -> None:
+    world = world_factory({}, factory=live_pg.sessions)
+    chains(world)
+    run_id, intent = await running_attempt(live_pg, world, repo)
+    beat = engine_module._Heartbeat(world.deps, run_id, intent.step_id, intent.attempt_id, 3600)
+    holder = await holding_row(live_pg, Session.__table__, intent.attempt_id)  # the attempt is held elsewhere
+    try:
+        task = asyncio.create_task(beat.beat())
+        await until(lambda: _blocked(live_pg))
+        assert await row_is_locked(live_pg, WorkflowStep.__table__, intent.step_id)  # it already holds the step
+    finally:
+        await holder.rollback()
+        await holder.close()
+    await asyncio.wait_for(task, 10)
+
+
+async def test_releasing_a_worktree_fences_out_a_plan_change_that_reopens_the_run(
+    live_pg, repo, world_factory, monkeypatch
+) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "more": [FauxAction(write={"m.txt": "m\n"})]}, factory=live_pg.sessions)
+    chains(world)
+    real_release = engine_module.release_finished_run
+
+    async def nothing(*_a: Any, **_k: Any) -> None:
+        return None
+
+    monkeypatch.setattr(engine_module, "release_finished_run", nothing)  # finish the run without its release
+    async with live_pg.sessions() as db:
+        run_id, _ = await create_run(db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    monkeypatch.setattr(engine_module, "release_finished_run", real_release)
+    async with live_pg.sessions() as db:
+        view = await view_of(db, run_id)
+    worktree = Path(view["worktree"])
+    assert worktree.exists() and view["worktree_release"] is None
+
+    async with _repo_lock(repo):  # the release has the run and waits for the repository
+        release = asyncio.create_task(real_release(run_id, world.deps))
+        await until(lambda: _locked_run(live_pg, run_id))
+
+        async def reopen() -> Any:
+            async with live_pg.sessions() as db:
+                request = AddSteps(steps=[{"key": "more", "instructions": "again", "agent_slug": "coder", "executor": "faux"}])
+                return await add_steps(db, run_id, request, deps=world.deps)
+
+        reopening = asyncio.create_task(reopen())
+        await until(lambda: _blocked(live_pg))
+        assert not reopening.done()  # the plan change waits for the release instead of slipping in beside it
+    record = await asyncio.wait_for(release, 10)
+    assert record is not None and record["state"] == "removed"
+    reopened = await asyncio.wait_for(reopening, 10)
+    assert reopened["reopened"] and reopened["state"] == "running"
+    async with live_pg.sessions() as db:
+        view = await view_of(db, run_id)
+    assert view["state"] == "running" and view["worktree_release"] is None  # the reopening cleared the record
+
+    # The new work gets its worktree made again, and a release that comes late leaves a running run alone.
+    await RunWorkspace.from_meta(engine_module._meta(await _run_row(live_pg, run_id))).ensure()
+    assert worktree.exists()
+    assert await real_release(run_id, world.deps) is None and worktree.exists()
+
+
+async def _locked_run(live: Any, run_id: str) -> bool:
+    return await row_is_locked(live, Session.__table__, run_id)
+
+
+async def _run_row(live: Any, run_id: str) -> Session:
+    async with live.sessions() as db:
+        row = await db.get(Session, run_id)
+        assert row is not None
+        return row

@@ -11,7 +11,7 @@ look through: a skipped, cancelled or failed dependency blocks the step until th
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -250,3 +250,31 @@ def context_order(steps: Sequence[StepLike], step: StepLike) -> list[str]:
         order.append(ready[0])
         remaining.discard(ready[0])
     return order
+
+
+def leaf_steps[T: StepLike](steps: Sequence[T], *, has_result: Callable[[T], bool] | None = None) -> list[T]:
+    """The completed steps no other completed step builds on, by position: what the finished run's result is made of.
+
+    A completed step builds on the nearest completed steps behind it, looking through steps that did not complete
+    (skipped, cancelled, failed, never started): a step that was skipped or cancelled took nothing from its
+    dependencies, so it must not hide them. ``has_result`` narrows which completed steps count (default: all).
+    """
+
+    usable = has_result or (lambda _s: True)
+    by_key = {s.step_key: s for s in steps}
+    deps = effective_deps(steps)
+    completed = {s.step_key for s in steps if s.status == "completed" and usable(s)}
+    built_on: set[str] = set()
+    for key in completed:
+        seen: set[str] = set()
+        stack = list(deps[key])
+        while stack:
+            dep = stack.pop()
+            if dep in seen:
+                continue
+            seen.add(dep)
+            if dep in completed:
+                built_on.add(dep)  # what that step built on is already counted through it
+            else:
+                stack.extend(deps[dep])
+    return [by_key[k] for k in sorted(completed - built_on, key=lambda k: by_key[k].position)]

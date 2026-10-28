@@ -20,6 +20,7 @@ from app.models import WorkflowStep
 
 from .engine import (
     FINISHED_RUN,
+    INTEGRATION_PAUSES,
     EngineDeps,
     WorkflowRunError,
     _lock_run,
@@ -111,6 +112,11 @@ def _settle(run: Any, meta: dict[str, Any], steps: list[Any], now: float) -> boo
     if meta.get("state") == "needs_owner" and pause.get("reason") == "step_failed":
         # Stays paused until the owner resumes (retry, skip or fail); the list of what is blocked follows the plan.
         meta = {**meta, "pause": {**failed_pause(steps, schedule(steps, max_running=cap)), "at": pause.get("at", now)}}
+    elif meta.get("state") == "needs_owner" and pause.get("reason") in INTEGRATION_PAUSES:
+        # A join step (or any new work) is the way past a failed merge: the run goes on, and puts the results together
+        # again when it is done.
+        if any(s.status == "pending" for s in steps):
+            meta = {**meta, "state": "running", "pause": None}
     elif meta.get("state") == "needs_owner" and pause.get("reason") == "blocked_dependencies":
         plan = schedule(steps, max_running=cap)
         if plan.start or not any(s.status == "pending" for s in steps):

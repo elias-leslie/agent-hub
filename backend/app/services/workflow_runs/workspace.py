@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from typing import Any
 from app.utils.safe_subprocess import create_process
 
 from .packet import GitState
+from .processes import MARKER_ENV, TrackedProcess, current_tracker, identify
 
 
 class GitError(RuntimeError):
@@ -39,8 +41,22 @@ async def _git_rc(cwd: Path, *args: str, config: tuple[str, ...] = ()) -> tuple[
     """Run git and return (exit code, stdout, stderr) without judging the exit code."""
 
     argv = ["git", *(a for pair in config for a in ("-c", pair)), *args]
-    proc = await create_process(*argv, working_dir=cwd)
-    out, err = await proc.communicate()
+    tracker = current_tracker.get()
+    if tracker is None:
+        proc = await create_process(*argv, working_dir=cwd)
+        out, err = await proc.communicate()
+    else:
+        # Inside an attempt the command (and any hook it runs) is the attempt's: it carries the attempt's marker, so
+        # recovery's marker sweep stops it if the worker dies, and the attempt's stop covers it while it runs. It is
+        # not written to the attempt's record: git commands are short and many.
+        proc = await create_process(
+            *argv, working_dir=cwd, env={**os.environ, MARKER_ENV: tracker.marker}, die_with_parent=True
+        )
+        tracked = TrackedProcess(proc, await asyncio.to_thread(identify, proc.pid), tracker.marker, "git")
+        tracker.processes.append(tracked)
+        out, err = await proc.communicate()
+        if tracked in tracker.processes:  # finished; one cancelled mid-way stays for the attempt's stop
+            tracker.processes.remove(tracked)
     return (
         proc.returncode if proc.returncode is not None else -1,
         out.decode(errors="replace").strip(),
@@ -128,31 +144,37 @@ class RunWorkspace:
         )
 
     async def ensure(self) -> None:
-        """Create the worktree and run directory if missing (idempotent)."""
+        """Create the worktree and run directory if missing (idempotent).
+
+        Takes the repository lock, like ``release`` and the lanes do, so a worktree is never looked at while another
+        task is removing it.
+        """
 
         await asyncio.to_thread(self.run_dir.mkdir, parents=True, exist_ok=True)
-        if self.worktree.exists():
-            return
         if not self.repo_path:
-            await asyncio.to_thread(self.worktree.mkdir, parents=True, exist_ok=True)
+            if not await asyncio.to_thread(self.worktree.exists):
+                await asyncio.to_thread(self.worktree.mkdir, parents=True, exist_ok=True)
             return
-        await asyncio.to_thread(self.root.mkdir, parents=True, exist_ok=True)
-        repo = Path(self.repo_path)
-        code, _out, _err = await _git_rc(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{self.branch}")
-        if self.lane is None and code == 0:
-            # A branch that is already there (a finished run taking new work, its worktree removed) keeps its commits.
-            await _git(repo, "worktree", "prune")
-            await _git(repo, "worktree", "add", str(self.worktree), self.branch)
-            return
-        await _git(
-            repo,
-            "worktree",
-            "add",
-            "-B",
-            self.branch,
-            str(self.worktree),
-            self.base_sha or "HEAD",
-        )
+        async with _repo_lock(self.repo_path):
+            if await asyncio.to_thread(self.worktree.exists):
+                return
+            await asyncio.to_thread(self.root.mkdir, parents=True, exist_ok=True)
+            repo = Path(self.repo_path)
+            code, _out, _err = await _git_rc(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{self.branch}")
+            if self.lane is None and code == 0:
+                # A branch that is already there (a finished run taking new work, its worktree removed) keeps its commits.
+                await _git(repo, "worktree", "prune")
+                await _git(repo, "worktree", "add", str(self.worktree), self.branch)
+                return
+            await _git(
+                repo,
+                "worktree",
+                "add",
+                "-B",
+                self.branch,
+                str(self.worktree),
+                self.base_sha or "HEAD",
+            )
 
     async def current_sha(self) -> str | None:
         return await head_sha(self.worktree) if self.repo_path else None
@@ -323,11 +345,11 @@ class RunWorkspace:
         return await self._lane_record(parents, merges)
 
     async def _drop_worktree(self) -> None:
-        if self.repo_path and self.worktree.exists():
+        if self.repo_path and await asyncio.to_thread(self.worktree.exists):
             code, _out, _err = await _git_rc(
                 Path(self.repo_path), "worktree", "remove", "--force", str(self.worktree)
             )
-            if code != 0 and self.worktree.exists():
+            if code != 0 and await asyncio.to_thread(self.worktree.exists):
                 await asyncio.to_thread(shutil.rmtree, self.worktree, True)
 
     async def retire_lane(self) -> None:
@@ -350,7 +372,7 @@ class RunWorkspace:
             return {"state": "none"}
         repo = Path(self.repo_path)
         async with _repo_lock(self.repo_path):
-            if self.worktree.exists():
+            if await asyncio.to_thread(self.worktree.exists):
                 code, out, err = await _git_rc(self.worktree, "status", "--porcelain")
                 if code != 0:
                     return {"state": "kept", "reason": f"git status failed: {err}"[:300]}
@@ -363,7 +385,7 @@ class RunWorkspace:
                         "files": [line[3:] for line in files[:20]],
                     }
                 code, _out, err = await _git_rc(repo, "worktree", "remove", str(self.worktree))
-                if code != 0 and self.worktree.exists():
+                if code != 0 and await asyncio.to_thread(self.worktree.exists):
                     return {"state": "kept", "reason": "remove_failed", "detail": err[:300]}
             await _git(repo, "worktree", "prune")
         return {"state": "removed"}

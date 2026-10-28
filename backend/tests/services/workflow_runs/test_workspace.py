@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from app.services.workflow_runs.workspace import GitError, LaneParent, RunWorkspace
+from app.services.workflow_runs.workspace import GitError, LaneParent, RunWorkspace, _repo_lock
 
 IDENTITY = ("user.name=Agent Hub Workflow", "user.email=workflow@agent-hub.local")
 ENV = {
@@ -194,3 +195,19 @@ async def test_leaves_that_conflict_are_reported_and_the_branch_stays_at_the_las
         ["shared.txt"],
     )
     assert result["sha"] == a.sha and git(run.worktree, "status", "--porcelain") == ""  # aborted, clean
+
+
+async def test_making_and_removing_the_run_worktree_take_turns_on_the_repository_lock(tmp_path, repo) -> None:
+    meta = meta_of(tmp_path, repo)
+    run = RunWorkspace.from_meta(meta, IDENTITY)
+    async with _repo_lock(repo):
+        making = asyncio.create_task(run.ensure())
+        await asyncio.sleep(0.2)
+        assert not making.done() and not run.worktree.exists()  # waits for whoever holds the repository
+    await making
+    assert run.worktree.exists()
+    async with _repo_lock(repo):
+        removing = asyncio.create_task(run.release())
+        await asyncio.sleep(0.2)
+        assert not removing.done() and run.worktree.exists()
+    assert (await removing)["state"] == "removed" and not run.worktree.exists()

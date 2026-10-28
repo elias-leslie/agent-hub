@@ -160,6 +160,9 @@ function pauseReasonText(pause: RunPause, stepKey: string | undefined): string {
       const names = failed.length > 0 ? failed.join(', ') : 'a step'
       return `${failed.length === 1 ? 'Step' : 'Steps'} ${names} failed. Everything that did not depend on ${failed.length === 1 ? 'it' : 'them'} has finished${blocked.length > 0 ? `; ${blocked.join(', ')} cannot start` : ''}. Retry or skip ${stepKey ? `"${stepKey}"` : 'the step'}, change the plan, or end the run.`
     }
+    case 'integration_conflict':
+    case 'integration_failed':
+      return `Every step finished, but their work could not be put together on the run branch. ${pause.detail ?? ''}`.trim()
     case 'tools_unavailable':
       return `${step} needs shell and file-edit tools that its project's Agent Hub permission tier does not give it, and no other model in its chain could run it${pause.error ? `: ${pause.error}` : '.'}`
     case 'no_agent_route':
