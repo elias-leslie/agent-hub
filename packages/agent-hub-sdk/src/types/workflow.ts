@@ -116,7 +116,8 @@ export interface PauseEntry {
 /** Why a run waits for the owner. `waiting` has one entry per step waiting. */
 export interface Pause {
     reason?: string;
-    at?: string;
+    /** When the run paused, in epoch seconds (the server stores its clock as a number, not text). */
+    at?: number;
     waiting?: Record<string, PauseEntry | null>;
     [key: string]: unknown;
 }
