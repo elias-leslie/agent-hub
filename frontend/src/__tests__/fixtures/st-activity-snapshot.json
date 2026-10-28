@@ -615,6 +615,18 @@
       "label": "Operations"
     },
     {
+      "id": "selection",
+      "label": "Selection"
+    },
+    {
+      "id": "verification",
+      "label": "Verification"
+    },
+    {
+      "id": "reporting",
+      "label": "Reporting"
+    },
+    {
       "id": "other",
       "label": "Other"
     },
