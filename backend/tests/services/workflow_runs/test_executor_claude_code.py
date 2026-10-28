@@ -67,7 +67,7 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return install
 
 
-def packet(test_hooks: dict[str, Any] | None = None, thinking_level: str | None = None, **kwargs: Any):
+def packet(test_hooks: dict[str, Any] | None = None, thinking_level: str | None = None, level: str | None = None, **kwargs: Any):
     return replace(build_packet(
         run_goal="goal",
         step_key="implement",
@@ -79,7 +79,7 @@ def packet(test_hooks: dict[str, Any] | None = None, thinking_level: str | None 
         context_window=100_000,
         budget_fraction=0.25,
         **kwargs,
-    ), test_hooks=test_hooks, thinking_level=thinking_level)
+    ), test_hooks=test_hooks, thinking_level=thinking_level, level=level)
 
 
 async def run(worktree: Path, tmp_path: Path, **kwargs: Any):
@@ -97,6 +97,27 @@ async def test_agent_thinking_level_becomes_the_effort(fake_claude, worktree, tm
     await run(worktree, tmp_path, thinking_level="low")
     args = (tmp_path / "args.txt").read_text().splitlines()
     assert args[args.index("--effort") + 1] == "low"
+
+
+async def test_steps_run_lean_by_default_and_full_on_request(fake_claude, worktree, tmp_path) -> None:
+    fake_claude(success_stream(HANDOFF))
+    await run(worktree, tmp_path)
+    args = (tmp_path / "args.txt").read_text().splitlines()
+    assert args[args.index("--tools") + 1] == "Read,Edit,Write,Bash"
+    assert {"--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"} <= set(args)
+    await run(worktree, tmp_path, level="full")
+    args = (tmp_path / "args.txt").read_text().splitlines()
+    assert "--tools" not in args and "--strict-mcp-config" not in args
+
+
+def test_step_level_must_be_a_configured_level() -> None:
+    from pydantic import ValidationError
+
+    from app.services.workflow_runs.schemas import StepDefinition
+
+    assert StepDefinition(key="a", instructions="x", agent_slug="coder", level="full").level == "full"
+    with pytest.raises(ValidationError):
+        StepDefinition(key="a", instructions="x", agent_slug="coder", level="huge")
 
 
 def test_registered_under_its_kind() -> None:

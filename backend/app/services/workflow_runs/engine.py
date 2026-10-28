@@ -712,6 +712,7 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
         packet = replace(
             packet,
             thinking_level=await deps.thinking_level_of(intent.definition["agent_slug"]),
+            level=intent.definition.get("level"),
             attempt=AttemptRef(
                 intent.attempt_id,
                 intent.run_id,

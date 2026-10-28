@@ -97,6 +97,7 @@ class ClaudeCodeExecutor:
             self.settings["setting_sources"],
             "--settings",
             json.dumps(self.settings["settings"]),
+            *self.settings["levels"][packet.level or self.settings["default_level"]],
         ]
         if packet.context:
             argv += ["--append-system-prompt", packet.context]

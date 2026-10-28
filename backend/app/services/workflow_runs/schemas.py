@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .executor_common import load_defaults
 from .executors import EXECUTOR_KINDS
 
 
@@ -32,6 +33,9 @@ class StepDefinition(BaseModel):
     allowed_models: list[str] | None = Field(None, min_length=1)
     # Executor kind; default is chosen from the provider of each attempt's model (policy.executor_for_provider).
     executor: str | None = None
+    # Harness tool/prompt level (executor_defaults.json claude_code.levels): "lean" (core tools only, the default)
+    # or "full" (the harness's whole built-in set, e.g. for research steps that need subagents or web tools).
+    level: str | None = None
     acceptance: list[str] = Field(default_factory=list)
     # Hard cap on attempts for the step; default is one attempt per chain model.
     max_attempts: int | None = Field(None, ge=1)
@@ -43,6 +47,14 @@ class StepDefinition(BaseModel):
     def _known_executor(cls, value: str | None) -> str | None:
         if value is not None and value not in EXECUTOR_KINDS:
             raise ValueError(f"executor must be one of {EXECUTOR_KINDS}")
+        return value
+
+    @field_validator("level")
+    @classmethod
+    def _known_level(cls, value: str | None) -> str | None:
+        levels = load_defaults()["claude_code"]["levels"]
+        if value is not None and value not in levels:
+            raise ValueError(f"level must be one of {sorted(levels)}")
         return value
 
 

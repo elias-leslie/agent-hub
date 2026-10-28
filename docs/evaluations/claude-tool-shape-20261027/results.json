@@ -1,0 +1,341 @@
+[
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "A",
+  "cache_read": 71364,
+  "cache_write": 10973,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0985,
+  "error": null,
+  "flags": [],
+  "input": 8,
+  "label": "A",
+  "output": 1465,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Task",
+   "Bash",
+   "CronCreate",
+   "CronDelete",
+   "CronList",
+   "DesignSync",
+   "Edit",
+   "EnterWorktree",
+   "ExitWorktree",
+   "ListAgents",
+   "Monitor",
+   "NotebookEdit",
+   "PushNotification",
+   "Read",
+   "RemoteTrigger",
+   "ReportFindings",
+   "ScheduleWakeup",
+   "SendMessage",
+   "Skill",
+   "TaskStop",
+   "ToolSearch",
+   "WebFetch",
+   "WebSearch",
+   "Workflow",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 16.1
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "B",
+  "cache_read": 31765,
+  "cache_write": 5517,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0657,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--exclude-dynamic-system-prompt-sections",
+   "--tools",
+   "Read,Edit,Write,Bash,Glob,Grep"
+  ],
+  "input": 8,
+  "label": "B",
+  "output": 1587,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Bash",
+   "Edit",
+   "Glob",
+   "Grep",
+   "Read",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 21.3
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "C",
+  "cache_read": 16291,
+  "cache_write": 7191,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0706,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--system-prompt",
+   "You are an expert coding assistant operating inside a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n- Read: Read file contents\n- Bash: Execute bash commands (ls, rg, find, tests, git)\n- Edit: Make precise file edits with exact text replacement\n- Write: Create or overwrite files\n\nGuidelines:\n- Use Bash for file operations like ls, rg, find\n- Read a file before editing it; use Edit for precise changes and Write only for new files or complete rewrites\n- Verify your work by running the relevant checks before you finish\n- Be concise in your responses\n- Show file paths clearly when working with files\n\nWorking directory: /srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/runs/C",
+   "--tools",
+   "Read,Edit,Write,Bash"
+  ],
+  "input": 8,
+  "label": "C",
+  "output": 1568,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Bash",
+   "Edit",
+   "Read",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 18.6
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "D",
+  "cache_read": 649,
+  "cache_write": 2652,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.1116,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--tools",
+   "",
+   "--mcp-config",
+   "{\"mcpServers\": {\"ah\": {\"command\": \"/srv/workspaces/projects/agent-hub/backend/.venv/bin/python\", \"args\": [\"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/ah_mcp_server.py\"], \"env\": {\"AH_TOOL_WORKDIR\": \"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/runs/D\"}}}}",
+   "--allowedTools",
+   "mcp__ah__bash,mcp__ah__read_file,mcp__ah__edit_file,mcp__ah__write_file"
+  ],
+  "input": 2,
+  "label": "D",
+  "output": 4908,
+  "passed": 7,
+  "status": "completed",
+  "tool_calls": 0,
+  "tool_failed": 0,
+  "tools_offered": [],
+  "total": 16,
+  "wall_s": 41.7
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "D",
+  "cache_read": 16854,
+  "cache_write": 7129,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0659,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--tools",
+   "",
+   "--mcp-config",
+   "{\"mcpServers\": {\"ah\": {\"command\": \"/srv/workspaces/projects/agent-hub/backend/.venv/bin/python\", \"args\": [\"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/ah_mcp_server.py\"], \"env\": {\"AH_TOOL_WORKDIR\": \"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/runs/D-r3\"}}}}",
+   "--allowedTools",
+   "mcp__ah__bash,mcp__ah__read_file,mcp__ah__edit_file,mcp__ah__write_file"
+  ],
+  "input": 8,
+  "label": "D-r3",
+  "mcp_servers": [
+   {
+    "name": "ah",
+    "source": "dynamic",
+    "status": "connected"
+   }
+  ],
+  "output": 1343,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "mcp__ah__bash",
+   "mcp__ah__edit_file",
+   "mcp__ah__read_file",
+   "mcp__ah__write_file"
+  ],
+  "total": 16,
+  "wall_s": 19.1
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "B",
+  "cache_read": 22883,
+  "cache_write": 4757,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0565,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--exclude-dynamic-system-prompt-sections",
+   "--tools",
+   "Read,Edit,Write,Bash,Glob,Grep"
+  ],
+  "input": 6,
+  "label": "B-r2",
+  "mcp_servers": [],
+  "output": 1405,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 2,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Bash",
+   "Edit",
+   "Glob",
+   "Grep",
+   "Read",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 19.5
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "C",
+  "cache_read": 19231,
+  "cache_write": 4130,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0521,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--system-prompt",
+   "You are an expert coding assistant operating inside a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n- Read: Read file contents\n- Bash: Execute bash commands (ls, rg, find, tests, git)\n- Edit: Make precise file edits with exact text replacement\n- Write: Create or overwrite files\n\nGuidelines:\n- Use Bash for file operations like ls, rg, find\n- Read a file before editing it; use Edit for precise changes and Write only for new files or complete rewrites\n- Verify your work by running the relevant checks before you finish\n- Be concise in your responses\n- Show file paths clearly when working with files\n\nWorking directory: /srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/runs/C-r2",
+   "--tools",
+   "Read,Edit,Write,Bash"
+  ],
+  "input": 8,
+  "label": "C-r2",
+  "mcp_servers": [],
+  "output": 1379,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Bash",
+   "Edit",
+   "Read",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 15.6
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "D",
+  "cache_read": 18839,
+  "cache_write": 5198,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0575,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--tools",
+   "",
+   "--mcp-config",
+   "{\"mcpServers\": {\"ah\": {\"command\": \"/srv/workspaces/projects/agent-hub/backend/.venv/bin/python\", \"args\": [\"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/ah_mcp_server.py\"], \"env\": {\"AH_TOOL_WORKDIR\": \"/srv/workspaces/projects/agent-hub/docs/evaluations/claude-tool-shape-20261027/runs/D-r4\"}}}}",
+   "--allowedTools",
+   "mcp__ah__bash,mcp__ah__read_file,mcp__ah__edit_file,mcp__ah__write_file"
+  ],
+  "input": 8,
+  "label": "D-r4",
+  "mcp_servers": [
+   {
+    "name": "ah",
+    "source": "dynamic",
+    "status": "connected"
+   }
+  ],
+  "output": 1388,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 3,
+  "tool_failed": 0,
+  "tools_offered": [
+   "mcp__ah__bash",
+   "mcp__ah__edit_file",
+   "mcp__ah__read_file",
+   "mcp__ah__write_file"
+  ],
+  "total": 16,
+  "wall_s": 28.6
+ },
+ {
+  "answered_by": [
+   "claude-opus-5-5"
+  ],
+  "arm": "E",
+  "cache_read": 14101,
+  "cache_write": 8967,
+  "claude_5h_delta_pts": null,
+  "cost_usd": 0.0775,
+  "error": null,
+  "flags": [
+   "--disable-slash-commands",
+   "--strict-mcp-config",
+   "--exclude-dynamic-system-prompt-sections",
+   "--tools",
+   "Read,Edit,Write,Bash"
+  ],
+  "input": 6,
+  "label": "E",
+  "mcp_servers": [],
+  "output": 1491,
+  "passed": 16,
+  "status": "completed",
+  "tool_calls": 2,
+  "tool_failed": 0,
+  "tools_offered": [
+   "Bash",
+   "Edit",
+   "Read",
+   "Write"
+  ],
+  "total": 16,
+  "wall_s": 17.4
+ }
+]

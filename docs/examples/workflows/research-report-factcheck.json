@@ -7,6 +7,7 @@
       "key": "research",
       "agent_slug": "researcher",
       "instructions": "Collect facts on the three libraries (license, maintenance, size, conflict handling). Save sources and quotes in notes files; every claim needs a source.",
+      "level": "full",
       "acceptance": []
     },
     {

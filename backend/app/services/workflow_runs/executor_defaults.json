@@ -23,6 +23,11 @@
     "catalog_provider": "claude",
     "permission_mode": "bypassPermissions",
     "setting_sources": "project",
-    "settings": {"switchModelsOnFlag": false}
+    "settings": {"switchModelsOnFlag": false},
+    "default_level": "lean",
+    "levels": {
+      "lean": ["--tools", "Read,Edit,Write,Bash", "--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"],
+      "full": []
+    }
   }
 }

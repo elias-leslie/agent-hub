@@ -110,6 +110,8 @@ class HandoffPacket:
     attempt: AttemptRef | None = None
     # The step agent's configured thinking level; executors map it to their harness's effort setting.
     thinking_level: str | None = None
+    # The step's harness level (StepDefinition.level); None means the executor's default.
+    level: str | None = None
     budget_tokens: int = 0
     estimated_tokens: int = 0
     over_budget: bool = False
