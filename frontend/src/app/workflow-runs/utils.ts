@@ -164,7 +164,7 @@ function pauseReasonText(pause: RunPause, stepKey: string | undefined): string {
     case 'integration_failed':
       return `Every step finished, but their work could not be put together on the run branch. ${pause.detail ?? ''}`.trim()
     case 'tools_unavailable':
-      return `${step} needs shell and file-edit tools that its project's Agent Hub permission tier does not give it, and no other model in its chain could run it${pause.error ? `: ${pause.error}` : '.'}`
+      return `${step} needs shell and file-edit tools that the run's tool level does not give it, and no other model in its chain could run it${pause.error ? `: ${pause.error}` : '.'}`
     case 'no_agent_route':
       return `${step} has no model route to run on${pause.error ? `: ${pause.error}` : '.'}`
     default:

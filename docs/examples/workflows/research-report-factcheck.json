@@ -2,6 +2,7 @@
   "goal": "Compare three local-first sync libraries for our notes app and recommend one.",
   "project_id": "example-project",
   "request_id": "example-research-report-factcheck-1",
+  "policy": {"tool_level": "full"},
   "steps": [
     {
       "key": "research",
@@ -14,12 +15,14 @@
       "key": "report",
       "agent_slug": "researcher",
       "instructions": "Write report.md with the comparison table and a recommendation, using only the sourced claims from the research notes.",
+      "level": "lean",
       "acceptance": []
     },
     {
       "key": "fact-check",
       "agent_slug": "verifier",
       "instructions": "Check every claim in report.md against its source. Fix or remove claims that do not hold, and list what changed in the handoff note.",
+      "level": "lean",
       "acceptance": []
     }
   ]

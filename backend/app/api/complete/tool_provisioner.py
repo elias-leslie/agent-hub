@@ -37,13 +37,18 @@ def build_direct_tool_runner(
     project_id: str | None,
     session_id: str | None,
     agent_slug: str | None,
+    permitted_tools: frozenset[str] | None = None,
 ) -> ToolRunner:
-    """Build the direct tool runner used by completion and streaming paths."""
+    """Build the direct tool runner used by completion and streaming paths.
+
+    ``permitted_tools`` replaces the project's chat permission tier as the allow-list of tool calls (workflow runs).
+    """
     handler = create_direct_handler(
         working_dir=working_dir,
         project_id=project_id,
         session_id=session_id,
         agent_slug=agent_slug,
+        permitted_tools=permitted_tools,
     )
 
     async def run_tool(call: ToolCall) -> ToolResultMessage:

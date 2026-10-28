@@ -2,7 +2,8 @@
 
 The model comes from the step chain (catalog id, provider prefix stripped through the catalog's upstream id), the
 cyber access program from the catalog entry (standard when the model needs none), reasoning effort from the
-agent's thinking level. Sandbox and approvals are data (``executor_defaults.json``): workspace-write, never ask.
+agent's thinking level. Sandbox and approvals are data (``executor_defaults.json``): workspace-write, never ask; the
+run's ``read`` tool level runs it read-only (Codex has no tool list, the sandbox mode is its only access setting).
 The packet's canonical context goes in as developer instructions next to the user's own Codex ones.
 """
 
@@ -16,7 +17,7 @@ import shutil
 import time
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -170,6 +171,11 @@ class CodexExecutor:
 
         return get_model_entry(model)
 
+    def sandbox(self, packet: HandoffPacket) -> str:
+        """The sandbox mode for the packet's tool level: ``sandbox_by_level`` names the levels that narrow it."""
+
+        return self.settings["sandbox_by_level"].get(packet.level or "") or self.settings["sandbox"]
+
     def command(
         self, packet: HandoffPacket, model: str, worktree: Path, user_instructions: str | None = None
     ) -> tuple[list[str], str, str]:
@@ -202,7 +208,7 @@ class CodexExecutor:
             "--cyber-access-program",
             program,
             "--sandbox",
-            self.settings["sandbox"],
+            self.sandbox(packet),
             "-c",
             f"approval_policy={json.dumps(self.settings['approval_policy'])}",
             "-c",
@@ -238,7 +244,8 @@ class CodexExecutor:
             await self._consume(harness, state, on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
-        return await self._result(state, harness, worktree)
+        # Codex has no tool list: the sandbox mode is what the attempt got, shown where other executors show tools.
+        return replace(await self._result(state, harness, worktree), tools=(f"sandbox:{self.sandbox(packet)}",))
 
     async def _consume(self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent) -> None:
         async for event in harness.records():

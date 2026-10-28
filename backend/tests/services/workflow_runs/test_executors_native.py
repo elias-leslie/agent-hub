@@ -505,3 +505,29 @@ def test_codex_and_pi_use_the_packet_effort_the_engine_resolved(tmp_path, effort
     assert f'model_reasoning_effort="{effort}"' in codex_argv
     pi_argv, _, _ = PiExecutor(load_defaults(), model_lookup=CATALOG.get).command(built, CODEX_MODEL, tmp_path)
     assert pi_argv[pi_argv.index("--thinking") + 1] == effort
+
+
+@pytest.mark.parametrize(("level", "sandbox"), [("read", "read-only"), ("lean", "workspace-write"), ("full", "workspace-write"), (None, "workspace-write")])
+def test_codex_sandbox_follows_the_runs_tool_level(tmp_path, level, sandbox) -> None:
+    argv, _, _ = CodexExecutor(load_defaults(), model_lookup=CATALOG.get).command(
+        packet(level=level), CODEX_MODEL, tmp_path
+    )
+    assert argv[argv.index("--sandbox") + 1] == sandbox
+
+
+def test_pi_tools_follow_the_runs_tool_level(tmp_path) -> None:
+    pi = PiExecutor(load_defaults(), model_lookup=CATALOG.get)
+    read, _, _ = pi.command(packet(level="read"), CODEX_MODEL, tmp_path)
+    assert read[read.index("--tools") + 1] == "read,grep,find,ls"
+    for level in ("lean", "full", None):
+        argv, _, _ = pi.command(packet(level=level), CODEX_MODEL, tmp_path)
+        assert "--tools" not in argv
+
+
+def test_every_tool_level_is_mapped_by_every_executor() -> None:
+    defaults = load_defaults()
+    for level in defaults["tool_levels"]:
+        assert level in defaults["claude_code"]["levels"]
+        assert level in defaults["agent_hub"]["levels"]
+        assert level in defaults["pi"]["levels"]
+    assert set(defaults["codex"]["sandbox_by_level"]) <= set(defaults["tool_levels"])

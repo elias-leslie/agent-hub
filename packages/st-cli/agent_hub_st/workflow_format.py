@@ -172,6 +172,8 @@ def run_header(view: dict[str, Any], page_url: str | None = None) -> list[str]:
     who = [f"{k}={view[k]}" for k in ("launched_by", "coordinator") if view.get(k)]
     if who:
         lines.append("  " + " ".join(who))
+    if view.get("tool_level"):
+        lines.append(f"  tool level: {view['tool_level']}")
     if pause := pause_text(view.get("pause")):
         lines.append(f"  needs owner: {pause}")
     if view.get("failure"):

@@ -1,5 +1,6 @@
 {
   "max_concurrent_steps": 1,
+  "tool_level": "lean",
   "restart_limit": 2,
   "stale_after_seconds": 300,
   "heartbeat_interval_seconds": 30,

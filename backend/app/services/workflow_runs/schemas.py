@@ -49,8 +49,9 @@ class StepDefinition(BaseModel):
     allowed_models: list[str] | None = Field(None, min_length=1)
     # Executor kind; default is chosen from the provider of each attempt's model (policy.executor_for_provider).
     executor: str | None = None
-    # Harness tool/prompt level (executor_defaults.json claude_code.levels, agent_hub.levels): "lean" (core tools only,
-    # the default) or "full" (the harness's whole tool set, e.g. for research steps that need subagents or web tools).
+    # Tool level (executor_defaults.json ``tool_levels``): "read", "lean" (core tools) or "full" (the harness's whole
+    # tool set, e.g. for research steps that need subagents or web tools). It can only narrow the run's tool level
+    # (policy.tool_level), which is also what a step without one gets.
     level: str | None = None
     # The runner, not the agent, decides the step is done: all of these must exit 0 before the checkpoint.
     # A bare string is a command without a time limit.
@@ -83,10 +84,9 @@ class StepDefinition(BaseModel):
     @field_validator("level")
     @classmethod
     def _known_level(cls, value: str | None) -> str | None:
-        defaults = load_defaults()
-        levels = set(defaults["claude_code"]["levels"]) | set(defaults["agent_hub"]["levels"])
+        levels = load_defaults()["tool_levels"]
         if value is not None and value not in levels:
-            raise ValueError(f"level must be one of {sorted(levels)}")
+            raise ValueError(f"level must be one of {levels}")
         return value
 
 

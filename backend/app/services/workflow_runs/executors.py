@@ -102,6 +102,7 @@ class FauxExecutor:
                 "step": packet.step_key,
                 "model": model,
                 "packet": packet.render(),
+                "level": packet.level,
                 "action": action.kind,
             }
         )
@@ -117,7 +118,7 @@ class FauxExecutor:
         if action.kind == "error":
             return StepResult("failed", [model], usage=usage, error="faux error", progress=progress)
         if action.kind == "no_tools":  # what an executor says when the project's tier left the step without its tools
-            error = "tools_unavailable: project tier 'read' allows only [read_file]; this step needs bash"
+            error = "tools_unavailable: tool level 'read' allows only [read_file]; this step needs bash"
             return StepResult("failed", usage={}, error=error, tools=["read_file"])
         if action.kind == "refuse":
             outcome = ProviderOutcome(

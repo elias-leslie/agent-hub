@@ -10,10 +10,12 @@ mirrors Pi's lean start: a short working-rules prompt with the worktree as cwd, 
 canonical context still comes first in the system prompt, and tool permission and safety checks are unchanged. ``full``
 is the agent's whole provisioned tool set and no extra prompt.
 
-The tool set is narrowed by the project's Agent Hub permission tier (a ``read`` project gives only read tools). The tools
-the attempt got are recorded on the result. A step that needs a shell and a write tool (acceptance commands, or a level
-that lists them) and does not have them ends at once with ``tools_unavailable`` and no model call; the engine treats it
-like an unavailable model (next chain entry, else the owner).
+The tool set comes from the packet's tool level, which the run sets (``read``, ``lean`` or ``full``; a step may only
+narrow it): the agent's tools narrowed to the level's list. The project's Agent Hub chat permission tier does not apply
+here, neither to which tools the model is shown nor to which calls run; the attempt's tool names are the permission. The
+tools the attempt got are recorded on the result. A step that needs a shell and a write tool (acceptance commands, or a
+level that lists them) and does not have them ends at once with ``tools_unavailable`` and no model call; the engine
+treats it like an unavailable model (next chain entry, else the owner).
 
 The loop runs with no database open. Afterwards the executor writes the attempt's transcript onto its child session
 (``agent_hub_transcript``): the session's events, with the served model and token usage (reasoning tokens when the
@@ -45,7 +47,6 @@ Complete = Callable[..., Awaitable[Any]]
 LoadAgent = Callable[[str], Awaitable[Any]]
 ProvisionTools = Callable[[str, str], Awaitable[list[dict[str, Any]] | None]]
 RecordTranscript = Callable[[Transcript], Awaitable[None]]
-TierLookup = Callable[[str], Awaitable[str | None]]
 
 logger = logging.getLogger(__name__)
 
@@ -114,32 +115,12 @@ async def load_agent(slug: str) -> Any:
 
 
 async def provision_tools(agent_slug: str, project_id: str) -> list[dict[str, Any]] | None:
-    """The agent's runtime tools from the canonical allow-list, narrowed to what the project's tier shows."""
+    """The agent's runtime tools from the canonical allow-list. The project's chat tier does not narrow them here."""
 
     from app.api.complete.tool_provisioner import provision_standard_tools
-    from app.db import async_session
-    from app.services.project_permission_service import get_visible_tools_for_project
 
-    async with async_session() as db:
-        visible = await get_visible_tools_for_project(project_id, db)
-    provisioned = provision_standard_tools(
-        True, None, agent_slug=agent_slug, project_id=project_id, visible_tool_names=visible
-    )
+    provisioned = provision_standard_tools(True, None, agent_slug=agent_slug, project_id=None)
     return provisioned.loaded_tools or None
-
-
-async def project_tier(project_id: str) -> str | None:
-    """The project's Agent Hub permission tier, for messages only (None when it cannot be read)."""
-
-    from app.db import async_session
-    from app.services.project_permission_service import _resolve_project_tier
-
-    try:
-        async with async_session() as db:
-            return await _resolve_project_tier(project_id, db)
-    except Exception:
-        logger.warning("permission tier of %s could not be read", project_id, exc_info=True)
-        return None
 
 
 def missing_tools(
@@ -166,8 +147,9 @@ def lean_surface(
 ) -> tuple[list[dict[str, Any]] | None, str | None]:
     """(tools, system prompt) for a level: the agent's tools narrowed to the level's list, plus its working-rules prompt.
 
-    A level with no tool list keeps everything. If the agent's allow-list shares none of the level's tools the full
-    list stays, so a step never starts without tools; the level never adds a tool the agent does not already have.
+    A level with no tool list keeps everything. If the agent's allow-list shares none of the level's tools, the level
+    keeps the agent's list only when its data says so (``agent_tools_if_none_match``, so an agent with its own tool
+    domain still starts with tools); otherwise the step has none. A level never adds a tool the agent does not have.
     """
 
     allowed = level.get("tools")
@@ -176,7 +158,7 @@ def lean_surface(
         return tools, None
     kept = [tool for tool in tools or [] if tool.get("name") in allowed]
     if not kept:
-        return tools, None
+        return (tools, None) if level.get("agent_tools_if_none_match") else ([], None)
     listing = "\n".join(f"- {tool['name']}: {allowed[tool['name']]}" for tool in kept)
     prompt = "\n".join(template).replace("{tools}", listing).replace("{cwd}", str(worktree)) if template else None
     return kept, prompt
@@ -195,14 +177,12 @@ class AgentHubExecutor:
         agent_loader: LoadAgent = load_agent,
         tool_provisioner: ProvisionTools = provision_tools,
         transcript_writer: RecordTranscript = persist_transcript,
-        tier_lookup: TierLookup = project_tier,
     ) -> None:
         self.defaults = dict(defaults or load_defaults())
         self._complete = complete
         self._load_agent = agent_loader
         self._provision = tool_provisioner
         self._write_transcript = transcript_writer
-        self._tier = tier_lookup
 
     @staticmethod
     def _partial(transcript: Transcript, loop_log: LoopLog, error: str) -> Transcript:
@@ -250,18 +230,17 @@ class AgentHubExecutor:
             if is_cache_stale():  # the tool handler only accepts working dirs under the known project roots
                 await refresh_project_cache()
         settings = self.defaults["agent_hub"]
-        level = settings["levels"].get(packet.level or settings["default_level"])
+        level_name = packet.level or settings["default_level"]
+        level = settings["levels"].get(level_name)
         if level is None:
             return StepResult("failed", error=f"agent_hub_unsupported: unknown level {packet.level!r}")
         tools, prompt = lean_surface(level, await self._provision(attempt.agent_slug, attempt.project_id), worktree)
         names = [str(tool.get("name")) for tool in tools or []]
         if lacking := missing_tools(names, packet.acceptance, level, settings):
-            # The project's tier left the step without what it needs: no model call, the next chain entry or the owner decides.
-            tier = await self._tier(attempt.project_id)
-            allows = f"project tier {tier!r}" if tier else "the project's Agent Hub permissions"
+            # The run's tool level left the step without what it needs: no model call, the next chain entry or the owner decides.
             return StepResult(
                 "failed",
-                error=f"tools_unavailable: {allows} allows only [{', '.join(names)}]; this step needs {' and '.join(lacking)}",
+                error=f"tools_unavailable: tool level {level_name!r} allows only [{', '.join(names)}]; this step needs {' and '.join(lacking)}",
                 tools=names,
             )
         messages: list[dict[str, Any]] = [{"role": "user", "content": packet.render()}]
@@ -285,6 +264,7 @@ class AgentHubExecutor:
                 thinking_level=thinking_level_for_provider(provider, packet.thinking_level or agent.thinking_level),
                 max_turns=max_turns,
                 tools=tools,
+                permitted_tools=frozenset(names),
                 execute_tools=True,
                 working_dir=str(worktree),
                 on_loop_event=loop_log,

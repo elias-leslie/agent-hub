@@ -222,7 +222,7 @@ def world_factory(pg_db: AsyncSession, tmp_path: Path, monkeypatch: pytest.Monke
 
 def example(name: str, repo: Path | None, **extra: Any) -> RunDefinition:
     data = json.loads((EXAMPLES / f"{name}.json").read_text())
-    data["policy"] = {"heartbeat_interval_seconds": 3600, **extra.pop("policy", {})}
+    data["policy"] = {"heartbeat_interval_seconds": 3600, **data.get("policy", {}), **extra.pop("policy", {})}
     for step in data["steps"]:
         step["executor"] = "faux"
         step["acceptance"] = []  # the examples name project commands (make test) that cannot run here
@@ -323,7 +323,7 @@ async def test_missing_tools_move_the_step_on_then_pause_it_with_that_reason_and
     assert (result["run_state"], result["reason"]) == ("needs_owner", "tools_unavailable")
     assert [c["model"] for c in world.faux.calls] == [OPUS, CODEX, OPUS_OLD]  # each chain entry gets its refusal
     view = await view_of(pg_db, run_id)
-    assert view["pause"]["reason"] == "tools_unavailable" and view["pause"]["error"].startswith("tools_unavailable: project tier")
+    assert view["pause"]["reason"] == "tools_unavailable" and view["pause"]["error"].startswith("tools_unavailable: tool level")
     attempts = view["steps"][0]["attempt_history"]
     assert [a["tools"] for a in attempts] == [["read_file"]] * 3
     assert attempts[0]["error"].startswith("tools_unavailable:")
@@ -3150,3 +3150,36 @@ async def _run_row(live: Any, run_id: str) -> Session:
         row = await db.get(Session, run_id)
         assert row is not None
         return row
+
+
+async def test_the_runs_tool_level_reaches_each_step_narrowed_by_the_step_and_shows_on_the_view(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    definition = graph(
+        repo,
+        {"key": "a", "depends_on": [], "level": "read"},
+        {"key": "b", "depends_on": []},
+        {"key": "c", "depends_on": [], "level": "lean"},
+        policy={"tool_level": "full"},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert {c["step"]: c["level"] for c in world.faux.calls} == {"a": "read", "b": "full", "c": "lean"}
+    assert (await view_of(pg_db, run_id))["tool_level"] == "full"
+
+
+async def test_a_run_without_a_tool_level_runs_lean_and_refuses_a_step_that_asks_for_more(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert [c["level"] for c in world.faux.calls] == ["lean"]
+    assert (await view_of(pg_db, run_id))["tool_level"] == "lean"
+    with pytest.raises(ValueError, match="wider than the run's 'lean'"):
+        await create_run(pg_db, graph(repo, {"key": "a", "level": "full"}), deps=world.deps)
+    with pytest.raises(ValueError, match="tool_level"):
+        await create_run(pg_db, graph(repo, {"key": "a"}, policy={"tool_level": "root"}), deps=world.deps)

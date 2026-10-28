@@ -149,7 +149,7 @@ def test_usage_limited_models_wait_for_the_earliest_reset_instead_of_exhausting_
     assert hard.reason == "chain_exhausted"
 
 
-TOOLS_ERROR = "tools_unavailable: project tier 'read' allows only [read_file]; this step needs bash"
+TOOLS_ERROR = "tools_unavailable: tool level 'read' allows only [read_file]; this step needs bash"
 
 
 def test_an_attempt_refused_for_missing_tools_moves_to_the_next_chain_model_then_pauses_with_that_reason() -> None:
@@ -356,6 +356,26 @@ def test_steps_run_one_at_a_time_unless_the_run_raises_the_cap() -> None:
     # A policy stored before the cap existed still loads, at one.
     stored = {k: v for k, v in load_policy().as_dict().items() if k != "max_concurrent_steps"}
     assert load_policy(stored).max_concurrent_steps == 1
+
+
+def test_the_run_sets_the_tool_level_and_a_step_can_only_narrow_it() -> None:
+    from app.services.workflow_runs.policy import effective_tool_level, require_level_within_run
+
+    assert load_policy().tool_level == "lean"  # the data file's default: what steps ran with before the level existed
+    assert [load_policy({"tool_level": level}).tool_level for level in ("read", "lean", "full")] == ["read", "lean", "full"]
+    with pytest.raises(ValueError, match="tool_level"):
+        load_policy({"tool_level": "root"})
+    # A policy stored before the level existed loads at the default.
+    stored = {k: v for k, v in load_policy().as_dict().items() if k != "tool_level"}
+    assert load_policy(stored).tool_level == "lean"
+
+    assert effective_tool_level("lean", None) == "lean"
+    assert effective_tool_level("full", "lean") == "lean" and effective_tool_level("full", "read") == "read"
+    assert effective_tool_level("read", "full") == "read" and effective_tool_level("lean", "full") == "lean"
+    require_level_within_run(load_policy({"tool_level": "full"}), {"key": "a", "level": "lean"})
+    require_level_within_run(load_policy(), {"key": "a"})
+    with pytest.raises(ValueError, match="wider than the run's 'read'"):
+        require_level_within_run(load_policy({"tool_level": "read"}), {"key": "a", "level": "lean"})
 
 
 def test_advance_task_deadline_is_policy_data_shown_with_the_run_policy_and_not_overridable_per_run() -> None:

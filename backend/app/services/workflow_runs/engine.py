@@ -62,8 +62,10 @@ from .policy import (
     choose_attempt_model,
     decide_after_attempt,
     decide_stale_step,
+    effective_tool_level,
     load_policy,
     pause_reason,
+    require_level_within_run,
     usage_limit_cooldown,
 )
 from .processes import (
@@ -487,6 +489,7 @@ async def create_run(
     policy = load_policy(definition.policy)
     _require_repo_for_parallel(policy, definition.repo_path)
     for step in definition.steps:
+        require_level_within_run(policy, step.model_dump())
         await deps.resolve_chain(
             db, step.model_dump()
         )  # unknown agent or empty route fails before anything is stored
@@ -1354,7 +1357,7 @@ async def _run_effect(
             # The step's own effort wins over the agent's thinking level in every executor.
             thinking_level=intent.definition.get("effort")
             or await deps.thinking_level_of(intent.definition["agent_slug"]),
-            level=intent.definition.get("level"),
+            level=effective_tool_level(policy.tool_level, intent.definition.get("level")),
             attempt=AttemptRef(
                 intent.attempt_id,
                 intent.run_id,
@@ -2414,6 +2417,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "plan_history": meta.get("plan_history", []),
         "limits": _limits(policy),
         "max_concurrent_steps": policy.max_concurrent_steps,
+        "tool_level": policy.tool_level,
         "running_steps": [s.step_key for s in steps if s.status == "running"],
         "uses_lanes": bool(meta.get("parallel")),
         "result": _result_view(meta, steps),

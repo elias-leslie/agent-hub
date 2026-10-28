@@ -208,19 +208,36 @@ def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
     return _hook
 
 
+def _create_tool_set_hook(permitted_tools: frozenset[str]) -> PreToolUseHook:
+    """Create a pre-hook that allows exactly the tools a caller handed the model (a workflow run's tool level)."""
+
+    async def _hook(tool_call: ToolCall) -> ToolDecision:
+        if tool_call.name in permitted_tools:
+            return ToolDecision.ALLOW
+        logger.info("Tool set DENY: %s is not among the %d tools this run allows", tool_call.name, len(permitted_tools))
+        return ToolDecision.DENY
+
+    return _hook
+
+
 def _collect_hooks(
     working_dir: str | None,
     project_id: str | None,
+    permitted_tools: frozenset[str] | None = None,
 ) -> list[PreToolUseHook]:
     """Build the ordered list of pre-hooks for a new DirectToolHandler.
 
-    Order: project permission → cross-project boundary → checkout boundary
-    → lease check. First DENY wins during execution.
+    Order: tool permission → cross-project boundary → checkout boundary → lease check. First DENY wins during
+    execution. The tool permission is the project's chat tier, unless the caller names the permitted tools itself
+    (a workflow run sets its own tool level; the project's chat tier does not apply to it).
     """
     hooks: list[PreToolUseHook] = []
 
-    if project_id:
+    if permitted_tools is not None:
+        hooks.append(_create_tool_set_hook(permitted_tools))
+    elif project_id:
         hooks.append(_create_project_permission_hook(project_id))
+    if project_id:
         hooks.append(_create_cross_project_permission_hook(project_id))
 
     if working_dir:
@@ -242,6 +259,7 @@ def create_direct_handler(
     session_id: str | None = None,
     agent_slug: str | None = None,
     tool_catalog: list[dict[str, object]] | None = None,
+    permitted_tools: frozenset[str] | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with project/checkout enforcement.
 
@@ -255,7 +273,7 @@ def create_direct_handler(
     Returns:
         DirectToolHandler configured for the directory with permission hook
     """
-    hooks = _collect_hooks(working_dir, project_id)
+    hooks = _collect_hooks(working_dir, project_id, permitted_tools)
 
     pre_hook: PreToolUseHook | None = None
     if len(hooks) == 1:

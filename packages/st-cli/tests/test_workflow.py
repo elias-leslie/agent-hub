@@ -71,6 +71,22 @@ def test_create_payload_merges_the_concurrency_flag_into_the_files_policy() -> N
     assert untouched == {"goal": "g", "policy": {"max_attempts": 4}}
 
 
+def test_create_payload_merges_the_tool_level_flag_into_the_files_policy() -> None:
+    payload = workflow.build_create_payload(
+        {"goal": "g", "policy": {"max_concurrent_steps": 2, "tool_level": "full"}}, tool_level="read",
+        max_concurrent_steps=3, env={},
+    )
+    assert payload == {"goal": "g", "policy": {"max_concurrent_steps": 3, "tool_level": "read"}}
+    assert "tool_level" not in workflow.build_create_payload({"goal": "g"}, env={}).get("policy", {})
+
+
+def test_run_view_shows_the_tool_level() -> None:
+    from agent_hub_st.workflow_format import run_text
+
+    assert "tool level: read" in run_text(view(tool_level="read"))
+    assert "tool level" not in run_text(view())
+
+
 def test_create_command_posts_definition_and_prints_run_and_page_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)

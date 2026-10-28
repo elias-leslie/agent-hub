@@ -127,11 +127,8 @@ async def run(
     async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
         return PROVISIONED if provisioned is None else provisioned
 
-    async def tier(_project: str) -> str:
-        return "read"
-
     executor = AgentHubExecutor(
-        complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=writer or write, tier_lookup=tier
+        complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=writer or write
     )
 
     async def on_event(_event: Any) -> None:
@@ -275,10 +272,12 @@ async def test_lean_never_adds_a_tool_and_never_leaves_the_step_without_any(work
 READ_TIER = [{"name": "read_file"}]
 
 
-async def test_a_read_tier_tool_set_ends_the_attempt_before_any_model_call_with_a_typed_error(worktree, tmp_path) -> None:
+async def test_a_tool_set_without_shell_and_write_ends_the_attempt_before_any_model_call_with_a_typed_error(
+    worktree, tmp_path
+) -> None:
     result, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=READ_TIER)
     assert calls == [] and result.status == "failed" and result.tools == ["read_file"]
-    assert result.error.startswith("tools_unavailable: project tier 'read' allows only [read_file]")
+    assert result.error.startswith("tools_unavailable: tool level 'lean' allows only [read_file]")
     assert "bash" in result.error and "edit_file or write_file" in result.error
     assert result.outcome is None and result.served_models == ()
 
@@ -303,6 +302,40 @@ async def test_the_tools_the_attempt_got_are_recorded_on_a_finished_attempt(work
         worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL
     )
     assert result.tools == ["bash", "read_file", "edit_file", "write_file", "search_scratch_context"]
+
+
+async def test_read_level_gives_only_read_tools_and_permits_exactly_those_calls(worktree, tmp_path) -> None:
+    result, calls = await run(
+        worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL, level="read"
+    )
+    assert result.status == "completed" and result.tools == ["read_file"]
+    assert [t["name"] for t in calls[0]["tools"]] == ["read_file"]
+    assert calls[0]["permitted_tools"] == frozenset({"read_file"})
+    assert "edit_file" not in calls[0]["messages"][0]["content"] and "- read_file" in calls[0]["messages"][0]["content"]
+
+
+async def test_read_level_never_falls_back_to_the_agents_own_tools_and_refuses_acceptance_commands(
+    worktree, tmp_path
+) -> None:
+    turns = [assistant([TextContent(text=HANDOFF)])]
+    result, calls = await run(worktree, tmp_path, turns, provisioned=PROVISIONED_ALL, level="read", acceptance=["true"])
+    assert calls == [] and result.error.startswith("tools_unavailable: tool level 'read' allows only [read_file]")
+    other, calls = await run(worktree, tmp_path, turns, provisioned=[{"name": "bash"}, {"name": "write_file"}], level="read")
+    assert other.status == "completed" and other.tools == [] and calls[0]["tools"] == []
+    assert calls[0]["permitted_tools"] == frozenset()
+
+
+async def test_every_attempt_permits_exactly_the_tools_it_got(worktree, tmp_path) -> None:
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL)
+    assert calls[0]["permitted_tools"] == frozenset(t["name"] for t in calls[0]["tools"])
+
+
+async def test_the_project_chat_tier_does_not_narrow_a_workflow_attempts_tools() -> None:
+    from app.services.workflow_runs.executor_agent_hub import provision_tools
+
+    # No tier lookup is involved: the agent's own tools come back, bash and the write tools included.
+    names = {tool["name"] for tool in await provision_tools("coder", "any-project") or []}
+    assert {"bash", "read_file", "edit_file", "write_file"} <= names
 
 
 async def test_unknown_level_fails_before_any_model_call(worktree, tmp_path) -> None:

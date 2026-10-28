@@ -106,7 +106,7 @@ def _emit(payload: dict[str, Any], as_json: bool, text: str) -> None:
 
 def build_create_payload(
     definition: dict[str, Any], *, request_id: str | None = None, max_concurrent_steps: int | None = None,
-    env: Mapping[str, str] | None = None,
+    tool_level: str | None = None, env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """The run definition plus who launched it: launched_by and coordinator come from the Aico session unless set."""
     env = os.environ if env is None else env
@@ -116,9 +116,10 @@ def build_create_payload(
             payload[field] = env[name]
     if request_id:
         payload["request_id"] = request_id
-    if max_concurrent_steps is not None:
-        # RunDefinition accepts the setting only inside its policy; any policy in the file is kept.
-        payload["policy"] = {**(payload.get("policy") or {}), "max_concurrent_steps": max_concurrent_steps}
+    # RunDefinition accepts these settings only inside its policy; any policy in the file is kept.
+    for key, value in (("max_concurrent_steps", max_concurrent_steps), ("tool_level", tool_level)):
+        if value is not None:
+            payload["policy"] = {**(payload.get("policy") or {}), key: value}
     return payload
 
 
@@ -222,6 +223,7 @@ def create(
     file: Annotated[str, _Opt("--file", "-f", help="Run definition JSON, or - for stdin.")],
     request_id: Annotated[str | None, _Opt("--request-id", help="Stable id: creating again returns the same run.")] = None,
     max_concurrent_steps: Annotated[int | None, _Opt("--max-concurrent-steps", min=1, help="Steps allowed to run at once.")] = None,
+    tool_level: Annotated[str | None, _Opt("--tool-level", help="Tools every step gets: read, lean or full.")] = None,
     as_json: _AsJson = False,
 ) -> None:
     """Create and start a run.
@@ -229,7 +231,7 @@ def create(
     launched_by and coordinator come from the Aico session unless the file sets them.
     """
     payload = build_create_payload(_read_object(file, "run definition"), request_id=request_id,
-                                   max_concurrent_steps=max_concurrent_steps)
+                                   max_concurrent_steps=max_concurrent_steps, tool_level=tool_level)
     result = _api("POST", WORKFLOW_RUNS_PATH, payload=payload)
     created = result.get("created", True)
     url = page_url(str(result.get("id")))

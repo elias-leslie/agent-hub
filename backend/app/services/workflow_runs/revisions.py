@@ -32,7 +32,7 @@ from .engine import (
     failed_pause,
 )
 from .plan import DEAD, explicit_deps, schedule, validate_graph
-from .policy import load_policy
+from .policy import RunPolicy, load_policy, require_level_within_run
 from .schemas import AddSteps, PlanChange, RemoveStep, RunRevision, StepDefinition, StepRevision
 
 # Changing any of these changes the step's model chain, which is cached on the step after its first resolve.
@@ -187,6 +187,10 @@ async def add_steps(
         definitions.append(definition)
     for definition in definitions:
         _check_dependencies_alive(definition["depends_on"], by_key)
+        try:
+            require_level_within_run(load_policy(meta["policy"]), definition)
+        except ValueError as error:
+            raise _invalid(error) from error
     position = max((s.position for s in steps), default=-1) + 1
     added = [
         WorkflowStep(
@@ -253,6 +257,7 @@ async def _revise(
     pending_definitions: dict[str, dict[str, Any]],
     deps: EngineDeps,
     state: str | None,
+    policy: RunPolicy,
 ) -> dict[str, Any] | None:
     """Validate one step revision and stage it in ``pending_definitions``; the change record, or None when nothing differs."""
 
@@ -261,6 +266,7 @@ async def _revise(
         raise WorkflowRunError("invalid_plan", "no changes given")
     try:
         new, before, after = _revised_definition(step, revision)
+        require_level_within_run(policy, new)
     except ValueError as error:
         raise _invalid(error) from error
     if not before:
@@ -305,7 +311,7 @@ async def revise_step(
     if step is None:
         raise WorkflowRunError("step_not_found", f"run has no step named {step_key}")
     staged: dict[str, dict[str, Any]] = {}
-    change = await _revise(db, step, request, steps, staged, deps, meta.get("state"))
+    change = await _revise(db, step, request, steps, staged, deps, meta.get("state"), load_policy(meta["policy"]))
     if change is None:  # nothing differs: no new revision
         return _result(run_id, meta, False, changed=False, step=step_key)
     _check_graph(steps, staged)
@@ -372,7 +378,9 @@ async def remove_step(
     changes: list[dict[str, Any]] = [{"step": step_key, "op": "remove", "before": step.definition, "after": None}]
     revisions: list[tuple[Any, dict[str, Any]]] = []
     for key, revision in request.revise.items():
-        revise_change = await _revise(db, by_key[key], revision, remaining, staged, deps, meta.get("state"))
+        revise_change = await _revise(
+            db, by_key[key], revision, remaining, staged, deps, meta.get("state"), load_policy(meta["policy"])
+        )
         if revise_change is not None:
             changes.append(revise_change)
             revisions.append((by_key[key], revise_change))

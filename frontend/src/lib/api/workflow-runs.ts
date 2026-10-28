@@ -421,6 +421,8 @@ export interface WorkflowRunDetail {
   usage_totals?: UsageTotals
   /** Most steps that run at once. */
   max_concurrent_steps?: number
+  /** What tools the run's steps get: read, lean or full. A step can only narrow it. */
+  tool_level?: string
   /** Steps running right now. */
   running_steps?: string[]
   /** Each running step works in its own worktree and branch. */

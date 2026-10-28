@@ -111,6 +111,14 @@ async def test_steps_run_lean_by_default_and_full_on_request(fake_claude, worktr
     assert "--tools" not in args and "--strict-mcp-config" not in args
 
 
+async def test_the_read_level_gives_claude_only_its_read_only_tools(fake_claude, worktree, tmp_path) -> None:
+    fake_claude(success_stream(HANDOFF))
+    result, _ = await run(worktree, tmp_path, level="read")
+    args = (tmp_path / "args.txt").read_text().splitlines()
+    assert args[args.index("--tools") + 1] == "Read,Grep,Glob"
+    assert result.tools == ("Read", "Grep", "Glob")
+
+
 def test_step_level_must_be_a_configured_level() -> None:
     from pydantic import ValidationError
 

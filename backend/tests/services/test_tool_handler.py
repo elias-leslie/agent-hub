@@ -208,3 +208,48 @@ class TestDirectToolHandlerPermissionFailClosed:
         )
 
         assert result.content.startswith("WARNING: file.txt leased by cc:abc123\n")
+
+
+# ---------------------------------------------------------------------------
+# Who decides which calls run: the project's chat tier, or a workflow run's tool set
+# ---------------------------------------------------------------------------
+
+
+class TestToolPermissionSource:
+    @pytest.mark.asyncio
+    async def test_chat_keeps_the_project_permission_tier(self):
+        """Without a permitted tool set (Agent Hub chat), a read-tier project still denies bash and allows read_file."""
+        from app.services.tools.tool_handler import _collect_hooks
+
+        hooks = _collect_hooks(None, "chat-project")
+        assert len(hooks) == 3  # project permission, cross-project boundary, lease check
+
+        with patch(
+            "app.services.project_permission_service._get_cached_tier", new_callable=AsyncMock, return_value="read"
+        ):
+            assert await hooks[0](_make_tool_call("bash")) == ToolDecision.DENY
+            assert await hooks[0](_make_tool_call("write_file")) == ToolDecision.DENY
+            assert await hooks[0](_make_tool_call("read_file")) == ToolDecision.ALLOW
+
+    def test_chat_tool_surface_is_still_narrowed_by_the_tier(self):
+        from app.api.complete.tool_provisioner import provision_standard_tools
+        from app.services.project_permission_service import get_visible_tools_for_tier
+
+        provisioned = provision_standard_tools(
+            True, None, agent_slug="coder", project_id="chat-project", visible_tool_names=get_visible_tools_for_tier("read")
+        )
+        assert {t["name"] for t in provisioned.loaded_tools} == {"read_file"}
+
+    @pytest.mark.asyncio
+    async def test_a_permitted_tool_set_replaces_the_tier_check(self):
+        """A workflow run names its tools: the project's tier is not asked, and anything outside the set is denied."""
+        from app.services.tools.tool_handler import _collect_hooks
+
+        hooks = _collect_hooks(None, "chat-project", frozenset({"bash", "edit_file"}))
+        assert len(hooks) == 3  # tool set, cross-project boundary, lease check
+        with patch(
+            "app.services.project_permission_service.check_tool_allowed", new_callable=AsyncMock
+        ) as tier:
+            assert await hooks[0](_make_tool_call("bash")) == ToolDecision.ALLOW
+            assert await hooks[0](_make_tool_call("write_file")) == ToolDecision.DENY
+            tier.assert_not_awaited()

@@ -5,6 +5,7 @@
   "progress_items": 12,
   "progress_output_chars": 1500,
   "default_thinking_level": "high",
+  "tool_levels": ["read", "lean", "full"],
   "thinking_levels": ["none", "minimal", "low", "medium", "high", "xhigh"],
   "usage": {
     "subscription_providers": ["claude", "codex", "opencode-go"],
@@ -15,6 +16,7 @@
     "binary": "codex",
     "catalog_provider": "codex",
     "sandbox": "workspace-write",
+    "sandbox_by_level": {"read": "read-only"},
     "approval_policy": "never",
     "default_cyber_program": "standard"
   },
@@ -22,7 +24,12 @@
     "binary": "pi",
     "provider_for_catalog_provider": {"codex": "openai", "claude": "anthropic", "opencode-go": "opencode-go"},
     "flags": ["--no-extensions", "--approve"],
-    "tools": null
+    "default_level": "lean",
+    "levels": {
+      "read": ["--tools", "read,grep,find,ls"],
+      "lean": [],
+      "full": []
+    }
   },
   "claude_code": {
     "catalog_provider": "claude",
@@ -31,6 +38,7 @@
     "settings": {"switchModelsOnFlag": false},
     "default_level": "lean",
     "levels": {
+      "read": ["--tools", "Read,Grep,Glob", "--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"],
       "lean": ["--tools", "Read,Edit,Write,Bash", "--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"],
       "full": []
     }
@@ -40,7 +48,30 @@
     "shell_tools": ["bash"],
     "write_tools": ["edit_file", "write_file"],
     "levels": {
+      "read": {
+        "tools": {
+          "read_file": "Read file contents"
+        },
+        "prompt": [
+          "You are an expert coding assistant operating inside Agent Hub, a coding agent harness. You help users by reading files and explaining what you find. You cannot run commands or change files.",
+          "",
+          "<tools>",
+          "{tools}",
+          "</tools>",
+          "",
+          "<rules>",
+          "- Use read_file to examine files.",
+          "- Be concise in your responses",
+          "- Show file paths clearly when working with files",
+          "</rules>",
+          "",
+          "<cwd>",
+          "{cwd}",
+          "</cwd>"
+        ]
+      },
       "lean": {
+        "agent_tools_if_none_match": true,
         "tools": {
           "bash": "Execute bash commands (ls, grep, find, etc.)",
           "read_file": "Read file contents",

@@ -92,6 +92,14 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           {run.uses_lanes ? ' · each step has its own worktree and branch' : ''}
         </p>
       ) : null}
+      {run.tool_level ? (
+        <p
+          className="font-mono text-[12px] text-slate-400"
+          data-testid="run-tool-level"
+        >
+          Tool level: {run.tool_level}
+        </p>
+      ) : null}
       {resultText(run.result) ? (
         <p
           className={cn(

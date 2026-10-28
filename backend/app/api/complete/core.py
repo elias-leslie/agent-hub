@@ -146,6 +146,7 @@ async def complete_internal(
     requested_provider: str | None = None,
     canonical_context_preinjected: bool = False,
     on_loop_event: Callable[[Any], None] | None = None,
+    permitted_tools: frozenset[str] | None = None,
 ) -> CompletionInternalResult:
     """Run a completion via the unified ``app.llm`` pipeline.
 
@@ -211,6 +212,7 @@ async def complete_internal(
             project_id=project_id,
             session_id=session_id,
             agent_slug=agent_slug,
+            permitted_tools=permitted_tools,
         )
         if execute_tools
         else None

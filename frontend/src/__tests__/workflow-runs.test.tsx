@@ -500,8 +500,7 @@ describe('workflow run detail', () => {
         pause: {
           reason: 'tools_unavailable',
           step_key: 'plan',
-          error:
-            "tools_unavailable: project tier 'read' allows only [read_file]",
+          error: "tools_unavailable: tool level 'read' allows only [read_file]",
         },
         steps: [
           step({
@@ -511,7 +510,7 @@ describe('workflow run detail', () => {
                 status: 'failed',
                 tools: ['read_file'],
                 error:
-                  "tools_unavailable: project tier 'read' allows only [read_file]",
+                  "tools_unavailable: tool level 'read' allows only [read_file]",
               }),
             ],
           }),
@@ -520,9 +519,7 @@ describe('workflow run detail', () => {
     )
     mount(<WorkflowRunPage />)
     const panel = await screen.findByRole('region', { name: 'Waiting for you' })
-    expect(panel).toHaveTextContent(
-      "project tier 'read' allows only [read_file]",
-    )
+    expect(panel).toHaveTextContent("tool level 'read' allows only [read_file]")
     expect(await screen.findByTestId('attempt-tools')).toHaveTextContent(
       'Tools: read_file',
     )
@@ -806,6 +803,7 @@ describe('workflow run detail', () => {
       run({
         state: 'running',
         max_concurrent_steps: 2,
+        tool_level: 'read',
         running_steps: ['a', 'b'],
         uses_lanes: true,
         result: null,
@@ -849,6 +847,9 @@ describe('workflow run detail', () => {
     mount(<WorkflowRunPage />)
     expect(await screen.findByTestId('run-concurrency')).toHaveTextContent(
       '2 of 2 steps running: a, b · each step has its own worktree and branch',
+    )
+    expect(screen.getByTestId('run-tool-level')).toHaveTextContent(
+      'Tool level: read',
     )
     expect(screen.queryByTestId('run-result')).toBeNull()
     const [a, b, join] = await screen.findAllByTestId('step-workspace')

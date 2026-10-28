@@ -29,6 +29,11 @@ class RunPolicy:
     # Steps that may run at once. The scheduler starts every ready step up to this many; 1 runs the plan one step at a
     # time in the run's own worktree, more gives each running step a worktree of its own (see workspace.py).
     max_concurrent_steps: int
+    # How much the run's steps may do with tools, for every executor the same way: "read" (look only), "lean" (the
+    # core read, edit, write and shell tools) or "full" (the harness's whole tool set). The coordinator sets it when
+    # the run is created; a step's own ``level`` can only narrow it. The levels and their order are data
+    # (executor_defaults.json ``tool_levels``, narrowest first); each executor maps a level to its own tool list.
+    tool_level: str
     # Restarts a step may use after a stalled attempt (the step fails when it stalls again past this many).
     restart_limit: int
     stale_after_seconds: int
@@ -86,7 +91,38 @@ def load_policy(
     cap = data["max_concurrent_steps"]
     if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
         raise ValueError("max_concurrent_steps must be a whole number of at least 1")
+    if data["tool_level"] not in tool_levels():
+        raise ValueError(f"tool_level must be one of {tool_levels()}")
     return RunPolicy(**data)
+
+
+def tool_levels() -> list[str]:
+    """The tool levels, narrowest first (executor_defaults.json)."""
+
+    from .executor_common import load_defaults
+
+    return list(load_defaults()["tool_levels"])
+
+
+def effective_tool_level(run_level: str, step_level: str | None) -> str:
+    """The level a step runs at: its own when narrower than the run's, else the run's (a step never widens the run)."""
+
+    order = tool_levels()
+    if step_level is None or step_level not in order:
+        return run_level
+    return min(run_level, step_level, key=order.index)
+
+
+def require_level_within_run(policy: RunPolicy, step: Mapping[str, Any]) -> None:
+    """Refuse a step that asks for a wider tool level than its run allows."""
+
+    order = tool_levels()
+    wanted = step.get("level")
+    if wanted in order and order.index(wanted) > order.index(policy.tool_level):
+        raise ValueError(
+            f"step {step.get('key')!r} asks for tool level {wanted!r}, wider than the run's {policy.tool_level!r}; "
+            "set the run's tool level (policy.tool_level) when creating it"
+        )
 
 
 # An executor that cannot give the step the tools it needs ends the attempt with an error starting with this word.

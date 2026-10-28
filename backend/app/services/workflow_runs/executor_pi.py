@@ -4,8 +4,9 @@ Pi's model is ``provider/id``; the provider comes from the catalog provider thro
 the id from the catalog's upstream id. The user's Agent Hub Pi extension is switched off for these runs
 (``--no-extensions``): the step's canonical context is already in the packet and goes in through
 ``--append-system-prompt``, and the extension would deliver a second, differently-scoped context and ingest the
-same transcript the engine ingests from ``transcript_path``. Pi has no access-program support, so a catalog model
-that needs one fails fast and the chain moves on.
+same transcript the engine ingests from ``transcript_path``. The packet's tool level (the run's, narrowed by the step)
+picks the ``--tools`` flags in ``executor_defaults.json`` ``pi.levels`` (``read`` is Pi's read-only set). Pi has no
+access-program support, so a catalog model that needs one fails fast and the chain moves on.
 """
 
 from __future__ import annotations
@@ -129,8 +130,8 @@ class PiExecutor:
             thinking_level(packet, entry, self.defaults),
             *self.settings["flags"],
         ]
-        if self.settings.get("tools"):
-            argv += ["--tools", ",".join(self.settings["tools"])]
+        # The run's tool level picks Pi's tool flags; a level with none leaves Pi's own default set.
+        argv += self.settings["levels"][packet.level or self.settings["default_level"]]
         context_file: Path | None = None
         if packet.context:
             context_file = run_dir / "pi" / f"{packet.step_key}-{uuid.uuid4().hex[:8]}-context.md"
