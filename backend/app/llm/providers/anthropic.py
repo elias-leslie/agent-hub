@@ -64,6 +64,7 @@ from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
+from ..utils.stream_timeout import note_timeout, stream_timeout
 
 # Re-export for downstream type-checkers that don't follow the `as` alias.
 __all__ = [
@@ -462,6 +463,7 @@ def create_client(
             auth_token=api_key,
             base_url=model.base_url,
             default_headers=headers,
+            timeout=stream_timeout(),
         )
         return client
 
@@ -483,6 +485,7 @@ def create_client(
         api_key=api_key,
         base_url=model.base_url,
         default_headers=headers,
+        timeout=stream_timeout(),
     )
     return client
 
@@ -640,7 +643,7 @@ def stream_anthropic(
 
             request_options: dict[str, Any] = {}
             if options and options.timeout_ms is not None:
-                request_options["timeout"] = options.timeout_ms / 1000
+                request_options["timeout"] = stream_timeout(options.timeout_ms)
             if options and options.max_retries is not None:
                 request_options["max_retries"] = options.max_retries
 
@@ -686,6 +689,9 @@ def stream_anthropic(
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) if str(exc) else type(exc).__name__
             if not aborted:
+                silence = note_timeout(exc, model.id, options.timeout_ms if options else None)
+                if silence:
+                    output.error_message = silence
                 tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()

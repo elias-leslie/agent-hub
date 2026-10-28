@@ -71,6 +71,7 @@ from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
+from ..utils.stream_timeout import note_timeout, stream_timeout
 
 __all__ = [
     "OpenAICompletionsOptions",
@@ -808,13 +809,15 @@ def create_client(
             "::1",
         }:
             raise ValueError("Loopback-only completion transport received a non-loopback URL")
-        http_client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
+        http_client = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=stream_timeout())
 
     return AsyncOpenAI(
         api_key=api_key or "placeholder",
         base_url=model.base_url,
         default_headers=headers,
         http_client=http_client,
+        # The one configured read bound, not the SDK's own 600 s default.
+        timeout=stream_timeout(),
         # Re-sends belong to the shared layer (llm/utils/retry.py), which keeps them visible and budgeted.
         max_retries=0,
     )
@@ -963,7 +966,7 @@ def stream_openai_completions(
 
             request_options: dict[str, Any] = {}
             if options and options.timeout_ms is not None:
-                request_options["timeout"] = options.timeout_ms / 1000
+                request_options["timeout"] = stream_timeout(options.timeout_ms)
 
             body = dict(params)
             body.pop("stream", None)
@@ -1169,6 +1172,9 @@ def stream_openai_completions(
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) or type(exc).__name__
             if not aborted:
+                silence = note_timeout(exc, model.id, options.timeout_ms if options else None)
+                if silence:
+                    output.error_message = silence
                 tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()

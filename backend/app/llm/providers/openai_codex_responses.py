@@ -60,6 +60,7 @@ from ..types import (
 from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
 from ..utils.refusal_codes import codex_refusal_category
 from ..utils.request_metrics import record_request_metrics
+from ..utils.stream_timeout import note_timeout, stream_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -296,19 +297,7 @@ def _tools(tools: list[Tool] | None) -> list[dict[str, Any]] | None:
 
 
 
-_CONNECT_TIMEOUT_S = 30.0
 _KEEPALIVE = "keepalive"
-
-
-def _stream_timeout(options: SimpleStreamOptions | None) -> httpx.Timeout:
-    """Transport bound only: no bytes at all for this long (keepalives are bytes) means the connection is dead.
-
-    A slow model is never cut off by this; it ends a connection that stopped talking altogether.
-    """
-    seconds = settings.llm_stream_read_timeout_s
-    if options is not None and options.timeout_ms is not None:
-        seconds = options.timeout_ms / 1000
-    return httpx.Timeout(seconds, connect=min(_CONNECT_TIMEOUT_S, seconds))
 
 
 def _body(
@@ -585,7 +574,7 @@ async def _run(
     try:
         body = _body(model, context, options)
         async with (
-            httpx.AsyncClient(timeout=_stream_timeout(options)) as client,
+            httpx.AsyncClient(timeout=stream_timeout(options.timeout_ms if options else None)) as client,
             _authenticated_response(client, model, body, _cache_key(options)) as response,
         ):
                 timing.headers = time.monotonic() - timing.start
@@ -707,8 +696,9 @@ async def _run(
         # The stream ended without response.completed: a partial message is not an answer.
         raise _Interrupted("stream ended before response.completed")
     except Exception as exc:
-        timing.failure = repr(exc)[:200]
-        error = replace(output, stop_reason="error", error_message=str(exc))
+        silence = note_timeout(exc, model.id, options.timeout_ms if options else None)
+        timing.failure = silence or repr(exc)[:200]
+        error = replace(output, stop_reason="error", error_message=silence or str(exc))
         if isinstance(exc, _CodexRefusal):
             record_outcome(
                 error,
@@ -723,7 +713,7 @@ async def _run(
         elif _retryable(exc):
             record_outcome(
                 error,
-                ProviderOutcome(kind="interrupted", requested_model=model.id, explanation=str(exc) or type(exc).__name__),
+                ProviderOutcome(kind="interrupted", requested_model=model.id, explanation=silence or str(exc) or type(exc).__name__),
             )
         timing.finish(model.id, error)
         stream.push(ErrorEvent(reason="error", error=error))

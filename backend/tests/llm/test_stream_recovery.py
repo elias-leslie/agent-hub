@@ -230,7 +230,7 @@ async def test_the_loop_surfaces_the_error_once_the_retry_budget_is_spent(sse) -
     assert events[-1].type == "error" and _kind(events[-1].error) == "interrupted"
     assert _kind(sunk[0]) == "interrupted" and [e.type for e in events].count("error") == 1
     metrics = request_metrics_of(sunk[0])
-    assert metrics is not None and metrics["retries"] == 1 and metrics["outcome"].startswith("ReadTimeout")
+    assert metrics is not None and metrics["retries"] == 1 and metrics["outcome"].startswith("stream_idle_timeout") and "ReadTimeout" in metrics["outcome"]
 
 
 @pytest.mark.asyncio
