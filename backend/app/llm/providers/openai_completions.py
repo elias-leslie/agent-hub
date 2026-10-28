@@ -1231,7 +1231,7 @@ def stream_simple_openai_completions(
     if not api_key:
         raise RuntimeError(f"No API key for provider: {model.provider}")
 
-    base = build_base_options(model, options, api_key)
+    base = build_base_options(model, options, api_key, context)
     reasoning_effort = options.reasoning if options.reasoning else None
 
     return stream_openai_completions(

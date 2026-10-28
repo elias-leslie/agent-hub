@@ -545,7 +545,7 @@ def stream_simple_google(
     # Only an explicit caller-supplied key is pinned here. Leaving it unset lets
     # stream_google() pick from the account pool and rotate on refusal; baking a
     # resolved key in at this point would defeat that.
-    base = build_base_options(model, options, options.api_key)
+    base = build_base_options(model, options, options.api_key, context)
     if options.reasoning is None:
         return stream_google(
             model,

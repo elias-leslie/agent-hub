@@ -711,7 +711,7 @@ def stream_simple_anthropic(
     if not api_key:
         raise RuntimeError(f"No API key for provider: {model.provider}")
 
-    base = build_base_options(model, options, api_key)
+    base = build_base_options(model, options, api_key, context)
 
     if not options.reasoning:
         return stream_anthropic(
@@ -723,9 +723,10 @@ def stream_simple_anthropic(
     level = clamp_reasoning(options.reasoning)
     if level is None or level == "xhigh":
         level = "high"
+    # Thinking counts inside max_tokens: with no explicit limit the fitted default is also the ceiling.
     max_tokens, thinking_budget = adjust_max_tokens_for_thinking(
         base.max_tokens or 0,
-        model.max_tokens,
+        base.max_tokens if options.max_tokens is None and base.max_tokens else model.max_tokens,
         level,
         options.thinking_budgets,
     )

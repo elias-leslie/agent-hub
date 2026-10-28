@@ -86,3 +86,75 @@ def test_no_caller_is_capped_at_one_or_thirty_two_turns() -> None:
     assert tool_loop_turns(True, 1) == DEFAULT_AGENTIC_MAX_TURNS
     assert tool_loop_turns(True, 7) == 7
     assert tool_loop_turns(False, 1) == 1
+
+
+def _model(max_tokens: int, context_window: int) -> Model[Any]:
+    return Model[Any](
+        id="deepseek-v4.1-flash", name="DeepSeek", api="openai-completions", provider="opencode-go",
+        base_url="https://example.invalid", reasoning=True, input=["text"],
+        cost=ModelCost(input=0.1, output=0.2, cache_read=0.0, cache_write=0.0),
+        context_window=context_window, max_tokens=max_tokens,
+    )
+
+
+def _prompt(words: int) -> Context:
+    return Context(messages=[UserMessage(content="alpha beta gamma delta " * (words // 4), timestamp=0)])
+
+
+def test_no_explicit_limit_means_the_catalog_limit_not_a_hidden_32000() -> None:
+    from app.llm.simple_options import build_base_options
+
+    assert build_base_options(_model(384_000, 1_000_000), None, "k", _context()).max_tokens == 384_000
+    assert build_base_options(_model(8_192, 128_000), None, "k").max_tokens == 8_192  # no context given: catalog only
+    assert build_base_options(_model(0, 128_000), None, "k", _context()).max_tokens is None
+
+
+def test_an_explicit_limit_is_never_changed() -> None:
+    from app.llm.simple_options import build_base_options
+    from app.llm.types import SimpleStreamOptions
+
+    base = build_base_options(_model(16_384, 32_768), SimpleStreamOptions(max_tokens=5_000), "k", _prompt(40_000))
+    assert base.max_tokens == 5_000
+
+
+def test_the_default_leaves_room_for_the_prompt_in_the_context_window() -> None:
+    from app.llm.simple_options import _context_text, build_base_options
+    from app.services.token_counter import count_tokens
+
+    model = _model(16_384, 32_768)  # a catalog row that allows 16k of output in a 32k window
+    context = _prompt(26_000)
+    prompt_tokens = count_tokens(_context_text(context))
+    assert 16_384 < prompt_tokens < 32_768  # long enough that the catalog limit would overflow the window
+    limit = build_base_options(model, None, "k", context).max_tokens
+    assert limit == 32_768 - prompt_tokens < 16_384
+    # A short prompt keeps the catalog limit.
+    assert build_base_options(model, None, "k", _prompt(400)).max_tokens == 16_384
+
+
+def test_a_prompt_already_over_the_window_is_not_clamped_to_a_useless_sliver() -> None:
+    from app.llm.simple_options import build_base_options
+
+    assert build_base_options(_model(16_384, 32_768), None, "k", _prompt(200_000)).max_tokens == 16_384
+
+
+def test_anthropic_thinking_stays_inside_the_fitted_default() -> None:
+    from app.llm.providers import anthropic
+    from app.llm.types import SimpleStreamOptions
+
+    seen: dict[str, Any] = {}
+
+    def fake_stream(model: Any, context: Any, options: Any) -> str:
+        seen["max_tokens"], seen["budget"] = options.max_tokens, options.thinking_budget_tokens
+        return "stream"
+
+    model = _anthropic_model(64_000)
+    model.context_window = 70_000
+    original = anthropic.stream_anthropic
+    anthropic.stream_anthropic = fake_stream  # type: ignore[assignment]
+    try:
+        anthropic.stream_simple_anthropic(
+            model, _prompt(56_000), SimpleStreamOptions(reasoning="high", api_key="k")
+        )
+    finally:
+        anthropic.stream_anthropic = original
+    assert seen["max_tokens"] <= model.context_window - 50_000 and seen["budget"] < seen["max_tokens"]
