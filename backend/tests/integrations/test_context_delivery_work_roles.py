@@ -137,3 +137,11 @@ async def test_unproven_role_and_bind_add_no_delivery_tag(client, monkeypatch):
     monkeypatch.delenv("ST_WORK_ROLE_SOURCE")
     tags, _argv = await _delivery_tags(client, monkeypatch, "deliver", "pi")
     assert tags == []
+
+
+@pytest.mark.asyncio
+async def test_hookless_delivery_with_inherited_environment_is_treated_as_the_root(client, monkeypatch):
+    # The child rule covers native child hooks only: a nested CLI that inherits
+    # the root's environment and delivers without a hook looks like the root.
+    tags, _argv = await _delivery_tags(client, monkeypatch, "deliver", "codex")
+    assert tags == ["work-role:implementation"]

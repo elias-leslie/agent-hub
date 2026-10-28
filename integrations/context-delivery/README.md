@@ -205,8 +205,8 @@ producer code; no live activation or deployment is performed by this checkpoint.
 The same proven declaration also selects context. On `deliver` and `hook`, the
 client adds the consumer tag `work-role:<id>` when both `ST_WORK_ROLE` and
 `ST_WORK_ROLE_SOURCE` are set, for every surface that delivers through it (Pi,
-Claude Code and Codex launchers, Antigravity retrieval). A child delivery
-(SubagentStart or a hook with child markers) gets no role tag, and `bind` adds
+Claude Code and Codex launchers, Antigravity retrieval). A native child hook
+(SubagentStart, or a hook with child markers) gets no role tag, and `bind` adds
 none. The tag is separate from `aico-coordinator`, which still comes only from
 Tether's coordinator flag. Agent Hub drops a `work-role:*` tag whose ID is not in
 `backend/app/services/session_roles.json`, so a new role needs only a registry
@@ -230,4 +230,7 @@ Limit: Claude Code and Codex children that reuse the root's launch context (the
 preloaded `CLAUDE.md` or inherited developer instructions) see the root's
 role-selected bytes; their SubagentStart hooks only bind, so no role-free child
 delivery is made there. Codex resume and fork keep saved context and get no new
-selection.
+selection. A nested native CLI started from a root's shell inherits
+`ST_WORK_ROLE` and `ST_WORK_ROLE_SOURCE` and delivers without a hook, so it is
+indistinguishable from the root launch and gets the root's role tag. The child
+rule covers native child hooks only.
