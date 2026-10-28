@@ -136,10 +136,7 @@ export function formatResetTime(
 }
 
 /** What the run is waiting on, in the owner's terms. */
-export function pauseExplanation(
-  pause: RunPause,
-  stepKey: string | undefined,
-): string {
+function pauseReasonText(pause: RunPause, stepKey: string | undefined): string {
   const step = stepKey ? `Step "${stepKey}"` : 'A step'
   const category = categoryText(pause.category)
   switch (pause.reason) {
@@ -170,6 +167,17 @@ export function pauseExplanation(
     default:
       return `${step} is paused: ${pause.reason.replaceAll('_', ' ')}.`
   }
+}
+
+export function pauseExplanation(
+  pause: RunPause,
+  stepKey: string | undefined,
+): string {
+  const text = pauseReasonText(pause, stepKey)
+  const others = Object.keys(pause.waiting ?? {}).filter((k) => k !== stepKey)
+  return others.length > 0
+    ? `${text} Also waiting for you: ${others.join(', ')}.`
+    : text
 }
 
 /** Who stopped a run or step, when, and why, in the owner's terms. */

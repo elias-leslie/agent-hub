@@ -170,8 +170,14 @@ class CodexExecutor:
 
         return get_model_entry(model)
 
-    def command(self, packet: HandoffPacket, model: str, worktree: Path) -> tuple[list[str], str, str]:
-        """(argv, upstream model, access program) for one attempt; the prompt goes in on stdin."""
+    def command(
+        self, packet: HandoffPacket, model: str, worktree: Path, user_instructions: str | None = None
+    ) -> tuple[list[str], str, str]:
+        """(argv, upstream model, access program) for one attempt; the prompt goes in on stdin.
+
+        ``user_instructions`` is the user's own Codex config instruction text; async callers read it off the event loop
+        and pass it in, others leave it to be read here.
+        """
 
         from app.llm.model_resolver import upstream_model_id
 
@@ -184,7 +190,9 @@ class CodexExecutor:
             "default_cyber_program"
         ]
         effort = thinking_level(packet, entry, self.defaults)
-        instructions = "\n\n".join(v for v in (user_developer_instructions(), packet.context) if v)
+        if user_instructions is None:
+            user_instructions = user_developer_instructions()
+        instructions = "\n\n".join(v for v in (user_instructions, packet.context) if v)
         argv = [
             self.settings["binary"],
             "exec",
@@ -209,7 +217,8 @@ class CodexExecutor:
         self, packet: HandoffPacket, model: str, worktree: Path, run_dir: Path, on_event: OnEvent
     ) -> StepResult:
         try:
-            argv, upstream, _ = self.command(packet, model, worktree)
+            user = await asyncio.to_thread(user_developer_instructions)
+            argv, upstream, _ = self.command(packet, model, worktree, user)
         except ValueError as exc:
             return StepResult("failed", error=f"codex_unsupported: {exc}")
         binary = shutil.which(argv[0])

@@ -528,6 +528,26 @@ describe('workflow run detail', () => {
     )
   })
 
+  it('names the other steps that also wait for the owner', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'needs_owner',
+        pause: {
+          reason: 'chain_exhausted',
+          step_key: 'plan',
+          waiting: {
+            plan: { reason: 'chain_exhausted' },
+            build: { reason: 'chain_exhausted' },
+          },
+        },
+        steps: [step({ status: 'needs_owner' })],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const panel = await screen.findByRole('region', { name: 'Waiting for you' })
+    expect(panel).toHaveTextContent('Also waiting for you: build.')
+  })
+
   it('explains a paused run and sends the owner decision', async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({

@@ -226,6 +226,17 @@ def test_step_line_shows_models_fallback_attempts_live_phase_and_cost() -> None:
     assert "$? unknown" in step_line(unpriced)
 
 
+def test_a_pause_with_several_waiting_steps_lists_each_one_once() -> None:
+    from agent_hub_st.workflow_format import pause_text
+
+    pause = {"reason": "chain_exhausted", "step_key": "a", "waiting": {
+        "a": {"reason": "chain_exhausted"}, "b": {"reason": "tools_unavailable", "error": "x"}}}
+    text = pause_text(pause)
+    assert text == "chain_exhausted step_key=a | waiting: a (chain_exhausted), b (tools_unavailable)"
+    one = {"reason": "chain_exhausted", "step_key": "a", "waiting": {"a": {"reason": "chain_exhausted"}}}
+    assert pause_text(one) == "chain_exhausted step_key=a"
+
+
 def test_the_same_model_spelled_two_ways_is_not_shown_as_a_switch_and_a_real_switch_is() -> None:
     same = step("a", "completed", attempt_history=[
         attempt(requested_model="opencode-go/deepseek-v4.1-flash", served_model="deepseek-v4.1-flash")])

@@ -342,6 +342,8 @@ export interface FailedStepRecord {
 export interface RunPause {
   reason: string
   step_key?: string
+  /** Every step waiting for the owner, in the order they stopped; the fields above describe the first. */
+  waiting?: Record<string, { reason: string; error?: string }>
   /** For reason step_failed: every failed step. Steps that do not depend on them have finished. */
   failed?: Record<string, FailedStepRecord>
   /** For a run blocked on dependencies: each blocked step and what blocks it. */

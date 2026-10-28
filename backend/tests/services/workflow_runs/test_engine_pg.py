@@ -2575,3 +2575,113 @@ async def test_revising_the_dependencies_of_a_step_whose_lane_exists_makes_the_l
     again = view["steps"][2]["workspace"]
     assert [p["step"] for p in again["parents"]] == ["a", "b"] and again["merge_result"] == "clean"
     assert "b.txt" in hold.seen["c"]["files"] and view["state"] == "completed"
+
+
+# --- several steps waiting on the owner, completion guard, heartbeat through the commit ---------------------------
+
+
+def two_owner_steps(repo: Path) -> RunDefinition:
+    one_model = {"depends_on": [], "allowed_models": [OPUS], "max_attempts": 3}
+    return parallel(repo, 2, {"key": "a", **one_model}, {"key": "b", **one_model})
+
+
+async def both_need_the_owner(pg_db, repo, world_factory) -> tuple[World, str]:
+    again = [FauxAction("refuse", category="cyber"), FauxAction()]
+    world = world_factory({"a": again, "b": again})
+    chains(world)
+    hold = with_hold(world)
+    hold.gate("a", "b")
+    run_id, _ = await create_run(pg_db, two_owner_steps(repo), deps=world.deps)
+    await world.spawn(run_id)
+    await asyncio.wait_for(asyncio.gather(hold.entered["a"].wait(), hold.entered["b"].wait()), 20)
+    hold.gates["a"].set()
+    for _ in range(200):  # a ends first and pauses the run while b is still running
+        if (await snapshot(world, pg_db, run_id))["state"] == "needs_owner":
+            break
+        await asyncio.sleep(0.02)
+    hold.gates["b"].set()
+    await world.settle()
+    return world, run_id
+
+
+async def test_a_second_step_needing_the_owner_joins_the_pause_and_each_is_resumed_by_name(
+    pg_db, repo, world_factory
+) -> None:
+    world, run_id = await both_need_the_owner(pg_db, repo, world_factory)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and [s["status"] for s in view["steps"]] == ["needs_owner", "needs_owner"]
+    assert list(view["pause"]["waiting"]) == ["a", "b"]
+    assert (view["pause"]["reason"], view["pause"]["step_key"]) == ("chain_exhausted", "a")
+
+    await resume_run(pg_db, run_id, OwnerDecision(action="retry", step_key="a"), deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    # The run stays paused for b; a waits (pending) until the owner has dealt with b too.
+    assert view["state"] == "needs_owner" and list(view["pause"]["waiting"]) == ["b"] and view["pause"]["step_key"] == "b"
+    assert [s["status"] for s in view["steps"]] == ["pending", "needs_owner"]
+    with pytest.raises(WorkflowRunError) as named:  # a is no longer in the list
+        await resume_run(pg_db, run_id, OwnerDecision(action="skip", step_key="a"), deps=world.deps)
+    assert named.value.code == "no_such_step" and "waiting: b" in str(named.value)
+
+    await resume_run(pg_db, run_id, OwnerDecision(action="retry", step_key="b"), deps=world.deps)
+    assert (await view_of(pg_db, run_id))["state"] == "running"
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and [s["status"] for s in view["steps"]] == ["completed", "completed"]
+
+
+async def test_a_run_never_completes_while_a_step_still_waits_for_the_owner(pg_db, repo, world_factory) -> None:
+    world, run_id = await both_need_the_owner(pg_db, repo, world_factory)
+    await resume_run(pg_db, run_id, OwnerDecision(action="skip", step_key="a"), deps=world.deps)
+    # Lose the pause the way the single-slot pause used to: the run says running, b is stranded in needs_owner.
+    run = await pg_db.get(Session, run_id)
+    assert run is not None
+    engine_module._set_meta(run, {**engine_module._meta(run), "state": "running", "pause": None}, now=NOW)
+    await pg_db.commit()
+    result = await advance_run(run_id, deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert result["next"] == "stop" and result["reason"] == "chain_exhausted"
+    assert view["state"] == "needs_owner" and list(view["pause"]["waiting"]) == ["b"]
+    assert [s["status"] for s in view["steps"]] == ["skipped", "needs_owner"]
+
+
+async def test_an_old_single_step_pause_still_resumes(pg_db, repo, world_factory) -> None:
+    world = world_factory({"plan": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(run_id)
+    world.faux.script["plan"] = [FauxAction()]
+    run = await pg_db.get(Session, run_id)
+    assert run is not None
+    await pg_db.refresh(run)
+    meta = engine_module._meta(run)
+    old = {k: v for k, v in meta["pause"].items() if k != "waiting"}  # as stored before the list existed
+    engine_module._set_meta(run, {**meta, "pause": old}, now=NOW)
+    await pg_db.commit()
+    resumed = await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert (resumed["state"], resumed["step"]) == ("running", "plan")
+
+
+async def test_the_heartbeat_keeps_beating_through_the_pre_flight_and_the_commit(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    beats: list[Any] = []
+
+    async def heartbeat() -> Any:
+        async with world.lock:
+            return (await pg_db.execute(select(WorkflowStep.heartbeat_at))).scalars().first()
+
+    async def slow(models: list[str]) -> dict[str, Unavailable]:
+        # Called after the executor ran: the checkpoint is done and the outcome is not committed yet.
+        if world.faux.calls:
+            beats.append(await heartbeat())
+            world.clock += 500  # far past stale_after_seconds; only a live ticker moves the stored heartbeat
+            await asyncio.sleep(0.4)
+            beats.append(await heartbeat())
+        return {}
+
+    world.deps.availability = slow
+    definition = graph(repo, {"key": "a"}, policy={"heartbeat_interval_seconds": 0.05, "stale_after_seconds": 100})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.run_to_stop(run_id)
+    assert len(beats) == 2 and beats[1] > beats[0]
+    assert (await view_of(pg_db, run_id))["state"] == "completed"

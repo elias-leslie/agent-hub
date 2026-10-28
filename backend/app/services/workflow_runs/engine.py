@@ -856,17 +856,71 @@ def failed_pause(steps: Sequence[WorkflowStep], plan: Schedule) -> dict[str, Any
     }
 
 
-def stuck_pause(steps: Sequence[WorkflowStep], plan: Schedule) -> dict[str, Any]:
-    """Why a run with nothing running cannot go on: a failed step, else pending steps blocked by skipped or cancelled ones."""
+def waiting_of(pause: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Each step the owner is asked about, with why: ``{step_key: {reason, ...}}``, in the order they stopped.
 
-    return failed_pause(steps, plan) if failed_steps(steps) else blocked_pause(plan)
+    A pause saved before the list existed names one step in its own fields. Failed and blocked pauses have their own
+    lists (``failed``, ``blocked``), not this one.
+    """
+
+    if not pause:
+        return {}
+    if isinstance(pause.get("waiting"), dict):
+        return {k: dict(v) for k, v in pause["waiting"].items()}
+    if pause.get("reason") in ("step_failed", "blocked_dependencies") or not pause.get("step_key"):
+        return {}
+    return {pause["step_key"]: {k: v for k, v in pause.items() if k not in ("at", "step_key", "waiting")}}
+
+
+def waiting_pause(waiting: Mapping[str, Mapping[str, Any]]) -> dict[str, Any] | None:
+    """The run's pause for steps waiting on the owner; its own fields mirror the first one, ``waiting`` lists all."""
+
+    if not waiting:
+        return None
+    key, first = next(iter(waiting.items()))
+    return {**first, "step_key": key, "waiting": {k: dict(v) for k, v in waiting.items()}}
+
+
+def owner_pause(steps: Sequence[WorkflowStep]) -> dict[str, Any] | None:
+    """A pause rebuilt from the steps themselves that wait as ``needs_owner`` (None when none do)."""
+
+    return waiting_pause(
+        {
+            s.step_key: {"reason": (_scratch(s).get("last") or {}).get("reason") or "needs_owner"}
+            for s in sorted(steps, key=lambda s: s.position)
+            if s.status == "needs_owner"
+        }
+    )
+
+
+def without_waiting(meta: dict[str, Any], key: str, now: float) -> dict[str, Any]:
+    """The run metadata once the owner dealt with ``key``: it runs again, unless other steps still wait for the owner."""
+
+    pause = meta.get("pause") or {}
+    left = {k: v for k, v in waiting_of(pause).items() if k != key}
+    if not left:
+        return {**meta, "state": "running", "pause": None}
+    return {**meta, "state": "needs_owner", "pause": {**waiting_pause(left), "at": pause.get("at", now)}}
+
+
+def stuck_pause(steps: Sequence[WorkflowStep], plan: Schedule) -> dict[str, Any]:
+    """Why a run with nothing running cannot go on: a failed step, else a step waiting on the owner, else pending
+    steps blocked by skipped or cancelled ones."""
+
+    if failed_steps(steps):
+        return failed_pause(steps, plan)
+    return owner_pause(steps) or blocked_pause(plan)
 
 
 def _pause_for_step(
     run: Session, step: WorkflowStep, meta: dict[str, Any], reason: str, now: float, **extra: Any
 ) -> None:
+    """Stop the run for the owner on this step. A pause already open keeps the steps in it: this one joins the list."""
+
     step.status = "needs_owner"
-    _pause_run(run, meta, {"reason": reason, "step_key": step.step_key, **extra}, now)
+    waiting = waiting_of(meta.get("pause")) if meta.get("state") == "needs_owner" else {}
+    waiting[step.step_key] = {"reason": reason, **extra}
+    _pause_run(run, meta, waiting_pause(waiting) or {}, now)
 
 
 async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any], _Intent | None]:
@@ -890,6 +944,10 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
                 _pause_run(run, meta, failed_pause(steps, schedule(steps)), now)
                 await db.commit()
                 return {"next": "stop", "reason": "step_failed"}, None
+            if (stranded := owner_pause(steps)) is not None:  # a step still waits for the owner: the run is not done
+                _pause_run(run, meta, stranded, now)
+                await db.commit()
+                return {"next": "stop", "reason": stranded["reason"]}, None
             result = await _integrate_result(meta, steps)
             _complete_run(run, {**meta, **({"result": result} if result else {})}, now)
             await db.commit()
@@ -1284,12 +1342,23 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
         except Exception:
             logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
     result, info = await _run_effect(intent, deps)
+    policy = load_policy(intent.meta["policy"])
+    # The step stays running until its outcome is committed: the checkpoint, the availability pre-flight and the
+    # commit are part of the attempt, so the heartbeat goes on through them (a slow one is not a stale step).
+    async with _Heartbeat(deps, run_id, intent.step_id, intent.attempt_id, policy.heartbeat_interval_seconds):
+        return await _settle_attempt(run_id, intent, result, info, policy, deps)
+
+
+async def _settle_attempt(
+    run_id: str, intent: _Intent, result: StepResult, info: dict[str, Any], policy: RunPolicy, deps: EngineDeps
+) -> dict[str, Any]:
+    """Everything after the executor: served ids, checkpoint, availability, and the committed decision."""
+
     # Served ids are catalog ids from here on: the same model spelled differently by an executor is not a switch.
     served_ids = catalog_served(intent.model, result.served_models)
     if served_ids != list(result.served_models):
         info["served_reported"] = list(result.served_models)
         result = replace(result, served_models=served_ids)
-    policy = load_policy(intent.meta["policy"])
     workspace = _workspace_of(intent, policy, info.get("workspace"))
     handoff = normalize_handoff(result.handoff) if result.status == "completed" else None
     checkpoint: str | None = None
@@ -1762,15 +1831,26 @@ async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
         meta = _meta(run)
         policy = load_policy(meta["policy"])
         pause = meta.get("pause") or {}
-        if meta.get("state") == "needs_owner" and pause.get("reason") == "usage_limit_wait":
-            if pause.get("resume_after") and pause["resume_after"] <= now:
-                for step in await _steps(db, run_id):
-                    if step.status == "needs_owner":
-                        step.status = "pending"
-                _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
-                await db.commit()
-                return True
-            return False
+        if meta.get("state") == "needs_owner" and any(
+            w.get("reason") == "usage_limit_wait" for w in waiting_of(pause).values()
+        ):
+            # Only the steps waiting for a usage-limit reset come back by themselves, each at its own reset; a step
+            # waiting for a decision stays with the owner.
+            due = {
+                k
+                for k, w in waiting_of(pause).items()
+                if w.get("reason") == "usage_limit_wait" and w.get("resume_after") and w["resume_after"] <= now
+            }
+            if not due:
+                return False
+            for step in await _steps(db, run_id):
+                if step.step_key in due and step.status == "needs_owner":
+                    step.status = "pending"
+            for key in due:
+                meta = without_waiting(meta, key, now)
+            _set_meta(run, meta, now=now)
+            await db.commit()
+            return meta["state"] == "running"
         if meta.get("state") != "running":
             return False
         steps = await _steps(db, run_id)
@@ -1812,13 +1892,20 @@ async def resume_run(
             blocked=(meta.get("pause") or {}).get("blocked"),
         )
     steps = await _steps(db, run_id)
-    key = decision.step_key or (meta.get("pause") or {}).get("step_key")
+    pause = meta.get("pause") or {}
+    key = decision.step_key or pause.get("step_key")
     # A step the owner is asked about waits as needs_owner; when the run waits because steps failed, those are the ones.
-    waiting = ("failed", "refused") if (meta.get("pause") or {}).get("reason") == "step_failed" else ("needs_owner",)
-    step = next((s for s in steps if s.step_key == key and s.status in waiting), None)
+    waiting = ("failed", "refused") if pause.get("reason") == "step_failed" else ("needs_owner",)
+    listed = waiting_of(pause)
+    step = next(
+        (s for s in steps if s.step_key == key and s.status in waiting and (not listed or key in listed)), None
+    )
     if step is None:
+        names = ", ".join(listed) if listed else ", ".join(s.step_key for s in steps if s.status in waiting)
         raise WorkflowRunError(
-            "no_such_step", f"no step waiting for the owner{f' named {key}' if key else ''}"
+            "no_such_step",
+            f"no step waiting for the owner{f' named {key}' if key else ''}"
+            + (f"; waiting: {names}" if names else ""),
         )
     scratch = _scratch(step)
     scratch["owner_decision"] = {
@@ -1828,7 +1915,7 @@ async def resume_run(
         "extra_attempts": decision.extra_attempts,
         "at": now,
     }
-    category = (meta.get("pause") or {}).get("category")
+    category = (listed.get(step.step_key) or pause).get("category")
     if decision.action == "retry":
         # A fresh pass over the agent's chain (or the model the owner names); the worktree is kept.
         if decision.extra_attempts:
@@ -1872,10 +1959,10 @@ async def resume_run(
         )
         scratch.pop("acceptance_note", None)
         step.status, step.outcome = "pending", scratch
-        _set_meta(run, {**meta, "state": "running", "pause": None, "refusals": refusals}, now=now)
+        _set_meta(run, {**without_waiting(meta, step.step_key, now), "refusals": refusals}, now=now)
     elif decision.action == "skip":
         step.status, step.outcome = "skipped", scratch
-        _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
+        _set_meta(run, without_waiting(meta, step.step_key, now), now=now)
     else:
         refused = step.status == "refused" or (scratch.get("last") or {}).get("kind") == "refused"
         step.status, step.outcome = ("refused" if refused else "failed"), scratch
@@ -1986,8 +2073,8 @@ async def cancel_step(
         scratch["cancel"] = _cancel_record(request, "step", requested_by, request_source, now)
         if step.status != "running":
             step.status = "cancelled"
-            if state == "needs_owner" and (meta.get("pause") or {}).get("step_key") == step_key:
-                _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
+            if state == "needs_owner" and step_key in waiting_of(meta.get("pause")):
+                _set_meta(run, without_waiting(meta, step_key, now), now=now)
         step.outcome = scratch
         await db.commit()
     return {

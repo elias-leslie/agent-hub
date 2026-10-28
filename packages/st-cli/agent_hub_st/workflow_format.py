@@ -149,8 +149,14 @@ def pause_text(pause: dict[str, Any] | None) -> str | None:
     """The decision the run waits for, e.g. "chain_exhausted step=build"."""
     if not pause:
         return None
-    detail = " ".join(f"{k}={v}" for k, v in pause.items() if k not in ("at", "reason") and v not in (None, "", [], {}))
-    return f"{pause.get('reason', 'paused')}" + (f" {detail}" if detail else "")
+    detail = " ".join(
+        f"{k}={v}" for k, v in pause.items() if k not in ("at", "reason", "waiting") and v not in (None, "", [], {})
+    )
+    text = f"{pause.get('reason', 'paused')}" + (f" {detail}" if detail else "")
+    waiting = pause.get("waiting") or {}
+    if len(waiting) > 1:  # the fields above are the first; every step waiting on the owner is listed once
+        text += " | waiting: " + ", ".join(f"{k} ({(v or {}).get('reason', '?')})" for k, v in waiting.items())
+    return text
 
 
 def counts_text(view: dict[str, Any]) -> str:

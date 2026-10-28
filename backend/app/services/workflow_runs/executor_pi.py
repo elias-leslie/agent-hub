@@ -10,6 +10,7 @@ that needs one fails fast and the chain moves on.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -144,8 +145,7 @@ class PiExecutor:
         except ValueError as exc:
             return StepResult("failed", error=f"pi_unsupported: {exc}")
         if context_file is not None:
-            context_file.parent.mkdir(parents=True, exist_ok=True)
-            context_file.write_text(packet.context)
+            await asyncio.to_thread(_write_context, context_file, packet.context)
         harness = await HarnessProcess.start(
             argv, worktree, child_env(self.defaults), self.defaults["stderr_tail_chars"], stdin=True
         )
@@ -199,6 +199,11 @@ class PiExecutor:
             outcome = ProviderOutcome("substituted", state.model, served_model=switched)
         handoff = await build_handoff(state.final_text, worktree)
         return StepResult("completed", outcome=outcome, handoff=handoff, **common)
+
+
+def _write_context(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
 
 
 def _command(payload: Mapping[str, Any]) -> bytes:
