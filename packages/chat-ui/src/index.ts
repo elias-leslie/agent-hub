@@ -31,7 +31,7 @@ export { cn } from './lib/utils';
 
 export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecution } from './types/chat';
 export type { ChatStreamConfig } from './hooks/use-chat-stream';
-export type { ChatHubClient } from './client';
+export type { ChatHubClient, ChatFollowUps } from './client';
 export type { ChatVoice } from './types/voice';
 export type { PromptMode } from './hooks/chat-stream/types';
 export type { ActivityState, ToolCall, ThinkingContent, ActivityIndicatorProps } from './components/activity-indicator';

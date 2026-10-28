@@ -14,6 +14,8 @@ interface MessageListProps {
   onContinueAs?: (model: string, prompt: string) => void;
   /** Shown when there are no messages; a host that failed to load them says so here instead of "Start a conversation". */
   emptyLabel?: string;
+  /** Follow-ups the host holds until the running turn ends. Shown after the messages, marked "Queued". */
+  queued?: string[];
 }
 
 export function MessageList(props: MessageListProps) {
@@ -40,14 +42,15 @@ function MessageListInner({
   onContinueMessage,
   onContinueAs,
   emptyLabel = "Start a conversation",
+  queued = [],
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, queued.length]);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && queued.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <p>{emptyLabel}</p>
@@ -105,6 +108,20 @@ function MessageListInner({
             />
           );
         })}
+        {queued.length > 0 ? (
+          <ul aria-label="Queued messages" className="space-y-2">
+            {queued.map((text, index) => (
+              <li key={`${index}:${text}`} data-testid="queued-message" className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-2 text-sm text-foreground/80">
+                  <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Queued
+                  </span>
+                  <p className="whitespace-pre-wrap break-words">{text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div ref={bottomRef} />
       </div>
     </>

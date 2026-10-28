@@ -52,7 +52,9 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     editingMessage,
     onEditCancel,
     allowModelMentions = true,
+    allowQueue = false,
   } = props;
+  const inputLocked = isStreaming && !allowQueue;
 
   return (
     <div className={cn("border-t border-border bg-card/35", compact ? "p-2.5" : "p-4")}>
@@ -105,14 +107,16 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
             onBlur={() => setIsInputFocused(false)}
             placeholder={
               isStreaming
-                ? "Waiting for response..."
+                ? allowQueue
+                  ? "Message (queued until the turn ends)"
+                  : "Waiting for response..."
                 : isRecording
                   ? "Recording... release spacebar to send"
                   : selectedModels.length > 0
                     ? "Type your message..."
                     : "Message"
             }
-            disabled={isStreaming || disabled}
+            disabled={inputLocked || disabled}
             rows={1}
             className={cn(
               "w-full resize-none rounded-xl border border-input",
@@ -131,7 +135,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
           />
         </div>
 
-        {allowModelMentions && !isStreaming && !voice?.micAvailable && (
+        {allowModelMentions && !inputLocked && !voice?.micAvailable && (
           <ModelTriggerButton onClick={triggerMentionPopup} disabled={disabled} />
         )}
 
@@ -155,9 +159,8 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
 
         {isStreaming ? (
           <StopButton onClick={onCancel} canCancel={canCancel} isCancelling={isCancelling} />
-        ) : (
-          <SendButton onClick={handleSend} canSend={canSend} />
-        )}
+        ) : null}
+        {!isStreaming || allowQueue ? <SendButton onClick={handleSend} canSend={canSend} /> : null}
       </div>
     </div>
   );

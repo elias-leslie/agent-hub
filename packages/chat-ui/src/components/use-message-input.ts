@@ -28,6 +28,8 @@ export interface MessageInputProps {
   /** The Agent Hub client for the model list behind @mentions; falls back to a `ChatClientProvider`. */
   client?: ChatHubClient | null;
   allowModelMentions?: boolean;
+  /** The host queues a message sent during a turn: the input stays enabled while the turn streams and Send sits next to Stop. */
+  allowQueue?: boolean;
 }
 
 export function useMessageInput(props: MessageInputProps) {

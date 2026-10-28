@@ -7,6 +7,7 @@ import {
   PanelRight,
   PanelRightClose,
   Play,
+  Shuffle,
   Split,
 } from "lucide-react";
 import { ChatClientProvider, useRequiredChatClient, type ChatHubClient } from "../client";
@@ -15,6 +16,7 @@ import { describePhase } from "../hooks/chat-stream/turn-phase";
 import type { ChatMessage } from "../types/chat";
 import type { ChatVoice } from "../types/voice";
 import { MessageList } from "./message-list";
+import { routeText } from "./MessageRuntimeDetails";
 import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
 
@@ -32,6 +34,10 @@ interface ChatPanelProps {
   /** The Agent Hub client (`createClient` from `@agent-hub/sdk`); falls back to a `ChatClientProvider` above the panel. */
   client?: ChatHubClient | null;
   config?: ChatStreamConfig;
+  /** `page` is the full chat page. `compact` drops the title header and toolbar for a small window: one status row (activity, phase, model route, tokens) above the messages. */
+  layout?: "page" | "compact";
+  /** Offer @model mentions in the input. Default true. */
+  allowModelMentions?: boolean;
   /** Voice input and output from `useChatVoice` (`@agent-hub/chat-ui/voice`). Omit for a chat without voice. */
   voice?: ChatVoice;
   /** When true, speak every assistant response (not just after voice input) */
@@ -62,6 +68,8 @@ function ChatPanelBody({
   autoSendKey,
   title = "Agent Hub",
   config,
+  layout = "page",
+  allowModelMentions = true,
   voice,
   alwaysSpeak = false,
   renderBanner,
@@ -74,6 +82,7 @@ function ChatPanelBody({
     error,
     currentSessionId,
     turnPhase,
+    queued,
     sendMessage,
     cancelStream,
     clearMessages,
@@ -85,6 +94,9 @@ function ChatPanelBody({
     compactMessages,
   } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, config });
 
+  const client = useRequiredChatClient();
+  const compact = layout === "compact";
+  const allowQueue = Boolean(client.followUps);
   const [showDebug, setShowDebug] = useState(false);
   const lastNotifiedSessionId = useRef<string | null>(null);
 
@@ -163,6 +175,8 @@ function ChatPanelBody({
         ? "calling_tool"
         : (status as ActivityState);
 
+  const routeLabel = lastAssistantMessage ? routeText(lastAssistantMessage) : null;
+
   const handleContinueLatest = useCallback(() => {
     if (!lastAssistantMessage) return;
     continueMessage(lastAssistantMessage.id);
@@ -196,90 +210,115 @@ function ChatPanelBody({
   return (
     <div className="flex flex-row h-full">
       <div className="flex flex-col flex-1 h-full min-w-0">
-        {/* Header */}
-        <div className="border-b border-border bg-card/35 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
-                {title}
-              </h1>
-              <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-muted-foreground md:flex">
-                <span>{currentSessionId ? `session ${currentSessionId.slice(0, 8)}` : "new session"}</span>
-                <span>agent {agentSlug}</span>
-                {workingDir ? <span className="truncate">cwd {workingDir}</span> : null}
-                {toolsEnabled ? <span>tools on</span> : null}
-                {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}
-                {runningTool ? <span className="text-primary">running {runningTool.name}</span> : null}
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-            {/* Activity indicator */}
+        {compact ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card/35 px-3 py-1.5 text-xs text-muted-foreground">
             <ActivityIndicator state={pillState} />
             {phaseLabel ? (
-              <span data-testid="turn-phase" className="sr-only" aria-live="polite">
+              <span data-testid="turn-phase" aria-live="polite">
                 {phaseLabel}
               </span>
             ) : null}
-
-            <button
-              onClick={handleContinueLatest}
-              disabled={!lastAssistantMessage || isBusy}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              title="Continue response"
-            >
-              <CornerDownRight className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={handleFork}
-              disabled={!currentSessionId || isBusy}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              title="Fork session"
-            >
-              <Split className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={handleCompact}
-              disabled={messages.length < 8 || isBusy}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              title="Compact context"
-            >
-              <Archive className="h-4 w-4" />
-            </button>
-
-            {/* Clear button */}
-            {messages.length > 0 && !isStreaming && (
-              <button
-                onClick={() => { clearMessages(); onClear?.(); }}
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            {routeLabel ? (
+              <span data-testid="model-route" className="truncate" title="Model asked for, and model that answered">
+                {routeLabel}
+              </span>
+            ) : null}
+            {lastAssistantMessage?.fallbackUsed ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-200"
+                title={lastAssistantMessage.fallbackReason ?? "A fallback model answered"}
               >
-                Clear
-              </button>
-            )}
+                <Shuffle className="h-3 w-3" />
+                fallback
+              </span>
+            ) : null}
+            {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}
+          </div>
+        ) : (
+          <div className="border-b border-border bg-card/35 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+                  {title}
+                </h1>
+                <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-muted-foreground md:flex">
+                  <span>{currentSessionId ? `session ${currentSessionId.slice(0, 8)}` : "new session"}</span>
+                  <span>agent {agentSlug}</span>
+                  {workingDir ? <span className="truncate">cwd {workingDir}</span> : null}
+                  {toolsEnabled ? <span>tools on</span> : null}
+                  {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}
+                  {runningTool ? <span className="text-primary">running {runningTool.name}</span> : null}
+                </div>
+              </div>
 
-            {/* Debug Toggle */}
-            {renderDebugPanel && (
+              <div className="flex shrink-0 items-center gap-2">
+              {/* Activity indicator */}
+              <ActivityIndicator state={pillState} />
+              {phaseLabel ? (
+                <span data-testid="turn-phase" className="sr-only" aria-live="polite">
+                  {phaseLabel}
+                </span>
+              ) : null}
+
               <button
-                onClick={() => setShowDebug(!showDebug)}
-                className="p-1.5 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                title="Toggle Debug Panel"
+                onClick={handleContinueLatest}
+                disabled={!lastAssistantMessage || isBusy}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                title="Continue response"
               >
-                {showDebug ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
+                <CornerDownRight className="h-4 w-4" />
               </button>
-            )}
-            <button
-              onClick={handleResume}
-              disabled={!(sessionId ?? currentSessionId) || isBusy}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              title="Resume session"
-            >
-                <Play className="h-4 w-4" />
-            </button>
+
+              <button
+                onClick={handleFork}
+                disabled={!currentSessionId || isBusy}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                title="Fork session"
+              >
+                <Split className="h-4 w-4" />
+              </button>
+
+              <button
+                onClick={handleCompact}
+                disabled={messages.length < 8 || isBusy}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                title="Compact context"
+              >
+                <Archive className="h-4 w-4" />
+              </button>
+
+              {/* Clear button */}
+              {messages.length > 0 && !isStreaming && (
+                <button
+                  onClick={() => { clearMessages(); onClear?.(); }}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Clear
+                </button>
+              )}
+
+              {/* Debug Toggle */}
+              {renderDebugPanel && (
+                <button
+                  onClick={() => setShowDebug(!showDebug)}
+                  className="p-1.5 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  title="Toggle Debug Panel"
+                >
+                  {showDebug ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
+                </button>
+              )}
+              <button
+                onClick={handleResume}
+                disabled={!(sessionId ?? currentSessionId) || isBusy}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                title="Resume session"
+              >
+                  <Play className="h-4 w-4" />
+              </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Optional banner slot */}
         {renderBanner?.()}
@@ -300,6 +339,7 @@ function ChatPanelBody({
           onContinueMessage={continueMessage}
           onContinueAs={(model, prompt) => sendMessage(prompt, [model])}
           emptyLabel={error ? "No messages loaded" : undefined}
+          queued={queued}
         />
 
         {/* Input */}
@@ -311,6 +351,9 @@ function ChatPanelBody({
           voice={voice}
           onVoiceSend={handleVoiceSend}
           initialPrompt={initialPrompt}
+          compact={compact}
+          allowModelMentions={allowModelMentions}
+          allowQueue={allowQueue}
         />
       </div>
 

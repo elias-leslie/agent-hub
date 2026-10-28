@@ -26,6 +26,9 @@ export interface ChatStreamConfig {
   model?: string | null;
 }
 
+/** How often a chat with queued follow-ups asks the host whether the next one has gone out. */
+const QUEUE_POLL_MS = 1_000;
+
 /** How long a new message waits for the turn it interrupts to wind down before it is sent anyway. */
 const INTERRUPT_WAIT_MS = 20_000;
 
@@ -49,6 +52,8 @@ interface UseChatStreamReturn {
   currentSessionId: string | null;
   /** Where the running turn is (`waiting_for_model`, `thinking`, `responding`, `running_tool:name`, `retrying`), else null. */
   turnPhase: string | null;
+  /** Follow-ups the host holds until the running turn ends, oldest first. Only a client with `followUps` has any. */
+  queued: string[];
   sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
@@ -83,6 +88,18 @@ export function useChatStream(
   const clientRef = useRef(client);
   clientRef.current = client;
 
+  // Ask the host what is waiting. A failed ask keeps what was shown: unknown is not an empty queue.
+  const refreshQueued = useCallback(async (targetSessionId: string) => {
+    const followUps = clientRef.current.followUps;
+    if (!followUps) return;
+    try {
+      const pending = await followUps.pending(targetSessionId);
+      setQueued((previous) => (previous.length === pending.length && previous.every((text, i) => text === pending[i]) ? previous : pending));
+    } catch {
+      // Retried on the next poll or send.
+    }
+  }, []);
+
   const {
     projectId = "agent-hub",
     memoryGroupPrefix = "agent:",
@@ -105,6 +122,10 @@ export function useChatStream(
   const [loadedSessionProjectId, setLoadedSessionProjectId] = useState<string | null>(null);
   const [sessionLoadEpoch, setSessionLoadEpoch] = useState(0);
   const [turnPhase, setTurnPhase] = useState<string | null>(null);
+  const [queued, setQueued] = useState<string[]>([]);
+  const queuedRef = useRef<string[]>([]);
+  queuedRef.current = queued;
+  const hasFollowUps = Boolean(client.followUps);
 
   const abortControllersRef = useRef<AbortController[]>([]);
   // The run that owns the controllers above: a send, or a rejoined turn.
@@ -139,6 +160,7 @@ export function useChatStream(
       setError(null);
       setStatus("streaming");
       setTurnPhase(loaded.turnPhase ?? "waiting_for_model");
+      void refreshQueued(targetSessionId);
 
       const run = (async () => {
         try {
@@ -175,13 +197,39 @@ export function useChatStream(
       activeRunRef.current = run;
       await run;
     },
-    [agentSlug],
+    [agentSlug, refreshQueued],
+  );
+
+  const resumeSession = useCallback(
+    async (targetSessionId: string) => {
+      try {
+        setStatus("connecting");
+        abortControllersRef.current.forEach((controller) => controller.abort());
+        const loadedSession = await loadSession(clientRef.current, targetSessionId);
+        if (loadedSession.turnState === "running") {
+          void followRunningTurn(targetSessionId, loadedSession, new AbortController(), () => false);
+          return true;
+        }
+        setCurrentSessionId(targetSessionId);
+        setLoadedSessionProjectId(loadedSession.projectId);
+        setMessages(loadedSession.messages);
+        setError(null);
+        setStatus("idle");
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to resume session");
+        setStatus("error");
+        return false;
+      }
+    },
+    [followRunningTurn],
   );
 
   // Load existing messages when sessionId is provided externally
   useEffect(() => {
     if (!sessionId) {
       setMessages([]);
+      setQueued([]);
       setCurrentSessionId(null);
       setLoadedSessionProjectId(null);
       return;
@@ -264,6 +312,22 @@ export function useChatStream(
       sessionIdOverride?: string,
       historyOverride?: ChatMessage[],
     ) => {
+      // A host that queues follow-ups takes the message while a turn runs (or while earlier ones wait): it never
+      // interrupts the turn, and the chat follows whichever turn the host starts next.
+      const followUps = clientRef.current.followUps;
+      const turnRunning = status === "streaming" || status === "reconnecting" || status === "cancelling";
+      const followUpSession = currentSessionId ?? sessionId;
+      if (followUps && followUpSession && (turnRunning || queuedRef.current.length > 0) && historyOverride === undefined) {
+        try {
+          const outcome = await followUps.send(followUpSession, content);
+          if (outcome.queued) await refreshQueued(followUpSession);
+          else void resumeSession(followUpSession);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to send the message");
+        }
+        return;
+      }
+
       // If a turn is active, interrupt it first (steering / user interruption). The server runs one turn per
       // session, so the running one is cancelled and given a moment to end before the new one is sent.
       if (status !== "idle" && status !== "error") {
@@ -362,7 +426,7 @@ export function useChatStream(
       activeRunRef.current = run;
       await run;
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, model, setCurrentSessionIdWithTracking, loadInitialSession],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, model, setCurrentSessionIdWithTracking, loadInitialSession, refreshQueued, resumeSession],
   );
 
   const cancelStream = useCallback(() => {
@@ -409,35 +473,55 @@ export function useChatStream(
     setCurrentSessionId(null);
     setLoadedSessionProjectId(null);
     setMessages([]);
+    setQueued([]);
     setError(null);
     setStatus("idle");
     setTurnPhase(null);
   }, []);
 
-  const resumeSession = useCallback(
-    async (targetSessionId: string) => {
+  // Idle with follow-ups waiting: the host sends the next one on its own. Watch for that and join the new turn.
+  const activeSessionId = currentSessionId ?? sessionId ?? null;
+  useEffect(() => {
+    if (!hasFollowUps || !activeSessionId || status !== "idle") return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      const followUps = clientRef.current.followUps;
+      if (!followUps) return;
+      let pending: string[] | null = null;
       try {
-        setStatus("connecting");
-        abortControllersRef.current.forEach((controller) => controller.abort());
-        const loadedSession = await loadSession(clientRef.current, targetSessionId);
-        if (loadedSession.turnState === "running") {
-          void followRunningTurn(targetSessionId, loadedSession, new AbortController(), () => false);
-          return true;
-        }
-        setCurrentSessionId(targetSessionId);
-        setLoadedSessionProjectId(loadedSession.projectId);
-        setMessages(loadedSession.messages);
-        setError(null);
-        setStatus("idle");
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to resume session");
-        setStatus("error");
-        return false;
+        pending = await followUps.pending(activeSessionId);
+      } catch {
+        // Unknown, not empty: keep what is shown and ask again.
       }
-    },
-    [followRunningTurn],
-  );
+      if (stopped) return;
+      if (pending) {
+        const before = queuedRef.current.length;
+        setQueued((previous) => (previous.length === pending.length && previous.every((text, i) => text === pending[i]) ? previous : pending));
+        if (pending.length < before) {
+          void resumeSession(activeSessionId);
+          return;
+        }
+        if (pending.length === 0) return;
+        try {
+          const info = await clientRef.current.sessions.get(activeSessionId, { includeMessages: false });
+          if (stopped) return;
+          if (info.turn_state === "running") {
+            void resumeSession(activeSessionId);
+            return;
+          }
+        } catch {
+          // Asked again on the next poll.
+        }
+      }
+      if (!stopped) timer = setTimeout(() => void poll(), QUEUE_POLL_MS);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [hasFollowUps, activeSessionId, status, resumeSession]);
 
   const forkSession = useCallback(
     async (forkAtTurn?: number | null) => {
@@ -551,6 +635,7 @@ export function useChatStream(
     error,
     currentSessionId,
     turnPhase,
+    queued,
     sendMessage,
     cancelStream,
     clearMessages,

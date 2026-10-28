@@ -41,7 +41,7 @@ function contextTone(tone: NonNullable<ChatMessage["contextHints"]>[number]["ton
 }
 
 /** "requested X, answered by Y": the model asked for and the one that served the answer. */
-function routeText(message: ChatMessage): string | null {
+export function routeText(message: ChatMessage): string | null {
   const { requestedModel: asked, servedModel: served } = message;
   if (asked && served && asked !== served) return `requested ${asked}, answered by ${served}`;
   if (served || asked) return served ? `answered by ${served}` : `requested ${asked}`;
