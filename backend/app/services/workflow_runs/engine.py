@@ -1292,7 +1292,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
         if verdict == "retry":
             step.restarts += 1  # restarts counts the ones actually used
         stopped = [o for o in orphans if o["recovery"] in ("terminated", "killed")]
-        note = f"; stopped the old process group {', '.join(str(o['pgid']) for o in stopped)}" if stopped else ""
+        note = f"; stopped the old process group {', '.join(sorted({str(o['pgid']) for o in stopped}))}" if stopped else ""
         if verdict == "cancelled":
             reason = "cancelled (the worker stopped before it saw the request)"
         elif verdict == "retry":
