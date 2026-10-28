@@ -103,6 +103,8 @@ class Registry:
                 if not self.path.startswith(prefix) or self.path[len(prefix):] not in registry.blobs:
                     self.send_error(404)
                     return
+                # Rebuilt from the registry's own digest, never from request text.
+                blob_digest = next(known for known in registry.blobs if known == self.path[len(prefix):])
                 headers = {}
                 if value := self.headers.get("Range"):
                     if not RANGE.fullmatch(value):
@@ -117,7 +119,7 @@ class Registry:
                             return
                         self.send_response(response.status_code)
                         # Ollama 0.30.5 asks Response.Location even for a 200 blob response.
-                        self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}{self.path}")
+                        self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}{prefix}{blob_digest}")
                         for name in ("Content-Length", "Content-Range", "Content-Type", "Accept-Ranges"):
                             if value := response.headers.get(name):
                                 self.send_header(name, value)

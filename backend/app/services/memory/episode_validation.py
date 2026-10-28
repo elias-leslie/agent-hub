@@ -36,15 +36,15 @@ class EpisodeValidator:
         r"(?im)^\[session summary:"
     )
     # Line shapes of pasted tool output (tracebacks, shell sessions, test runners,
-    # st status tags). Matched per line from the line start, so each stays linear.
+    # st status tags). Anchored at the line start, so each match attempt stays linear.
     TOOL_OUTPUT_LINE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"Traceback \(most recent call last\):"
+        r"^(?:Traceback \(most recent call last\):"
         r'|\s*File "[^"\n]*", line \d+'
         r"|(?:\$|>>>|\u276f) \S"
         r"|(?:FAILED|PASSED|ERROR) \S+::"
         r"|E {2,}\S"
         r"|=+ [^=\n]*\b(?:passed|failed|errors?)\b"
-        r"|[A-Z][A-Z_]+(?:\[\d+\])?:(?:OK|FAIL|PASS|SKIP|ERROR|BLOCKED)\b"
+        r"|[A-Z][A-Z_]+(?:\[\d+\])?:(?:OK|FAIL|PASS|SKIP|ERROR|BLOCKED)\b)"
     )
     TOOL_OUTPUT_MIN_LINES: ClassVar[int] = 3
     # A compact high-tier memory that suddenly balloons is almost always a dump.

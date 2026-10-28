@@ -86,6 +86,41 @@ def test_tool_output_detection_is_linear_on_long_lines() -> None:
 
 
 @pytest.mark.parametrize(
+    "line",
+    [
+        "  File " + '"' + "a" * 200_000,
+        " " * 200_000 + "x",
+        "= " * 100_000,
+        "=" * 100_000 + " " + "word " * 40_000,
+        "A" * 200_000 + ":NOPE",
+        "E" + " " * 200_000,
+    ],
+)
+def test_tool_output_line_pattern_is_fast_on_adversarial_lines(line: str) -> None:
+    started = time.perf_counter()
+    assert EpisodeValidator.TOOL_OUTPUT_LINE_PATTERN.match(line) is None
+    assert EpisodeValidator.TOOL_OUTPUT_LINE_PATTERN.search("x" + line) is None
+    assert time.perf_counter() - started < 1.0
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Traceback (most recent call last):",
+        '  File "/srv/app/main.py", line 42, in run',
+        "$ st check --quick",
+        ">>> import os",
+        "FAILED tests/test_a.py::test_b - assert 1 == 2",
+        "E   assert 1 == 2",
+        "===== 1 failed, 20 passed in 1.2s =====",
+        "CODEQL:FAIL:1",
+    ],
+)
+def test_tool_output_line_pattern_still_matches_real_lines(line: str) -> None:
+    assert EpisodeValidator.TOOL_OUTPUT_LINE_PATTERN.match(line)
+
+
+@pytest.mark.parametrize(
     ("added", "pattern"),
     [
         ("## Heartbeat: 03:00 all quiet", "heartbeat journal"),

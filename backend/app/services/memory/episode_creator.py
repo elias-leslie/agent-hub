@@ -56,7 +56,7 @@ async def _check_duplicate(
         return None
     duplicate = await find_exact_duplicate(content, config.dedup_window_minutes)
     if duplicate:
-        logger.debug("Skipping duplicate content: %s", content[:50])
+        logger.debug("Skipping duplicate content (%d chars) of %s", len(content), duplicate)
         return CreateResult(success=True, uuid=duplicate, deduplicated=True)
     return None
 
