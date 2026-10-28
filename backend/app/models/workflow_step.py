@@ -64,7 +64,7 @@ class WorkflowStep(Base):
         UniqueConstraint("run_session_id", "step_key", name="uq_workflow_steps_run_key"),
         UniqueConstraint("run_session_id", "position", name="uq_workflow_steps_run_position"),
         CheckConstraint(
-            "status IN ('pending','running','completed','failed','refused','needs_owner','skipped')",
+            "status IN ('pending','running','completed','failed','refused','needs_owner','skipped','cancelled')",
             name="ck_workflow_steps_status",
         ),
         Index("ix_workflow_steps_status_heartbeat", "status", "heartbeat_at"),

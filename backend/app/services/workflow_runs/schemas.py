@@ -119,3 +119,11 @@ class OwnerDecision(BaseModel):
     step_key: str | None = None
     model: str | None = None
     note: str | None = Field(None, max_length=2000)
+
+
+class CancelRequest(BaseModel):
+    """Stop a run or one step. The reason is kept with who asked and when."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(None, max_length=2000)

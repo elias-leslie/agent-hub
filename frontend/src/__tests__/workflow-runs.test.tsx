@@ -32,13 +32,24 @@ vi.mock('@/lib/api/workflow-runs', async (original) => ({
   fetchWorkflowRuns: vi.fn(),
   fetchWorkflowRun: vi.fn(),
   resumeWorkflowRun: vi.fn(),
+  cancelWorkflowRun: vi.fn(),
+  cancelWorkflowStep: vi.fn(),
 }))
 
 import {
+  cancelWorkflowRun,
+  cancelWorkflowStep,
   fetchWorkflowRun,
   fetchWorkflowRuns,
   resumeWorkflowRun,
 } from '@/lib/api/workflow-runs'
+
+const CANCEL = {
+  scope: 'run' as const,
+  reason: 'wrong branch',
+  requested_by: 'owner',
+  requested_at: 1_793_181_000,
+}
 
 function mount(ui: React.ReactElement) {
   const Wrapper = createQueryClientWrapper()
@@ -49,6 +60,8 @@ beforeEach(() => {
   vi.mocked(fetchWorkflowRuns).mockReset()
   vi.mocked(fetchWorkflowRun).mockReset()
   vi.mocked(resumeWorkflowRun).mockReset()
+  vi.mocked(cancelWorkflowRun).mockReset()
+  vi.mocked(cancelWorkflowStep).mockReset()
 })
 
 afterEach(() => {
@@ -459,6 +472,168 @@ describe('workflow run detail', () => {
 
     await act(() => vi.advanceTimersByTimeAsync(30_000))
     expect(fetchWorkflowRun).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels the run after a second click, with a reason', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({ state: 'running', steps: [step({ status: 'running' })] }),
+    )
+    vi.mocked(cancelWorkflowRun).mockResolvedValue({
+      run_id: 'r1',
+      state: 'running',
+      cancel: CANCEL,
+      cancelling: true,
+    })
+    mount(<WorkflowRunPage />)
+    const box = await screen.findByTestId('cancel-run')
+    fireEvent.click(within(box).getByRole('button', { name: 'Cancel run' }))
+    expect(cancelWorkflowRun).not.toHaveBeenCalled()
+    fireEvent.change(within(box).getByLabelText('Reason (optional)'), {
+      target: { value: 'wrong branch' },
+    })
+    fireEvent.click(
+      within(box).getByRole('button', { name: 'Confirm: cancel run' }),
+    )
+    await waitFor(() =>
+      expect(cancelWorkflowRun).toHaveBeenCalledWith(
+        'r1111111-0000-0000-0000-000000000000',
+        'wrong branch',
+      ),
+    )
+  })
+
+  it('backs out of a cancel without sending anything', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({ state: 'running', steps: [step({ status: 'running' })] }),
+    )
+    mount(<WorkflowRunPage />)
+    const box = await screen.findByTestId('cancel-run')
+    fireEvent.click(within(box).getByRole('button', { name: 'Cancel run' }))
+    fireEvent.click(within(box).getByRole('button', { name: 'Keep run going' }))
+    expect(
+      within(box).getByRole('button', { name: 'Cancel run' }),
+    ).toBeInTheDocument()
+    expect(cancelWorkflowRun).not.toHaveBeenCalled()
+  })
+
+  it('cancels one step and reports a refused request', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        steps: [
+          step({ key: 'build', status: 'running' }),
+          step({
+            key: 'test',
+            position: 1,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+          }),
+        ],
+      }),
+    )
+    vi.mocked(cancelWorkflowStep).mockRejectedValue(
+      new Error('Cancel failed (409): step is already completed'),
+    )
+    mount(<WorkflowRunPage />)
+    const card = (await screen.findAllByTestId('step'))[0]
+    const box = within(card).getByTestId('cancel-step')
+    fireEvent.click(within(box).getByRole('button', { name: 'Cancel step' }))
+    fireEvent.click(
+      within(box).getByRole('button', { name: 'Confirm: cancel step' }),
+    )
+    await waitFor(() =>
+      expect(cancelWorkflowStep).toHaveBeenCalledWith(
+        'r1111111-0000-0000-0000-000000000000',
+        'build',
+        undefined,
+      ),
+    )
+    expect(await within(box).findByRole('alert')).toHaveTextContent(
+      'step is already completed',
+    )
+    // The waiting step has its own button.
+    expect(screen.getAllByTestId('cancel-step')).toHaveLength(2)
+  })
+
+  it('shows a cancel in progress without offering another', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        cancel: CANCEL,
+        cancelling: true,
+        steps: [step({ status: 'running', cancelling: true })],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findAllByText('Cancelling')).toHaveLength(2)
+    expect(screen.getByText(/Cancel requested for this run/)).toHaveTextContent(
+      'wrong branch',
+    )
+    expect(screen.queryByRole('button', { name: /^Cancel / })).toBeNull()
+  })
+
+  it('shows a cancelled run with who stopped it and stops polling', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'cancelled',
+        cancel: CANCEL,
+        steps: [
+          step({
+            status: 'cancelled',
+            cancel: CANCEL,
+            attempt_history: [
+              attempt({
+                status: 'failed',
+                outcome: { kind: 'cancelled', requested_model: OPUS_55 },
+                served_models: [OPUS_55],
+              }),
+            ],
+          }),
+          step({
+            key: 'test',
+            position: 1,
+            status: 'skipped',
+            attempts: 0,
+            attempt_history: [],
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(
+      await screen.findByText(/This run was cancelled by owner/),
+    ).toHaveTextContent('wrong branch')
+    // run, step and attempt each say it
+    expect(screen.getAllByText('Cancelled').length).toBeGreaterThanOrEqual(3)
+    expect(screen.getByText(/Stopped on request/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Cancel / })).toBeNull()
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(fetchWorkflowRun).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the answering model from served_models when served_model is absent', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        steps: [
+          step({
+            attempt_history: [
+              attempt({
+                served_model: null,
+                served_models: [CODEX],
+                requested_model: CODEX,
+                effective_model: CODEX,
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const card = await screen.findByTestId('attempt')
+    expect(card).toHaveTextContent(CODEX)
+    expect(card).not.toHaveTextContent('unknown model')
   })
 
   it('says when the run does not exist', async () => {

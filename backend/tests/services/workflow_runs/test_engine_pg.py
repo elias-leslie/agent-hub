@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -30,19 +32,25 @@ from app.services.workflow_runs.engine import (
     EngineDeps,
     WorkflowRunError,
     advance_run,
+    cancel_run,
+    cancel_step,
     create_run,
     get_run_view,
     recover_stale_steps,
     resume_run,
 )
-from app.services.workflow_runs.executors import FauxAction, FauxExecutor
+from app.services.workflow_runs.executor_common import HarnessProcess, child_env, load_defaults
+from app.services.workflow_runs.executors import FauxAction, FauxExecutor, StepResult
 from app.services.workflow_runs.policy import Unavailable
+from app.services.workflow_runs.processes import MARKER_ENV, identify, read_stat
 from app.services.workflow_runs.schemas import (
     AcceptanceCommand,
+    CancelRequest,
     OwnerDecision,
     RunDefinition,
     StepTestHooks,
 )
+from app.services.workflow_runs.workspace import RunWorkspace
 
 pytestmark = pytest.mark.integration
 
@@ -112,10 +120,13 @@ class World:
         self.tripped: list[tuple[str, float, str]] = []
         self.clock = NOW
         self.faux = faux
+        # One connection serves the engine's heartbeat and the test's own calls: they take turns.
+        self.lock = asyncio.Lock()
 
         @asynccontextmanager
         async def factory() -> AsyncGenerator[AsyncSession]:
-            yield pg_db
+            async with self.lock:
+                yield pg_db
 
         async def resolve(_db: AsyncSession, definition: dict[str, Any]) -> list[str]:
             return list(self.chains[definition["agent_slug"]])
@@ -990,3 +1001,322 @@ async def test_workflow_window_readings_beat_an_older_statusline_and_say_where_t
     page = {p["provider"]: p for p in await _utilization(pg_db, t0 + timedelta(hours=1))}
     five = next(w for w in page["claude"]["windows"] if w["window_minutes"] == 300)
     assert (five["used_percent"], five["source"]) == (33.0, "claude_statusline")
+
+
+# --- cancel, orphans and the served model -----------------------------------------------------------------
+
+# A harness stand-in: a leader and a grandchild in one process group, both sleeping, the pids reported on stdout.
+TREE = (
+    "import json, subprocess, sys, time\n"
+    "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])\n"
+    "print(json.dumps({'child': child.pid}), flush=True)\n"
+    "time.sleep(300)\n"
+)
+FAST = {"heartbeat_interval_seconds": 0.2, "process_stop_grace_seconds": 3}
+
+
+def running(pid: int) -> bool:
+    stat = read_stat(pid)
+    return stat is not None and stat.state != "Z"
+
+
+async def gone(*pids: int, within: float = 10.0) -> bool:
+    deadline = asyncio.get_running_loop().time() + within
+    while any(running(pid) for pid in pids):
+        if asyncio.get_running_loop().time() > deadline:
+            return False
+        await asyncio.sleep(0.05)
+    return True
+
+
+class TreeExecutor:
+    """Runs a real process tree through the executors' own HarnessProcess for the steps named, the faux for the rest."""
+
+    def __init__(self, faux: FauxExecutor, steps: set[str]) -> None:
+        self.faux, self.steps = faux, steps
+        self.leader: int | None = None
+        self.child: int | None = None
+        self.started = asyncio.Event()
+
+    async def run(self, packet, model, worktree, run_dir, on_event) -> StepResult:
+        if packet.step_key not in self.steps:
+            return await self.faux.run(packet, model, worktree, run_dir, on_event)
+        defaults = load_defaults()
+        harness = await HarnessProcess.start(
+            [sys.executable, "-c", TREE], worktree, child_env(defaults), 1000, stdin=False
+        )
+        self.leader = harness.process.pid
+        try:
+            async for record in harness.records():
+                self.child = record["child"]
+                self.started.set()
+        finally:
+            await harness.stop(defaults["terminate_grace_seconds"])
+        return StepResult("failed", error="the harness ended")
+
+
+def with_tree(world: World, *steps: str) -> TreeExecutor:
+    tree = TreeExecutor(world.faux, set(steps))
+    world.deps.get_executor = lambda _kind: tree
+    return tree
+
+
+async def test_cancelling_a_running_step_stops_its_process_tree_and_the_run_goes_on(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    tree = with_tree(world, "plan")
+    run_id, _ = await create_run(
+        pg_db, example("plan-implement-review-fix", repo, policy=FAST), deps=world.deps
+    )
+    advancing = asyncio.create_task(world.run_to_stop(run_id))
+    await asyncio.wait_for(tree.started.wait(), 20)
+    assert running(tree.leader) and running(tree.child)
+
+    async with world.lock:
+        asked = await cancel_step(
+            pg_db, run_id, "plan", CancelRequest(reason="wrong approach"), requested_by="summitflow", deps=world.deps
+        )
+        again = await cancel_step(pg_db, run_id, "plan", CancelRequest(), requested_by="other", deps=world.deps)
+    assert asked["cancelling"] and again["cancel"] == asked["cancel"]  # the second ask changes nothing
+    assert (asked["cancel"]["scope"], asked["cancel"]["requested_by"], asked["cancel"]["reason"]) == (
+        "step",
+        "summitflow",
+        "wrong approach",
+    )
+
+    assert (await asyncio.wait_for(advancing, 30))["reason"] == "completed"
+    assert await gone(tree.leader, tree.child, within=5)  # within the grace period (3s), not the 300s of the sleeps
+    view = await view_of(pg_db, run_id)
+    plan, *rest = view["steps"]
+    (attempt,) = plan["attempt_history"]
+    assert plan["status"] == "cancelled" and plan["cancel"]["reason"] == "wrong approach"
+    assert attempt["outcome"] == {"kind": "cancelled", "requested_model": OPUS, "explanation": "wrong approach"}
+    assert attempt["decision"] == {"action": "cancelled", "reason": "cancelled"} and attempt["status"] == "failed"
+    assert plan["attempts"] == 1 and [c["model"] for c in world.faux.calls if c["step"] == "plan"] == []
+    # No next model for the cancelled step, and the other steps ran.
+    assert [s["status"] for s in rest] == ["completed"] * len(rest) and view["state"] == "completed"
+    assert [p["kind"] for p in attempt["processes"]] == ["harness"] and attempt["processes"][0]["pid"] == tree.leader
+
+
+async def test_cancelling_the_run_stops_the_step_and_skips_what_has_not_started(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    tree = with_tree(world, "plan")
+    run_id, _ = await create_run(
+        pg_db, example("plan-implement-review-fix", repo, policy=FAST), deps=world.deps
+    )
+    advancing = asyncio.create_task(world.run_to_stop(run_id))
+    await asyncio.wait_for(tree.started.wait(), 20)
+    async with world.lock:
+        asked = await cancel_run(pg_db, run_id, CancelRequest(reason="not needed"), requested_by="owner", deps=world.deps)
+        again = await cancel_run(pg_db, run_id, CancelRequest(), deps=world.deps)
+    assert asked["state"] == "running" and asked["cancelling"] and again["cancel"] == asked["cancel"]
+
+    result = await asyncio.wait_for(advancing, 30)
+    assert (result["run_state"], result["reason"]) == ("cancelled", "cancelled")
+    assert await gone(tree.leader, tree.child, within=5)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "cancelled" and view["cancel"]["reason"] == "not needed" and not view["cancelling"]
+    assert [s["status"] for s in view["steps"]] == ["cancelled", "skipped", "skipped", "skipped"]
+    assert view["steps"][1]["outcome"] is None and view["steps"][0]["attempt_history"][0]["outcome"]["kind"] == "cancelled"
+    skipped = (await pg_db.execute(select(WorkflowStep).where(WorkflowStep.step_key == view["steps"][1]["key"]))).scalar_one()
+    assert skipped.outcome["skipped"] == "run_cancelled"
+    assert world.faux.calls == []
+    run = (await pg_db.execute(select(Session).where(Session.id == run_id))).scalar_one()
+    assert (run.status, run.health_detail) == ("failed", "cancelled")
+    # Nothing is left to advance or cancel.
+    assert (await advance_run(run_id, deps=world.deps))["reason"] == "run_cancelled"
+    with pytest.raises(WorkflowRunError) as finished:
+        await cancel_run(pg_db, run_id, CancelRequest(), deps=world.deps)
+    assert finished.value.code == "already_finished" and finished.value.extra == {"state": "cancelled"}
+
+
+async def test_cancelling_a_run_with_nothing_running_ends_it_at_once(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    result = await cancel_run(pg_db, run_id, CancelRequest(reason="changed my mind"), deps=world.deps)
+    assert (result["state"], result["cancelling"]) == ("cancelled", False)
+    view = await view_of(pg_db, run_id)
+    assert {s["status"] for s in view["steps"]} == {"skipped"} and view["cancel"]["requested_at"] == NOW
+
+
+async def test_cancelling_a_waiting_step_skips_it_for_good_and_the_run_continues(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "chain_exhausted"
+    result = await cancel_step(pg_db, run_id, "plan", CancelRequest(), deps=world.deps)
+    assert (result["state"], result["status"], result["cancelling"]) == ("running", "cancelled", False)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert (await view_of(pg_db, run_id))["steps"][0]["status"] == "cancelled"
+
+
+async def test_recovery_stops_a_recorded_live_group_and_spares_a_reused_pid(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db,
+        example("plan-implement-review-fix", repo, policy={"stale_after_seconds": 100, "process_stop_grace_seconds": 3}),
+        deps=world.deps,
+    )
+    _early, intent = await engine_module._commit_intent(run_id, world.deps)
+    assert intent is not None
+    # The orphaned harness: its worker is gone, but the group (with its marker) runs on and is recorded.
+    orphan = subprocess.Popen(
+        [sys.executable, "-c", TREE],
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        text=True,
+        env={**os.environ, MARKER_ENV: intent.attempt_id},
+    )
+    assert orphan.stdout is not None
+    child = json.loads(orphan.stdout.readline())["child"]
+    # Another process whose pid the record names with a different start time: the pid was reused.
+    bystander = subprocess.Popen(["sleep", "300"], start_new_session=True)
+    try:
+        for who, shift in ((orphan.pid, 0), (bystander.pid, 1)):
+            identity = identify(who)
+            assert identity is not None
+            await engine_module._record_process(
+                world.deps,
+                intent.attempt_id,
+                {"kind": "harness", **{**identity.as_dict(), "start_time": identity.start_time + shift}},
+            )
+        await RunWorkspace.from_meta(intent.meta).ensure()
+        junk = Path((await view_of(pg_db, run_id))["worktree"]) / "half-written.txt"
+        junk.write_text("partial")
+
+        world.clock += 500
+        assert await recover_stale_steps(world.deps) == [run_id]
+        assert orphan.wait(timeout=10) != 0 and await gone(child, within=5)  # stopped before anything was reset
+        assert running(bystander.pid)  # never signalled
+        view = await view_of(pg_db, run_id)
+        (attempt,) = view["steps"][0]["attempt_history"]
+        assert [p["recovery"] for p in attempt["processes"]] == ["terminated", "pid_reused"]
+        assert "stopped the old process group" in attempt["error"] and view["steps"][0]["status"] == "pending"
+        await advance_run(run_id, deps=world.deps)
+        assert not junk.exists()  # the reset ran after the old group was stopped
+    finally:
+        bystander.kill()
+        bystander.wait()
+        if orphan.poll() is None:
+            orphan.kill()
+
+
+async def test_a_stale_step_that_was_cancelled_ends_cancelled_instead_of_restarting(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db, example("plan-implement-review-fix", repo, policy={"stale_after_seconds": 100}), deps=world.deps
+    )
+    await engine_module._commit_intent(run_id, world.deps)  # the worker dies mid-step
+    await cancel_run(pg_db, run_id, CancelRequest(reason="stop"), deps=world.deps)
+    world.clock += 500
+    assert await recover_stale_steps(world.deps) == []
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "cancelled" and view["steps"][0]["status"] == "cancelled"
+    assert view["steps"][0]["restarts"] == 0
+    assert view["steps"][0]["attempt_history"][0]["outcome"]["kind"] == "cancelled"
+
+
+async def test_cancel_endpoints_record_who_asked_and_answer_409_for_finished_targets(
+    pg_db, repo, world_factory, monkeypatch
+) -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api import workflow_runs as api
+    from app.db import get_db
+
+    queued: list[str] = []
+
+    async def enqueue(run_id: str) -> None:
+        queued.append(run_id)
+
+    monkeypatch.setattr(api, "_enqueue", enqueue)
+    monkeypatch.setattr(engine_module, "EngineDeps", lambda: world.deps)
+    world = world_factory({})
+    chains(world)
+    second, _ = await create_run(pg_db, example("plan-implement-review-fix", repo, request_id="second"), deps=world.deps)
+    assert (await world.run_to_stop(second))["reason"] == "completed"
+    app = FastAPI()
+    app.include_router(api.router)
+
+    async def override() -> AsyncGenerator[AsyncSession]:
+        yield pg_db
+
+    app.dependency_overrides[get_db] = override
+    headers = {"X-Client-Id": "summitflow", "X-Request-Source": "proof"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # A finished run and a finished step answer 409 with where things stand.
+        done = await client.post(f"/workflow-runs/{second}/cancel", headers=headers)
+        assert done.status_code == 409 and done.json()["detail"] == {
+            "code": "already_finished",
+            "message": "run is already completed",
+            "state": "completed",
+        }
+        step = await client.post(f"/workflow-runs/{second}/steps/plan/cancel")
+        assert step.status_code == 409 and step.json()["detail"]["state"] == "completed"
+        assert (await client.post("/workflow-runs/missing/cancel")).status_code == 404
+
+        fresh, _ = await create_run(pg_db, example("plan-implement-review-fix", repo, request_id="third"), deps=world.deps)
+        missing = await client.post(f"/workflow-runs/{fresh}/steps/nope/cancel")
+        assert missing.status_code == 404 and missing.json()["detail"]["code"] == "step_not_found"
+        cancelled = await client.post(f"/workflow-runs/{fresh}/cancel", json={"reason": "enough"}, headers=headers)
+        body = cancelled.json()
+        assert cancelled.status_code == 200 and body["state"] == "cancelled"
+        assert (body["cancel"]["requested_by"], body["cancel"]["request_source"], body["cancel"]["reason"]) == (
+            "summitflow",
+            "proof",
+            "enough",
+        )
+        assert (await client.post(f"/workflow-runs/{fresh}/cancel")).status_code == 409
+        assert (await client.get(f"/workflow-runs/{fresh}")).json()["cancel"]["requested_by"] == "summitflow"
+
+        # Cancelling a step that has not started: the run goes on, so an advance is queued.
+        live, _ = await create_run(pg_db, example("plan-implement-review-fix", repo, request_id="fourth"), deps=world.deps)
+        ok = await client.post(f"/workflow-runs/{live}/steps/plan/cancel", json={})
+        assert ok.status_code == 200 and ok.json()["status"] == "cancelled" and queued == [live]
+
+
+async def test_the_view_shows_the_model_that_answered_when_it_is_the_one_requested(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(run_id)
+    row = (await pg_db.execute(select(Session).where(Session.parent_session_id == run_id).limit(1))).scalar_one()
+    assert "served_model" not in (row.provider_metadata or {})  # stored only when it differs from the request
+    (attempt,) = (await view_of(pg_db, run_id))["steps"][0]["attempt_history"]
+    assert attempt["served_model"] == OPUS == attempt["served_models"][-1]
+
+
+async def test_an_equal_workflow_window_reading_refreshes_source_and_time() -> None:
+    from app.services.subscription_accounting import collector
+
+    t0 = datetime(2026, 10, 28, 12, tzinfo=UTC)
+    reset = t0 + timedelta(hours=3)
+    old = collector.SnapshotEvent("claude", t0, 300, 31.0, reset, None, None, None)  # recorded before sources existed
+    same = collector.SnapshotEvent("claude", t0 + timedelta(minutes=2), 300, 31.0, reset, None, None, collector.SOURCE_WORKFLOW)
+    lower = collector.SnapshotEvent("claude", t0 + timedelta(minutes=3), 300, 20.0, reset, None, None, collector.SOURCE_WORKFLOW)
+    again = collector.SnapshotEvent("claude", t0 + timedelta(minutes=2), 300, 31.0, reset, None, None, collector.SOURCE_WORKFLOW)
+    state: dict = {}
+    kept = collector.select_snapshots([old], state)
+    kept += collector.select_snapshots([same, lower, again], state)
+    # The equal reading is kept with its own source and time; a lower one and a re-read of the same one are not.
+    assert [(e.source, e.ts, e.used_percent) for e in kept] == [
+        (None, t0, 31.0),
+        (collector.SOURCE_WORKFLOW, t0 + timedelta(minutes=2), 31.0),
+    ]

@@ -66,6 +66,17 @@ function OutcomeNotice({ attempt }: { attempt: WorkflowAttempt }) {
       </div>
     )
   }
+  if (outcome?.kind === 'cancelled') {
+    return (
+      <div
+        role="note"
+        className={cn(base, 'border-slate-600 bg-slate-900/60 text-slate-200')}
+      >
+        <strong>Cancelled.</strong>{' '}
+        {outcome.explanation ?? 'Stopped on request; its processes were ended.'}
+      </div>
+    )
+  }
   if (attempt.error && attempt.status !== 'completed') {
     return (
       <div
@@ -130,6 +141,7 @@ const FAILED_LABEL: Record<string, string> = {
   refused: 'Refused',
   usage_limit: 'Usage limit',
   interrupted: 'Interrupted',
+  cancelled: 'Cancelled',
 }
 
 function failedLabel(attempt: WorkflowAttempt): string {

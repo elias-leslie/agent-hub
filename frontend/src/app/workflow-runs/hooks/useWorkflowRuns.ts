@@ -61,14 +61,15 @@ export function useWorkflowRuns() {
   }
 }
 
-/** Polls while the run is working; stops once it has completed or failed. */
+/** Polls while the run is working; stops once it has completed, failed or been cancelled. */
 export function useWorkflowRun(id: string) {
   const query = useQuery({
     queryKey: ['workflow-runs', 'detail', id],
     queryFn: ({ signal }) => fetchWorkflowRun(id, signal),
     refetchInterval: (q) => {
       const state = q.state.data?.state
-      if (state === 'completed' || state === 'failed') return false
+      if (state === 'completed' || state === 'failed' || state === 'cancelled')
+        return false
       return state === 'needs_owner' ? PAUSED_REFRESH_MS : DETAIL_REFRESH_MS
     },
     refetchIntervalInBackground: false,

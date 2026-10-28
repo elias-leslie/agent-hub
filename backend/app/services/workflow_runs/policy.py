@@ -38,6 +38,12 @@ class RunPolicy:
     # Per acceptance command, unless the command sets its own ``timeout_s``.
     acceptance_timeout_seconds: int
     acceptance_output_tail_chars: int
+    # How long a finished or killed acceptance command's output is read for, so an escaped grandchild that still
+    # holds the pipe cannot hold the step up.
+    acceptance_drain_seconds: float
+    # Cancel, recovery of an orphan and cleanup of an attempt's processes: SIGTERM to the process group, SIGKILL
+    # after this many seconds.
+    process_stop_grace_seconds: float
     usage_limit_cooldown_seconds: int
     packet_budget_fraction: float
     default_context_window: int
@@ -139,13 +145,15 @@ class AttemptResult:
     error: str | None = None
     # The step's acceptance commands: None when it has none (or they did not run), else whether all passed.
     acceptance_passed: bool | None = None
+    # The owner or a coordinator asked for the step (or the whole run) to stop.
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)
 class Decision:
-    action: Literal["complete", "retry", "fail", "needs_owner"]
+    action: Literal["complete", "retry", "fail", "needs_owner", "cancelled"]
     reason: str
-    kind: str | None = None  # refused | substituted | usage_limit | error | acceptance
+    kind: str | None = None  # refused | substituted | usage_limit | error | acceptance | cancelled
     category: str | None = None
     next_model: str | None = None
     wait_until: float | None = None
@@ -299,6 +307,8 @@ def _decide(
     now: float,
 ) -> Decision:
     refusals = dict(run.refusals)
+    if result.cancelled:  # a stop request ends the attempt whatever it produced; it never moves to the next model
+        return Decision("cancelled", "cancelled", kind="cancelled", refusals=refusals)
     outcome = result.outcome
     finished = result.status == "completed" and result.has_handoff
     acceptance_failed = finished and result.acceptance_passed is False
@@ -354,13 +364,16 @@ def _decide(
 
 
 def decide_stale_step(
-    *, restarts: int, attempts: int, max_attempts: int | None, policy: RunPolicy
-) -> Literal["retry", "fail"]:
+    *, restarts: int, attempts: int, max_attempts: int | None, policy: RunPolicy, cancelled: bool = False
+) -> Literal["retry", "fail", "cancelled"]:
     """A running step with a stale heartbeat restarts while it has used fewer than ``restart_limit`` restarts.
 
-    ``restarts`` counts the restarts already used, not including this one.
+    ``restarts`` counts the restarts already used, not including this one. A step someone asked to stop is
+    cancelled instead of restarted.
     """
 
+    if cancelled:
+        return "cancelled"
     if restarts >= policy.restart_limit or attempts_exhausted(attempts, max_attempts, policy):
         return "fail"
     return "retry"

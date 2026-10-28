@@ -8,17 +8,13 @@ attempt with that output in the next packet (``failure_note``).
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import os
-import signal
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from app.utils.safe_subprocess import create_process
-
 from .executor_common import child_env, load_defaults
+from .processes import start_tracked, wait_exit
 
 
 def commands_of(definition: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -33,19 +29,21 @@ def commands_of(definition: Mapping[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int) -> dict[str, Any]:
+async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int, drain_seconds: float) -> dict[str, Any]:
     started = time.monotonic()
     tail = bytearray()
     timed_out = False
-    process = await create_process(
+    tracked = await start_tracked(
         "bash",
         "-c",
         cmd,
+        kind="acceptance",
         working_dir=worktree,
         stdin=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.STDOUT,
         env=child_env(load_defaults()),
     )
+    process = tracked.process
 
     async def drain() -> None:
         stream = process.stdout
@@ -53,15 +51,15 @@ async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int) ->
             tail.extend(chunk)
             del tail[: -tail_chars * 4]
 
+    reader = asyncio.create_task(drain())
     try:
-        await asyncio.wait_for(asyncio.gather(drain(), process.wait()), timeout)
-    except TimeoutError:
-        timed_out = True
+        # The command's own exit decides pass or fail: a grandchild that keeps the pipe open is not the command.
+        timed_out = not await wait_exit(process, timeout)
     finally:
-        if process.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)  # the command and everything it started
-            await process.wait()
+        # The command and everything it started, whether it timed out, was cancelled or exited and left children.
+        await tracked.kill()
+        await asyncio.wait({reader}, timeout=drain_seconds)
+        reader.cancel()
     text = tail.decode(errors="replace").strip()
     return {
         "cmd": cmd,
@@ -73,7 +71,12 @@ async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int) ->
 
 
 async def run_acceptance(
-    commands: Sequence[Mapping[str, Any]], worktree: Path, *, default_timeout: float, tail_chars: int
+    commands: Sequence[Mapping[str, Any]],
+    worktree: Path,
+    *,
+    default_timeout: float,
+    tail_chars: int,
+    drain_seconds: float,
 ) -> list[dict[str, Any]]:
     """Run every command in order (all of them, so one retry sees every failure)."""
 
@@ -81,7 +84,11 @@ async def run_acceptance(
     for command in commands:
         try:
             result = await _run_one(
-                command["cmd"], worktree, command.get("timeout_s") or default_timeout, tail_chars
+                command["cmd"],
+                worktree,
+                command.get("timeout_s") or default_timeout,
+                tail_chars,
+                drain_seconds,
             )
         except Exception as exc:  # a command that cannot start is a failed command, not an engine error
             result = {

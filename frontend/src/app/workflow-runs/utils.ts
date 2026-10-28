@@ -1,6 +1,7 @@
 import { formatCost } from '@/app/sessions/utils'
 import type {
   AttemptCost,
+  CancelRecord,
   CostBasis,
   CostTotals,
   RunPause,
@@ -69,6 +70,7 @@ export const RUN_STATE_LABEL: Record<RunState, string> = {
   needs_owner: 'Needs you',
   completed: 'Completed',
   failed: 'Failed',
+  cancelled: 'Cancelled',
 }
 
 export function runStateLabel(state: RunState | null): string {
@@ -83,6 +85,7 @@ export const STEP_STATUS_LABEL: Record<StepStatus, string> = {
   refused: 'Refused',
   needs_owner: 'Needs you',
   skipped: 'Skipped',
+  cancelled: 'Cancelled',
 }
 
 export const STATE_TONE: Record<string, { dot: string; text: string }> = {
@@ -93,6 +96,7 @@ export const STATE_TONE: Record<string, { dot: string; text: string }> = {
   failed: { dot: 'bg-rose-400', text: 'text-rose-300' },
   refused: { dot: 'bg-rose-400', text: 'text-rose-300' },
   skipped: { dot: 'bg-slate-500', text: 'text-slate-400' },
+  cancelled: { dot: 'bg-slate-400', text: 'text-slate-300' },
 }
 
 export const EXECUTOR_LABEL: Record<string, string> = {
@@ -143,6 +147,20 @@ export function pauseExplanation(
     default:
       return `${step} is paused: ${pause.reason.replaceAll('_', ' ')}.`
   }
+}
+
+/** Who stopped a run or step, when, and why, in the owner's terms. */
+export function cancelText(
+  cancel: CancelRecord,
+  what: 'run' | 'step',
+  finished: boolean,
+): string {
+  const when = new Date(cancel.requested_at * 1000).toLocaleString()
+  const who = cancel.requested_by ? ` by ${cancel.requested_by}` : ''
+  const lead = finished
+    ? `This ${what} was cancelled`
+    : `Cancel requested for this ${what}`
+  return `${lead}${who} at ${when}${cancel.reason ? `: ${cancel.reason}` : '.'}`
 }
 
 const TOKEN_PARTS = [

@@ -6,7 +6,12 @@ import { fetchApi, getApiBaseUrl } from '../api-config'
 
 const API_BASE = `${getApiBaseUrl()}/api`
 
-export type RunState = 'running' | 'needs_owner' | 'completed' | 'failed'
+export type RunState =
+  | 'running'
+  | 'needs_owner'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 export interface WorkflowRunListItem {
   id: string
@@ -67,7 +72,7 @@ export interface WorkflowRunList {
 
 /** Provider outcome of an attempt (outcome_details); only populated fields are present. */
 export interface AttemptOutcome {
-  kind: 'refused' | 'substituted' | 'usage_limit' | 'interrupted'
+  kind: 'refused' | 'substituted' | 'usage_limit' | 'interrupted' | 'cancelled'
   requested_model: string
   served_model?: string
   category?: string
@@ -126,6 +131,24 @@ export interface RunLimits {
   refusal_pause_threshold: number
 }
 
+/** Who asked for a stop, when, and why; stored with the run or the step. */
+export interface CancelRecord {
+  scope: 'run' | 'step'
+  reason: string | null
+  requested_by: string | null
+  request_source?: string | null
+  /** Unix seconds. */
+  requested_at: number
+}
+
+/** A harness process the attempt started; recovery says what it did to it after a crash. */
+export interface AttemptProcess {
+  kind: string
+  pid: number
+  pgid: number
+  recovery?: string | null
+}
+
 export interface WorkflowAttempt {
   session_id: string
   attempt: number
@@ -149,6 +172,8 @@ export interface WorkflowAttempt {
   context_status: string | null
   /** null when the step has no acceptance commands (or the attempt never got that far). */
   acceptance?: AcceptanceResult[] | null
+  /** Processes the attempt started (harness, acceptance commands); absent on older responses. */
+  processes?: AttemptProcess[]
   executor: string | null
   started_at: string | null
   finished_at: string | null
@@ -169,6 +194,7 @@ export type StepStatus =
   | 'refused'
   | 'needs_owner'
   | 'skipped'
+  | 'cancelled'
 
 export interface WorkflowStepView {
   key: string
@@ -195,6 +221,10 @@ export interface WorkflowStepView {
     model?: string | null
     note?: string | null
   } | null
+  /** The stop request for this step, if one was made. */
+  cancel?: CancelRecord | null
+  /** The request is made and the worker has not yet stopped the step. */
+  cancelling?: boolean
   heartbeat_at: string | null
   attempt_history: WorkflowAttempt[]
 }
@@ -219,6 +249,10 @@ export interface WorkflowRunDetail {
   branch: string | null
   pause: RunPause | null
   failure: string | null
+  /** The stop request for the whole run, if one was made. */
+  cancel?: CancelRecord | null
+  /** The request is made and the worker has not yet stopped the running step. */
+  cancelling?: boolean
   refusals: Record<string, number>
   limits?: RunLimits
   created_at: string | null
@@ -288,4 +322,46 @@ export async function resumeWorkflowRun(
   )
   if (!response.ok) throw await failure(response, 'Resume failed')
   return response.json()
+}
+
+export interface CancelResult {
+  run_id: string
+  state: RunState
+  step?: string
+  status?: string
+  cancel: CancelRecord
+  cancelling: boolean
+}
+
+async function postCancel(
+  path: string,
+  reason: string | undefined,
+): Promise<CancelResult> {
+  const response = await fetchApi(`${API_BASE}/workflow-runs/${path}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reason ? { reason } : {}),
+  })
+  if (!response.ok) throw await failure(response, 'Cancel failed')
+  return response.json()
+}
+
+/** Stop the whole run; a running step is stopped by its worker within a few seconds. */
+export function cancelWorkflowRun(
+  id: string,
+  reason?: string,
+): Promise<CancelResult> {
+  return postCancel(encodeURIComponent(id), reason)
+}
+
+/** Stop one step; the run goes on with the others. */
+export function cancelWorkflowStep(
+  id: string,
+  stepKey: string,
+  reason?: string,
+): Promise<CancelResult> {
+  return postCancel(
+    `${encodeURIComponent(id)}/steps/${encodeURIComponent(stepKey)}`,
+    reason,
+  )
 }

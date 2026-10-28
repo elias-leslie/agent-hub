@@ -276,3 +276,24 @@ def test_policy_overrides_merge_and_unknown_keys_are_rejected() -> None:
     assert load_policy({"restart_limit": 5, "git": {"user_name": "x"}}).git["user_email"]
     with pytest.raises(ValueError, match="unknown policy keys"):
         load_policy({"nope": 1})
+
+
+def test_a_cancelled_attempt_ends_the_step_whatever_it_produced_and_never_takes_the_next_model() -> None:
+    for result in (
+        AttemptResult("failed", error="cancelled", cancelled=True),
+        AttemptResult("completed", has_handoff=True, cancelled=True),
+        AttemptResult("failed", ProviderOutcome("refused", OPUS, category="cyber"), cancelled=True),
+    ):
+        decision = decide(OPUS, result, refusals={"cyber": 1})
+        assert (decision.action, decision.kind, decision.next_model, decision.hop) == ("cancelled", "cancelled", None, None)
+        assert decision.refusals == {"cyber": 1}  # a stop is not a refusal
+
+
+def test_a_stale_step_that_was_asked_to_stop_is_cancelled_not_restarted() -> None:
+    assert decide_stale_step(restarts=0, attempts=1, max_attempts=None, policy=POLICY, cancelled=True) == "cancelled"
+
+
+def test_process_stop_grace_and_drain_are_policy_data() -> None:
+    policy = load_policy()
+    assert policy.process_stop_grace_seconds > 0 and policy.acceptance_drain_seconds > 0
+    assert load_policy({"process_stop_grace_seconds": 1}).process_stop_grace_seconds == 1

@@ -750,7 +750,10 @@ def select_snapshots(events: list[SnapshotEvent], state: dict[str, Any]) -> list
             if ev.resets_at is not None and resets < p_resets - 60:
                 continue  # stale session reporting an older window
             same_window = abs(resets - p_resets) <= 60
-            if same_window and ev.used_percent <= p_used and ev.plan_type == p_plan and (
+            # A workflow reading that equals the one on record still says where and when it was seen: keep it, so the
+            # page shows its source and time rather than an older reading's (or none).
+            refresh = ev.source == SOURCE_WORKFLOW and ev.used_percent == p_used and ev.ts.timestamp() > p_ts
+            if same_window and ev.used_percent <= p_used and ev.plan_type == p_plan and not refresh and (
                 ev.ts.timestamp() - p_ts < SNAPSHOT_MIN_INTERVAL_S
             ):
                 continue

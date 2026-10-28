@@ -1,8 +1,15 @@
 import { formatRelativeTime } from '@/app/sessions/utils'
 import type { RunLimits, WorkflowStepView } from '@/lib/api/workflow-runs'
 import { cn } from '@/lib/utils'
-import { atLimit, modelLabel, ofLimit, STEP_STATUS_LABEL } from '../utils'
+import {
+  atLimit,
+  cancelText,
+  modelLabel,
+  ofLimit,
+  STEP_STATUS_LABEL,
+} from '../utils'
 import { AttemptCard } from './AttemptCard'
+import { CancelButton } from './CancelButton'
 import { StatusDot } from './StatusDot'
 
 function HandoffNote({ step }: { step: WorkflowStepView }) {
@@ -98,11 +105,21 @@ function LimitLine({
 export function StepCard({
   step,
   limits,
+  runId,
+  runOpen = false,
 }: {
   step: WorkflowStepView
   limits?: RunLimits
+  /** With `runOpen`, the card offers to cancel the step. */
+  runId?: string
+  /** The run is still going (running or waiting for you). */
+  runOpen?: boolean
 }) {
   const decision = step.owner_decision
+  const stoppable = ['pending', 'running', 'needs_owner'].includes(step.status)
+  const cancelling =
+    step.cancelling === true ||
+    (step.status === 'running' && Boolean(step.cancel))
   return (
     <li
       data-testid="step"
@@ -121,6 +138,9 @@ export function StepCard({
         <span className="text-[12px] text-slate-500">
           agent {step.agent_slug}
         </span>
+        {cancelling ? (
+          <span className="text-[12px] text-amber-300">Cancelling</span>
+        ) : null}
         {step.heartbeat_at && step.status === 'running' ? (
           <span className="text-[12px] text-slate-500">
             last sign of life {formatRelativeTime(step.heartbeat_at)}
@@ -133,6 +153,16 @@ export function StepCard({
         </p>
       ) : null}
       {step.attempts > 0 ? <LimitLine step={step} limits={limits} /> : null}
+      {step.cancel ? (
+        <p role="note" className="mt-1 text-[12px] text-slate-300">
+          {cancelText(step.cancel, 'step', step.status === 'cancelled')}
+        </p>
+      ) : null}
+      {runId && runOpen && stoppable && !cancelling ? (
+        <div className="mt-2">
+          <CancelButton runId={runId} stepKey={step.key} />
+        </div>
+      ) : null}
       {decision ? (
         <p className="mt-1 text-[12px] text-slate-300">
           You chose to {decision.action}
@@ -150,7 +180,9 @@ export function StepCard({
         <p className="mt-3 text-[12px] text-slate-500">
           {step.status === 'skipped'
             ? 'Skipped before any attempt.'
-            : 'No attempts yet.'}
+            : step.status === 'cancelled'
+              ? 'Cancelled before any attempt.'
+              : 'No attempts yet.'}
         </p>
       )}
       <HandoffNote step={step} />

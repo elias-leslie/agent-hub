@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { formatDurationMs, formatTokens } from '@/app/sessions/utils'
 import type { WorkflowRunDetail } from '@/lib/api/workflow-runs'
+import { CancelButton } from '../components/CancelButton'
 import { ErrorAlert, LoadingState } from '../components/ListStates'
 import { PausePanel } from '../components/PausePanel'
 import { StatusDot } from '../components/StatusDot'
 import { StepCard } from '../components/StepCard'
 import { useWorkflowRun } from '../hooks/useWorkflowRuns'
-import { costTotalsParts, runStateLabel } from '../utils'
+import { cancelText, costTotalsParts, runStateLabel } from '../utils'
 
 function clock(ms: number): string {
   return ms ? new Date(ms).toLocaleTimeString() : ''
@@ -20,7 +21,13 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
   const attempts = run.steps.flatMap((s) => s.attempt_history).length
   const tokens = run.usage_totals?.total_tokens ?? null
   const cost = run.usage_totals ? costTotalsParts(run.usage_totals.cost) : null
-  const finished = run.state === 'completed' || run.state === 'failed'
+  const finished =
+    run.state === 'completed' ||
+    run.state === 'failed' ||
+    run.state === 'cancelled'
+  const open = run.state === 'running' || run.state === 'needs_owner'
+  const cancelling =
+    run.cancelling === true || (run.state === 'running' && Boolean(run.cancel))
   const elapsed =
     finished && run.created_at && run.last_activity_at
       ? formatDurationMs(
@@ -33,6 +40,9 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
     <div className="mb-4 space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         <StatusDot status={run.state} label={runStateLabel(run.state)} />
+        {cancelling ? (
+          <span className="text-[12px] text-amber-300">Cancelling</span>
+        ) : null}
         <span className="font-mono text-[12px] text-slate-500">
           {run.project_id ?? 'no project'}
         </span>
@@ -73,6 +83,18 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
             .join(', ')}
         </p>
       ) : null}
+      {run.cancel ? (
+        <p
+          role="note"
+          className="rounded-md border border-slate-600 bg-slate-900/60 px-2.5 py-1.5 text-[13px] text-slate-200"
+        >
+          {cancelText(run.cancel, 'run', run.state === 'cancelled')}
+          {run.state === 'cancelled'
+            ? ' Steps that had not started were skipped.'
+            : ' A running step is being stopped.'}
+        </p>
+      ) : null}
+      {open && !cancelling ? <CancelButton runId={run.id} /> : null}
       {run.state === 'failed' && run.failure ? (
         <p
           role="note"
@@ -159,7 +181,17 @@ export default function WorkflowRunPage() {
                 data-testid="step-list"
               >
                 {run.steps.map((step) => (
-                  <StepCard key={step.key} step={step} limits={run.limits} />
+                  <StepCard
+                    key={step.key}
+                    step={step}
+                    limits={run.limits}
+                    runId={run.id}
+                    runOpen={
+                      (run.state === 'running' ||
+                        run.state === 'needs_owner') &&
+                      !run.cancel
+                    }
+                  />
                 ))}
               </ol>
             </>

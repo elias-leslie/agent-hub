@@ -52,7 +52,8 @@ from .policy import (
     pause_reason,
     usage_limit_cooldown,
 )
-from .schemas import OwnerDecision, RunDefinition
+from .processes import ProcessIdentity, ProcessTracker, current_tracker, stop_group
+from .schemas import CancelRequest, OwnerDecision, RunDefinition
 from .settings import get_workflow_run_settings
 from .usage import cost_of, record_attempt_cost, usage_totals
 from .workspace import RunWorkspace, head_sha
@@ -62,14 +63,18 @@ logger = logging.getLogger(__name__)
 SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 ContextProvider = Callable[..., Awaitable[tuple[str, str]]]
 
-RUN_STATES = ("running", "needs_owner", "completed", "failed")
-TERMINAL_STEP = ("completed", "skipped")
+RUN_STATES = ("running", "needs_owner", "completed", "failed", "cancelled")
+FINISHED_RUN = ("completed", "failed", "cancelled")
+TERMINAL_STEP = ("completed", "skipped", "cancelled")
+# A step in any of these has nothing left to stop.
+FINISHED_STEP = ("completed", "failed", "refused", "skipped", "cancelled")
 
 
 class WorkflowRunError(Exception):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, **extra: Any) -> None:
         super().__init__(message)
         self.code = code
+        self.extra = extra
 
 
 # --- dependencies ------------------------------------------------------------------------------
@@ -335,6 +340,28 @@ def _complete_run(run: Session, meta: dict[str, Any], now: float) -> None:
     _set_meta(run, {**meta, "state": "completed", "pause": None}, now=now)
 
 
+def _cancel_run(
+    run: Session, meta: dict[str, Any], steps: list[WorkflowStep], cancel: dict[str, Any], now: float
+) -> None:
+    """End the run as cancelled: what has not started is skipped, with the reason on each step."""
+
+    for step in steps:
+        if step.status in ("pending", "needs_owner"):
+            step.status = "skipped"
+            step.outcome = {**_scratch(step), "skipped": "run_cancelled"}
+    reason = cancel.get("reason")
+    run.status = "failed"  # the session enum has no cancelled; health_detail and the run state say which
+    run.health_detail = "cancelled"
+    run.summary_oneliner = f"Workflow cancelled{f': {reason}' if reason else ''}"[:500]
+    _set_meta(run, {**meta, "state": "cancelled", "pause": None, "cancel": cancel}, now=now)
+
+
+def _cancel_request(meta: dict[str, Any], step: WorkflowStep) -> dict[str, Any] | None:
+    """The stop request that applies to a running step: its own, else the run's."""
+
+    return _scratch(step).get("cancel") or meta.get("cancel")
+
+
 def _pause_run(run: Session, meta: dict[str, Any], pause: dict[str, Any], now: float) -> None:
     _set_meta(run, {**meta, "state": "needs_owner", "pause": {**pause, "at": now}}, now=now)
 
@@ -464,20 +491,37 @@ def _prior(steps: list[WorkflowStep], step: WorkflowStep) -> list[PriorStep]:
 
 
 class _Heartbeat:
-    """Keeps a running step's heartbeat fresh from a ticker and from executor events."""
+    """Keeps a running step's heartbeat fresh from a ticker and from executor events.
 
-    def __init__(self, deps: EngineDeps, step_id: str, attempt_id: str, interval: float) -> None:
-        self.deps, self.step_id, self.attempt_id, self.interval = (
+    Each beat also reads the durable stop request (the step's own or the run's). The first time it sees one it sets
+    ``cancelled`` and runs ``on_cancel`` once, in its own task, so a slow stop never holds up the ticker.
+    """
+
+    def __init__(
+        self,
+        deps: EngineDeps,
+        run_id: str,
+        step_id: str,
+        attempt_id: str,
+        interval: float,
+        on_cancel: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        self.deps, self.run_id, self.step_id, self.attempt_id, self.interval = (
             deps,
+            run_id,
             step_id,
             attempt_id,
             interval,
         )
+        self.on_cancel = on_cancel
+        self.cancelled = False
         self._last = deps.clock()
         self._task: asyncio.Task[None] | None = None
+        self._interrupt: asyncio.Task[None] | None = None
 
     async def beat(self) -> None:
         self._last = self.deps.clock()
+        cancel: dict[str, Any] | None = None
         try:
             async with self.deps.factory()() as db:
                 step = await db.get(WorkflowStep, self.step_id)
@@ -492,9 +536,15 @@ class _Heartbeat:
                         attempt is not None
                     ):  # keeps the cleanup/reaper heuristics off a live attempt
                         attempt.last_heartbeat_at = attempt.last_activity_at = _dt(self._last)
+                    run = await db.get(Session, self.run_id)
+                    cancel = _cancel_request(_meta(run), step) if run is not None else None
                     await db.commit()
         except Exception:
             logger.warning("workflow heartbeat failed for step %s", self.step_id, exc_info=True)
+        if cancel and not self.cancelled:
+            self.cancelled = True
+            if self.on_cancel is not None:
+                self._interrupt = asyncio.create_task(self.on_cancel())
 
     async def on_event(self, _event: Any) -> None:
         if self.deps.clock() - self._last >= self.interval:
@@ -514,6 +564,23 @@ class _Heartbeat:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
+        if self._interrupt is not None:
+            with contextlib.suppress(Exception):
+                await self._interrupt
+
+
+async def _record_process(deps: EngineDeps, attempt_id: str, entry: dict[str, Any]) -> None:
+    """Note a process the attempt started (pid, group, start time) on the attempt, so recovery can find it."""
+
+    async with deps.factory()() as db:
+        attempt = await db.get(Session, attempt_id)
+        if attempt is None:
+            return
+        meta = dict(attempt.provider_metadata or {})
+        detail = dict(meta.get("workflow_attempt") or {})
+        detail["processes"] = [*detail.get("processes", []), entry]
+        attempt.provider_metadata = {**meta, "workflow_attempt": detail}
+        await db.commit()
 
 
 @dataclass
@@ -766,9 +833,13 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
     except Exception as exc:
         logger.exception("workflow step %s setup failed", intent.step_key)
         return StepResult("failed", error=f"setup_failed: {exc!r}"), info
-    async with _Heartbeat(
-        deps, intent.step_id, intent.attempt_id, policy.heartbeat_interval_seconds
-    ) as heartbeat:
+    tracker = ProcessTracker(
+        intent.attempt_id, lambda entry: _record_process(deps, intent.attempt_id, entry)
+    )
+    grace = policy.process_stop_grace_seconds
+    work: asyncio.Task[StepResult] | None = None
+
+    async def run_step() -> StepResult:
         try:
             result = await executor.run(
                 packet, intent.model, workspace.worktree, workspace.run_dir, heartbeat.on_event
@@ -784,7 +855,46 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
                 workspace.worktree,
                 default_timeout=policy.acceptance_timeout_seconds,
                 tail_chars=policy.acceptance_output_tail_chars,
+                drain_seconds=policy.acceptance_drain_seconds,
             )
+        return result
+
+    async def interrupt() -> None:
+        """Stop the attempt's processes (SIGTERM, then SIGKILL after the grace), then let the work finish or cancel it."""
+
+        await tracker.stop_all(grace)
+        if work is not None:
+            await asyncio.wait({work}, timeout=grace)
+            work.cancel()  # no-op when it has finished
+
+    async with _Heartbeat(
+        deps,
+        intent.run_id,
+        intent.step_id,
+        intent.attempt_id,
+        policy.heartbeat_interval_seconds,
+        on_cancel=interrupt,
+    ) as heartbeat:
+        await heartbeat.beat()  # a stop asked for before the executor starts is seen now, not an interval later
+        if heartbeat.cancelled:
+            result = StepResult("failed", error="cancelled")
+        else:
+            token = current_tracker.set(tracker)  # the executor's task starts with a copy of this context
+            try:
+                work = asyncio.create_task(run_step())
+            finally:
+                current_tracker.reset(token)
+            try:
+                result = await work
+            except asyncio.CancelledError:
+                current = asyncio.current_task()
+                if not heartbeat.cancelled or (current is not None and current.cancelling()):
+                    raise  # the worker itself is being stopped, not a step cancel
+                result = StepResult("failed", error="cancelled")
+            finally:
+                await tracker.stop_all(grace)  # nothing the attempt started outlives it, however it ended
+            if heartbeat.cancelled:
+                result = replace(result, status="failed", handoff=None, error="cancelled")
     return result, info
 
 
@@ -890,6 +1000,8 @@ async def _commit_outcome(
             return {"next": "stop", "reason": "attempt_abandoned"}
         meta = _meta(run)
         policy = load_policy(meta["policy"])
+        # Read under the run lock, so a stop asked for while the step finished still wins.
+        cancel = _cancel_request(meta, step)
         decision = decide_after_attempt(
             model=intent.model,
             result=AttemptResult(
@@ -900,6 +1012,7 @@ async def _commit_outcome(
                 acceptance_passed=(
                     acceptance_runner.passed(info["acceptance"]) if "acceptance" in info else None
                 ),
+                cancelled=cancel is not None,
             ),
             step=_step_state(step),
             run=_run_state(meta),
@@ -909,7 +1022,7 @@ async def _commit_outcome(
             now=now,
         )
         served = list(result.served_models) or [intent.model]
-        _finish_attempt(attempt, intent, result, decision, served, info, now)
+        _finish_attempt(attempt, intent, result, decision, served, info, now, cancel)
         await record_attempt_cost(
             db,
             session_id=attempt.id,
@@ -958,6 +1071,13 @@ async def _commit_outcome(
         elif decision.action == "fail":
             step.status = "failed"
             _fail_run(run, meta, steps, f"{intent.step_key}: {decision.reason}", now)
+        elif decision.action == "cancelled":
+            # Stays cancelled: no next model, no retry. A run-level request ends the run; a step-level one leaves
+            # the run to carry on with its other steps, like a skip.
+            step.status = "cancelled"
+            scratch.update(hop=None, pinned_model=None, cancel=cancel)
+            if meta.get("cancel"):
+                _cancel_run(run, meta, steps, meta["cancel"], now)
         else:
             if decision.reason == "usage_limit_wait":
                 _retry_after_limit(scratch)
@@ -994,6 +1114,21 @@ def _attempt_cost(usage: Mapping[str, Any] | None) -> dict[str, Any]:
     return {"usd": cost, "basis": basis, "source": source}
 
 
+def _attempt_outcome(
+    intent: _Intent, result: StepResult, decision: Decision, cancel: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The attempt's outcome: what the provider said, or ``cancelled`` with the request's reason."""
+
+    if decision.action == "cancelled":
+        reason = (cancel or {}).get("reason")
+        return {
+            "kind": "cancelled",
+            "requested_model": intent.model,
+            **({"explanation": reason} if reason else {}),
+        }
+    return outcome_details(result.outcome) if result.outcome else None
+
+
 def _finish_attempt(
     attempt: Session,
     intent: _Intent,
@@ -1002,6 +1137,7 @@ def _finish_attempt(
     served: list[str],
     info: dict[str, Any],
     now: float,
+    cancel: dict[str, Any] | None = None,
 ) -> None:
     from app.api.complete.session_repo import apply_execution_metadata
     from app.services.agent_routing_completion import format_fallback_reason
@@ -1022,9 +1158,9 @@ def _finish_attempt(
     detail = {
         **attempt.provider_metadata.get("workflow_attempt", {}),
         "served_models": served,
-        "outcome": outcome_details(result.outcome) if result.outcome else None,
+        "outcome": _attempt_outcome(intent, result, decision, cancel),
         "usage": dict(result.usage),
-        "error": result.error,
+        "error": None if decision.action == "cancelled" else result.error,
         "native_session_id": result.native_session_id,
         "transcript_path": result.transcript_path,
         "decision": {"action": decision.action, "reason": decision.reason},
@@ -1040,7 +1176,7 @@ def _finish_attempt(
     attempt.last_activity_at = _dt(now)
     served_note = f" (served {', '.join(served)})" if served != [intent.model] else ""
     ended = decision.reason if decision.action != "complete" else "completed"
-    if result.error and decision.action != "complete":
+    if result.error and decision.action not in ("complete", "cancelled"):
         ended = f"{ended} - {format_fallback_reason(RuntimeError(result.error))}"
     attempt.summary_oneliner = (
         f"{intent.step_key} attempt {intent.attempt_no} on {intent.model}{served_note}: {ended}"[
@@ -1099,6 +1235,24 @@ async def recover_stale_steps(deps: EngineDeps | None = None) -> list[str]:
     return to_advance
 
 
+async def _stop_orphans(attempt: Session | None, grace: float) -> list[dict[str, Any]]:
+    """Stop the process groups a stale attempt recorded; each result is the recorded entry plus ``recovery``.
+
+    A group is signalled only when its leader still has the recorded start time (see ``processes.inspect_group``);
+    a pid that has been reused, or a group that is already gone, is left alone.
+    """
+
+    if attempt is None:
+        return []
+    recorded = ((attempt.provider_metadata or {}).get("workflow_attempt") or {}).get("processes") or []
+    results: list[dict[str, Any]] = []
+    for entry in recorded:
+        identity = ProcessIdentity.from_dict(entry)
+        outcome = "unrecorded" if identity is None else await stop_group(identity, attempt.id, grace)
+        results.append({**entry, "recovery": outcome})
+    return results
+
+
 async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) -> bool:
     async with deps.factory()() as db:
         run = await _lock_run(db, run_id)
@@ -1113,60 +1267,90 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
         heartbeat = step.heartbeat_at.timestamp() if step.heartbeat_at else 0.0
         if now - heartbeat < policy.stale_after_seconds:
             return False
-        verdict = decide_stale_step(
-            restarts=step.restarts,
-            attempts=step.attempts,
-            max_attempts=step.definition.get("max_attempts"),
-            policy=policy,
-        )
-        if verdict == "retry":
-            step.restarts += 1  # restarts counts the ones actually used
         attempt = (
             await db.get(Session, step.current_attempt_session_id)
             if step.current_attempt_session_id
             else None
         )
-        reason = (
-            f"stale_heartbeat (restart {step.restarts}/{policy.restart_limit})"
-            if verdict == "retry"
-            else f"stale_heartbeat (no restart left: {step.restarts}/{policy.restart_limit} used, "
-            f"{step.attempts} attempts)"
+        # The old harness may still be writing in the worktree: its process group is stopped first, and the step is
+        # only charged, reset or restarted once nothing of it is left.
+        orphans = await _stop_orphans(attempt, policy.process_stop_grace_seconds)
+        if any(o["recovery"] == "survived" for o in orphans):
+            logger.warning("workflow step %s: a recorded process survived SIGKILL; not recovering yet", step.step_key)
+            return False
+        scratch = _scratch(step)
+        cancel = _cancel_request(meta, step)
+        verdict = decide_stale_step(
+            restarts=step.restarts,
+            attempts=step.attempts,
+            max_attempts=step.definition.get("max_attempts"),
+            policy=policy,
+            cancelled=cancel is not None,
         )
+        if verdict == "retry":
+            step.restarts += 1  # restarts counts the ones actually used
+        stopped = [o for o in orphans if o["recovery"] in ("terminated", "killed")]
+        note = f"; stopped the old process group {', '.join(str(o['pgid']) for o in stopped)}" if stopped else ""
+        if verdict == "cancelled":
+            reason = "cancelled (the worker stopped before it saw the request)"
+        elif verdict == "retry":
+            reason = f"stale_heartbeat (restart {step.restarts}/{policy.restart_limit})"
+        else:
+            reason = (
+                f"stale_heartbeat (no restart left: {step.restarts}/{policy.restart_limit} used, "
+                f"{step.attempts} attempts)"
+            )
         if attempt is not None:
             detail = {
                 **(attempt.provider_metadata or {}).get("workflow_attempt", {}),
-                "error": reason,
-                "decision": {"action": verdict, "reason": "stale_heartbeat"},
+                "error": None if verdict == "cancelled" else reason + note,
+                "decision": {
+                    "action": verdict,
+                    "reason": "cancelled" if verdict == "cancelled" else "stale_heartbeat",
+                },
                 "finished_at": now,
             }
+            if orphans:
+                detail["processes"] = orphans
+            if verdict == "cancelled":
+                reason_text = (cancel or {}).get("reason")
+                detail["outcome"] = {
+                    "kind": "cancelled",
+                    "requested_model": step.chosen_model,
+                    **({"explanation": reason_text} if reason_text else {}),
+                }
             attempt.provider_metadata = {
                 **(attempt.provider_metadata or {}),
                 "workflow_attempt": detail,
             }
             attempt.status = "failed"
-            attempt.health_detail = "stale_heartbeat"
+            attempt.health_detail = "cancelled" if verdict == "cancelled" else "stale_heartbeat"
             await store_child_session_lifecycle_event(
                 db, attempt, SessionEventType.CHILD_SESSION_RESULT
             )
-        scratch = _scratch(step)
         scratch["last"] = {
             "attempt": step.attempts,
             "model": step.chosen_model,
             "status": "failed",
-            "reason": "stale_heartbeat",
-            "kind": "crash",
+            "reason": "cancelled" if verdict == "cancelled" else "stale_heartbeat",
+            "kind": "cancelled" if verdict == "cancelled" else "crash",
             "attempt_session_id": step.current_attempt_session_id,
         }
         if verdict == "retry":
             # A crash is not the model's refusal: run the same model again, from the step checkpoint.
             step.status = "pending"
             scratch.update(pinned_model=step.chosen_model, reset_on_next=True, hop=None)
+        elif verdict == "cancelled":
+            step.status = "cancelled"
+            scratch.update(hop=None, pinned_model=None, cancel=cancel)
+            if meta.get("cancel"):
+                _cancel_run(run, meta, await _steps(db, run_id), meta["cancel"], now)
         else:
             step.status = "failed"
             _fail_run(run, meta, await _steps(db, run_id), f"{step.step_key}: {reason}", now)
         step.outcome = scratch
         await db.commit()
-        return verdict == "retry"
+        return verdict == "retry" or (verdict == "cancelled" and _meta(run)["state"] == "running")
 
 
 async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
@@ -1266,6 +1450,117 @@ async def resume_run(
     }
 
 
+# --- cancel ------------------------------------------------------------------------------------------
+
+
+def _cancel_record(
+    request: CancelRequest, scope: str, requested_by: str | None, request_source: str | None, now: float
+) -> dict[str, Any]:
+    return {
+        "scope": scope,
+        "reason": request.reason,
+        "requested_by": requested_by,
+        "request_source": request_source,
+        "requested_at": now,
+    }
+
+
+async def cancel_run(
+    db: AsyncSession,
+    run_id: str,
+    request: CancelRequest,
+    *,
+    requested_by: str | None = None,
+    request_source: str | None = None,
+    deps: EngineDeps | None = None,
+) -> dict[str, Any]:
+    """Stop the whole run.
+
+    The request is a durable flag. With no step running the run ends as cancelled at once (pending steps skipped);
+    with a step running the worker that owns it sees the flag within a heartbeat, stops the step's processes and
+    ends the run. Asking again while that is under way returns the same state.
+    """
+
+    deps = deps or EngineDeps()
+    now = deps.clock()
+    run = await _lock_run(db, run_id)
+    if run is None:
+        raise WorkflowRunError("not_found", "run not found")
+    meta = _meta(run)
+    state = meta.get("state")
+    if state in FINISHED_RUN:
+        raise WorkflowRunError("already_finished", f"run is already {state}", state=state)
+    steps = await _steps(db, run_id)
+    if meta.get("cancel") is None:
+        cancel = _cancel_record(request, "run", requested_by, request_source, now)
+        if any(s.status == "running" for s in steps):
+            _set_meta(run, {**meta, "cancel": cancel}, now=now)
+        else:
+            _cancel_run(run, meta, steps, cancel, now)
+        await db.commit()
+    meta = _meta(run)
+    return {
+        "run_id": run_id,
+        "state": meta["state"],
+        "cancel": meta["cancel"],
+        "cancelling": meta["state"] == "running",
+    }
+
+
+async def cancel_step(
+    db: AsyncSession,
+    run_id: str,
+    step_key: str,
+    request: CancelRequest,
+    *,
+    requested_by: str | None = None,
+    request_source: str | None = None,
+    deps: EngineDeps | None = None,
+) -> dict[str, Any]:
+    """Stop one step; the run carries on with its other steps, as it does after an owner skip.
+
+    A running step is flagged and stopped by the worker that owns it; a step that has not started (or waits for
+    the owner) is cancelled at once and never runs.
+    """
+
+    deps = deps or EngineDeps()
+    now = deps.clock()
+    run = await _lock_run(db, run_id)
+    if run is None:
+        raise WorkflowRunError("not_found", "run not found")
+    meta = _meta(run)
+    state = meta.get("state")
+    if state in FINISHED_RUN:
+        raise WorkflowRunError("already_finished", f"run is already {state}", state=state)
+    step = next((s for s in await _steps(db, run_id) if s.step_key == step_key), None)
+    if step is None:
+        raise WorkflowRunError("step_not_found", f"run has no step named {step_key}")
+    if step.status in FINISHED_STEP:
+        raise WorkflowRunError(
+            "already_finished",
+            f"step {step_key} is already {step.status}",
+            state=state,
+            step_status=step.status,
+        )
+    scratch = _scratch(step)
+    if scratch.get("cancel") is None:
+        scratch["cancel"] = _cancel_record(request, "step", requested_by, request_source, now)
+        if step.status != "running":
+            step.status = "cancelled"
+            if state == "needs_owner" and (meta.get("pause") or {}).get("step_key") == step_key:
+                _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
+        step.outcome = scratch
+        await db.commit()
+    return {
+        "run_id": run_id,
+        "state": _meta(run)["state"],
+        "step": step_key,
+        "status": step.status,
+        "cancel": scratch["cancel"],
+        "cancelling": step.status == "running",
+    }
+
+
 # --- views -----------------------------------------------------------------------------------------
 
 
@@ -1320,7 +1615,10 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 # Same keys the session UI reads for requested vs actual model.
                 "requested_model": pm.get("requested_model"),
                 "effective_model": pm.get("effective_model"),
-                "served_model": pm.get("served_model"),
+                # Stored only when the answering model differs from the one asked for; a finished attempt otherwise
+                # was answered by the last model the executor reported. One that never finished had no answer.
+                "served_model": pm.get("served_model")
+                or ((detail.get("served_models") or [None])[-1] if child.status == "completed" else None),
                 "fallback_used": pm.get("fallback_used"),
                 "fallback_reason": pm.get("fallback_reason"),
                 "served_models": detail.get("served_models") or [],
@@ -1336,6 +1634,10 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "context_status": detail.get("context_status"),
                 "acceptance": detail.get("acceptance"),
                 "executor": detail.get("executor"),
+                "processes": [
+                    {k: p.get(k) for k in ("kind", "pid", "pgid", "recovery")}
+                    for p in detail.get("processes") or []
+                ],
                 "started_at": child.created_at.isoformat() if child.created_at else None,
                 "finished_at": _iso(detail.get("finished_at")),
             }
@@ -1355,6 +1657,8 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "run_dir": meta.get("run_dir"),
         "pause": meta.get("pause"),
         "failure": meta.get("failure"),
+        "cancel": meta.get("cancel"),
+        "cancelling": meta.get("state") == "running" and meta.get("cancel") is not None,
         "refusals": meta.get("refusals", {}),
         "limits": _limits(policy),
         "created_at": run.created_at.isoformat() if run.created_at else None,
@@ -1383,6 +1687,8 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "handoff": s.handoff,
                 "outcome": _scratch(s).get("last"),
                 "owner_decision": _scratch(s).get("owner_decision"),
+                "cancel": _scratch(s).get("cancel"),
+                "cancelling": s.status == "running" and _scratch(s).get("cancel") is not None,
                 "heartbeat_at": s.heartbeat_at.isoformat() if s.heartbeat_at else None,
                 "attempt_history": attempts.get(s.step_key, []),
             }

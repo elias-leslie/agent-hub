@@ -11,7 +11,6 @@ import contextlib
 import json
 import os
 import re
-import signal
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -22,6 +21,7 @@ from app.llm.utils.outcomes import ProviderOutcome
 from app.utils.safe_subprocess import create_process
 
 from .packet import HandoffPacket, normalize_handoff, parse_handoff
+from .processes import TrackedProcess, start_tracked
 
 DEFAULTS_FILE = Path(__file__).with_name("executor_defaults.json")
 FALLBACK_NOTE = "fallback handoff: built by the executor from the final message and git diff --stat"
@@ -228,8 +228,9 @@ async def build_handoff(final_text: str, worktree: Path) -> dict[str, Any] | Non
 class HarnessProcess:
     """One harness child in its own process group: LF-framed stdout, bounded stderr tail, hard cleanup."""
 
-    def __init__(self, process: asyncio.subprocess.Process, stderr_tail: int) -> None:
-        self.process = process
+    def __init__(self, tracked: TrackedProcess, stderr_tail: int) -> None:
+        self.tracked = tracked
+        self.process = tracked.process
         self._stderr = bytearray()
         self._tail = stderr_tail
         self._drain = asyncio.create_task(self._drain_stderr())
@@ -238,14 +239,16 @@ class HarnessProcess:
     async def start(
         cls, argv: Sequence[str], cwd: Path, env: dict[str, str], stderr_tail: int, *, stdin: bool
     ) -> HarnessProcess:
-        process = await create_process(
+        # Registered with the attempt (when there is one) and killed by the kernel if the worker dies.
+        tracked = await start_tracked(
             *argv,
+            kind="harness",
             working_dir=cwd,
             env=env,
             stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
             limit=2**24,
         )
-        return cls(process, stderr_tail)
+        return cls(tracked, stderr_tail)
 
     async def _drain_stderr(self) -> None:
         stream = self.process.stderr
@@ -280,18 +283,12 @@ class HarnessProcess:
                 yield record
 
     async def stop(self, grace: float) -> int | None:
-        """End the whole process group (harness and its tool children) and reap it."""
+        """End the whole process group (harness and its tool children) and reap it.
 
-        process = self.process
-        if process.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGTERM)
-            try:
-                await asyncio.wait_for(process.wait(), grace)
-            except TimeoutError:
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGKILL)
-                await process.wait()
-        with contextlib.suppress(Exception):
-            await asyncio.wait_for(self._drain, 2)
-        return process.returncode
+        SIGTERM first, SIGKILL after ``grace`` seconds, and also when only a grandchild outlived the harness.
+        """
+
+        await self.tracked.stop(grace)
+        # Not cancelled on timeout: stop() may run twice (the executor's cleanup and the engine's).
+        await asyncio.wait({self._drain}, timeout=2)
+        return self.process.returncode
