@@ -49,6 +49,13 @@ class _RootsProxy(dict):
 KNOWN_ROOTS: dict[str, str] = _RootsProxy()
 
 
+def _workflow_runs_root() -> str:
+    """Agent Hub's own workflow-run directory (configured, created by the engine): run worktrees and plain run dirs."""
+    from app.services.workflow_runs.settings import get_workflow_run_settings
+
+    return str(get_workflow_run_settings().runs_root)
+
+
 def _linked_worktrees(roots: list[str]) -> list[str]:
     """Real paths of the known roots' linked git worktrees, read from each root's own git records."""
     worktrees: list[str] = []
@@ -69,13 +76,13 @@ def _linked_worktrees(roots: list[str]) -> list[str]:
 def contained_working_dir(working_dir: str) -> Path:
     """Resolve a caller-supplied working directory inside an allowed root.
 
-    Allowed: a known project root, a linked git worktree of one, or the system
-    temporary directory (scratch). Anything else raises ``ValueError`` before the
+    Allowed: a known project root, a linked git worktree of one, the workflow runs
+    root, or the system temporary directory (scratch). Anything else raises ``ValueError`` before the
     path is touched; the directory is never created.
     """
     real = os.path.realpath(working_dir)
     roots = [os.path.realpath(root) for root in _get_known_roots().values()]
-    bases = [*roots, os.path.realpath(tempfile.gettempdir())]
+    bases = [*roots, os.path.realpath(_workflow_runs_root()), os.path.realpath(tempfile.gettempdir())]
     allowed = bases + _linked_worktrees(roots)
     # Exactly a root: return the trusted configured value, not the caller's.
     for base in allowed:

@@ -46,6 +46,19 @@ def test_working_dir_must_sit_in_a_known_root_worktree_or_scratch(tmp_path: Path
     assert _executor_roots.contained_working_dir(str(worktree)) == worktree.resolve()
 
 
+def test_workflow_run_directories_are_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runs = tmp_path / "workflow-runs"
+    (runs / "run-1" / "worktree").mkdir(parents=True)
+    (tmp_path / "runs-evil").mkdir()
+    monkeypatch.setattr(_executor_roots, "_get_known_roots", dict)
+    monkeypatch.setattr(_executor_roots, "_workflow_runs_root", lambda: str(runs))
+    monkeypatch.setattr(_executor_roots.tempfile, "gettempdir", lambda: str(tmp_path / "scratch"))
+
+    assert _executor_roots.contained_working_dir(str(runs / "run-1" / "worktree")) == (runs / "run-1" / "worktree").resolve()
+    with pytest.raises(ValueError, match="outside"):
+        _executor_roots.contained_working_dir(str(tmp_path / "runs-evil"))
+
+
 def test_a_sibling_sharing_the_root_prefix_is_outside(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root, evil = tmp_path / "root", tmp_path / "root-evil"
     root.mkdir()
