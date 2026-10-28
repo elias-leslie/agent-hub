@@ -619,6 +619,47 @@ def _lane_parents(
     return parents or [LaneParent(None, meta["base_sha"])]
 
 
+async def release_finished_run(run_id: str, deps: EngineDeps | None = None) -> dict[str, Any] | None:
+    """Remove the worktree of a run that has ended (completed, failed or cancelled); the branch stays.
+
+    Runs after the run's state is committed and outside its row lock, under the repository lock. A worktree with
+    uncommitted changes is left and the reason is kept in the run's metadata (``worktree_release``). A run that
+    waits for the owner is never touched: resuming it needs the worktree. Failures are logged, never raised.
+    """
+
+    deps = deps or EngineDeps()
+    try:
+        async with deps.factory()() as db:
+            run = (
+                await db.execute(select(Session).where(Session.id == run_id, Session.session_type == "workflow"))
+            ).scalar_one_or_none()
+            meta = _meta(run) if run is not None else {}
+        if (
+            meta.get("state") not in FINISHED_RUN
+            or not meta.get("repo_path")
+            or (meta.get("worktree_release") or {}).get("state") == "removed"
+        ):
+            return None
+        try:
+            record = await RunWorkspace.from_meta(meta).release()
+        except Exception as exc:
+            logger.warning("workflow run %s: worktree not removed", run_id, exc_info=True)
+            record = {"state": "kept", "reason": "release_failed", "detail": repr(exc)[:300]}
+        if record.get("state") == "none":
+            return None
+        record = {**record, "at": _iso(deps.clock())}
+        async with deps.factory()() as db:
+            run = await _lock_run(db, run_id)
+            if run is None or _meta(run).get("state") not in FINISHED_RUN:
+                return record  # taken up again meanwhile (a completed run given new steps): nothing to record
+            _set_meta(run, {**_meta(run), "worktree_release": record}, now=deps.clock())
+            await db.commit()
+        return record
+    except Exception:
+        logger.warning("workflow run %s: worktree release not recorded", run_id, exc_info=True)
+        return None
+
+
 async def _integrate_result(meta: dict[str, Any], steps: list[WorkflowStep]) -> dict[str, Any] | None:
     """Where a run that ran steps in lanes ends up: the finished steps nothing else builds on, on the run branch.
 
@@ -1335,6 +1376,7 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
     deps = deps or EngineDeps()
     early, intent = await _commit_intent(run_id, deps)
     if intent is None:
+        await release_finished_run(run_id, deps)
         return early
     if intent.more:  # a ready step has a free slot: it gets an advance of its own and runs beside this one
         try:
@@ -1346,7 +1388,9 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
     # The step stays running until its outcome is committed: the checkpoint, the availability pre-flight and the
     # commit are part of the attempt, so the heartbeat goes on through them (a slow one is not a stale step).
     async with _Heartbeat(deps, run_id, intent.step_id, intent.attempt_id, policy.heartbeat_interval_seconds):
-        return await _settle_attempt(run_id, intent, result, info, policy, deps)
+        outcome = await _settle_attempt(run_id, intent, result, info, policy, deps)
+    await release_finished_run(run_id, deps)  # a step's cancel can have ended the run
+    return outcome
 
 
 async def _settle_attempt(
@@ -1694,6 +1738,7 @@ async def recover_stale_steps(deps: EngineDeps | None = None) -> list[str]:
     for step_id, run_id in running:
         if await _recover_one(step_id, run_id, deps, now) and run_id not in to_advance:
             to_advance.append(run_id)  # one advance is enough: each one starts a step and queues the next if room is left
+        await release_finished_run(run_id, deps)  # a recovered step's cancel can have ended the run
     for run_id in runs_active:
         if run_id not in to_advance and await _resume_if_due(run_id, deps, now):
             to_advance.append(run_id)
@@ -1968,6 +2013,7 @@ async def resume_run(
         step.status, step.outcome = ("refused" if refused else "failed"), scratch
         _fail_run(run, meta, steps, f"{step.step_key}: owner ended the run", now)
     await db.commit()
+    await release_finished_run(run_id, deps)
     return {
         "run_id": run_id,
         "state": _meta(run)["state"],
@@ -2024,6 +2070,8 @@ async def cancel_run(
         else:
             _cancel_run(run, meta, steps, cancel, now)
         await db.commit()
+        if _meta(run)["state"] in FINISHED_RUN:
+            await release_finished_run(run_id, deps)
     meta = _meta(run)
     return {
         "run_id": run_id,
@@ -2118,18 +2166,28 @@ def _workspace_view(
     return {**record, "kind": "lane" if record.get("lane") else "run"}
 
 
+def _released_view(view: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+    """Once the run's worktree is removed the code is on the branch: no path to a directory that is gone."""
+
+    release = meta.get("worktree_release")
+    if not release:
+        return view
+    removed = release.get("state") == "removed"
+    return {**view, **({"worktree": None} if removed else {}), "worktree_release": release}
+
+
 def _result_view(meta: dict[str, Any], steps: list[WorkflowStep]) -> dict[str, Any] | None:
     """Where the run's code is: the run branch and worktree. A run on lanes has it once it completes."""
 
     if meta.get("parallel"):
-        return {**meta["result"], "mode": "lanes"} if meta.get("result") else None
-    return {
+        return _released_view({**meta["result"], "mode": "lanes"}, meta) if meta.get("result") else None
+    return _released_view({
         "mode": "run_worktree",
         "state": "complete" if meta.get("state") == "completed" else None,
         "branch": meta.get("branch"),
         "worktree": meta.get("worktree"),
         "sha": _start_sha(steps, meta) if meta.get("repo_path") else None,
-    }
+    }, meta)
 
 
 async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
@@ -2237,6 +2295,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "running_steps": [s.step_key for s in steps if s.status == "running"],
         "uses_lanes": bool(meta.get("parallel")),
         "result": _result_view(meta, steps),
+        "worktree_release": meta.get("worktree_release"),
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
         "usage_totals": usage_totals(

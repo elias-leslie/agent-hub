@@ -305,7 +305,7 @@ async def test_example_run_with_injected_refusal_takes_over_and_opus_returns(
     # Later steps start from their own primary again.
     assert [c["model"] for c in world.faux.calls if c["step"] in ("review", "fix")] == [OPUS, OPUS]
     assert view["refusals"] == {"cyber": 1}
-    assert (Path(view["worktree"]) / "feature.py").read_text() == "print('done')\n"
+    assert git_out(repo, "show", f"{view['branch']}:feature.py") == "print('done')"  # the worktree is gone: the branch has it
     review = next(c for c in world.faux.calls if c["step"] == "review")
     assert "implement" in review["packet"] and "Partial progress" not in review["packet"]
 
@@ -2043,10 +2043,10 @@ async def test_with_a_cap_of_one_steps_run_one_at_a_time_in_the_run_worktree(pg_
     assert not (Path(view["worktree"]).parent / "lanes").exists() and branches(repo) == ["main", view["branch"]]
     assert {s["workspace"]["kind"] for s in view["steps"]} == {"run"}
     assert {s["workspace"]["worktree"] for s in view["steps"]} == {view["worktree"]}
-    assert all((Path(view["worktree"]) / f"{n}.txt").exists() for n in "ab")  # one tree holds everything
+    assert all(git_out(repo, "show", f"{view['branch']}:{n}.txt") == n for n in "ab")  # one branch holds everything
     assert view["result"]["mode"] == "run_worktree" and view["result"]["state"] == "complete"
     assert view["result"]["branch"] == view["branch"] and view["result"]["sha"] == view["steps"][-1]["checkpoint_sha"]
-    assert git_out(view["worktree"], "rev-parse", "HEAD") == view["result"]["sha"]
+    assert git_out(repo, "rev-parse", view["branch"]) == view["result"]["sha"]
 
 
 async def test_three_independent_steps_with_a_cap_of_two_never_have_more_than_two_running(pg_db, repo, world_factory) -> None:
@@ -2100,9 +2100,9 @@ async def test_three_independent_steps_with_a_cap_of_two_never_have_more_than_tw
     # The result is all three steps' work on the run branch, in the run worktree.
     result = view["result"]
     assert (result["mode"], result["state"], result["merged"]) == ("lanes", "merged", ["a", "b", "c"])
-    assert (result["branch"], result["worktree"]) == (view["branch"], view["worktree"])
-    assert git_out(view["worktree"], "rev-parse", "HEAD") == result["sha"]
-    assert all((Path(view["worktree"]) / f"{k}.txt").read_text() == f"{k}\n" for k in "abc")
+    assert (result["branch"], result["worktree"]) == (view["branch"], None)  # the run worktree is removed at the end
+    assert git_out(repo, "rev-parse", view["branch"]) == result["sha"]
+    assert all(git_out(repo, "show", f"{view['branch']}:{k}.txt") == k for k in "abc")
     # Usage rolls up over the three steps' attempts.
     assert [a["usage"]["input_tokens"] for s in steps.values() for a in s["attempt_history"]] == [100, 100, 100]
     assert view["usage_totals"]["total_tokens"] == 360
@@ -2143,7 +2143,7 @@ async def test_a_join_after_branches_that_edited_different_files_merges_cleanly(
     assert git_out(repo, "rev-list", "--merges", "--count", steps["join"]["checkpoint_sha"]) == "1"
     # The join is the only leaf, so the run branch is exactly its checkpoint.
     assert view["result"]["sha"] == steps["join"]["checkpoint_sha"] and view["result"]["merged"] == ["join"]
-    assert all((Path(view["worktree"]) / n).exists() for n in ("a.txt", "b.txt", "joined.txt"))
+    assert all(git_out(repo, "show", f"{view['branch']}:{n}") for n in ("a.txt", "b.txt", "joined.txt"))
     # Its acceptance (both files in its own tree) passed.
     assert [r["exit_code"] for r in steps["join"]["attempt_history"][0]["acceptance"]] == [0]
 
@@ -2221,7 +2221,7 @@ async def test_cancelling_one_parallel_step_leaves_the_others_running(pg_db, rep
     assert {s["key"]: s["status"] for s in view["steps"]} == {"a": "cancelled", "b": "completed", "c": "completed"}
     assert view["state"] == "completed" and view["steps"][0]["attempt_history"][0]["outcome"]["kind"] == "cancelled"
     # The cancelled step has no checkpoint; the others' work is the result.
-    assert view["result"]["merged"] == ["b", "c"] and not (Path(view["worktree"]) / "a.txt").exists()
+    assert view["result"]["merged"] == ["b", "c"] and "a.txt" not in git_out(repo, "ls-tree", "--name-only", view["branch"]).split()
 
 
 async def _until(check, within: float = 20) -> None:
@@ -2548,7 +2548,7 @@ async def test_a_run_that_starts_on_the_run_worktree_moves_to_lanes_when_the_cap
     assert steps["c"]["workspace"]["base_sha"] == view["base_sha"]  # independent of a: starts from the run's base
     assert "a.txt" in hold.seen["b"]["files"] and "a.txt" not in hold.seen["c"]["files"]
     assert view["result"]["mode"] == "lanes" and view["result"]["merged"] == ["b", "c"]
-    assert all((Path(view["worktree"]) / f"{k}.txt").exists() for k in "abc")
+    assert all(git_out(repo, "show", f"{view['branch']}:{k}.txt") == k for k in "abc")
 
 
 async def test_revising_the_dependencies_of_a_step_whose_lane_exists_makes_the_lane_again(pg_db, repo, world_factory) -> None:
@@ -2685,3 +2685,94 @@ async def test_the_heartbeat_keeps_beating_through_the_pre_flight_and_the_commit
     await world.run_to_stop(run_id)
     assert len(beats) == 2 and beats[1] > beats[0]
     assert (await view_of(pg_db, run_id))["state"] == "completed"
+
+
+# --- the run's worktree goes when the run ends ---------------------------------------------------------------
+
+
+def worktrees_of(repo: Path) -> list[str]:
+    return [line[9:] for line in git_out(repo, "worktree", "list", "--porcelain").splitlines() if line.startswith("worktree ")]
+
+
+async def test_a_completed_run_removes_its_worktree_keeps_the_branch_and_points_the_result_at_it(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    assert not Path(view["worktree"]).exists() and worktrees_of(repo) == [str(repo)]
+    assert view["branch"] in branches(repo)
+    assert git_out(repo, "show", f"{view['branch']}:a.txt") == "a"
+    assert git_out(repo, "rev-parse", view["branch"]) == view["result"]["sha"] == view["steps"][-1]["checkpoint_sha"]
+    assert (view["result"]["branch"], view["result"]["worktree"]) == (view["branch"], None)
+    assert view["worktree_release"]["state"] == "removed"
+
+
+async def test_a_completed_run_given_new_steps_makes_its_worktree_again_from_the_branch(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "more": [FauxAction(write={"m.txt": "m\n"})]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    first = await view_of(pg_db, run_id)
+    assert not Path(first["worktree"]).exists()
+    await add_steps(
+        pg_db, run_id, AddSteps(steps=[{"key": "more", "instructions": "again", "agent_slug": "coder", "executor": "faux"}]), deps=world.deps
+    )
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and not Path(view["worktree"]).exists()
+    assert view["worktree_release"]["state"] == "removed"
+    assert git_out(repo, "show", f"{view['branch']}:a.txt") == "a" and git_out(repo, "show", f"{view['branch']}:m.txt") == "m"
+    assert first["steps"][-1]["checkpoint_sha"] in git_out(repo, "rev-list", view["branch"]).split()
+
+
+async def test_failed_and_cancelled_runs_remove_their_worktree_too(pg_db, repo, world_factory) -> None:
+    failing = world_factory({"a": [FauxAction("refuse", category="cyber")]})
+    chains(failing)
+    failed, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="f1"), deps=failing.deps)
+    assert (await failing.run_to_stop(failed))["reason"] == "chain_exhausted"
+    assert Path((await view_of(pg_db, failed))["worktree"]).exists()  # waiting for the owner: resume needs it
+    await resume_run(pg_db, failed, OwnerDecision(action="fail"), deps=failing.deps)
+    view = await view_of(pg_db, failed)
+    assert view["state"] == "failed" and not Path(view["worktree"]).exists()
+    assert view["branch"] in branches(repo) and view["worktree_release"]["state"] == "removed"
+
+    world = world_factory({})
+    chains(world)
+    cancelled, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="c2"), deps=world.deps)
+    await RunWorkspace.from_meta(engine_module._meta(await pg_db.get(Session, cancelled))).ensure()
+    await cancel_run(pg_db, cancelled, CancelRequest(), deps=world.deps)
+    view = await view_of(pg_db, cancelled)
+    assert view["state"] == "cancelled" and not Path(view["worktree"]).exists()
+    assert view["branch"] in branches(repo) and view["worktree_release"]["state"] == "removed"
+
+
+async def test_a_run_waiting_for_the_owner_keeps_its_worktree(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "chain_exhausted"
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and Path(view["worktree"]).exists()
+    assert view["worktree_release"] is None and view["worktree"] in worktrees_of(repo)
+
+
+async def test_a_worktree_with_uncommitted_changes_is_kept_and_the_run_says_why(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    # A run whose last attempt left files behind: its worktree made, left dirty, then the run ends.
+    dirty, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="dirty"), deps=world.deps)
+    workspace = RunWorkspace.from_meta(engine_module._meta(await pg_db.get(Session, dirty)))
+    await workspace.ensure()
+    (workspace.worktree / "stray.txt").write_text("left behind\n")
+    await cancel_run(pg_db, dirty, CancelRequest(), deps=world.deps)
+    view = await view_of(pg_db, dirty)
+    assert view["state"] == "cancelled" and (workspace.worktree / "stray.txt").exists()
+    release = view["worktree_release"]
+    assert (release["state"], release["reason"], release["files"]) == ("kept", "uncommitted_changes", ["stray.txt"])
+    assert view["result"] is not None and view["branch"] in branches(repo)
+    assert str(workspace.worktree) in worktrees_of(repo)

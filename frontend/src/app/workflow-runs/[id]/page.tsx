@@ -106,6 +106,17 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           {run.result?.worktree ? ` · ${run.result.worktree}` : ''}
         </p>
       ) : null}
+      {run.worktree_release?.state === 'kept' ? (
+        <p
+          className="break-all font-mono text-[12px] text-amber-300"
+          data-testid="run-worktree-kept"
+        >
+          Worktree kept at {run.worktree ?? 'unknown path'}:{' '}
+          {run.worktree_release.detail ??
+            run.worktree_release.reason ??
+            'not removed'}
+        </p>
+      ) : null}
       {run.limits ? (
         <p
           className="font-mono text-[12px] tabular-nums text-slate-500"

@@ -134,7 +134,8 @@ def _reopen(run: Any, meta: dict[str, Any]) -> dict[str, Any]:
     provider_metadata = dict(run.provider_metadata or {})
     provider_metadata.pop("live_activity", None)
     run.provider_metadata = provider_metadata
-    return {**meta, "state": "running", "pause": None}
+    # The worktree is made again from the run branch when the next step needs it.
+    return {**{k: v for k, v in meta.items() if k != "worktree_release"}, "state": "running", "pause": None}
 
 
 def _result(run_id: str, meta: dict[str, Any], enqueue: bool, **extra: Any) -> dict[str, Any]:

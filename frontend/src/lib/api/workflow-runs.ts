@@ -271,6 +271,15 @@ export interface StepWorkspace {
   checkpoint_sha?: string
 }
 
+/** What became of the run's worktree once it ended: removed (the code is on the branch) or kept, with the reason. */
+export interface WorktreeRelease {
+  state: 'removed' | 'kept'
+  reason?: string
+  detail?: string
+  files?: string[]
+  at?: string | null
+}
+
 /** Where the run's final code is: the run branch and worktree, once the run completes. */
 export interface RunResult {
   mode: 'run_worktree' | 'lanes'
@@ -387,6 +396,8 @@ export interface WorkflowRunDetail {
   task_id: string | null
   repo_path: string | null
   branch: string | null
+  /** The run's own worktree path; removed once the run ends (see worktree_release). */
+  worktree?: string | null
   pause: RunPause | null
   failure: string | null
   /** The stop request for the whole run, if one was made. */
@@ -413,6 +424,7 @@ export interface WorkflowRunDetail {
   /** Each running step works in its own worktree and branch. */
   uses_lanes?: boolean
   result?: RunResult | null
+  worktree_release?: WorktreeRelease | null
 }
 
 export type ResumeAction = 'retry' | 'skip' | 'fail'
