@@ -416,3 +416,15 @@ async def test_timeout_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_
         patch.undo()
     assert [e[0] for e in events] == ["system_message", "user_message", "tool_use", "tool_result", "error"]
     assert (events[-1][1] or "").startswith("timeout")
+
+
+@pytest.mark.parametrize("module", ["engine", "schemas"])
+def test_workflow_modules_import_first_in_a_fresh_worker(module: str) -> None:
+    """The worker imports the engine on its first advance, before anything has loaded app.api (whose package
+    init imports the workflow routes, which import the engine): that order must not be a circular import."""
+
+    done = subprocess.run(
+        ["python", "-c", f"import app.services.workflow_runs.{module}"],
+        capture_output=True, text=True, cwd=Path(__file__).resolve().parents[3], check=False,
+    )
+    assert done.returncode == 0, done.stderr[-600:]

@@ -26,7 +26,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from app.api.complete.runtime_usage import served_model
 from app.llm.types import AssistantMessage, TextContent, ToolCall
 from app.llm.utils.outcomes import ProviderOutcome, outcome_of
 
@@ -243,6 +242,9 @@ class AgentHubExecutor:
             messages = messages[: hook.after_turn]
             injected = True
         # The catalog identity of what answered each turn; a provider-reported different model is kept as reported.
+        # Imported here: app.api's package init imports the workflow routes, which import the engine and these executors.
+        from app.api.complete.runtime_usage import served_model
+
         served = list(dict.fromkeys(served_model(m, model) for m in messages))
         usage = Usage()
         for item in (m.usage for m in messages):

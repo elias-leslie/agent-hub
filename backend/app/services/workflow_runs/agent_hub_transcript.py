@@ -15,8 +15,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.complete.helpers import normalize_content_for_storage
-from app.api.complete.runtime_usage import accounting_model, outcome_usage, served_model
 from app.llm.types import (
     AssistantMessage,
     TextContent,
@@ -54,6 +52,9 @@ class Transcript:
 def usage_payload(message: AssistantMessage, requested_model: str) -> dict[str, Any]:
     """Per-turn usage as the session UI reads it, with the model that answered and any typed outcome."""
 
+    # Imported here: app.api's package init imports the workflow routes, which import the engine and its executors.
+    from app.api.complete.runtime_usage import outcome_usage, served_model
+
     counts = Usage()
     usage = message.usage
     counts.add(usage.input, usage.cache_read, usage.cache_write, usage.output, usage.reasoning)
@@ -73,6 +74,10 @@ def _text(result: ToolResultMessage) -> str:
 
 async def record_transcript(db: AsyncSession, transcript: Transcript) -> None:
     """Write the transcript as session events and cost rows; the caller commits."""
+
+    # Imported here: app.api's package init imports the workflow routes, which import the engine and its executors.
+    from app.api.complete.helpers import normalize_content_for_storage
+    from app.api.complete.runtime_usage import accounting_model, outcome_usage, served_model
 
     sid, agent = transcript.session_id, transcript.agent_slug
     await lock_session_event_ingestion(db, sid)
