@@ -162,3 +162,67 @@ async def test_shutdown_persists_the_interruption(
     assert run.state == "interrupted"
     stored = await persisted_turn(pg_db, "live")
     assert stored["state"] == "interrupted" and stored["last_seq"] == 2
+
+
+def _assistant(**fields: Any) -> Any:
+    import time
+
+    from app.llm.types import AssistantMessage, Usage
+    from tests.model_ids import CLAUDE_SONNET
+
+    return AssistantMessage(
+        content=[], api="anthropic-messages", provider="claude", model=CLAUDE_SONNET,
+        usage=Usage(input=5, output=2), stop_reason="stop", timestamp=int(time.time() * 1000), **fields,
+    )
+
+
+async def test_the_prompt_is_stored_at_turn_start_so_a_second_client_sees_it_mid_turn(
+    api: httpx.AsyncClient, pg_db: AsyncSession, registry: TurnRegistry, test_session_factory: None  # noqa: F811
+) -> None:
+    from unittest.mock import patch
+
+    from app.api.complete import stream_completion
+    from app.api.complete.schemas import MessageInput
+    from app.llm.types import DoneEvent, TextDeltaEvent
+    from app.services.llm_messages import Message
+    from tests.api.stream_test_support import patched_done_persistence
+    from tests.model_ids import CLAUDE_SONNET
+
+    await add_session(pg_db, "prompted", minutes=1, session_type="chat", status="active")
+    gate = asyncio.Event()
+    prompt = "Please audit the cache layer"
+
+    async def provider_stream(*_args: object, **_kwargs: object) -> AsyncIterator[Any]:
+        yield TextDeltaEvent(content_index=0, delta="Working on it. ", partial=_assistant())
+        await gate.wait()
+        yield DoneEvent(reason="stop", message=_assistant())
+
+    with (
+        patched_done_persistence() as persistence,
+        patch("app.api.complete.streaming.run_completion_stream", new=provider_stream),
+    ):
+        stream = stream_completion(
+            messages=[Message(role="user", content=prompt)],
+            model=CLAUDE_SONNET,
+            provider="claude",
+            temperature=0.7,
+            session_id="prompted",
+            db=pg_db,
+            user_messages=[MessageInput(role="user", content=prompt)],
+        )
+        run = registry.start("prompted", stream)
+        await asyncio.sleep(0.2)
+
+        # A second client opens the session while the first client's turn is still running.
+        mid = (await api.get("/api/sessions/prompted")).json()
+        assert mid["turn_state"] == "running"
+        assert [(m["role"], m["content"]) for m in mid["messages"]] == [("user", prompt)]
+        attach = asyncio.create_task(api.get("/api/sessions/prompted/stream"))
+        await asyncio.sleep(0.05)
+        gate.set()
+        response = await asyncio.wait_for(attach, 5)
+        await asyncio.wait_for(run.finished.wait(), 2)
+
+    assert [e["type"] for e in parse(response.text)][-1] == "done"
+    # The end-of-turn save no longer stores the prompt a second time.
+    assert not persistence.save_messages_to_db.await_args.kwargs["user_messages"]

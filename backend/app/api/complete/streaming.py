@@ -424,6 +424,13 @@ async def stream_completion(
     _attach_routing(writer, ctx)
     content_buf: list[str] = [""]
 
+    if db is not None and ctx.user_messages:
+        from .streaming_persistence import save_turn_prompt_to_db
+
+        # Stored now, not with the answer: a client that opens the session mid-turn must see the prompt.
+        if await save_turn_prompt_to_db(session_id, ctx.user_messages, source_metadata, agent_used):
+            ctx.user_messages = None
+
     yield writer.connected(model=model, provider=provider, turn_id=turn_id)
     try:
         context = build_context_from_messages(messages_to_dicts(messages), tools=tools)

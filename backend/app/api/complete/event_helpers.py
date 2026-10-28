@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _save_user_message_events(
+async def save_user_message_events(
     db: AsyncSession,
     session_id: str,
     user_messages: list[MessageInput],
-    input_tokens: int,
+    input_tokens: int | None,
     agent_id: str | None,
     source_metadata: dict[str, object] | None = None,
 ) -> None:
@@ -85,7 +85,7 @@ async def save_events(
 
     ``usage`` is stored on the assistant event (provider outcome payload).
     """
-    await _save_user_message_events(db, session_id, user_messages, input_tokens, agent_id, source_metadata)
+    await save_user_message_events(db, session_id, user_messages, input_tokens, agent_id, source_metadata)
     await _save_thinking_event(
         db,
         session_id,

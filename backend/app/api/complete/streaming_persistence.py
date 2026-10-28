@@ -14,7 +14,7 @@ from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_message, publish_tool_result, publish_tool_use
 from app.services.session_live_activity import mark_session_completed
 
-from .event_helpers import save_events
+from .event_helpers import save_events, save_user_message_events
 from .schemas import MessageInput
 from .streaming_context import StreamContext
 
@@ -60,6 +60,30 @@ async def save_messages_to_db(
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:
         logger.error("Failed to save streaming messages: %s", save_err)
+
+
+async def save_turn_prompt_to_db(
+    session_id: str,
+    user_messages: list[MessageInput],
+    source_metadata: dict[str, object] | None = None,
+    agent_used: str | None = None,
+) -> bool:
+    """Store the prompt that starts a turn, so every client that opens the session mid-turn sees it.
+
+    Returns True once stored; the end-of-turn save then must not store it again.
+    """
+    if not any(msg.role in ("user", "system") for msg in user_messages):
+        return False
+    try:
+        from app.db import async_session
+
+        async with async_session() as fresh_db:
+            await save_user_message_events(fresh_db, session_id, user_messages, None, agent_used, source_metadata)
+            await fresh_db.commit()
+        return True
+    except Exception as save_err:
+        logger.error("Failed to save the turn's prompt: %s", save_err)
+        return False
 
 
 async def _with_fresh_session(
