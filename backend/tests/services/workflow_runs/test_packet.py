@@ -64,6 +64,7 @@ def test_everything_fits_in_a_large_window_and_render_has_required_parts() -> No
         "/run",
         "summary2",
         "handoff note",
+        "Do not run git commit",
     ):
         assert part in text
 

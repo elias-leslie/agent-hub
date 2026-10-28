@@ -153,7 +153,8 @@ class HandoffPacket:
             f"# Run directory\nFull earlier-step notes and transcript references: {self.run_dir}"
         )
         lines.append(
-            "# Required output\nEnd your final message with a handoff note: a fenced block labelled "
+            "# Required output\nDo not run git commit or change git settings: the runner checkpoints your "
+            "changes after the step.\nEnd your final message with a handoff note: a fenced block labelled "
             f"`{HANDOFF_FENCE}` holding one JSON object with the keys summary (string), decisions (list of "
             "strings), files (list of files touched) and open_questions (list of strings).\n"
             f"```{HANDOFF_FENCE}\n"
