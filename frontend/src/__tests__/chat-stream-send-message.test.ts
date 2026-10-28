@@ -2,21 +2,22 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { sendMessage } from '../../../packages/chat-ui/src/hooks/chat-stream/send-message'
 
-const mockProcessStreamWithReconnect = vi.fn()
+const mockProcessStream = vi.fn()
 
 vi.mock(
   '../../../packages/chat-ui/src/hooks/chat-stream/stream-processor',
   () => ({
-    processStreamWithReconnect: (...args: unknown[]) =>
-      mockProcessStreamWithReconnect(...args),
+    processStream: (...args: unknown[]) => mockProcessStream(...args),
   }),
 )
 
 describe('chat stream sendMessage', () => {
   it('requests real tool execution when tools are enabled', async () => {
-    mockProcessStreamWithReconnect.mockResolvedValue(undefined)
+    mockProcessStream.mockResolvedValue('finished')
 
+    const client = { turns: {} } as never
     await sendMessage({
+      client,
       content: 'Inspect repo and fix the issue.',
       agentSlug: 'assistant',
       messages: [],
@@ -32,9 +33,6 @@ describe('chat stream sendMessage', () => {
         ]),
       },
       abortControllersRef: { current: [] },
-      fetchHeaders: {},
-      completeEndpoint: '/api/complete',
-      preferencesEndpoint: '/api/preferences',
       projectId: 'summitflow',
       memoryGroupPrefix: 'agent:',
       includeRoles: ['system', 'system-extra', 'user-context'],
@@ -56,10 +54,8 @@ describe('chat stream sendMessage', () => {
       },
     })
 
-    expect(mockProcessStreamWithReconnect).toHaveBeenCalledWith(
-      'assistant',
-      expect.any(String),
-      expect.any(AbortController),
+    expect(mockProcessStream).toHaveBeenCalledWith(
+      client,
       expect.objectContaining({
         project_id: 'summitflow',
         tools_enabled: true,
@@ -82,14 +78,10 @@ describe('chat stream sendMessage', () => {
           surface: 'work_chats',
         },
       }),
-      expect.any(Object),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Object),
-      '/api/complete',
+      expect.objectContaining({ assistantId: expect.any(String) }),
+      expect.any(AbortSignal),
     )
-    const request = mockProcessStreamWithReconnect.mock.calls[0][3]
+    const request = mockProcessStream.mock.calls[0][1]
     expect(request).not.toHaveProperty('max_turns')
   })
 })

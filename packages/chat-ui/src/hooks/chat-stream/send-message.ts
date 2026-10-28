@@ -2,12 +2,15 @@
  * Message sending logic for chat streaming.
  */
 
+import type { ChatHubClient } from "../../client";
 import type { ChatMessage, StreamStatus } from "../../types/chat";
 import type { StreamState, CompletionRequest, MessageHistoryEntry } from "./types";
 import { formatModelName, generateId } from "./utils";
-import { processStreamWithReconnect } from "./stream-processor";
+import { clearPendingPrompt, rememberPendingPrompt } from "./pending-prompt";
+import { processStream } from "./stream-processor";
 
 interface SendMessageParams {
+  client: Pick<ChatHubClient, "turns">;
   content: string;
   targetAgents?: string[];
   agentSlug: string;
@@ -23,11 +26,9 @@ interface SendMessageParams {
   setStatus: React.Dispatch<React.SetStateAction<StreamStatus>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   setCurrentSessionId: React.Dispatch<React.SetStateAction<string | null>>;
+  setTurnPhase?: (phase: string | null) => void;
   streamStatesRef: React.MutableRefObject<Map<string, StreamState>>;
   abortControllersRef: React.MutableRefObject<AbortController[]>;
-  fetchHeaders: Record<string, string>;
-  completeEndpoint: string;
-  preferencesEndpoint?: string;
   projectId: string;
   memoryGroupPrefix: string;
   externalId?: string;
@@ -40,9 +41,13 @@ interface SendMessageParams {
 
 /**
  * Sends a message and processes streaming responses from agents.
+ *
+ * A session runs one turn at a time on the server, so several target agents answer one after the other, in the
+ * order given, and every answer after the first continues the session the first one opened.
  */
 export async function sendMessage(params: SendMessageParams): Promise<void> {
   const {
+    client,
     content,
     targetAgents,
     agentSlug,
@@ -58,11 +63,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
     setStatus,
     setError,
     setCurrentSessionId,
+    setTurnPhase,
     streamStatesRef,
     abortControllersRef,
-    fetchHeaders,
-    completeEndpoint,
-    preferencesEndpoint,
     projectId,
     memoryGroupPrefix,
     externalId,
@@ -124,58 +127,72 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   const controllers = effectiveAgents.map(() => new AbortController());
   abortControllersRef.current = controllers;
 
+  // The session the answers belong to: the one given, then the one the first answer opens.
+  let activeSessionId = sessionId;
+  const trackSession: React.Dispatch<React.SetStateAction<string | null>> = (value) => {
+    if (typeof value === "string" && value) {
+      activeSessionId = value;
+      rememberPendingPrompt(value, content);
+    }
+    setCurrentSessionId(value);
+  };
+  if (sessionId) rememberPendingPrompt(sessionId, content);
+
   try {
     setStatus("streaming");
 
-    await Promise.all(
-      effectiveAgents.map((targetAgent, index) => {
-        const requestBody: CompletionRequest = {
-          agent_slug: targetAgent,
-          include_roles: includeRoles && includeRoles.length > 0 ? includeRoles : undefined,
-          prompt_mode: promptMode || undefined,
-          messages: messageHistory,
-          temperature,
-          session_id: sessionId,
-          working_dir: workingDir,
-          tools_enabled: toolsEnabled,
-          // Streaming tool execution keys off execute_tools; Agent Hub owns the
-          // generous internal turn fuse.
-          execute_tools: toolsEnabled,
-          project_id: projectId,
-          external_id: externalId,
-          parent_session_id: parentSessionId,
-          source_metadata: sourceMetadata,
-          work_context: workContext,
-          thinking_level: thinkingLevel || undefined,
-          current_branch: currentBranch || undefined,
-          stream: true,
-          use_memory: useMemory ?? true,
-          memory_group_id: `${memoryGroupPrefix}${targetAgent}`,
-        };
+    for (const [index, targetAgent] of effectiveAgents.entries()) {
+      if (controllers[index].signal.aborted) break;
+      const requestBody: CompletionRequest = {
+        agent_slug: targetAgent,
+        include_roles: includeRoles && includeRoles.length > 0 ? includeRoles : undefined,
+        prompt_mode: promptMode || undefined,
+        messages: messageHistory,
+        temperature,
+        session_id: activeSessionId,
+        working_dir: workingDir,
+        tools_enabled: toolsEnabled,
+        // Streaming tool execution keys off execute_tools; Agent Hub owns the
+        // generous internal turn fuse.
+        execute_tools: toolsEnabled,
+        project_id: projectId,
+        external_id: externalId,
+        parent_session_id: parentSessionId,
+        source_metadata: sourceMetadata,
+        work_context: workContext,
+        thinking_level: thinkingLevel || undefined,
+        current_branch: currentBranch || undefined,
+        use_memory: useMemory ?? true,
+        memory_group_id: `${memoryGroupPrefix}${targetAgent}`,
+      };
 
-        const state = streamStatesRef.current.get(assistantIds[index])!;
-        return processStreamWithReconnect(
-          targetAgent,
-          assistantIds[index],
-          controllers[index],
-          requestBody,
-          state,
+      const outcome = await processStream(
+        client,
+        requestBody,
+        {
+          assistantId: assistantIds[index],
+          streamState: streamStatesRef.current.get(assistantIds[index])!,
           setMessages,
-          setCurrentSessionId,
+          setCurrentSessionId: trackSession,
           setStatus,
-          fetchHeaders,
-          completeEndpoint,
-        );
-      }),
-    );
+          setTurnPhase,
+        },
+        controllers[index].signal,
+      );
+      if (outcome === "cancelled") break;
+    }
 
+    if (activeSessionId) clearPendingPrompt(activeSessionId);
     if (abortControllersRef.current === controllers) setStatus("idle");
   } catch (err: unknown) {
     // A newer sendMessage (user interruption) owns status now; don't clobber it.
     if (abortControllersRef.current !== controllers) return;
     if (err instanceof Error && err.name === "AbortError") {
+      // The connection was dropped here (cancel, unmount, new session); the turn may still be running on the server.
       setStatus("idle");
     } else {
+      // The turn ended with an error: nothing to resume.
+      if (activeSessionId) clearPendingPrompt(activeSessionId);
       setError(err instanceof Error ? err.message : "Stream connection error");
       setStatus("error");
     }

@@ -19,15 +19,12 @@ import {
   useRef,
   useState,
 } from 'react'
-import {
-  type ModelOption,
-  useModelsWithSync,
-} from '@/components/chat/use-models'
 import { useToastActions } from '@/components/error/toast'
 import { ModelCard } from '@/components/models/model-card'
 import { ModelComparison } from '@/components/models/model-comparison'
 import { ModelFilters } from '@/components/models/model-filters'
 import { useModelComparison } from '@/components/models/use-model-comparison'
+import { type ModelOption, useModelsWithSync } from '@/hooks/use-models-catalog'
 import { fetchApi } from '@/lib/api-config'
 import { getPricingSortValue } from '@/lib/model-pricing'
 

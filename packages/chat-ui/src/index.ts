@@ -19,18 +19,20 @@ export { ModelTriggerButton, MicButton, StopButton, SendButton } from './compone
 export { SpeakerButton } from './components/speaker-button';
 
 export { useChatStream } from './hooks/use-chat-stream';
-export { useVoicePreferences } from './hooks/use-voice-preferences';
 export { useModels } from './components/use-models';
 export { useMentionPopup } from './components/use-mention-popup';
 export { useVoiceInput } from './components/use-voice-input';
+export { ChatClientProvider, useChatClient } from './client';
 
 export { groupMessages, formatModelName, detectMentionedModel, getToolIcon, MODEL_ALIASES } from './components/message-utils';
 export { getProviderBubbleStyle, getProviderIconColor, getProviderTextColor } from './components/message-bubble-utils';
+export { describePhase } from './hooks/chat-stream/turn-phase';
 export { cn } from './lib/utils';
 
 export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecution } from './types/chat';
-export type { ChatStreamApiConfig } from './hooks/use-chat-stream';
+export type { ChatStreamConfig } from './hooks/use-chat-stream';
+export type { ChatHubClient } from './client';
+export type { ChatVoice } from './types/voice';
 export type { PromptMode } from './hooks/chat-stream/types';
 export type { ActivityState, ToolCall, ThinkingContent, ActivityIndicatorProps } from './components/activity-indicator';
 export type { ModelOption, ModelScores, ModelCost, ModelCapabilities, ModelEnrichment } from './components/use-models';
-export type { VoiceOption } from './hooks/use-voice-preferences';

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type { ModelOption } from '@/components/chat/use-models'
+import type { ModelOption } from '@/hooks/use-models-catalog'
 
 /** Most models the comparison panel shows side by side. */
 export const MAX_COMPARED_MODELS = 3

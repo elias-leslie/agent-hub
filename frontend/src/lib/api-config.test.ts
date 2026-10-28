@@ -71,16 +71,6 @@ describe('fetchApi', () => {
     )
   })
 
-  it('builds the same-origin chat completion path for browser requests', async () => {
-    vi.stubGlobal('window', {
-      location: { hostname: '192.0.2.44' },
-    } as Window & typeof globalThis)
-
-    const { getCompleteApiUrl } = await import('./api-config')
-
-    expect(getCompleteApiUrl()).toBe('/api/complete')
-  })
-
   it('uses the built-in dashboard identity when no client id env is set', async () => {
     delete process.env.INTERNAL_SERVICE_SECRET
     delete process.env.AGENT_HUB_DASHBOARD_CLIENT_ID

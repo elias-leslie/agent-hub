@@ -7,7 +7,8 @@ interface UseVoiceInputProps {
   isRecording: boolean;
   status: StreamStatus;
   disabled: boolean;
-  voiceWsUrl?: string;
+  /** The hold-space shortcut is active only when voice input is available. */
+  voiceEnabled: boolean;
   startRecording: () => void;
   stopRecording: () => void;
   stopSpeaking: () => void;
@@ -19,7 +20,7 @@ export function useVoiceInput({
   isRecording,
   status,
   disabled,
-  voiceWsUrl,
+  voiceEnabled,
   startRecording,
   stopRecording,
   stopSpeaking,
@@ -27,7 +28,7 @@ export function useVoiceInput({
   const isSpaceHeldRef = useRef(false);
 
   useEffect(() => {
-    if (!voiceWsUrl) return;
+    if (!voiceEnabled) return;
 
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape" && isSpeaking) {
@@ -78,7 +79,7 @@ export function useVoiceInput({
       window.removeEventListener("blur", handleBlur);
     };
   }, [
-    voiceWsUrl,
+    voiceEnabled,
     isInputFocused,
     isSpeaking,
     isRecording,

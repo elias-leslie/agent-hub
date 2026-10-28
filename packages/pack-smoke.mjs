@@ -45,11 +45,25 @@ for (const [index, manifest] of manifests.entries()) {
 	Object.assign(dependencies, manifest.peerDependencies);
 	dependencies[manifest.name] = `file:${archives[index]}`;
 	overrides[manifest.name] = `file:${archives[index]}`;
+	// Stylesheet exports are files, not modules: they only need to be in the tarball (checked above).
 	imports.push(
-		...Object.keys(manifest.exports).map(
-			(key) => manifest.name + (key === "." ? "" : key.slice(1)),
-		),
+		...Object.keys(manifest.exports)
+			.filter((key) => !key.endsWith(".css"))
+			.map((key) => manifest.name + (key === "." ? "" : key.slice(1))),
 	);
+	if (manifest.name === "@agent-hub/chat-ui") {
+		// The main entry must work on a host without passport-client; only ./voice may reach it.
+		for (const file of ["dist/index.js", "dist/index.cjs"]) {
+			const source = execFileSync("tar", ["-xOf", archives[index], `package/${file}`], {
+				encoding: "utf8",
+				maxBuffer: 64 * 1024 * 1024,
+			});
+			assert(
+				!source.includes("passport-client"),
+				`${manifest.name} ${file} must not import passport-client`,
+			);
+		}
+	}
 }
 const consumer = mkdtempSync(join(tmpdir(), "package-consumer-"));
 writeFileSync(

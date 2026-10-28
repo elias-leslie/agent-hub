@@ -1,7 +1,7 @@
 'use client'
 
 import { X } from 'lucide-react'
-import type { ModelOption } from '@/components/chat/use-models'
+import type { ModelOption } from '@/hooks/use-models-catalog'
 import {
   CapabilitiesMatrix,
   CompositeScore,

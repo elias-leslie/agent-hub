@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
-import { useModelsWithSync } from '@/components/chat/use-models'
+import { useModelsWithSync } from '@/hooks/use-models-catalog'
 import {
   type Credential,
   type CredentialCreate,

@@ -1,11 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-
-import type { ModelOption } from '@/components/chat/use-models'
 import {
   MAX_COMPARED_MODELS,
   useModelComparison,
 } from '@/components/models/use-model-comparison'
+import type { ModelOption } from '@/hooks/use-models-catalog'
 
 function model(id: string, provider = 'claude'): ModelOption {
   return { id, name: id, provider } as ModelOption

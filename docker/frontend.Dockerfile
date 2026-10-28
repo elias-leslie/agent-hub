@@ -14,7 +14,7 @@ COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
 RUN CI=true pnpm install --frozen-lockfile
-RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
+RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/sdk --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
 
 WORKDIR /workspace/frontend
 
@@ -37,7 +37,7 @@ COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
 RUN CI=true pnpm install --frozen-lockfile
-RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
+RUN pnpm --filter @agent-hub/passport-client --filter @agent-hub/sdk --filter @agent-hub/chat-ui --filter @summitflow/notes-ui build
 
 # Build with standalone output, then prune pnpm store
 ENV NEXT_TELEMETRY_DISABLED=1

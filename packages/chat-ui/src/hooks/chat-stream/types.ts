@@ -18,7 +18,7 @@ export interface StreamState {
 }
 
 /**
- * Session data returned from the backend.
+ * A tool call as the session stores it.
  */
 export interface SessionToolExecution {
   id: string;
@@ -27,25 +27,6 @@ export interface SessionToolExecution {
   status: string;
   result?: string | null;
   duration_ms?: number | null;
-}
-
-export interface SessionData {
-  id: string;
-  project_id?: string;
-  provider?: string;
-  messages?: Array<{
-    id: number;
-    role: string;
-    content: string;
-    created_at: string;
-    agent_name?: string;
-    model_used?: string;
-    model_display_name?: string | null;
-    agent_display_name?: string | null;
-    thinking?: string | null;
-    thinking_tokens?: number | null;
-    tool_executions?: SessionToolExecution[];
-  }>;
 }
 
 /**
@@ -100,7 +81,6 @@ export interface CompletionRequest {
   };
   thinking_level?: string;
   current_branch?: string;
-  stream: boolean;
   use_memory: boolean;
   memory_group_id: string;
 }

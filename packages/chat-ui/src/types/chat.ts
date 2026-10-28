@@ -108,6 +108,7 @@ export interface StreamMessage {
   | "thinking"
   | "done"
   | "cancelled"
+  | "cancel_acknowledged"
   | "error"
   | "tool_use"
   | "tool_start"

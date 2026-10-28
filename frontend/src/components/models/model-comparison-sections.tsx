@@ -9,8 +9,8 @@ import {
   Pencil,
   X,
 } from 'lucide-react'
-import type { ModelOption, ModelScores } from '@/components/chat/use-models'
 import { getProviderColor } from '@/components/settings/constants'
+import type { ModelOption, ModelScores } from '@/hooks/use-models-catalog'
 import { formatCatalogModelPricing } from '@/lib/model-pricing'
 import { cn } from '@/lib/utils'
 

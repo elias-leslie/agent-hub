@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useChatClient, type ChatHubClient } from "../client";
 
 export interface ModelScores {
   coding: number;
@@ -69,23 +70,16 @@ export interface ModelOption {
   enrichment?: ModelEnrichment | null;
 }
 
-async function fetchModels(fetchFn: (url: string, options?: RequestInit) => Promise<Response>, endpoint: string): Promise<ModelOption[]> {
-  const response = await fetchFn(endpoint);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.status}`);
-  }
-  const data = await response.json();
-  return data.models;
-}
-
-export function useModels(
-  fetchFn: (url: string, options?: RequestInit) => Promise<Response> = fetch,
-  modelsEndpoint: string | null = "/api/models",
-): ModelOption[] {
+/**
+ * The model catalog through the client's `models.list()`. Empty until it loads, and when there is no client or
+ * `enabled` is false (nothing is fetched then).
+ */
+export function useModels(client?: ChatHubClient | null, options: { enabled?: boolean } = {}): ModelOption[] {
+  const resolved = useChatClient(client);
   const { data } = useQuery({
-    queryKey: ["models", modelsEndpoint],
-    queryFn: () => fetchModels(fetchFn, modelsEndpoint || "/api/models"),
-    enabled: Boolean(modelsEndpoint),
+    queryKey: ["agent-hub-chat-ui", "models", resolved?.baseUrl ?? ""],
+    queryFn: async () => (await resolved!.models.list()) as unknown as ModelOption[],
+    enabled: Boolean(resolved) && (options.enabled ?? true),
     staleTime: Infinity,
     gcTime: Infinity,
   });

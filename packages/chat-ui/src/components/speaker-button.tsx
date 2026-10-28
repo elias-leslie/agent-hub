@@ -1,44 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useVoicePreferences } from "../hooks/use-voice-preferences";
 
 interface SpeakerButtonProps {
-  ttsBaseUrl: string;
-  preferencesEndpoint?: string;
-  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
+  ttsEnabled: boolean;
   isSpeaking?: boolean;
+  onToggle: () => void;
   onStopSpeaking?: () => void;
-  onVoiceChange?: (voiceId: string) => void;
-  onEnabledChange?: (enabled: boolean) => void;
 }
 
 export function SpeakerButton({
-  ttsBaseUrl,
-  preferencesEndpoint,
-  fetchFn,
+  ttsEnabled,
   isSpeaking = false,
+  onToggle,
   onStopSpeaking,
-  onVoiceChange,
-  onEnabledChange,
 }: SpeakerButtonProps) {
-  const {
-    selectedVoice,
-    ttsEnabled,
-    setTtsEnabled,
-  } = useVoicePreferences({ ttsBaseUrl, preferencesEndpoint, fetchFn });
-
-  // Notify parent of changes
-  useEffect(() => { onVoiceChange?.(selectedVoice); }, [selectedVoice, onVoiceChange]);
-  useEffect(() => { onEnabledChange?.(ttsEnabled); }, [ttsEnabled, onEnabledChange]);
-
   const handleClick = () => {
     if (isSpeaking) {
       onStopSpeaking?.();
     } else {
-      setTtsEnabled(!ttsEnabled);
+      onToggle();
     }
   };
 

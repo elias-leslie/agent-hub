@@ -12,8 +12,8 @@ import {
   Pencil,
   Zap,
 } from 'lucide-react'
-import type { ModelOption } from '@/components/chat/use-models'
 import { getProviderColor } from '@/components/settings/constants'
+import type { ModelOption } from '@/hooks/use-models-catalog'
 import { formatCatalogModelPricing } from '@/lib/model-pricing'
 import { cn } from '@/lib/utils'
 import { ModelRadar } from './model-radar'

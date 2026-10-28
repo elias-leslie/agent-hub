@@ -48,14 +48,9 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     status,
     disabled = false,
     compact = false,
-    voiceWsUrl,
-    ttsBaseUrl,
-    preferencesEndpoint,
-    fetchFn,
+    voice,
     editingMessage,
     onEditCancel,
-    onVoiceChange,
-    onEnabledChange,
     allowModelMentions = true,
   } = props;
 
@@ -136,23 +131,20 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
           />
         </div>
 
-        {allowModelMentions && !isStreaming && !voiceWsUrl && (
+        {allowModelMentions && !isStreaming && !voice?.micAvailable && (
           <ModelTriggerButton onClick={triggerMentionPopup} disabled={disabled} />
         )}
 
-        {ttsBaseUrl && (
+        {voice?.speakerAvailable && (
           <SpeakerButton
-            ttsBaseUrl={ttsBaseUrl}
-            preferencesEndpoint={preferencesEndpoint}
-            fetchFn={fetchFn}
+            ttsEnabled={voice.ttsEnabled}
             isSpeaking={isSpeaking}
+            onToggle={() => voice.setTtsEnabled(!voice.ttsEnabled)}
             onStopSpeaking={stopSpeaking}
-            onVoiceChange={onVoiceChange}
-            onEnabledChange={onEnabledChange}
           />
         )}
 
-        {voiceWsUrl && (
+        {voice?.micAvailable && (
           <MicButton
             isRecording={isRecording}
             canRecord={canRecord}

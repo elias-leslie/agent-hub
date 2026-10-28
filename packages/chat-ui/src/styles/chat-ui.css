@@ -1,0 +1,68 @@
+/*
+ * Source of dist/chat-ui.css: the Tailwind utilities this package uses, compiled, plus default colors. A host
+ * without Tailwind imports `@agent-hub/chat-ui/chat-ui.css`; a host with Tailwind scans the package itself and
+ * does not need it.
+ *
+ * Colors come from CSS variables (--background, --card, --primary, ...). The defaults below are a dark palette and
+ * sit in :where(), so any value the host sets on :root wins. All rules are in cascade layers, so the host's
+ * unlayered CSS wins over them too.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+@layer base {
+  :where(:root) {
+    color-scheme: dark;
+    --radius: 0.625rem;
+    --background: oklch(0.19 0.012 264);
+    --foreground: oklch(0.9 0.008 264);
+    --card: oklch(0.23 0.014 264);
+    --card-foreground: oklch(0.9 0.008 264);
+    --popover: oklch(0.25 0.014 264);
+    --popover-foreground: oklch(0.9 0.008 264);
+    --primary: oklch(0.72 0.1 250);
+    --primary-foreground: oklch(0.18 0.02 264);
+    --secondary: oklch(0.29 0.014 264);
+    --secondary-foreground: oklch(0.88 0.008 264);
+    --muted: oklch(0.27 0.012 264);
+    --muted-foreground: oklch(0.68 0.015 264);
+    --accent: oklch(0.31 0.016 264);
+    --accent-foreground: oklch(0.92 0.008 264);
+    --destructive: oklch(0.66 0.19 22);
+    --border: oklch(0.36 0.014 264 / 70%);
+    --input: oklch(0.36 0.014 264 / 85%);
+    --ring: oklch(0.72 0.1 250);
+  }
+}

@@ -1,6 +1,6 @@
 {
     "name": "@agent-hub/chat-ui",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "license": "Apache-2.0",
     "type": "module",
     "main": "./dist/index.cjs",
@@ -20,19 +20,35 @@
                 "types": "./dist/index.d.cts",
                 "default": "./dist/index.cjs"
             }
-        }
+        },
+        "./voice": {
+            "development": {
+                "types": "./src/voice.ts",
+                "default": "./src/voice.ts"
+            },
+            "import": {
+                "types": "./dist/voice.d.ts",
+                "default": "./dist/voice.js"
+            },
+            "require": {
+                "types": "./dist/voice.d.cts",
+                "default": "./dist/voice.cjs"
+            }
+        },
+        "./chat-ui.css": "./dist/chat-ui.css"
     },
     "scripts": {
-        "build": "tsup",
+        "build": "tsup && node scripts/build-css.mjs",
         "dev": "tsup --watch",
         "prepack": "pnpm run build"
     },
     "peerDependencies": {
+        "@agent-hub/passport-client": ">=0.1.0",
+        "@agent-hub/sdk": ">=0.1.1",
         "react": ">=18 || ^19.0.0",
         "react-dom": ">=18 || ^19.0.0"
     },
     "dependencies": {
-        "@agent-hub/passport-client": "workspace:*",
         "@tanstack/react-query": "^5.90.18",
         "clsx": "^2.1.0",
         "lucide-react": "^0.562.0",
@@ -41,8 +57,13 @@
         "tailwind-merge": "^2.2.0"
     },
     "devDependencies": {
+        "@agent-hub/passport-client": "workspace:*",
+        "@agent-hub/sdk": "workspace:*",
+        "@tailwindcss/postcss": "^4",
         "@types/react": "19",
         "@types/react-dom": "^19.2.3",
+        "postcss": "^8.5.23",
+        "tailwindcss": "^4",
         "tsup": "^8.0.0",
         "typescript": "^5.3.0"
     },
@@ -60,7 +81,23 @@
                     "types": "./dist/index.d.cts",
                     "default": "./dist/index.cjs"
                 }
-            }
+            },
+            "./voice": {
+                "import": {
+                    "types": "./dist/voice.d.ts",
+                    "default": "./dist/voice.js"
+                },
+                "require": {
+                    "types": "./dist/voice.d.cts",
+                    "default": "./dist/voice.cjs"
+                }
+            },
+            "./chat-ui.css": "./dist/chat-ui.css"
+        }
+    },
+    "peerDependenciesMeta": {
+        "@agent-hub/passport-client": {
+            "optional": true
         }
     }
 }

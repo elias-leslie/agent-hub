@@ -2,12 +2,17 @@
  * Session loading utilities.
  */
 
+import type { ChatHubClient } from "../../client";
 import type { ChatMessage, ToolExecution } from "../../types/chat";
-import type { SessionData, SessionToolExecution } from "./types";
+import type { SessionToolExecution } from "./types";
 
 export interface LoadedSession {
   messages: ChatMessage[];
   projectId: string | null;
+  /** `running` when the server is still working on a turn for this session. */
+  turnState: "running" | "idle";
+  /** Where the running turn is (`thinking`, `responding`, `running_tool:name`, ...). */
+  turnPhase: string | null;
 }
 
 function mapToolExecutions(
@@ -26,24 +31,19 @@ function mapToolExecutions(
 }
 
 /**
- * Loads an existing chat session from the backend.
+ * Loads an existing chat session through the client.
  */
-export async function loadSession(
-  sessionId: string,
-  fetchFn: (url: string, options?: RequestInit) => Promise<Response>,
-  sessionsEndpoint: string,
-): Promise<LoadedSession> {
-  const res = await fetchFn(`${sessionsEndpoint}/${sessionId}`);
-  if (!res.ok) {
-    throw new Error(`Failed to load session: ${res.status}`);
-  }
-
-  const session = (await res.json()) as SessionData;
+export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessionId: string): Promise<LoadedSession> {
+  const session = await client.sessions.get(sessionId);
+  const turnState = session.turn_state === "running" ? "running" : "idle";
+  const turnPhase = turnState === "running" ? (session.turn_phase ?? null) : null;
 
   if (!session.messages || session.messages.length === 0) {
     return {
       messages: [],
       projectId: session.project_id ?? null,
+      turnState,
+      turnPhase,
     };
   }
 
@@ -61,7 +61,7 @@ export async function loadSession(
   const seenToolExecutionIds = new Set<string>();
   const uniqueToolExecutionsByMessage = new Map<string | number, SessionToolExecution[]>();
   for (const message of [...deduped].reverse()) {
-    const uniqueTools = (message.tool_executions ?? []).filter((tool) => {
+    const uniqueTools = ((message.tool_executions ?? []) as SessionToolExecution[]).filter((tool) => {
       if (seenToolExecutionIds.has(tool.id)) return false;
       seenToolExecutionIds.add(tool.id);
       return true;
@@ -75,10 +75,10 @@ export async function loadSession(
     messages: deduped.map((m) => ({
       id: `loaded-${m.id}`,
       role: m.role as "user" | "assistant" | "system",
-      content: m.content,
+      content: m.content ?? "",
       timestamp: new Date(m.created_at),
-      agentName: m.agent_display_name || m.agent_name,
-      agentModel: m.model_display_name || m.model_used,
+      agentName: m.agent_display_name || m.agent_name || undefined,
+      agentModel: m.model_display_name || m.model_used || undefined,
       ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
       ...(m.thinking ? { thinking: m.thinking } : {}),
       ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
@@ -87,5 +87,7 @@ export async function loadSession(
         : {}),
     })),
     projectId: session.project_id ?? null,
+    turnState,
+    turnPhase,
   };
 }

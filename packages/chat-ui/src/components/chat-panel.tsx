@@ -9,8 +9,11 @@ import {
   Play,
   Split,
 } from "lucide-react";
-import { useChatStream, type ChatStreamApiConfig } from "../hooks/use-chat-stream";
+import { ChatClientProvider, useRequiredChatClient, type ChatHubClient } from "../client";
+import { useChatStream, type ChatStreamConfig } from "../hooks/use-chat-stream";
+import { describePhase } from "../hooks/chat-stream/turn-phase";
 import type { ChatMessage } from "../types/chat";
+import type { ChatVoice } from "../types/voice";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
@@ -26,11 +29,11 @@ interface ChatPanelProps {
   autoSendPrompt?: string | null;
   autoSendKey?: string | number | null;
   title?: string;
-  apiConfig?: ChatStreamApiConfig;
-  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
-  modelsEndpoint?: string;
-  voiceWsUrl?: string;
-  ttsBaseUrl?: string;
+  /** The Agent Hub client (`createClient` from `@agent-hub/sdk`); falls back to a `ChatClientProvider` above the panel. */
+  client?: ChatHubClient | null;
+  config?: ChatStreamConfig;
+  /** Voice input and output from `useChatVoice` (`@agent-hub/chat-ui/voice`). Omit for a chat without voice. */
+  voice?: ChatVoice;
   /** When true, speak every assistant response (not just after voice input) */
   alwaysSpeak?: boolean;
   renderBanner?: () => React.ReactNode;
@@ -38,7 +41,16 @@ interface ChatPanelProps {
   onMessagesChange?: (messages: ChatMessage[]) => void;
 }
 
-export function ChatPanel({
+export function ChatPanel({ client: clientProp, ...props }: ChatPanelProps) {
+  const client = useRequiredChatClient(clientProp);
+  return (
+    <ChatClientProvider client={client}>
+      <ChatPanelBody {...props} />
+    </ChatClientProvider>
+  );
+}
+
+function ChatPanelBody({
   agentSlug,
   sessionId,
   workingDir,
@@ -49,21 +61,19 @@ export function ChatPanel({
   autoSendPrompt,
   autoSendKey,
   title = "Agent Hub",
-  apiConfig,
-  fetchFn,
-  modelsEndpoint,
-  voiceWsUrl: voiceWsUrlProp,
-  ttsBaseUrl: ttsBaseUrlProp,
+  config,
+  voice,
   alwaysSpeak = false,
   renderBanner,
   renderDebugPanel,
   onMessagesChange,
-}: ChatPanelProps) {
+}: Omit<ChatPanelProps, "client">) {
   const {
     messages,
     status,
     error,
     currentSessionId,
+    turnPhase,
     sendMessage,
     cancelStream,
     clearMessages,
@@ -73,7 +83,7 @@ export function ChatPanel({
     resumeSession,
     forkSession,
     compactMessages,
-  } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, apiConfig });
+  } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, config });
 
   const [showDebug, setShowDebug] = useState(false);
   const lastNotifiedSessionId = useRef<string | null>(null);
@@ -98,35 +108,14 @@ export function ChatPanel({
 
   // Track if last message was sent via voice (to auto-speak response)
   const [wasVoiceMessage, setWasVoiceMessage] = useState(false);
-  const speakTextRef = useRef<((text: string, voice?: string) => Promise<void>) | null>(null);
   const prevStatusRef = useRef(status);
-
-  // Voice preferences lifted from SpeakerButton
-  const [selectedVoice, setSelectedVoice] = useState<string>("en-US-AriaNeural");
-  const [dbTtsEnabled, setDbTtsEnabled] = useState(false);
 
   // When voice sends a message, mark it so we know to speak the response
   const handleVoiceSend = useCallback(() => {
     setWasVoiceMessage(true);
   }, []);
 
-  // Store the speakText function when MessageInput provides it
-  const handleSpeakTextReady = useCallback(
-    (speakText: (text: string, voice?: string) => Promise<void>) => {
-      speakTextRef.current = speakText;
-    },
-    []
-  );
-
-  const handleVoiceChange = useCallback((voiceId: string) => {
-    setSelectedVoice(voiceId);
-  }, []);
-
-  const handleEnabledChange = useCallback((enabled: boolean) => {
-    setDbTtsEnabled(enabled);
-  }, []);
-
-  // When streaming completes, speak the response (DB preference or alwaysSpeak fallback)
+  // When streaming completes, speak the response (the voice preference or alwaysSpeak)
   useEffect(() => {
     const wasStreaming =
       prevStatusRef.current === "streaming" ||
@@ -134,22 +123,22 @@ export function ChatPanel({
       prevStatusRef.current === "cancelling";
     const isNowIdle = status === "idle";
 
-    const shouldSpeak = dbTtsEnabled || alwaysSpeak;
+    const shouldSpeak = Boolean(voice) && (voice?.ttsEnabled || alwaysSpeak);
 
-    if (wasStreaming && isNowIdle && shouldSpeak && speakTextRef.current) {
+    if (wasStreaming && isNowIdle && shouldSpeak && voice) {
       // Find the last assistant message
       const lastAssistantMessage = [...messages]
         .reverse()
         .find((m) => m.role === "assistant");
 
       if (lastAssistantMessage?.content) {
-        speakTextRef.current(lastAssistantMessage.content, selectedVoice);
+        void voice.speakText(lastAssistantMessage.content, voice.selectedVoice);
       }
       setWasVoiceMessage(false);
     }
 
     prevStatusRef.current = status;
-  }, [status, wasVoiceMessage, alwaysSpeak, dbTtsEnabled, selectedVoice, messages]);
+  }, [status, wasVoiceMessage, alwaysSpeak, voice, messages]);
 
   const isStreaming = status === "streaming" || status === "reconnecting" || status === "cancelling";
   const isBusy = status !== "idle" && status !== "error";
@@ -163,6 +152,8 @@ export function ChatPanel({
     (sum, message) => sum + (message.inputTokens ?? 0) + (message.outputTokens ?? 0) + (message.thinkingTokens ?? 0),
     0,
   );
+
+  const phaseLabel = isBusy ? describePhase(turnPhase) : null;
 
   const handleContinueLatest = useCallback(() => {
     if (!lastAssistantMessage) return;
@@ -217,6 +208,11 @@ export function ChatPanel({
             <div className="flex shrink-0 items-center gap-2">
             {/* Activity indicator */}
             <ActivityIndicator state={status as ActivityState} />
+            {phaseLabel ? (
+              <span data-testid="turn-phase" className="text-xs text-muted-foreground" aria-live="polite">
+                {phaseLabel}
+              </span>
+            ) : null}
 
             <button
               onClick={handleContinueLatest}
@@ -303,16 +299,9 @@ export function ChatPanel({
           onSend={sendMessage}
           onCancel={cancelStream}
           status={status}
-          voiceWsUrl={voiceWsUrlProp}
-          ttsBaseUrl={ttsBaseUrlProp}
-          preferencesEndpoint={apiConfig?.preferencesEndpoint}
+          voice={voice}
           onVoiceSend={handleVoiceSend}
-          onSpeakTextReady={handleSpeakTextReady}
-          onVoiceChange={handleVoiceChange}
-          onEnabledChange={handleEnabledChange}
           initialPrompt={initialPrompt}
-          fetchFn={fetchFn}
-          modelsEndpoint={modelsEndpoint}
         />
       </div>
 

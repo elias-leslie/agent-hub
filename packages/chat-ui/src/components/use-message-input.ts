@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, KeyboardEvent } from "react";
-import { useVoice } from "@agent-hub/passport-client";
+import type { ChatHubClient } from "../client";
 import type { StreamStatus } from "../types/chat";
+import type { ChatVoice } from "../types/voice";
 import type { ModelOption } from "./use-models";
 import { useModels } from "./use-models";
 import { useMentionPopup } from "./use-mention-popup";
@@ -16,20 +17,16 @@ export interface MessageInputProps {
   onCancel: () => void;
   status: StreamStatus;
   disabled?: boolean;
-  voiceWsUrl?: string;
-  ttsBaseUrl?: string;
-  preferencesEndpoint?: string;
+  /** Voice input and output, from `useChatVoice` in `@agent-hub/chat-ui/voice`. Without it the input has no mic or speaker. */
+  voice?: ChatVoice;
   onVoiceSend?: () => void;
-  onSpeakTextReady?: (speakText: (text: string, voice?: string) => Promise<void>) => void;
-  onVoiceChange?: (voiceId: string) => void;
-  onEnabledChange?: (enabled: boolean) => void;
   editingMessage?: { id: string; content: string; model?: string } | null;
   onEditCancel?: () => void;
   compact?: boolean;
   /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */
   initialPrompt?: string;
-  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
-  modelsEndpoint?: string;
+  /** The Agent Hub client for the model list behind @mentions; falls back to a `ChatClientProvider`. */
+  client?: ChatHubClient | null;
   allowModelMentions?: boolean;
 }
 
@@ -39,15 +36,12 @@ export function useMessageInput(props: MessageInputProps) {
     onSend,
     status,
     disabled = false,
-    voiceWsUrl,
-    ttsBaseUrl,
+    voice,
     onVoiceSend,
-    onSpeakTextReady,
     editingMessage,
     onEditCancel,
     initialPrompt,
-    fetchFn = fetch,
-    modelsEndpoint = "/api/models",
+    client,
     allowModelMentions = true,
   } = props;
 
@@ -56,7 +50,7 @@ export function useMessageInput(props: MessageInputProps) {
   const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
-  const allModels = useModels(fetchFn, allowModelMentions ? modelsEndpoint : null);
+  const allModels = useModels(client, { enabled: allowModelMentions });
 
   const {
     showMentionPopup,
@@ -110,31 +104,18 @@ export function useMessageInput(props: MessageInputProps) {
     [onSend, onVoiceSend, selectedModels]
   );
 
-  const {
-    isRecording,
-    isConnected,
-    isSpeaking,
-    connect,
-    startRecording,
-    stopRecording,
-    speakText,
-    stopSpeaking,
-  } = useVoice({
-    onTranscript: handleTranscript,
-    ttsBaseUrl,
-  });
-
+  // A finished recording is sent like typed text.
+  const setTranscriptHandler = voice?.setTranscriptHandler;
   useEffect(() => {
-    if (voiceWsUrl && !isConnected) {
-      connect(voiceWsUrl);
-    }
-  }, [voiceWsUrl, isConnected, connect]);
+    if (!setTranscriptHandler) return;
+    setTranscriptHandler(handleTranscript);
+    return () => setTranscriptHandler(null);
+  }, [setTranscriptHandler, handleTranscript]);
 
-  useEffect(() => {
-    if (speakText && onSpeakTextReady) {
-      onSpeakTextReady(speakText);
-    }
-  }, [speakText, onSpeakTextReady]);
+  const micAvailable = voice?.micAvailable ?? false;
+  const isRecording = voice?.isRecording ?? false;
+  const isSpeaking = voice?.isSpeaking ?? false;
+  const noop = useCallback(() => undefined, []);
 
   const { handleMicClick } = useVoiceInput({
     isInputFocused,
@@ -142,10 +123,10 @@ export function useMessageInput(props: MessageInputProps) {
     isRecording,
     status,
     disabled,
-    voiceWsUrl,
-    startRecording,
-    stopRecording,
-    stopSpeaking,
+    voiceEnabled: micAvailable,
+    startRecording: voice?.startRecording ?? noop,
+    stopRecording: voice?.stopRecording ?? noop,
+    stopSpeaking: voice?.stopSpeaking ?? noop,
   });
 
   const isStreaming = status === "streaming" || status === "cancelling" || status === "reconnecting";
@@ -153,7 +134,7 @@ export function useMessageInput(props: MessageInputProps) {
   // Allow sending during streaming — this triggers interrupt-and-send (steering)
   const canSend = !disabled && input.trim().length > 0 && status !== "cancelling";
   const canCancel = status === "streaming" || status === "reconnecting";
-  const canRecord = !!(voiceWsUrl && !isStreaming && !disabled);
+  const canRecord = micAvailable && !isStreaming && !disabled;
 
   const handleSend = useCallback(() => {
     if (!canSend) return;
@@ -268,7 +249,7 @@ export function useMessageInput(props: MessageInputProps) {
     canRecord,
     isRecording,
     isSpeaking,
-    stopSpeaking,
+    stopSpeaking: voice?.stopSpeaking ?? noop,
     triggerMentionPopup,
     handleSend,
     selectModel,

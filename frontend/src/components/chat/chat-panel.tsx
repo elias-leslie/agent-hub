@@ -3,8 +3,12 @@
 import {
   type ChatMessage,
   ChatPanel as ChatPanelBase,
-  type ChatStreamApiConfig,
+  type ChatStreamConfig,
 } from '@agent-hub/chat-ui'
+import {
+  createHttpPreferencesStore,
+  useChatVoice,
+} from '@agent-hub/chat-ui/voice'
 import {
   type ComponentProps,
   type ComponentType,
@@ -12,13 +16,8 @@ import {
   useMemo,
   useState,
 } from 'react'
-import {
-  fetchApi,
-  getApiBaseUrl,
-  getCompleteApiUrl,
-  getWsUrl,
-  INTERNAL_HEADERS,
-} from '@/lib/api-config'
+import { agentHubClient } from '@/lib/agent-hub-client'
+import { fetchApi, getApiBaseUrl, getWsUrl } from '@/lib/api-config'
 import type { Agent, AgentPreview } from '@/types/agent'
 import { DebugPanel, type DebugTrace } from './debug-panel/debug-panel'
 
@@ -56,7 +55,7 @@ interface WorkChatContext {
   pane_id?: string
 }
 
-type ExtendedChatStreamApiConfig = ChatStreamApiConfig & {
+type ExtendedChatStreamConfig = ChatStreamConfig & {
   parentSessionId?: string
   sourceMetadata?: WorkChatSourceMetadata
   workContext?: WorkChatContext
@@ -66,6 +65,12 @@ type ExtendedChatPanelBaseProps = ComponentProps<typeof ChatPanelBase> & {
   autoSendPrompt?: string | null
   autoSendKey?: string | number | null
 }
+
+// Voice settings are kept through the dashboard's authenticated fetch.
+const voicePreferences = createHttpPreferencesStore(
+  '/api/preferences',
+  fetchApi,
+)
 
 const ExtendedChatPanelBase =
   ChatPanelBase as ComponentType<ExtendedChatPanelBaseProps>
@@ -162,13 +167,14 @@ export function ChatPanel({
     [],
   )
 
-  const apiConfig: ExtendedChatStreamApiConfig = useMemo(
+  const voice = useChatVoice({
+    voiceWsUrl,
+    ttsBaseUrl,
+    preferences: voicePreferences,
+  })
+
+  const config: ExtendedChatStreamConfig = useMemo(
     () => ({
-      fetchHeaders: INTERNAL_HEADERS,
-      completeEndpoint: getCompleteApiUrl(),
-      sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
-      preferencesEndpoint: '/api/preferences',
-      fetchFn: fetchApi,
       projectId,
       memoryGroupPrefix: 'agent:',
       externalId,
@@ -200,10 +206,9 @@ export function ChatPanel({
       initialPrompt={initialPrompt}
       autoSendPrompt={autoSendPrompt}
       autoSendKey={autoSendKey}
-      apiConfig={apiConfig}
-      fetchFn={fetchApi}
-      voiceWsUrl={voiceWsUrl}
-      ttsBaseUrl={ttsBaseUrl}
+      client={agentHubClient}
+      config={config}
+      voice={voice}
       renderDebugPanel={
         agent
           ? ({ messages: msgs }) => (

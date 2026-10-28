@@ -68,6 +68,7 @@ export function handleStreamEvent(
       break;
 
     case "cancelled":
+    case "cancel_acknowledged":
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -75,8 +76,8 @@ export function handleStreamEvent(
               ...m,
               content: state.content,
               thinking: state.thinking || undefined,
-              agentProvider: provider,
-              agentModel: data.model,
+              agentProvider: provider ?? m.agentProvider,
+              agentModel: data.model ?? m.agentModel,
               cancelled: true,
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,

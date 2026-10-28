@@ -10,8 +10,8 @@ import {
   RadarChart,
   ResponsiveContainer,
 } from 'recharts'
-import type { ModelOption } from '@/components/chat/use-models'
 import { getProviderColor } from '@/components/settings/constants'
+import type { ModelOption } from '@/hooks/use-models-catalog'
 
 interface ModelRadarProps {
   models: ModelOption[]
