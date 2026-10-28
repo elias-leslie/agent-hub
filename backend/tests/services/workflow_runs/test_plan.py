@@ -59,3 +59,14 @@ def test_context_is_the_transitive_dependencies_in_topological_order() -> None:
     )
     assert context_order(steps, steps[0]) == ["a", "b", "c"]
     assert context_order(steps, steps[3]) == []
+
+
+def test_a_cap_counts_the_steps_already_running_and_only_ready_steps_start() -> None:
+    steps = plan(
+        ("a", "running", []), ("b", "pending", []), ("c", "pending", []), ("d", "pending", ["a"]), ("e", "pending", [])
+    )
+    assert [s.step_key for s in schedule(steps, max_running=2).start] == ["b"]  # one slot is free
+    assert [s.step_key for s in schedule(steps, max_running=3).start] == ["b", "c"]  # d waits on a, e is third
+    assert [s.step_key for s in schedule(steps, max_running=9).start] == ["b", "c", "e"]
+    assert schedule(steps, max_running=1).start == []  # at the cap
+    assert schedule(steps, max_running=2).readiness["d"].state == "waiting"

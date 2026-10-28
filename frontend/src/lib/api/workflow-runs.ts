@@ -178,6 +178,8 @@ export interface WorkflowAttempt {
   executor: string | null
   started_at: string | null
   finished_at: string | null
+  /** Where this attempt worked; absent on older responses. */
+  workspace?: StepWorkspace | null
 }
 
 export interface Handoff {
@@ -229,6 +231,55 @@ export interface StepReadiness {
   reason: string | null
 }
 
+/** How a lane's start was made from its dependencies' checkpoints. */
+export type MergeResult =
+  | 'none'
+  | 'clean'
+  | 'up_to_date'
+  | 'conflict'
+  | 'pending'
+
+export interface LaneMerge {
+  /** The dependency merged in. */
+  step: string | null
+  sha: string
+  result: Exclude<MergeResult, 'none'>
+  /** Files in conflict; empty unless the merge conflicted. */
+  files: string[]
+}
+
+/** Where a step works: its own lane (worktree and branch) or the run's single worktree. */
+export interface StepWorkspace {
+  kind: 'lane' | 'run'
+  lane: string | null
+  worktree: string
+  branch: string
+  /** The commit the step's tree is based on (its first dependency's checkpoint on a lane). */
+  base_sha: string | null
+  /** null while a merge conflict is open, so there is no clean start yet. */
+  start_sha: string | null
+  /** Lanes only. */
+  merge_result?: MergeResult
+  merges?: LaneMerge[]
+  conflict_files?: string[]
+  /** The step's directory is gone; its branch and commits remain. */
+  retired?: boolean
+  checkpoint_sha?: string
+}
+
+/** Where the run's final code is: the run branch and worktree, once the run completes. */
+export interface RunResult {
+  mode: 'run_worktree' | 'lanes'
+  /** merged, conflict (some branches left unmerged) or complete; null while the run is still going. */
+  state: 'merged' | 'conflict' | 'complete' | null
+  branch: string | null
+  worktree: string | null
+  sha: string | null
+  merged?: string[]
+  not_merged?: string[]
+  conflict_files?: string[]
+}
+
 export interface WorkflowStepView {
   key: string
   position: number
@@ -272,6 +323,8 @@ export interface WorkflowStepView {
   /** The request is made and the worker has not yet stopped the step. */
   cancelling?: boolean
   heartbeat_at: string | null
+  /** null until the step has been placed. */
+  workspace?: StepWorkspace | null
   attempt_history: WorkflowAttempt[]
 }
 
@@ -289,7 +342,8 @@ export interface RunPause {
 
 /** One field-level change in the plan history; `before` is null for an added step, `after` for a removed one. */
 export interface PlanChangeRecord {
-  step: string
+  /** null for a change to the run itself, such as the concurrency cap. */
+  step: string | null
   op: 'add' | 'revise' | 'remove'
   before: Record<string, unknown> | null
   after: Record<string, unknown> | null
@@ -299,7 +353,7 @@ export interface PlanHistoryEntry {
   revision: number
   /** Unix seconds. */
   at: number
-  action: 'add_steps' | 'revise_step' | 'remove_step'
+  action: 'add_steps' | 'revise_step' | 'remove_step' | 'revise_run'
   by: {
     changed_by?: string | null
     client_id?: string | null
@@ -337,6 +391,13 @@ export interface WorkflowRunDetail {
   steps: WorkflowStepView[]
   /** Tokens and cost over every attempt, cost split by basis. */
   usage_totals?: UsageTotals
+  /** Most steps that run at once. */
+  max_concurrent_steps?: number
+  /** Steps running right now. */
+  running_steps?: string[]
+  /** Each running step works in its own worktree and branch. */
+  uses_lanes?: boolean
+  result?: RunResult | null
 }
 
 export type ResumeAction = 'retry' | 'skip' | 'fail'

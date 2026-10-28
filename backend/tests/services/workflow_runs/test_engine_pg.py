@@ -44,7 +44,7 @@ from app.services.workflow_runs.executors import FauxAction, FauxExecutor, StepR
 from app.services.workflow_runs.live import note_live
 from app.services.workflow_runs.policy import Unavailable
 from app.services.workflow_runs.processes import MARKER_ENV, identify, read_stat
-from app.services.workflow_runs.revisions import add_steps, remove_step, revise_step
+from app.services.workflow_runs.revisions import add_steps, remove_step, revise_run, revise_step
 from app.services.workflow_runs.schemas import (
     AcceptanceCommand,
     AddSteps,
@@ -52,6 +52,7 @@ from app.services.workflow_runs.schemas import (
     OwnerDecision,
     RemoveStep,
     RunDefinition,
+    RunRevision,
     StepRevision,
     StepTestHooks,
 )
@@ -157,7 +158,9 @@ class World:
         async def context(**_kw: Any) -> tuple[str, str]:
             return "", "ok"
 
+        self.tasks: list[asyncio.Task[dict[str, Any]]] = []
         self.deps = EngineDeps(
+            enqueue_advance=self.spawn,
             session_factory=factory,
             get_executor=lambda _kind: self.faux,
             resolve_chain=resolve,
@@ -169,6 +172,29 @@ class World:
             owner_only_categories=lambda: {"reasoning_extraction", "frontier_llm"},
             clock=lambda: self.clock,
         )
+
+    async def spawn(self, run_id: str) -> None:
+        """Queue an advance the way the Hatchet task does: it runs beside the others."""
+
+        self.tasks.append(asyncio.create_task(self._advance_then_queue(run_id)))
+
+    async def _advance_then_queue(self, run_id: str) -> dict[str, Any]:
+        result = await advance_run(run_id, deps=self.deps)
+        if result["next"] == "continue":
+            await self.spawn(run_id)
+        return result
+
+    async def drive(self, run_id: str, timeout: float = 60) -> list[dict[str, Any]]:
+        """Run advances until none is left, as many at once as the run's cap lets them start."""
+
+        await self.spawn(run_id)
+        await self.settle(timeout)
+        return [task.result() for task in self.tasks]
+
+    async def settle(self, timeout: float = 60) -> None:
+        while pending := [t for t in self.tasks if not t.done()]:
+            done, _ = await asyncio.wait(pending, timeout=timeout)
+            assert done, "advances did not finish"
 
     async def run_to_stop(self, run_id: str, limit: int = 20) -> dict[str, Any]:
         for _ in range(limit):
@@ -1466,11 +1492,12 @@ async def test_an_equal_workflow_window_reading_refreshes_source_and_time() -> N
 def graph(repo: Path, *steps: dict[str, Any], **extra: Any) -> RunDefinition:
     """A run of faux steps: each dict is a step (key, optional depends_on / agent_slug ...)."""
 
+    policy = {"heartbeat_interval_seconds": 3600, **extra.pop("policy", {})}
     return RunDefinition(
         goal="graph",
         project_id="p",
         repo_path=str(repo),
-        policy={"heartbeat_interval_seconds": 3600},
+        policy=policy,
         steps=[
             {"instructions": f"do {s['key']}", "agent_slug": "coder", "executor": "faux", **s}
             for s in steps
@@ -1877,3 +1904,503 @@ async def test_plan_revision_endpoints_answer_409_for_a_started_step_and_queue_a
         assert (await client.request("DELETE", "/workflow-runs/missing/steps/a")).status_code == 404
         final = await client.get(f"/workflow-runs/{run_id}")
         assert final.json()["plan_revision"] == 3 and [s["key"] for s in final.json()["steps"]] == ["a", "c"]
+
+
+# --- steps running at once, each in a worktree of its own ---------------------------------------------------------
+
+
+def git_out(cwd: Path | str, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    return subprocess.run(["git", *args], cwd=cwd, check=True, env=env, capture_output=True, text=True).stdout.strip()
+
+
+def commit_file(repo: Path, name: str, text: str) -> None:
+    (repo / name).write_text(text)
+    git_out(repo, "add", "-A")
+    git_out(repo, "commit", "-q", "-m", f"add {name}")
+
+
+class Hold:
+    """The faux executor with a delay or a gate per step, recording who ran at once and what each worktree held."""
+
+    def __init__(self, faux: FauxExecutor, delay: float = 0.0) -> None:
+        self.faux, self.delay = faux, delay
+        self.gates: dict[str, asyncio.Event] = {}
+        self.entered: dict[str, asyncio.Event] = {}
+        self.active: set[str] = set()
+        self.peak = 0
+        self.spans: dict[str, list[float]] = {}
+        self.seen: dict[str, dict[str, Any]] = {}
+
+    def gate(self, *keys: str) -> None:
+        for key in keys:
+            self.gates[key] = asyncio.Event()
+            self.entered[key] = asyncio.Event()
+
+    async def run(self, packet, model, worktree, run_dir, on_event) -> StepResult:
+        key = packet.step_key
+        self.active.add(key)
+        self.peak = max(self.peak, len(self.active))
+        loop = asyncio.get_running_loop()
+        self.spans[key] = [loop.time(), 0.0]
+        self.seen[key] = {
+            "worktree": str(worktree),
+            "files": sorted(p.name for p in worktree.iterdir() if p.name != ".git"),
+            "text": {p.name: p.read_text() for p in worktree.iterdir() if p.is_file() and p.name != ".git"},
+        }
+        try:
+            if key in self.gates:
+                self.entered[key].set()
+                await self.gates[key].wait()
+            else:
+                await asyncio.sleep(self.delay)
+            return await self.faux.run(packet, model, worktree, run_dir, on_event)
+        finally:
+            self.active.discard(key)
+            self.spans[key][1] = loop.time()
+
+
+def with_hold(world: World, delay: float = 0.1) -> Hold:
+    hold = Hold(world.faux, delay)
+    world.deps.get_executor = lambda _kind: hold
+    return hold
+
+
+def parallel(repo: Path, cap: int, *steps: dict[str, Any], **extra: Any) -> RunDefinition:
+    policy = {"max_concurrent_steps": cap, **extra.pop("policy", {})}
+    return graph(repo, *steps, policy=policy, **extra)
+
+
+async def snapshot(world: World, pg_db: AsyncSession, run_id: str) -> dict[str, Any]:
+    async with world.lock:
+        return await view_of(pg_db, run_id)
+
+
+async def watching(world: World, pg_db: AsyncSession, run_id: str, seen: list[dict[str, Any]], stop: asyncio.Event) -> None:
+    while not stop.is_set():
+        seen.append(await snapshot(world, pg_db, run_id))
+        await asyncio.sleep(0.02)
+
+
+def branches(repo: Path) -> list[str]:
+    return git_out(repo, "branch", "--list", "--format=%(refname:short)").split()
+
+
+async def test_with_a_cap_of_one_steps_run_one_at_a_time_in_the_run_worktree(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "b": [FauxAction(write={"b.txt": "b\n"})]})
+    chains(world)
+    hold = with_hold(world, 0.05)
+    run_id, _ = await create_run(
+        pg_db, graph(repo, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}, {"key": "c", "depends_on": []}), deps=world.deps
+    )
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    assert hold.peak == 1 and order(world) == ["a", "b", "c"]
+    assert (view["max_concurrent_steps"], view["uses_lanes"], view["running_steps"]) == (1, False, [])
+    # Everything happens in the run worktree on the run branch, as it always did; no lane exists.
+    assert not (Path(view["worktree"]).parent / "lanes").exists() and branches(repo) == ["main", view["branch"]]
+    assert {s["workspace"]["kind"] for s in view["steps"]} == {"run"}
+    assert {s["workspace"]["worktree"] for s in view["steps"]} == {view["worktree"]}
+    assert all((Path(view["worktree"]) / f"{n}.txt").exists() for n in "ab")  # one tree holds everything
+    assert view["result"]["mode"] == "run_worktree" and view["result"]["state"] == "complete"
+    assert view["result"]["branch"] == view["branch"] and view["result"]["sha"] == view["steps"][-1]["checkpoint_sha"]
+    assert git_out(view["worktree"], "rev-parse", "HEAD") == view["result"]["sha"]
+
+
+async def test_three_independent_steps_with_a_cap_of_two_never_have_more_than_two_running(pg_db, repo, world_factory) -> None:
+    files = {k: [FauxAction(write={f"{k}.txt": f"{k}\n"})] for k in "abc"}
+    world = world_factory(files)
+    chains(world)
+    hold = with_hold(world, 0.3)
+    # Each step's own acceptance runs in its own lane: it sees its file and not the others'.
+    accept = lambda k: [f"test -f {k}.txt && test $(ls *.txt | wc -l) = 1"]  # noqa: E731
+    definition = parallel(repo, 2, *({"key": k, "depends_on": [], "acceptance": accept(k)} for k in "abc"))
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    seen: list[dict[str, Any]] = []
+    stop = asyncio.Event()
+    watcher = asyncio.create_task(watching(world, pg_db, run_id, seen, stop))
+    try:
+        results = await world.drive(run_id)
+    finally:
+        stop.set()
+        await watcher
+    assert {r["reason"] for r in results} >= {"completed"}
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and view["max_concurrent_steps"] == 2 and view["uses_lanes"]
+
+    # At most two ran at once, and two really did: the first two overlap, the third starts after one of them ends.
+    assert hold.peak == 2
+    (a0, a1), (b0, b1), (c0, _c1) = (hold.spans[k] for k in "abc")
+    assert max(a0, b0) < min(a1, b1) and c0 >= min(a1, b1)
+    assert max(len(v["running_steps"]) for v in seen) == 2  # the run view never showed a third
+    # A step's workspace is unknown until its lane exists, so look at the first view where both are placed.
+    both = next(
+        v
+        for v in seen
+        if len(v["running_steps"]) == 2 and all(s["workspace"] for s in v["steps"] if s["status"] == "running")
+    )
+    assert both["running_steps"] == ["a", "b"]
+    lanes_now = [s["workspace"] for s in both["steps"] if s["status"] == "running"]
+    assert len({w["worktree"] for w in lanes_now}) == 2 and len({w["branch"] for w in lanes_now}) == 2
+    assert all(w["kind"] == "lane" and w["merge_result"] == "none" and w["base_sha"] == view["base_sha"] for w in lanes_now)
+
+    # Each step ran on a branch named for the run and the step; its directory is gone, its commits are not.
+    steps = {s["key"]: s for s in view["steps"]}
+    for key, step in steps.items():
+        assert step["workspace"]["branch"] == f"{view['branch']}-{key}" and step["workspace"]["retired"]
+        assert not Path(step["workspace"]["worktree"]).exists()
+        assert git_out(repo, "rev-parse", step["workspace"]["branch"]) == step["checkpoint_sha"]
+    assert set(branches(repo)) >= {f"{view['branch']}-{k}" for k in "abc"}
+    # Acceptance ran per step, in the step's own lane.
+    for step in steps.values():
+        (attempt,) = step["attempt_history"]
+        assert [r["exit_code"] for r in attempt["acceptance"]] == [0] and attempt["workspace"]["lane"] == step["key"]
+    # The result is all three steps' work on the run branch, in the run worktree.
+    result = view["result"]
+    assert (result["mode"], result["state"], result["merged"]) == ("lanes", "merged", ["a", "b", "c"])
+    assert (result["branch"], result["worktree"]) == (view["branch"], view["worktree"])
+    assert git_out(view["worktree"], "rev-parse", "HEAD") == result["sha"]
+    assert all((Path(view["worktree"]) / f"{k}.txt").read_text() == f"{k}\n" for k in "abc")
+    # Usage rolls up over the three steps' attempts.
+    assert [a["usage"]["input_tokens"] for s in steps.values() for a in s["attempt_history"]] == [100, 100, 100]
+    assert view["usage_totals"]["total_tokens"] == 360
+
+
+async def test_a_join_after_branches_that_edited_different_files_merges_cleanly(pg_db, repo, world_factory) -> None:
+    world = world_factory(
+        {
+            "a": [FauxAction(write={"a.txt": "a\n"})],
+            "b": [FauxAction(write={"b.txt": "b\n"})],
+            "join": [FauxAction(write={"joined.txt": "ok\n"})],
+        }
+    )
+    chains(world)
+    hold = with_hold(world, 0.1)
+    definition = parallel(
+        repo,
+        2,
+        {"key": "a", "depends_on": []},
+        {"key": "b", "depends_on": []},
+        {"key": "join", "depends_on": ["a", "b"], "acceptance": ["test -f a.txt && test -f b.txt"]},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    steps = {s["key"]: s for s in view["steps"]}
+    assert view["state"] == "completed" and hold.peak == 2
+    assert "a.txt" in hold.seen["join"]["files"] and "b.txt" in hold.seen["join"]["files"]  # both branches' work
+    ws = steps["join"]["workspace"]
+    assert (ws["merge_result"], [m["result"] for m in ws["merges"]]) == ("clean", ["clean"])
+    assert ws["base_sha"] == steps["a"]["checkpoint_sha"] and ws["parents"][1] == {"step": "b", "sha": steps["b"]["checkpoint_sha"]}
+    assert ws["start_sha"] and ws["start_sha"] != ws["base_sha"] and ws["conflict_files"] == []
+    assert "Merge conflicts" not in next(c["packet"] for c in world.faux.calls if c["step"] == "join")
+    # The attempt keeps the merge result too; the join's checkpoint merges a and b.
+    assert steps["join"]["attempt_history"][0]["workspace"]["merge_result"] == "clean"
+    parents = git_out(repo, "rev-list", "--parents", "-n", "1", steps["join"]["checkpoint_sha"]).split()
+    assert len(parents) == 2  # a plain commit on top of the merge
+    assert git_out(repo, "rev-list", "--merges", "--count", steps["join"]["checkpoint_sha"]) == "1"
+    # The join is the only leaf, so the run branch is exactly its checkpoint.
+    assert view["result"]["sha"] == steps["join"]["checkpoint_sha"] and view["result"]["merged"] == ["join"]
+    assert all((Path(view["worktree"]) / n).exists() for n in ("a.txt", "b.txt", "joined.txt"))
+    # Its acceptance (both files in its own tree) passed.
+    assert [r["exit_code"] for r in steps["join"]["attempt_history"][0]["acceptance"]] == [0]
+
+
+async def test_a_join_after_edits_to_the_same_lines_gets_the_conflict_and_a_packet_section(pg_db, repo, world_factory) -> None:
+    commit_file(repo, "shared.txt", "one\ntwo\nthree\n")
+    world = world_factory(
+        {
+            "a": [FauxAction(write={"shared.txt": "one\nTWO by a\nthree\n"})],
+            "b": [FauxAction(write={"shared.txt": "one\nTWO by b\nthree\n"})],
+            # The first attempt leaves the markers in; the second resolves them.
+            "join": [FauxAction(), FauxAction(write={"shared.txt": "one\nTWO by a and b\nthree\n"})],
+        }
+    )
+    chains(world)
+    hold = with_hold(world, 0.1)
+    definition = parallel(
+        repo,
+        2,
+        {"key": "a", "depends_on": []},
+        {"key": "b", "depends_on": []},
+        {"key": "join", "depends_on": ["a", "b"], "acceptance": ["! grep -q '<<<<<<<' shared.txt"]},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    steps = {s["key"]: s for s in view["steps"]}
+    ws = steps["join"]["workspace"]
+    assert (ws["merge_result"], ws["conflict_files"], ws["start_sha"]) == ("conflict", ["shared.txt"], None)
+    assert [(m["step"], m["result"]) for m in ws["merges"]] == [("b", "conflict")]
+    # The step was given the conflicted tree (not a resolved one) and told which files to resolve first.
+    first = hold.seen["join"]["text"]["shared.txt"]
+    assert "<<<<<<<" in first and "TWO by a" in first and "TWO by b" in first
+    packets = [c["packet"] for c in world.faux.calls if c["step"] == "join"]
+    assert len(packets) == 2  # the markers left in the first attempt kept it from being checkpointed
+    for packet in packets:
+        section = packet.split("# Merge conflicts to resolve first", 1)[1].split("\n\n# ", 1)[0]
+        assert "- shared.txt" in section and "conflict marker" in section
+    first_attempt, second_attempt = steps["join"]["attempt_history"]
+    assert first_attempt["status"] == "failed" and first_attempt["decision"]["reason"] == "acceptance_failed"
+    assert [r["passed"] for r in first_attempt["acceptance"]] == [False]
+    # The retry kept the same lane (one merge result, one base) and finished the merge.
+    assert second_attempt["workspace"]["base_sha"] == first_attempt["workspace"]["base_sha"]
+    assert view["state"] == "completed" and steps["join"]["status"] == "completed"
+    parents = git_out(repo, "rev-list", "--parents", "-n", "1", steps["join"]["checkpoint_sha"]).split()[1:]
+    assert parents == [steps["a"]["checkpoint_sha"], steps["b"]["checkpoint_sha"]]
+    assert git_out(repo, "show", f"{steps['join']['checkpoint_sha']}:shared.txt") == "one\nTWO by a and b\nthree"
+    assert view["result"]["state"] == "merged" and view["result"]["sha"] == steps["join"]["checkpoint_sha"]
+
+
+async def test_cancelling_one_parallel_step_leaves_the_others_running(pg_db, repo, world_factory) -> None:
+    world = world_factory({k: [FauxAction(write={f"{k}.txt": f"{k}\n"})] for k in "abc"})
+    chains(world)
+    hold = with_hold(world)
+    hold.gate("a", "b")
+    definition = parallel(
+        repo, 2, *({"key": k, "depends_on": []} for k in "abc"),
+        policy={"heartbeat_interval_seconds": 0.1, "process_stop_grace_seconds": 0.3},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.spawn(run_id)
+    await asyncio.wait_for(asyncio.gather(hold.entered["a"].wait(), hold.entered["b"].wait()), 20)
+    async with world.lock:
+        asked = await cancel_step(pg_db, run_id, "a", CancelRequest(reason="not needed"), deps=world.deps)
+    assert asked["cancelling"]
+    await asyncio.wait_for(hold.entered["c"].wait() if "c" in hold.entered else _until(lambda: "c" in hold.seen), 20)
+    # a was stopped and c took its slot; b was never touched and still runs.
+    view = await snapshot(world, pg_db, run_id)
+    status = {s["key"]: s["status"] for s in view["steps"]}
+    assert status == {"a": "cancelled", "b": "running", "c": "running"} or status["b"] == "running"
+    assert view["state"] == "running" and "b" in hold.active and hold.peak == 2
+    hold.gates["b"].set()
+    await world.settle()
+    view = await view_of(pg_db, run_id)
+    assert {s["key"]: s["status"] for s in view["steps"]} == {"a": "cancelled", "b": "completed", "c": "completed"}
+    assert view["state"] == "completed" and view["steps"][0]["attempt_history"][0]["outcome"]["kind"] == "cancelled"
+    # The cancelled step has no checkpoint; the others' work is the result.
+    assert view["result"]["merged"] == ["b", "c"] and not (Path(view["worktree"]) / "a.txt").exists()
+
+
+async def _until(check, within: float = 20) -> None:
+    deadline = asyncio.get_running_loop().time() + within
+    while not check():
+        assert asyncio.get_running_loop().time() < deadline, "condition not reached"
+        await asyncio.sleep(0.02)
+
+
+async def test_cancelling_the_run_stops_every_running_step_and_the_last_one_ends_it(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    hold = with_hold(world)
+    hold.gate("a", "b")
+    definition = parallel(
+        repo, 2, *({"key": k, "depends_on": []} for k in "abc"),
+        policy={"heartbeat_interval_seconds": 0.1, "process_stop_grace_seconds": 0.3},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.spawn(run_id)
+    await asyncio.wait_for(asyncio.gather(hold.entered["a"].wait(), hold.entered["b"].wait()), 20)
+    async with world.lock:
+        await cancel_run(pg_db, run_id, CancelRequest(reason="stop all"), deps=world.deps)
+    await world.settle()
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "cancelled" and [s["status"] for s in view["steps"]] == ["cancelled", "cancelled", "skipped"]
+    assert hold.active == set() and "c" not in hold.seen
+
+
+async def test_a_failing_step_stops_the_steps_running_beside_it(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction("error")]})
+    chains(world)
+    hold = with_hold(world)
+    hold.gate("b")
+    definition = parallel(
+        repo, 2, {"key": "a", "depends_on": [], "max_attempts": 1}, {"key": "b", "depends_on": []},
+        policy={"heartbeat_interval_seconds": 0.1, "process_stop_grace_seconds": 0.3},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.spawn(run_id)
+    await world.settle(30)  # b is gated: it ends only because the run failed under it
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "failed" and [s["status"] for s in view["steps"]] == ["failed", "cancelled"]
+    assert "run failed" in view["steps"][1]["cancel"]["reason"] and hold.active == set()
+
+
+async def test_recovery_after_a_crash_with_two_steps_running_restarts_both_on_their_own_worktrees(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"a": [FauxAction(write={"a.txt": "a\n"})], "b": [FauxAction(write={"b.txt": "b\n"})]})
+    chains(world)
+    hold = with_hold(world, 0.05)
+    definition = parallel(
+        repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []},
+        policy={"stale_after_seconds": 100, "process_stop_grace_seconds": 3},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    # The worker dies with both steps running: two attempts, two lanes with half-written files, an orphan each.
+    _early, first = await engine_module._commit_intent(run_id, world.deps)
+    _early, second = await engine_module._commit_intent(run_id, world.deps)
+    assert first is not None and second is not None and first.lane == "a" and second.lane == "b" and first.more
+    assert first.attempt_id != second.attempt_id
+    orphans: dict[str, subprocess.Popen] = {}
+    children: dict[str, int] = {}
+    bystander = subprocess.Popen(
+        [sys.executable, "-c", TREE], start_new_session=True, stdout=subprocess.PIPE, text=True,
+        env={**os.environ, MARKER_ENV: "some-other-attempt"},
+    )
+    try:
+        for intent in (first, second):
+            record = await engine_module._prepare_lane(intent, engine_module._workspace_of(intent, engine_module.load_policy(intent.meta["policy"])), world.deps)
+            (Path(record["worktree"]) / "half-written.txt").write_text("partial")
+            orphan = subprocess.Popen(
+                [sys.executable, "-c", TREE], start_new_session=True, stdout=subprocess.PIPE, text=True,
+                env={**os.environ, MARKER_ENV: intent.attempt_id},
+            )
+            orphans[intent.step_key] = orphan
+            assert orphan.stdout is not None
+            children[intent.step_key] = json.loads(orphan.stdout.readline())["child"]
+            identity = identify(orphan.pid)
+            assert identity is not None
+            await engine_module._record_process(world.deps, intent.attempt_id, {"kind": "harness", **identity.as_dict()})
+        assert bystander.stdout is not None
+        bystander_child = json.loads(bystander.stdout.readline())["child"]
+
+        world.clock += 500
+        assert await recover_stale_steps(world.deps) == [run_id]  # one advance is enough: it queues the next
+        for key in "ab":  # each orphan group was stopped through its own attempt
+            assert orphans[key].wait(timeout=10) != 0 and await gone(children[key], within=5)
+        assert running(bystander.pid) and running(bystander_child)  # another attempt's marker: never touched
+        view = await view_of(pg_db, run_id)
+        for step, intent in zip(view["steps"], (first, second), strict=True):
+            (attempt,) = step["attempt_history"]
+            assert step["status"] == "pending" and attempt["session_id"] == intent.attempt_id
+            assert [p["recovery"] for p in attempt["processes"]] == ["terminated"]
+            assert attempt["processes"][0]["pid"] == orphans[step["key"]].pid
+        lane_a = Path(view["steps"][0]["workspace"]["worktree"])
+        assert lane_a != Path(view["steps"][1]["workspace"]["worktree"]) and (lane_a / "half-written.txt").exists()
+
+        await world.drive(run_id)
+        view = await view_of(pg_db, run_id)
+        assert view["state"] == "completed" and [s["restarts"] for s in view["steps"]] == [1, 1]
+        # Each restarted in its own lane, reset to where it started (the half-written file is gone).
+        assert hold.seen["a"]["worktree"] != hold.seen["b"]["worktree"]
+        assert all("half-written.txt" not in hold.seen[k]["files"] for k in "ab")
+        assert hold.seen["a"]["worktree"].endswith("/lanes/a") and hold.seen["b"]["worktree"].endswith("/lanes/b")
+        assert view["result"]["merged"] == ["a", "b"]
+    finally:
+        for process in (bystander, *orphans.values()):
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+
+
+async def test_a_pending_step_can_be_revised_while_others_run_and_a_higher_cap_starts_it(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    hold = with_hold(world)
+    hold.gate("a", "b")
+    definition = parallel(
+        repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}, {"key": "c", "depends_on": ["a"]}
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.spawn(run_id)
+    await asyncio.wait_for(asyncio.gather(hold.entered["a"].wait(), hold.entered["b"].wait()), 20)
+    async with world.lock:
+        effort = await revise_step(pg_db, run_id, "c", StepRevision(effort="high"), deps=world.deps)
+        assert (effort["changed"], effort["enqueue"]) == (True, False)  # both slots are busy
+        freed = await revise_step(pg_db, run_id, "c", StepRevision(depends_on=[]), deps=world.deps)
+        assert freed["enqueue"] is False  # ready now, but the cap is full
+        # A running step cannot be revised, as before.
+        with pytest.raises(WorkflowRunError) as started:
+            await revise_step(pg_db, run_id, "a", StepRevision(effort="low"), deps=world.deps)
+        assert started.value.code == "step_not_pending"
+        same = await revise_run(pg_db, run_id, RunRevision(max_concurrent_steps=2), deps=world.deps)
+        assert same["changed"] is False
+        raised = await revise_run(
+            pg_db, run_id, RunRevision(max_concurrent_steps=3, changed_by="coordinator", reason="room for c"), deps=world.deps
+        )
+    assert (raised["changed"], raised["enqueue"], raised["plan_revision"]) == (True, True, 3)
+    await world.spawn(run_id)  # what the API does with enqueue
+    await _until(lambda: "c" in hold.seen)
+    assert hold.peak == 3 and {"a", "b", "c"} <= hold.active | set(hold.seen)
+    for gate in hold.gates.values():
+        gate.set()
+    await world.settle()
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and view["max_concurrent_steps"] == 3
+    history = view["plan_history"]
+    assert [h["action"] for h in history] == ["revise_step", "revise_step", "revise_run"]
+    assert history[2]["changes"][0]["after"] == {"max_concurrent_steps": 3} and history[2]["by"]["changed_by"] == "coordinator"
+    assert view["steps"][2]["effort"] == "high"
+
+
+async def test_the_cap_is_set_at_create_and_a_run_without_a_repository_cannot_raise_it(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    with pytest.raises(ValueError, match="needs a repo_path"):
+        await create_run(
+            pg_db,
+            RunDefinition(
+                goal="x", project_id="p", policy={"max_concurrent_steps": 2},
+                steps=[{"key": "a", "instructions": "x", "agent_slug": "coder", "executor": "faux"}],
+            ),
+            deps=world.deps,
+        )
+    with pytest.raises(ValueError, match="max_concurrent_steps"):
+        await create_run(pg_db, parallel(repo, 0, {"key": "a"}), deps=world.deps)
+    plain = RunDefinition(
+        goal="x", project_id="p", steps=[{"key": "a", "instructions": "x", "agent_slug": "coder", "executor": "faux"}]
+    )
+    run_id, _ = await create_run(pg_db, plain, deps=world.deps)
+    with pytest.raises(WorkflowRunError) as refused:
+        await revise_run(pg_db, run_id, RunRevision(max_concurrent_steps=2), deps=world.deps)
+    assert refused.value.code == "invalid_plan"
+    run_id, _ = await create_run(pg_db, parallel(repo, 3, {"key": "a"}), deps=world.deps)
+    assert (await view_of(pg_db, run_id))["max_concurrent_steps"] == 3
+
+
+async def test_a_run_that_starts_on_the_run_worktree_moves_to_lanes_when_the_cap_is_raised(pg_db, repo, world_factory) -> None:
+    world = world_factory({k: [FauxAction(write={f"{k}.txt": f"{k}\n"})] for k in "abc"})
+    chains(world)
+    hold = with_hold(world, 0.05)
+    definition = graph(repo, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": ["a"]}, {"key": "c", "depends_on": []})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await advance_run(run_id, deps=world.deps)  # a: one at a time, in the run worktree
+    view = await view_of(pg_db, run_id)
+    assert view["steps"][0]["workspace"]["kind"] == "run" and not view["uses_lanes"]
+    await revise_run(pg_db, run_id, RunRevision(max_concurrent_steps=2), deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    steps = {s["key"]: s for s in view["steps"]}
+    assert view["state"] == "completed" and view["uses_lanes"] and hold.peak == 2
+    assert steps["b"]["workspace"]["kind"] == "lane" and steps["b"]["workspace"]["base_sha"] == steps["a"]["checkpoint_sha"]
+    assert steps["c"]["workspace"]["base_sha"] == view["base_sha"]  # independent of a: starts from the run's base
+    assert "a.txt" in hold.seen["b"]["files"] and "a.txt" not in hold.seen["c"]["files"]
+    assert view["result"]["mode"] == "lanes" and view["result"]["merged"] == ["b", "c"]
+    assert all((Path(view["worktree"]) / f"{k}.txt").exists() for k in "abc")
+
+
+async def test_revising_the_dependencies_of_a_step_whose_lane_exists_makes_the_lane_again(pg_db, repo, world_factory) -> None:
+    world = world_factory(
+        {"a": [FauxAction(write={"a.txt": "a\n"})], "b": [FauxAction(write={"b.txt": "b\n"})], "c": [FauxAction("error"), FauxAction()]}
+    )
+    chains(world)
+    hold = with_hold(world, 0.0)
+
+    async def one_at_a_time(_run_id: str) -> None:
+        return None
+
+    world.deps.enqueue_advance = one_at_a_time  # the test takes the advances itself, in order
+    definition = parallel(repo, 2, {"key": "a", "depends_on": []}, {"key": "b", "depends_on": []}, {"key": "c", "depends_on": ["a"]})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await advance_run(run_id, deps=world.deps)  # a
+    await advance_run(run_id, deps=world.deps)  # b
+    await advance_run(run_id, deps=world.deps)  # c fails once, keeping its lane
+    first = (await view_of(pg_db, run_id))["steps"][2]["workspace"]
+    assert first["parents"][0]["step"] == "a" and Path(first["worktree"]).exists()
+    await revise_step(pg_db, run_id, "c", StepRevision(depends_on=["a", "b"]), deps=world.deps)
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    again = view["steps"][2]["workspace"]
+    assert [p["step"] for p in again["parents"]] == ["a", "b"] and again["merge_result"] == "clean"
+    assert "b.txt" in hold.seen["c"]["files"] and view["state"] == "completed"

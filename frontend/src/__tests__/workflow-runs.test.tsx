@@ -668,6 +668,156 @@ describe('workflow run detail', () => {
     expect(history).toHaveTextContent('added extra')
   })
 
+  it('shows which steps run at once, their worktrees, branches and merges, and where the final code is', async () => {
+    const lane = (key: string, extra: Record<string, unknown> = {}) => ({
+      kind: 'lane' as const,
+      lane: key,
+      worktree: `/srv/runs/r1/lanes/${key}`,
+      branch: `workflow/r1111111-${key}`,
+      base_sha: 'aaaaaaaa11111111',
+      start_sha: 'aaaaaaaa11111111',
+      merge_result: 'none' as const,
+      merges: [],
+      conflict_files: [],
+      ...extra,
+    })
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        max_concurrent_steps: 2,
+        running_steps: ['a', 'b'],
+        uses_lanes: true,
+        result: null,
+        steps: [
+          step({
+            key: 'a',
+            position: 0,
+            status: 'running',
+            workspace: lane('a'),
+          }),
+          step({
+            key: 'b',
+            position: 1,
+            status: 'running',
+            workspace: lane('b'),
+          }),
+          step({
+            key: 'join',
+            position: 2,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+            handoff: null,
+            workspace: lane('join', {
+              start_sha: null,
+              merge_result: 'conflict',
+              conflict_files: ['shared.txt'],
+              merges: [
+                {
+                  step: 'b',
+                  sha: 'bbbbbbbb',
+                  result: 'conflict',
+                  files: ['shared.txt'],
+                },
+              ],
+            }),
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('run-concurrency')).toHaveTextContent(
+      '2 of 2 steps running: a, b · each step has its own worktree and branch',
+    )
+    expect(screen.queryByTestId('run-result')).toBeNull()
+    const [a, b, join] = await screen.findAllByTestId('step-workspace')
+    expect(a).toHaveTextContent(
+      'Lane workflow/r1111111-a at /srv/runs/r1/lanes/a',
+    )
+    expect(a).toHaveTextContent('base aaaaaaaa · start aaaaaaaa')
+    expect(b).toHaveTextContent('workflow/r1111111-b')
+    expect(join).toHaveAttribute('data-merge', 'conflict')
+    expect(join).toHaveTextContent(
+      'Merge conflict in shared.txt; this step resolves it first',
+    )
+    expect(join).not.toHaveTextContent('start ')
+  })
+
+  it('says where the final code is once a lane run completes, and when branches could not be merged', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        max_concurrent_steps: 2,
+        running_steps: [],
+        uses_lanes: true,
+        result: {
+          mode: 'lanes',
+          state: 'conflict',
+          branch: 'workflow/r1111111',
+          worktree: '/srv/runs/r1/worktree',
+          sha: 'cccccccc99999999',
+          merged: ['a'],
+          not_merged: ['b'],
+          conflict_files: ['shared.txt'],
+        },
+        steps: [
+          step({
+            workspace: {
+              kind: 'lane',
+              lane: 'a',
+              worktree: '/srv/runs/r1/lanes/a',
+              branch: 'workflow/r1111111-a',
+              base_sha: 'aaaaaaaa11111111',
+              start_sha: 'aaaaaaaa11111111',
+              merge_result: 'clean',
+              merges: [
+                { step: 'x', sha: 'xxxxxxxx', result: 'clean', files: [] },
+              ],
+              retired: true,
+            },
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('run-result')).toHaveTextContent(
+      'Branches b could not be merged (conflict in shared.txt); the rest is on workflow/r1111111 at cccccccc',
+    )
+    expect(screen.getByTestId('run-concurrency')).toHaveTextContent(
+      '0 of 2 steps running',
+    )
+    const ws = screen.getByTestId('step-workspace')
+    expect(ws).toHaveTextContent('directory removed, branch kept')
+    expect(ws).toHaveTextContent('Clean merge of x')
+  })
+
+  it('lists a change to the run itself in the plan history', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        plan_revision: 1,
+        plan_history: [
+          {
+            revision: 1,
+            at: 1_793_181_000,
+            action: 'revise_run',
+            by: { client_id: 'summitflow' },
+            changes: [
+              {
+                step: null,
+                op: 'revise',
+                before: { max_concurrent_steps: 1 },
+                after: { max_concurrent_steps: 3 },
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const history = await screen.findByTestId('plan-history')
+    expect(history).toHaveTextContent('r1 Changed the run by summitflow')
+    expect(history).toHaveTextContent('run: max_concurrent_steps 1 -> 3')
+  })
+
   it('explains a run blocked on dependencies without offering step decisions', async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({

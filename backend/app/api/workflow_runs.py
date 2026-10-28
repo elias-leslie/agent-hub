@@ -6,6 +6,7 @@ GET  /workflow-runs/{id}          run, steps, attempts (requested vs served mode
 POST /workflow-runs/{id}/resume   resolve a run paused for the owner (retry, skip or fail the waiting step)
 POST /workflow-runs/{id}/cancel   stop the whole run (optional reason; who asked and when are kept)
 POST /workflow-runs/{id}/steps/{key}/cancel   stop one step; the run carries on with its other steps
+PATCH  /workflow-runs/{id}              change the run's cap on steps running at once (max_concurrent_steps)
 POST   /workflow-runs/{id}/steps        add steps (optional after / depends_on); reopens a completed run
 PATCH  /workflow-runs/{id}/steps/{key}  change a pending step; 409 when it has started
 DELETE /workflow-runs/{id}/steps/{key}  remove a pending step nothing depends on (or revise its dependents in the call)
@@ -29,13 +30,14 @@ from app.services.workflow_runs.engine import (
     resume_run,
 )
 from app.services.workflow_runs.listing import list_runs
-from app.services.workflow_runs.revisions import add_steps, remove_step, revise_step
+from app.services.workflow_runs.revisions import add_steps, remove_step, revise_run, revise_step
 from app.services.workflow_runs.schemas import (
     AddSteps,
     CancelRequest,
     OwnerDecision,
     RemoveStep,
     RunDefinition,
+    RunRevision,
     StepRevision,
 )
 
@@ -127,6 +129,21 @@ async def get_workflow_run(
             status_code=404, detail={"code": "not_found", "message": "run not found"}
         )
     return view
+
+
+@router.patch("/{run_id}")
+async def revise_workflow_run(
+    run_id: str,
+    body: RunRevision,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    client_id, source = _requester(request)
+    try:
+        result = await revise_run(db, run_id, body, requested_by=client_id, request_source=source)
+    except WorkflowRunError as error:
+        raise _http(error) from error
+    return await _after_revision(db, run_id, result)
 
 
 @router.post("/{run_id}/resume")

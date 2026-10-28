@@ -24,6 +24,9 @@ RETIRED_KEYS = frozenset({"acceptance_timeout_seconds", "max_usage_limit_resumes
 
 @dataclass(frozen=True)
 class RunPolicy:
+    # Steps that may run at once. The scheduler starts every ready step up to this many; 1 runs the plan one step at a
+    # time in the run's own worktree, more gives each running step a worktree of its own (see workspace.py).
+    max_concurrent_steps: int
     # Restarts a step may use after a stalled attempt (the step fails when it stalls again past this many).
     restart_limit: int
     stale_after_seconds: int
@@ -71,6 +74,9 @@ def load_policy(
         raise ValueError(f"unknown policy keys: {sorted(unknown)}")
     for key, value in overrides.items():
         data[key] = {**data[key], **value} if isinstance(data[key], dict) else value
+    cap = data["max_concurrent_steps"]
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+        raise ValueError("max_concurrent_steps must be a whole number of at least 1")
     return RunPolicy(**data)
 
 

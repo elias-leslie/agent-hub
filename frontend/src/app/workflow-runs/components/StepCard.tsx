@@ -6,6 +6,7 @@ import {
   cancelText,
   dependsText,
   liveStatus,
+  mergeText,
   modelLabel,
   ofLimit,
   STEP_STATUS_LABEL,
@@ -150,6 +151,43 @@ function DependencyLine({ step }: { step: WorkflowStepView }) {
   )
 }
 
+/** Where the step works: its own worktree and branch, the commit it started from and how that start was merged. */
+function WorkspaceLine({ step }: { step: WorkflowStepView }) {
+  const ws = step.workspace
+  if (!ws) return null
+  const merge = mergeText(ws)
+  return (
+    <div
+      className="mt-1 font-mono text-[12px] text-slate-400"
+      data-testid="step-workspace"
+      data-kind={ws.kind}
+      data-merge={ws.merge_result ?? 'none'}
+    >
+      <p className="break-all">
+        {ws.kind === 'lane' ? 'Lane' : 'Run worktree'} {ws.branch}
+        {ws.retired
+          ? ' (directory removed, branch kept)'
+          : ` at ${ws.worktree}`}
+      </p>
+      <p>
+        base {ws.base_sha ? ws.base_sha.slice(0, 8) : 'unknown'}
+        {ws.start_sha ? ` · start ${ws.start_sha.slice(0, 8)}` : ''}
+      </p>
+      {merge ? (
+        <p
+          className={cn(
+            ws.merge_result === 'conflict' || ws.merge_result === 'pending'
+              ? 'text-amber-300'
+              : 'text-slate-400',
+          )}
+        >
+          {merge}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 /** What the running attempt is doing. Display only: nothing here stops or restarts the step. */
 function LiveLine({ step }: { step: WorkflowStepView }) {
   const live = liveStatus(step.live)
@@ -229,6 +267,7 @@ export function StepCard({
       </div>
       <DependencyLine step={step} />
       {step.status === 'running' ? <LiveLine step={step} /> : null}
+      <WorkspaceLine step={step} />
       {step.chain && step.chain.length > 0 ? (
         <p className="mt-1 text-[12px] text-slate-500">
           Model chain: {step.chain.map(modelLabel).join(' then ')}

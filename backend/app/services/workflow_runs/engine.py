@@ -22,7 +22,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable, Collection, Mapping
 from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -38,8 +38,16 @@ from app.services.session_live_activity import mark_session_completed
 from . import acceptance as acceptance_runner
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .live import LiveStatus, current_live
-from .packet import AttemptRef, GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
-from .plan import Schedule, context_order, schedule
+from .packet import (
+    AttemptRef,
+    GitState,
+    HandoffPacket,
+    MergeConflict,
+    PriorStep,
+    build_packet,
+    normalize_handoff,
+)
+from .plan import Schedule, context_order, effective_deps, schedule
 from .policy import (
     AttemptResult,
     Decision,
@@ -67,7 +75,7 @@ from .processes import (
 from .schemas import CancelRequest, OwnerDecision, RunDefinition
 from .settings import get_workflow_run_settings
 from .usage import cost_of, record_attempt_cost, usage_totals
-from .workspace import RunWorkspace, head_sha
+from .workspace import LaneParent, RunWorkspace, head_sha
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +224,8 @@ class EngineDeps:
     owner_only_categories: Callable[[], Collection[str]] | None = None
     test_hooks_on: Callable[[], bool] | None = None
     agent_thinking_level: Callable[[str], Awaitable[str | None]] | None = None
+    # Queue another advance of a run (a ready step is waiting for a free slot); default is the Hatchet task.
+    enqueue_advance: Callable[[str], Awaitable[Any]] | None = None
     clock: Callable[[], float] = time.time
 
     def factory(self) -> SessionFactory:
@@ -224,6 +234,14 @@ class EngineDeps:
         from app.db import async_session
 
         return async_session
+
+    async def enqueue(self, run_id: str) -> None:
+        if self.enqueue_advance is not None:
+            await self.enqueue_advance(run_id)
+            return
+        from app.workflows.workflow_run import enqueue_advance
+
+        await enqueue_advance(run_id)
 
     async def thinking_level_of(self, agent_slug: str) -> str | None:
         """The agent's configured thinking level; none when it cannot be read (the executor default applies)."""
@@ -403,9 +421,19 @@ def _cancel_run(
 
 
 def _cancel_request(meta: dict[str, Any], step: WorkflowStep) -> dict[str, Any] | None:
-    """The stop request that applies to a running step: its own, else the run's."""
+    """The stop request that applies to a running step: its own, else the run's.
 
-    return _scratch(step).get("cancel") or meta.get("cancel")
+    A run that has failed stops the steps still running beside the one that failed: nothing they produce can be used.
+    """
+
+    request = _scratch(step).get("cancel") or meta.get("cancel")
+    if request is None and meta.get("state") == "failed":
+        return {"scope": "run", "reason": f"run failed: {meta.get('failure') or 'a step failed'}"}
+    return request
+
+
+def _others_running(steps: list[WorkflowStep], step: WorkflowStep) -> bool:
+    return any(s is not step and s.status == "running" for s in steps)
 
 
 def _pause_run(run: Session, meta: dict[str, Any], pause: dict[str, Any], now: float) -> None:
@@ -436,6 +464,7 @@ async def create_run(
         if existing:
             return existing, False
     policy = load_policy(definition.policy)
+    _require_repo_for_parallel(policy, definition.repo_path)
     for step in definition.steps:
         await deps.resolve_chain(
             db, step.model_dump()
@@ -511,6 +540,15 @@ async def create_run(
     return run_id, True
 
 
+def _require_repo_for_parallel(policy: RunPolicy, repo_path: str | None) -> None:
+    """Steps that run at once each need a worktree of their own, which only a repository gives them."""
+
+    if policy.max_concurrent_steps > 1 and not repo_path:
+        raise ValueError(
+            "max_concurrent_steps above 1 needs a repo_path: each running step works in its own git worktree"
+        )
+
+
 def definition_fingerprint(definition: RunDefinition) -> str:
     """Hash of everything the caller asked for except the request id, so a repeat can be told from a different request."""
 
@@ -563,6 +601,44 @@ def _start_sha(steps: list[WorkflowStep], meta: dict[str, Any]) -> str | None:
     return done[-1].checkpoint_sha if done else meta.get("base_sha")
 
 
+def _lane_parents(
+    steps: list[WorkflowStep], step: WorkflowStep, deps: Mapping[str, list[str]], meta: dict[str, Any]
+) -> list[LaneParent]:
+    """The commits a step's lane starts from: its dependencies' checkpoints in order, else the run's base commit."""
+
+    by_key = {s.step_key: s for s in steps}
+    parents = [
+        LaneParent(key, by_key[key].checkpoint_sha)
+        for key in deps[step.step_key]
+        if by_key[key].checkpoint_sha
+    ]
+    return parents or [LaneParent(None, meta["base_sha"])]
+
+
+async def _integrate_result(meta: dict[str, Any], steps: list[WorkflowStep]) -> dict[str, Any] | None:
+    """Where a run that ran steps in lanes ends up: the finished steps nothing else builds on, on the run branch.
+
+    A run that never used lanes has its result in the run worktree already.
+    """
+
+    if not meta.get("parallel") or not meta.get("repo_path"):
+        return None
+    done = [s for s in steps if s.status == "completed" and s.checkpoint_sha]
+    built_on = {dep for deps in effective_deps(steps).values() for dep in deps}
+    leaves = [
+        LaneParent(s.step_key, s.checkpoint_sha or "")
+        for s in sorted(done, key=lambda s: s.position)
+        if s.step_key not in built_on
+    ]
+    policy = load_policy(meta["policy"])
+    identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
+    try:
+        return await RunWorkspace.from_meta(meta, identity).integrate(leaves)
+    except Exception as exc:
+        logger.exception("workflow run result could not be put together")
+        return {"state": "failed", "error": repr(exc), "branch": meta.get("branch"), "worktree": meta.get("worktree")}
+
+
 def _prior(steps: list[WorkflowStep], step: WorkflowStep) -> list[PriorStep]:
     """Handoffs of the step's transitive dependencies, dependencies first. ``position`` is the place in that order."""
 
@@ -613,6 +689,7 @@ class _Heartbeat:
         self._last = deps.clock()
         self._task: asyncio.Task[None] | None = None
         self._interrupt: asyncio.Task[None] | None = None
+        self._stopped = asyncio.Event()
 
     async def _liveness(self) -> dict[str, Any] | None:
         """The attempt's phase, time of its harness's last event and whether the harness process is alive.
@@ -673,8 +750,11 @@ class _Heartbeat:
             await self.beat()
 
     async def _loop(self) -> None:
-        while True:
-            await asyncio.sleep(self.interval)
+        # Waits for the next beat or the end of the step; a beat in progress is never cut off mid-commit.
+        while not self._stopped.is_set():
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._stopped.wait(), self.interval)
+                return
             await self.beat()
 
     async def __aenter__(self) -> _Heartbeat:
@@ -682,10 +762,13 @@ class _Heartbeat:
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
+        self._stopped.set()
         if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._task
+            except BaseException:
+                self._task.cancel()
+                raise
         if self._interrupt is not None:
             with contextlib.suppress(Exception):
                 await self._interrupt
@@ -729,6 +812,12 @@ class _Intent:
     project_id: str
     # What the step's failed acceptance commands printed, for the retry's packet.
     acceptance_note: str | None = None
+    # The step's own worktree (named by the step) and the commits it starts from; None runs in the run's worktree.
+    lane: str | None = None
+    parents: list[LaneParent] = field(default_factory=list)
+    lane_record: dict[str, Any] | None = None
+    # Another ready step has a free slot: the caller queues one more advance.
+    more: bool = False
 
 
 def blocked_pause(plan: Schedule) -> dict[str, Any]:
@@ -761,14 +850,19 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         if meta.get("state") != "running":
             return {"next": "stop", "reason": f"run_{meta.get('state')}"}, None
         steps = await _steps(db, run_id)
-        if any(s.status == "running" for s in steps):
-            return {"next": "stop", "reason": "step_running"}, None
+        run_policy = load_policy(meta["policy"])
+        running = any(s.status == "running" for s in steps)
         if not any(s.status == "pending" for s in steps):
-            _complete_run(run, meta, now)
+            if running:
+                return {"next": "stop", "reason": "step_running"}, None
+            result = await _integrate_result(meta, steps)
+            _complete_run(run, {**meta, **({"result": result} if result else {})}, now)
             await db.commit()
             return {"next": "stop", "reason": "completed"}, None
-        plan = schedule(steps)
+        plan = schedule(steps, max_running=run_policy.max_concurrent_steps)
         if not plan.start:
+            if running:  # at the cap, or everything left waits on a running step: its end queues the next advance
+                return {"next": "stop", "reason": "step_running"}, None
             # Nothing can start: every pending step waits on one that will never complete. The owner or coordinator
             # revises the plan (the step is skipped, cancelled or failed; point its dependents elsewhere or remove them).
             _pause_run(run, meta, blocked_pause(plan), now)
@@ -864,6 +958,15 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         await store_child_session_lifecycle_event(
             db, attempt, SessionEventType.CHILD_SESSION_STARTED
         )
+        # More than one step may run: each gets a lane of its own, and the run stays on lanes from then on.
+        lane = (
+            step.step_key
+            if meta.get("repo_path") and (run_policy.max_concurrent_steps > 1 or meta.get("parallel"))
+            else None
+        )
+        if lane and not meta.get("parallel"):
+            meta = {**meta, "parallel": True}
+            _set_meta(run, meta, now=now)
         intent = _Intent(
             run_id=run_id,
             step_id=step.id,
@@ -886,23 +989,93 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
             prior=_prior(steps, step),
             project_id=run.project_id,
             acceptance_note=scratch.get("acceptance_note"),
+            lane=lane,
+            parents=_lane_parents(steps, step, plan.deps, meta) if lane else [],
+            lane_record=scratch.get("workspace") if lane else None,
+            more=len(plan.start) > 1,
         )
         await db.commit()
     return {}, intent
+
+
+def _identity(policy: RunPolicy) -> tuple[str, ...]:
+    return (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
+
+
+def _workspace_of(intent: _Intent, policy: RunPolicy, record: Mapping[str, Any] | None = None) -> RunWorkspace:
+    """The step's workspace: its lane, or the run's worktree."""
+
+    if intent.lane:
+        return RunWorkspace.lane_of(
+            intent.meta, intent.lane, _identity(policy), (record or {}).get("base_sha")
+        )
+    return RunWorkspace.from_meta(intent.meta, _identity(policy))
+
+
+async def _record_workspace(deps: EngineDeps, intent: _Intent, record: dict[str, Any]) -> None:
+    """Keep where the attempt works (worktree, branch, base commit, merge result) on the attempt and the step."""
+
+    async with deps.factory()() as db:
+        await _lock_run(db, intent.run_id)  # taken in the order cancel and the outcome take it
+        step = await db.get(WorkflowStep, intent.step_id)
+        attempt = await db.get(Session, intent.attempt_id, with_for_update=True)
+        if step is None or attempt is None:
+            return
+        await db.refresh(step)
+        scratch = _scratch(step)
+        scratch["workspace"] = record
+        step.outcome = scratch
+        meta = dict(attempt.provider_metadata or {})
+        detail = {**(meta.get("workflow_attempt") or {}), "workspace": record}
+        attempt.provider_metadata = {**meta, "workflow_attempt": detail}
+        await db.commit()
+
+
+async def _prepare_lane(intent: _Intent, workspace: RunWorkspace, deps: EngineDeps) -> dict[str, Any]:
+    """The step's lane: made from its dependencies' checkpoints, or kept as it is for a further attempt.
+
+    A lane is made again only when the dependencies it was made from are no longer the step's (the plan was revised).
+    """
+
+    wanted = [p.as_dict() for p in intent.parents]
+    record = intent.lane_record
+    if record and record.get("parents") == wanted and await asyncio.to_thread(workspace.worktree.exists):
+        if intent.reset:  # restart after a crash: back to where the lane started
+            record = await workspace.reset_lane(record)
+    else:
+        record = await workspace.prepare_lane(intent.parents)
+    await _record_workspace(deps, intent, record)
+    return record
 
 
 async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, dict[str, Any]]:
     """The external effect: prepare the worktree, build the packet, run the executor."""
 
     meta, policy = intent.meta, load_policy(intent.meta["policy"])
-    identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
-    workspace = RunWorkspace.from_meta(meta, identity)
+    workspace = _workspace_of(intent, policy)
     info: dict[str, Any] = {}
     commands = acceptance_runner.commands_of(intent.definition)
     try:
-        await workspace.ensure()
-        if intent.reset:  # restart after a crash: back to the step's checkpoint
-            await workspace.reset(intent.start_sha)
+        start_sha = intent.start_sha
+        merge_conflict: MergeConflict | None = None
+        if intent.lane:
+            record = await _prepare_lane(intent, workspace, deps)
+            workspace = _workspace_of(intent, policy, record)
+            start_sha = record["start_sha"] or record["base_sha"]
+            info["workspace"] = record
+            merge_conflict = await _merge_conflict_of(workspace, record)
+            meta = {**meta, "worktree": str(workspace.worktree)}  # the step's context is read from its own tree
+        else:
+            await workspace.ensure()
+            if intent.reset:  # restart after a crash: back to the step's checkpoint
+                await workspace.reset(intent.start_sha)
+            info["workspace"] = {
+                "lane": None,
+                "worktree": str(workspace.worktree),
+                "branch": workspace.branch,
+                "base_sha": meta.get("base_sha"),
+                "start_sha": intent.start_sha,
+            }
         git: GitState = await workspace.git_state()
         provider_fn = deps.context_provider or (
             lambda **kw: canonical_context(deps.factory(), **kw)
@@ -920,13 +1093,13 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
             saved = await workspace.read_json(intent.partial_path)
             partial_kwargs = {
                 "partial_from": intent.hop,
-                "partial_diff": await workspace.diff_since(intent.start_sha),
+                "partial_diff": await workspace.diff_since(start_sha),
                 "partial_outputs": saved.get("progress", []),
             }
         elif intent.hop:
             partial_kwargs = {
                 "partial_from": intent.hop,
-                "partial_diff": await workspace.diff_since(intent.start_sha),
+                "partial_diff": await workspace.diff_since(start_sha),
             }
         packet: HandoffPacket = build_packet(
             run_goal=meta["goal"],
@@ -947,6 +1120,7 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
                 else None
             ),
             previous_attempt_note=intent.acceptance_note,
+            merge_conflict=merge_conflict,
             **partial_kwargs,
         )
         packet = replace(
@@ -1044,6 +1218,19 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
     return result, info
 
 
+async def _merge_conflict_of(workspace: RunWorkspace, record: Mapping[str, Any]) -> MergeConflict | None:
+    """What a join step must resolve before its own work: conflicted files still holding markers, merges still to do."""
+
+    if record.get("merge_result") != "conflict":
+        return None
+    files = await workspace.unresolved(record["conflict_files"])
+    pending = [(m["step"], m["sha"]) for m in record["merges"] if m["result"] == "pending"]
+    if not files and not pending:
+        return None
+    conflicted = next((m["step"] for m in record["merges"] if m["result"] == "conflict"), None)
+    return MergeConflict(conflicted, files, pending)
+
+
 def _usage_limited(result: StepResult) -> bool:
     return result.outcome is not None and result.outcome.kind == "usage_limit"
 
@@ -1055,10 +1242,14 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
     early, intent = await _commit_intent(run_id, deps)
     if intent is None:
         return early
+    if intent.more:  # a ready step has a free slot: it gets an advance of its own and runs beside this one
+        try:
+            await deps.enqueue(run_id)
+        except Exception:
+            logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
     result, info = await _run_effect(intent, deps)
     policy = load_policy(intent.meta["policy"])
-    identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
-    workspace = RunWorkspace.from_meta(intent.meta, identity)
+    workspace = _workspace_of(intent, policy, info.get("workspace"))
     handoff = normalize_handoff(result.handoff) if result.status == "completed" else None
     checkpoint: str | None = None
     notes_path: str | None = None
@@ -1077,7 +1268,8 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
                 },
             )
             checkpoint = await workspace.checkpoint(
-                f"workflow {intent.step_key}: {handoff['summary'][:60]}"
+                f"workflow {intent.step_key}: {handoff['summary'][:60]}",
+                conflict_files=(info.get("workspace") or {}).get("conflict_files", []),
             )
         except Exception as exc:
             logger.exception("workflow step %s checkpoint failed", intent.step_key)
@@ -1108,7 +1300,7 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
         # The requested model too: an acceptance retry goes back to it only while it is still eligible.
         + [intent.model]
     )
-    return await _commit_outcome(
+    outcome = await _commit_outcome(
         run_id,
         intent,
         result,
@@ -1120,6 +1312,13 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
         info,
         deps,
     )
+    if intent.lane and outcome.get("action") == "complete":
+        # The step's checkpoint is on its branch; the directory is no longer needed.
+        try:
+            await workspace.retire_lane()
+        except Exception:
+            logger.warning("workflow step %s: lane directory not removed", intent.step_key, exc_info=True)
+    return outcome
 
 
 async def _commit_outcome(
@@ -1212,6 +1411,9 @@ async def _commit_outcome(
         if decision.action == "complete":
             step.status, step.handoff, step.checkpoint_sha = "completed", handoff, checkpoint
             scratch.update(hop=None, partial_path=None, pinned_model=None, completed_at=now)
+            if intent.lane and isinstance(scratch.get("workspace"), dict):
+                # The lane directory goes once this commits; the branch and the checkpoint stay.
+                scratch["workspace"] = {**scratch["workspace"], "retired": True, "checkpoint_sha": checkpoint}
         elif decision.action == "retry":
             step.status = "pending"
             scratch.update(hop=decision.hop, pinned_model=decision.next_model)
@@ -1223,8 +1425,8 @@ async def _commit_outcome(
             # the run to carry on with its other steps, like a skip.
             step.status = "cancelled"
             scratch.update(hop=None, pinned_model=None, cancel=cancel)
-            if meta.get("cancel"):
-                _cancel_run(run, meta, steps, meta["cancel"], now)
+            if meta.get("cancel") and not _others_running(steps, step):
+                _cancel_run(run, meta, steps, meta["cancel"], now)  # the last running step to stop ends the run
         else:
             if decision.reason == "usage_limit_wait":
                 _retry_after_limit(scratch)
@@ -1318,6 +1520,8 @@ def _finish_attempt(
         "packet": info.get("packet"),
         "packet_path": info.get("packet_path"),
     }
+    if info.get("workspace"):
+        detail["workspace"] = info["workspace"]
     attempt.provider_metadata = {**attempt.provider_metadata, "workflow_attempt": detail}
     attempt.models_used = list(dict.fromkeys([*(attempt.models_used or []), *served]))
     attempt.last_activity_at = _dt(now)
@@ -1374,8 +1578,8 @@ async def recover_stale_steps(deps: EngineDeps | None = None) -> list[str]:
             .all()
         )
     for step_id, run_id in running:
-        if await _recover_one(step_id, run_id, deps, now):
-            to_advance.append(run_id)
+        if await _recover_one(step_id, run_id, deps, now) and run_id not in to_advance:
+            to_advance.append(run_id)  # one advance is enough: each one starts a step and queues the next if room is left
     for run_id in runs_active:
         if run_id not in to_advance and await _resume_if_due(run_id, deps, now):
             to_advance.append(run_id)
@@ -1410,7 +1614,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             return False
         await db.refresh(step)
         meta = _meta(run)
-        if step.status != "running" or meta.get("state") != "running":
+        if step.status != "running":
             return False
         policy = load_policy(meta["policy"])
         heartbeat = step.heartbeat_at.timestamp() if step.heartbeat_at else 0.0
@@ -1494,7 +1698,9 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             step.status = "cancelled"
             scratch.update(hop=None, pinned_model=None, cancel=cancel)
             if meta.get("cancel"):
-                _cancel_run(run, meta, await _steps(db, run_id), meta["cancel"], now)
+                all_steps = await _steps(db, run_id)
+                if not _others_running(all_steps, step):
+                    _cancel_run(run, meta, all_steps, meta["cancel"], now)
         else:
             step.status = "failed"
             _fail_run(run, meta, await _steps(db, run_id), f"{step.step_key}: {reason}", now)
@@ -1765,6 +1971,33 @@ def _limits(policy: RunPolicy) -> dict[str, int]:
     }
 
 
+def _workspace_view(
+    step: WorkflowStep, history: list[dict[str, Any]], meta: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Where the step works or worked: its lane (worktree, branch, base commit, merge result), or the run's worktree."""
+
+    record = _scratch(step).get("workspace") or next(
+        (a["workspace"] for a in reversed(history) if a.get("workspace")), None
+    )
+    if not record:
+        return None
+    return {**record, "kind": "lane" if record.get("lane") else "run"}
+
+
+def _result_view(meta: dict[str, Any], steps: list[WorkflowStep]) -> dict[str, Any] | None:
+    """Where the run's code is: the run branch and worktree. A run on lanes has it once it completes."""
+
+    if meta.get("parallel"):
+        return {**meta["result"], "mode": "lanes"} if meta.get("result") else None
+    return {
+        "mode": "run_worktree",
+        "state": "complete" if meta.get("state") == "completed" else None,
+        "branch": meta.get("branch"),
+        "worktree": meta.get("worktree"),
+        "sha": _start_sha(steps, meta) if meta.get("repo_path") else None,
+    }
+
+
 async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
     run = (
         await db.execute(
@@ -1835,6 +2068,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                     {k: p.get(k) for k in ("kind", "pid", "pgid", "recovery")}
                     for p in detail.get("processes") or []
                 ],
+                "workspace": detail.get("workspace"),
                 "started_at": child.created_at.isoformat() if child.created_at else None,
                 "finished_at": _iso(detail.get("finished_at")),
             }
@@ -1862,6 +2096,10 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "plan_revision": meta.get("plan_revision", 0),
         "plan_history": meta.get("plan_history", []),
         "limits": _limits(policy),
+        "max_concurrent_steps": policy.max_concurrent_steps,
+        "running_steps": [s.step_key for s in steps if s.status == "running"],
+        "uses_lanes": bool(meta.get("parallel")),
+        "result": _result_view(meta, steps),
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
         "usage_totals": usage_totals(
@@ -1892,6 +2130,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "answered_by": (_scratch(s).get("last") or {}).get("served_models"),
                 "hops": _scratch(s).get("hops", []),
                 "checkpoint_sha": s.checkpoint_sha,
+                "workspace": _workspace_view(s, attempts.get(s.step_key, []), meta),
                 "handoff": s.handoff,
                 "outcome": _scratch(s).get("last"),
                 "owner_decision": _scratch(s).get("owner_decision"),

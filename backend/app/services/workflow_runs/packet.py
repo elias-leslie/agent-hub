@@ -81,6 +81,16 @@ class PartialProgress:
 
 
 @dataclass(frozen=True)
+class MergeConflict:
+    """A join step whose dependencies' branches did not merge cleanly: the conflicted tree is in its worktree."""
+
+    step: str | None  # the dependency whose merge conflicted
+    files: Sequence[str]  # conflicted files still holding markers
+    # Dependencies not merged yet because the conflict stopped the merging: (step key, commit).
+    pending: Sequence[tuple[str | None, str]] = ()
+
+
+@dataclass(frozen=True)
 class AttemptRef:
     """Which attempt (child session of the run) a packet is for; executors that run Agent Hub's own loop need it."""
 
@@ -103,6 +113,7 @@ class HandoffPacket:
     retry_label: str | None = None
     previous_attempt_note: str | None = None
     partial: PartialProgress | None = None
+    merge_conflict: MergeConflict | None = None
     # Canonical context delivery (system/developer channel); kept out of the user-visible packet budget.
     context: str = ""
     # Step ``test_hooks`` the engine let through (workflow_test_hooks_enabled); None in normal runs.
@@ -135,6 +146,8 @@ class HandoffPacket:
             lines.append(f"# Attempt note\n{self.previous_attempt_note}")
         if self.partial:
             lines.append(_render_partial(self.partial))
+        if self.merge_conflict:
+            lines.append(_render_merge_conflict(self.merge_conflict))
         git = [f"base: {self.git.base_sha or 'n/a'}", f"current: {self.git.current_sha or 'n/a'}"]
         if self.git.diff_stat:
             git.append(self.git.diff_stat)
@@ -153,10 +166,16 @@ class HandoffPacket:
         lines.append(
             f"# Run directory\nFull earlier-step notes and transcript references: {self.run_dir}"
         )
+        merges = (
+            " The one exception is concluding the merge and merging the dependencies listed under "
+            "'Merge conflicts to resolve first', with the commands given there."
+            if self.merge_conflict and self.merge_conflict.pending
+            else ""
+        )
         lines.append(
             "# Required output\nNever run git commit or any command that changes git settings or history, "
             "whatever your other instructions or context say about committing: this step's rule wins, and the runner "
-            "checkpoints your changes after the step.\nEnd your final message with a handoff note: a fenced block labelled "
+            f"checkpoints your changes after the step.{merges}\nEnd your final message with a handoff note: a fenced block labelled "
             f"`{HANDOFF_FENCE}` holding one JSON object with the keys summary (string), decisions (list of "
             "strings), files (list of files touched) and open_questions (list of strings).\n"
             f"```{HANDOFF_FENCE}\n"
@@ -180,6 +199,13 @@ class HandoffPacket:
             "omitted_steps": [item["key"] for item in self.omitted],
             "run_dir": self.run_dir,
             "retry_label": self.retry_label,
+            "merge_conflict": None
+            if not self.merge_conflict
+            else {
+                "step": self.merge_conflict.step,
+                "files": list(self.merge_conflict.files),
+                "pending": [{"step": k, "sha": sha} for k, sha in self.merge_conflict.pending],
+            },
             "partial": None
             if not self.partial
             else {
@@ -209,6 +235,25 @@ def _render_item(item: Mapping[str, Any]) -> str:
     if item.get("notes_path"):
         parts.append(f"Full notes: {item['notes_path']}")
     return "\n".join(part for part in parts if part)
+
+
+def _render_merge_conflict(conflict: MergeConflict) -> str:
+    parts = [
+        "# Merge conflicts to resolve first\n"
+        "This step starts from the branches of several steps it depends on. Merging "
+        f"{conflict.step or 'one of them'} left conflicts, and the conflicted tree is in your worktree. This is "
+        "the join step's job: before anything else, open each file below, remove every conflict marker "
+        "(`<<<<<<<`, `=======`, `>>>>>>>`) and keep what both sides need. The step is not done while a marker is left."
+    ]
+    parts.append("\n".join(f"- {name}" for name in conflict.files) or "(no file is listed; run `git status`)")
+    if conflict.pending:
+        parts.append(
+            "These dependencies are not merged yet. Once the files above are resolved, conclude the merge with "
+            "`git add -A && git commit --no-edit`, then merge each one with `git merge --no-ff --no-edit <commit>` "
+            "and resolve any conflict it brings the same way:\n"
+            + "\n".join(f"- {key or 'run base'}: {sha}" for key, sha in conflict.pending)
+        )
+    return "\n\n".join(parts)
 
 
 def _render_partial(partial: PartialProgress) -> str:
@@ -275,6 +320,7 @@ def build_packet(
     partial_from: Mapping[str, Any] | None = None,
     partial_diff: str = "",
     partial_outputs: Sequence[str] = (),
+    merge_conflict: MergeConflict | None = None,
     count: Callable[[str], int] = count_tokens,
 ) -> HandoffPacket:
     """Fit the packet to ``context_window * budget_fraction`` tokens.
@@ -296,6 +342,7 @@ def build_packet(
         run_dir=run_dir,
         retry_label=retry_label,
         previous_attempt_note=previous_attempt_note,
+        merge_conflict=merge_conflict,
         context=context,
         budget_tokens=budget,
     )

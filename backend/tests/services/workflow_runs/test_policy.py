@@ -331,3 +331,14 @@ def test_process_stop_grace_and_drain_are_policy_data() -> None:
     policy = load_policy()
     assert policy.process_stop_grace_seconds > 0 and policy.acceptance_drain_seconds > 0
     assert load_policy({"process_stop_grace_seconds": 1}).process_stop_grace_seconds == 1
+
+
+def test_steps_run_one_at_a_time_unless_the_run_raises_the_cap() -> None:
+    assert load_policy().max_concurrent_steps == 1
+    assert load_policy({"max_concurrent_steps": 3}).max_concurrent_steps == 3
+    for bad in (0, -1, 1.5, True, "2"):
+        with pytest.raises(ValueError, match="max_concurrent_steps"):
+            load_policy({"max_concurrent_steps": bad})
+    # A policy stored before the cap existed still loads, at one.
+    stored = {k: v for k, v in load_policy().as_dict().items() if k != "max_concurrent_steps"}
+    assert load_policy(stored).max_concurrent_steps == 1

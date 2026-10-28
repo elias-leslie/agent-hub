@@ -1,4 +1,5 @@
 {
+  "max_concurrent_steps": 1,
   "restart_limit": 2,
   "stale_after_seconds": 300,
   "heartbeat_interval_seconds": 30,

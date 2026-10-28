@@ -197,6 +197,13 @@ class StepRevision(PlanChange):
         return out
 
 
+class RunRevision(PlanChange):
+    """Change a run-level setting of a run that is going on."""
+
+    # Steps that may run at once; a run without a repository stays at 1.
+    max_concurrent_steps: int | None = Field(None, ge=1)
+
+
 class RemoveStep(PlanChange):
     """Remove a pending step. Steps that depend on it must be revised in the same call (``revise``, by step key)."""
 

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { formatDurationMs, formatTokens } from '@/app/sessions/utils'
 import type { WorkflowRunDetail } from '@/lib/api/workflow-runs'
+import { cn } from '@/lib/utils'
 import { CancelButton } from '../components/CancelButton'
 import { ErrorAlert, LoadingState } from '../components/ListStates'
 import { PausePanel } from '../components/PausePanel'
@@ -12,7 +13,12 @@ import { PlanHistory } from '../components/PlanHistory'
 import { StatusDot } from '../components/StatusDot'
 import { StepCard } from '../components/StepCard'
 import { useWorkflowRun } from '../hooks/useWorkflowRuns'
-import { cancelText, costTotalsParts, runStateLabel } from '../utils'
+import {
+  cancelText,
+  costTotalsParts,
+  resultText,
+  runStateLabel,
+} from '../utils'
 
 function clock(ms: number): string {
   return ms ? new Date(ms).toLocaleTimeString() : ''
@@ -37,6 +43,7 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
         )
       : null
   const refusals = Object.entries(run.refusals ?? {})
+  const running = run.running_steps ?? []
   return (
     <div className="mb-4 space-y-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -74,6 +81,31 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           ? ` · started ${new Date(run.created_at).toLocaleString()}`
           : ''}
       </p>
+      {run.max_concurrent_steps !== undefined ? (
+        <p
+          className="font-mono text-[12px] tabular-nums text-slate-400"
+          data-testid="run-concurrency"
+        >
+          {running.length} of {run.max_concurrent_steps} step
+          {run.max_concurrent_steps === 1 ? '' : 's'} running
+          {running.length > 0 ? `: ${running.join(', ')}` : ''}
+          {run.uses_lanes ? ' · each step has its own worktree and branch' : ''}
+        </p>
+      ) : null}
+      {resultText(run.result) ? (
+        <p
+          className={cn(
+            'break-all font-mono text-[12px]',
+            run.result?.state === 'conflict'
+              ? 'text-amber-300'
+              : 'text-slate-300',
+          )}
+          data-testid="run-result"
+        >
+          {resultText(run.result)}
+          {run.result?.worktree ? ` · ${run.result.worktree}` : ''}
+        </p>
+      ) : null}
       {run.limits ? (
         <p
           className="font-mono text-[12px] tabular-nums text-slate-500"

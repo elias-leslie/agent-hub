@@ -5,6 +5,7 @@ const ACTION_LABEL: Record<PlanHistoryEntry['action'], string> = {
   add_steps: 'Added steps',
   revise_step: 'Changed a step',
   remove_step: 'Removed a step',
+  revise_run: 'Changed the run',
 }
 
 /** Compact record of plan revisions, newest first: who changed what, when, and from what to what. */
@@ -37,7 +38,10 @@ export function PlanHistory({ history }: { history: PlanHistoryEntry[] }) {
             ) : null}
             <ul className="list-disc pl-5 text-slate-400">
               {entry.changes.map((change) => (
-                <li key={`${change.op}-${change.step}`} className="break-words">
+                <li
+                  key={`${change.op}-${change.step ?? 'run'}`}
+                  className="break-words"
+                >
                   {planChangeText(change)}
                 </li>
               ))}

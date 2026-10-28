@@ -30,7 +30,8 @@ from .engine import (
     blocked_pause,
 )
 from .plan import DEAD, explicit_deps, schedule, validate_graph
-from .schemas import AddSteps, PlanChange, RemoveStep, StepDefinition, StepRevision
+from .policy import load_policy
+from .schemas import AddSteps, PlanChange, RemoveStep, RunRevision, StepDefinition, StepRevision
 
 # Changing any of these changes the step's model chain, which is cached on the step after its first resolve.
 CHAIN_FIELDS = ("agent_slug", "model_override", "allowed_models")
@@ -105,14 +106,19 @@ def _settle(run: Any, meta: dict[str, Any], steps: list[Any], now: float) -> boo
     """
 
     pause = meta.get("pause") or {}
+    cap = load_policy(meta["policy"]).max_concurrent_steps
     if meta.get("state") == "needs_owner" and pause.get("reason") == "blocked_dependencies":
-        plan = schedule(steps)
+        plan = schedule(steps, max_running=cap)
         if plan.start or not any(s.status == "pending" for s in steps):
             meta = {**meta, "state": "running", "pause": None}
         else:
             meta = {**meta, "pause": {**blocked_pause(plan), "at": now}}
     _set_meta(run, meta, now=now)
-    return meta.get("state") == "running" and not any(s.status == "running" for s in steps)
+    if meta.get("state") != "running":
+        return False
+    # Nothing running: an advance finishes, pauses or starts the run. Something running: only when a free slot has a
+    # ready step (the change made one ready, or the cap rose).
+    return not any(s.status == "running" for s in steps) or bool(schedule(steps, max_running=cap).start)
 
 
 def _reopen(run: Any, meta: dict[str, Any]) -> dict[str, Any]:
@@ -376,3 +382,45 @@ async def remove_step(
     enqueue = _settle(run, meta, remaining, now)
     await db.commit()
     return _result(run_id, _meta(run), enqueue, removed=step_key, relinked=relinked)
+
+
+async def revise_run(
+    db: AsyncSession,
+    run_id: str,
+    request: RunRevision,
+    *,
+    requested_by: str | None = None,
+    request_source: str | None = None,
+    deps: EngineDeps | None = None,
+) -> dict[str, Any]:
+    """Change a run-level setting while it goes on: how many steps may run at once.
+
+    A higher cap starts ready steps at once; a lower one never stops a running step, it only holds back the next.
+    """
+
+    deps = deps or EngineDeps()
+    now = deps.clock()
+    run = await _locked_open_run(db, run_id)
+    meta = _meta(run)
+    cap = request.max_concurrent_steps
+    if cap is None:
+        raise WorkflowRunError("invalid_plan", "no changes given")
+    current = load_policy(meta["policy"]).max_concurrent_steps
+    if cap == current:
+        return _result(run_id, meta, False, changed=False, max_concurrent_steps=current)
+    if cap > 1 and not meta.get("repo_path"):
+        raise WorkflowRunError(
+            "invalid_plan", "max_concurrent_steps above 1 needs a repo_path: each running step works in its own worktree"
+        )
+    meta = {**meta, "policy": {**meta["policy"], "max_concurrent_steps": cap}}
+    meta = _record(
+        meta,
+        "revise_run",
+        request,
+        [{"step": None, "op": "revise", "before": {"max_concurrent_steps": current}, "after": {"max_concurrent_steps": cap}}],
+        _by(request, requested_by, request_source),
+        now,
+    )
+    enqueue = _settle(run, meta, await _steps(db, run_id), now)
+    await db.commit()
+    return _result(run_id, _meta(run), enqueue, changed=True, max_concurrent_steps=cap)

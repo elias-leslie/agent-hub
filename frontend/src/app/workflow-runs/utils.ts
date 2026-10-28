@@ -7,9 +7,11 @@ import type {
   PlanChangeRecord,
   PlanHistoryEntry,
   RunPause,
+  RunResult,
   RunState,
   StepLive,
   StepStatus,
+  StepWorkspace,
   WorkflowAttempt,
   WorkflowStepView,
 } from '@/lib/api/workflow-runs'
@@ -369,10 +371,49 @@ export function planChangeText(change: PlanChangeRecord): string {
     (field) =>
       `${field} ${shown(change.before?.[field])} -> ${shown(change.after?.[field])}`,
   )
-  return `${change.step}: ${parts.join('; ')}`
+  return `${change.step ?? 'run'}: ${parts.join('; ')}`
 }
 
 /** Who made a plan revision: the caller's own label first, then the client that sent it. */
 export function planAuthor(by: PlanHistoryEntry['by']): string {
   return by.changed_by || by.client_id || by.request_source || 'unknown'
+}
+
+/** The merge that made a lane's start: "clean merge of a, b", "conflict in shared.txt", or nothing to merge. */
+export function mergeText(workspace: StepWorkspace): string | null {
+  if (workspace.kind !== 'lane') return null
+  const merges = workspace.merges ?? []
+  const names = (result: string) =>
+    merges
+      .filter((m) => m.result === result)
+      .map((m) => m.step ?? m.sha.slice(0, 8))
+  switch (workspace.merge_result) {
+    case 'conflict': {
+      const files = workspace.conflict_files ?? []
+      return `Merge conflict in ${files.length > 0 ? files.join(', ') : 'some files'}; this step resolves it first`
+    }
+    case 'pending': {
+      return `Merge of ${names('pending').join(', ')} still to do`
+    }
+    case 'clean':
+      return `Clean merge of ${names('clean').join(', ')}`
+    case 'up_to_date':
+      return 'Dependencies already included; nothing to merge'
+    default:
+      return 'Started from its dependency, no merge needed'
+  }
+}
+
+/** Where the run's code is, in plain words; null while a lane run is still going. */
+export function resultText(
+  result: RunResult | null | undefined,
+): string | null {
+  if (!result || !result.state) return null
+  const where = `${result.branch ?? 'unknown branch'}${result.sha ? ` at ${result.sha.slice(0, 8)}` : ''}`
+  if (result.state === 'conflict') {
+    const left = (result.not_merged ?? []).join(', ')
+    const files = (result.conflict_files ?? []).join(', ')
+    return `Branches ${left || 'some'} could not be merged (conflict in ${files || 'some files'}); the rest is on ${where}`
+  }
+  return `Final code: ${where}`
 }

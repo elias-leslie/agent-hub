@@ -6,6 +6,7 @@ import pytest
 
 from app.services.workflow_runs.packet import (
     GitState,
+    MergeConflict,
     PriorStep,
     build_packet,
     normalize_handoff,
@@ -139,3 +140,23 @@ def test_step_definition_accepts_bare_acceptance_strings_and_validates_effort() 
     for bad in ({"effort": "max"}, {"acceptance": [{"cmd": ""}]}, {"acceptance": [{"cmd": "x", "timeout_s": 0}]}):
         with pytest.raises(ValidationError):
             StepDefinition(**base, **bad)
+
+
+def test_a_join_step_with_merge_conflicts_is_told_to_resolve_them_first_and_which_files() -> None:
+    conflict = MergeConflict("b", ["shared.txt", "lib/util.py"], pending=[("c", "abc123"), (None, "def456")])
+    rendered = packet(prior(1), 10_000, merge_conflict=conflict).render()
+    section = rendered.split("# Merge conflicts to resolve first", 1)[1].split("\n\n# ", 1)[0]
+    assert "- shared.txt" in section and "- lib/util.py" in section
+    assert "before anything else" in section and "git merge --no-ff --no-edit" in section
+    assert "- c: abc123" in section and "- run base: def456" in section
+    # It comes before the git state, and the no-git rule names its one exception.
+    assert rendered.index("Merge conflicts to resolve first") < rendered.index("# Git state")
+    assert "The one exception is concluding the merge" in rendered
+    assert packet(prior(1), 10_000, merge_conflict=conflict).as_dict()["merge_conflict"]["files"] == ["shared.txt", "lib/util.py"]
+
+
+def test_a_conflict_with_nothing_left_to_merge_adds_no_git_exception_and_a_clean_packet_has_no_section() -> None:
+    rendered = packet(prior(1), 10_000, merge_conflict=MergeConflict("b", ["x.txt"])).render()
+    assert "Merge conflicts to resolve first" in rendered and "The one exception" not in rendered
+    clean = packet(prior(1), 10_000)
+    assert "Merge conflicts" not in clean.render() and clean.as_dict()["merge_conflict"] is None
