@@ -199,3 +199,35 @@ services and verify the installed context-adapter source links before launching
 a fresh root with `st aico create ... --work-role implementation`. Existing
 processes need their normal native resume/extension reload before using updated
 producer code; no live activation or deployment is performed by this checkpoint.
+
+### Work-role context selection
+
+The same proven declaration also selects context. On `deliver` and `hook`, the
+client adds the consumer tag `work-role:<id>` when both `ST_WORK_ROLE` and
+`ST_WORK_ROLE_SOURCE` are set, for every surface that delivers through it (Pi,
+Claude Code and Codex launchers, Antigravity retrieval). A child delivery
+(SubagentStart or a hook with child markers) gets no role tag, and `bind` adds
+none. The tag is separate from `aico-coordinator`, which still comes only from
+Tether's coordinator flag. Agent Hub drops a `work-role:*` tag whose ID is not in
+`backend/app/services/session_roles.json`, so a new role needs only a registry
+entry. Registered IDs: `coordinator`, `implementation`, `research`, `review`,
+`recon`, `hunting`, `operations`, `selection`, `verification`, `reporting`, and
+`other`. Role tags never narrow untargeted legacy references.
+
+Sources target roles with the existing applicability fields:
+`exclude_audience_tags: ["work-role:review"]` omits a source for review sessions
+and keeps it for every other session, including ones with no declared role;
+`audience_tags: ["work-role:coordinator"]` delivers it only to declared
+coordinators, and never to an undeclared session. Required means required
+wherever it applies: a required rule that a role's applicability excludes is
+neither delivered nor expected by required-policy verification for that role.
+Prefer exclusions for required rules so undeclared sessions fail toward more
+policy. Applicability has no project dimension: role targeting on a global source
+affects that role in every project, so put project-specific role targeting on
+sources scoped to that project. No prompt text is added, and Blank Slate roots still get no delivery.
+
+Limit: Claude Code and Codex children that reuse the root's launch context (the
+preloaded `CLAUDE.md` or inherited developer instructions) see the root's
+role-selected bytes; their SubagentStart hooks only bind, so no role-free child
+delivery is made there. Codex resume and fork keep saved context and get no new
+selection.

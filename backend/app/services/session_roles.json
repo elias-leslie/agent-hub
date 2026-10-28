@@ -6,5 +6,8 @@
   "recon": "Recon",
   "hunting": "Hunting",
   "operations": "Operations",
+  "selection": "Selection",
+  "verification": "Verification",
+  "reporting": "Reporting",
   "other": "Other"
 }
