@@ -64,6 +64,13 @@ export interface ChatMessage {
   agentProvider?: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
   /** Agent slug or effective model identifier used for display. */
   agentModel?: string;
+  /** The model asked for, the one that answered, and whether a fallback served the turn. */
+  requestedModel?: string;
+  servedModel?: string;
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
+  /** Interrupted model turns the backend re-ran for this answer; the discarded partial output is not kept. */
+  retries?: Array<{ attempt?: number; max?: number; reason?: string }>;
   /** Target agent slug specified via @mention (for user messages) */
   targetModel?: string;
   /** Group ID for parallel responses to the same user message */
@@ -124,6 +131,9 @@ export interface StreamMessage {
   model?: string;
   model_display_name?: string;
   agent_used?: string;
+  model_used?: string;
+  fallback_used?: boolean;
+  fallback_reason?: string;
   input_tokens?: number;
   output_tokens?: number;
   thinking_tokens?: number;

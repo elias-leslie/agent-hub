@@ -4,10 +4,12 @@ import { Loader2 } from 'lucide-react'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 
 import { ChatPanel } from '@/components/chat'
+import { useModelsWithSync } from '@/hooks/use-models-catalog'
 import { searchTasks, type TaskSearchItem } from '@/lib/api/tasks'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
 import { ChatHeader } from './components/ChatHeader'
+import type { ChatSessionRow } from './components/ChatSessions'
 import { ChatSidebar } from './components/ChatSidebar'
 import { useAgentSelection } from './hooks/useAgentSelection'
 import { useChatSession } from './hooks/useChatSession'
@@ -36,6 +38,8 @@ function ChatContent() {
   const [tasksLoading, setTasksLoading] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
   const [thinkingLevel, setThinkingLevel] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const catalog = useModelsWithSync()
 
   const {
     agents,
@@ -157,7 +161,18 @@ function ChatContent() {
     if (agent.slug === selectedAgent?.slug) return
     handleContextChange()
     setSelectedAgent(agent)
+    setSelectedModel('')
     setSessionError(null)
+  }
+  const selectSession = (session: ChatSessionRow) => {
+    const agent = agents.find(
+      (candidate) => candidate.slug === session.agentSlug,
+    )
+    if (agent && agent.slug !== selectedAgent?.slug) {
+      setSelectedAgent(agent)
+      setSelectedModel('')
+    }
+    handleSelectSession(session.id)
   }
   const selectTask = (task: TaskSearchItem) => {
     if (task.id === selectedTask?.id) return
@@ -191,6 +206,11 @@ function ChatContent() {
         projects={projects}
         selectedProject={selectedProject}
         onSelectProject={selectProject}
+        models={catalog.models}
+        modelsLoading={catalog.isLoading}
+        modelsError={catalog.isError}
+        selectedModel={selectedModel}
+        onSelectModel={setSelectedModel}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -208,6 +228,7 @@ function ChatContent() {
             thinkingLevel={thinkingLevel}
             onNewSession={handleNewSession}
             onResumeSession={() => handleSelectSession(activeSessionId)}
+            onSelectSession={selectSession}
             onSelectProject={selectProject}
             onSelectTask={selectTask}
             onProjectSearchChange={setProjectSearch}
@@ -231,6 +252,7 @@ function ChatContent() {
               projectId={effectiveProjectId}
               externalId={selectedTask?.id}
               thinkingLevel={thinkingLevel || null}
+              model={selectedModel || null}
             />
           ) : (
             <div

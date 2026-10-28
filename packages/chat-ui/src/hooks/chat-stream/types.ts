@@ -44,6 +44,8 @@ export type PromptMode = "full" | "chat" | "none";
  */
 export interface CompletionRequest {
   agent_slug?: string | null;
+  /** Catalog model override for the agent; omitted for its own routing. */
+  model?: string;
   include_roles?: string[];
   prompt_mode?: PromptMode;
   messages: MessageHistoryEntry[];

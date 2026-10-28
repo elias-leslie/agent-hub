@@ -5,6 +5,17 @@
 import type { ChatMessage, ToolExecution, StreamMessage } from "../../types/chat";
 import type { StreamState } from "./types";
 
+/** Which model was asked for and which answered, once the event carries them. */
+function routingFields(data: StreamMessage): Partial<ChatMessage> {
+  return {
+    ...(data.model ? { requestedModel: data.model } : {}),
+    ...(data.model_used ? { servedModel: data.model_used } : {}),
+    ...(data.agent_used ? { agentName: data.agent_used } : {}),
+    ...(data.fallback_used !== undefined ? { fallbackUsed: data.fallback_used } : {}),
+    ...(data.fallback_reason ? { fallbackReason: data.fallback_reason } : {}),
+  };
+}
+
 /**
  * Handles incoming stream events and updates message state accordingly.
  */
@@ -22,13 +33,14 @@ export function handleStreamEvent(
       if (data.session_id) {
         setCurrentSessionId(data.session_id);
       }
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, ...routingFields(data) } : m)));
       break;
 
     case "thinking":
       state.thinking += data.content || "";
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, thinking: state.thinking, statusLabel: "Thinking" } : m,
+          m.id === assistantId ? { ...m, ...routingFields(data), thinking: state.thinking, statusLabel: "Thinking" } : m,
         ),
       );
       break;
@@ -37,7 +49,7 @@ export function handleStreamEvent(
       state.content += data.content || "";
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, content: state.content, statusLabel: "Responding" } : m,
+          m.id === assistantId ? { ...m, ...routingFields(data), content: state.content, statusLabel: "Responding" } : m,
         ),
       );
       break;
@@ -48,10 +60,10 @@ export function handleStreamEvent(
           m.id === assistantId
             ? {
               ...m,
+              ...routingFields(data),
               content: state.content,
               thinking: state.thinking || undefined,
               agentProvider: provider,
-              agentName: data.agent_used || m.agentName,
               agentModel: data.model_display_name || data.model,
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
@@ -169,6 +181,7 @@ export function handleStreamEvent(
               content: state.content,
               thinking: state.thinking || undefined,
               toolExecutions: [...state.tools],
+              retries: [...(m.retries ?? []), { attempt: data.attempt, max: data.max_retries, reason: data.reason }],
               statusLabel: `Retrying (${data.attempt ?? "?"}/${data.max_retries ?? "?"})`,
             }
             : m,

@@ -66,12 +66,14 @@ function clearSessionIdFromUrl(): void {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
   url.searchParams.delete('session_id')
+  url.searchParams.delete('session')
   window.history.replaceState(null, '', url.toString())
 }
 
 function setSessionIdInUrl(sessionId: string): void {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
+  url.searchParams.delete('session')
   url.searchParams.set('session_id', sessionId)
   window.history.replaceState(null, '', url.toString())
 }
@@ -82,6 +84,7 @@ function pushSessionIdInUrl(
 ): void {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
+  url.searchParams.delete('session')
   if (sessionId) {
     url.searchParams.set('session_id', sessionId)
   } else {
@@ -106,7 +109,8 @@ export function useChatSession(
 ): UseChatSessionReturn {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const sessionIdFromUrl = searchParams.get('session_id')
+  const sessionIdFromUrl =
+    searchParams.get('session_id') ?? searchParams.get('session')
   const contextKey = options.contextKey ?? null
   const ignoreUrlOnNextContextLoad = useRef(false)
 

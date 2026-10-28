@@ -100,6 +100,8 @@ interface ChatPanelProps {
   workContext?: WorkChatContext
   thinkingLevel?: string | null
   currentBranch?: string | null
+  /** Catalog model to ask for; empty means the agent's own routing. */
+  model?: string | null
 }
 
 export function ChatPanel({
@@ -120,6 +122,7 @@ export function ChatPanel({
   workContext,
   thinkingLevel,
   currentBranch,
+  model,
 }: ChatPanelProps) {
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(
     undefined,
@@ -183,6 +186,7 @@ export function ChatPanel({
       workContext,
       thinkingLevel: normalizeThinkingLevel(thinkingLevel),
       currentBranch,
+      model,
     }),
     [
       projectId,
@@ -192,6 +196,7 @@ export function ChatPanel({
       workContext,
       thinkingLevel,
       currentBranch,
+      model,
     ],
   )
 

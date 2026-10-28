@@ -37,6 +37,7 @@ export function ToolExecutionDisplay({ tools }: { tools: ToolExecution[] }) {
         <button
           type="button"
           onClick={() => setIsExpanded((value) => !value)}
+          aria-expanded={isExpanded}
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
         >
           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}

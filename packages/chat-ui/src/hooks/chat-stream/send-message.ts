@@ -6,7 +6,6 @@ import type { ChatHubClient } from "../../client";
 import type { ChatMessage, StreamStatus } from "../../types/chat";
 import type { StreamState, CompletionRequest, MessageHistoryEntry } from "./types";
 import { formatModelName, generateId } from "./utils";
-import { clearPendingPrompt, rememberPendingPrompt } from "./pending-prompt";
 import { processStream } from "./stream-processor";
 
 interface SendMessageParams {
@@ -37,6 +36,7 @@ interface SendMessageParams {
   workContext?: CompletionRequest["work_context"];
   thinkingLevel?: string | null;
   currentBranch?: string | null;
+  model?: string | null;
 }
 
 /**
@@ -74,6 +74,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
     workContext,
     thinkingLevel,
     currentBranch,
+    model,
   } = params;
 
   setError(null);
@@ -132,11 +133,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   const trackSession: React.Dispatch<React.SetStateAction<string | null>> = (value) => {
     if (typeof value === "string" && value) {
       activeSessionId = value;
-      rememberPendingPrompt(value, content);
     }
     setCurrentSessionId(value);
   };
-  if (sessionId) rememberPendingPrompt(sessionId, content);
 
   try {
     setStatus("streaming");
@@ -145,6 +144,8 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
       if (controllers[index].signal.aborted) break;
       const requestBody: CompletionRequest = {
         agent_slug: targetAgent,
+        // Empty means the agent's canonical routing.
+        model: model || undefined,
         include_roles: includeRoles && includeRoles.length > 0 ? includeRoles : undefined,
         prompt_mode: promptMode || undefined,
         messages: messageHistory,
@@ -182,7 +183,6 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
       if (outcome === "cancelled") break;
     }
 
-    if (activeSessionId) clearPendingPrompt(activeSessionId);
     if (abortControllersRef.current === controllers) setStatus("idle");
   } catch (err: unknown) {
     // A newer sendMessage (user interruption) owns status now; don't clobber it.
@@ -192,7 +192,6 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
       setStatus("idle");
     } else {
       // The turn ended with an error: nothing to resume.
-      if (activeSessionId) clearPendingPrompt(activeSessionId);
       setError(err instanceof Error ? err.message : "Stream connection error");
       setStatus("error");
     }

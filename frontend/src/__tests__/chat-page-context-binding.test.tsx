@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ChatPage from '@/app/chat/page'
+import { createQueryClientWrapper } from './test-utils'
 
 const mocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
@@ -34,6 +35,13 @@ vi.mock('@/components/chat', () => ({
         data-external-id={String(props.externalId ?? '')}
       />
     )
+  },
+}))
+
+vi.mock('@/lib/agent-hub-client', () => ({
+  agentHubClient: {
+    sessions: { list: vi.fn().mockResolvedValue({ sessions: [], total: 0 }) },
+    models: { catalog: vi.fn().mockResolvedValue({ models: [] }) },
   },
 }))
 
@@ -130,7 +138,7 @@ describe('ChatPage context binding', () => {
   })
 
   it('starts a fresh thread when project, agent, or task context changes', async () => {
-    render(<ChatPage />)
+    render(<ChatPage />, { wrapper: createQueryClientWrapper() })
 
     await waitFor(() => {
       expect(screen.getByTestId('chat-panel')).toHaveAttribute(
@@ -191,7 +199,7 @@ describe('ChatPage context binding', () => {
       }),
     )
 
-    render(<ChatPage />)
+    render(<ChatPage />, { wrapper: createQueryClientWrapper() })
 
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(

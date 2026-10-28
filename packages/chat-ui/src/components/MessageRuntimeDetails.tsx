@@ -1,5 +1,7 @@
 import {
   Activity,
+  RotateCw,
+  Shuffle,
   DollarSign,
   FileText,
   Paperclip,
@@ -38,7 +40,17 @@ function contextTone(tone: NonNullable<ChatMessage["contextHints"]>[number]["ton
   return "text-muted-foreground";
 }
 
+/** "requested X, answered by Y": the model asked for and the one that served the answer. */
+function routeText(message: ChatMessage): string | null {
+  const { requestedModel: asked, servedModel: served } = message;
+  if (asked && served && asked !== served) return `requested ${asked}, answered by ${served}`;
+  if (served || asked) return served ? `answered by ${served}` : `requested ${asked}`;
+  return null;
+}
+
 export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
+  const route = message.role === "assistant" ? routeText(message) : null;
+  const retries = message.retries ?? [];
   const hasUsage =
     message.inputTokens !== undefined ||
     message.outputTokens !== undefined ||
@@ -48,13 +60,40 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
   const hasAttachments = Boolean(message.attachments?.length);
   const hasPermissions = Boolean(message.permissionRequests?.length);
   const hasContextHints = Boolean(message.contextHints?.length);
+  const hasRoute = Boolean(route || message.fallbackUsed || retries.length);
 
-  if (!hasUsage && !hasArtifacts && !hasAttachments && !hasPermissions && !hasContextHints && !message.statusLabel) {
+  if (!hasUsage && !hasArtifacts && !hasAttachments && !hasPermissions && !hasContextHints && !hasRoute && !message.statusLabel) {
     return null;
   }
 
   return (
     <div className="mt-3 space-y-2 border-t border-current/10 pt-2 text-xs">
+      {hasRoute && (
+        <div className="flex flex-wrap items-center gap-2 text-muted-foreground" data-testid="message-route">
+          {route ? <span title="Model asked for, and model that answered">{route}</span> : null}
+          {message.fallbackUsed ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-200"
+              title={message.fallbackReason ?? "A fallback model answered"}
+            >
+              <Shuffle className="h-3 w-3" />
+              fallback{message.fallbackReason ? `: ${message.fallbackReason}` : ""}
+            </span>
+          ) : null}
+          {retries.map((retry, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-200"
+              title="The backend dropped an interrupted model turn and re-ran it; its partial output was discarded"
+            >
+              <RotateCw className="h-3 w-3" />
+              retried {retry.attempt ?? "?"}/{retry.max ?? "?"}
+              {retry.reason ? `: ${retry.reason}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
       {(message.statusLabel || hasUsage || hasContextHints) && (
         <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
           {message.statusLabel ? (

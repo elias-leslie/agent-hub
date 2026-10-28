@@ -71,6 +71,13 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
     }
   }
 
+  // The session names the route of its latest turn; only that turn's answer carries it.
+  const lastAssistantId = [...deduped].reverse().find((m) => m.role === "assistant")?.id;
+  const latestRoute: Partial<ChatMessage> = {
+    ...(session.requested_model ? { requestedModel: session.requested_model } : {}),
+    ...(session.fallback_used !== undefined ? { fallbackUsed: session.fallback_used } : {}),
+  };
+
   return {
     messages: deduped.map((m) => ({
       id: `loaded-${m.id}`,
@@ -80,6 +87,8 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
       agentName: m.agent_display_name || m.agent_name || undefined,
       agentModel: m.model_display_name || m.model_used || undefined,
       ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
+      ...(m.role === "assistant" && m.model_used ? { servedModel: m.model_used } : {}),
+      ...(m.id === lastAssistantId ? latestRoute : {}),
       ...(m.thinking ? { thinking: m.thinking } : {}),
       ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
       ...(uniqueToolExecutionsByMessage.has(m.id)

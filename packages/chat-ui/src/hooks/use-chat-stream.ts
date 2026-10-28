@@ -7,7 +7,6 @@ import type { CompletionRequest, StreamState } from "./chat-stream/types";
 import { loadSession, type LoadedSession } from "./chat-stream/session-loader";
 import { sendMessage as sendMessageImpl } from "./chat-stream/send-message";
 import { attachToTurn } from "./chat-stream/stream-processor";
-import { clearPendingPrompt, readPendingPrompt } from "./chat-stream/pending-prompt";
 import { generateId } from "./chat-stream/utils";
 
 /** What the host knows about the conversation. Where Agent Hub is lives in the client, not here. */
@@ -23,6 +22,8 @@ export interface ChatStreamConfig {
   useMemory?: boolean;
   thinkingLevel?: string | null;
   currentBranch?: string | null;
+  /** Catalog model to ask for instead of the agent's own routing. Empty or omitted: canonical routing. */
+  model?: string | null;
 }
 
 /** How long a new message waits for the turn it interrupts to wind down before it is sent anyway. */
@@ -94,6 +95,7 @@ export function useChatStream(
     useMemory,
     thinkingLevel,
     currentBranch,
+    model,
   } = config;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -128,18 +130,10 @@ export function useChatStream(
       const state: StreamState = { content: "", thinking: "", tools: [], lastSeq: 0 };
       streamStatesRef.current.set(assistantId, state);
 
-      // The server stores a turn's messages when it ends, so the prompt that started this one is not in the session yet.
-      const pendingPrompt = readPendingPrompt(targetSessionId);
-      const lastUser = [...loaded.messages].reverse().find((m) => m.role === "user");
-      const history =
-        pendingPrompt && lastUser?.content !== pendingPrompt
-          ? [...loaded.messages, { id: generateId(), role: "user" as const, content: pendingPrompt, timestamp: new Date() }]
-          : loaded.messages;
-
       setCurrentSessionId(targetSessionId);
       setLoadedSessionProjectId(loaded.projectId);
       setMessages([
-        ...history,
+        ...loaded.messages,
         { id: assistantId, role: "assistant", content: "", timestamp: new Date(), agentModel: agentSlug, toolExecutions: [] },
       ]);
       setError(null);
@@ -162,7 +156,6 @@ export function useChatStream(
             setMessages(fresh.messages);
             setLoadedSessionProjectId(fresh.projectId);
           }
-          clearPendingPrompt(targetSessionId);
           setStatus("idle");
         } catch (err) {
           if (isStale() || abortControllersRef.current !== mine) return;
@@ -170,7 +163,6 @@ export function useChatStream(
             setStatus("idle");
             return;
           }
-          clearPendingPrompt(targetSessionId);
           setError(err instanceof Error ? err.message : "Stream connection error");
           setStatus("error");
         } finally {
@@ -365,11 +357,12 @@ export function useChatStream(
         workContext,
         thinkingLevel,
         currentBranch,
+        model,
       });
       activeRunRef.current = run;
       await run;
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, loadInitialSession],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, parentSessionId, sourceMetadata, workContext, includeRoles, promptMode, useMemory, thinkingLevel, currentBranch, model, setCurrentSessionIdWithTracking, loadInitialSession],
   );
 
   const cancelStream = useCallback(() => {

@@ -111,16 +111,20 @@ describe('useChatStream reattach', () => {
     expect(result.current.messages.at(-1)?.content).toBe('Still going')
   })
 
-  it('puts the prompt this tab sent back above the rejoined answer', async () => {
-    localStorage.setItem(
-      'agent-hub-chat-ui:pending-prompt:s1',
-      JSON.stringify({ content: 'the question in flight', at: Date.now() }),
-    )
+  it('shows the prompt that started the running turn, which the server stored when the turn began', async () => {
     const { client } = fakeClient({
       id: 's1',
       project_id: 'agent-hub',
       turn_state: 'running',
-      messages: history,
+      messages: [
+        ...history,
+        {
+          id: 'm3',
+          role: 'user',
+          content: 'the question in flight',
+          created_at: '2026-10-28T10:01:00Z',
+        },
+      ],
     })
 
     const { result } = renderHook(() =>

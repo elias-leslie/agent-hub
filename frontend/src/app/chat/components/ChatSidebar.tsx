@@ -6,6 +6,7 @@ import type { TaskSearchItem } from '@/lib/api/tasks'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
 import type { ProjectConfig } from '../hooks/useProjectContext'
+import { type ChatSessionRow, ChatSessions } from './ChatSessions'
 
 const THINKING_LEVELS = [
   { value: '', label: 'Default' },
@@ -306,6 +307,7 @@ export function ChatSidebar({
   thinkingLevel,
   onNewSession,
   onResumeSession,
+  onSelectSession,
   onSelectProject,
   onSelectTask,
   onProjectSearchChange,
@@ -325,6 +327,7 @@ export function ChatSidebar({
   thinkingLevel: string
   onNewSession: () => void
   onResumeSession: () => void
+  onSelectSession: (session: ChatSessionRow) => void
   onSelectProject: (project: ProjectConfig | null) => void
   onSelectTask: (task: TaskSearchItem) => void
   onProjectSearchChange: (value: string) => void
@@ -333,7 +336,7 @@ export function ChatSidebar({
   onThinkingLevelChange: (value: string) => void
 }) {
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-border bg-card/45 p-3 md:block">
+    <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-border bg-card/45 p-3 md:block">
       <div className="space-y-3">
         <ThreadSection
           activeSessionId={activeSessionId}
@@ -342,6 +345,11 @@ export function ChatSidebar({
           selectedAgent={selectedAgent}
           onNewSession={onNewSession}
           onResumeSession={onResumeSession}
+        />
+
+        <ChatSessions
+          activeSessionId={activeSessionId}
+          onSelect={onSelectSession}
         />
 
         <ProjectContextSection

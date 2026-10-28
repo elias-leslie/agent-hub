@@ -15,14 +15,17 @@ export function ThinkingBlock({
   isStreaming,
   hasContent,
 }: ThinkingBlockProps) {
-  const [showThinking, setShowThinking] = useState(false);
   const isThinkingOnly = isStreaming && !hasContent;
+  // Open while the model is only thinking, folded once it answers; a click overrides either.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const showThinking = chosen ?? isThinkingOnly;
 
   return (
     <div className="mb-3">
       <button
         data-testid="thinking-toggle"
-        onClick={() => setShowThinking(!showThinking)}
+        onClick={() => setChosen(!showThinking)}
+        aria-expanded={showThinking}
         className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
       >
         <Brain className={cn("h-3.5 w-3.5", isThinkingOnly && "animate-pulse")} />

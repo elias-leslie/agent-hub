@@ -10,6 +10,7 @@ import {
   Server,
 } from 'lucide-react'
 import { useState } from 'react'
+import type { CatalogModel } from '@/lib/models'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
 import type { ProjectConfig } from '../hooks/useProjectContext'
@@ -25,6 +26,11 @@ interface ChatHeaderProps {
   projects: ProjectConfig[]
   selectedProject: ProjectConfig | null
   onSelectProject: (project: ProjectConfig | null) => void
+  models: CatalogModel[]
+  modelsLoading: boolean
+  modelsError: boolean
+  selectedModel: string
+  onSelectModel: (modelId: string) => void
 }
 
 function getAgentIcon(slug: string) {
@@ -43,6 +49,11 @@ export function ChatHeader({
   projects,
   selectedProject,
   onSelectProject,
+  models,
+  modelsLoading,
+  modelsError,
+  selectedModel,
+  onSelectModel,
 }: ChatHeaderProps) {
   const [showAgentSelector, setShowAgentSelector] = useState(false)
   const [showProjectSelector, setShowProjectSelector] = useState(false)
@@ -126,6 +137,40 @@ export function ChatHeader({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Model: empty means the agent's own routing */}
+          {selectedAgent && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Model
+              <select
+                value={selectedModel}
+                onChange={(event) => onSelectModel(event.target.value)}
+                disabled={modelsLoading}
+                title={
+                  modelsError
+                    ? 'The model catalog did not load; only agent routing is available'
+                    : undefined
+                }
+                className="max-w-56 rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-60"
+              >
+                <option value="">
+                  {modelsLoading
+                    ? 'Loading models...'
+                    : `Agent routing (${selectedAgent.primary_model_id ?? 'default'})`}
+                </option>
+                {models
+                  .filter((model) => model.routable)
+                  .map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} ({model.provider})
+                    </option>
+                  ))}
+              </select>
+              {modelsError ? (
+                <span className="text-destructive">catalog failed</span>
+              ) : null}
+            </label>
+          )}
+
           {/* Agent Selector */}
           {selectedAgent && (
             <div className="relative">
