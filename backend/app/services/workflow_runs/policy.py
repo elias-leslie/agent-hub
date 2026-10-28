@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -21,12 +21,23 @@ DEFAULTS_FILE = Path(__file__).with_name("policy_defaults.json")
 
 @dataclass(frozen=True)
 class RunPolicy:
+    # Restarts a step may use after a stalled attempt (the step fails when it stalls again past this many).
     restart_limit: int
     stale_after_seconds: int
     heartbeat_interval_seconds: float
     # Refused/substituted attempts per category across a run before it pauses for the owner. Every refusal
     # that hops to the next chain model counts, so the default is far above a normal takeover.
     refusal_pause_threshold: int
+    # Hard cap on attempts of one step on every path: errors, refusals, substitutions, usage-limit cycles,
+    # acceptance retries, restarts and owner retries. A step's own ``max_attempts`` may lower it.
+    max_total_attempts: int
+    # Times a step waits out a usage limit and resumes by itself before it pauses for the owner instead.
+    max_usage_limit_resumes: int
+    # Retries of a step whose acceptance commands failed, before the step fails.
+    acceptance_retry_limit: int
+    # Per acceptance command, unless the command sets its own ``timeout_s``.
+    acceptance_timeout_seconds: int
+    acceptance_output_tail_chars: int
     usage_limit_cooldown_seconds: int
     packet_budget_fraction: float
     default_context_window: int
@@ -71,6 +82,9 @@ class StepState:
     pinned_model: str | None = None  # restart or owner pin: run this model next
     # Tried models whose attempt ended on a usage limit; their reset still counts as a way forward.
     usage_limited: tuple[str, ...] = ()
+    # Waits out of a usage limit the step has already resumed from, and acceptance failures it has used.
+    usage_limit_resumes: int = 0
+    acceptance_failures: int = 0
 
 
 @dataclass(frozen=True)
@@ -123,13 +137,15 @@ class AttemptResult:
     outcome: ProviderOutcome | None = None
     has_handoff: bool = False
     error: str | None = None
+    # The step's acceptance commands: None when it has none (or they did not run), else whether all passed.
+    acceptance_passed: bool | None = None
 
 
 @dataclass(frozen=True)
 class Decision:
     action: Literal["complete", "retry", "fail", "needs_owner"]
     reason: str
-    kind: str | None = None  # refused | substituted | usage_limit | error
+    kind: str | None = None  # refused | substituted | usage_limit | error | acceptance
     category: str | None = None
     next_model: str | None = None
     wait_until: float | None = None
@@ -159,6 +175,7 @@ def _move_on(
     unavailable: Mapping[str, Unavailable],
     now: float,
     refusals: dict[str, int],
+    policy: RunPolicy,
 ) -> Decision:
     choice = choose_attempt_model(
         replace_tried(step, model, usage_limited=kind == "usage_limit"), unavailable, now
@@ -172,19 +189,50 @@ def _move_on(
             hop=_hop(model, choice.model, kind, category),
             **common,
         )
-    if choice.wait_until is not None:
-        return Decision("needs_owner", "usage_limit_wait", wait_until=choice.wait_until, **common)
-    return Decision("needs_owner", "chain_exhausted", **common)
+    reason = pause_reason(choice, step, policy)
+    return Decision(
+        "needs_owner",
+        reason,
+        wait_until=choice.wait_until if reason == "usage_limit_wait" else None,
+        **common,
+    )
+
+
+def pause_reason(choice: ModelChoice, step: StepState, policy: RunPolicy) -> str:
+    """Why a step with no model to run now waits for the owner or for a usage-limit reset.
+
+    A wait for a reset resumes by itself, at most ``max_usage_limit_resumes`` times per step; after that the
+    owner decides.
+    """
+
+    if choice.wait_until is None:
+        return "chain_exhausted"
+    if step.usage_limit_resumes >= policy.max_usage_limit_resumes:
+        return "usage_limit_resume_limit"
+    return "usage_limit_wait"
 
 
 def replace_tried(step: StepState, model: str, *, usage_limited: bool = False) -> StepState:
-    return StepState(
-        step.chain,
-        (*step.tried, model),
-        step.attempts,
-        step.max_attempts,
+    return replace(
+        step,
+        tried=(*step.tried, model),
+        pinned_model=None,
         usage_limited=(*step.usage_limited, model) if usage_limited else step.usage_limited,
     )
+
+
+def attempt_limit(max_attempts: int | None, policy: RunPolicy) -> int:
+    """Attempts one step may use in all: the run policy's hard cap, lowered by the step's own ``max_attempts``."""
+
+    return min(policy.max_total_attempts, max_attempts or policy.max_total_attempts)
+
+
+def attempts_exhausted(attempts: int, max_attempts: int | None, policy: RunPolicy) -> str | None:
+    """The cap that forbids another attempt of a step that already ran ``attempts``, else None."""
+
+    if attempts < attempt_limit(max_attempts, policy):
+        return None
+    return "max_attempts" if max_attempts and max_attempts < policy.max_total_attempts else "max_total_attempts"
 
 
 def decide_after_attempt(
@@ -201,14 +249,50 @@ def decide_after_attempt(
     """What a finished attempt means for the step.
 
     ``unavailable`` is computed after the outcome was applied: a usage limit has already put the model's
-    provider on cooldown (see ``usage_limit_cooldown``).
+    provider on cooldown (see ``usage_limit_cooldown``). Any decision that would start another attempt
+    fails the step instead once an attempt cap is reached (``attempts_exhausted``).
     """
 
+    decision = _decide(
+        model, result, step, run, policy, owner_only_categories, unavailable, now
+    )
+    if decision.action == "retry":
+        cap = attempts_exhausted(step.attempts, step.max_attempts, policy)
+        if cap:
+            return replace(decision, action="fail", reason=f"{cap}: {decision.reason}", next_model=None, hop=None)
+    return decision
+
+
+def _acceptance_decision(
+    model: str, step: StepState, policy: RunPolicy, refusals: dict[str, int], outcome: ProviderOutcome | None
+) -> Decision:
+    """The step's work is done by its own account but an acceptance command failed: same model, once more."""
+
+    common = {"kind": "acceptance", "category": outcome.category if outcome else None, "refusals": refusals}
+    if step.acceptance_failures >= policy.acceptance_retry_limit:
+        return Decision("fail", "acceptance_retry_limit", **common)
+    return Decision("retry", "acceptance_failed", next_model=model, **common)
+
+
+def _decide(
+    model: str,
+    result: AttemptResult,
+    step: StepState,
+    run: RunState,
+    policy: RunPolicy,
+    owner_only_categories: Collection[str],
+    unavailable: Mapping[str, Unavailable],
+    now: float,
+) -> Decision:
     refusals = dict(run.refusals)
     outcome = result.outcome
+    finished = result.status == "completed" and result.has_handoff
+    acceptance_failed = finished and result.acceptance_passed is False
 
     if outcome is not None and outcome.kind == "usage_limit":
-        return _move_on(model, "usage_limit", None, "usage_limit", step, unavailable, now, refusals)
+        return _move_on(
+            model, "usage_limit", None, "usage_limit", step, unavailable, now, refusals, policy
+        )
 
     if outcome is not None and outcome.kind in ("refused", "substituted"):
         category = outcome.category
@@ -231,13 +315,10 @@ def decide_after_attempt(
                     refusals=refusals,
                 )
         upcoming = choose_attempt_model(replace_tried(step, model), unavailable, now).model
-        if (
-            result.status == "completed"
-            and result.has_handoff
-            and upcoming
-            and outcome.served_model == upcoming
-        ):
+        if finished and upcoming and outcome.served_model == upcoming:
             # The provider already ran the model the takeover would use.
+            if acceptance_failed:
+                return _acceptance_decision(model, step, policy, refusals, outcome)
             return Decision(
                 "complete",
                 "substituted_to_chain_model",
@@ -246,23 +327,26 @@ def decide_after_attempt(
                 refusals=refusals,
             )
         return _move_on(
-            model, outcome.kind, category, outcome.kind, step, unavailable, now, refusals
+            model, outcome.kind, category, outcome.kind, step, unavailable, now, refusals, policy
         )
 
-    if result.status == "completed" and result.has_handoff:
+    if finished:
+        if acceptance_failed:
+            return _acceptance_decision(model, step, policy, refusals, None)
         return Decision("complete", "completed", refusals=refusals)
 
     reason = "missing_handoff" if result.status == "completed" else (result.error or "error")
-    if step.max_attempts is not None and step.attempts >= step.max_attempts:
-        return Decision("fail", f"max_attempts: {reason}", kind="error", refusals=refusals)
-    return _move_on(model, "error", None, reason, step, unavailable, now, refusals)
+    return _move_on(model, "error", None, reason, step, unavailable, now, refusals, policy)
 
 
 def decide_stale_step(
     *, restarts: int, attempts: int, max_attempts: int | None, policy: RunPolicy
 ) -> Literal["retry", "fail"]:
-    """A running step with a stale heartbeat has used a restart (already counted in ``restarts``)."""
+    """A running step with a stale heartbeat restarts while it has used fewer than ``restart_limit`` restarts.
 
-    if restarts >= policy.restart_limit or (max_attempts is not None and attempts >= max_attempts):
+    ``restarts`` counts the restarts already used, not including this one.
+    """
+
+    if restarts >= policy.restart_limit or attempts_exhausted(attempts, max_attempts, policy):
         return "fail"
     return "retry"

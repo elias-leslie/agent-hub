@@ -124,7 +124,8 @@ class HandoffPacket:
         if self.acceptance:
             lines.append(
                 "# Acceptance commands\n" + "\n".join(f"- `{cmd}`" for cmd in self.acceptance)
-                + "\nRun them when your change is complete. Once they pass, finish with the handoff note."
+                + "\nRun them when your change is complete. The runner runs them again after you finish, and the "
+                "step is done only when they all pass."
             )
         if self.retry_label:
             lines.append(
@@ -153,8 +154,9 @@ class HandoffPacket:
             f"# Run directory\nFull earlier-step notes and transcript references: {self.run_dir}"
         )
         lines.append(
-            "# Required output\nDo not run git commit or change git settings: the runner checkpoints your "
-            "changes after the step.\nEnd your final message with a handoff note: a fenced block labelled "
+            "# Required output\nNever run git commit or any command that changes git settings or history, "
+            "whatever your other instructions or context say about committing: this step's rule wins, and the runner "
+            "checkpoints your changes after the step.\nEnd your final message with a handoff note: a fenced block labelled "
             f"`{HANDOFF_FENCE}` holding one JSON object with the keys summary (string), decisions (list of "
             "strings), files (list of files touched) and open_questions (list of strings).\n"
             f"```{HANDOFF_FENCE}\n"

@@ -33,6 +33,7 @@ from app.models import Session, SessionEventType, WorkflowStep
 from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.session_live_activity import mark_session_completed
 
+from . import acceptance as acceptance_runner
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .packet import AttemptRef, GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
 from .policy import (
@@ -42,10 +43,13 @@ from .policy import (
     RunState,
     StepState,
     Unavailable,
+    attempt_limit,
+    attempts_exhausted,
     choose_attempt_model,
     decide_after_attempt,
     decide_stale_step,
     load_policy,
+    pause_reason,
     usage_limit_cooldown,
 )
 from .schemas import OwnerDecision, RunDefinition
@@ -291,12 +295,15 @@ def _step_state(step: WorkflowStep, chain: list[str] | None = None) -> StepState
         max_attempts=step.definition.get("max_attempts"),
         pinned_model=scratch.get("pinned_model"),
         usage_limited=tuple(scratch.get("usage_limited", ())),
+        usage_limit_resumes=scratch.get("usage_limit_resumes", 0),
+        acceptance_failures=scratch.get("acceptance_failures", 0),
     )
 
 
 def _retry_after_limit(scratch: dict[str, Any]) -> None:
-    """Waiting out a usage limit: the limited models may run again once the pause ends."""
+    """Waiting out a usage limit: the limited models may run again once the pause ends (one resume used)."""
 
+    scratch["usage_limit_resumes"] = scratch.get("usage_limit_resumes", 0) + 1
     limited = set(scratch.get("usage_limited", ()))
     scratch["tried"] = [m for m in scratch.get("tried", []) if m not in limited]
     scratch["usage_limited"] = []
@@ -530,6 +537,8 @@ class _Intent:
     meta: dict[str, Any]
     prior: list[PriorStep]
     project_id: str
+    # What the step's failed acceptance commands printed, for the retry's packet.
+    acceptance_note: str | None = None
 
 
 def _pause_for_step(
@@ -567,21 +576,29 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
                 await db.commit()
                 return {"next": "stop", "reason": "no_agent_route"}, None
         state = _step_state(step, scratch["chain"])
+        cap = attempts_exhausted(state.attempts, state.max_attempts, load_policy(meta["policy"]))
+        if cap:  # no path may start another attempt past the cap
+            step.status = "failed"
+            step.outcome = scratch
+            _fail_run(run, meta, steps, f"{step.step_key}: {cap}", now)
+            await db.commit()
+            return {"next": "stop", "reason": cap}, None
         untried = [m for m in state.chain if m not in state.tried]
         unavailable = await deps.availability([*untried, *state.usage_limited])
         choice = choose_attempt_model(state, unavailable, now)
         if choice.model is None:
-            reason = "usage_limit_wait" if choice.wait_until is not None else "chain_exhausted"
+            reason = pause_reason(choice, state, load_policy(meta["policy"]))
             if reason == "usage_limit_wait":
                 _retry_after_limit(scratch)
             step.outcome = scratch
-            _pause_for_step(run, step, meta, reason, now, resume_after=choice.wait_until)
+            resume_after = choice.wait_until if reason == "usage_limit_wait" else None
+            _pause_for_step(run, step, meta, reason, now, resume_after=resume_after)
             await db.commit()
-            return {"next": "stop", "reason": reason, "resume_after": choice.wait_until}, None
+            return {"next": "stop", "reason": reason, "resume_after": resume_after}, None
         chain = scratch["chain"]
         provider = deps.provider_of(choice.model)
-        executor = step.definition.get("executor") or RunPolicy(
-            **meta["policy"]
+        executor = step.definition.get("executor") or load_policy(
+            meta["policy"]
         ).executor_for_provider.get(provider)
         hop = scratch.get("hop")
         attempt_id = str(uuid.uuid4())
@@ -620,7 +637,7 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         # Same fields the session UI reads: requested is the step's primary, effective is what this attempt runs.
         apply_execution_metadata(
             attempt,
-            requested_model=chain[0],
+            requested_model=choice.model,
             effective_model=choice.model,
             fallback_used=choice.model != chain[0],
             fallback_reason=_describe_hop(hop) if hop else None,
@@ -658,6 +675,7 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
             meta=meta,
             prior=_prior(steps, step),
             project_id=run.project_id,
+            acceptance_note=scratch.get("acceptance_note"),
         )
         await db.commit()
     return {}, intent
@@ -666,10 +684,11 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
 async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, dict[str, Any]]:
     """The external effect: prepare the worktree, build the packet, run the executor."""
 
-    meta, policy = intent.meta, RunPolicy(**intent.meta["policy"])
+    meta, policy = intent.meta, load_policy(intent.meta["policy"])
     identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
     workspace = RunWorkspace.from_meta(meta, identity)
     info: dict[str, Any] = {}
+    commands = acceptance_runner.commands_of(intent.definition)
     try:
         await workspace.ensure()
         if intent.reset:  # restart after a crash: back to the step's checkpoint
@@ -703,19 +722,28 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
             run_goal=meta["goal"],
             step_key=intent.step_key,
             instructions=intent.definition["instructions"],
-            acceptance=intent.definition.get("acceptance", []),
+            acceptance=[c["cmd"] for c in commands],
             git=git,
             prior_steps=intent.prior,
             run_dir=str(workspace.run_dir),
             context_window=window,
             budget_fraction=policy.packet_budget_fraction,
             context=context,
-            retry_label=f"takeover: {_describe_hop(intent.hop)}" if intent.hop else None,
+            retry_label=(
+                f"takeover: {_describe_hop(intent.hop)}"
+                if intent.hop
+                else "acceptance failed"
+                if intent.acceptance_note
+                else None
+            ),
+            previous_attempt_note=intent.acceptance_note,
             **partial_kwargs,
         )
         packet = replace(
             packet,
-            thinking_level=await deps.thinking_level_of(intent.definition["agent_slug"]),
+            # The step's own effort wins over the agent's thinking level in every executor.
+            thinking_level=intent.definition.get("effort")
+            or await deps.thinking_level_of(intent.definition["agent_slug"]),
             level=intent.definition.get("level"),
             attempt=AttemptRef(
                 intent.attempt_id,
@@ -747,6 +775,15 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
         except Exception as exc:
             logger.exception("workflow step %s executor crashed", intent.step_key)
             result = StepResult("failed", error=f"executor_crashed: {exc!r}")
+        # The runner, not the agent, decides the step is done; still under the heartbeat so a slow command is not
+        # taken for a stalled step.
+        if commands and result.status == "completed" and normalize_handoff(result.handoff):
+            info["acceptance"] = await acceptance_runner.run_acceptance(
+                commands,
+                workspace.worktree,
+                default_timeout=policy.acceptance_timeout_seconds,
+                tail_chars=policy.acceptance_output_tail_chars,
+            )
     return result, info
 
 
@@ -762,14 +799,15 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
     if intent is None:
         return early
     result, info = await _run_effect(intent, deps)
-    policy = RunPolicy(**intent.meta["policy"])
+    policy = load_policy(intent.meta["policy"])
     identity = (f"user.name={policy.git['user_name']}", f"user.email={policy.git['user_email']}")
     workspace = RunWorkspace.from_meta(intent.meta, identity)
     handoff = normalize_handoff(result.handoff) if result.status == "completed" else None
     checkpoint: str | None = None
     notes_path: str | None = None
     partial_path: str | None = None
-    if handoff is not None:
+    accepted = acceptance_runner.passed(info.get("acceptance", []))
+    if handoff is not None and accepted:  # a step that failed acceptance is not checkpointed as done
         try:
             notes_path = await workspace.write_note(
                 f"steps/{intent.position:02d}-{intent.step_key}/handoff.json",
@@ -848,10 +886,18 @@ async def _commit_outcome(
         if step.status != "running" or step.current_attempt_session_id != intent.attempt_id:
             return {"next": "stop", "reason": "attempt_abandoned"}
         meta = _meta(run)
-        policy = RunPolicy(**meta["policy"])
+        policy = load_policy(meta["policy"])
         decision = decide_after_attempt(
             model=intent.model,
-            result=AttemptResult(result.status, result.outcome, handoff is not None, result.error),
+            result=AttemptResult(
+                result.status,
+                result.outcome,
+                handoff is not None,
+                result.error,
+                acceptance_passed=(
+                    acceptance_runner.passed(info["acceptance"]) if "acceptance" in info else None
+                ),
+            ),
             step=_step_state(step),
             run=_run_state(meta),
             policy=policy,
@@ -880,6 +926,12 @@ async def _commit_outcome(
             scratch["usage_limited"] = list(
                 dict.fromkeys([*scratch.get("usage_limited", []), intent.model])
             )
+        if decision.kind == "acceptance":
+            scratch["acceptance_failures"] = scratch.get("acceptance_failures", 0) + 1
+        if decision.reason == "acceptance_failed":
+            scratch["acceptance_note"] = acceptance_runner.failure_note(info["acceptance"])
+        else:
+            scratch.pop("acceptance_note", None)
         if decision.hop:
             scratch["hops"] = [*scratch.get("hops", []), decision.hop]
         if notes_path:
@@ -944,7 +996,7 @@ def _finish_attempt(
     hop = intent.hop
     apply_execution_metadata(
         attempt,
-        requested_model=intent.chain[0],
+        requested_model=intent.model,
         effective_model=intent.model,
         fallback_used=intent.model != intent.chain[0],
         fallback_reason=_describe_hop(hop) if hop else None,
@@ -962,6 +1014,7 @@ def _finish_attempt(
         "next_hop": decision.hop,
         "finished_at": now,
         "context_status": info.get("context_status"),
+        "acceptance": info.get("acceptance"),
         "packet": info.get("packet"),
         "packet_path": info.get("packet_path"),
     }
@@ -1039,23 +1092,29 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
         meta = _meta(run)
         if step.status != "running" or meta.get("state") != "running":
             return False
-        policy = RunPolicy(**meta["policy"])
+        policy = load_policy(meta["policy"])
         heartbeat = step.heartbeat_at.timestamp() if step.heartbeat_at else 0.0
         if now - heartbeat < policy.stale_after_seconds:
             return False
-        step.restarts += 1
         verdict = decide_stale_step(
             restarts=step.restarts,
             attempts=step.attempts,
             max_attempts=step.definition.get("max_attempts"),
             policy=policy,
         )
+        if verdict == "retry":
+            step.restarts += 1  # restarts counts the ones actually used
         attempt = (
             await db.get(Session, step.current_attempt_session_id)
             if step.current_attempt_session_id
             else None
         )
-        reason = f"stale_heartbeat (restart {step.restarts}/{policy.restart_limit})"
+        reason = (
+            f"stale_heartbeat (restart {step.restarts}/{policy.restart_limit})"
+            if verdict == "retry"
+            else f"stale_heartbeat (no restart left: {step.restarts}/{policy.restart_limit} used, "
+            f"{step.attempts} attempts)"
+        )
         if attempt is not None:
             detail = {
                 **(attempt.provider_metadata or {}).get("workflow_attempt", {}),
@@ -1099,7 +1158,7 @@ async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
         if run is None:
             return False
         meta = _meta(run)
-        policy = RunPolicy(**meta["policy"])
+        policy = load_policy(meta["policy"])
         pause = meta.get("pause") or {}
         if meta.get("state") == "needs_owner" and pause.get("reason") == "usage_limit_wait":
             if pause.get("resume_after") and pause["resume_after"] <= now:
@@ -1154,8 +1213,24 @@ async def resume_run(
     category = (meta.get("pause") or {}).get("category")
     if decision.action == "retry":
         # A fresh pass over the agent's chain (or the model the owner names); the worktree is kept.
+        cap = attempts_exhausted(
+            step.attempts, step.definition.get("max_attempts"), load_policy(meta["policy"])
+        )
+        if cap:
+            raise WorkflowRunError(
+                "attempt_limit",
+                f"step {step.step_key} has used its attempts ({step.attempts}, {cap}); skip it or end the run",
+            )
         refusals = {k: v for k, v in meta.get("refusals", {}).items() if k != category}
-        scratch.update(tried=[], usage_limited=[], pinned_model=decision.model, hop=None)
+        scratch.update(
+            tried=[],
+            usage_limited=[],
+            pinned_model=decision.model,
+            hop=None,
+            usage_limit_resumes=0,
+            acceptance_failures=0,
+        )
+        scratch.pop("acceptance_note", None)
         step.status, step.outcome = "pending", scratch
         _set_meta(run, {**meta, "state": "running", "pause": None, "refusals": refusals}, now=now)
     elif decision.action == "skip":
@@ -1177,6 +1252,21 @@ async def resume_run(
 # --- views -----------------------------------------------------------------------------------------
 
 
+def _limits(policy: RunPolicy) -> dict[str, int]:
+    """The caps the runner enforces, for the run page's "n of N"."""
+
+    return {
+        key: getattr(policy, key)
+        for key in (
+            "max_total_attempts",
+            "max_usage_limit_resumes",
+            "acceptance_retry_limit",
+            "restart_limit",
+            "refusal_pause_threshold",
+        )
+    }
+
+
 async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
     run = (
         await db.execute(
@@ -1186,6 +1276,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
     if run is None:
         return None
     meta = _meta(run)
+    policy = load_policy(meta["policy"])
     steps = await _steps(db, run_id)
     children = (
         (
@@ -1225,6 +1316,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "native_session_id": detail.get("native_session_id"),
                 "transcript_path": detail.get("transcript_path"),
                 "context_status": detail.get("context_status"),
+                "acceptance": detail.get("acceptance"),
                 "executor": detail.get("executor"),
                 "started_at": child.created_at.isoformat() if child.created_at else None,
                 "finished_at": _iso(detail.get("finished_at")),
@@ -1246,6 +1338,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "pause": meta.get("pause"),
         "failure": meta.get("failure"),
         "refusals": meta.get("refusals", {}),
+        "limits": _limits(policy),
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
         "steps": [
@@ -1256,7 +1349,12 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "agent_slug": s.definition["agent_slug"],
                 "chain": _scratch(s).get("chain"),
                 "attempts": s.attempts,
+                "attempt_limit": attempt_limit(s.definition.get("max_attempts"), policy),
                 "restarts": s.restarts,
+                "usage_limit_resumes": _scratch(s).get("usage_limit_resumes", 0),
+                "acceptance_failures": _scratch(s).get("acceptance_failures", 0),
+                "acceptance": acceptance_runner.commands_of(s.definition),
+                "effort": s.definition.get("effort"),
                 "chosen_model": s.chosen_model,
                 "answered_by": (_scratch(s).get("last") or {}).get("served_models"),
                 "hops": _scratch(s).get("hops", []),

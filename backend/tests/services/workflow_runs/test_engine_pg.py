@@ -31,7 +31,12 @@ from app.services.workflow_runs.engine import (
 )
 from app.services.workflow_runs.executors import FauxAction, FauxExecutor
 from app.services.workflow_runs.policy import Unavailable
-from app.services.workflow_runs.schemas import OwnerDecision, RunDefinition, StepTestHooks
+from app.services.workflow_runs.schemas import (
+    AcceptanceCommand,
+    OwnerDecision,
+    RunDefinition,
+    StepTestHooks,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -156,6 +161,7 @@ def example(name: str, repo: Path | None, **extra: Any) -> RunDefinition:
     data["policy"] = {"heartbeat_interval_seconds": 3600, **extra.pop("policy", {})}
     for step in data["steps"]:
         step["executor"] = "faux"
+        step["acceptance"] = []  # the examples name project commands (make test) that cannot run here
     if repo is not None:
         data["repo_path"] = str(repo)
     data.update(extra)
@@ -215,9 +221,10 @@ async def test_example_run_with_injected_refusal_takes_over_and_opus_returns(
         OPUS,
         OPUS,
     )
+    # A takeover records the model it asked for, not the step's primary.
     assert (second["status"], second["requested_model"], second["effective_model"]) == (
         "completed",
-        OPUS,
+        CODEX,
         CODEX,
     )
     assert (
@@ -397,15 +404,16 @@ async def test_stale_heartbeat_restarts_from_checkpoint_then_fails_at_the_limit(
     view = await view_of(pg_db, run_id)
     assert view["steps"][1]["status"] == "completed" and view["steps"][1]["attempts"] == 2
 
-    # Next step dies twice: restarts reach the limit and the step ends visibly failed.
-    for expected in ("pending", "failed"):
+    # restart_limit 2 means two restarts: the third stall ends the step visibly failed.
+    for expected, restarts in (("pending", 1), ("pending", 2), ("failed", 2)):
         await engine_module._commit_intent(run_id, world.deps)
         world.clock += 500
         await recover_stale_steps(world.deps)
         view = await view_of(pg_db, run_id)
-        assert view["steps"][2]["status"] == expected
-    assert view["state"] == "failed" and view["steps"][2]["restarts"] == 2
+        assert (view["steps"][2]["status"], view["steps"][2]["restarts"]) == (expected, restarts)
+    assert view["state"] == "failed" and "no restart left: 2/2 used" in view["failure"]
     assert view["steps"][3]["status"] == "skipped"
+    assert view["limits"]["restart_limit"] == 2
 
 
 async def test_attempt_abandoned_after_recovery_does_not_overwrite_the_step(
@@ -547,3 +555,222 @@ async def test_workflow_runs_endpoints_list_and_paginate(pg_db, repo, world_fact
         assert empty["runs"] == [] and empty["total"] == 1
         assert (await client.get("/workflow-runs", params={"limit": 0})).status_code == 422
         assert (await client.get(f"/workflow-runs/{run_id}")).json()["id"] == run_id
+
+
+# --- acceptance, attempt caps and per-step effort ---------------------------------------------------
+
+CHECK = "test -f out.txt || { echo 'missing out.txt'; exit 3; }"
+
+
+def with_acceptance(definition: RunDefinition, *cmds: str | AcceptanceCommand) -> RunDefinition:
+    definition.steps[0].acceptance = [
+        c if isinstance(c, AcceptanceCommand) else AcceptanceCommand(cmd=c) for c in cmds
+    ]
+    return definition
+
+
+async def test_acceptance_passing_completes_the_step_and_records_each_command(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction(write={"out.txt": "ok\n"})]})
+    chains(world)
+    definition = with_acceptance(
+        example("plan-implement-review-fix", repo), CHECK, AcceptanceCommand(cmd="echo fine", timeout_s=5)
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    plan = view["steps"][0]
+    (attempt,) = plan["attempt_history"]
+    assert [(r["cmd"], r["exit_code"], r["passed"]) for r in attempt["acceptance"]] == [
+        (CHECK, 0, True),
+        ("echo fine", 0, True),
+    ]
+    assert attempt["acceptance"][1]["output_tail"] == "fine" and attempt["acceptance"][1]["duration_s"] >= 0
+    assert plan["status"] == "completed" and plan["checkpoint_sha"] and plan["acceptance_failures"] == 0
+    assert [a["cmd"] for a in plan["acceptance"]] == [CHECK, "echo fine"]
+    # Steps without acceptance commands behave as before.
+    assert view["steps"][1]["attempt_history"][0]["acceptance"] is None
+
+
+async def test_failed_acceptance_retries_with_the_failing_output_then_passes(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction(), FauxAction(write={"out.txt": "ok\n"})]})
+    chains(world)
+    definition = with_acceptance(example("plan-implement-review-fix", repo), CHECK)
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+
+    plan = (await view_of(pg_db, run_id))["steps"][0]
+    first, second = plan["attempt_history"]
+    assert (first["status"], first["acceptance"][0]["exit_code"], first["decision"]["reason"]) == (
+        "failed",
+        3,
+        "acceptance_failed",
+    )
+    assert "missing out.txt" in first["acceptance"][0]["output_tail"]
+    assert (second["status"], second["acceptance"][0]["passed"]) == ("completed", True)
+    assert plan["acceptance_failures"] == 1 and plan["attempts"] == 2
+    # The retry is the same model, in the same worktree, and its packet carries the failing output.
+    retry = [c for c in world.faux.calls if c["step"] == "plan"][1]
+    assert retry["model"] == OPUS
+    assert "acceptance failed" in retry["packet"] and "missing out.txt" in retry["packet"]
+    assert "exit code 3" in retry["packet"]
+
+
+async def test_acceptance_that_never_passes_fails_the_step_at_the_retry_limit(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction()]})
+    chains(world)
+    definition = with_acceptance(example("plan-implement-review-fix", repo), CHECK)
+    definition.policy = {"heartbeat_interval_seconds": 3600, "acceptance_retry_limit": 2}
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    result = await world.run_to_stop(run_id)
+    assert (result["run_state"], result["reason"]) == ("failed", "acceptance_retry_limit")
+    view = await view_of(pg_db, run_id)
+    plan = view["steps"][0]
+    assert (plan["status"], plan["attempts"], plan["acceptance_failures"]) == ("failed", 3, 3)
+    assert "plan: acceptance_retry_limit" in view["failure"]
+    assert view["limits"]["acceptance_retry_limit"] == 2 and plan["attempt_limit"] == view["limits"]["max_total_attempts"]
+    assert {s["status"] for s in view["steps"][1:]} == {"skipped"}
+
+
+async def test_acceptance_timeout_and_unrunnable_command_count_as_failures(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    definition = with_acceptance(
+        example("plan-implement-review-fix", repo), AcceptanceCommand(cmd="sleep 30", timeout_s=1)
+    )
+    definition.policy = {"heartbeat_interval_seconds": 3600, "acceptance_retry_limit": 0}
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.run_to_stop(run_id)
+    (attempt,) = (await view_of(pg_db, run_id))["steps"][0]["attempt_history"]
+    (result,) = attempt["acceptance"]
+    assert (result["timed_out"], result["exit_code"], result["passed"]) == (True, None, False)
+
+
+async def test_stored_runs_with_bare_string_acceptance_still_load_and_run(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction(write={"out.txt": "x"})]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    step = (await engine_module._steps(pg_db, run_id))[0]
+    step.definition = {**step.definition, "acceptance": ["test -f out.txt"]}  # the pre-object shape
+    await pg_db.commit()
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert (await view_of(pg_db, run_id))["steps"][0]["attempt_history"][0]["acceptance"][0]["passed"]
+
+
+async def test_usage_limit_cycles_and_owner_retries_stop_at_the_attempt_caps(
+    pg_db, repo, world_factory
+) -> None:
+    limit = FauxAction("usage_limit", resets_at=int(NOW) + 60)
+    world = world_factory({"plan": [limit]})
+    world.chains.update({slug: [OPUS] for slug in ("planner", "coder", "reviewer")})
+    definition = example(
+        "plan-implement-review-fix",
+        repo,
+        policy={"max_usage_limit_resumes": 1, "max_total_attempts": 4},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+
+    async def pass_the_reset() -> bool:
+        world.clock += 120
+        world.unavailable.clear()
+        return run_id in await recover_stale_steps(world.deps)
+
+    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_wait"  # attempt 1
+    assert await pass_the_reset()  # the one allowed automatic resume
+    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_resume_limit"  # attempt 2
+    assert not await pass_the_reset()  # no more automatic resumes: the owner decides
+    view = await view_of(pg_db, run_id)
+    assert view["steps"][0]["usage_limit_resumes"] == 1 and view["state"] == "needs_owner"
+
+    await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)  # fresh counters
+    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_wait"  # attempt 3
+    assert await pass_the_reset()
+    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_resume_limit"  # attempt 4
+    view = await view_of(pg_db, run_id)
+    assert view["steps"][0]["attempts"] == 4 == view["limits"]["max_total_attempts"]
+    with pytest.raises(WorkflowRunError, match="has used its attempts") as raised:
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert raised.value.code == "attempt_limit"
+    # The owner can still end the run.
+    ended = await resume_run(pg_db, run_id, OwnerDecision(action="fail"), deps=world.deps)
+    assert ended["state"] == "failed"
+    assert len(world.faux.calls) == 4
+
+
+async def test_usage_limit_cycling_alone_fails_the_step_at_max_total_attempts(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction("usage_limit", resets_at=int(NOW) + 60)]})
+    world.chains.update({slug: [OPUS] for slug in ("planner", "coder", "reviewer")})
+    definition = example(
+        "plan-implement-review-fix",
+        repo,
+        policy={"max_usage_limit_resumes": 99, "max_total_attempts": 3},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    for _ in range(10):
+        result = await world.run_to_stop(run_id)
+        if result["reason"] == "max_total_attempts":
+            break
+        world.clock += 120
+        world.unavailable.clear()
+        await recover_stale_steps(world.deps)
+    view = await view_of(pg_db, run_id)
+    assert (view["state"], view["steps"][0]["attempts"]) == ("failed", 3)
+    assert "plan: max_total_attempts" in view["failure"] and len(world.faux.calls) == 3
+
+
+async def test_refusing_chain_and_owner_retry_stop_at_a_step_max_attempts(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    definition = example("plan-implement-review-fix", repo)
+    definition.steps[0].max_attempts = 2
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    result = await world.run_to_stop(run_id)
+    # Refusals used to ignore max_attempts; now the second refusal ends the step instead of a third hop.
+    assert (result["run_state"], len(world.faux.calls)) == ("failed", 2)
+    view = await view_of(pg_db, run_id)
+    assert view["steps"][0]["attempt_limit"] == 2 and "max_attempts" in view["failure"]
+
+
+async def test_step_effort_overrides_the_agent_thinking_level(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    seen: list[tuple[str, str | None]] = []
+    inner = world.faux.run
+
+    async def capture(packet, *args, **kwargs):
+        seen.append((packet.step_key, packet.thinking_level))
+        return await inner(packet, *args, **kwargs)
+
+    world.faux.run = capture
+    definition = example("plan-implement-review-fix", repo)
+    definition.steps[1].effort = "xhigh"
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    await world.run_to_stop(run_id)
+    # The test agent's thinking level is "medium"; only the step that names an effort differs.
+    assert dict(seen) == {"plan": "medium", "implement": "xhigh", "review": "medium", "fix": "medium"}
+    assert (await view_of(pg_db, run_id))["steps"][1]["effort"] == "xhigh"
+
+
+async def test_takeover_attempt_records_the_model_it_asked_for(pg_db, repo, world_factory) -> None:
+    world = world_factory({"plan": [FauxAction("refuse", category="cyber"), FauxAction()]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(run_id)
+    first, second = (await view_of(pg_db, run_id))["steps"][0]["attempt_history"]
+    assert (first["requested_model"], second["requested_model"]) == (OPUS, CODEX)
+    assert second["effective_model"] == CODEX and second["fallback_used"] is True
+    row = await pg_db.get(Session, second["session_id"])
+    assert row.model == CODEX and row.provider_metadata["requested_model"] == CODEX

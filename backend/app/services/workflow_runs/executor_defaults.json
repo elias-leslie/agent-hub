@@ -6,6 +6,7 @@
   "progress_items": 12,
   "progress_output_chars": 1500,
   "default_thinking_level": "high",
+  "thinking_levels": ["none", "minimal", "low", "medium", "high", "xhigh"],
   "codex": {
     "binary": "codex",
     "catalog_provider": "codex",

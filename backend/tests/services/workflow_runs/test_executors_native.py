@@ -341,3 +341,14 @@ def test_child_env_bypasses_context_launchers_and_drops_backend_secrets(monkeypa
     env = child_env({"env_passthrough": ["HOME"]})
 
     assert env == {"HOME": "/home/someone", "AGENT_HUB_CONTEXT_BYPASS": "1"}
+
+
+@pytest.mark.parametrize("effort", ["low", "medium", "high"])
+def test_codex_and_pi_use_the_packet_effort_the_engine_resolved(tmp_path, effort) -> None:
+    """The engine puts the step's ``effort`` (else the agent's level) in ``packet.thinking_level``; executors read only that."""
+
+    built = packet(thinking_level=effort)
+    codex_argv, _, _ = CodexExecutor(load_defaults(), model_lookup=CATALOG.get).command(built, CODEX_MODEL, tmp_path)
+    assert f'model_reasoning_effort="{effort}"' in codex_argv
+    pi_argv, _, _ = PiExecutor(load_defaults(), model_lookup=CATALOG.get).command(built, CODEX_MODEL, tmp_path)
+    assert pi_argv[pi_argv.index("--thinking") + 1] == effort

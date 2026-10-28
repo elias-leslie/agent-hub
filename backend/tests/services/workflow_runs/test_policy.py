@@ -168,6 +168,62 @@ def test_plain_error_moves_to_next_model_and_max_attempts_fails_the_step() -> No
     assert (capped.action, capped.reason.startswith("max_attempts")) == ("fail", True)
 
 
+def test_every_retrying_path_stops_at_the_total_attempt_cap() -> None:
+    total = POLICY.max_total_attempts
+    paths = {
+        "error": AttemptResult("failed", error="boom"),
+        "refusal": refused(OPUS),
+        "substitution": AttemptResult(
+            "completed", ProviderOutcome("substituted", OPUS, served_model=OPUS_OLD, category="cyber"), True
+        ),
+        "usage_limit": AttemptResult(
+            "failed", ProviderOutcome("usage_limit", OPUS, resets_at=int(NOW) + 60), error="limit"
+        ),
+        "acceptance": AttemptResult("completed", has_handoff=True, acceptance_passed=False),
+    }
+    for name, result in paths.items():
+        assert decide(OPUS, result, attempts=total - 1).action == "retry", name
+        capped = decide(OPUS, result, attempts=total)
+        assert (capped.action, capped.reason.startswith("max_total_attempts")) == ("fail", True), name
+    # A step's own max_attempts can lower the cap, never raise it.
+    assert decide(OPUS, paths["refusal"], attempts=2, max_attempts=2).reason.startswith("max_attempts")
+    assert decide(OPUS, paths["error"], attempts=total, max_attempts=total + 5).reason.startswith(
+        "max_total_attempts"
+    )
+
+
+def test_usage_limit_waits_resume_a_limited_number_of_times_then_the_owner_decides() -> None:
+    limit = AttemptResult(
+        "failed", ProviderOutcome("usage_limit", OPUS, resets_at=int(NOW) + 300), error="limit"
+    )
+    blocked = {OPUS: Unavailable("cooldown", 300.0)}
+    chain = (OPUS,)
+    waiting = decide(OPUS, limit, chain=chain, unavailable=blocked, usage_limit_resumes=POLICY.max_usage_limit_resumes - 1)
+    assert (waiting.reason, waiting.wait_until) == ("usage_limit_wait", NOW + 300)
+    spent = decide(OPUS, limit, chain=chain, unavailable=blocked, usage_limit_resumes=POLICY.max_usage_limit_resumes)
+    assert (spent.action, spent.reason, spent.wait_until) == ("needs_owner", "usage_limit_resume_limit", None)
+
+
+def test_failed_acceptance_retries_the_same_model_until_the_retry_limit_then_fails() -> None:
+    failed = AttemptResult("completed", has_handoff=True, acceptance_passed=False)
+    passed = AttemptResult("completed", has_handoff=True, acceptance_passed=True)
+    first = decide(OPUS, failed, attempts=1)
+    assert (first.action, first.reason, first.kind, first.next_model, first.hop) == (
+        "retry",
+        "acceptance_failed",
+        "acceptance",
+        OPUS,
+        None,
+    )
+    last = decide(OPUS, failed, attempts=3, acceptance_failures=POLICY.acceptance_retry_limit - 1)
+    assert last.action == "retry"
+    spent = decide(OPUS, failed, attempts=3, acceptance_failures=POLICY.acceptance_retry_limit)
+    assert (spent.action, spent.reason) == ("fail", "acceptance_retry_limit")
+    assert decide(OPUS, passed, attempts=2, acceptance_failures=1).action == "complete"
+    # No acceptance commands (None) behaves as before.
+    assert decide(OPUS, DONE).action == "complete"
+
+
 def test_completed_without_handoff_is_an_error() -> None:
     decision = decide(OPUS, AttemptResult("completed", has_handoff=False))
     assert (decision.action, decision.reason) == ("retry", "missing_handoff")
@@ -180,15 +236,18 @@ def test_unavailable_chain_models_are_skipped_in_order() -> None:
     assert decision.next_model == OPUS_OLD
 
 
-def test_stale_step_retries_until_restart_limit_then_fails() -> None:
-    assert decide_stale_step(restarts=1, attempts=1, max_attempts=None, policy=POLICY) == "retry"
-    assert (
-        decide_stale_step(
-            restarts=POLICY.restart_limit, attempts=1, max_attempts=None, policy=POLICY
+def test_stale_step_restarts_exactly_restart_limit_times_then_fails() -> None:
+    """``restarts`` is how many restarts were already used: a limit of N allows N restarts, the next stall fails."""
+
+    limit = POLICY.restart_limit
+    for used in range(limit):
+        assert (
+            decide_stale_step(restarts=used, attempts=1, max_attempts=None, policy=POLICY) == "retry"
         )
-        == "fail"
-    )
-    assert decide_stale_step(restarts=1, attempts=2, max_attempts=2, policy=POLICY) == "fail"
+    assert decide_stale_step(restarts=limit, attempts=1, max_attempts=None, policy=POLICY) == "fail"
+    assert decide_stale_step(restarts=0, attempts=2, max_attempts=2, policy=POLICY) == "fail"
+    total = POLICY.max_total_attempts
+    assert decide_stale_step(restarts=0, attempts=total, max_attempts=None, policy=POLICY) == "fail"
 
 
 def test_policy_overrides_merge_and_unknown_keys_are_rejected() -> None:

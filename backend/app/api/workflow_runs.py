@@ -26,6 +26,7 @@ _STATUS = {
     "no_such_step": 409,
     "unknown_agent": 422,
     "empty_chain": 422,
+    "attempt_limit": 409,
 }
 
 

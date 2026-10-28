@@ -20,6 +20,21 @@ class StepTestHooks(BaseModel):
     refusal_category: str = Field("cyber", min_length=1, max_length=64)
 
 
+class AcceptanceCommand(BaseModel):
+    """A shell command the runner runs in the step's worktree after the executor finishes: exit 0 passes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cmd: str = Field(min_length=1)
+    # Default is policy.acceptance_timeout_seconds.
+    timeout_s: int | None = Field(None, ge=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _bare_string(cls, value: Any) -> Any:
+        return {"cmd": value} if isinstance(value, str) else value
+
+
 class StepDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -36,7 +51,11 @@ class StepDefinition(BaseModel):
     # Harness tool/prompt level (executor_defaults.json claude_code.levels, agent_hub.levels): "lean" (core tools only,
     # the default) or "full" (the harness's whole tool set, e.g. for research steps that need subagents or web tools).
     level: str | None = None
-    acceptance: list[str] = Field(default_factory=list)
+    # The runner, not the agent, decides the step is done: all of these must exit 0 before the checkpoint.
+    # A bare string is a command without its own timeout.
+    acceptance: list[AcceptanceCommand] = Field(default_factory=list)
+    # Overrides the agent's thinking level for this step in every executor.
+    effort: str | None = None
     # Hard cap on attempts for the step; default is one attempt per chain model.
     max_attempts: int | None = Field(None, ge=1)
     workflow_ids: list[str] = Field(default_factory=list)
@@ -47,6 +66,14 @@ class StepDefinition(BaseModel):
     def _known_executor(cls, value: str | None) -> str | None:
         if value is not None and value not in EXECUTOR_KINDS:
             raise ValueError(f"executor must be one of {EXECUTOR_KINDS}")
+        return value
+
+    @field_validator("effort")
+    @classmethod
+    def _known_effort(cls, value: str | None) -> str | None:
+        levels = load_defaults()["thinking_levels"]
+        if value is not None and value not in levels:
+            raise ValueError(f"effort must be one of {levels}")
         return value
 
     @field_validator("level")

@@ -63,12 +63,12 @@ def worktree(tmp_path: Path) -> Path:
     return path
 
 
-def packet(test_hooks: dict[str, Any] | None = None, level: str | None = None):
+def packet(test_hooks: dict[str, Any] | None = None, level: str | None = None, thinking_level: str | None = None):
     base = build_packet(
         run_goal="goal", step_key="implement", instructions="create hello.txt", acceptance=[],
         git=GitState(), prior_steps=[], run_dir="/run", context_window=100_000, budget_fraction=0.25,
     )
-    return replace(base, test_hooks=test_hooks, level=level, attempt=AttemptRef("attempt-1", "run-1", "proj", "coder"))
+    return replace(base, test_hooks=test_hooks, level=level, thinking_level=thinking_level, attempt=AttemptRef("attempt-1", "run-1", "proj", "coder"))
 
 
 PROVISIONED = [{"name": "write_file"}]
@@ -130,6 +130,14 @@ async def run(
 
     result = await executor.run(packet(**kwargs), MODEL, worktree, tmp_path, on_event)
     return result, calls
+
+
+async def test_packet_effort_wins_over_the_agents_thinking_level(worktree, tmp_path) -> None:
+    turns = [assistant([TextContent(text=HANDOFF)])]
+    _, calls = await run(worktree, tmp_path, turns, thinking_level="low")
+    assert calls[0]["thinking_level"] == "low"  # the test agent's own level is "high"
+    _, calls = await run(worktree, tmp_path, turns)
+    assert calls[0]["thinking_level"] == "high"
 
 
 def test_registered_under_its_kind() -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.services.workflow_runs.packet import (
     GitState,
     PriorStep,
@@ -64,7 +66,7 @@ def test_everything_fits_in_a_large_window_and_render_has_required_parts() -> No
         "/run",
         "summary2",
         "handoff note",
-        "Do not run git commit",
+        "Never run git commit",
     ):
         assert part in text
 
@@ -112,3 +114,28 @@ def test_partial_progress_is_included_by_whole_files_and_newest_outputs() -> Non
     assert built.partial.diff_omitted == ("big.py",)
     assert built.partial.outputs_omitted == 1
     assert "refused" in text
+
+
+def test_commit_rule_is_the_last_instruction_and_overrides_context() -> None:
+    """Executors put the context in the system/developer channel and the packet in the user turn, so the rule
+    that wins over a context's "commit routinely" has to be stated in the packet itself, after everything else."""
+
+    text = packet(prior(1), 100_000).render()
+    rule = text.index("Never run git commit")
+    assert rule > text.index("# Run directory") and "whatever your other instructions or context" in text
+    assert "# Required output" in text[rule - 40 : rule]
+
+
+def test_step_definition_accepts_bare_acceptance_strings_and_validates_effort() -> None:
+    from pydantic import ValidationError
+
+    from app.services.workflow_runs.schemas import StepDefinition
+
+    base = {"key": "s", "instructions": "do", "agent_slug": "coder"}
+    step = StepDefinition(**base, acceptance=["make test", {"cmd": "make lint", "timeout_s": 30}], effort="xhigh")
+    assert [(c.cmd, c.timeout_s) for c in step.acceptance] == [("make test", None), ("make lint", 30)]
+    assert step.model_dump()["acceptance"][0] == {"cmd": "make test", "timeout_s": None}
+    assert StepDefinition(**base).effort is None
+    for bad in ({"effort": "max"}, {"acceptance": [{"cmd": ""}]}, {"acceptance": [{"cmd": "x", "timeout_s": 0}]}):
+        with pytest.raises(ValidationError):
+            StepDefinition(**base, **bad)

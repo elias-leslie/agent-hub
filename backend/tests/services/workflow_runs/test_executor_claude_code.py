@@ -240,3 +240,9 @@ def test_transcript_path_finds_the_native_jsonl(tmp_path: Path) -> None:
     expected.write_text("{}")
     assert transcript_path("abc", worktree, home) == expected
     assert transcript_path("missing", worktree, home) is None
+
+
+def test_claude_effort_follows_the_packet_thinking_level() -> None:
+    for level in ("low", "medium", "high"):
+        argv, _ = ClaudeCodeExecutor().command(packet(thinking_level=level), MODEL, "claude")
+        assert argv[argv.index("--effort") + 1] == level
