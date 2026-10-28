@@ -25,6 +25,8 @@ def _dispatch(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.R
     if method == "GET":
         return client.get(url, params=kw.get("params"), headers=kw["headers"])
     if method == "DELETE":
+        if kw.get("json") is not None:  # httpx's delete() takes no body
+            return client.request("DELETE", url, params=kw.get("params"), json=kw["json"], headers=kw["headers"])
         return client.delete(url, params=kw.get("params"), headers=kw["headers"])
     if method == "PUT":
         return client.put(url, json=kw.get("json"), headers=kw["headers"])

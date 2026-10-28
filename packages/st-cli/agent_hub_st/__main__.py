@@ -19,6 +19,7 @@ from .native_sessions import app as native_sessions_app
 from .note import note
 from .prompt import app as prompt_app
 from .skills import app as skills_app
+from .workflow import app as workflow_app
 
 
 def _leaf_app(name: str, callback: Any) -> typer.Typer:
@@ -38,6 +39,7 @@ OWNED_APPS: dict[str, typer.Typer] = {
     "note": _leaf_app("note", note),
     "prompt": prompt_app,
     "skills": skills_app,
+    "workflow": workflow_app,
 }
 
 

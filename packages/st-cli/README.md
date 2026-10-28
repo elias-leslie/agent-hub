@@ -22,6 +22,14 @@ No daemon configuration or inference request is involved. Ollama 0.30.5's
 tensor downloader may transfer a blob twice because it follows a local
 `Location` header even on a successful streamed response.
 
+`st workflow` drives Agent Hub's durable workflow runner (`/api/workflow-runs`):
+create a run from a step plan, `get`/`wait` on it with distinct exit codes,
+`add-step`/`revise`/`remove-step` while it runs, `cancel` and `resume`. Aico
+sessions fill `launched_by` and `coordinator`. The coordinator guide is the
+`st.workflow` usage surface (`st tools manifest --surface st.workflow`).
+After a command change, regenerate `st-extensions/workflow.json` with
+`describe_app` at `COLUMNS=80`; `tests/test_workflow.py` fails on drift.
+
 ## Public helper contract
 
 Version `2`, exposed as `agent_hub_st.PUBLIC_HELPER_API_VERSION`, supports these

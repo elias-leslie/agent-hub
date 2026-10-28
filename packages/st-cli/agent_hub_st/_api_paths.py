@@ -52,3 +52,12 @@ AUTOMATIONS_PROFILES_PATH = f"{AUTOMATIONS_BASE_PATH}/profiles"
 AUTOMATIONS_RUNS_PATH = f"{AUTOMATIONS_BASE_PATH}/runs"
 AUTOMATIONS_POLICY_PATH = f"{AUTOMATIONS_BASE_PATH}/projects/{{project_id}}/policy"
 PROJECT_PERMISSION_PATH = "/api/projects/{project_id}/permissions"
+
+# ── Workflow runs ────────────────────────────────────────────────────
+WORKFLOW_RUNS_PATH = "/api/workflow-runs"
+WORKFLOW_RUN_PATH = "/api/workflow-runs/{run_id}"
+WORKFLOW_RUN_RESUME_PATH = "/api/workflow-runs/{run_id}/resume"
+WORKFLOW_RUN_CANCEL_PATH = "/api/workflow-runs/{run_id}/cancel"
+WORKFLOW_RUN_STEPS_PATH = "/api/workflow-runs/{run_id}/steps"
+WORKFLOW_RUN_STEP_PATH = "/api/workflow-runs/{run_id}/steps/{key}"
+WORKFLOW_RUN_STEP_CANCEL_PATH = "/api/workflow-runs/{run_id}/steps/{key}/cancel"

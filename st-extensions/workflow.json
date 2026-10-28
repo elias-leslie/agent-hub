@@ -1,0 +1,162 @@
+{
+  "id": "agent-hub.workflow",
+  "owner": "agent-hub",
+  "version": "0.5.0",
+  "st_contract_versions": [
+    1
+  ],
+  "summary": "Create, watch and steer durable multi-model workflow runs on Agent Hub.",
+  "effects": [
+    "network",
+    "read-remote",
+    "write-remote",
+    "read-local",
+    "credentials"
+  ],
+  "namespace": "workflow",
+  "help": {
+    "": "Usage: workflow [OPTIONS] COMMAND [ARGS]...\n\n  Durable multi-model workflow runs (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  create       Create and start a run.\n  get          One line per step, then run totals.\n  wait         Wait for a run to end, pause or change.\n  add-step     Add steps to a run.\n  revise       Revise a pending step; a step that has started answers 409.\n  remove-step  Remove a pending step.\n  cancel       Cancel a run or one of its steps.\n  resume       Resolve a paused run.\n  list         Recent runs, newest first.",
+    "create": "Usage: workflow create [OPTIONS]\n\n  Create and start a run.\n\n  launched_by and coordinator come from the Aico session unless the file sets\n  them.\n\nOptions:\n  -f, --file <str>                Run definition JSON, or - for stdin.\n                                  [required]\n  --request-id <str>              Stable id: creating again returns the same\n                                  run.\n  --max-concurrent-steps <int range>\n                                  Steps allowed to run at once.  [x>=1]\n  --json                          Print the full API payload.\n  --help                          Show this message and exit.",
+    "get": "Usage: workflow get [OPTIONS] {run_id}\n\n  One line per step, then run totals.\n\nArguments:\n  run_id  Workflow run id  [required]\n\nOptions:\n  --json  Print the full API payload.\n  --help  Show this message and exit.",
+    "wait": "Usage: workflow wait [OPTIONS] {run_id}\n\n  Wait for a run to end, pause or change.\n\n  Polls until the condition holds. Stops at a finished run or a pause that\n  needs a decision.\n\nArguments:\n  run_id  Workflow run id  [required]\n\nOptions:\n  --until <str>             done | needs_owner | any-change | step:<key>\n                            [default: done]\n  --max-wait <float range>  Seconds, then return exit 30. Cancels nothing;\n                            default waits without limit.  [x>=0]\n  --poll-min <float range>  Seconds between reads after a change.  [default:\n                            2.0; x>=0.5]\n  --poll-max <float range>  Seconds between reads once nothing changes.\n                            [default: 10.0; x>=0.5]\n  --max-errors <int range>  Failed reads in a row before exit 31.  [default:\n                            12; x>=1]\n  --help                    Show this message and exit.\n\n  Exit codes: 0 run completed, 10 needs owner decision, 11 run failed, 12 run\n  cancelled, 13 awaited step ended without completing, 20 awaited step done,\n  21 something changed, 30 --max-wait passed (run still going), 31 lost\n  contact, 1 error.",
+    "add-step": "Usage: workflow add-step [OPTIONS] {run_id}\n\n  Add steps to a run.\n\nArguments:\n  run_id  Workflow run id  [required]\n\nOptions:\n  -f, --file <str>  A step object, a list of steps or {steps: [...]}, or - for\n                    stdin.  [required]\n  --after <str>     Key of the step the first added step depends on.\n  --reason <str>    Why; kept in the plan history.\n  --json            Print the full API payload.\n  --help            Show this message and exit.",
+    "revise": "Usage: workflow revise [OPTIONS] {run_id} {key}\n\n  Revise a pending step; a step that has started answers 409.\n\nArguments:\n  run_id  Workflow run id  [required]\n  key     Step key  [required]\n\nOptions:\n  --set <str>       field=value, repeatable. Lists take JSON or commas; null\n                    clears.\n  -f, --file <str>  Revision JSON object, or - for stdin.\n  --reason <str>    Why; kept in the plan history.\n  --json            Print the full API payload.\n  --help            Show this message and exit.",
+    "remove-step": "Usage: workflow remove-step [OPTIONS] {run_id} {key}\n\n  Remove a pending step.\n\nArguments:\n  run_id  Workflow run id  [required]\n  key     Step key  [required]\n\nOptions:\n  --reason <str>    Why; kept in the plan history.\n  -f, --file <str>  JSON {revise: {dependent-key: revision}}, or - for stdin.\n  --json            Print the full API payload.\n  --help            Show this message and exit.",
+    "cancel": "Usage: workflow cancel [OPTIONS] {run_id}\n\n  Cancel a run or one of its steps. It stops running work; it never deletes\n  history.\n\nArguments:\n  run_id  Workflow run id  [required]\n\nOptions:\n  --step <str>    Stop only this step.\n  --reason <str>  Why; kept with who asked and when.\n  --json          Print the full API payload.\n  --help          Show this message and exit.",
+    "resume": "Usage: workflow resume [OPTIONS] {run_id}\n\n  Resolve a paused run.\n\nArguments:\n  run_id  Workflow run id  [required]\n\nOptions:\n  --action <str>                retry | skip | fail  [required]\n  --step <str>                  Step to act on; default is the paused step.\n  --model <str>                 retry: pin this model for the next attempt.\n  --extra-attempts <int range>  retry: attempts to allow past the cap.  [x>=1]\n  --note <str>                  Kept with the decision.\n  --json                        Print the full API payload.\n  --help                        Show this message and exit.",
+    "list": "Usage: workflow list [OPTIONS]\n\n  Recent runs, newest first.\n\nOptions:\n  --mine                Only runs launched by this session (AICO_SESSION_ID).\n  --limit <int range>   [default: 20; 1<=x<=200]\n  --offset <int range>  [default: 0; x>=0]\n  --json                Print the full API payload.\n  --help                Show this message and exit."
+  },
+  "usage": [
+    {
+      "surface": "st.workflow",
+      "tier": "reference",
+      "cmd": "st workflow create|get|wait|add-step|revise|remove-step|cancel|resume|list",
+      "when": "run a multi-step, multi-model job on Agent Hub's durable runner and keep coordinating it across chat restarts",
+      "precautions": [
+        "The runner holds all job state; your chat can end and re-attach. Create with --request-id (a stable name) so a second create returns the same run; re-attach later with st workflow list --mine, get or wait.",
+        "Plan: one step per deliverable, each with key, instructions that stand alone (a step sees only its dependencies' handoffs), agent_slug, and acceptance commands the runner executes in the step's worktree (exit 0 = done). No acceptance command means nothing checks the step.",
+        "Dependencies: depends_on lists the steps a step needs; omitted means the step before it, [] means none. Independent steps can run side by side where the run's max_concurrent_steps allows.",
+        "Models: set model_override and a narrow allowed_models per step; the agent's chain supplies fallbacks. Cheap model for mechanical edits, strongest for design or review. Pick executor and effort per step when the default does not fit. Check usage limits before choosing a harness.",
+        "st workflow create --file def.json [--request-id ID] prints the run id and page URL; AICO session and agent fill launched_by and coordinator.",
+        "st workflow wait ID --until done blocks without any time limit and prints what changed. It stops at a finished run or a pause that needs a decision. Use any-change to react to each change, step:KEY to continue as soon as one step ends. --max-wait only returns control to you; it cancels nothing.",
+        "Wait exit codes: 0 completed, 10 needs owner, 11 failed, 12 cancelled, 13 awaited step ended without completing, 20 awaited step done, 21 changed, 30 --max-wait passed, 31 lost contact.",
+        "On 10: st workflow get ID shows the pause reason and step. Fix the cause, then resume: retry (optionally --extra-attempts N when the step used its attempts), skip, or fail. Revise the step first if instructions, acceptance or model were wrong.",
+        "Revise a step only while pending: st workflow revise ID KEY --set model_override=MODEL --set max_attempts=3 --reason WHY (values are JSON or text; null clears). A step that already started answers 409; cancel it with --step KEY and add a replacement.",
+        "As you learn, add-step --file step.json [--after KEY] extends the plan, also after the run completed; remove-step drops a pending step nothing depends on. Plan changes are kept in the run's history with your reason.",
+        "Read st workflow get ID before deciding: requested→served model shows silent fallbacks, attempt n/N the budget left, cost basis separates metered spend from subscription-equivalent. Unpriced shows $?, which is unknown, not zero.",
+        "End: let the run finish, or st workflow cancel ID [--step KEY] --reason WHY; cancelling stops running work and keeps the finished steps' commits and history. Never cancel just because waiting is long."
+      ],
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.create",
+      "tier": "reference",
+      "cmd": "st workflow create --file def.json|- [--request-id ID] [--json]",
+      "when": "start a durable run from a step plan; the same --request-id returns the existing run",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.get",
+      "tier": "reference",
+      "cmd": "st workflow get RUN [--json]",
+      "when": "see each step's status, requested→served model, attempt n/N, live phase, cost and the run totals",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.wait",
+      "tier": "reference",
+      "cmd": "st workflow wait RUN [--until done|needs_owner|any-change|step:KEY] [--max-wait SECONDS]",
+      "when": "block until the run ends, pauses for a decision, a step ends or anything changes; prints changes; exit code tells which",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.add-step",
+      "tier": "reference",
+      "cmd": "st workflow add-step RUN --file step.json|- [--after KEY] [--reason WHY]",
+      "when": "extend the plan with one or more steps, also after the run completed",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.revise",
+      "tier": "reference",
+      "cmd": "st workflow revise RUN KEY --set field=value ... | --file revision.json [--reason WHY]",
+      "when": "change a step that has not started: instructions, model, executor, effort, acceptance, max_attempts, depends_on",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.remove-step",
+      "tier": "reference",
+      "cmd": "st workflow remove-step RUN KEY [--reason WHY] [--file revise.json]",
+      "when": "drop a pending step nothing else depends on (or revise its dependents in the same call)",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.cancel",
+      "tier": "reference",
+      "cmd": "st workflow cancel RUN [--step KEY] [--reason WHY]",
+      "when": "stop the whole run, or one step while the run carries on; work already done is kept",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.resume",
+      "tier": "reference",
+      "cmd": "st workflow resume RUN --action retry|skip|fail [--step KEY] [--model M] [--extra-attempts N] [--note TEXT]",
+      "when": "answer a run paused for a decision: retry the step (optionally more attempts or a pinned model), skip it, or fail the run",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    },
+    {
+      "surface": "st.workflow.list",
+      "tier": "reference",
+      "cmd": "st workflow list [--mine] [--limit N] [--json]",
+      "when": "find runs, or re-attach to the runs this Aico session launched (--mine)",
+      "task_types": [
+        "agent-admin",
+        "orchestration"
+      ],
+      "on_demand": "autonomous operations"
+    }
+  ],
+  "help_options": {
+    "": {
+      "--install-completion": 0,
+      "--show-completion": 0,
+      "--help": 0
+    }
+  }
+}
