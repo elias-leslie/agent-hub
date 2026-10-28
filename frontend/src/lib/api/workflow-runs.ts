@@ -1,0 +1,218 @@
+/**
+ * Workflow runs: list, detail (steps, attempts, requested vs served model) and owner resume.
+ */
+
+import { fetchApi, getApiBaseUrl } from '../api-config'
+
+const API_BASE = `${getApiBaseUrl()}/api`
+
+export type RunState = 'running' | 'needs_owner' | 'completed' | 'failed'
+
+export interface WorkflowRunListItem {
+  id: string
+  state: RunState | null
+  goal: string | null
+  project_id: string | null
+  pause_reason: string | null
+  failure: string | null
+  created_at: string | null
+  last_activity_at: string | null
+  step_total: number
+  step_counts: Record<string, number>
+  attempt_count: number
+  /** Attempts that ended in a refusal, substitution, usage limit or interruption. */
+  flagged_attempts: number
+  served_models: string[]
+  /** null when no attempt reported it (unknown is not zero). */
+  total_tokens: number | null
+  cost_usd: number | null
+  cost_reported_attempts: number
+}
+
+export interface WorkflowRunList {
+  runs: WorkflowRunListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** Provider outcome of an attempt (outcome_details); only populated fields are present. */
+export interface AttemptOutcome {
+  kind: 'refused' | 'substituted' | 'usage_limit' | 'interrupted'
+  requested_model: string
+  served_model?: string
+  category?: string
+  explanation?: string
+  window?: string
+  resets_at?: number
+  request_id?: string
+}
+
+export interface AttemptUsage {
+  input_tokens?: number
+  cache_read_tokens?: number
+  cache_write_tokens?: number
+  output_tokens?: number
+  reasoning_tokens?: number
+  total_tokens?: number
+  cost_usd?: number
+  total_cost_usd?: number
+  duration_ms?: number
+}
+
+export interface Hop {
+  from_model: string
+  to_model: string
+  category: string | null
+  kind: string
+}
+
+export interface WorkflowAttempt {
+  session_id: string
+  attempt: number
+  status: string
+  requested_model: string | null
+  effective_model: string | null
+  served_model: string | null
+  fallback_used: boolean | null
+  fallback_reason: string | null
+  served_models: string[]
+  hop_from: Hop | null
+  next_hop: Hop | null
+  outcome: AttemptOutcome | null
+  usage: AttemptUsage | null
+  error: string | null
+  decision: { action: string; reason: string } | null
+  native_session_id: string | null
+  transcript_path: string | null
+  context_status: string | null
+  executor: string | null
+  started_at: string | null
+  finished_at: string | null
+}
+
+export interface Handoff {
+  summary?: string
+  decisions?: string[]
+  files?: string[]
+  open_questions?: string[]
+}
+
+export type StepStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'refused'
+  | 'needs_owner'
+  | 'skipped'
+
+export interface WorkflowStepView {
+  key: string
+  position: number
+  status: StepStatus
+  agent_slug: string
+  chain: string[] | null
+  attempts: number
+  restarts: number
+  chosen_model: string | null
+  answered_by: string[] | null
+  hops: Hop[]
+  checkpoint_sha: string | null
+  handoff: Handoff | null
+  owner_decision: {
+    action: string
+    model?: string | null
+    note?: string | null
+  } | null
+  heartbeat_at: string | null
+  attempt_history: WorkflowAttempt[]
+}
+
+export interface RunPause {
+  reason: string
+  step_key?: string
+  category?: string | null
+  /** Unix seconds; a usage-limit pause resumes by itself after this. */
+  resume_after?: number | null
+  error?: string
+  at?: number
+}
+
+export interface WorkflowRunDetail {
+  id: string
+  state: RunState | null
+  goal: string | null
+  project_id: string | null
+  task_id: string | null
+  repo_path: string | null
+  branch: string | null
+  pause: RunPause | null
+  failure: string | null
+  refusals: Record<string, number>
+  created_at: string | null
+  last_activity_at: string | null
+  steps: WorkflowStepView[]
+}
+
+export type ResumeAction = 'retry' | 'skip' | 'fail'
+
+async function failure(response: Response, what: string): Promise<Error> {
+  let detail = ''
+  try {
+    const body = await response.json()
+    detail =
+      body?.detail?.message ??
+      (typeof body?.detail === 'string' ? body.detail : '')
+  } catch {
+    // body is not JSON; the status is enough
+  }
+  return new Error(`${what} (${response.status})${detail ? `: ${detail}` : ''}`)
+}
+
+export async function fetchWorkflowRuns(
+  params: { limit: number; offset: number },
+  signal?: AbortSignal,
+): Promise<WorkflowRunList> {
+  const query = new URLSearchParams({
+    limit: String(params.limit),
+    offset: String(params.offset),
+  })
+  const response = await fetchApi(`${API_BASE}/workflow-runs?${query}`, {
+    signal,
+  })
+  if (!response.ok)
+    throw await failure(response, 'Workflow runs request failed')
+  return response.json()
+}
+
+export async function fetchWorkflowRun(
+  id: string,
+  signal?: AbortSignal,
+): Promise<WorkflowRunDetail> {
+  const response = await fetchApi(
+    `${API_BASE}/workflow-runs/${encodeURIComponent(id)}`,
+    {
+      signal,
+    },
+  )
+  if (response.status === 404) throw new Error('Run not found (404)')
+  if (!response.ok) throw await failure(response, 'Workflow run request failed')
+  return response.json()
+}
+
+export async function resumeWorkflowRun(
+  id: string,
+  decision: { action: ResumeAction; step_key?: string; model?: string | null },
+): Promise<{ run_id: string; state: RunState; step: string; status: string }> {
+  const response = await fetchApi(
+    `${API_BASE}/workflow-runs/${encodeURIComponent(id)}/resume`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(decision),
+    },
+  )
+  if (!response.ok) throw await failure(response, 'Resume failed')
+  return response.json()
+}

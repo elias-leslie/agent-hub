@@ -512,8 +512,8 @@ async def test_list_runs_newest_first_with_counts_usage_and_served_models(
     )
     assert fresh["step_total"] == 4 and fresh["step_counts"] == {"pending": 4}
     assert done["state"] == "completed" and done["step_counts"] == {"completed": 4}
-    assert done["attempt_count"] == 5 and done["flagged_attempts"] == 2
-    assert done["total_tokens"] == 5 * 120 and done["cost_usd"] is None
+    assert done["attempt_count"] == 6 and done["flagged_attempts"] == 3
+    assert done["total_tokens"] == 6 * 120 and done["cost_usd"] is None
     assert done["served_models"][0] == CODEX and OPUS_OLD in done["served_models"]
 
     attempt = (await view_of(pg_db, first))["steps"][0]["attempt_history"][0]

@@ -13,6 +13,7 @@ import {
   MessageSquare,
   ScrollText,
   Shield,
+  Workflow,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
@@ -73,6 +74,12 @@ const NAV_ENTRIES: NavEntry[] = [
     label: 'Sessions',
     icon: History,
     description: 'History & logs',
+  },
+  {
+    href: '/workflow-runs',
+    label: 'Workflow runs',
+    icon: Workflow,
+    description: 'Steps & models',
   },
   {
     id: 'agents',
