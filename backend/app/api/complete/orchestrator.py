@@ -201,7 +201,7 @@ async def run_completion(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
+    max_turns: int | None = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     on_loop_event: Callable[[Any], None] | None = None,
@@ -271,7 +271,7 @@ async def run_completion_stream(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
+    max_turns: int | None = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.

@@ -85,6 +85,7 @@ def test_no_caller_is_capped_at_one_or_thirty_two_turns() -> None:
     assert inspect.signature(tool_loop.run).parameters["max_turns"].default == DEFAULT_AGENTIC_MAX_TURNS
     assert tool_loop_turns(True, 1) == DEFAULT_AGENTIC_MAX_TURNS
     assert tool_loop_turns(True, 7) == 7
+    assert tool_loop_turns(True, None) is None  # an explicit "no turn budget" is not replaced by the default
     assert tool_loop_turns(False, 1) == 1
 
 

@@ -21,12 +21,16 @@ def resolve_tool_max_turns(requested_max_turns: int) -> int:
     return max(requested_max_turns, _MIN_TOOL_COMPLETION_TURNS)
 
 
-def tool_loop_turns(execute_tools: bool, requested_max_turns: int) -> int:
+def tool_loop_turns(execute_tools: bool, requested_max_turns: int | None) -> int | None:
     """Turn cap to hand the tool loop: the shared agentic headroom unless the caller asked for more than one turn.
+
+    ``None`` is the caller's explicit "no turn budget" and is passed through.
 
     A tool-executing call that leaves ``max_turns`` at its single-turn default would otherwise be cut off after
     one model turn; ``CompletionRequest`` applies the same rule to HTTP callers.
     """
+    if requested_max_turns is None:
+        return None
     if execute_tools and requested_max_turns <= 1:
         return DEFAULT_AGENTIC_MAX_TURNS
     return requested_max_turns

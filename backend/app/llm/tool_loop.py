@@ -96,8 +96,19 @@ class TurnRetry:
     type: Literal["turn_retry"] = "turn_retry"
 
 
+@dataclass(slots=True)
+class TurnBudgetExhausted:
+    """The caller's finite turn budget ran out while the model still wanted tools; one closeout turn follows.
+
+    Only a caller that set a budget can see this: ``max_turns=None`` runs until the model stops, an error or an abort.
+    """
+
+    max_turns: int
+    type: Literal["turn_budget_exhausted"] = "turn_budget_exhausted"
+
+
 ToolRunEvent = ToolRunStart | ToolRunComplete | ToolRunError
-ToolLoopEvent = AssistantMessageEvent | ToolRunEvent | TurnRetry
+ToolLoopEvent = AssistantMessageEvent | ToolRunEvent | TurnRetry | TurnBudgetExhausted
 
 ToolRunner = Callable[[ToolCall], Awaitable[ToolResultMessage]]
 
@@ -250,7 +261,7 @@ async def run(
     context: Context,
     run_tool: ToolRunner,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
+    max_turns: int | None = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     is_parallel_safe: ParallelSafe | None = None,
@@ -264,7 +275,7 @@ async def run(
     with ``stop_reason == "toolUse"``, drives ``run_tool`` per tool call,
     appends ``ToolResultMessage``s to ``context.messages``, and starts
     the next turn. Stops on the first non-``toolUse`` terminal or when
-    ``max_turns`` is exhausted.
+    ``max_turns`` is exhausted (``None``: no turn budget, the loop ends only on a terminal stop).
 
     Yields:
         Each :class:`AssistantMessageEvent` from the provider, plus
@@ -275,7 +286,7 @@ async def run(
     turns = 0
     tool_calls_count = 0
 
-    while turns < max_turns:
+    while max_turns is None or turns < max_turns:
         turns += 1
 
         # Compress accumulated tool-result text before the next model call when
@@ -363,6 +374,7 @@ async def run(
     # loop stays bounded at max_turns + 1.
     import time as _time
 
+    yield TurnBudgetExhausted(max_turns=turns)
     context.messages.append(
         UserMessage(
             content=(
@@ -389,6 +401,7 @@ __all__ = [
     "ToolRunEvent",
     "ToolRunStart",
     "ToolRunner",
+    "TurnBudgetExhausted",
     "TurnRetry",
     "run",
     "run_turn",

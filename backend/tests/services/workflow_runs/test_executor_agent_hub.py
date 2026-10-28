@@ -217,6 +217,22 @@ async def test_injected_refusal_caps_the_loop_and_drops_the_closeout_turn(worktr
     assert finished.status == "completed"
 
 
+async def test_an_attempt_runs_with_no_turn_budget(worktree, tmp_path) -> None:
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])])
+    assert calls[0]["max_turns"] is None
+
+
+async def test_a_turn_budget_that_is_reached_fails_the_step_explicitly(worktree, tmp_path) -> None:
+    (worktree / "hello.txt").write_text("hi\n")
+    exhausted = Event(type="turn_budget_exhausted")
+    exhausted.max_turns = 7  # type: ignore[attr-defined]
+    result, _ = await run(
+        worktree, tmp_path, [assistant([TextContent(text=f"closeout\n{HANDOFF}")])], loop_events=[exhausted]
+    )
+    assert result.status == "failed" and result.handoff is None
+    assert result.error and result.error.startswith("turn_budget_exhausted:") and "7 turns" in result.error
+
+
 async def test_packet_without_an_attempt_cannot_run(worktree, tmp_path) -> None:
     async def on_event(_event: Any) -> None:
         return None

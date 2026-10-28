@@ -84,6 +84,7 @@ class LoopLog:
         self.tool_results: dict[str, Any] = {}
         self.retries: list[tuple[int, str]] = []
         self.messages: list[AssistantMessage] = []
+        self.budget_exhausted: int | None = None  # the finite turn budget the loop ran into, if it did
 
     @property
     def turns(self) -> int:
@@ -96,6 +97,8 @@ class LoopLog:
             self.tool_results[event.tool_call.id] = event.result
         elif kind == "turn_retry":
             self.retries.append((self.turns, event.reason))
+        elif kind == "turn_budget_exhausted":
+            self.budget_exhausted = event.max_turns
         elif kind in ("done", "error"):
             message = getattr(event, "message", None) if kind == "done" else getattr(event, "error", None)
             if message is not None:
@@ -227,7 +230,6 @@ class AgentHubExecutor:
         attempt = packet.attempt
         if attempt is None:
             return StepResult("failed", error="agent_hub_unavailable: the packet names no attempt session")
-        from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
         from app.routing.registry import get_provider_for_model
         from app.services.agent_routing_completion import thinking_level_for_provider
 
@@ -236,8 +238,10 @@ class AgentHubExecutor:
             return StepResult("failed", error=f"agent_hub_unavailable: agent {attempt.agent_slug!r} not found")
         provider = get_provider_for_model(model)
         hook = refusal_hook(packet)
-        # An injected refusal lets the loop take that many turns; the closeout turn the loop then adds is the one dropped.
-        max_turns = hook.after_turn if hook is not None else DEFAULT_AGENTIC_MAX_TURNS
+        # No turn budget: the attempt ends on the model's own stop, a provider outcome, an error or a cancel. Only an
+        # injected refusal (a test hook) bounds it: the loop takes that many turns, and the closeout turn it then adds
+        # is the one dropped.
+        max_turns = hook.after_turn if hook is not None else None
         complete = self._complete
         if complete is None:
             from app.api.complete.core import complete_internal as complete
@@ -294,6 +298,15 @@ class AgentHubExecutor:
         await self._record(
             replace(transcript, turns=turns, tool_results=loop_log.tool_results, retries=tuple(loop_log.retries))
         )
+        if loop_log.budget_exhausted is not None and hook is None:
+            # Never a quiet success: the model was cut off while it still wanted tools, and its closeout answer is
+            # not the finished work.
+            return StepResult(
+                "failed",
+                error=f"turn_budget_exhausted: the tool loop stopped after {loop_log.budget_exhausted} turns while the "
+                "model still wanted tools",
+                tools=names,
+            )
         return await self._result(packet, model, worktree, result, names)
 
     async def _result(

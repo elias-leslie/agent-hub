@@ -203,3 +203,32 @@ def test_direct_runner_keys_single_file_writes_by_resolved_path(tmp_path) -> Non
     for call in (faux_tool_call("bash", {"command": "true"}, id="6"), faux_tool_call("write_file", {}, id="7")):
         assert target(call) is None
     assert runner.max_file_batch > 1  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_no_turn_budget_runs_until_the_model_stops_and_a_finite_one_reports_exhaustion() -> None:
+    from app.llm.tool_loop import TurnBudgetExhausted
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        return _result(call, "ok")
+
+    async def drive(max_turns):
+        reg = register_faux_provider()
+        try:
+            reg.set_responses(
+                [faux_assistant_message([faux_tool_call("read_file", {}, id=f"c{i}")], stop_reason="toolUse") for i in range(6)]
+                + [faux_assistant_message("done")]
+            )
+            model = reg.get_model()
+            assert model is not None
+            context = Context(messages=[UserMessage(content="go", timestamp=0)])
+            return [e async for e in run_loop(model, context, run_tool, max_turns=max_turns)]
+        finally:
+            reg.unregister()
+
+    unlimited = await drive(None)
+    assert not any(isinstance(e, TurnBudgetExhausted) for e in unlimited)
+    assert sum(isinstance(e, ToolRunComplete) for e in unlimited) == 6  # all six tool turns ran, then the answer
+    capped = await drive(2)
+    assert [e.max_turns for e in capped if isinstance(e, TurnBudgetExhausted)] == [2]
+    assert sum(isinstance(e, ToolRunComplete) for e in capped) == 2
