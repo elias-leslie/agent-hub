@@ -16,6 +16,9 @@ import { cn } from "../lib/utils";
 export type ActivityState =
   | "idle"
   | "connecting"
+  | "waiting"
+  | "working"
+  | "retrying"
   | "thinking"
   | "calling_tool"
   | "streaming"
@@ -38,6 +41,10 @@ export interface ActivityIndicatorProps {
   toolCall?: ToolCall;
   thinkingContent?: ThinkingContent;
   stepProgress?: { current: number; total: number };
+  /** Replaces the state's wording, e.g. to name the tool being called. */
+  label?: string;
+  /** The host announces the status to screen readers elsewhere (a live region); hide the pill from them. */
+  decorative?: boolean;
   className?: string;
 }
 
@@ -62,6 +69,27 @@ const stateConfig: Record<
     label: "Connecting...",
     color: "text-muted-foreground",
     bgColor: "bg-muted",
+    animate: true,
+  },
+  waiting: {
+    icon: Loader2,
+    label: "Waiting for the model...",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
+    animate: true,
+  },
+  working: {
+    icon: Loader2,
+    label: "Working...",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
+    animate: true,
+  },
+  retrying: {
+    icon: Loader2,
+    label: "Retrying...",
+    color: "text-amber-400",
+    bgColor: "bg-amber-900/30",
     animate: true,
   },
   thinking: {
@@ -116,22 +144,28 @@ export function ActivityIndicator({
   toolCall,
   thinkingContent,
   stepProgress,
+  label,
+  decorative,
   className,
 }: ActivityIndicatorProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
   const config = stateConfig[state];
   const Icon = config.icon;
 
+  const baseLabel = label ?? config.label;
   const displayLabel = toolCall?.name
     ? `Calling ${toolCall.name}...`
     : stepProgress
-      ? `${config.label} (${stepProgress.current}/${stepProgress.total})`
-      : config.label;
+      ? `${baseLabel} (${stepProgress.current}/${stepProgress.total})`
+      : baseLabel;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {/* Main indicator */}
       <div
+        data-testid="activity-pill"
+        data-state={state}
+        aria-hidden={decorative ? true : undefined}
         className={cn(
           "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium",
           config.bgColor,

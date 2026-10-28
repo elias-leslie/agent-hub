@@ -165,15 +165,24 @@ function ChatPanelBody({
     0,
   );
 
+  // One visible status, and it names the phase the turn is in. The phase text itself is kept for screen readers.
   const phaseLabel = isBusy ? describePhase(turnPhase) : null;
-  // The pill names the turn's phase while it streams: thinking, calling a tool, or responding.
-  const phaseName = (isBusy && status === "streaming" ? turnPhase ?? "" : "").split(":", 1)[0];
+  const [phaseName, phaseDetail] = (status === "streaming" ? turnPhase ?? "" : "").split(":", 2);
   const pillState: ActivityState =
-    phaseName === "thinking"
-      ? "thinking"
-      : phaseName === "running_tool"
-        ? "calling_tool"
-        : (status as ActivityState);
+    status !== "streaming"
+      ? (status as ActivityState)
+      : phaseName === "waiting_for_model"
+        ? "waiting"
+        : phaseName === "thinking"
+          ? "thinking"
+          : phaseName === "running_tool"
+            ? "calling_tool"
+            : phaseName === "responding"
+              ? "streaming"
+              : phaseName === "retrying"
+                ? "retrying"
+                : "working";
+  const pillLabel = pillState === "calling_tool" && phaseDetail ? `Calling ${phaseDetail}...` : undefined;
 
   const routeLabel = lastAssistantMessage ? routeText(lastAssistantMessage) : null;
 
@@ -212,9 +221,9 @@ function ChatPanelBody({
       <div className="flex flex-col flex-1 h-full min-w-0">
         {compact ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card/35 px-3 py-1.5 text-xs text-muted-foreground">
-            <ActivityIndicator state={pillState} />
+            <ActivityIndicator state={pillState} label={pillLabel} decorative={!!phaseLabel} />
             {phaseLabel ? (
-              <span data-testid="turn-phase" aria-live="polite">
+              <span data-testid="turn-phase" className="sr-only" aria-live="polite">
                 {phaseLabel}
               </span>
             ) : null}
@@ -253,7 +262,7 @@ function ChatPanelBody({
 
               <div className="flex shrink-0 items-center gap-2">
               {/* Activity indicator */}
-              <ActivityIndicator state={pillState} />
+              <ActivityIndicator state={pillState} label={pillLabel} decorative={!!phaseLabel} />
               {phaseLabel ? (
                 <span data-testid="turn-phase" className="sr-only" aria-live="polite">
                   {phaseLabel}

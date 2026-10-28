@@ -6,6 +6,9 @@
  * Colors come from CSS variables (--background, --card, --primary, ...). The defaults below are a dark palette and
  * sit in :where(), so any value the host sets on :root wins. All rules are in cascade layers, so the host's
  * unlayered CSS wins over them too.
+ *
+ * Besides those, `--chat-ui-thinking` sets the accent of the thinking block (any CSS color). It is not defined
+ * here: the block falls back to its default violet when the host leaves it unset.
  */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
