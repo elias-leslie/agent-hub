@@ -1399,7 +1399,9 @@ async def test_cancel_endpoints_record_who_asked_and_answer_409_for_finished_tar
         done = await client.post(f"/workflow-runs/{second}/cancel", headers=headers)
         assert done.status_code == 409 and done.json()["detail"] == {
             "code": "already_finished",
+            "error": "already_finished",
             "message": "run is already completed",
+            "details": {"state": "completed"},
             "state": "completed",
         }
         step = await client.post(f"/workflow-runs/{second}/steps/plan/cancel")

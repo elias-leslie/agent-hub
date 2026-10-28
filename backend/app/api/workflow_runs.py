@@ -63,7 +63,14 @@ _STATUS = {
 def _http(error: WorkflowRunError) -> HTTPException:
     return HTTPException(
         status_code=_STATUS.get(error.code, 400),
-        detail={"code": error.code, "message": str(error), **error.extra},
+        # "error" and "details" are what the app-wide error handler passes on; the flat keys stay for in-process callers.
+        detail={
+            "code": error.code,
+            "error": error.code,
+            "message": str(error),
+            "details": error.extra,
+            **error.extra,
+        },
     )
 
 
