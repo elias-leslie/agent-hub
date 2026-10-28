@@ -22,6 +22,7 @@ from app.llm.types import (
     ToolCall,
     ToolResultMessage,
 )
+from app.llm.utils.request_metrics import request_metrics_of
 from app.models import SessionEventType
 from app.services.context_tracker import log_token_usage
 from app.services.event_storage import lock_session_event_ingestion, store_event
@@ -77,6 +78,7 @@ async def record_transcript(db: AsyncSession, transcript: Transcript) -> None:
 
     # Imported here: app.api's package init imports the workflow routes, which import the engine and its executors.
     from app.api.complete.helpers import normalize_content_for_storage
+    from app.api.complete.request_metrics import store_model_requests
     from app.api.complete.runtime_usage import accounting_model, outcome_usage, served_model
 
     sid, agent = transcript.session_id, transcript.agent_slug
@@ -92,13 +94,18 @@ async def record_transcript(db: AsyncSession, transcript: Transcript) -> None:
             agent_id=agent, agent_name=agent,
         )
     for index, message in enumerate(transcript.turns):
-        for after, reason in transcript.retries:
-            if after == index:
-                await store_event(
-                    db, sid, SessionEventType.ERROR, content=f"turn_retry: {reason}",
-                    agent_id=agent, agent_name=agent, model_used=transcript.requested_model,
-                )
         model = served_model(message, transcript.requested_model)
+        # The turn's re-sends and its liveness record (longest silence, keepalives, tool-argument size, outcome), the
+        # same events a /complete request saves. A turn that carries no record still gets its re-sends from the loop.
+        if request_metrics_of(message) is not None:
+            await store_model_requests(db, sid, [message], model_used=model, agent_id=agent)
+        else:
+            for after, reason in transcript.retries:
+                if after == index:
+                    await store_event(
+                        db, sid, SessionEventType.ERROR, content=f"turn_retry: {reason}",
+                        agent_id=agent, agent_name=agent, model_used=transcript.requested_model,
+                    )
         usage: dict[str, Any] | None = usage_payload(message, transcript.requested_model)
 
         def lead() -> dict[str, Any] | None:

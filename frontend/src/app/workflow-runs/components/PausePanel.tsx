@@ -20,6 +20,13 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
   const step = run.steps.find((s) => s.key === stepKey)
   const [model, setModel] = useState('')
   const [confirmEnd, setConfirmEnd] = useState(false)
+  const [extra, setExtra] = useState('')
+
+  const atCap =
+    step !== undefined &&
+    step.attempt_limit !== undefined &&
+    step.attempts >= step.attempt_limit
+  const extraAttempts = atCap ? Math.max(0, Math.floor(Number(extra) || 0)) : 0
 
   const resume = useMutation({
     mutationFn: (action: ResumeAction) =>
@@ -27,6 +34,9 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
         action,
         step_key: stepKey,
         model: action === 'retry' && model ? model : undefined,
+        ...(action === 'retry' && extraAttempts > 0
+          ? { extra_attempts: extraAttempts }
+          : {}),
       }),
     onSuccess: () => {
       setConfirmEnd(false)
@@ -65,6 +75,20 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
             ))}
           </select>
         </label>
+        {atCap ? (
+          <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+            Add attempts (step is at {step?.attempts} of {step?.attempt_limit})
+            <input
+              type="number"
+              min={1}
+              inputMode="numeric"
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              disabled={resume.isPending}
+              className="h-8 w-24 rounded-md border border-slate-700 bg-slate-950 px-2 text-[12px] text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
+            />
+          </label>
+        ) : null}
         <button
           type="button"
           disabled={resume.isPending}

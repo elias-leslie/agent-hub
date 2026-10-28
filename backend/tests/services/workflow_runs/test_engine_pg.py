@@ -41,6 +41,7 @@ from app.services.workflow_runs.engine import (
 )
 from app.services.workflow_runs.executor_common import HarnessProcess, child_env, load_defaults
 from app.services.workflow_runs.executors import FauxAction, FauxExecutor, StepResult
+from app.services.workflow_runs.live import note_live
 from app.services.workflow_runs.policy import Unavailable
 from app.services.workflow_runs.processes import MARKER_ENV, identify, read_stat
 from app.services.workflow_runs.schemas import (
@@ -57,6 +58,7 @@ pytestmark = pytest.mark.integration
 OPUS, CODEX, OPUS_OLD = "claude-opus-5-5", "codex/gpt-5.6-sol-daybreak-blue", "claude-opus-4-8"
 EXAMPLES = Path(__file__).resolve().parents[4] / "docs/examples/workflows"
 NOW = 2_000_000_000.0
+NO_WORK = {"input_tokens": 0, "output_tokens": 0}  # an attempt that failed before the model produced anything
 
 
 @pytest_asyncio.fixture
@@ -691,13 +693,14 @@ async def test_stored_runs_with_bare_string_acceptance_still_load_and_run(
 async def test_usage_limit_cycles_and_owner_retries_stop_at_the_attempt_caps(
     pg_db, repo, world_factory
 ) -> None:
-    limit = FauxAction("usage_limit", resets_at=int(NOW) + 60)
+    # An attempt that used no tokens made no progress, so every wait after it counts toward the pause.
+    limit = FauxAction("usage_limit", resets_at=int(NOW) + 60, usage=NO_WORK)
     world = world_factory({"plan": [limit]})
     world.chains.update({slug: [OPUS] for slug in ("planner", "coder", "reviewer")})
     definition = example(
         "plan-implement-review-fix",
         repo,
-        policy={"max_usage_limit_resumes": 1, "max_total_attempts": 4},
+        policy={"max_unproductive_usage_limit_resumes": 1, "max_total_attempts": 4},
     )
     run_id, _ = await create_run(pg_db, definition, deps=world.deps)
 
@@ -706,26 +709,94 @@ async def test_usage_limit_cycles_and_owner_retries_stop_at_the_attempt_caps(
         world.unavailable.clear()
         return run_id in await recover_stale_steps(world.deps)
 
-    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_wait"  # attempt 1
-    assert await pass_the_reset()  # the one allowed automatic resume
-    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_resume_limit"  # attempt 2
+    async def until_the_owner_is_needed() -> dict[str, Any]:
+        """Wait out each reset the way the recovery loop does, until the step pauses for the owner."""
+        for _ in range(10):
+            stop = await world.run_to_stop(run_id)
+            if stop["reason"] != "usage_limit_wait":
+                return stop
+            assert await pass_the_reset()
+        raise AssertionError("the usage-limit waits never paused")
+
+    async def plan() -> dict[str, Any]:
+        return (await view_of(pg_db, run_id))["steps"][0]
+
+    assert (await until_the_owner_is_needed())["reason"] == "usage_limit_resume_limit"
     assert not await pass_the_reset()  # no more automatic resumes: the owner decides
     view = await view_of(pg_db, run_id)
     assert view["steps"][0]["usage_limit_resumes"] == 1 and view["state"] == "needs_owner"
+    first_round = (await plan())["attempts"]
 
     await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)  # fresh counters
-    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_wait"  # attempt 3
-    assert await pass_the_reset()
-    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_resume_limit"  # attempt 4
-    view = await view_of(pg_db, run_id)
-    assert view["steps"][0]["attempts"] == 4 == view["limits"]["max_total_attempts"]
-    with pytest.raises(WorkflowRunError, match="has used its attempts") as raised:
+    assert (await until_the_owner_is_needed())["reason"] == "usage_limit_resume_limit"
+    assert (await plan())["attempts"] > first_round
+    # Run the plain owner retries up to the cap.
+    while (await plan())["attempts"] < 4:
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+        await until_the_owner_is_needed()
+    assert (await plan())["attempts"] == 4 == (await view_of(pg_db, run_id))["limits"]["max_total_attempts"]
+    with pytest.raises(WorkflowRunError, match="extra_attempts") as raised:
         await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
     assert raised.value.code == "attempt_limit"
+    # The owner can raise this step's cap explicitly; who asked and how many is kept and shown.
+    await resume_run(
+        pg_db,
+        run_id,
+        OwnerDecision(action="retry", extra_attempts=2, note="the reset is close"),
+        requested_by="client-7",
+        request_source="dashboard",
+        deps=world.deps,
+    )
+    granted = await plan()
+    assert granted["attempt_limit"] == 6 and granted["extra_attempts"]["total"] == 2
+    (grant,) = granted["extra_attempts"]["grants"]
+    assert (grant["count"], grant["requested_by"], grant["request_source"]) == (2, "client-7", "dashboard")
+    await until_the_owner_is_needed()
+    while (await plan())["attempts"] < 6:  # the granted attempts run as ordinary owner retries
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+        await until_the_owner_is_needed()
+    assert (await plan())["attempts"] == 6  # the two granted attempts ran, then the cap
+    with pytest.raises(WorkflowRunError) as capped:  # automatic loops stay capped; each grant is spent once
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert capped.value.code == "attempt_limit"
     # The owner can still end the run.
     ended = await resume_run(pg_db, run_id, OwnerDecision(action="fail"), deps=world.deps)
     assert ended["state"] == "failed"
-    assert len(world.faux.calls) == 4
+    assert len(world.faux.calls) == 6
+
+
+async def test_usage_limit_waits_after_progress_never_pause_and_the_count_resets(
+    pg_db, repo, world_factory
+) -> None:
+    """Waiting costs nothing: only waits in a row with no new tokens since the previous resume count."""
+
+    idle = FauxAction("usage_limit", resets_at=int(NOW) + 60, usage=NO_WORK)
+    worked = FauxAction("usage_limit", resets_at=int(NOW) + 60)  # the default usage carries tokens
+    world = world_factory({"plan": [idle, idle, worked, idle, idle, idle]})
+    world.chains.update({slug: [OPUS] for slug in ("planner", "coder", "reviewer")})
+    definition = example(
+        "plan-implement-review-fix",
+        repo,
+        policy={"max_unproductive_usage_limit_resumes": 2, "max_total_attempts": 12},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+
+    async def pass_the_reset() -> bool:
+        world.clock += 120
+        world.unavailable.clear()
+        return run_id in await recover_stale_steps(world.deps)
+
+    counts = []
+    for _attempt in range(1, 6):
+        assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_wait"
+        counts.append((await view_of(pg_db, run_id))["steps"][0]["unproductive_resumes"])
+        assert await pass_the_reset()
+    # idle, idle, worked (resets), idle, idle: five waits, never a pause. Two idle ones before it would have paused
+    # at the third attempt had the count not reset.
+    assert counts == [1, 2, 0, 1, 2]
+    assert (await world.run_to_stop(run_id))["reason"] == "usage_limit_resume_limit"  # attempt 6, idle again
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and view["steps"][0]["usage_limit_resumes"] == 5
 
 
 async def test_usage_limit_cycling_alone_fails_the_step_at_max_total_attempts(
@@ -736,7 +807,7 @@ async def test_usage_limit_cycling_alone_fails_the_step_at_max_total_attempts(
     definition = example(
         "plan-implement-review-fix",
         repo,
-        policy={"max_usage_limit_resumes": 99, "max_total_attempts": 3},
+        policy={"max_unproductive_usage_limit_resumes": 1, "max_total_attempts": 3},
     )
     run_id, _ = await create_run(pg_db, definition, deps=world.deps)
     for _ in range(10):
@@ -1059,6 +1130,61 @@ def with_tree(world: World, *steps: str) -> TreeExecutor:
     tree = TreeExecutor(world.faux, set(steps))
     world.deps.get_executor = lambda _kind: tree
     return tree
+
+
+class LiveTreeExecutor(TreeExecutor):
+    """A real harness process that reports a phase, then finishes like the faux once released."""
+
+    def __init__(self, faux: FauxExecutor, steps: set[str]) -> None:
+        super().__init__(faux, steps)
+        self.release = asyncio.Event()
+
+    async def run(self, packet, model, worktree, run_dir, on_event) -> StepResult:
+        if packet.step_key not in self.steps:
+            return await self.faux.run(packet, model, worktree, run_dir, on_event)
+        defaults = load_defaults()
+        harness = await HarnessProcess.start(
+            [sys.executable, "-c", TREE], worktree, child_env(defaults), 1000, stdin=False
+        )
+        self.leader = harness.process.pid
+        try:
+            async for record in harness.records():
+                self.child = record["child"]
+                note_live("tool:Bash")
+                self.started.set()
+                await self.release.wait()
+                break
+        finally:
+            await harness.stop(defaults["terminate_grace_seconds"])
+        return await self.faux.run(packet, model, worktree, run_dir, on_event)
+
+
+async def test_a_running_step_shows_its_phase_last_activity_and_live_harness_process(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    tree = LiveTreeExecutor(world.faux, {"plan"})
+    world.deps.get_executor = lambda _kind: tree
+    run_id, _ = await create_run(
+        pg_db, example("plan-implement-review-fix", repo, policy=FAST), deps=world.deps
+    )
+    advancing = asyncio.create_task(world.run_to_stop(run_id))
+    await asyncio.wait_for(tree.started.wait(), 20)
+    live: dict[str, Any] | None = None
+    for _ in range(100):  # the heartbeat saves it at its own rate (0.2s here), never per event
+        async with world.lock:
+            live = (await view_of(pg_db, run_id))["steps"][0]["live"]
+        if live and live["harness_pid"]:
+            break
+        await asyncio.sleep(0.1)
+    assert live is not None
+    assert (live["phase"], live["harness_pid"], live["harness_alive"]) == ("tool:Bash", tree.leader, True)
+    assert live["last_event_at"] and live["updated_at"]
+    tree.release.set()
+    assert (await asyncio.wait_for(advancing, 30))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    assert all(step["live"] is None for step in view["steps"])  # shown only while the step runs
 
 
 async def test_cancelling_a_running_step_stops_its_process_tree_and_the_run_goes_on(

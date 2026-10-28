@@ -357,15 +357,126 @@ describe('workflow run detail', () => {
     mount(<WorkflowRunPage />)
     const limits = await screen.findByTestId('step-limits')
     expect(limits).toHaveTextContent(
-      'Attempt 3 of 3 · acceptance retries 2 of 2 · usage-limit resumes 1 of 3 · restarts 1 of 2 · effort low',
+      'Attempt 3 of 3 · acceptance retries 2 of 2 · usage-limit resumes 1, idle in a row 1 of 3 · restarts 1 of 2 · effort low',
     )
     expect(screen.getByTestId('run-limits')).toHaveTextContent(
-      '12 attempts · 3 usage-limit resumes · 2 acceptance retries · 2 restarts',
+      '12 attempts · 3 idle usage-limit resumes · 2 acceptance retries · 2 restarts',
     )
     const checks = screen.getByTestId('acceptance')
     expect(checks).toHaveTextContent('Failed (exit 2)')
     expect(checks).toHaveTextContent('make test')
     expect(checks).toHaveTextContent('FAILED test_export')
+  })
+
+  it('shows the phase, last activity and process state next to a running step', async () => {
+    const at = (secondsAgo: number) =>
+      new Date(Date.now() - secondsAgo * 1000).toISOString()
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        steps: [
+          step({
+            status: 'running',
+            live: {
+              phase: 'tool:Bash',
+              last_event_at: at(12),
+              harness_pid: 4242,
+              harness_alive: true,
+              updated_at: at(5),
+            },
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const live = await screen.findByTestId('step-live')
+    expect(live).toHaveTextContent(
+      'Running tool Bash · last activity 12s ago · process alive',
+    )
+    expect(live).toHaveAttribute('data-phase', 'tool:Bash')
+  })
+
+  it('says a running step has no live status or a missing process rather than calling it idle', async () => {
+    const old = new Date(Date.now() - 600_000).toISOString()
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        steps: [
+          step({ key: 'a', status: 'running', live: null }),
+          step({
+            key: 'b',
+            position: 1,
+            status: 'running',
+            live: {
+              phase: 'thinking',
+              last_event_at: null,
+              harness_pid: 77,
+              harness_alive: false,
+              updated_at: old,
+            },
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const [first, second] = await screen.findAllByTestId('step-live')
+    expect(first).toHaveTextContent(
+      'no live status reported yet · process state unknown',
+    )
+    expect(second).toHaveTextContent(
+      'Thinking · no activity seen yet · process not found · status saved 10m ago',
+    )
+  })
+
+  it('shows the attempts the owner added and offers to add more at the cap', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'needs_owner',
+        pause: { reason: 'usage_limit_resume_limit', step_key: 'plan' },
+        steps: [
+          step({
+            status: 'needs_owner',
+            attempts: 6,
+            attempt_limit: 6,
+            extra_attempts: {
+              total: 2,
+              grants: [
+                {
+                  count: 2,
+                  requested_by: 'client-7',
+                  request_source: 'dashboard',
+                  requested_at: 1_793_181_000,
+                  note: null,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    )
+    vi.mocked(resumeWorkflowRun).mockResolvedValue({
+      run_id: 'r1',
+      state: 'running',
+      step: 'plan',
+      status: 'pending',
+    })
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('step-limits')).toHaveTextContent(
+      '+2 attempts you added (client-7)',
+    )
+    const panel = screen.getByRole('region', { name: 'Waiting for you' })
+    fireEvent.change(within(panel).getByLabelText(/Add attempts/), {
+      target: { value: '3' },
+    })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Retry step' }))
+    await waitFor(() =>
+      expect(resumeWorkflowRun).toHaveBeenCalledWith(expect.any(String), {
+        action: 'retry',
+        step_key: 'plan',
+        model: undefined,
+        extra_attempts: 3,
+      }),
+    )
   })
 
   it('shows the plain attempt count when the run reports no limits', async () => {

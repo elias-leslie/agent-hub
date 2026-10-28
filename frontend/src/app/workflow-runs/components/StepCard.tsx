@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   atLimit,
   cancelText,
+  liveStatus,
   modelLabel,
   ofLimit,
   STEP_STATUS_LABEL,
@@ -75,9 +76,22 @@ function LimitLine({
   }
   const resumes = step.usage_limit_resumes ?? 0
   if (resumes > 0) {
+    // Only waits in a row with no new work count toward the pause.
+    const idle = step.unproductive_resumes ?? resumes
+    const cap = limits?.max_unproductive_usage_limit_resumes
     parts.push({
-      text: `usage-limit resumes ${ofLimit(resumes, limits?.max_usage_limit_resumes)}`,
-      hot: atLimit(resumes, limits?.max_usage_limit_resumes),
+      text: `usage-limit resumes ${resumes}, idle in a row ${ofLimit(idle, cap)}`,
+      hot: atLimit(idle, cap),
+    })
+  }
+  const extra = step.extra_attempts
+  if (extra && extra.total > 0) {
+    const asked = extra.grants
+      .map((g) => g.requested_by)
+      .filter((who): who is string => Boolean(who))
+    parts.push({
+      text: `+${extra.total} attempts you added${asked.length > 0 ? ` (${[...new Set(asked)].join(', ')})` : ''}`,
+      hot: false,
     })
   }
   if (step.restarts > 0) {
@@ -98,6 +112,38 @@ function LimitLine({
           <span className={cn(part.hot && 'text-amber-300')}>{part.text}</span>
         </span>
       ))}
+    </p>
+  )
+}
+
+/** What the running attempt is doing. Display only: nothing here stops or restarts the step. */
+function LiveLine({ step }: { step: WorkflowStepView }) {
+  const live = liveStatus(step.live)
+  return (
+    <p
+      className="mt-1 text-[12px] text-slate-300"
+      data-testid="step-live"
+      data-phase={live.phase ?? 'unknown'}
+    >
+      <span className="font-medium">{live.phaseText}</span>
+      <span className="text-slate-400">
+        {' · '}
+        {live.activityText}
+        {' · '}
+      </span>
+      <span
+        className={cn(
+          live.process === 'alive' ? 'text-emerald-300' : 'text-amber-300',
+        )}
+      >
+        {live.processText}
+      </span>
+      {live.staleText ? (
+        <span className="text-amber-300">
+          {' · '}
+          {live.staleText}
+        </span>
+      ) : null}
     </p>
   )
 }
@@ -147,6 +193,7 @@ export function StepCard({
           </span>
         ) : null}
       </div>
+      {step.status === 'running' ? <LiveLine step={step} /> : null}
       {step.chain && step.chain.length > 0 ? (
         <p className="mt-1 text-[12px] text-slate-500">
           Model chain: {step.chain.map(modelLabel).join(' then ')}

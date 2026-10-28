@@ -106,10 +106,16 @@ async def get_workflow_run(
 
 @router.post("/{run_id}/resume")
 async def resume_workflow_run(
-    run_id: str, decision: OwnerDecision, db: Annotated[AsyncSession, Depends(get_db)]
+    run_id: str,
+    decision: OwnerDecision,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
+    client_id, source = _requester(request)
     try:
-        result = await resume_run(db, run_id, decision)
+        result = await resume_run(
+            db, run_id, decision, requested_by=client_id, request_source=source
+        )
     except WorkflowRunError as error:
         raise _http(error) from error
     if result["state"] == "running":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import os
@@ -256,6 +257,91 @@ async def test_injected_refusal_looks_like_a_real_one(fake_claude, worktree, tmp
     # Without the hook (the engine drops it while hooks are disabled) the same stream is not refused.
     plain, _ = await run(worktree, tmp_path)
     assert plain.outcome is None
+
+
+def stream_event(inner: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "stream_event", "event": inner, "session_id": "sess-1", "uuid": "u", "parent_tool_use_id": None}
+
+
+def partial_lines() -> list[dict[str, Any]]:
+    """What ``--include-partial-messages`` adds around a turn: thinking and text deltas, a tool call, a provider retry."""
+
+    start = lambda block: stream_event({"type": "content_block_start", "index": 0, "content_block": block})  # noqa: E731
+    delta = lambda part: stream_event({"type": "content_block_delta", "index": 0, "delta": part})  # noqa: E731
+    return [
+        {"type": "system", "subtype": "api_retry", "attempt": 1, "max_retries": 10, "retry_delay_ms": 500,
+         "error_status": 529, "error": "overloaded", "session_id": "sess-1"},
+        stream_event({"type": "message_start", "message": {"id": "m", "role": "assistant", "content": []}}),
+        start({"type": "thinking", "thinking": ""}),
+        delta({"type": "thinking_delta", "thinking": "let me think"}),
+        delta({"type": "signature_delta", "signature": "sig"}),
+        start({"type": "text", "text": ""}),
+        delta({"type": "text_delta", "text": "I will write it"}),
+        start({"type": "tool_use", "id": "tu", "name": "Write", "input": {}}),
+        delta({"type": "input_json_delta", "partial_json": '{"file'}),
+        stream_event({"type": "message_stop"}),
+        {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu"}]},
+         "session_id": "sess-1"},
+        start({"type": "thinking", "thinking": ""}),
+    ]
+
+
+async def test_partial_messages_are_liveness_only_and_the_transcript_and_usage_are_unchanged(
+    fake_claude, worktree, tmp_path
+) -> None:
+    from .support import recording_live
+
+    plain = success_stream(f"All done.\n{HANDOFF}")
+    fake_claude(plain)
+    before, _ = await run(worktree, tmp_path)
+    assert "--include-partial-messages" in (tmp_path / "args.txt").read_text().splitlines()
+
+    with_partials = [plain[0], *partial_lines(), *plain[1:]]
+    fake_claude(with_partials)
+    with recording_live() as live:
+        after, _ = await run(worktree, tmp_path)
+    for field in ("status", "handoff", "usage", "served_models", "native_session_id", "progress", "outcome", "error"):
+        assert getattr(after, field) == getattr(before, field), field
+    assert live.history == ["waiting", "provider_retry", "thinking", "writing", "tool:Write", "waiting", "thinking"]
+    assert live.last_event_at is not None
+
+
+def test_stream_events_are_ignored_by_the_turn_observer_and_the_attempt() -> None:
+    from app.llm.provider_support.claude_stream import ClaudeTurnObserver
+
+    observer, state = ClaudeTurnObserver(), module._Attempt(MODEL, MODEL, {"progress_items": 4, "progress_output_chars": 100}, None)
+    for event in partial_lines():
+        observer.handle(event)
+        state.handle(event)
+    assert observer.result is None and observer.refusal is None and not observer.answer_text and not observer.succeeded()
+    assert not state.turns and not state.served and state.progress.items == []
+
+
+async def test_the_loop_clock_jump_really_fires_wait_for_deadlines() -> None:
+    """Guards the long-run tests below: a two-hour jump does expire a 3600 s ``wait_for``."""
+
+    from .support import loop_clock
+
+    with loop_clock() as clock:
+        waiting = asyncio.create_task(asyncio.wait_for(asyncio.sleep(5), 3600))
+        await asyncio.sleep(0)
+        clock.jump(2 * 3600)
+        with pytest.raises(TimeoutError):
+            await waiting
+
+
+async def test_a_run_past_the_old_hour_limit_is_not_ended(fake_claude, worktree, tmp_path) -> None:
+    from .support import loop_clock
+
+    fake_claude(success_stream(f"All done.\n{HANDOFF}"))
+    with loop_clock() as clock:
+        async def on_event(_event: Any) -> None:
+            if not clock.offset:
+                clock.jump(2 * 3600)
+                await asyncio.sleep(0.05)
+
+        result = await ClaudeCodeExecutor().run(packet(), MODEL, worktree, tmp_path / "run", on_event)
+    assert result.status == "completed" and result.error is None
 
 
 def test_transcript_path_finds_the_native_jsonl(tmp_path: Path) -> None:

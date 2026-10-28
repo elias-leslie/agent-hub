@@ -124,7 +124,8 @@ export interface AcceptanceCommand {
 /** The caps the runner enforces; each is a per-step count unless noted. */
 export interface RunLimits {
   max_total_attempts: number
-  max_usage_limit_resumes: number
+  /** Waits in a row that made no progress before the run pauses for the owner. */
+  max_unproductive_usage_limit_resumes: number
   acceptance_retry_limit: number
   restart_limit: number
   /** Refusals per category across the whole run. */
@@ -196,6 +197,28 @@ export type StepStatus =
   | 'skipped'
   | 'cancelled'
 
+export interface ExtraAttempts {
+  total: number
+  grants: {
+    count: number
+    requested_by: string | null
+    request_source: string | null
+    requested_at: number
+    note: string | null
+  }[]
+}
+
+/** Display-only liveness of the running attempt, saved at the heartbeat rate. */
+export interface StepLive {
+  /** thinking, writing, waiting, provider_retry or tool:<name>. */
+  phase: string | null
+  last_event_at: string | null
+  /** null when the work runs inside the service (no child process). */
+  harness_pid: number | null
+  harness_alive: boolean | null
+  updated_at: string | null
+}
+
 export interface WorkflowStepView {
   key: string
   position: number
@@ -207,6 +230,12 @@ export interface WorkflowStepView {
   attempt_limit?: number
   restarts: number
   usage_limit_resumes?: number
+  /** Resumes in a row since the step last made progress; the pause counts these. */
+  unproductive_resumes?: number
+  /** Attempts the owner added to this step's cap, with who asked. */
+  extra_attempts?: ExtraAttempts | null
+  /** What the running step is doing now; null when it reports nothing yet. */
+  live?: StepLive | null
   acceptance_failures?: number
   acceptance?: AcceptanceCommand[]
   /** The step's own thinking-level override; null when the agent's applies. */
@@ -220,6 +249,7 @@ export interface WorkflowStepView {
     action: string
     model?: string | null
     note?: string | null
+    extra_attempts?: number | null
   } | null
   /** The stop request for this step, if one was made. */
   cancel?: CancelRecord | null
@@ -310,7 +340,13 @@ export async function fetchWorkflowRun(
 
 export async function resumeWorkflowRun(
   id: string,
-  decision: { action: ResumeAction; step_key?: string; model?: string | null },
+  decision: {
+    action: ResumeAction
+    step_key?: string
+    model?: string | null
+    /** Retry only: attempts to add to this step's cap. */
+    extra_attempts?: number
+  },
 ): Promise<{ run_id: string; state: RunState; step: string; status: string }> {
   const response = await fetchApi(
     `${API_BASE}/workflow-runs/${encodeURIComponent(id)}/resume`,

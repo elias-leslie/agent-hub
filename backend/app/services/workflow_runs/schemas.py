@@ -26,7 +26,7 @@ class AcceptanceCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cmd: str = Field(min_length=1)
-    # Default is policy.acceptance_timeout_seconds.
+    # Unset, the command runs until it exits.
     timeout_s: int | None = Field(None, ge=1)
 
     @model_validator(mode="before")
@@ -52,7 +52,7 @@ class StepDefinition(BaseModel):
     # the default) or "full" (the harness's whole tool set, e.g. for research steps that need subagents or web tools).
     level: str | None = None
     # The runner, not the agent, decides the step is done: all of these must exit 0 before the checkpoint.
-    # A bare string is a command without its own timeout.
+    # A bare string is a command without a time limit.
     acceptance: list[AcceptanceCommand] = Field(default_factory=list)
     # Overrides the agent's thinking level for this step in every executor.
     effort: str | None = None
@@ -119,6 +119,15 @@ class OwnerDecision(BaseModel):
     step_key: str | None = None
     model: str | None = None
     note: str | None = Field(None, max_length=2000)
+    # retry only: attempts to allow this step past its cap. The step records who asked and how many; automatic loops
+    # never raise a cap.
+    extra_attempts: int | None = Field(None, ge=1)
+
+    @model_validator(mode="after")
+    def _extra_only_with_retry(self) -> OwnerDecision:
+        if self.extra_attempts is not None and self.action != "retry":
+            raise ValueError("extra_attempts only applies to action 'retry'")
+        return self
 
 
 class CancelRequest(BaseModel):

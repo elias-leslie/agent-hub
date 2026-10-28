@@ -160,16 +160,16 @@ def _group_exists(pgid: int) -> bool:
     return bool(_live_members(pgid))
 
 
-async def wait_exit(process: asyncio.subprocess.Process, timeout: float) -> bool:
-    """Whether the child itself exited within ``timeout`` seconds.
+async def wait_exit(process: asyncio.subprocess.Process, timeout: float | None) -> bool:
+    """Whether the child itself exited within ``timeout`` seconds (``None``: wait for the exit however long it takes).
 
     ``Process.wait()`` also waits for the child's pipes to close, so a grandchild that inherited stdout would hold it
     for as long as it lives; the child's own exit is read from its return code instead.
     """
 
-    deadline = time.monotonic() + timeout
+    deadline = None if timeout is None else time.monotonic() + timeout
     while process.returncode is None:
-        if time.monotonic() >= deadline:
+        if deadline is not None and time.monotonic() >= deadline:
             return False
         await asyncio.sleep(POLL_SECONDS)
     return True
@@ -321,6 +321,11 @@ class ProcessTracker:
             await self._record({"kind": tracked.kind, **tracked.identity.as_dict(), "started_at": time.time()})
         except Exception:
             logger.warning("could not record %s process %s", tracked.kind, tracked.identity.pid, exc_info=True)
+
+    def harness(self) -> TrackedProcess | None:
+        """The attempt's harness process (the latest one started), if it has started one."""
+
+        return next((p for p in reversed(self.processes) if p.kind == "harness"), None)
 
     async def stop_all(self, grace: float) -> list[str]:
         """Stop every process still around; errors in one do not stop the others."""

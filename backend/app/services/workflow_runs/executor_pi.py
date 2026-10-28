@@ -10,7 +10,6 @@ that needs one fails fast and the chain moves on.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 import uuid
@@ -33,6 +32,7 @@ from .executor_common import (
     thinking_level,
 )
 from .executors import OnEvent, StepResult, register_executor
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
 from .packet import HandoffPacket
 from .usage import finish_usage, harness_basis
 
@@ -46,6 +46,36 @@ def message_text(message: Mapping[str, Any]) -> str:
         for block in content or []
         if isinstance(block, Mapping) and block.get("type") == "text"
     ).strip()
+
+
+def pi_phase(record: Mapping[str, Any]) -> str | None:
+    """What a Pi RPC record says the model is doing."""
+
+    kind = record.get("type")
+    if kind == "message_update":
+        update = record.get("assistantMessageEvent")
+        update = update if isinstance(update, Mapping) else {}
+        shape = str(update.get("type") or "")
+        if shape.startswith("thinking"):
+            return THINKING
+        if shape.startswith("text"):
+            return WRITING
+        if shape.startswith("toolcall"):
+            call = update.get("toolCall")
+            if not isinstance(call, Mapping):
+                partial = update.get("partial")
+                content = partial.get("content") if isinstance(partial, Mapping) else None
+                index = update.get("contentIndex")
+                call = content[index] if isinstance(content, list) and isinstance(index, int) and 0 <= index < len(content) else {}
+            return tool_phase(call.get("name") if isinstance(call, Mapping) else None)
+        return None
+    if kind == "tool_execution_start":
+        return tool_phase(record.get("toolName"))
+    if kind in ("tool_execution_end", "turn_start", "auto_retry_end"):
+        return WAITING
+    if kind == "auto_retry_start":
+        return PROVIDER_RETRY
+    return None
 
 
 class PiExecutor:
@@ -111,11 +141,7 @@ class PiExecutor:
         )
         state = _Attempt(model, pi_id.split("/", 1)[1], self.defaults)
         try:
-            await asyncio.wait_for(
-                self._drive(harness, state, packet.render(), on_event), self.defaults["max_seconds"]
-            )
-        except TimeoutError:
-            state.error = f"timeout: no completion within {self.defaults['max_seconds']}s"
+            await self._drive(harness, state, packet.render(), on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
         return await self._result(state, harness, worktree)
@@ -126,6 +152,7 @@ class PiExecutor:
         await harness.write(_command({"id": "state", "type": "get_state"}))
         await harness.write(_command({"id": "prompt", "type": "prompt", "message": prompt}))
         async for record in harness.records():
+            note_live(pi_phase(record))
             await on_event({"type": "pi_event", "event": record.get("type"), "at": time.time()})
             if state.handle(record):
                 break

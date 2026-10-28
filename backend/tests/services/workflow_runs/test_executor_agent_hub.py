@@ -24,7 +24,6 @@ from app.llm.utils.outcomes import ProviderOutcome, record_outcome
 from app.services.workflow_runs import agent_hub_transcript
 from app.services.workflow_runs.agent_hub_transcript import Transcript, record_transcript
 from app.services.workflow_runs.executor_agent_hub import AgentHubExecutor
-from app.services.workflow_runs.executor_common import load_defaults
 from app.services.workflow_runs.executors import get_executor
 from app.services.workflow_runs.packet import AttemptRef, GitState, build_packet
 
@@ -374,7 +373,7 @@ async def test_record_transcript_writes_ordered_events_with_usage_once_per_turn(
     assert [c[:4] for c in costs] == [("attempt-1", MODEL, 10, 5)] * 2
 
 
-async def test_timeout_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_error(worktree, tmp_path) -> None:
+async def test_a_crash_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_error(worktree, tmp_path) -> None:
     call = ToolCall(id="t1", name="write_file", arguments={"path": "hello.txt"})
     turn = assistant([call], "toolUse")
     transcripts: list[Transcript] = []
@@ -382,10 +381,10 @@ async def test_timeout_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_
     async def write(transcript: Transcript) -> None:
         transcripts.append(transcript)
 
-    async def hang(**kw: Any) -> Any:
+    async def crash(**kw: Any) -> Any:
         kw["on_loop_event"](Event("done", message=turn))
         kw["on_loop_event"](Event("tool_run_complete", tool_call=call, result=tool_result(call, "wrote 3 bytes")))
-        await asyncio.sleep(10)
+        raise ConnectionResetError("provider closed the connection")
 
     async def agent(_slug: str) -> Agent:
         return Agent()
@@ -396,12 +395,9 @@ async def test_timeout_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_
     async def on_event(_event: Any) -> None:
         return None
 
-    executor = AgentHubExecutor(
-        {**load_defaults(), "max_seconds": 0.05},
-        complete=hang, agent_loader=agent, tool_provisioner=tools, transcript_writer=write,
-    )
+    executor = AgentHubExecutor(complete=crash, agent_loader=agent, tool_provisioner=tools, transcript_writer=write)
     result = await executor.run(packet(), MODEL, worktree, tmp_path, on_event)
-    assert result.status == "failed" and (result.error or "").startswith("timeout")
+    assert result.status == "failed" and (result.error or "").startswith("agent_hub_error")
     (saved,) = transcripts
     assert list(saved.turns) == [turn] and tool_text(saved.tool_results["t1"]) == "wrote 3 bytes"
     assert saved.error == result.error
@@ -423,7 +419,103 @@ async def test_timeout_after_a_tool_turn_keeps_the_turn_and_its_result_then_the_
     finally:
         patch.undo()
     assert [e[0] for e in events] == ["system_message", "user_message", "tool_use", "tool_result", "error"]
-    assert (events[-1][1] or "").startswith("timeout")
+    assert (events[-1][1] or "").startswith("agent_hub_error")
+
+
+async def test_a_run_past_the_old_hour_limit_is_not_ended(worktree, tmp_path) -> None:
+    """Two hours pass on the loop clock while the model works; nothing in the executor ends the attempt for it."""
+
+    from .support import loop_clock
+
+    async def agent(_slug: str) -> Agent:
+        return Agent()
+
+    async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
+        return PROVISIONED
+
+    async def write(_transcript: Transcript) -> None:
+        return None
+
+    async def on_event(_event: Any) -> None:
+        return None
+
+    with loop_clock() as clock:
+        async def slow(**_kw: Any) -> Any:
+            clock.jump(2 * 3600)
+            await asyncio.sleep(0.05)
+            return internal([assistant([TextContent(text=HANDOFF)])])
+
+        executor = AgentHubExecutor(complete=slow, agent_loader=agent, tool_provisioner=tools, transcript_writer=write)
+        result = await executor.run(packet(), MODEL, worktree, tmp_path, on_event)
+    assert result.status == "completed" and result.error is None
+
+
+async def test_loop_events_become_phases_for_the_run_view(worktree, tmp_path) -> None:
+    from .support import recording_live
+
+    call = ToolCall(id="t1", name="write_file", arguments={"path": "hello.txt"})
+    turn = assistant([call], "toolUse")
+    events = [
+        Event("start"),
+        Event("thinking_delta"),
+        Event("text_delta"),
+        Event("toolcall_end", tool_call=call),
+        Event("done", message=turn),
+        Event("tool_run_start", tool_call=call),
+        Event("tool_run_complete", tool_call=call, result=tool_result(call, "ok")),
+        Event("turn_retry", reason="stream stalled"),
+        Event("thinking_delta"),
+        Event("done", message=assistant([TextContent(text=HANDOFF)])),
+    ]
+    with recording_live() as live:
+        await run(worktree, tmp_path, [turn, assistant([TextContent(text=HANDOFF)])], loop_events=events)
+    assert live.history == [
+        "waiting", "thinking", "writing", "tool:write_file", "waiting", "tool:write_file", "waiting",
+        "provider_retry", "thinking", "waiting",
+    ]
+    assert live.last_event_at is not None
+
+
+def metric_turn(retries: list[dict[str, Any]]) -> AssistantMessage:
+    from app.llm.utils.request_metrics import record_request_metrics
+
+    message = assistant([TextContent(text="ok")])
+    record_request_metrics(
+        message, max_gap_s=41.5, keepalives=3, total_s=95.0, outcome="ok", retries=len(retries), retry_log=retries
+    )
+    return message
+
+
+async def test_record_transcript_saves_each_turns_request_record_once(monkeypatch) -> None:
+    """The workflow path persists the same ``model_request`` audit and re-send events a /complete request does."""
+
+    from app.api.complete import request_metrics
+
+    events: list[dict[str, Any]] = []
+
+    async def store_event(_db, session_id, event_type, **kw):
+        events.append({"session_id": session_id, "type": event_type, **kw})
+
+    async def noop(*_a: Any, **_k: Any) -> None:
+        return None
+
+    for module in (agent_hub_transcript, request_metrics):
+        monkeypatch.setattr(module, "store_event", store_event)
+    monkeypatch.setattr(agent_hub_transcript, "log_token_usage", noop)
+    monkeypatch.setattr(agent_hub_transcript, "lock_session_event_ingestion", noop)
+    retried = metric_turn([{"reason": "stream ended early", "delay_s": 2.0}])
+    plain = assistant([TextContent(text="no record")])  # a turn whose provider recorded nothing keeps loop retries
+    transcript = Transcript(
+        "attempt-1", "coder", MODEL, input_messages=[{"role": "user", "content": "goal"}],
+        turns=[retried, plain], retries=[(0, "stream ended early"), (1, "stalled")],
+    )
+    await record_transcript(FakeDb(), transcript)
+    audits = [e for e in events if e["type"] == "tool_audit"]
+    assert len(audits) == 1 and audits[0]["tool_name"] == "model_request"
+    assert audits[0]["tool_output"]["max_gap_s"] == 41.5 and audits[0]["tool_output"]["keepalives"] == 3
+    assert audits[0]["session_id"] == "attempt-1" and audits[0]["agent_id"] == "coder"
+    retries = [e["content"] for e in events if e["type"] == "error"]
+    assert retries == ["turn_retry: stream ended early", "turn_retry: stalled"]  # once each, never twice
 
 
 @pytest.mark.parametrize("module", ["engine", "schemas"])

@@ -12,6 +12,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from app.services.workflow_runs import acceptance
 from app.services.workflow_runs.processes import (
     MARKER_ENV,
@@ -169,7 +171,6 @@ async def test_acceptance_timeout_kills_the_command_and_its_lingering_grandchild
     results = await acceptance.run_acceptance(
         [{"cmd": "sleep 300 & echo $! > gc.pid; wait", "timeout_s": 1}],
         tmp_path,
-        default_timeout=30,
         tail_chars=500,
         drain_seconds=2,
     )
@@ -179,13 +180,45 @@ async def test_acceptance_timeout_kills_the_command_and_its_lingering_grandchild
     assert await gone(int((tmp_path / "gc.pid").read_text()), within=3)
 
 
+async def test_acceptance_has_no_default_time_limit_and_a_commands_own_timeout_still_applies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import inspect
+    from types import SimpleNamespace
+
+    from app.services.workflow_runs import processes
+
+    assert "default_timeout" not in inspect.signature(acceptance.run_acceptance).parameters
+    offset = 0.0
+    monkeypatch.setattr(
+        processes, "time", SimpleNamespace(monotonic=lambda: time.monotonic() + offset, time=time.time)
+    )
+
+    async def two_hours_pass() -> None:
+        nonlocal offset
+        await asyncio.sleep(0.2)
+        offset += 2 * 3600  # far past the 600 s the old default allowed
+
+    passing = asyncio.create_task(two_hours_pass())
+    results = await acceptance.run_acceptance(
+        [{"cmd": "sleep 0.8; echo finished", "timeout_s": None}, {"cmd": "sleep 30", "timeout_s": 1}],
+        tmp_path,
+        tail_chars=500,
+        drain_seconds=2,
+    )
+    await passing
+    unlimited, limited = results
+    assert (unlimited["timed_out"], unlimited["exit_code"], unlimited["passed"]) == (False, 0, True)
+    assert unlimited["output_tail"] == "finished"
+    assert (limited["timed_out"], limited["passed"]) == (True, False)
+
+
 async def test_a_grandchild_holding_the_output_pipe_does_not_turn_a_finished_command_into_a_timeout(
     tmp_path: Path,
 ) -> None:
     (result,) = await acceptance.run_acceptance(
         [{"cmd": "sleep 300 & echo $! > gc.pid; echo checked", "timeout_s": 20}],
         tmp_path,
-        default_timeout=30,
         tail_chars=500,
         drain_seconds=2,
     )

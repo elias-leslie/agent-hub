@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import stat
 from pathlib import Path
@@ -101,6 +102,20 @@ async def run(ex, model: str, tmp_path: Path, **kwargs):
     worktree.mkdir(exist_ok=True)
     result = await ex.run(kwargs.pop("packet", None) or packet(), model, worktree, tmp_path / "run", on_event)
     return result, events
+
+
+def long_run_clock_case():
+    """An ``on_event`` that lets two hours pass on the loop clock at the first event, and the clock it moves."""
+
+    from .support import loop_clock
+
+    return loop_clock()
+
+
+async def hours_pass(clock, event=None) -> None:
+    if not clock.offset:
+        clock.jump(2 * 3600)  # well past the old 3600 s step limit
+        await asyncio.sleep(0.05)
 
 
 def test_executors_register_under_their_kinds():
@@ -280,6 +295,46 @@ async def test_codex_rejects_other_providers_models(tmp_path, codex_home):
     assert result.status == "failed" and result.error.startswith("codex_unsupported")
 
 
+async def test_codex_events_become_phases_thinking_between_items(tmp_path, codex_home):
+    from .support import recording_live
+
+    binary, _ = stub(tmp_path, "codex_exec_completed.jsonl")
+    with recording_live() as live:
+        result, _ = await run(executor("codex", binary), CODEX_MODEL, tmp_path)
+    assert result.status == "completed"
+    # turn.started, a message, a command running (item.started), back to the model, the closing message.
+    assert live.history == ["thinking", "writing", "tool:command", "thinking", "writing"]
+    assert live.last_event_at is not None
+
+
+def test_codex_phase_mapping_names_tools_and_retries():
+    from app.services.workflow_runs.executor_codex import codex_phase
+
+    started = lambda item: {"type": "item.started", "item": item}  # noqa: E731
+    assert codex_phase({"type": "turn.started"}) == "thinking"
+    assert codex_phase(started({"type": "mcp_tool_call", "server": "docs", "tool": "search"})) == "tool:docs.search"
+    assert codex_phase(started({"type": "web_search"})) == "tool:web_search"
+    assert codex_phase({"type": "error", "message": "Reconnecting... 2/5"}) == "provider_retry"
+    assert codex_phase({"type": "turn.completed", "usage": {}}) is None
+    assert codex_phase({"type": "thread.started"}) is None
+
+
+async def test_codex_run_past_the_old_hour_limit_is_not_ended(tmp_path, codex_home):
+    binary, _ = stub(tmp_path, "codex_exec_completed.jsonl")
+    ex = executor("codex", binary)
+    with long_run_clock_case() as clock:
+        events: list[dict] = []
+
+        async def on_event(event):
+            events.append(dict(event))
+            await hours_pass(clock)
+
+        worktree = tmp_path / "worktree"
+        worktree.mkdir(exist_ok=True)
+        result = await ex.run(packet(), CODEX_MODEL, worktree, tmp_path / "run", on_event)
+    assert result.status == "completed" and result.error is None and len(events) > 3
+
+
 async def test_codex_exit_without_a_turn_is_a_failure_with_stderr(tmp_path, codex_home):
     script = tmp_path / "harness"
     script.write_text("#!/bin/sh\ncat >/dev/null\necho boom >&2\nexit 3\n")
@@ -316,6 +371,51 @@ async def test_pi_completed_session(tmp_path):
     assert result.handoff["summary"] == "Created `hello.txt` containing `hi`." and FALLBACK_NOTE in result.handoff["decisions"]
     assert result.progress[0].startswith("tool write") and "hello.txt" in result.progress[0]
     assert events and events[-1]["event"] == "agent_settled"
+
+
+def pi_stream_with_updates(tmp_path: Path) -> str:
+    """The completed Pi fixture with the live records Pi sends while it works (deltas, a tool run, an auto retry)."""
+
+    def update(kind: str, **extra) -> dict:
+        return {"type": "message_update", "message": {}, "assistantMessageEvent": {"type": kind, **extra}}
+
+    live = [
+        {"type": "auto_retry_start", "attempt": 1, "maxAttempts": 3, "delayMs": 2000, "errorMessage": "overloaded"},
+        {"type": "auto_retry_end", "success": True, "attempt": 1},
+        update("thinking_delta", contentIndex=0, delta="hm"),
+        update("text_delta", contentIndex=1, delta="ok"),
+        update("toolcall_delta", contentIndex=2, delta="{", partial={"content": [{}, {}, {"type": "toolCall", "name": "write"}]}),
+        {"type": "tool_execution_start", "toolCallId": "c1", "toolName": "write", "args": {}},
+        {"type": "tool_execution_update", "toolCallId": "c1", "toolName": "write", "args": {}, "partialResult": {}},
+    ]
+    lines = (FIXTURES / "pi_rpc_completed.jsonl").read_text().splitlines()
+    mixed = [*lines[:2], *(json.dumps(r) for r in live), *lines[2:]]
+    path = tmp_path / "pi_with_updates.jsonl"
+    path.write_text("\n".join(mixed) + "\n")
+    return str(path)
+
+
+async def test_pi_records_become_phases_including_retries_and_tool_runs(tmp_path):
+    from .support import recording_live
+
+    binary, _ = stub(tmp_path, pi_stream_with_updates(tmp_path), wait_for_prompt=True)
+    with recording_live() as live:
+        result, _ = await run(executor("pi", binary), CODEX_MODEL, tmp_path)
+    assert result.status == "completed"
+    assert live.history == ["provider_retry", "waiting", "thinking", "writing", "tool:write", "waiting"]
+
+
+async def test_pi_run_past_the_old_hour_limit_is_not_ended(tmp_path):
+    binary, _ = stub(tmp_path, "pi_rpc_completed.jsonl", wait_for_prompt=True)
+    ex = executor("pi", binary)
+    with long_run_clock_case() as clock:
+        async def on_event(event):
+            await hours_pass(clock)
+
+        worktree = tmp_path / "worktree"
+        worktree.mkdir(exist_ok=True)
+        result = await ex.run(packet(), CODEX_MODEL, worktree, tmp_path / "run", on_event)
+    assert result.status == "completed" and result.error is None
 
 
 async def test_pi_response_model_switch_is_a_substitution(tmp_path):

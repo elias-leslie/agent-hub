@@ -17,7 +17,6 @@ provider reports them) per turn, plus cost rows. The run view's per-attempt ``se
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -33,6 +32,7 @@ from .agent_hub_transcript import Transcript, persist_transcript
 from .executor_common import Progress, Usage, build_handoff, clip, load_defaults
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
 from .packet import HandoffPacket
 from .usage import agent_hub_basis, finish_usage
 
@@ -44,10 +44,34 @@ RecordTranscript = Callable[[Transcript], Awaitable[None]]
 logger = logging.getLogger(__name__)
 
 
+def loop_phase(event: Any) -> str | None:
+    """What a tool-loop event says the model or its tools are doing (None: activity that changes nothing)."""
+
+    kind = str(getattr(event, "type", "") or "")
+    if kind.startswith("thinking"):
+        return THINKING
+    if kind.startswith("text"):
+        return WRITING
+    if kind in ("toolcall_start", "toolcall_delta", "toolcall_end"):
+        call = getattr(event, "tool_call", None)
+        if call is None:
+            content = getattr(getattr(event, "partial", None), "content", None) or []
+            index = getattr(event, "content_index", None)
+            call = content[index] if isinstance(index, int) and 0 <= index < len(content) else None
+        return tool_phase(getattr(call, "name", None))
+    if kind == "tool_run_start":
+        return tool_phase(getattr(event.tool_call, "name", None))
+    if kind in ("start", "tool_run_complete", "tool_run_error", "done"):
+        return WAITING
+    if kind == "turn_retry":
+        return PROVIDER_RETRY
+    return None
+
+
 class LoopLog:
     """Collects what the tool loop reports while it runs: finished turns, tool results by call id and retries.
 
-    A timeout or crash ends the loop without a result, so this is what the transcript keeps of the partial run.
+    A crash ends the loop without a result, so this is what the transcript keeps of the partial run.
     """
 
     def __init__(self) -> None:
@@ -61,6 +85,7 @@ class LoopLog:
 
     def __call__(self, event: Any) -> None:
         kind = getattr(event, "type", None)
+        note_live(loop_phase(event))
         if kind in ("tool_run_complete", "tool_run_error"):
             self.tool_results[event.tool_call.id] = event.result
         elif kind == "turn_retry":
@@ -191,31 +216,24 @@ class AgentHubExecutor:
         loop_log = LoopLog()
         transcript = Transcript(attempt.session_id, attempt.agent_slug, model, input_messages=tuple(messages))
         try:
-            result = await asyncio.wait_for(
-                complete(
-                    messages=messages,
-                    model=model,
-                    provider=provider,
-                    temperature=agent.temperature,
-                    project_id=attempt.project_id,
-                    db=None,
-                    session_id=attempt.session_id,
-                    parent_session_id=attempt.run_id,
-                    request_source="workflow_run",
-                    agent_slug=attempt.agent_slug,
-                    thinking_level=thinking_level_for_provider(provider, packet.thinking_level or agent.thinking_level),
-                    max_turns=max_turns,
-                    tools=tools,
-                    execute_tools=True,
-                    working_dir=str(worktree),
-                    on_loop_event=loop_log,
-                ),
-                self.defaults["max_seconds"],
+            result = await complete(
+                messages=messages,
+                model=model,
+                provider=provider,
+                temperature=agent.temperature,
+                project_id=attempt.project_id,
+                db=None,
+                session_id=attempt.session_id,
+                parent_session_id=attempt.run_id,
+                request_source="workflow_run",
+                agent_slug=attempt.agent_slug,
+                thinking_level=thinking_level_for_provider(provider, packet.thinking_level or agent.thinking_level),
+                max_turns=max_turns,
+                tools=tools,
+                execute_tools=True,
+                working_dir=str(worktree),
+                on_loop_event=loop_log,
             )
-        except TimeoutError:
-            error = f"timeout: no completion within {self.defaults['max_seconds']}s"
-            await self._record(self._partial(transcript, loop_log, error))
-            return StepResult("failed", error=error)
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
             error = clip(f"agent_hub_error: {exc!r}", 1000)
             await self._record(self._partial(transcript, loop_log, error))

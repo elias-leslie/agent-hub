@@ -8,6 +8,7 @@ attempt with that output in the next packet (``failure_note``).
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -15,6 +16,8 @@ from typing import Any
 
 from .executor_common import child_env, load_defaults
 from .processes import start_tracked, wait_exit
+
+logger = logging.getLogger(__name__)
 
 
 def commands_of(definition: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -29,7 +32,7 @@ def commands_of(definition: Mapping[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int, drain_seconds: float) -> dict[str, Any]:
+async def _run_one(cmd: str, worktree: Path, timeout: float | None, tail_chars: int, drain_seconds: float) -> dict[str, Any]:
     started = time.monotonic()
     tail = bytearray()
     timed_out = False
@@ -60,6 +63,8 @@ async def _run_one(cmd: str, worktree: Path, timeout: float, tail_chars: int, dr
         await tracked.kill()
         await asyncio.wait({reader}, timeout=drain_seconds)
         reader.cancel()
+    if timed_out:  # the only way a command is cut short: the caller's own limit, so it is logged and recorded
+        logger.warning("acceptance command %r was stopped at its own timeout_s of %ss", cmd, timeout)
     text = tail.decode(errors="replace").strip()
     return {
         "cmd": cmd,
@@ -74,11 +79,13 @@ async def run_acceptance(
     commands: Sequence[Mapping[str, Any]],
     worktree: Path,
     *,
-    default_timeout: float,
     tail_chars: int,
     drain_seconds: float,
 ) -> list[dict[str, Any]]:
-    """Run every command in order (all of them, so one retry sees every failure)."""
+    """Run every command in order (all of them, so one retry sees every failure).
+
+    A command runs until it exits unless the caller gave it a ``timeout_s``; there is no default limit.
+    """
 
     results: list[dict[str, Any]] = []
     for command in commands:
@@ -86,7 +93,7 @@ async def run_acceptance(
             result = await _run_one(
                 command["cmd"],
                 worktree,
-                command.get("timeout_s") or default_timeout,
+                command.get("timeout_s"),
                 tail_chars,
                 drain_seconds,
             )

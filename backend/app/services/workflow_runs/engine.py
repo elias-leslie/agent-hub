@@ -35,6 +35,7 @@ from app.services.session_live_activity import mark_session_completed
 
 from . import acceptance as acceptance_runner
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
+from .live import LiveStatus, current_live
 from .packet import AttemptRef, GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
 from .policy import (
     AttemptResult,
@@ -52,7 +53,14 @@ from .policy import (
     pause_reason,
     usage_limit_cooldown,
 )
-from .processes import ProcessIdentity, ProcessTracker, current_tracker, stop_group, stop_marked
+from .processes import (
+    ProcessIdentity,
+    ProcessTracker,
+    current_tracker,
+    read_stat,
+    stop_group,
+    stop_marked,
+)
 from .schemas import CancelRequest, OwnerDecision, RunDefinition
 from .settings import get_workflow_run_settings
 from .usage import cost_of, record_attempt_cost, usage_totals
@@ -292,8 +300,29 @@ def _scratch(step: WorkflowStep) -> dict[str, Any]:
     return dict(step.outcome or {})
 
 
-def _step_state(step: WorkflowStep, chain: list[str] | None = None) -> StepState:
-    scratch = _scratch(step)
+def _work_of(usage: Mapping[str, Any] | None) -> int:
+    """Tokens an attempt used, the measure of whether it made progress (zero for one that failed before the model ran)."""
+
+    counts = usage or {}
+    return sum(
+        value
+        for key in ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens")
+        if isinstance(value := counts.get(key), int) and not isinstance(value, bool)
+    )
+
+
+def _unproductive_resumes(scratch: Mapping[str, Any]) -> int:
+    """Usage-limit waits in a row that followed no new tokens; 0 once work was done since the previous resume."""
+
+    if scratch.get("work_total", 0) > scratch.get("work_at_resume", 0):
+        return 0
+    return int(scratch.get("unproductive_resumes", 0))
+
+
+def _step_state(
+    step: WorkflowStep, chain: list[str] | None = None, scratch: dict[str, Any] | None = None
+) -> StepState:
+    scratch = _scratch(step) if scratch is None else scratch
     return StepState(
         chain=tuple(chain if chain is not None else scratch.get("chain", ())),
         tried=tuple(scratch.get("tried", ())),
@@ -301,15 +330,29 @@ def _step_state(step: WorkflowStep, chain: list[str] | None = None) -> StepState
         max_attempts=step.definition.get("max_attempts"),
         pinned_model=scratch.get("pinned_model"),
         usage_limited=tuple(scratch.get("usage_limited", ())),
-        usage_limit_resumes=scratch.get("usage_limit_resumes", 0),
+        unproductive_resumes=_unproductive_resumes(scratch),
         acceptance_failures=scratch.get("acceptance_failures", 0),
+        extra_attempts=_extra_attempts(scratch),
     )
 
 
+def _extra_attempts(scratch: Mapping[str, Any]) -> int:
+    """Attempts the owner granted this step past its cap, in all."""
+
+    return int((scratch.get("extra_attempts") or {}).get("total", 0))
+
+
 def _retry_after_limit(scratch: dict[str, Any]) -> None:
-    """Waiting out a usage limit: the limited models may run again once the pause ends (one resume used)."""
+    """Waiting out a usage limit: the limited models may run again once the pause ends.
+
+    The wait counts as unproductive only when no tokens were used since the previous resume.
+    """
 
     scratch["usage_limit_resumes"] = scratch.get("usage_limit_resumes", 0) + 1
+    scratch["unproductive_resumes"] = _unproductive_resumes(scratch) + (
+        1 if scratch.get("work_total", 0) <= scratch.get("work_at_resume", 0) else 0
+    )
+    scratch["work_at_resume"] = scratch.get("work_total", 0)
     limited = set(scratch.get("usage_limited", ()))
     scratch["tried"] = [m for m in scratch.get("tried", []) if m not in limited]
     scratch["usage_limited"] = []
@@ -505,6 +548,8 @@ class _Heartbeat:
         attempt_id: str,
         interval: float,
         on_cancel: Callable[[], Awaitable[None]] | None = None,
+        live: LiveStatus | None = None,
+        tracker: ProcessTracker | None = None,
     ) -> None:
         self.deps, self.run_id, self.step_id, self.attempt_id, self.interval = (
             deps,
@@ -514,14 +559,39 @@ class _Heartbeat:
             interval,
         )
         self.on_cancel = on_cancel
+        self.live = live
+        self.tracker = tracker
         self.cancelled = False
         self._last = deps.clock()
         self._task: asyncio.Task[None] | None = None
         self._interrupt: asyncio.Task[None] | None = None
 
+    async def _liveness(self) -> dict[str, Any] | None:
+        """The attempt's phase, time of its harness's last event and whether the harness process is alive.
+
+        Shown, never acted on: a harness that has been quiet for a long time is thinking, not stuck. In-process
+        executors have no harness (``harness_pid`` is null).
+        """
+
+        if self.live is None:
+            return None
+        harness = self.tracker.harness() if self.tracker is not None else None
+        pid = harness.process.pid if harness is not None else None
+        alive = None
+        if harness is not None:
+            stat = await asyncio.to_thread(read_stat, pid) if pid is not None else None
+            alive = harness.process.returncode is None and stat is not None and stat.state != "Z"
+        return {
+            **self.live.snapshot(),
+            "harness_pid": pid,
+            "harness_alive": alive,
+            "updated_at": self._last,
+        }
+
     async def beat(self) -> None:
         self._last = self.deps.clock()
         cancel: dict[str, Any] | None = None
+        liveness = await self._liveness()
         try:
             async with self.deps.factory()() as db:
                 step = await db.get(WorkflowStep, self.step_id)
@@ -531,11 +601,15 @@ class _Heartbeat:
                     and step.current_attempt_session_id == self.attempt_id
                 ):
                     step.heartbeat_at = _dt(self._last)
-                    attempt = await db.get(Session, self.attempt_id)
+                    attempt = await db.get(Session, self.attempt_id, with_for_update=True)
                     if (
                         attempt is not None
                     ):  # keeps the cleanup/reaper heuristics off a live attempt
                         attempt.last_heartbeat_at = attempt.last_activity_at = _dt(self._last)
+                        if liveness is not None:
+                            meta = dict(attempt.provider_metadata or {})
+                            meta["live_activity"] = {**(meta.get("live_activity") or {}), "workflow": liveness}
+                            attempt.provider_metadata = meta
                     run = await db.get(Session, self.run_id)
                     cancel = _cancel_request(_meta(run), step) if run is not None else None
                     await db.commit()
@@ -573,7 +647,7 @@ async def _record_process(deps: EngineDeps, attempt_id: str, entry: dict[str, An
     """Note a process the attempt started (pid, group, start time) on the attempt, so recovery can find it."""
 
     async with deps.factory()() as db:
-        attempt = await db.get(Session, attempt_id)
+        attempt = await db.get(Session, attempt_id, with_for_update=True)
         if attempt is None:
             return
         meta = dict(attempt.provider_metadata or {})
@@ -644,7 +718,9 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
                 await db.commit()
                 return {"next": "stop", "reason": "no_agent_route"}, None
         state = _step_state(step, scratch["chain"])
-        cap = attempts_exhausted(state.attempts, state.max_attempts, load_policy(meta["policy"]))
+        cap = attempts_exhausted(
+            state.attempts, state.max_attempts, load_policy(meta["policy"]), state.extra_attempts
+        )
         if cap:  # no path may start another attempt past the cap
             step.status = "failed"
             step.outcome = scratch
@@ -837,6 +913,7 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
         intent.attempt_id, lambda entry: _record_process(deps, intent.attempt_id, entry)
     )
     grace = policy.process_stop_grace_seconds
+    live = LiveStatus()
     work: asyncio.Task[StepResult] | None = None
 
     async def run_step() -> StepResult:
@@ -853,7 +930,6 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
             info["acceptance"] = await acceptance_runner.run_acceptance(
                 commands,
                 workspace.worktree,
-                default_timeout=policy.acceptance_timeout_seconds,
                 tail_chars=policy.acceptance_output_tail_chars,
                 drain_seconds=policy.acceptance_drain_seconds,
             )
@@ -874,16 +950,20 @@ async def _run_effect(intent: _Intent, deps: EngineDeps) -> tuple[StepResult, di
         intent.attempt_id,
         policy.heartbeat_interval_seconds,
         on_cancel=interrupt,
+        live=live,
+        tracker=tracker,
     ) as heartbeat:
         await heartbeat.beat()  # a stop asked for before the executor starts is seen now, not an interval later
         if heartbeat.cancelled:
             result = StepResult("failed", error="cancelled")
         else:
             token = current_tracker.set(tracker)  # the executor's task starts with a copy of this context
+            live_token = current_live.set(live)
             try:
                 work = asyncio.create_task(run_step())
             finally:
                 current_tracker.reset(token)
+                current_live.reset(live_token)
             try:
                 result = await work
             except asyncio.CancelledError:
@@ -1002,6 +1082,8 @@ async def _commit_outcome(
         policy = load_policy(meta["policy"])
         # Read under the run lock, so a stop asked for while the step finished still wins.
         cancel = _cancel_request(meta, step)
+        scratch = _scratch(step)
+        scratch["work_total"] = scratch.get("work_total", 0) + _work_of(result.usage)
         decision = decide_after_attempt(
             model=intent.model,
             result=AttemptResult(
@@ -1014,7 +1096,7 @@ async def _commit_outcome(
                 ),
                 cancelled=cancel is not None,
             ),
-            step=_step_state(step),
+            step=_step_state(step, scratch=scratch),
             run=_run_state(meta),
             policy=policy,
             owner_only_categories=deps.owner_only(),
@@ -1031,7 +1113,6 @@ async def _commit_outcome(
             usage=result.usage,
         )
         steps = await _steps(db, run_id)
-        scratch = _scratch(step)
         last = {
             "attempt": intent.attempt_no,
             "model": intent.model,
@@ -1288,6 +1369,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             max_attempts=step.definition.get("max_attempts"),
             policy=policy,
             cancelled=cancel is not None,
+            extra_attempts=_extra_attempts(scratch),
         )
         if verdict == "retry":
             step.restarts += 1  # restarts counts the ones actually used
@@ -1387,7 +1469,13 @@ async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
 
 
 async def resume_run(
-    db: AsyncSession, run_id: str, decision: OwnerDecision, *, deps: EngineDeps | None = None
+    db: AsyncSession,
+    run_id: str,
+    decision: OwnerDecision,
+    *,
+    requested_by: str | None = None,
+    request_source: str | None = None,
+    deps: EngineDeps | None = None,
 ) -> dict[str, Any]:
     deps = deps or EngineDeps()
     now = deps.clock()
@@ -1411,18 +1499,39 @@ async def resume_run(
         "action": decision.action,
         "model": decision.model,
         "note": decision.note,
+        "extra_attempts": decision.extra_attempts,
         "at": now,
     }
     category = (meta.get("pause") or {}).get("category")
     if decision.action == "retry":
         # A fresh pass over the agent's chain (or the model the owner names); the worktree is kept.
+        if decision.extra_attempts:
+            # An explicit, recorded raise of this step's cap; only the owner can ask for it.
+            earlier: list[dict[str, Any]] = list((scratch.get("extra_attempts") or {}).get("grants", []))
+            scratch["extra_attempts"] = {
+                "total": _extra_attempts(scratch) + decision.extra_attempts,
+                "grants": [
+                    *earlier,
+                    {
+                        "count": decision.extra_attempts,
+                        "requested_by": requested_by,
+                        "request_source": request_source,
+                        "requested_at": now,
+                        "note": decision.note,
+                    },
+                ],
+            }
         cap = attempts_exhausted(
-            step.attempts, step.definition.get("max_attempts"), load_policy(meta["policy"])
+            step.attempts,
+            step.definition.get("max_attempts"),
+            load_policy(meta["policy"]),
+            _extra_attempts(scratch),
         )
         if cap:
             raise WorkflowRunError(
                 "attempt_limit",
-                f"step {step.step_key} has used its attempts ({step.attempts}, {cap}); skip it or end the run",
+                f"step {step.step_key} has used its attempts ({step.attempts}, {cap}); "
+                "resume with extra_attempts to allow more, skip it or end the run",
             )
         refusals = {k: v for k, v in meta.get("refusals", {}).items() if k != category}
         scratch.update(
@@ -1431,6 +1540,8 @@ async def resume_run(
             pinned_model=decision.model,
             hop=None,
             usage_limit_resumes=0,
+            unproductive_resumes=0,
+            work_at_resume=scratch.get("work_total", 0),
             acceptance_failures=0,
         )
         scratch.pop("acceptance_note", None)
@@ -1573,7 +1684,7 @@ def _limits(policy: RunPolicy) -> dict[str, int]:
         key: getattr(policy, key)
         for key in (
             "max_total_attempts",
-            "max_usage_limit_resumes",
+            "max_unproductive_usage_limit_resumes",
             "acceptance_retry_limit",
             "restart_limit",
             "refusal_pause_threshold",
@@ -1604,8 +1715,18 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         .all()
     )
     attempts: dict[str, list[dict[str, Any]]] = {}
+    live: dict[str, dict[str, Any]] = {}
     for child in children:
         pm = child.provider_metadata or {}
+        shown = (pm.get("live_activity") or {}).get("workflow")
+        if isinstance(shown, dict) and child.status == "active":
+            live[child.id] = {
+                "phase": shown.get("phase"),
+                "last_event_at": _iso(shown.get("last_event_at")),
+                "harness_pid": shown.get("harness_pid"),
+                "harness_alive": shown.get("harness_alive"),
+                "updated_at": _iso(shown.get("updated_at")),
+            }
         detail = pm.get("workflow_attempt")
         if not detail:
             continue
@@ -1676,9 +1797,13 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "agent_slug": s.definition["agent_slug"],
                 "chain": _scratch(s).get("chain"),
                 "attempts": s.attempts,
-                "attempt_limit": attempt_limit(s.definition.get("max_attempts"), policy),
+                "attempt_limit": attempt_limit(
+                    s.definition.get("max_attempts"), policy, _extra_attempts(_scratch(s))
+                ),
+                "extra_attempts": _scratch(s).get("extra_attempts"),
                 "restarts": s.restarts,
                 "usage_limit_resumes": _scratch(s).get("usage_limit_resumes", 0),
+                "unproductive_resumes": _unproductive_resumes(_scratch(s)),
                 "acceptance_failures": _scratch(s).get("acceptance_failures", 0),
                 "acceptance": acceptance_runner.commands_of(s.definition),
                 "effort": s.definition.get("effort"),
@@ -1692,6 +1817,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "cancel": _scratch(s).get("cancel"),
                 "cancelling": s.status == "running" and _scratch(s).get("cancel") is not None,
                 "heartbeat_at": s.heartbeat_at.isoformat() if s.heartbeat_at else None,
+                "live": live.get(s.current_attempt_session_id) if s.status == "running" else None,
                 "attempt_history": attempts.get(s.step_key, []),
             }
             for s in steps

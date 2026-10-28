@@ -6,6 +6,7 @@ import type {
   CostTotals,
   RunPause,
   RunState,
+  StepLive,
   StepStatus,
   WorkflowAttempt,
 } from '@/lib/api/workflow-runs'
@@ -261,4 +262,79 @@ export function ofLimit(count: number, limit: number | undefined): string {
 /** A count that has used all of its cap is worth a second look. */
 export function atLimit(count: number, limit: number | undefined): boolean {
   return limit !== undefined && limit > 0 && count >= limit
+}
+
+/** Seconds of silence in a saved status before the page says it may be out of date. */
+const LIVE_STATUS_STALE_SECONDS = 120
+
+export interface LiveStatusText {
+  phase: string | null
+  phaseText: string
+  activityText: string
+  process: 'alive' | 'gone' | 'inside' | 'unknown'
+  processText: string
+  staleText: string | null
+}
+
+function ageText(iso: string | null | undefined, now: number): string | null {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return null
+  const secs = Math.max(0, Math.floor((now - then) / 1000))
+  if (secs < 60) return `${secs}s ago`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
+  return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m ago`
+}
+
+/** The running attempt's phase, last activity and process state in plain words; unknown is not idle. */
+export function liveStatus(
+  live: StepLive | null | undefined,
+  now: number = Date.now(),
+): LiveStatusText {
+  if (!live) {
+    return {
+      phase: null,
+      phaseText: 'Working',
+      activityText: 'no live status reported yet',
+      process: 'unknown',
+      processText: 'process state unknown',
+      staleText: null,
+    }
+  }
+  const phase = live.phase
+  let phaseText = 'Working'
+  if (phase === 'thinking') phaseText = 'Thinking'
+  else if (phase === 'writing') phaseText = 'Writing'
+  else if (phase === 'waiting') phaseText = 'Waiting on the model'
+  else if (phase === 'provider_retry') phaseText = 'Provider retrying'
+  else if (phase?.startsWith('tool:'))
+    phaseText = `Running tool ${phase.slice('tool:'.length)}`
+  const seen = ageText(live.last_event_at, now)
+  let process: LiveStatusText['process'] = 'unknown'
+  let processText = 'process state unknown'
+  if (live.harness_pid === null && live.harness_alive === null) {
+    process = 'inside'
+    processText = 'no child process'
+  } else if (live.harness_alive === true) {
+    process = 'alive'
+    processText = 'process alive'
+  } else if (live.harness_alive === false) {
+    process = 'gone'
+    processText = 'process not found'
+  }
+  const saved = ageText(live.updated_at, now)
+  const savedSecs = live.updated_at
+    ? (now - new Date(live.updated_at).getTime()) / 1000
+    : null
+  return {
+    phase,
+    phaseText,
+    activityText: seen ? `last activity ${seen}` : 'no activity seen yet',
+    process,
+    processText,
+    staleText:
+      savedSecs !== null && savedSecs > LIVE_STATUS_STALE_SECONDS
+        ? `status saved ${saved}`
+        : null,
+  }
 }

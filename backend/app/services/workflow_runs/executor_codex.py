@@ -37,6 +37,7 @@ from .executor_common import (
     thinking_level,
 )
 from .executors import OnEvent, StepResult, register_executor
+from .live import PROVIDER_RETRY, THINKING, WRITING, note_live, tool_phase
 from .packet import HandoffPacket
 from .usage import codex_windows, finish_usage, harness_basis
 
@@ -129,6 +130,33 @@ def reroute_outcome(requested: str, event: Mapping[str, Any]) -> ProviderOutcome
     )
 
 
+def codex_phase(event: Mapping[str, Any]) -> str | None:
+    """What a ``codex exec --json`` event says Codex is doing.
+
+    Reasoning is not streamed, so between a turn start or a finished item and the next item the model is "thinking".
+    """
+
+    kind = str(event.get("type") or "")
+    if kind == "turn.started":
+        return THINKING
+    if kind == "error":  # a stream error the turn may still recover from (reconnecting)
+        return PROVIDER_RETRY
+    if kind not in ("item.started", "item.completed"):
+        return None
+    item = event.get("item")
+    item = item if isinstance(item, Mapping) else {}
+    item_type = item.get("type")
+    if item_type == "agent_message":
+        return WRITING
+    if kind == "item.completed":
+        return THINKING
+    if item_type == "command_execution":
+        return tool_phase("command")
+    if item_type == "mcp_tool_call":
+        return tool_phase(f"{item.get('server')}.{item.get('tool')}" if item.get("server") else item.get("tool"))
+    return tool_phase(item_type)
+
+
 class CodexExecutor:
     def __init__(self, defaults: Mapping[str, Any] | None = None, model_lookup: Any = None) -> None:
         self.defaults = dict(defaults or load_defaults())
@@ -198,15 +226,14 @@ class CodexExecutor:
         state = _Attempt(model, upstream, self.defaults)
         try:
             await harness.write(packet.render().encode(), close=True)
-            await asyncio.wait_for(self._consume(harness, state, on_event), self.defaults["max_seconds"])
-        except TimeoutError:
-            state.error = f"timeout: no completion within {self.defaults['max_seconds']}s"
+            await self._consume(harness, state, on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
         return await self._result(state, harness, worktree)
 
     async def _consume(self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent) -> None:
         async for event in harness.records():
+            note_live(codex_phase(event))
             await on_event({"type": "codex_event", "event": event.get("type"), "at": time.time()})
             state.handle(event)
 

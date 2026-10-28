@@ -10,6 +10,7 @@ from app.services.workflow_runs.policy import (
     RunState,
     StepState,
     Unavailable,
+    attempt_limit,
     choose_attempt_model,
     decide_after_attempt,
     decide_stale_step,
@@ -192,16 +193,49 @@ def test_every_retrying_path_stops_at_the_total_attempt_cap() -> None:
     )
 
 
-def test_usage_limit_waits_resume_a_limited_number_of_times_then_the_owner_decides() -> None:
+def test_usage_limit_waits_pause_for_the_owner_only_after_consecutive_waits_without_progress() -> None:
     limit = AttemptResult(
         "failed", ProviderOutcome("usage_limit", OPUS, resets_at=int(NOW) + 300), error="limit"
     )
     blocked = {OPUS: Unavailable("cooldown", 300.0)}
     chain = (OPUS,)
-    waiting = decide(OPUS, limit, chain=chain, unavailable=blocked, usage_limit_resumes=POLICY.max_usage_limit_resumes - 1)
+    waiting = decide(OPUS, limit, chain=chain, unavailable=blocked, unproductive_resumes=POLICY.max_unproductive_usage_limit_resumes - 1)
     assert (waiting.reason, waiting.wait_until) == ("usage_limit_wait", NOW + 300)
-    spent = decide(OPUS, limit, chain=chain, unavailable=blocked, usage_limit_resumes=POLICY.max_usage_limit_resumes)
+    spent = decide(OPUS, limit, chain=chain, unavailable=blocked, unproductive_resumes=POLICY.max_unproductive_usage_limit_resumes)
     assert (spent.action, spent.reason, spent.wait_until) == ("needs_owner", "usage_limit_resume_limit", None)
+
+
+def test_waiting_costs_nothing_so_a_wait_that_followed_progress_never_counts() -> None:
+    """The engine hands the policy ``unproductive_resumes`` already reset to 0 when the attempt just ended did work."""
+
+    limit = AttemptResult(
+        "failed", ProviderOutcome("usage_limit", OPUS, resets_at=int(NOW) + 300), error="limit"
+    )
+    blocked = {OPUS: Unavailable("cooldown", 300.0)}
+    for resumes in range(0, 50, 7):
+        # Any number of earlier waits: with progress the count the engine passes is 0, so the step keeps waiting.
+        assert decide(OPUS, limit, chain=(OPUS,), unavailable=blocked, unproductive_resumes=0).reason == "usage_limit_wait", resumes
+
+
+def test_the_owner_can_raise_one_steps_attempt_cap_but_loops_never_do() -> None:
+    total = POLICY.max_total_attempts
+    error = AttemptResult("failed", error="boom")
+    assert decide(OPUS, error, attempts=total).reason.startswith("max_total_attempts")
+    granted = decide(OPUS, error, attempts=total, extra_attempts=2)
+    assert granted.action == "retry"
+    assert decide(OPUS, error, attempts=total + 2, extra_attempts=2).action == "fail"
+    assert attempt_limit(None, POLICY, 3) == total + 3 and attempt_limit(2, POLICY, 1) == 3
+    # A step's own max_attempts is raised by the grant too: that is what "this step's cap" means.
+    assert decide(OPUS, error, attempts=1, max_attempts=1, extra_attempts=1).action == "retry"
+    assert decide_stale_step(restarts=0, attempts=total, max_attempts=None, policy=POLICY) == "fail"
+    assert decide_stale_step(restarts=0, attempts=total, max_attempts=None, policy=POLICY, extra_attempts=1) == "retry"
+
+
+def test_retired_policy_keys_are_dropped_so_stored_runs_still_load() -> None:
+    policy = load_policy({"acceptance_timeout_seconds": 600, "max_usage_limit_resumes": 3, "restart_limit": 5})
+    assert policy.restart_limit == 5 and not hasattr(policy, "acceptance_timeout_seconds")
+    with pytest.raises(ValueError):
+        load_policy({"no_such_key": 1})
 
 
 def test_failed_acceptance_retries_the_same_model_until_the_retry_limit_then_fails() -> None:

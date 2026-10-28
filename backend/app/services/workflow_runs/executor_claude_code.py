@@ -9,7 +9,6 @@ never reads or forwards credentials. The native JSONL transcript stays where Cla
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 import time
@@ -32,6 +31,7 @@ from .executor_common import (
 )
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
 from .packet import HandoffPacket
 from .usage import finish_usage, harness_basis
 
@@ -51,6 +51,37 @@ def transcript_path(session_id: str | None, worktree: Path, home: Path | None = 
         return expected
     found = sorted(projects.glob(f"*/{session_id}.jsonl"))
     return found[-1] if found else None
+
+
+def claude_phase(event: Mapping[str, Any]) -> str | None:
+    """What a Claude Code stream event says the model is doing (None: the event is activity but changes nothing)."""
+
+    kind = event.get("type")
+    if kind == "stream_event":
+        inner = event.get("event")
+        inner = inner if isinstance(inner, Mapping) else {}
+        part = inner.get("content_block") if inner.get("type") == "content_block_start" else inner.get("delta")
+        part = part if isinstance(part, Mapping) else {}
+        shape = part.get("type")
+        if shape in ("thinking", "thinking_delta", "redacted_thinking"):
+            return THINKING
+        if shape in ("text", "text_delta"):
+            return WRITING
+        if shape in ("tool_use", "server_tool_use"):
+            return tool_phase(part.get("name"))
+        return None
+    if kind == "system":
+        subtype = event.get("subtype")
+        if subtype == "api_retry":
+            return PROVIDER_RETRY
+        return WAITING if subtype == "init" else None
+    if kind == "assistant":
+        blocks = (event.get("message") or {}).get("content") or []
+        calls = [b for b in blocks if isinstance(b, Mapping) and b.get("type") == "tool_use"]
+        return tool_phase(calls[-1].get("name")) if calls else None
+    if kind == "user":  # tool results are in: the model is being asked again
+        return WAITING
+    return None
 
 
 def refusal_event(category: str, explanation: str) -> dict[str, Any]:
@@ -88,6 +119,9 @@ class ClaudeCodeExecutor:
             "--output-format",
             "stream-json",
             "--verbose",
+            # Thinking and text deltas arrive as stream_event lines: liveness only, the transcript and usage come
+            # from the complete assistant and result events.
+            "--include-partial-messages",
             "--model",
             upstream,
             "--effort",
@@ -121,15 +155,14 @@ class ClaudeCodeExecutor:
         try:
             turn = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": packet.render()}]}}
             await harness.write(json.dumps(turn).encode() + b"\n", close=True)
-            await asyncio.wait_for(self._consume(harness, state, on_event), self.defaults["max_seconds"])
-        except TimeoutError:
-            state.error = f"timeout: no completion within {self.defaults['max_seconds']}s"
+            await self._consume(harness, state, on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
         return await self._result(state, harness, worktree)
 
     async def _consume(self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent) -> None:
         async for event in harness.records():
+            note_live(claude_phase(event))
             await on_event({"type": "claude_code_event", "event": event.get("type"), "at": time.time()})
             state.handle(event)
             if state.injected or event.get("type") == "result":

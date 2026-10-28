@@ -68,8 +68,8 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           data-testid="run-limits"
         >
           Limits per step: {run.limits.max_total_attempts} attempts ·{' '}
-          {run.limits.max_usage_limit_resumes} usage-limit resumes ·{' '}
-          {run.limits.acceptance_retry_limit} acceptance retries ·{' '}
+          {run.limits.max_unproductive_usage_limit_resumes} idle usage-limit
+          resumes · {run.limits.acceptance_retry_limit} acceptance retries ·{' '}
           {run.limits.restart_limit} restarts
           {' · '}
           {run.limits.refusal_pause_threshold} refusals per category in the run

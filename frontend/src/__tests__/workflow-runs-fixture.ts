@@ -89,7 +89,7 @@ export function run(
     refusals: {},
     limits: {
       max_total_attempts: 12,
-      max_usage_limit_resumes: 3,
+      max_unproductive_usage_limit_resumes: 3,
       acceptance_retry_limit: 2,
       restart_limit: 2,
       refusal_pause_threshold: 12,

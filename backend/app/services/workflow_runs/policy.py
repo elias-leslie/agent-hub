@@ -18,6 +18,9 @@ from app.llm.utils.outcomes import ProviderOutcome
 
 DEFAULTS_FILE = Path(__file__).with_name("policy_defaults.json")
 
+# Keys runs stored (or callers sent) before they were removed or renamed; dropped on load so old runs still open.
+RETIRED_KEYS = frozenset({"acceptance_timeout_seconds", "max_usage_limit_resumes"})
+
 
 @dataclass(frozen=True)
 class RunPolicy:
@@ -31,12 +34,12 @@ class RunPolicy:
     # Hard cap on attempts of one step on every path: errors, refusals, substitutions, usage-limit cycles,
     # acceptance retries, restarts and owner retries. A step's own ``max_attempts`` may lower it.
     max_total_attempts: int
-    # Times a step waits out a usage limit and resumes by itself before it pauses for the owner instead.
-    max_usage_limit_resumes: int
+    # Consecutive usage-limit waits after which the step made no progress (no new tokens since the previous resume)
+    # before it pauses for the owner instead. A wait that follows progress resets the count: waiting costs nothing,
+    # a loop that never gets anywhere is the failure.
+    max_unproductive_usage_limit_resumes: int
     # Retries of a step whose acceptance commands failed, before the step fails.
     acceptance_retry_limit: int
-    # Per acceptance command, unless the command sets its own ``timeout_s``.
-    acceptance_timeout_seconds: int
     acceptance_output_tail_chars: int
     # How long a finished or killed acceptance command's output is read for, so an escaped grandchild that still
     # holds the pipe cannot hold the step up.
@@ -62,10 +65,11 @@ def load_policy(
     """Defaults from the data file, with a run's own ``policy`` overrides merged over them."""
 
     data: dict[str, Any] = json.loads(path.read_text())
-    unknown = set(overrides or {}) - set(data)
+    overrides = {k: v for k, v in (overrides or {}).items() if k not in RETIRED_KEYS}
+    unknown = set(overrides) - set(data)
     if unknown:
         raise ValueError(f"unknown policy keys: {sorted(unknown)}")
-    for key, value in (overrides or {}).items():
+    for key, value in overrides.items():
         data[key] = {**data[key], **value} if isinstance(data[key], dict) else value
     return RunPolicy(**data)
 
@@ -88,9 +92,12 @@ class StepState:
     pinned_model: str | None = None  # restart or owner pin: run this model next
     # Tried models whose attempt ended on a usage limit; their reset still counts as a way forward.
     usage_limited: tuple[str, ...] = ()
-    # Waits out of a usage limit the step has already resumed from, and acceptance failures it has used.
-    usage_limit_resumes: int = 0
+    # Consecutive waits out of a usage limit after which the step still had no progress (the engine has already
+    # reset it to 0 when the attempt just ended did make progress), and acceptance failures the step has used.
+    unproductive_resumes: int = 0
     acceptance_failures: int = 0
+    # Attempts the owner granted past the cap (``resume`` with ``extra_attempts``).
+    extra_attempts: int = 0
 
 
 @dataclass(frozen=True)
@@ -209,13 +216,13 @@ def _move_on(
 def pause_reason(choice: ModelChoice, step: StepState, policy: RunPolicy) -> str:
     """Why a step with no model to run now waits for the owner or for a usage-limit reset.
 
-    A wait for a reset resumes by itself, at most ``max_usage_limit_resumes`` times per step; after that the
-    owner decides.
+    A wait for a reset resumes by itself; only waits that follow no progress count, and after
+    ``max_unproductive_usage_limit_resumes`` of them in a row the owner decides.
     """
 
     if choice.wait_until is None:
         return "chain_exhausted"
-    if step.usage_limit_resumes >= policy.max_usage_limit_resumes:
+    if step.unproductive_resumes >= policy.max_unproductive_usage_limit_resumes:
         return "usage_limit_resume_limit"
     return "usage_limit_wait"
 
@@ -229,16 +236,19 @@ def replace_tried(step: StepState, model: str, *, usage_limited: bool = False) -
     )
 
 
-def attempt_limit(max_attempts: int | None, policy: RunPolicy) -> int:
-    """Attempts one step may use in all: the run policy's hard cap, lowered by the step's own ``max_attempts``."""
+def attempt_limit(max_attempts: int | None, policy: RunPolicy, extra_attempts: int = 0) -> int:
+    """Attempts one step may use in all: the run policy's hard cap, lowered by the step's own ``max_attempts``,
+    raised by the attempts the owner granted that step (automatic loops never grant any)."""
 
-    return min(policy.max_total_attempts, max_attempts or policy.max_total_attempts)
+    return min(policy.max_total_attempts, max_attempts or policy.max_total_attempts) + extra_attempts
 
 
-def attempts_exhausted(attempts: int, max_attempts: int | None, policy: RunPolicy) -> str | None:
+def attempts_exhausted(
+    attempts: int, max_attempts: int | None, policy: RunPolicy, extra_attempts: int = 0
+) -> str | None:
     """The cap that forbids another attempt of a step that already ran ``attempts``, else None."""
 
-    if attempts < attempt_limit(max_attempts, policy):
+    if attempts < attempt_limit(max_attempts, policy, extra_attempts):
         return None
     return "max_attempts" if max_attempts and max_attempts < policy.max_total_attempts else "max_total_attempts"
 
@@ -265,7 +275,7 @@ def decide_after_attempt(
         model, result, step, run, policy, owner_only_categories, unavailable, now
     )
     if decision.action == "retry":
-        cap = attempts_exhausted(step.attempts, step.max_attempts, policy)
+        cap = attempts_exhausted(step.attempts, step.max_attempts, policy, step.extra_attempts)
         if cap:
             return replace(decision, action="fail", reason=f"{cap}: {decision.reason}", next_model=None, hop=None)
     return decision
@@ -364,7 +374,13 @@ def _decide(
 
 
 def decide_stale_step(
-    *, restarts: int, attempts: int, max_attempts: int | None, policy: RunPolicy, cancelled: bool = False
+    *,
+    restarts: int,
+    attempts: int,
+    max_attempts: int | None,
+    policy: RunPolicy,
+    cancelled: bool = False,
+    extra_attempts: int = 0,
 ) -> Literal["retry", "fail", "cancelled"]:
     """A running step with a stale heartbeat restarts while it has used fewer than ``restart_limit`` restarts.
 
@@ -374,6 +390,6 @@ def decide_stale_step(
 
     if cancelled:
         return "cancelled"
-    if restarts >= policy.restart_limit or attempts_exhausted(attempts, max_attempts, policy):
+    if restarts >= policy.restart_limit or attempts_exhausted(attempts, max_attempts, policy, extra_attempts):
         return "fail"
     return "retry"
