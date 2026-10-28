@@ -38,6 +38,8 @@ DEFAULT_PROVIDER = {
 # Consumer tag for a session whose Aico/A-Term widget Tether marks as a
 # coordinator; coordinator-only memories target it through applicability.
 COORDINATOR_TAG = "aico-coordinator"
+WORK_ROLE_TAG_PREFIX = "work-role:"
+CHILD_HOOK_KEYS = ("agent_id", "subagent_id", "subagent_type", "agent_type", "parent_session_id")
 TETHER_TIMEOUT_SECONDS = 1.0
 TETHER_BODY_LIMIT = 1 << 16
 
@@ -246,6 +248,9 @@ async def _resolve_metadata(args: argparse.Namespace, hook: dict[str, Any]) -> d
         and await asyncio.to_thread(_tether_coordinator, native_metadata.get("aico_widget_id"))
     ):
         consumer_tags.append(COORDINATOR_TAG)
+    role_tag = _work_role_tag(hook, hook_event)
+    if args.command != "bind" and role_tag and role_tag not in consumer_tags:
+        consumer_tags.append(role_tag)
 
     return {
         "surface": args.surface,
@@ -794,6 +799,21 @@ def _launch_work_role() -> dict[str, str] | None:
     return declaration
 
 
+def _child_hook(hook: dict[str, Any]) -> bool:
+    return any(hook.get(key) for key in CHILD_HOOK_KEYS)
+
+
+def _work_role_tag(hook: dict[str, Any], hook_event: str) -> str | None:
+    """Audience tag for the launch's declared work role; children get none.
+
+    Agent Hub drops a tag whose role its registry lacks.
+    """
+    role = _launch_work_role()
+    if role is None or _child_hook(hook) or hook_event == "SubagentStart":
+        return None
+    return WORK_ROLE_TAG_PREFIX + role["id"].strip().lower()
+
+
 async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any]) -> None:
     # Child hooks carry their parent's environment. Never turn that into a
     # declaration for a child, or use the widget/artifact correlation as UUID.
@@ -801,8 +821,7 @@ async def _bind_native_work_role(args: argparse.Namespace, hook: dict[str, Any])
     event = getattr(args, "hook_event", None) or hook.get("hook_event_name")
     native = _string(hook.get("session_id")) or _string(hook.get("conversation_id"))
     if (role is None or event != "SessionStart" or args.surface not in {"codex", "claude_code"}
-            or not native or any(hook.get(key) for key in (
-                "agent_id", "subagent_id", "subagent_type", "agent_type", "parent_session_id"))):
+            or not native or _child_hook(hook)):
         return
     metadata = await _resolve_metadata(args, hook)
     cli = await _canonical_cli()

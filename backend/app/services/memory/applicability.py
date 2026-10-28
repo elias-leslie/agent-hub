@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any
 
 from .memory_models import MemoryApplicability, MemoryContextKind
@@ -17,11 +19,19 @@ _APPLICABILITY_KEYS = (
     "audience_tags",
     "exclude_audience_tags",
 )
+# A session's declared work role reaches selection as `work-role:<id>`; the
+# session work-role registry is the only source of valid IDs.
+WORK_ROLE_TAG_PREFIX = "work-role:"
+_WORK_ROLE_IDS = frozenset(
+    json.loads((Path(__file__).parents[1] / "session_roles.json").read_text())
+)
 # Consumer tags that name a session's role rather than a topic. Applicability
 # targeting matches them like any tag, but they never narrow legacy references
 # that rely on ordinary memory tags for routing: a coordinator keeps every
 # reference a plain session gets.
-ROLE_CONSUMER_TAGS = frozenset({"aico-coordinator"})
+ROLE_CONSUMER_TAGS = frozenset(
+    {"aico-coordinator", *(WORK_ROLE_TAG_PREFIX + role for role in _WORK_ROLE_IDS)}
+)
 _TRIGGER_TASK_TYPE_ALIASES = {
     "testing": "test",
     "tests": "test",
@@ -183,6 +193,21 @@ def normalize_trigger_phases(value: Any) -> list[str]:
             identifier
             for item in _normalize_string_list(value)
             if (identifier := normalize_context_identifier(item))
+        )
+    )
+
+
+def normalize_consumer_tags(tags: list[str] | None) -> list[str]:
+    """Lowercase and dedupe tags, dropping any work-role tag the registry lacks."""
+    return list(
+        dict.fromkeys(
+            tag
+            for raw in tags or []
+            if (tag := raw.strip().lower())
+            and (
+                not tag.startswith(WORK_ROLE_TAG_PREFIX)
+                or tag.removeprefix(WORK_ROLE_TAG_PREFIX) in _WORK_ROLE_IDS
+            )
         )
     )
 

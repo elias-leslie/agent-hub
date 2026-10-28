@@ -89,3 +89,51 @@ async def test_retirement_forwards_only_exact_owner_to_canonical_cli(client, mon
                                            "--aico-session", "aico-widget-12345678"])
     assert await client["_main"](args) == 0
     run.assert_awaited_once_with("canonical-cli", f"retire-{surface}", "--aico-session", "aico-widget-12345678")
+
+
+async def _delivery_tags(client, monkeypatch, command, surface, hook=None, coordinator=False):
+    globals_ = client["_resolve_metadata"].__globals__
+    monkeypatch.setitem(globals_, "_git_value", AsyncMock(return_value=None))
+    monkeypatch.setitem(globals_, "_tether_coordinator", lambda _widget: coordinator)
+    args = client["_parser"]().parse_args([command, "--surface", surface, "--cwd", "/fixture"])
+    metadata = await client["_resolve_metadata"](args, hook or {})
+    return metadata["consumer_tags"], client["_delivery_command"]("canonical-cli", metadata)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("surface", ["pi", "codex", "claude_code"])
+@pytest.mark.parametrize("command", ["deliver", "hook"])
+async def test_root_delivery_carries_declared_work_role_tag(client, monkeypatch, surface, command):
+    hook = {"hook_event_name": "SessionStart", "session_id": SID} if command == "hook" else None
+    tags, argv = await _delivery_tags(client, monkeypatch, command, surface, hook)
+    assert tags == ["work-role:implementation"]
+    assert argv[argv.index("--consumer-tag") + 1] == "work-role:implementation"
+
+
+@pytest.mark.asyncio
+async def test_work_role_tag_is_independent_of_coordinator_membership(client, monkeypatch):
+    tags, _argv = await _delivery_tags(client, monkeypatch, "deliver", "pi", coordinator=True)
+    assert tags == ["aico-coordinator", "work-role:implementation"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hook", [
+    {"hook_event_name": "SubagentStart", "session_id": SID},
+    {"hook_event_name": "SessionStart", "session_id": SID, "agent_id": "child"},
+    {"hook_event_name": "SessionStart", "session_id": SID, "agent_type": "explore"},
+    {"hook_event_name": "SessionStart", "session_id": SID, "parent_session_id": "parent"},
+])
+async def test_child_delivery_never_inherits_parent_work_role(client, monkeypatch, hook):
+    tags, argv = await _delivery_tags(client, monkeypatch, "hook", "claude_code", hook)
+    assert tags == []
+    assert "--consumer-tag" not in argv
+
+
+@pytest.mark.asyncio
+async def test_unproven_role_and_bind_add_no_delivery_tag(client, monkeypatch):
+    tags, _argv = await _delivery_tags(client, monkeypatch, "bind", "codex",
+                                       {"hook_event_name": "SessionStart", "session_id": SID})
+    assert tags == []
+    monkeypatch.delenv("ST_WORK_ROLE_SOURCE")
+    tags, _argv = await _delivery_tags(client, monkeypatch, "deliver", "pi")
+    assert tags == []

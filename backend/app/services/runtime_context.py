@@ -36,6 +36,7 @@ from app.services.memory.applicability import (
     legacy_routing_tags,
     normalize_agent_slug,
     normalize_consumer_surface,
+    normalize_consumer_tags,
     normalize_context_identifier,
     normalize_trigger_phases,
     normalize_trigger_task_types,
@@ -876,13 +877,7 @@ def _normalize_canonical_request(
                 )
             ),
             "agent_slug": normalize_agent_slug(request.agent_slug),
-            "consumer_tags": list(
-                dict.fromkeys(
-                    tag.strip().lower()
-                    for tag in request.consumer_tags
-                    if tag.strip()
-                )
-            ),
+            "consumer_tags": normalize_consumer_tags(request.consumer_tags),
             "task_type": task_type[0] if task_type else None,
             "phase": phases[0] if phases else None,
             "exclude_tags": list(

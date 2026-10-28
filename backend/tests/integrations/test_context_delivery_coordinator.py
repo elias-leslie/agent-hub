@@ -124,7 +124,7 @@ def _deliver(tmp_path: Path, tether: _Tether, command: str = "deliver") -> list[
     log = tmp_path / "argv.json"
     env = {
         key: value for key, value in os.environ.items()
-        if not key.startswith(("AICO_", "AGENT_HUB_CONTEXT_PREINJECTED"))
+        if not key.startswith(("AICO_", "AGENT_HUB_CONTEXT_PREINJECTED", "ST_WORK_ROLE"))
     }
     env.update({
         "AGENT_HUB_CONTEXT_CLI": str(cli),
