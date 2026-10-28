@@ -1073,6 +1073,10 @@
       "label": "Reporting"
     },
     {
+      "id": "mapping",
+      "label": "Mapping"
+    },
+    {
       "id": "other",
       "label": "Other"
     },

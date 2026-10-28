@@ -211,8 +211,8 @@ none. The tag is separate from `aico-coordinator`, which still comes only from
 Tether's coordinator flag. Agent Hub drops a `work-role:*` tag whose ID is not in
 `backend/app/services/session_roles.json`, so a new role needs only a registry
 entry. Registered IDs: `coordinator`, `implementation`, `research`, `review`,
-`recon`, `hunting`, `operations`, `selection`, `verification`, `reporting`, and
-`other`. Role tags never narrow untargeted legacy references.
+`recon`, `hunting`, `operations`, `selection`, `verification`, `reporting`,
+`mapping`, and `other`. Role tags never narrow untargeted legacy references.
 
 Sources target roles with the existing applicability fields:
 `exclude_audience_tags: ["work-role:review"]` omits a source for review sessions
