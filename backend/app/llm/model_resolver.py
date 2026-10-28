@@ -37,6 +37,7 @@ _PROVIDER_API: dict[str, Api] = {
     "local": "openai-completions",
     "nvidia": "openai-completions",
     "cloudflare": "openai-completions",
+    "opencode-go": "openai-completions",
     "codex": "openai-codex-responses",
     # Claude runs through the headless Claude Code CLI on the owner's subscription.
     "claude": "claude-code-cli",
@@ -60,6 +61,7 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "local": "http://127.0.0.1:11434/v1",  # Ollama; effective value read from settings.local_openai_base_url
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
+    "opencode-go": "https://opencode.ai/inference/go/openai/v1",
     "codex": "https://chatgpt.com/backend-api/codex/responses",
     "claude": "",
 }
@@ -122,11 +124,28 @@ def resolve_llm_model(
         thinking_level_map=cast(ThinkingLevelMap | None, caps.thinking_level_map),
         headers=headers,
         access_programs=entry.access_programs,
-        compat=(
-            _local_qwen_compat(base_url)
-            if provider == "local" and entry.family == "qwen"
-            else None
-        ),
+        compat=_provider_compat(provider, entry.family, base_url),
+    )
+
+
+def _provider_compat(provider: str, family: str | None, base_url: str) -> OpenAICompletionsCompat | None:
+    if provider == "local" and family == "qwen":
+        return _local_qwen_compat(base_url)
+    if provider == "opencode-go":
+        return _opencode_go_compat(family)
+    return None
+
+
+def _opencode_go_compat(family: str | None) -> OpenAICompletionsCompat:
+    """OpenCode Go's OpenAI-compatible gateway, as Pi configures it; DeepSeek models also take DeepSeek's thinking wire format."""
+    deepseek = family == "deepseek"
+    return OpenAICompletionsCompat(
+        supports_store=False,
+        supports_developer_role=False,
+        supports_strict_mode=True,
+        max_tokens_field="max_tokens",
+        thinking_format="deepseek" if deepseek else None,
+        requires_reasoning_content_on_assistant_messages=True if deepseek else None,
     )
 
 

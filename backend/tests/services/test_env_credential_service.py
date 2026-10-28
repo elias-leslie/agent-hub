@@ -99,3 +99,24 @@ class TestLoadEnvCredentialsIntoCache:
             changed = load_env_credentials_into_cache()
 
         assert changed == []
+
+
+class TestOpencodeGoCredential:
+    def setup_method(self) -> None:
+        CredentialManager.reset()
+
+    def test_stored_credential_serves_opencode_go_completions(self, monkeypatch) -> None:
+        from app.llm.env_api_keys import get_env_api_key
+
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        CredentialManager.get_instance().set("opencode-go", "api_key", "stored-key")
+
+        assert get_env_api_key("opencode-go") == "stored-key"
+
+    def test_environment_variable_overrides_the_stored_credential(self, monkeypatch) -> None:
+        from app.llm.env_api_keys import get_env_api_key
+
+        monkeypatch.setenv("OPENCODE_API_KEY", "env-key")
+        CredentialManager.get_instance().set("opencode-go", "api_key", "stored-key")
+
+        assert get_env_api_key("opencode-go") == "env-key"

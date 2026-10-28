@@ -304,6 +304,19 @@ async def test_pi_cannot_send_access_programs_or_unmapped_providers(tmp_path):
     assert unmapped.status == "failed" and "no Pi provider" in unmapped.error
 
 
+def test_pi_runs_opencode_go_catalog_models_under_pi_opencode_go_provider():
+    from tests.model_ids import MODEL_CATALOG
+
+    seed = {entry.id: entry for entry in MODEL_CATALOG}
+    ex = PiExecutor(load_defaults(), model_lookup=seed.get)
+    for model_id, pi_id in {
+        "opencode-go/deepseek-v4.1-flash": "opencode-go/deepseek-v4.1-flash",
+        "opencode-go/minimax-m3.1-flash": "opencode-go/minimax-m3.1-flash",
+    }.items():
+        entry, resolved = ex.pi_model(model_id)
+        assert entry.provider == "opencode-go" and resolved == pi_id
+
+
 # --- classification ----------------------------------------------------------------------------------
 
 

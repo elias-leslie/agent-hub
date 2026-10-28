@@ -62,7 +62,9 @@ def test_migration_backfills_the_catalog_values() -> None:
     assert spec and spec.loader
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
-    catalog_upstream_ids = {e.id: e.upstream_id for e in MODEL_CATALOG if e.upstream_id}
+    # Rows added through the models API after the migration (OpenCode Go) are outside its backfill.
+    backfilled = [e for e in MODEL_CATALOG if e.provider != "opencode-go"]
+    catalog_upstream_ids = {e.id: e.upstream_id for e in backfilled if e.upstream_id}
     assert catalog_upstream_ids == {
         **migration._UPSTREAM_IDS,
         "codex/gpt-5.6-sol-daybreak-blue": "gpt-5.6-sol",
@@ -78,9 +80,9 @@ def test_migration_backfills_the_catalog_values() -> None:
     removed.add("codex/gpt-daybreak-blue-latest")
     added.add("codex/gpt-5.6-sol-daybreak-blue")
     assert set(migration._MINIMAL_AS_LOW_MODELS) - removed | added == {
-        e.id for e in MODEL_CATALOG if e.capabilities.thinking_level_map
+        e.id for e in backfilled if e.capabilities.thinking_level_map
     }
-    level_maps = {str(e.capabilities.thinking_level_map) for e in MODEL_CATALOG}
+    level_maps = {str(e.capabilities.thinking_level_map) for e in backfilled}
     assert level_maps <= {"None", str(migration._MINIMAL_AS_LOW)}
 
 

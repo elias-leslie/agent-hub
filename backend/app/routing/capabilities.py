@@ -31,6 +31,7 @@ _capabilities: dict[str, ProviderCapabilities] = {
     "local": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
     "nvidia": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
     "cloudflare": ProviderCapabilities(supports_tool_execution=True),
+    "opencode-go": ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
     # The headless Claude Code CLI runs tool-denied; Agent Hub owns the tool loop.
     "claude": ProviderCapabilities(supports_thinking=True),
 }

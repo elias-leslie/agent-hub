@@ -15,7 +15,7 @@
   },
   "pi": {
     "binary": "pi",
-    "provider_for_catalog_provider": {"codex": "openai", "claude": "anthropic"},
+    "provider_for_catalog_provider": {"codex": "openai", "claude": "anthropic", "opencode-go": "opencode-go"},
     "flags": ["--no-extensions", "--approve"],
     "tools": null
   },

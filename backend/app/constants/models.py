@@ -28,4 +28,5 @@ PROVIDER_NAMES: dict[str, str] = {
     "nvidia": "NVIDIA",
     "cloudflare": "Cloudflare",
     "codex": "Codex",
+    "opencode-go": "OpenCode Go",
 }

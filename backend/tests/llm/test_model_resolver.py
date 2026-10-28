@@ -81,3 +81,26 @@ def test_local_qwen_llama_cpp_keeps_chat_template_request_semantics(monkeypatch)
 def test_seed_catalog_does_not_restore_neri_experiment_model() -> None:
     assert all(entry.id != "local/qwen3.8-27b-gsq-rco-iq3_s-mtp" for entry in MODEL_CATALOG)
     assert all(entry.alias != "local/neri-qwen" for entry in MODEL_CATALOG)
+
+
+def test_opencode_go_models_use_the_openai_gateway_with_deepseek_wire_format() -> None:
+    model = resolve_llm_model("opencode-go/deepseek-v4.1-flash", "opencode-go")
+
+    assert model.api == "openai-completions"
+    assert model.id == "deepseek-v4.1-flash"
+    assert model.base_url == "https://opencode.ai/inference/go/openai/v1"
+    assert model.reasoning and model.max_tokens > 0
+    assert isinstance(model.compat, OpenAICompletionsCompat)
+    assert model.compat.thinking_format == "deepseek"
+    assert model.compat.requires_reasoning_content_on_assistant_messages is True
+    assert model.compat.max_tokens_field == "max_tokens"
+    assert (model.compat.supports_store, model.compat.supports_developer_role) == (False, False)
+
+
+def test_opencode_go_non_deepseek_models_keep_default_thinking_format() -> None:
+    model = resolve_llm_model("opencode-go/glm-5.3-flash", "opencode-go")
+
+    assert isinstance(model.compat, OpenAICompletionsCompat)
+    assert model.compat.thinking_format is None
+    assert model.compat.requires_reasoning_content_on_assistant_messages is None
+    assert model.compat.max_tokens_field == "max_tokens"

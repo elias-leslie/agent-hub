@@ -50,9 +50,10 @@ def test_inactive_providers_still_accept_credentials(inactive_minimax) -> None:
     assert "minimax" in list_credential_providers()
 
 
-def test_opencode_go_accepts_a_key_but_never_routes() -> None:
+def test_opencode_go_accepts_a_key_and_routes_workloads() -> None:
     assert "opencode-go" in list_credential_providers()
-    assert not is_workload_provider("opencode-go")
+    assert is_workload_provider("opencode-go")
+    assert not is_workload_provider("typesafe")
 
 
 @pytest.mark.asyncio
@@ -77,3 +78,14 @@ async def test_keyless_provider_and_signed_out_claude(monkeypatch) -> None:
 )
 def test_billing_and_entitlement_refusals_are_classified(message, status) -> None:
     assert classify_runtime_failure(RuntimeError(message)).provider_status == status
+
+
+def test_opencode_go_models_route_by_catalog_and_alias() -> None:
+    from app.constants.catalog import MODEL_CATALOG_BY_ID
+    from app.routing.capabilities import supports_tools
+
+    assert get_provider_for_model("opencode-go/deepseek-v4.1-flash") == "opencode-go"
+    assert get_provider_for_model("opencode-go/not-yet-catalogued") == "opencode-go"
+    opencode_go = [e for e in MODEL_CATALOG_BY_ID.values() if e.provider == "opencode-go"]
+    assert {e.id for e in opencode_go} >= {"opencode-go/deepseek-v4.1-flash", "opencode-go/deepseek-v4-pro"}
+    assert all(supports_tools("opencode-go", e.id) for e in opencode_go)

@@ -14,9 +14,8 @@ from pydantic import BeforeValidator
 
 from app.constants.models import PROVIDER_NAMES
 
-# Keys Agent Hub stores but never routes workloads through. OpenCode Go runs in
-# Pi; Agent Hub only reads its quota for the Costs page.
-CREDENTIAL_ONLY_PROVIDERS = frozenset({"typesafe", "opencode-go"})
+# Keys Agent Hub stores but never routes workloads through.
+CREDENTIAL_ONLY_PROVIDERS = frozenset({"typesafe"})
 UNKNOWN_PROVIDER = "unknown"
 
 
