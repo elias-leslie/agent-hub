@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +16,6 @@ from agent_hub._image import generate_image_async
 from agent_hub._memory import AsyncMemoryOperationsMixin
 from agent_hub._sessions import AsyncSessionOperationsMixin
 from agent_hub._streaming import stream_completion_sse
-from agent_hub._workflow import build_workflow_payload, handle_workflow_response
 from agent_hub.constants import DEFAULT_IMAGE_AGENT
 from agent_hub.exceptions import ClientDisabledError
 from agent_hub.models import (
@@ -244,52 +242,6 @@ class AsyncAgentHubClient(
 
             handle_error(response)
         return response.json()
-
-    async def workflow(
-        self,
-        *,
-        project_id: str,
-        shared_context: str | None = None,
-        external_id: str | None = None,
-        trace_id: str | None = None,
-        clarify: dict[str, Any] | None = None,
-        plan: dict[str, Any] | None = None,
-        execute: dict[str, Any] | None = None,
-        review: dict[str, Any] | None = None,
-        qa: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Deprecated: the server route was removed. Kept for import compatibility."""
-
-        warnings.warn(
-            "AsyncAgentHubClient.workflow() is deprecated in agent-hub-client 0.7.0: Agent Hub no "
-            "longer serves /api/orchestration/workflow. It will be removed in 0.8.0; "
-            "compose complete() calls with an explicit agent_slug instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        self._check_disabled()
-
-        client = await self._get_client()
-        payload = build_workflow_payload(
-            project_id=project_id,
-            shared_context=shared_context,
-            external_id=external_id,
-            trace_id=trace_id,
-            clarify=clarify,
-            plan=plan,
-            execute=execute,
-            review=review,
-            qa=qa,
-        )
-        headers = self._inject_tracking_headers("sdk.workflow")
-        response = await client.post(
-            "/api/orchestration/workflow",
-            json=payload,
-            headers=headers,
-            timeout=self.timeout,
-        )
-        return handle_workflow_response(response, self)
 
     async def stream_sse(
         self,

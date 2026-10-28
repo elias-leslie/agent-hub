@@ -77,9 +77,9 @@ use the same response handler and identity configuration.
 carry routing, workspace and `live_activity` fields and keep any field the
 server adds rather than dropping it.
 
-0.7.0 deprecates `workflow()`: Agent Hub no longer serves
-`/api/orchestration/workflow`, so the call emits a `DeprecationWarning` and the
-method will be removed in 0.8.0. Compose `complete()` calls with an explicit
+0.8.0 removes `workflow()` (Agent Hub no longer serves
+`/api/orchestration/workflow`) and `get_execution_permission()` (Agent Hub has no
+per-project execution permission). Compose `complete()` calls with an explicit
 `agent_slug` instead.
 
 ### Model selection advice
