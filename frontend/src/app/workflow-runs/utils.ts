@@ -4,11 +4,14 @@ import type {
   CancelRecord,
   CostBasis,
   CostTotals,
+  PlanChangeRecord,
+  PlanHistoryEntry,
   RunPause,
   RunState,
   StepLive,
   StepStatus,
   WorkflowAttempt,
+  WorkflowStepView,
 } from '@/lib/api/workflow-runs'
 
 const CLAUDE_FAMILY = /^(opus|sonnet|haiku|fable)-(\d+)-(\d+)(?:-\d{8})?$/i
@@ -143,6 +146,8 @@ export function pauseExplanation(
       return `${step} was refused${category}. This category is yours to route, so the run stopped.`
     case 'refusal_threshold':
       return `Too many refusals${category} in this run. ${step} is paused for your decision.`
+    case 'blocked_dependencies':
+      return 'No step can start: the ones left wait on steps that were skipped, cancelled or failed. The plan needs a change from whoever coordinates the run, or you can cancel the run.'
     case 'no_agent_route':
       return `${step} has no model route to run on${pause.error ? `: ${pause.error}` : '.'}`
     default:
@@ -337,4 +342,37 @@ export function liveStatus(
         ? `status saved ${saved}`
         : null,
   }
+}
+
+/** "Depends on plan, implement", "Depends on nothing", or the default ("follows plan") when none was declared. */
+export function dependsText(step: WorkflowStepView): string | null {
+  if (!step.depends_on) return null
+  if (step.depends_on.length === 0) return 'Depends on nothing'
+  const list = step.depends_on.join(', ')
+  return step.depends_on_explicit === false
+    ? `Follows ${list}`
+    : `Depends on ${list}`
+}
+
+function shown(value: unknown): string {
+  if (value === null || value === undefined) return 'none'
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text
+}
+
+/** One plan change in the owner's terms: "added c", "b: model_override none -> x", "removed b". */
+export function planChangeText(change: PlanChangeRecord): string {
+  if (change.op === 'add') return `added ${change.step}`
+  if (change.op === 'remove') return `removed ${change.step}`
+  const fields = Object.keys(change.after ?? {})
+  const parts = fields.map(
+    (field) =>
+      `${field} ${shown(change.before?.[field])} -> ${shown(change.after?.[field])}`,
+  )
+  return `${change.step}: ${parts.join('; ')}`
+}
+
+/** Who made a plan revision: the caller's own label first, then the client that sent it. */
+export function planAuthor(by: PlanHistoryEntry['by']): string {
+  return by.changed_by || by.client_id || by.request_source || 'unknown'
 }

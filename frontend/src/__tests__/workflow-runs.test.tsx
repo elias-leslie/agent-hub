@@ -541,6 +541,162 @@ describe('workflow run detail', () => {
     )
   })
 
+  it("shows who launched the run, each step's dependencies, which are ready and why one is blocked", async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'running',
+        launched_by: 'aico-session-7',
+        coordinator: 'claude-code',
+        plan_revision: 2,
+        steps: [
+          step({ key: 'a', position: 0, depends_on: [] }),
+          step({
+            key: 'b',
+            position: 1,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+            handoff: null,
+            depends_on: ['a'],
+            depends_on_explicit: true,
+            readiness: {
+              state: 'ready',
+              waiting_on: [],
+              blocked_by: [],
+              reason: null,
+            },
+          }),
+          step({
+            key: 'c',
+            position: 2,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+            handoff: null,
+            depends_on: ['b'],
+            depends_on_explicit: false,
+            readiness: {
+              state: 'waiting',
+              waiting_on: ['b'],
+              blocked_by: [],
+              reason: 'waiting for b',
+            },
+          }),
+          step({
+            key: 'd',
+            position: 3,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+            handoff: null,
+            depends_on: ['x'],
+            depends_on_explicit: true,
+            readiness: {
+              state: 'blocked',
+              waiting_on: [],
+              blocked_by: [{ key: 'x', status: 'skipped' }],
+              reason: 'blocked by x (skipped)',
+            },
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('run-origin')).toHaveTextContent(
+      'Launched by aico-session-7 (claude-code) · plan revision 2',
+    )
+    const [a, b, c, d] = await screen.findAllByTestId('step-deps')
+    expect(a).toHaveTextContent('Depends on nothing')
+    expect(a).toHaveAttribute('data-readiness', 'started')
+    expect(b).toHaveTextContent('Depends on a · Ready to start')
+    expect(c).toHaveTextContent('Follows b · Not ready: waiting for b')
+    expect(d).toHaveTextContent(
+      'Depends on x · Blocked: blocked by x (skipped)',
+    )
+    expect(d).toHaveAttribute('data-readiness', 'blocked')
+  })
+
+  it('lists plan revisions newest first with who changed what', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        plan_revision: 2,
+        plan_history: [
+          {
+            revision: 1,
+            at: 1_793_181_000,
+            action: 'add_steps',
+            by: { changed_by: 'aico-1', client_id: 'summitflow' },
+            reason: 'found more work',
+            changes: [
+              {
+                step: 'extra',
+                op: 'add',
+                before: null,
+                after: { key: 'extra' },
+              },
+            ],
+          },
+          {
+            revision: 2,
+            at: 1_793_181_100,
+            action: 'revise_step',
+            by: { client_id: 'summitflow' },
+            changes: [
+              {
+                step: 'b',
+                op: 'revise',
+                before: { model_override: null },
+                after: { model_override: 'agent_hub/deepseek' },
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const history = await screen.findByTestId('plan-history')
+    expect(history).toHaveTextContent('Plan history (2 revisions)')
+    const items = within(
+      within(history).getByRole('list', { name: 'Plan history' }),
+    ).getAllByRole('listitem', { name: '' })
+    expect(items[0]).toHaveTextContent('r2 Changed a step by summitflow')
+    expect(items[0]).toHaveTextContent(
+      'b: model_override none -> agent_hub/deepseek',
+    )
+    expect(history).toHaveTextContent('r1 Added steps by aico-1')
+    expect(history).toHaveTextContent('found more work')
+    expect(history).toHaveTextContent('added extra')
+  })
+
+  it('explains a run blocked on dependencies without offering step decisions', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'needs_owner',
+        pause: {
+          reason: 'blocked_dependencies',
+          step_key: 'b',
+          blocked: {
+            b: {
+              state: 'blocked',
+              waiting_on: [],
+              blocked_by: [{ key: 'a', status: 'skipped' }],
+              reason: 'blocked by a (skipped)',
+            },
+          },
+        },
+        steps: [step({ key: 'a', status: 'skipped' })],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const panel = await screen.findByRole('region', {
+      name: 'Blocked on dependencies',
+    })
+    expect(panel).toHaveTextContent('b: blocked by a (skipped)')
+    expect(
+      within(panel).queryByRole('button', { name: 'Retry step' }),
+    ).toBeNull()
+  })
+
   it('keeps the run on screen and says it is stale when a refresh fails', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.mocked(fetchWorkflowRun)

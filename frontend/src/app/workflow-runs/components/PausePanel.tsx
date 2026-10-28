@@ -47,6 +47,31 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
   if (run.state !== 'needs_owner' || !pause) return null
   const chain = step?.chain ?? []
 
+  if (pause.reason === 'blocked_dependencies') {
+    // Nothing to retry or skip: the plan itself has to change (the coordinator edits it through the API).
+    const blocked = Object.entries(pause.blocked ?? {})
+    return (
+      <section
+        aria-labelledby="pause-heading"
+        className="mb-4 rounded-lg border border-amber-500/40 bg-amber-950/25 p-3"
+      >
+        <h2 id="pause-heading" className="text-sm font-semibold text-amber-100">
+          Blocked on dependencies
+        </h2>
+        <p className="mt-1 text-[13px] text-amber-50/90">
+          {pauseExplanation(pause, stepKey)}
+        </p>
+        <ul className="mt-2 list-disc pl-5 text-[12px] text-amber-50/80">
+          {blocked.map(([key, readiness]) => (
+            <li key={key}>
+              {key}: {readiness.reason ?? 'blocked'}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
   return (
     <section
       aria-labelledby="pause-heading"

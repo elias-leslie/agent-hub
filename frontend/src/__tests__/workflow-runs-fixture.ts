@@ -96,6 +96,8 @@ export function run(
     },
     created_at: '2026-10-28T10:00:00Z',
     last_activity_at: '2026-10-28T10:05:00Z',
+    plan_revision: 0,
+    plan_history: [],
     steps: [step()],
     ...overrides,
   }

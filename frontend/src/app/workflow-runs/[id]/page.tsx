@@ -8,6 +8,7 @@ import type { WorkflowRunDetail } from '@/lib/api/workflow-runs'
 import { CancelButton } from '../components/CancelButton'
 import { ErrorAlert, LoadingState } from '../components/ListStates'
 import { PausePanel } from '../components/PausePanel'
+import { PlanHistory } from '../components/PlanHistory'
 import { StatusDot } from '../components/StatusDot'
 import { StepCard } from '../components/StepCard'
 import { useWorkflowRun } from '../hooks/useWorkflowRuns'
@@ -48,6 +49,17 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
         </span>
         <span className="font-mono text-[12px] text-slate-500">{run.id}</span>
       </div>
+      <p
+        className="font-mono text-[12px] text-slate-500"
+        data-testid="run-origin"
+      >
+        {run.launched_by
+          ? `Launched by ${run.launched_by}${run.coordinator ? ` (${run.coordinator})` : ''}`
+          : run.coordinator
+            ? `Coordinator ${run.coordinator}`
+            : 'Launcher not recorded'}
+        {' · '}plan revision {run.plan_revision ?? 0}
+      </p>
       <p className="whitespace-pre-wrap break-words text-sm text-slate-100">
         {run.goal ?? 'No goal recorded'}
       </p>
@@ -172,6 +184,7 @@ export default function WorkflowRunPage() {
             <>
               <RunSummary run={run} />
               <PausePanel run={run} />
+              <PlanHistory history={run.plan_history ?? []} />
               <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                 Steps
               </h2>

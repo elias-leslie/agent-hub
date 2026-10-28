@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   atLimit,
   cancelText,
+  dependsText,
   liveStatus,
   modelLabel,
   ofLimit,
@@ -116,6 +117,39 @@ function LimitLine({
   )
 }
 
+/** What the step waits for, and for a step not yet started whether it can start, is waiting, or is blocked. */
+function DependencyLine({ step }: { step: WorkflowStepView }) {
+  const depends = dependsText(step)
+  const readiness = step.status === 'pending' ? step.readiness : null
+  if (!depends && !readiness) return null
+  return (
+    <p
+      className="mt-1 text-[12px] text-slate-400"
+      data-testid="step-deps"
+      data-readiness={readiness?.state ?? 'started'}
+    >
+      {depends}
+      {readiness ? (
+        <>
+          {depends ? ' · ' : ''}
+          <span
+            className={cn(
+              readiness.state === 'ready' && 'text-emerald-300',
+              readiness.state === 'blocked' && 'text-amber-300',
+            )}
+          >
+            {readiness.state === 'ready'
+              ? 'Ready to start'
+              : readiness.state === 'blocked'
+                ? `Blocked: ${readiness.reason ?? 'a dependency will not complete'}`
+                : `Not ready: ${readiness.reason ?? 'waiting on dependencies'}`}
+          </span>
+        </>
+      ) : null}
+    </p>
+  )
+}
+
 /** What the running attempt is doing. Display only: nothing here stops or restarts the step. */
 function LiveLine({ step }: { step: WorkflowStepView }) {
   const live = liveStatus(step.live)
@@ -193,6 +227,7 @@ export function StepCard({
           </span>
         ) : null}
       </div>
+      <DependencyLine step={step} />
       {step.status === 'running' ? <LiveLine step={step} /> : null}
       {step.chain && step.chain.length > 0 ? (
         <p className="mt-1 text-[12px] text-slate-500">

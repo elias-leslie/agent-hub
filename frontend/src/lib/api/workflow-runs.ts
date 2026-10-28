@@ -219,11 +219,27 @@ export interface StepLive {
   updated_at: string | null
 }
 
+/** Where a not-yet-started step stands against its dependencies. */
+export interface StepReadiness {
+  state: 'ready' | 'waiting' | 'blocked'
+  /** Dependencies that have not finished and may still complete. */
+  waiting_on: string[]
+  /** Dependencies that ended without completing (skipped, cancelled, failed), so this step cannot start. */
+  blocked_by: { key: string; status: StepStatus }[]
+  reason: string | null
+}
+
 export interface WorkflowStepView {
   key: string
   position: number
   status: StepStatus
   agent_slug: string
+  /** Steps this one waits for; their handoffs are its context. Empty for a step that depends on nothing. */
+  depends_on?: string[]
+  /** False when the list is the default (the step before it). */
+  depends_on_explicit?: boolean
+  /** Only for steps that have not started. */
+  readiness?: StepReadiness | null
   chain: string[] | null
   attempts: number
   /** Most attempts the step may use (the run cap, lowered by the step's own max_attempts). */
@@ -262,11 +278,36 @@ export interface WorkflowStepView {
 export interface RunPause {
   reason: string
   step_key?: string
+  /** For a run blocked on dependencies: each blocked step and what blocks it. */
+  blocked?: Record<string, StepReadiness>
   category?: string | null
   /** Unix seconds; a usage-limit pause resumes by itself after this. */
   resume_after?: number | null
   error?: string
   at?: number
+}
+
+/** One field-level change in the plan history; `before` is null for an added step, `after` for a removed one. */
+export interface PlanChangeRecord {
+  step: string
+  op: 'add' | 'revise' | 'remove'
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+}
+
+export interface PlanHistoryEntry {
+  revision: number
+  /** Unix seconds. */
+  at: number
+  action: 'add_steps' | 'revise_step' | 'remove_step'
+  by: {
+    changed_by?: string | null
+    client_id?: string | null
+    request_source?: string | null
+  }
+  reason?: string | null
+  changes: PlanChangeRecord[]
+  relinked?: string[]
 }
 
 export interface WorkflowRunDetail {
@@ -284,6 +325,12 @@ export interface WorkflowRunDetail {
   /** The request is made and the worker has not yet stopped the running step. */
   cancelling?: boolean
   refusals: Record<string, number>
+  /** Opaque id of whatever started the run (e.g. an Aico session) and an optional label for the coordinator. */
+  launched_by?: string | null
+  coordinator?: string | null
+  /** 0 until the plan is revised; each added, changed or removed step set bumps it. */
+  plan_revision?: number
+  plan_history?: PlanHistoryEntry[]
   limits?: RunLimits
   created_at: string | null
   last_activity_at: string | null
