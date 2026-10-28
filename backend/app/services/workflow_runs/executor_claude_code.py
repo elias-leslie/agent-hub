@@ -179,9 +179,13 @@ class _Attempt:
         self.injected = False
         self.error: str | None = None
         self.returncode: int | None = None
+        # Subscription window use (fraction of the limit) as of the last rate_limit_event the CLI emitted.
+        self.windows: dict[str, float] = {}
 
     def handle(self, event: dict[str, Any]) -> None:
         self.session_id = str(event.get("session_id") or self.session_id or "") or None
+        if event.get("type") == "rate_limit_event":
+            self._rate_limit(event.get("rate_limit_info"))
         self.observer.handle(event)
         if event.get("type") == "assistant":
             self._assistant(event.get("message") or {})
@@ -190,6 +194,12 @@ class _Attempt:
                 self.observer.handle(
                     refusal_event(self.hook.category, "injected by the workflow test hook (no provider contacted)")
                 )
+
+    def _rate_limit(self, info: Any) -> None:
+        windows = info.get("unifiedWindows") if isinstance(info, Mapping) else None
+        for name, window in (windows or {}).items():
+            if isinstance(window, Mapping) and isinstance(window.get("utilization"), int | float):
+                self.windows[str(name)] = float(window["utilization"])
 
     def _assistant(self, message: Mapping[str, Any]) -> None:
         name = message.get("model")
@@ -220,12 +230,14 @@ class _Attempt:
                 as_int(item.get("output_tokens")),
                 as_int(details.get("thinking_tokens")) if isinstance(details, Mapping) else 0,
             )
-        out: dict[str, Any] = usage.as_dict()
+        out: dict[str, Any] = {**usage.as_dict()}
         for key in ("total_cost_usd", "duration_ms", "num_turns"):
             if result.get(key) is not None:
                 out[key] = result[key]
         if isinstance(result.get("modelUsage"), Mapping):
             out["by_model"] = result["modelUsage"]
+        if self.windows:
+            out["rate_limit_windows"] = dict(self.windows)
         return out
 
 
