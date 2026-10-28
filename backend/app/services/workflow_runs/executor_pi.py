@@ -61,13 +61,21 @@ def pi_phase(record: Mapping[str, Any]) -> str | None:
         if shape.startswith("text"):
             return WRITING
         if shape.startswith("toolcall"):
-            call = update.get("toolCall")
-            if not isinstance(call, Mapping):
-                partial = update.get("partial")
-                content = partial.get("content") if isinstance(partial, Mapping) else None
-                index = update.get("contentIndex")
-                call = content[index] if isinstance(content, list) and isinstance(index, int) and 0 <= index < len(content) else {}
-            return tool_phase(call.get("name") if isinstance(call, Mapping) else None)
+            # Pi 0.x names the tool on toolcall_start ("toolName"); the deltas after it carry no name,
+            # so they keep the phase that start set. Older shapes put it in toolCall or the partial message.
+            name = update.get("toolName")
+            if not name:
+                call = update.get("toolCall")
+                if not isinstance(call, Mapping):
+                    partial = update.get("partial")
+                    content = partial.get("content") if isinstance(partial, Mapping) else None
+                    index = update.get("contentIndex")
+                    entry: Any = None
+                    if isinstance(content, list) and isinstance(index, int) and 0 <= index < len(content):
+                        entry = content[index]
+                    call = entry if isinstance(entry, Mapping) else {}
+                name = call.get("name") if isinstance(call, Mapping) else None
+            return tool_phase(name) if name else None
         return None
     if kind == "tool_execution_start":
         return tool_phase(record.get("toolName"))

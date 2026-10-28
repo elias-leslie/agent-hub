@@ -384,7 +384,8 @@ def pi_stream_with_updates(tmp_path: Path) -> str:
         {"type": "auto_retry_end", "success": True, "attempt": 1},
         update("thinking_delta", contentIndex=0, delta="hm"),
         update("text_delta", contentIndex=1, delta="ok"),
-        update("toolcall_delta", contentIndex=2, delta="{", partial={"content": [{}, {}, {"type": "toolCall", "name": "write"}]}),
+        update("toolcall_start", contentIndex=2, id="c1", toolName="write"),  # Pi names the tool only here
+        update("toolcall_delta", contentIndex=2, delta="{"),  # later deltas keep the phase the start set
         {"type": "tool_execution_start", "toolCallId": "c1", "toolName": "write", "args": {}},
         {"type": "tool_execution_update", "toolCallId": "c1", "toolName": "write", "args": {}, "partialResult": {}},
     ]
