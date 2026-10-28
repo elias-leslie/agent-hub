@@ -453,13 +453,25 @@ async def put_model_alias(
 @router.post("/models/select")
 async def select_model_advice(request: SelectionRequest) -> dict:
     """Select from a generic task type; never accepts task content or executes a model."""
-    from app.routing.model_selection import select_model
+    from app.routing.model_selection import UnknownTaskType, select_model
 
     catalog = await list_models()
-    result = await select_model(request)
+    try:
+        result = await select_model(request)
+    except UnknownTaskType as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     result["catalog_health"] = {
         "is_stale": catalog.catalog_health.is_stale if catalog.catalog_health else None,
         "last_sync": catalog.last_sync.isoformat() if catalog.last_sync else None,
         "last_model_review": catalog.last_model_review.isoformat() if catalog.last_model_review else None,
     }
     return result
+
+
+@router.get("/models/selection-policy")
+async def model_selection_policy() -> dict:
+    """List configured task categories for advisory callers."""
+    from app.routing.model_selection import selection_policy
+
+    policy = await selection_policy()
+    return {"version": policy["version"], "task_types": sorted(policy["policies"])}

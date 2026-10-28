@@ -87,16 +87,35 @@ method will be removed in 0.8.0. Compose `complete()` calls with an explicit
 `await client.select_model("coding", mode="shadow", assigned_model="codex/gpt-6.1-sol")`
 returns model and effort advice for a generic task type, its source and date,
 current route preflight, catalog freshness, and a comparison to the assigned
-model. Supported task types are `general`, `coding`, `reasoning`,
-`visual_reasoning`, and `writing`. The selector rejects task contents. Supply
+model. Discover task types with `await client.model_selection_policy()`. The initial
+policy includes `general`, `coding`, `reasoning`, `visual_reasoning`, and
+`writing`; the Agent Hub configuration may add others without a code change.
+Set `AGENT_HUB_MODEL_SELECTION_POLICY_PATH` to an Agent Hub-owned JSON policy
+file to manage it independently; the service reloads it for each request. The
+selector rejects task contents. Supply
 both `override_model` and `override_effort` for an explicit choice; capability
-and availability checks still apply. The response is advice: it does not call
+and availability checks still apply. Policies contain ordered candidates; the
+response explains each skipped route. An override is a pin and is never silently
+replaced. The response is advice: it does not call
 a model or alter an agent's assigned chain. `mode="automatic"` returns
 `apply=true` only for a current task-specific benchmark qualification of the
-exact model and effort and a passing preflight. No route is currently qualified.
+exact task, model and effort, a current local route qualification for that same
+tuple, and a passing preflight. No route is currently qualified.
 An opting-in caller can apply a qualified decision through its existing model
 and effort override; it must check `apply` for every decision and retain its
 assigned route otherwise. Route preflight checks catalog status, credentials and
 provider cooldown, not entitlement or actual task success. Provider guidance
 and inherited catalog scores are not benchmark evidence. Cost is not ranked:
 subscription quota and metered API prices are not directly comparable.
+
+Policy JSON contains a `version` and a `policies` object keyed by task type.
+Each policy has ordered `candidates`, each with `model`, `effort`, `rationale`,
+`source`, and `source_checked_at`; optional `requires_tools` and
+`requires_vision` apply to all its candidates. A candidate can carry a
+`qualification` object with `benchmark` and `local_route` evidence. Each
+must identify `kind` (`task_benchmark` or `local_route_qualification`),
+`source`, `assessed_at`, `valid_until`, `task_type`, `model`, and `effort`.
+The dates are ISO dates. A qualification is scoped to that exact tuple and
+must be current. Configure policy changes atomically so readers never see a
+partial file. `apply` is an advisory decision for an opting-in caller; Agent
+Hub does not change assigned model chains or run the selection automatically.

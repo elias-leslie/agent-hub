@@ -35,19 +35,23 @@ async def test_cooldown_and_inactive_cannot_be_selected() -> None:
 
 @pytest.mark.asyncio
 async def test_automatic_requires_current_exact_benchmark_qualification(monkeypatch) -> None:
-    policy = deepcopy(model_selection._POLICY)
-    policy["policies"]["general"]["qualification"] = {
-        "kind": "task_benchmark", "source": "https://example.org/benchmark", "assessed_at": "2026-01-01",
-        "valid_until": "9999-12-31", "model": "codex/gpt-6.1-sol", "effort": "medium",
-    }
-    monkeypatch.setattr(model_selection, "_POLICY", policy)
+    policy = deepcopy(model_selection._load_policy())
+    candidate = policy["policies"]["general"]["candidates"][0]
+    evidence = {"source": "https://example.org/evidence", "assessed_at": "2026-01-01",
+                "valid_until": "9999-12-31", "model": "codex/gpt-6.1-sol", "effort": "medium", "task_type": "general"}
+    candidate["qualification"] = {"benchmark": dict(evidence, kind="task_benchmark")}
+    monkeypatch.setattr(model_selection, "_load_policy", lambda: policy)
     with patch.object(model_selection, "route_preflight_error", new_callable=AsyncMock, return_value=None):
+        result = await select_model(SelectionRequest(task_type="general", mode="automatic"))
+        assert not result["automatic_eligible"] and not result["apply"]
+        candidate["qualification"]["local_route"] = dict(evidence, kind="local_route_qualification")
         result = await select_model(SelectionRequest(task_type="general", mode="automatic"))
         assert result["automatic_eligible"] and result["apply"]
         override = await select_model(SelectionRequest(task_type="general", mode="automatic", override_model="codex/gpt-6.1-sol", override_effort="medium"))
         assert not override["apply"]
-        policy["policies"]["general"]["qualification"]["valid_until"] = "2020-01-01"
+        candidate["qualification"]["local_route"]["valid_until"] = "2020-01-01"
         assert not (await select_model(SelectionRequest(task_type="general", mode="automatic")))["apply"]
+
 
 
 @pytest.mark.asyncio
@@ -75,3 +79,42 @@ async def test_api_reports_stale_catalog_and_never_applies_unqualified_route() -
     assert result["available"] and not result["apply"]
     assert result["provenance"]["benchmark_evidence"] is None
     assert "not directly comparable" in result["cost_comparison"]
+
+
+@pytest.mark.asyncio
+async def test_policy_can_add_task_types_without_code_change(monkeypatch) -> None:
+    policy = deepcopy(model_selection._load_policy())
+    policy["policies"]["coordinator_triage"] = policy["policies"]["general"]
+    monkeypatch.setattr(model_selection, "_load_policy", lambda: policy)
+    with patch.object(model_selection, "route_preflight_error", new_callable=AsyncMock, return_value=None):
+        assert (await select_model(SelectionRequest(task_type="coordinator_triage")))["model"] == "codex/gpt-6.1-sol"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"}) as client:
+        assert "coordinator_triage" in (await client.get("/api/models/selection-policy")).json()["task_types"]
+        assert (await client.post("/api/models/select", json={"task_type": "unknown"})).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_external_policy_is_reloaded(monkeypatch, tmp_path) -> None:
+    import json
+    policy = model_selection._load_policy()
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy))
+    monkeypatch.setattr(model_selection.settings, "agent_hub_model_selection_policy_path", str(path))
+    assert "new_category" not in (await model_selection.selection_policy())["policies"]
+    policy["policies"]["new_category"] = policy["policies"]["general"]
+    path.write_text(json.dumps(policy))
+    assert "new_category" in (await model_selection.selection_policy())["policies"]
+
+
+@pytest.mark.asyncio
+async def test_fallback_skips_unavailable_routes_but_override_is_a_pin() -> None:
+    async def preflight(model):
+        return RuntimeError("cooldown") if model.startswith("codex/") else None
+    with patch.object(model_selection, "route_preflight_error", side_effect=preflight):
+        advice = await select_model(SelectionRequest(task_type="coding"))
+        assert advice["available"] and advice["model"] == "gemini-3.8-flash"
+        assert len(advice["candidates_checked"]) == 2
+        assert "cooldown" in str(advice["candidates_checked"][0]["reasons"])
+        pinned = await select_model(SelectionRequest(task_type="coding", override_model="codex/gpt-6.1-sol", override_effort="medium"))
+        assert not pinned["available"] and len(pinned["candidates_checked"]) == 1
+        assert pinned["model"] == "codex/gpt-6.1-sol"

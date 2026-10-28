@@ -1,27 +1,38 @@
-"""Advisory task-type selection, using catalog capabilities and live preflight.
-
-Policy is provider guidance and operator judgment, not benchmark evidence. No
-request content or inferred task classification passes through this module.
-"""
+"""Metadata-only advisory selection using catalog capabilities and live preflight."""
 from __future__ import annotations
 
+import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.config import settings
 from app.constants.catalog import get_model_entry, resolve_model
 from app.services.agent_routing_completion import route_preflight_error
 
 _POLICY_PATH = Path(__file__).parent / "model_selection_policy.json"
-_POLICY = json.loads(_POLICY_PATH.read_text())
+
+
+def _load_policy() -> dict:
+    path = Path(settings.agent_hub_model_selection_policy_path) if settings.agent_hub_model_selection_policy_path else _POLICY_PATH
+    return json.loads(path.read_text())
+
+
+class UnknownTaskType(ValueError):
+    pass
+
+
+async def selection_policy() -> dict:
+    """Read the owning policy on each call without blocking the event loop."""
+    return await asyncio.to_thread(_load_policy)
 
 
 class SelectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    task_type: Literal["general", "coding", "reasoning", "visual_reasoning", "writing"]
+    task_type: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     mode: Literal["advisory", "shadow", "automatic"] = "advisory"
     assigned_model: str | None = Field(default=None, min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:/-]+$")
     override_model: str | None = Field(default=None, min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:/-]+$")
@@ -38,70 +49,90 @@ class SelectionRequest(BaseModel):
         return self
 
 
-async def select_model(request: SelectionRequest) -> dict:
-    policy_data = _POLICY
-    policy = policy_data["policies"][request.task_type]
-    selected = resolve_model(request.override_model or policy["model"])
-    effort = request.override_effort or policy["effort"]
-    entry = get_model_entry(selected)
-    reasons: list[str] = []
+def _current_evidence(evidence: dict, *, kind: str, model: str, effort: str, task_type: str) -> bool:
+    try:
+        start = date.fromisoformat(evidence.get("assessed_at", ""))
+        end = date.fromisoformat(evidence.get("valid_until", ""))
+        in_window = start <= datetime.now(UTC).date() <= end
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        evidence.get("kind") == kind and evidence.get("source") and in_window
+        and evidence.get("model") == model and evidence.get("effort") == effort
+        and evidence.get("task_type") == task_type
+    )
+
+
+async def _unavailable(model: str, effort: str, *, tools: bool, vision: bool) -> list[str]:
+    entry = get_model_entry(model)
     if entry is None:
-        reasons.append("Model is not active in the catalog")
-    else:
-        if not entry.capabilities.supports_chat:
-            reasons.append("Model does not support chat workloads")
-        if (request.requires_tools or policy.get("requires_tools")) and not entry.capabilities.supports_tool_execution:
-            reasons.append("Model route does not support tool execution")
-        if (request.requires_vision or policy.get("requires_vision")) and not entry.capabilities.has_vision:
-            reasons.append("Model route does not support image input")
-        if not entry.capabilities.has_thinking:
-            reasons.append("Model route does not advertise reasoning effort")
-        if effort == "xhigh" and not entry.capabilities.supports_xhigh:
-            reasons.append("Model route does not advertise xhigh effort")
-        if (entry.capabilities.thinking_level_map or {}).get(effort, effort) is None:
-            reasons.append("Model route does not support the requested effort")
-        error = await route_preflight_error(selected)
-        if error is not None:
-            reasons.append(str(error))
-    # A future pilot needs a dated, task-specific qualification for this exact
-    # route and effort. Provider guidance and seed scores alone never qualify.
-    qualification = policy.get("qualification") or {}
-    today = datetime.now(UTC).date().isoformat()
+        return ["Model is not active in the catalog"]
+    reasons = []
+    if not entry.capabilities.supports_chat:
+        reasons.append("Model does not support chat workloads")
+    if tools and not entry.capabilities.supports_tool_execution:
+        reasons.append("Model route does not support tool execution")
+    if vision and not entry.capabilities.has_vision:
+        reasons.append("Model route does not support image input")
+    if not entry.capabilities.has_thinking:
+        reasons.append("Model route does not advertise reasoning effort")
+    if effort not in {"low", "medium", "high", "xhigh"}:
+        reasons.append("Effort is not supported by the selection contract")
+    elif effort == "xhigh" and not entry.capabilities.supports_xhigh:
+        reasons.append("Model route does not advertise xhigh effort")
+    if (entry.capabilities.thinking_level_map or {}).get(effort, effort) is None:
+        reasons.append("Model route does not support the requested effort")
+    error = await route_preflight_error(model)
+    if error is not None:
+        reasons.append(str(error))
+    return reasons
+
+
+async def select_model(request: SelectionRequest) -> dict:
+    policy_data = await selection_policy()
+    policy = policy_data["policies"].get(request.task_type)
+    if policy is None:
+        raise UnknownTaskType(f"Task type {request.task_type!r} is not in the selection policy")
+    candidates: list[dict[str, Any]] = ([{"model": request.override_model, "effort": request.override_effort}]
+                  if request.override_model else policy["candidates"])
+    attempts = []
+    chosen = None
+    for candidate in candidates:
+        model = resolve_model(candidate["model"])
+        effort = candidate["effort"]
+        reasons = await _unavailable(model, effort, tools=request.requires_tools or policy.get("requires_tools", False),
+                                     vision=request.requires_vision or policy.get("requires_vision", False))
+        attempts.append({"model": model, "effort": effort, "available": not reasons, "reasons": reasons})
+        if not reasons:
+            chosen = (candidate, model, effort)
+            break
+    candidate, model, effort = chosen if chosen else (candidates[0], resolve_model(candidates[0]["model"]), candidates[0]["effort"])
+    qualification = candidate.get("qualification") or {}
+    benchmark = qualification.get("benchmark") or {}
+    local = qualification.get("local_route") or {}
     qualified = bool(
-        not request.override_model
-        and qualification.get("kind") == "task_benchmark"
-        and qualification.get("source")
-        and qualification.get("assessed_at", "9999") <= today
-        and qualification.get("valid_until", "") >= today
-        and qualification.get("model") == selected
-        and qualification.get("effort") == effort
+        chosen and not request.override_model
+        and _current_evidence(benchmark, kind="task_benchmark", model=model, effort=effort, task_type=request.task_type)
+        and _current_evidence(local, kind="local_route_qualification", model=model, effort=effort, task_type=request.task_type)
     )
     return {
-        "task_type": request.task_type,
-        "mode": request.mode,
-        "model": selected,
-        "effort": effort,
-        "override": request.override_model is not None,
-        "available": not reasons,
-        "unavailable_reasons": reasons,
+        "task_type": request.task_type, "mode": request.mode, "model": model, "effort": effort,
+        "override": request.override_model is not None, "available": chosen is not None,
+        "unavailable_reasons": attempts[0]["reasons"] if not chosen else [], "candidates_checked": attempts,
         "checked_at": datetime.now(UTC).isoformat(),
         "availability_scope": "catalog, credentials and shared provider cooldown; not an entitlement or capability probe",
         "cost_comparison": "not evaluated; subscription quota and metered prices are not directly comparable",
         "provenance": {
             "kind": "explicit_override" if request.override_model else "provider_guidance_and_operator_judgment",
-            "source": None if request.override_model else policy["source"],
-            "source_checked_at": None if request.override_model else policy["source_checked_at"],
-            "confidence": "unqualified",
-            "rationale": "Caller selected the model and effort." if request.override_model else policy["rationale"],
-            "policy_version": policy_data["version"],
-            "benchmark_evidence": None,
+            "source": candidate.get("source"), "source_checked_at": candidate.get("source_checked_at"),
+            "confidence": "unqualified", "rationale": "Caller selected the model and effort." if request.override_model else candidate["rationale"],
+            "policy_version": policy_data["version"], "benchmark_evidence": benchmark or None,
         },
-        "automatic_eligible": qualified,
-        "apply": request.mode == "automatic" and qualified and not reasons,
-        "automatic_reason": ("Task-specific qualification is current." if qualified else "No current task-specific benchmark qualification is configured."),
+        "automatic_eligible": qualified, "apply": request.mode == "automatic" and qualified,
+        "automatic_reason": "Task benchmark and local route qualification are current." if qualified else "Current task benchmark and local route qualification are both required.",
         "qualification": qualification or None,
         "shadow_comparison": (
-            {"assigned_model": resolve_model(request.assigned_model), "same_model": resolve_model(request.assigned_model) == selected}
+            {"assigned_model": resolve_model(request.assigned_model), "same_model": resolve_model(request.assigned_model) == model}
             if request.mode == "shadow" and request.assigned_model else None
         ),
     }

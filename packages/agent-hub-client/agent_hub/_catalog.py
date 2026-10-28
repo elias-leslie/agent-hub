@@ -34,6 +34,10 @@ class CatalogOperationsMixin:
         """Return the live model catalog (``GET /api/models``)."""
         return _object(self._get_client().get("/api/models", headers=self._inject_tracking_headers("sdk.list_models")), "Model catalog")
 
+    def model_selection_policy(self) -> dict[str, Any]:
+        """List configured task types and policy version."""
+        return _object(self._get_client().get("/api/models/selection-policy", headers=self._inject_tracking_headers("sdk.model_selection_policy")), "Model selection policy")
+
     def select_model(self, task_type: str, **options: Any) -> dict[str, Any]:
         """Get metadata-only model advice; no task contents are accepted."""
         return _object(self._get_client().post("/api/models/select", json={"task_type": task_type, **options}, headers=self._inject_tracking_headers("sdk.select_model")), "Model selection")
@@ -71,6 +75,11 @@ class AsyncCatalogOperationsMixin:
         """Return the live model catalog (``GET /api/models``)."""
         client = await self._get_client()
         return _object(await client.get("/api/models", headers=self._inject_tracking_headers("sdk.list_models")), "Model catalog")
+
+    async def model_selection_policy(self) -> dict[str, Any]:
+        """List configured task types and policy version."""
+        client = await self._get_client()
+        return _object(await client.get("/api/models/selection-policy", headers=self._inject_tracking_headers("sdk.model_selection_policy")), "Model selection policy")
 
     async def select_model(self, task_type: str, **options: Any) -> dict[str, Any]:
         """Get metadata-only model advice; no task contents are accepted."""

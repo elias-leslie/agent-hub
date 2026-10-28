@@ -92,8 +92,10 @@ async def test_automation_owner_calls_require_and_send_the_internal_secret(httpx
 
 @pytest.mark.asyncio
 async def test_model_selection_sdk_sends_only_metadata(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url=f"{BASE}/api/models/selection-policy", json={"version": 2, "task_types": ["visual_reasoning"]})
     httpx_mock.add_response(url=f"{BASE}/api/models/select", method="POST", json={"model": "codex/gpt-6.1-terra", "apply": False})
     async with AsyncAgentHubClient(client_id="c", request_source="r") as client:
+        assert (await client.model_selection_policy())["task_types"] == ["visual_reasoning"]
         result = await client.select_model("visual_reasoning", mode="shadow", assigned_model="codex/gpt-6.1-sol")
     assert result["apply"] is False
-    assert json.loads(httpx_mock.get_request().content) == {"task_type": "visual_reasoning", "mode": "shadow", "assigned_model": "codex/gpt-6.1-sol"}
+    assert json.loads(httpx_mock.get_requests()[1].content) == {"task_type": "visual_reasoning", "mode": "shadow", "assigned_model": "codex/gpt-6.1-sol"}

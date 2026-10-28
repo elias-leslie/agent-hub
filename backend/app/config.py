@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # Per-logger overrides, e.g. "app.llm=DEBUG,httpx=WARNING" (app/core/logging_config.py).
     log_levels: str = ""
 
+    # Optional external selection policy, read on each advisory request.
+    agent_hub_model_selection_policy_path: str = ""
+
     # Database
     agent_hub_db_url: str = ""
     # Keep few idle connections while preserving the existing 30-call burst

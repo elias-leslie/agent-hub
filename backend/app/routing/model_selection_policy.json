@@ -1,28 +1,98 @@
 {
-  "version": 1,
+  "version": 2,
   "policies": {
     "coding": {
-      "model": "codex/gpt-6.1-sol", "effort": "medium", "requires_tools": true,
-      "rationale": "Provider guidance describes Sol as suitable for complex coding; effort is an operator starting point.",
-      "source": "https://developers.openai.com/api/docs/guides/latest-model", "source_checked_at": "2026-10-28"
+      "requires_tools": true,
+      "candidates": [
+        {
+          "model": "codex/gpt-6.1-sol",
+          "effort": "medium",
+          "rationale": "Provider guidance describes Sol as suitable for complex coding; effort is an operator starting point.",
+          "source": "https://developers.openai.com/api/docs/guides/latest-model",
+          "source_checked_at": "2026-10-28"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "effort": "medium",
+          "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+          "source_checked_at": "2026-10-28",
+          "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
+        }
+      ]
     },
     "reasoning": {
-      "model": "codex/gpt-6-astra", "effort": "high", "requires_tools": false,
-      "rationale": "Provider guidance positions Astra for demanding reasoning; effort is an operator starting point.",
-      "source": "https://developers.openai.com/api/docs/models/gpt-6-astra", "source_checked_at": "2026-10-28"
+      "requires_tools": false,
+      "candidates": [
+        {
+          "model": "codex/gpt-6-astra",
+          "effort": "high",
+          "rationale": "Provider guidance positions Astra for demanding reasoning; effort is an operator starting point.",
+          "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+          "source_checked_at": "2026-10-28"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "effort": "high",
+          "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+          "source_checked_at": "2026-10-28",
+          "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
+        }
+      ]
     },
     "visual_reasoning": {
-      "model": "codex/gpt-6.1-terra", "effort": "medium", "requires_vision": true,
-      "rationale": "Provider guidance identifies visual reasoning as a Terra use; effort is an operator starting point.",
-      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra", "source_checked_at": "2026-10-28"
+      "requires_vision": true,
+      "candidates": [
+        {
+          "model": "codex/gpt-6.1-terra",
+          "effort": "medium",
+          "rationale": "Provider guidance identifies visual reasoning as a Terra use; effort is an operator starting point.",
+          "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+          "source_checked_at": "2026-10-28"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "effort": "medium",
+          "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+          "source_checked_at": "2026-10-28",
+          "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
+        }
+      ]
     },
     "writing": {
-      "model": "codex/gpt-6.1-terra", "effort": "medium", "rationale": "Provider guidance identifies writing as a Terra use; effort is an operator starting point.",
-      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra", "source_checked_at": "2026-10-28"
+      "candidates": [
+        {
+          "model": "codex/gpt-6.1-terra",
+          "effort": "medium",
+          "rationale": "Provider guidance identifies writing as a Terra use; effort is an operator starting point.",
+          "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+          "source_checked_at": "2026-10-28"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "effort": "medium",
+          "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+          "source_checked_at": "2026-10-28",
+          "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
+        }
+      ]
     },
     "general": {
-      "model": "codex/gpt-6.1-sol", "effort": "medium", "rationale": "Provider guidance positions Sol for complex general work; effort is an operator starting point.",
-      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol", "source_checked_at": "2026-10-28"
+      "candidates": [
+        {
+          "model": "codex/gpt-6.1-sol",
+          "effort": "medium",
+          "rationale": "Provider guidance positions Sol for complex general work; effort is an operator starting point.",
+          "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+          "source_checked_at": "2026-10-28"
+        },
+        {
+          "model": "gemini-3.8-flash",
+          "effort": "medium",
+          "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+          "source_checked_at": "2026-10-28",
+          "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
+        }
+      ]
     }
   }
 }
