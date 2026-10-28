@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from app.models.session import SessionEventType
 from app.services._session_metadata_helpers import resolve_model_display_name
+from app.services.event_storage import TOOL_RESULT_SUMMARY_CHARS, _extract_tool_result_content
 
 if TYPE_CHECKING:
     from app.api.schemas.sessions import MessageResponse, ToolExecutionResponse
@@ -15,6 +17,13 @@ _MESSAGE_TYPES = frozenset({
     SessionEventType.USER_MESSAGE,
     SessionEventType.ASSISTANT_MESSAGE,
     SessionEventType.SYSTEM_MESSAGE,
+})
+
+
+_TRACE_TYPES = frozenset({
+    SessionEventType.THINKING,
+    SessionEventType.TOOL_USE,
+    SessionEventType.TOOL_RESULT,
 })
 
 
@@ -30,13 +39,41 @@ def tool_execution_from_event(evt: Any) -> ToolExecutionResponse:
     )
 
 
-def apply_tool_result(evt: Any, tool_use_map: dict[str, ToolExecutionResponse]) -> None:
-    matched = tool_use_map.get(evt.tool_name or "")
-    if not matched:
+def _result_summary(evt: Any) -> str | None:
+    """Readable, bounded text of a tool result, so a reopened chat does not carry whole file reads."""
+    text = evt.content if isinstance(evt.content, str) and evt.content else None
+    output = evt.tool_output
+    if text is None and isinstance(output, dict):
+        text = _extract_tool_result_content(output, TOOL_RESULT_SUMMARY_CHARS + 1)
+        if text is None and output:
+            text = json.dumps(output, default=str)
+    elif text is None and output:
+        text = str(output)
+    if not text:
+        return None
+    if len(text) > TOOL_RESULT_SUMMARY_CHARS:
+        return f"{text[:TOOL_RESULT_SUMMARY_CHARS]}…"
+    return text
+
+
+def apply_tool_result(
+    evt: Any,
+    tool_use_map: dict[str, list[ToolExecutionResponse]],
+    pending: dict[str, ToolExecutionResponse] | None = None,
+) -> None:
+    """Attach a result to its call: by the call's own id when both carry one, else the first unanswered call of that name."""
+    call_id = getattr(evt, "call_id", None)
+    matched = pending.pop(call_id, None) if pending is not None and call_id else None
+    if matched is None:
+        queue = tool_use_map.get(evt.tool_name or "") or []
+        matched = next((tool for tool in queue if tool.result is None and tool.status != "error"), None)
+    if matched is None:
         return
-    output = evt.tool_output or evt.content
-    matched.result = str(output) if output else None
+    matched.result = _result_summary(evt)
     matched.duration_ms = evt.duration_ms or matched.duration_ms
+    output = evt.tool_output
+    if isinstance(output, dict) and output.get("is_error") is True:
+        matched.status = "error"
 
 
 def collect_turn_data(
@@ -45,7 +82,8 @@ def collect_turn_data(
     thinking_parts: list[str] = []
     thinking_tokens = 0
     tool_executions: list[ToolExecutionResponse] = []
-    tool_use_map: dict[str, ToolExecutionResponse] = {}
+    tool_use_map: dict[str, list[ToolExecutionResponse]] = defaultdict(list)
+    by_call_id: dict[str, ToolExecutionResponse] = {}
 
     for evt in turn_events:
         if evt.event_type == SessionEventType.THINKING:
@@ -58,10 +96,13 @@ def collect_turn_data(
             tool_resp = tool_execution_from_event(evt)
             tool_executions.append(tool_resp)
             if evt.tool_name:
-                tool_use_map[evt.tool_name] = tool_resp
+                tool_use_map[evt.tool_name].append(tool_resp)
+            call_id = getattr(evt, "call_id", None)
+            if call_id:
+                by_call_id[call_id] = tool_resp
             continue
         if evt.event_type == SessionEventType.TOOL_RESULT:
-            apply_tool_result(evt, tool_use_map)
+            apply_tool_result(evt, tool_use_map, by_call_id)
 
     return thinking_parts, thinking_tokens, tool_executions
 
@@ -159,7 +200,26 @@ def group_events_by_turn(events: list[Any]) -> dict[int, list[Any]]:
     return turns
 
 
+def _split_at_user_messages(turn_events: list[Any]) -> list[list[Any]]:
+    """A chat session keeps every exchange in one turn number; each user message starts a new exchange."""
+    segments: list[list[Any]] = [[]]
+    for evt in turn_events:
+        if evt.event_type == SessionEventType.USER_MESSAGE and any(
+            e.event_type in _MESSAGE_TYPES or e.event_type in _TRACE_TYPES for e in segments[-1]
+        ):
+            segments.append([])
+        segments[-1].append(evt)
+    return [segment for segment in segments if segment]
+
+
 def turn_messages(turn_events: list[Any], names: dict[str, str]) -> list[MessageResponse]:
+    messages: list[MessageResponse] = []
+    for segment in _split_at_user_messages(turn_events):
+        messages.extend(_exchange_messages(segment, names))
+    return messages
+
+
+def _exchange_messages(turn_events: list[Any], names: dict[str, str]) -> list[MessageResponse]:
     thinking_parts, thinking_tokens, tool_executions = collect_turn_data(turn_events)
     messages: list[MessageResponse] = []
     for evt in turn_events:

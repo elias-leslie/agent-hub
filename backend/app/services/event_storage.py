@@ -484,32 +484,38 @@ async def store_tool_use_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    call_id: str | None = None,
 ) -> SessionEvent:
     """Store a tool use event."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.TOOL_USE,
-        tool_name=tool_name, tool_input=tool_input, duration_ms=duration_ms,
+        tool_name=tool_name, call_id=call_id, tool_input=tool_input, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,
     )
 
 
-def _extract_tool_result_content(output_data: dict[str, Any]) -> str | None:
+TOOL_RESULT_SUMMARY_CHARS = 2000
+
+
+def _extract_tool_result_content(
+    output_data: dict[str, Any], limit: int = TOOL_RESULT_SUMMARY_CHARS
+) -> str | None:
     """Extract a text summary from tool_output for the content column.
 
-    Tries common keys in order: result, content, output, message.
+    Tries common keys in order: result, content, output, message, text.
     Falls back to None if no usable text found. Redacts before the cut, so a
     token straddling it cannot leave a fragment the floor no longer matches.
     """
-    for key in ("result", "content", "output", "message"):
+    for key in ("result", "content", "output", "message", "text"):
         val = output_data.get(key)
         if val and isinstance(val, str):
-            return redact_secrets(val)[0][:2000]
+            return redact_secrets(val)[0][:limit]
     if len(output_data) == 1:
         val = next(iter(output_data.values()))
         if isinstance(val, str):
-            return redact_secrets(val)[0][:2000]
+            return redact_secrets(val)[0][:limit]
     return None
 
 
@@ -528,12 +534,13 @@ async def store_tool_result_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    call_id: str | None = None,
 ) -> SessionEvent:
     """Store a tool result event."""
     output_data = tool_output if isinstance(tool_output, dict) else {"result": tool_output}
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.TOOL_RESULT,
-        tool_name=tool_name, content=_extract_tool_result_content(output_data),
+        tool_name=tool_name, call_id=call_id, content=_extract_tool_result_content(output_data),
         tool_output=output_data, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,

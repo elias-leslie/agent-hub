@@ -322,7 +322,7 @@ def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None
     assert messages[0].tool_executions is not None
     assert len(messages[0].tool_executions) == 1
     assert messages[0].tool_executions[0].name == "bash"
-    assert messages[0].tool_executions[0].result == "{'content': 'Created checkout', 'is_error': False}"
+    assert messages[0].tool_executions[0].result == "Created checkout"
 
 
 def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_duplicate() -> None:
@@ -575,3 +575,72 @@ def test_session_summary_kwargs_only_names_shared_schema_fields() -> None:
     for session in (_session(), _fully_populated_session()):
         kwargs = _session_summary_kwargs(session, owner_session_ids=None, specialist_session_ids=None)
         assert set(kwargs) <= set(SessionSummaryFields.model_fields)
+
+
+def _event(seq: int, event_type: str, **fields: Any) -> SimpleNamespace:
+    base: dict[str, Any] = {
+        "id": f"evt-{seq}", "turn": 1, "sequence": seq, "event_type": event_type, "role": None, "content": None,
+        "tool_name": None, "call_id": None, "tool_input": None, "tool_output": None, "tokens": None,
+        "duration_ms": None, "model_used": "m", "agent_id": "chat", "agent_name": "chat",
+        "created_at": datetime.now(UTC),
+    }
+    base.update(fields)
+    return SimpleNamespace(**base)
+
+
+def test_a_chat_session_keeps_each_exchanges_thinking_and_tools_with_its_own_answer() -> None:
+    """A chat session numbers every event as turn 1; the second answer must not inherit the first's trace."""
+    events = [
+        _event(1, SessionEventType.USER_MESSAGE, role="user", content="read a"),
+        _event(2, SessionEventType.THINKING, content="first thought", tokens=5),
+        _event(3, SessionEventType.TOOL_USE, tool_name="read", call_id="c1", tool_input={"path": "a"}),
+        _event(4, SessionEventType.TOOL_RESULT, tool_name="read", call_id="c1",
+               tool_output={"content": "alpha", "is_error": False}, content="alpha"),
+        _event(5, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="a says alpha"),
+        _event(6, SessionEventType.USER_MESSAGE, role="user", content="and now"),
+        _event(7, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="nothing more"),
+    ]
+
+    messages = convert_messages_to_response(events)
+
+    assert [m.role for m in messages] == ["user", "assistant", "user", "assistant"]
+    assert messages[1].thinking == "first thought"
+    assert messages[1].thinking_tokens == 5
+    assert [t.name for t in messages[1].tool_executions or []] == ["read"]
+    assert messages[3].thinking is None
+    assert not messages[3].tool_executions
+
+
+def test_tool_results_match_their_own_call_and_come_back_as_bounded_text() -> None:
+    from app.services.event_storage import TOOL_RESULT_SUMMARY_CHARS
+
+    big = "y" * (TOOL_RESULT_SUMMARY_CHARS + 50)
+    events = [
+        _event(1, SessionEventType.TOOL_USE, tool_name="read", call_id="c1", tool_input={"path": "a"}),
+        _event(2, SessionEventType.TOOL_USE, tool_name="read", call_id="c2", tool_input={"path": "b"}),
+        _event(3, SessionEventType.TOOL_RESULT, tool_name="read", call_id="c2",
+               tool_output={"content": "denied", "is_error": True}, content="denied"),
+        _event(4, SessionEventType.TOOL_RESULT, tool_name="read", call_id="c1", tool_output={"text": big}),
+        _event(5, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="ok"),
+    ]
+
+    tools = convert_messages_to_response(events)[0].tool_executions or []
+
+    assert [(t.status, t.result) for t in tools] == [
+        ("complete", "y" * TOOL_RESULT_SUMMARY_CHARS + "…"),
+        ("error", "denied"),
+    ]
+
+
+def test_results_without_call_ids_pair_with_the_first_unanswered_call_of_that_name() -> None:
+    events = [
+        _event(1, SessionEventType.TOOL_USE, tool_name="bash", tool_input={"command": "pwd"}),
+        _event(2, SessionEventType.TOOL_USE, tool_name="bash", tool_input={"command": "ls"}),
+        _event(3, SessionEventType.TOOL_RESULT, tool_name="bash", tool_output={"text": "/srv"}),
+        _event(4, SessionEventType.TOOL_RESULT, tool_name="bash", tool_output={"text": "a b"}),
+        _event(5, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="ok"),
+    ]
+
+    tools = convert_messages_to_response(events)[0].tool_executions or []
+
+    assert [t.result for t in tools] == ["/srv", "a b"]

@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import cast
@@ -49,6 +49,7 @@ from app.routing.registry import get_provider_for_model
 from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message, messages_to_dicts
 
+from .event_helpers import TurnTraceStep
 from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
 from .runtime_usage import accounting_model, aggregate_message_usage, outcome_usage, served_model
 from .schemas import MessageInput
@@ -135,6 +136,7 @@ async def _persist_and_build_done_sse(
     message: AssistantMessage,
     accumulated_content: str,
     cost_usd: float | None = None,
+    trace: Sequence[TurnTraceStep] = (),
 ) -> str:
     """Run the same persistence side-effects the legacy path emitted, then return done SSE."""
     from app.constants.catalog import MODEL_CATALOG_BY_ID
@@ -170,6 +172,8 @@ async def _persist_and_build_done_sse(
         stream_start=ctx.stream_start,
         source_metadata=ctx.source_metadata,
         usage=outcome_usage(message),
+        trace=trace,
+        thinking_tokens=thinking_tokens,
     )
     await track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
     if ctx.is_new_session and ctx.is_one_shot:
@@ -213,6 +217,24 @@ def _attach_routing(writer: SseWriter, ctx: StreamContext) -> None:
     )
 
 
+def _tool_result_step(
+    event: ToolRunComplete | ToolRunError,
+    text: str,
+    started_at: dict[str, float],
+    *,
+    is_error: bool,
+) -> TurnTraceStep:
+    started = started_at.pop(event.tool_call.id, None)
+    return TurnTraceStep(
+        kind="tool_result",
+        text=text,
+        tool_name=event.tool_call.name,
+        call_id=event.tool_call.id,
+        is_error=is_error,
+        duration_ms=None if started is None else int((time.monotonic() - started) * 1000),
+    )
+
+
 async def _emit_events(
     events: AsyncIterator[ToolLoopEvent],
     writer: SseWriter,
@@ -232,16 +254,30 @@ async def _emit_events(
     usage_messages: list[AssistantMessage] = []
     total_cost_usd = 0.0
     turn_text_start = len(content_buf[0])
+    # What the model thought and which tools it called, stored with the answer so a reopened chat shows it.
+    trace: list[TurnTraceStep] = []
+    thinking_buf: list[str] = []
+    turn_trace_start = 0
+    tool_started_at: dict[str, float] = {}
+
+    def flush_thinking() -> None:
+        if thinking_buf:
+            trace.append(TurnTraceStep(kind="thinking", text="".join(thinking_buf)))
+            thinking_buf.clear()
+
     async for event in events:
         if cancel_event is not None and cancel_event.is_set():
             yield writer.cancel_acknowledged()
             return
         if isinstance(event, StartEvent):
             turn_text_start = len(content_buf[0])
+            turn_trace_start = len(trace)
             continue
         if isinstance(event, TurnRetry):
             # The interrupted turn's partial text is void; clients drop it on the same event.
             content_buf[0] = content_buf[0][:turn_text_start]
+            del trace[turn_trace_start:]
+            thinking_buf.clear()
             yield writer.turn_retry(event.attempt, event.max_retries, event.reason)
             continue
         if isinstance(event, TextDeltaEvent):
@@ -255,11 +291,21 @@ async def _emit_events(
             if event.delta:
                 if attempt_output_started is not None:
                     attempt_output_started[0] = True
+                thinking_buf.append(event.delta)
                 yield writer.thinking(event.delta)
             continue
         if isinstance(event, ToolCallEndEvent):
             if attempt_output_started is not None:
                 attempt_output_started[0] = True
+            flush_thinking()
+            trace.append(
+                TurnTraceStep(
+                    kind="tool_use",
+                    tool_name=event.tool_call.name,
+                    call_id=event.tool_call.id,
+                    tool_input=event.tool_call.arguments,
+                )
+            )
             yield writer.tool_use(
                 event.tool_call.id,
                 event.tool_call.name,
@@ -269,20 +315,24 @@ async def _emit_events(
         if isinstance(event, ToolRunStart):
             if attempt_output_started is not None:
                 attempt_output_started[0] = True
+            tool_started_at[event.tool_call.id] = time.monotonic()
             yield writer.tool_start(event.tool_call.id, event.tool_call.name)
             continue
         if isinstance(event, ToolRunComplete):
             if attempt_output_started is not None:
                 attempt_output_started[0] = True
+            result_text = tool_result_text(event.result)
+            trace.append(_tool_result_step(event, result_text, tool_started_at, is_error=False))
             yield writer.tool_result(
                 event.tool_call.id,
-                tool_result_text(event.result),
+                result_text,
                 "complete",
             )
             continue
         if isinstance(event, ToolRunError):
             if attempt_output_started is not None:
                 attempt_output_started[0] = True
+            trace.append(_tool_result_step(event, event.error, tool_started_at, is_error=True))
             yield writer.tool_result(event.tool_call.id, event.error, "error")
             continue
         if isinstance(event, DoneEvent):
@@ -291,12 +341,14 @@ async def _emit_events(
             await _mirror_request_metrics(ctx, event.message)
             if tool_loop_active and event.reason == "toolUse":
                 continue
+            flush_thinking()
             yield await _persist_and_build_done_sse(
                 writer=writer,
                 ctx=ctx,
                 message=aggregate_message_usage(event.message, usage_messages),
                 accumulated_content=content_buf[0],
                 cost_usd=total_cost_usd,
+                trace=trace,
             )
             continue
         if isinstance(event, ErrorEvent):

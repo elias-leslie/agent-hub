@@ -186,3 +186,48 @@ async def test_emit_events_announces_a_turn_retry_and_drops_the_voided_text() ->
     assert [c["type"] for c in chunks] == ["content", "turn_retry", "content", "done"]
     assert (chunks[1]["attempt"], chunks[1]["max_retries"], chunks[1]["reason"]) == (1, 2, "no progress")
     assert buf[0] == "earlier ok"
+
+
+@pytest.mark.asyncio
+async def test_emit_events_hands_the_turns_thinking_and_tool_calls_to_the_save() -> None:
+    from app.llm.types import ThinkingDeltaEvent
+
+    tool_call = ToolCall(id="toolu_1", name="read", arguments={"path": "a.txt"})
+    msg_tool = _message([tool_call], "toolUse", Usage(input=10, output=2, total_tokens=12))
+    msg_done = _message([TextContent(text="done")], "stop", Usage(input=12, output=1, total_tokens=13))
+
+    async def events() -> AsyncIterator[ToolLoopEvent]:
+        yield StartEvent(partial=msg_tool)
+        yield ThinkingDeltaEvent(content_index=0, delta="I should ", partial=msg_tool)
+        yield ThinkingDeltaEvent(content_index=0, delta="read it.", partial=msg_tool)
+        yield ToolCallEndEvent(content_index=1, tool_call=tool_call, partial=msg_tool)
+        yield tool_loop.ToolRunStart(tool_call=tool_call)
+        yield tool_loop.ToolRunComplete(
+            tool_call=tool_call,
+            result=ToolResultMessage(
+                tool_call_id="toolu_1", tool_name="read", content=[TextContent(text="hello")],
+                is_error=False, timestamp=0,
+            ),
+        )
+        yield DoneEvent(reason="toolUse", message=msg_tool)
+        yield StartEvent(partial=msg_done)
+        yield ThinkingDeltaEvent(content_index=0, delta="All read.", partial=msg_done)
+        yield TextDeltaEvent(content_index=1, delta="done", partial=msg_done)
+        yield DoneEvent(reason="stop", message=msg_done)
+
+    ctx = make_stream_ctx("sess-trace")
+    writer = SseWriter(session_id="sess-trace")
+    _attach_routing(writer, ctx)
+    with patched_done_persistence() as mocks:
+        async for _ in _emit_events(events(), writer, ctx, [""], tool_loop_active=True):
+            pass
+
+    trace = mocks.save_messages_to_db.await_args.kwargs["trace"]
+    assert [(step.kind, step.text, step.tool_name, step.call_id, step.is_error) for step in trace] == [
+        ("thinking", "I should read it.", None, None, False),
+        ("tool_use", "", "read", "toolu_1", False),
+        ("tool_result", "hello", "read", "toolu_1", False),
+        ("thinking", "All read.", None, None, False),
+    ]
+    assert trace[1].tool_input == {"path": "a.txt"}
+    assert trace[2].duration_ms is not None

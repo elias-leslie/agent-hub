@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from app.llm.types import AssistantMessage
@@ -14,7 +15,7 @@ from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_message, publish_tool_result, publish_tool_use
 from app.services.session_live_activity import mark_session_completed
 
-from .event_helpers import save_events, save_user_message_events
+from .event_helpers import TurnTraceStep, save_events, save_user_message_events
 from .schemas import MessageInput
 from .streaming_context import StreamContext
 
@@ -35,6 +36,8 @@ async def save_messages_to_db(
     stream_start: float,
     source_metadata: dict[str, object] | None = None,
     usage: dict[str, object] | None = None,
+    trace: Sequence[TurnTraceStep] = (),
+    thinking_tokens: int | None = None,
 ) -> None:
     """Save streamed messages to the database using a fresh session."""
     if not accumulated_content:
@@ -56,6 +59,8 @@ async def save_messages_to_db(
                 duration_ms=stream_duration_ms,
                 source_metadata=source_metadata,
                 usage=usage,
+                trace=trace,
+                thinking_tokens=thinking_tokens,
             )
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:
