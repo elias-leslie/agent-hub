@@ -226,6 +226,22 @@ def test_step_line_shows_models_fallback_attempts_live_phase_and_cost() -> None:
     assert "$? unknown" in step_line(unpriced)
 
 
+def test_the_same_model_spelled_two_ways_is_not_shown_as_a_switch_and_a_real_switch_is() -> None:
+    same = step("a", "completed", attempt_history=[
+        attempt(requested_model="opencode-go/deepseek-v4.1-flash", served_model="deepseek-v4.1-flash")])
+    assert "→" not in step_line(same)
+    real = step("a", "completed", attempt_history=[
+        attempt(requested_model="opencode-go/deepseek-v4.1-flash", served_model="opencode-go/kimi-k3")])
+    assert "opencode-go/deepseek-v4.1-flash→opencode-go/kimi-k3" in step_line(real)
+
+
+def test_step_line_shows_the_tools_the_last_attempt_got_and_says_none_when_it_got_none() -> None:
+    narrowed = step("a", "needs_owner", attempt_history=[attempt(tools=["read_file"])])
+    assert "tools=read_file" in step_line(narrowed)
+    assert "tools=none" in step_line(step("a", "failed", attempt_history=[attempt(tools=[])]))
+    assert "tools=" not in step_line(step("a", "failed", attempt_history=[attempt()]))  # not reported is not "none"
+
+
 def test_a_fresh_run_and_a_just_started_attempt_format_without_numbers_or_cost() -> None:
     fresh = view(usage_totals={"total_tokens": None, "cost": {}})
     started = step("a", "running", attempts=1, attempt_history=[

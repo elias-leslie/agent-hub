@@ -11,6 +11,8 @@ GUIDE: tuple[str, ...] = (
     "  dependencies' handoffs. Independent steps may overlap where the run's max_concurrent_steps allows.",
     "- Pick models per step: cheap for mechanical edits, strongest for design or review; the agent's chain adds",
     "  fallbacks. Check usage limits before choosing a harness.",
+    "- executor agent_hub follows the project's Agent Hub tier (read tier: no bash or edits, so a step that needs them",
+    "  ends tools_unavailable at once); claude_code, codex and pi get their own tools. get shows tools=... per step.",
     "START",
     "- st workflow create --file def.json --request-id NAME   prints run id and page URL; the same NAME returns the same run.",
     "- After a restart: st workflow list --mine, then get or wait.",

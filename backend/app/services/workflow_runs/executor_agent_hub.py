@@ -10,6 +10,11 @@ mirrors Pi's lean start: a short working-rules prompt with the worktree as cwd, 
 canonical context still comes first in the system prompt, and tool permission and safety checks are unchanged. ``full``
 is the agent's whole provisioned tool set and no extra prompt.
 
+The tool set is narrowed by the project's Agent Hub permission tier (a ``read`` project gives only read tools). The tools
+the attempt got are recorded on the result. A step that needs a shell and a write tool (acceptance commands, or a level
+that lists them) and does not have them ends at once with ``tools_unavailable`` and no model call; the engine treats it
+like an unavailable model (next chain entry, else the owner).
+
 The loop runs with no database open. Afterwards the executor writes the attempt's transcript onto its child session
 (``agent_hub_transcript``): the session's events, with the served model and token usage (reasoning tokens when the
 provider reports them) per turn, plus cost rows. The run view's per-attempt ``session_id`` is the way to read it.
@@ -40,6 +45,7 @@ Complete = Callable[..., Awaitable[Any]]
 LoadAgent = Callable[[str], Awaitable[Any]]
 ProvisionTools = Callable[[str, str], Awaitable[list[dict[str, Any]] | None]]
 RecordTranscript = Callable[[Transcript], Awaitable[None]]
+TierLookup = Callable[[str], Awaitable[str | None]]
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +125,39 @@ async def provision_tools(agent_slug: str, project_id: str) -> list[dict[str, An
     return provisioned.loaded_tools or None
 
 
+async def project_tier(project_id: str) -> str | None:
+    """The project's Agent Hub permission tier, for messages only (None when it cannot be read)."""
+
+    from app.db import async_session
+    from app.services.project_permission_service import _resolve_project_tier
+
+    try:
+        async with async_session() as db:
+            return await _resolve_project_tier(project_id, db)
+    except Exception:
+        logger.warning("permission tier of %s could not be read", project_id, exc_info=True)
+        return None
+
+
+def missing_tools(
+    names: list[str], acceptance: tuple[str, ...] | list[str], level: Mapping[str, Any], settings: Mapping[str, Any]
+) -> list[str]:
+    """What a step needs but its tool set lacks: a shell tool and a write tool (empty when it needs neither).
+
+    A step needs them when it has acceptance commands or its level's own tool list carries a shell or write tool.
+    Which tools count as shell and write is data (``executor_defaults.json`` ``agent_hub``).
+    """
+
+    shell, write = set(settings["shell_tools"]), set(settings["write_tools"])
+    if not acceptance and not (set(level.get("tools") or ()) & (shell | write)):
+        return []
+    have = set(names)
+    return [
+        *([" or ".join(sorted(shell))] if not shell & have else []),
+        *([" or ".join(sorted(write))] if not write & have else []),
+    ]
+
+
 def lean_surface(
     level: Mapping[str, Any], tools: list[dict[str, Any]] | None, worktree: Path
 ) -> tuple[list[dict[str, Any]] | None, str | None]:
@@ -153,12 +192,14 @@ class AgentHubExecutor:
         agent_loader: LoadAgent = load_agent,
         tool_provisioner: ProvisionTools = provision_tools,
         transcript_writer: RecordTranscript = persist_transcript,
+        tier_lookup: TierLookup = project_tier,
     ) -> None:
         self.defaults = dict(defaults or load_defaults())
         self._complete = complete
         self._load_agent = agent_loader
         self._provision = tool_provisioner
         self._write_transcript = transcript_writer
+        self._tier = tier_lookup
 
     @staticmethod
     def _partial(transcript: Transcript, loop_log: LoopLog, error: str) -> Transcript:
@@ -209,6 +250,16 @@ class AgentHubExecutor:
         if level is None:
             return StepResult("failed", error=f"agent_hub_unsupported: unknown level {packet.level!r}")
         tools, prompt = lean_surface(level, await self._provision(attempt.agent_slug, attempt.project_id), worktree)
+        names = [str(tool.get("name")) for tool in tools or []]
+        if lacking := missing_tools(names, packet.acceptance, level, settings):
+            # The project's tier left the step without what it needs: no model call, the next chain entry or the owner decides.
+            tier = await self._tier(attempt.project_id)
+            allows = f"project tier {tier!r}" if tier else "the project's Agent Hub permissions"
+            return StepResult(
+                "failed",
+                error=f"tools_unavailable: {allows} allows only [{', '.join(names)}]; this step needs {' and '.join(lacking)}",
+                tools=names,
+            )
         messages: list[dict[str, Any]] = [{"role": "user", "content": packet.render()}]
         if prompt:  # the agent's own prompt layer: the canonical context goes ahead of it
             messages.insert(0, {"role": "system", "content": prompt})
@@ -237,16 +288,16 @@ class AgentHubExecutor:
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
             error = clip(f"agent_hub_error: {exc!r}", 1000)
             await self._record(self._partial(transcript, loop_log, error))
-            return StepResult("failed", error=error)
+            return StepResult("failed", error=error, tools=names)
         await on_event({"type": "agent_hub_finished", "at": time.time()})
         turns = list(result.usage_messages or [result.message])
         await self._record(
             replace(transcript, turns=turns, tool_results=loop_log.tool_results, retries=tuple(loop_log.retries))
         )
-        return await self._result(packet, model, worktree, result)
+        return await self._result(packet, model, worktree, result, names)
 
     async def _result(
-        self, packet: HandoffPacket, model: str, worktree: Path, result: Any
+        self, packet: HandoffPacket, model: str, worktree: Path, result: Any, tools: list[str]
     ) -> StepResult:
         message: AssistantMessage = result.message
         messages: list[AssistantMessage] = list(result.usage_messages or [message])
@@ -294,6 +345,7 @@ class AgentHubExecutor:
             "usage": used,
             "native_session_id": getattr(result, "session_id", None),
             "progress": tuple(progress.items),
+            "tools": tools,
         }
         if failed or (outcome is not None and outcome.kind != "substituted"):
             error = "refused" if injected else (message.error_message or result.error or "agent_hub run failed")

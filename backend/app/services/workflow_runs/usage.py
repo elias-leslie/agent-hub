@@ -49,18 +49,15 @@ def _positive(value: Any) -> float | None:
 def _price_per_token_estimate(model: str, counts: Mapping[str, int]) -> float | None:
     """List price from the catalog's own per-million prices; None when the entry has none (0 is not a price)."""
 
-    from app.constants.catalog import get_model_entry
+    from app.services.subscription_accounting.rates import catalog_list_usd
 
-    entry = get_model_entry(model)
-    price = entry.cost if entry is not None else None
-    if price is None or not (price.input_per_m or price.output_per_m):
-        return None
-    return (
-        counts["input_tokens"] * price.input_per_m
-        + counts["output_tokens"] * price.output_per_m
-        + counts["cache_read_tokens"] * (price.cache_read_per_million or 0.0)
-        + counts["cache_write_tokens"] * (price.cache_write_per_million or 0.0)
-    ) / 1e6
+    return catalog_list_usd(
+        model,
+        input_tokens=counts["input_tokens"],
+        output_tokens=counts["output_tokens"],
+        cache_read=counts["cache_read_tokens"],
+        cache_write=counts["cache_write_tokens"],
+    )
 
 
 def estimate_list_cost(model: str, counts: Mapping[str, int]) -> float | None:
@@ -91,7 +88,9 @@ def harness_basis(provider: str | None, settings: Mapping[str, Any]) -> str:
 
 
 def agent_hub_basis(model: str, counts: Mapping[str, int]) -> str:
-    """Agent Hub's own cost rows: subscription value for Claude/Codex routes, per-token cash for the rest."""
+    """Agent Hub's own cost rows: subscription value for subscription providers (Claude, Codex, OpenCode Go), cash for the rest.
+
+    It follows the model's provider, the same rule Pi and the other harnesses use, so the executor never changes it."""
 
     from app.services.subscription_accounting.rates import subscription_call_value
 

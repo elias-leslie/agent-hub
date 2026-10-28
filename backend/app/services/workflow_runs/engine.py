@@ -36,6 +36,7 @@ from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.session_live_activity import mark_session_completed
 
 from . import acceptance as acceptance_runner
+from .executor_common import catalog_served
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .live import LiveStatus, current_live
 from .packet import (
@@ -49,6 +50,7 @@ from .packet import (
 )
 from .plan import Schedule, context_order, effective_deps, schedule
 from .policy import (
+    TOOLS_UNAVAILABLE,
     AttemptResult,
     Decision,
     RunPolicy,
@@ -1282,6 +1284,11 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
         except Exception:
             logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
     result, info = await _run_effect(intent, deps)
+    # Served ids are catalog ids from here on: the same model spelled differently by an executor is not a switch.
+    served_ids = catalog_served(intent.model, result.served_models)
+    if served_ids != list(result.served_models):
+        info["served_reported"] = list(result.served_models)
+        result = replace(result, served_models=served_ids)
     policy = load_policy(intent.meta["policy"])
     workspace = _workspace_of(intent, policy, info.get("workspace"))
     handoff = normalize_handoff(result.handoff) if result.status == "completed" else None
@@ -1473,6 +1480,7 @@ async def _commit_outcome(
                 now,
                 category=decision.category,
                 resume_after=decision.wait_until,
+                **({"error": result.error} if decision.reason == TOOLS_UNAVAILABLE else {}),
             )
         step.outcome = scratch
         if _meta(run)["state"] == "running":
@@ -1547,6 +1555,8 @@ def _finish_attempt(
         "error": None if decision.action == "cancelled" else result.error,
         "native_session_id": result.native_session_id,
         "transcript_path": result.transcript_path,
+        "tools": list(result.tools) if result.tools is not None else None,
+        "served_reported": info.get("served_reported"),
         "decision": {"action": decision.action, "reason": decision.reason},
         "next_hop": decision.hop,
         "finished_at": now,
@@ -2089,6 +2099,9 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "fallback_used": pm.get("fallback_used"),
                 "fallback_reason": pm.get("fallback_reason"),
                 "served_models": detail.get("served_models") or [],
+                # What the executor reported before it was mapped to catalog ids; null when it already was one.
+                "served_reported": detail.get("served_reported"),
+                "tools": detail.get("tools"),
                 "hop_from": detail.get("hop"),
                 "next_hop": detail.get("next_hop"),
                 "outcome": detail.get("outcome"),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -37,6 +38,11 @@ def last_attempt(step: dict[str, Any]) -> dict[str, Any] | None:
     return history[-1] if history else None
 
 
+def _bare(model: str) -> str:
+    """The model without provider prefix, case or dated snapshot: the same rule the server uses for a model switch."""
+    return re.sub(r"-(?:\d{4}-\d{2}-\d{2}|\d{8})$", "", model.strip().lower().rsplit("/", 1)[-1])
+
+
 def model_text(step: dict[str, Any]) -> str:
     """"requested→served" once an attempt has run (just the model when they match), else the model it will start on."""
     attempt = last_attempt(step)
@@ -46,7 +52,7 @@ def model_text(step: dict[str, Any]) -> str:
         chain = step.get("chain") or []
         return str(step.get("chosen_model") or (chain[0] if chain else "-"))
     requested = requested or "-"
-    if served and served != requested:
+    if served and requested != "-" and _bare(served) != _bare(requested):
         return f"{requested}→{served}"
     return str(served or requested)
 
@@ -84,6 +90,16 @@ def cost_text(step: dict[str, Any]) -> str | None:
     return ", ".join(f"{_usd(usd)} {basis}" for basis, usd in by_basis.items())
 
 
+def tools_text(step: dict[str, Any]) -> str | None:
+    """The tool names the last attempt was given ("tools=none" when it had none), when its executor reported them."""
+    tools = (last_attempt(step) or {}).get("tools")
+    if tools is None:
+        return None
+    names = [str(t) for t in tools]
+    shown = ",".join(names[:8]) + (f"+{len(names) - 8}" if len(names) > 8 else "")
+    return f"tools={shown or 'none'}"
+
+
 def live_text(step: dict[str, Any], now: datetime | None = None) -> str | None:
     live = step.get("live")
     if step.get("status") != "running" or not live:
@@ -101,6 +117,8 @@ def step_line(step: dict[str, Any], now: datetime | None = None) -> str:
     if extra := outcome_text(step):
         cells.append(extra)
     cells.append(f"attempt {step.get('attempts', 0)}/{step.get('attempt_limit', '?')}")
+    if tools := tools_text(step):
+        cells.append(tools)
     if live := live_text(step, now):
         cells.append(live)
     if step.get("cancelling"):

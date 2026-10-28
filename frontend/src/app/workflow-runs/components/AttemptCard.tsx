@@ -8,6 +8,7 @@ import {
   attemptDurationMs,
   attemptModels,
   attemptTokens,
+  attemptToolsText,
   categoryText,
   executorLabel,
   formatResetTime,
@@ -155,6 +156,7 @@ export function AttemptCard({ attempt }: { attempt: WorkflowAttempt }) {
   const duration = attemptDurationMs(attempt)
   const tokens = attemptTokens(attempt)
   const cost = attemptCostText(attempt)
+  const toolsText = attemptToolsText(attempt)
   const hop = attempt.hop_from
   const next = attempt.next_hop
   const statusText = running
@@ -223,6 +225,15 @@ export function AttemptCard({ attempt }: { attempt: WorkflowAttempt }) {
           </p>
         )}
       </div>
+
+      {toolsText ? (
+        <p
+          data-testid="attempt-tools"
+          className="mt-1.5 text-[12px] text-slate-400"
+        >
+          Tools: <span className="font-mono text-slate-300">{toolsText}</span>
+        </p>
+      ) : null}
 
       {hop ? (
         <p className="mt-1.5 text-[12px] text-slate-400">

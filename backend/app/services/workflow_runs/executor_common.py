@@ -14,6 +14,7 @@ import re
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +98,37 @@ class Usage:
             + self.cache_write_tokens
             + self.output_tokens,
         }
+
+
+def argv_tools(argv: Sequence[str]) -> tuple[str, ...] | None:
+    """The tool names a harness command line limits the attempt to (``--tools A,B``); None when it names none."""
+
+    for flag, value in pairwise(argv):
+        if flag == "--tools":
+            return tuple(name for name in value.split(",") if name)
+    return None
+
+
+def catalog_served(requested: str, served: Sequence[str]) -> list[str]:
+    """Served model ids as catalog ids, so one model is never shown as a switch because of how it was spelled.
+
+    A served id that is the requested model (same upstream id, provider prefix, case or dated snapshot: the rule
+    ``is_model_switch`` applies) becomes the requested catalog id. A different model becomes its catalog id when the
+    catalog knows it (as reported, or under the requested model's provider), else it stays as reported.
+    """
+
+    from app.constants.catalog import MODEL_CATALOG_BY_ID, get_model_entry
+    from app.llm.utils.outcomes import is_model_switch
+
+    entry = get_model_entry(requested)
+    provider = entry.provider if entry is not None else requested.partition("/")[0]
+    out: list[str] = []
+    for name in served:
+        if not is_model_switch(requested, name):
+            out.append(requested)
+            continue
+        out.append(next((key for key in (name, f"{provider}/{name}") if key in MODEL_CATALOG_BY_ID), name))
+    return list(dict.fromkeys(out))
 
 
 def as_int(value: Any) -> int:

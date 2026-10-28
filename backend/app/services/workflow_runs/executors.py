@@ -38,6 +38,8 @@ class StepResult:
     # The attempt's last non-refused assistant output and tool actions (whole items, oldest first).
     # Never the refused turn itself. The next model in the chain gets them as partial progress.
     progress: Sequence[str] = ()
+    # The tool names the attempt was given, where the executor knows them (None: unknown, not "no tools").
+    tools: Sequence[str] | None = None
 
 
 class Executor(Protocol):
@@ -68,7 +70,7 @@ def get_executor(kind: str) -> Executor:
 
 @dataclass(frozen=True)
 class FauxAction:
-    """One scripted attempt. ``kind``: success | refuse | substitute | usage_limit | crash | error."""
+    """One scripted attempt. ``kind``: success | refuse | substitute | usage_limit | crash | error | no_tools."""
 
     kind: str = "success"
     category: str | None = None
@@ -114,6 +116,9 @@ class FauxExecutor:
         progress = list(action.progress)
         if action.kind == "error":
             return StepResult("failed", [model], usage=usage, error="faux error", progress=progress)
+        if action.kind == "no_tools":  # what an executor says when the project's tier left the step without its tools
+            error = "tools_unavailable: project tier 'read' allows only [read_file]; this step needs bash"
+            return StepResult("failed", usage={}, error=error, tools=["read_file"])
         if action.kind == "refuse":
             outcome = ProviderOutcome(
                 "refused", model, category=action.category, explanation="faux refusal"

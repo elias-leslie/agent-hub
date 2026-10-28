@@ -117,6 +117,13 @@ export function executorLabel(kind: string | null): string {
   return kind ? (EXECUTOR_LABEL[kind] ?? kind) : 'executor not recorded'
 }
 
+/** The tool names an attempt was given, or null when its executor did not report them. */
+export function attemptToolsText(attempt: WorkflowAttempt): string | null {
+  const tools = attempt.tools
+  if (!tools) return null
+  return tools.length > 0 ? tools.join(', ') : 'none'
+}
+
 export function categoryText(category: string | null | undefined): string {
   return category ? ` (${category})` : ''
 }
@@ -156,6 +163,8 @@ export function pauseExplanation(
       const names = failed.length > 0 ? failed.join(', ') : 'a step'
       return `${failed.length === 1 ? 'Step' : 'Steps'} ${names} failed. Everything that did not depend on ${failed.length === 1 ? 'it' : 'them'} has finished${blocked.length > 0 ? `; ${blocked.join(', ')} cannot start` : ''}. Retry or skip ${stepKey ? `"${stepKey}"` : 'the step'}, change the plan, or end the run.`
     }
+    case 'tools_unavailable':
+      return `${step} needs shell and file-edit tools that its project's Agent Hub permission tier does not give it, and no other model in its chain could run it${pause.error ? `: ${pause.error}` : '.'}`
     case 'no_agent_route':
       return `${step} has no model route to run on${pause.error ? `: ${pause.error}` : '.'}`
     default:

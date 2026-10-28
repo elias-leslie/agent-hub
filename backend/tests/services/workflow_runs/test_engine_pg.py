@@ -310,6 +310,42 @@ async def test_example_run_with_injected_refusal_takes_over_and_opus_returns(
     assert "implement" in review["packet"] and "Partial progress" not in review["packet"]
 
 
+async def test_missing_tools_move_the_step_on_then_pause_it_with_that_reason_and_show_the_tools(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"plan": [FauxAction("no_tools")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    result = await world.run_to_stop(run_id)
+    assert (result["run_state"], result["reason"]) == ("needs_owner", "tools_unavailable")
+    assert [c["model"] for c in world.faux.calls] == [OPUS, CODEX, OPUS_OLD]  # each chain entry gets its refusal
+    view = await view_of(pg_db, run_id)
+    assert view["pause"]["reason"] == "tools_unavailable" and view["pause"]["error"].startswith("tools_unavailable: project tier")
+    attempts = view["steps"][0]["attempt_history"]
+    assert [a["tools"] for a in attempts] == [["read_file"]] * 3
+    assert attempts[0]["error"].startswith("tools_unavailable:")
+
+
+async def test_a_served_id_spelled_differently_is_the_requested_model_and_a_real_switch_still_shows(
+    pg_db, repo, world_factory
+) -> None:
+    upstream = OPUS.removeprefix("claude/")
+    world = world_factory(
+        {
+            "plan": [FauxAction("success", served_model=f"{upstream}-20260922")],
+            "implement": [FauxAction("substitute", served_model=OPUS_OLD)],
+        }
+    )
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(run_id)
+    view = await view_of(pg_db, run_id)
+    plan, implement = view["steps"][0]["attempt_history"][0], view["steps"][1]["attempt_history"][0]
+    assert plan["requested_model"] == OPUS and plan["served_models"] == [OPUS]
+    assert plan["served_model"] in (None, OPUS) and plan["served_reported"] == [f"{upstream}-20260922"]
+    assert implement["served_models"] == [OPUS_OLD] and implement["outcome"]["kind"] == "substituted"
+
+
 async def test_chain_exhaustion_goes_to_the_owner_with_each_model_tried_once(
     pg_db, repo, world_factory
 ) -> None:

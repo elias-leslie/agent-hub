@@ -21,8 +21,6 @@ from dataclasses import dataclass
 
 from app.constants.catalog import INACTIVE_MODEL_CATALOG_BY_ID, MODEL_CATALOG_BY_ID, ModelEntry
 
-SUBSCRIPTION_PROVIDERS = frozenset({"claude", "codex"})
-
 # $ per credit at which the Codex rate card equals API list price. Used only for API-equivalent value;
 # what a credit is worth to the owner lives on credit_lots (grant = $0 cash, purchase = price paid).
 CREDIT_API_PARITY_USD = 0.04
@@ -151,6 +149,35 @@ def codex_credits(
     return (input_tokens * rate[0] + cached_input_tokens * rate[1] + output_tokens * rate[2]) / 1e6 * mult
 
 
+def catalog_list_usd(
+    model: str, *, input_tokens: int, output_tokens: int, cache_read: int = 0, cache_write: int = 0
+) -> float | None:
+    """List price of a call from the catalog's own per-million prices; None when the entry has none (0 is not a price).
+
+    Token counts follow the provider adapters' Usage: input is uncached input; cache_read/cache_write are separate.
+    """
+    from app.constants.catalog import get_model_entry
+
+    entry = get_model_entry(model)
+    price = entry.cost if entry is not None else None
+    if price is None or not (price.input_per_m or price.output_per_m):
+        return None
+    return (
+        input_tokens * price.input_per_m
+        + output_tokens * price.output_per_m
+        + cache_read * (price.cache_read_per_million or 0.0)
+        + cache_write * (price.cache_write_per_million or 0.0)
+    ) / 1e6
+
+
+def is_flat_subscription_provider(model: str) -> bool:
+    """Whether the model's catalog provider is a flat subscription (data: ``executor_defaults.json`` ``usage``)."""
+    from app.routing.registry import get_provider_for_model
+    from app.services.workflow_runs.usage import usage_settings
+
+    return get_provider_for_model(model) in set(usage_settings().get("subscription_providers", ()))
+
+
 @dataclass(frozen=True)
 class CallValue:
     """Accounting view of one Hub-routed call."""
@@ -170,6 +197,9 @@ def subscription_call_value(
 ) -> CallValue | None:
     """Value of a Hub-routed subscription call, or None when the model bills per token (metered).
 
+    Claude and Codex price from their rate cards; any other provider listed as a subscription in the workflow usage
+    settings prices from the catalog list price. The provider decides, never the executor that ran the call.
+
     Token counts follow the provider adapters' Usage: input is uncached input; cache_read/cache_write are separate.
     """
     provider = provider_for_model(model)
@@ -179,6 +209,12 @@ def subscription_call_value(
     if provider == "claude":
         usd = claude_api_equiv_usd(
             model, input_tokens=input_tokens, output_tokens=output_tokens, cache_read=cache_read, cache_write_1h=cache_write
+        )
+        return CallValue("subscription", usd, None)
+    if is_flat_subscription_provider(model):
+        # Any other flat subscription (OpenCode Go): $0 marginal, the value is the catalog list price.
+        usd = catalog_list_usd(
+            model, input_tokens=input_tokens, output_tokens=output_tokens, cache_read=cache_read, cache_write=cache_write
         )
         return CallValue("subscription", usd, None)
     return None

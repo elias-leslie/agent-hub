@@ -160,6 +160,8 @@ export interface WorkflowAttempt {
   fallback_used: boolean | null
   fallback_reason: string | null
   served_models: string[]
+  /** Tool names the attempt was given, where the executor knows them; null when unknown. */
+  tools?: string[] | null
   hop_from: Hop | null
   next_hop: Hop | null
   outcome: AttemptOutcome | null

@@ -493,6 +493,41 @@ describe('workflow run detail', () => {
     expect(screen.queryByTestId('run-limits')).toBeNull()
   })
 
+  it('shows the tools an attempt got and why a tier-limited step is paused', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'needs_owner',
+        pause: {
+          reason: 'tools_unavailable',
+          step_key: 'plan',
+          error:
+            "tools_unavailable: project tier 'read' allows only [read_file]",
+        },
+        steps: [
+          step({
+            status: 'needs_owner',
+            attempt_history: [
+              attempt({
+                status: 'failed',
+                tools: ['read_file'],
+                error:
+                  "tools_unavailable: project tier 'read' allows only [read_file]",
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const panel = await screen.findByRole('region', { name: 'Waiting for you' })
+    expect(panel).toHaveTextContent(
+      "project tier 'read' allows only [read_file]",
+    )
+    expect(await screen.findByTestId('attempt-tools')).toHaveTextContent(
+      'Tools: read_file',
+    )
+  })
+
   it('explains a paused run and sends the owner decision', async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({

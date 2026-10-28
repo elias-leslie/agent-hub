@@ -80,6 +80,11 @@ def load_policy(
     return RunPolicy(**data)
 
 
+# An executor that cannot give the step the tools it needs ends the attempt with an error starting with this word.
+# Like an unavailable model, it moves the step to the next chain entry; with none left the run waits for the owner.
+TOOLS_UNAVAILABLE = "tools_unavailable"
+
+
 @dataclass(frozen=True)
 class Unavailable:
     reason: str
@@ -210,7 +215,10 @@ def _move_on(
             hop=_hop(model, choice.model, kind, category),
             **common,
         )
-    reason = pause_reason(choice, step, policy)
+    paused = pause_reason(choice, step, policy)
+    if paused == "chain_exhausted" and reason.startswith(TOOLS_UNAVAILABLE):
+        paused = TOOLS_UNAVAILABLE
+    reason = paused
     return Decision(
         "needs_owner",
         reason,

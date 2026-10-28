@@ -62,6 +62,46 @@ def test_basis_follows_the_subscription_provider_list() -> None:
     assert harness_basis("openai", SETTINGS) == harness_basis(None, SETTINGS) == "unknown"
 
 
+def entry_of(model: str) -> Any:
+    from app.constants.catalog import get_model_entry
+
+    entry = get_model_entry(model)
+    assert entry is not None, model
+    return entry
+
+
+def test_the_basis_follows_the_provider_not_the_executor_for_every_model() -> None:
+    from app.services.workflow_runs.usage import agent_hub_basis
+
+    for model in ("opencode-go/deepseek-v4.1-flash", "claude-opus-5-5", "codex/gpt-5.6-sol-daybreak-blue"):
+        provider = entry_of(model).provider
+        assert agent_hub_basis(model, COUNTS) == harness_basis(provider, SETTINGS) == "subscription_equiv"
+    gemini = entry_of("gemini-3.8-flash")
+    assert agent_hub_basis("gemini-3.8-flash", COUNTS) == "metered"
+    assert harness_basis(gemini.provider, SETTINGS) == "unknown"  # a harness cannot tell cash from a gap
+
+
+def test_agent_hub_cost_rows_follow_the_providers_billing_so_the_usage_pages_stay_honest() -> None:
+    from app.services.token_counter import estimate_cost, estimate_usage_cost
+
+    model = "opencode-go/deepseek-v4.1-flash"
+    price = entry_of(model).cost
+    expected = (1000 * price.input_per_m + 100 * price.output_per_m) / 1e6
+    for cost in (estimate_usage_cost(1000, 100, model), estimate_cost(1000, 100, model)):
+        assert (cost.billing_mode, cost.total_cost_usd) == ("subscription", 0.0)
+        assert cost.api_equiv_usd == pytest.approx(expected)
+    cash = estimate_usage_cost(1000, 100, "gemini-3.8-flash")
+    assert cash.billing_mode == "metered" and cash.total_cost_usd > 0 and cash.api_equiv_usd is None
+
+
+def test_a_flat_subscription_provider_without_a_catalog_price_is_a_subscription_with_unknown_value(monkeypatch) -> None:
+    from app.services.subscription_accounting.rates import subscription_call_value
+
+    monkeypatch.setattr("app.constants.catalog.get_model_entry", lambda _m: None)
+    value = subscription_call_value("opencode-go/deepseek-v4.1-flash", input_tokens=10, output_tokens=10)
+    assert value is not None and value.billing_mode == "subscription" and value.api_equiv_usd is None
+
+
 def test_codex_windows_use_the_claude_names_and_a_fraction() -> None:
     limits = {
         "primary": {"used_percent": 40.0, "window_minutes": 300, "resets_at": 1793035965},
@@ -148,3 +188,17 @@ async def test_an_unpriced_attempt_keeps_its_tokens_without_inventing_value() ->
     await record_attempt_cost(db, session_id="s", model="m", executor="pi", usage=usage)
     row = db.added[0]
     assert (row.api_equiv_usd, row.cost_usd, row.input_tokens) == (None, 0.0, 7) and "cost unknown" in row.cost_note
+
+
+def test_served_ids_map_to_catalog_ids_and_a_real_switch_stays_a_switch() -> None:
+    from app.services.workflow_runs.executor_common import catalog_served
+
+    requested = "opencode-go/deepseek-v4.1-flash"
+    assert catalog_served(requested, ["deepseek-v4.1-flash"]) == [requested]  # Pi: upstream id only
+    assert catalog_served(requested, [requested, "DeepSeek-V4.1-Flash"]) == [requested]
+    assert catalog_served("claude-opus-5-5", ["claude-opus-5-5-20260922"]) == ["claude-opus-5-5"]  # dated snapshot
+    switched = catalog_served(requested, ["deepseek-v4.1-flash", "kimi-k3-unlisted"])
+    assert switched == [requested, "kimi-k3-unlisted"]
+    other = catalog_served("claude-opus-5-5", ["claude-opus-4-8"])
+    assert other == ["claude-opus-4-8"]
+    assert catalog_served(requested, []) == []

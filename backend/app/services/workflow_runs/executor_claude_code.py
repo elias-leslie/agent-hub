@@ -13,6 +13,7 @@ import json
 import re
 import time
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from .executor_common import (
     HarnessProcess,
     Progress,
     Usage,
+    argv_tools,
     as_int,
     build_handoff,
     clip,
@@ -158,7 +160,7 @@ class ClaudeCodeExecutor:
             await self._consume(harness, state, on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
-        return await self._result(state, harness, worktree)
+        return replace(await self._result(state, harness, worktree), tools=argv_tools(argv))
 
     async def _consume(self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent) -> None:
         async for event in harness.records():

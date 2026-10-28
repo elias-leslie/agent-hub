@@ -37,6 +37,8 @@
   },
   "agent_hub": {
     "default_level": "lean",
+    "shell_tools": ["bash"],
+    "write_tools": ["edit_file", "write_file"],
     "levels": {
       "lean": {
         "tools": {

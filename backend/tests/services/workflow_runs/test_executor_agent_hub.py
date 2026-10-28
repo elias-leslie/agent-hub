@@ -37,11 +37,13 @@ class Agent:
     thinking_level: str | None = "high"
 
 
-def assistant(content: list[Any], stop: str = "stop", *, model: str = MODEL, **kwargs: Any) -> AssistantMessage:
+def assistant(
+    content: list[Any], stop: str = "stop", *, model: str = MODEL, provider: str = "claude", **kwargs: Any
+) -> AssistantMessage:
     usage = Usage(input=10, output=5, cache_read=100, cache_write=20, total_tokens=135)
     usage.cost.total = 0.01
     return AssistantMessage(
-        content=content, api="claude-code-cli", provider="claude", model=model, usage=usage,
+        content=content, api="claude-code-cli", provider=provider, model=model, usage=usage,
         stop_reason=stop, timestamp=0, response_model=model, **kwargs,
     )
 
@@ -62,15 +64,20 @@ def worktree(tmp_path: Path) -> Path:
     return path
 
 
-def packet(test_hooks: dict[str, Any] | None = None, level: str | None = None, thinking_level: str | None = None):
+def packet(
+    test_hooks: dict[str, Any] | None = None,
+    level: str | None = None,
+    thinking_level: str | None = None,
+    acceptance: list[str] | None = None,
+):
     base = build_packet(
-        run_goal="goal", step_key="implement", instructions="create hello.txt", acceptance=[],
+        run_goal="goal", step_key="implement", instructions="create hello.txt", acceptance=acceptance or [],
         git=GitState(), prior_steps=[], run_dir="/run", context_window=100_000, budget_fraction=0.25,
     )
     return replace(base, test_hooks=test_hooks, level=level, thinking_level=thinking_level, attempt=AttemptRef("attempt-1", "run-1", "proj", "coder"))
 
 
-PROVISIONED = [{"name": "write_file"}]
+PROVISIONED = [{"name": "bash"}, {"name": "write_file"}]
 
 
 class Calls(list):
@@ -100,7 +107,7 @@ def tool_result(call: ToolCall, text: str, *, error: bool = False) -> ToolResult
 
 async def run(
     worktree: Path, tmp_path: Path, messages: list[AssistantMessage], provisioned=None, loop_events=(), writer=None,
-    **kwargs: Any,
+    model: str = MODEL, **kwargs: Any,
 ):
     calls = Calls()
     transcripts = calls.transcripts = []
@@ -120,14 +127,17 @@ async def run(
     async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
         return PROVISIONED if provisioned is None else provisioned
 
+    async def tier(_project: str) -> str:
+        return "read"
+
     executor = AgentHubExecutor(
-        complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=writer or write
+        complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=writer or write, tier_lookup=tier
     )
 
     async def on_event(_event: Any) -> None:
         return None
 
-    result = await executor.run(packet(**kwargs), MODEL, worktree, tmp_path, on_event)
+    result = await executor.run(packet(**kwargs), model, worktree, tmp_path, on_event)
     return result, calls
 
 
@@ -148,7 +158,7 @@ async def test_runs_the_tool_loop_on_the_worktree_with_the_attempt_session(workt
     turns = [assistant([call], "toolUse"), assistant([TextContent(text=f"Done.\n{HANDOFF}")])]
     result, calls = await run(worktree, tmp_path, turns)
     kw = calls[0]
-    assert kw["tools"] == [{"name": "write_file"}]
+    assert kw["tools"] == PROVISIONED
     assert kw["execute_tools"] is True and kw["working_dir"] == str(worktree)
     assert kw["session_id"] == "attempt-1" and kw["parent_session_id"] == "run-1"
     assert kw["agent_slug"] == "coder" and kw["project_id"] == "proj" and kw["temperature"] == 0.3
@@ -237,13 +247,46 @@ async def test_full_level_keeps_the_agents_whole_tool_set_and_adds_no_prompt(wor
 
 
 async def test_lean_never_adds_a_tool_and_never_leaves_the_step_without_any(worktree, tmp_path) -> None:
-    only = [{"name": "bash"}, {"name": "manage_tasks"}]
+    only = [{"name": "bash"}, {"name": "write_file"}, {"name": "manage_tasks"}]
     _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=only)
-    assert [t["name"] for t in calls[0]["tools"]] == ["bash"]
+    assert [t["name"] for t in calls[0]["tools"]] == ["bash", "write_file"]
     assert "- read_file" not in calls[0]["messages"][0]["content"]
     other = [{"name": "manage_tasks"}]
-    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=other)
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=other, level="full")
     assert calls[0]["tools"] == other and [m["role"] for m in calls[0]["messages"]] == ["user"]
+
+
+READ_TIER = [{"name": "read_file"}]
+
+
+async def test_a_read_tier_tool_set_ends_the_attempt_before_any_model_call_with_a_typed_error(worktree, tmp_path) -> None:
+    result, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=READ_TIER)
+    assert calls == [] and result.status == "failed" and result.tools == ["read_file"]
+    assert result.error.startswith("tools_unavailable: project tier 'read' allows only [read_file]")
+    assert "bash" in result.error and "edit_file or write_file" in result.error
+    assert result.outcome is None and result.served_models == ()
+
+
+async def test_acceptance_commands_need_a_shell_and_a_write_tool_even_at_the_full_level(worktree, tmp_path) -> None:
+    turns = [assistant([TextContent(text=HANDOFF)])]
+    refused, calls = await run(
+        worktree, tmp_path, turns, provisioned=READ_TIER, level="full", acceptance=["test -f hello.txt"]
+    )
+    assert calls == [] and refused.error.startswith("tools_unavailable:")
+    no_write, calls = await run(
+        worktree, tmp_path, turns, provisioned=[{"name": "bash"}, {"name": "read_file"}], level="full", acceptance=["true"]
+    )
+    assert calls == [] and "edit_file or write_file" in no_write.error and "needs bash and" not in no_write.error
+    # Without acceptance commands the full level asks for nothing in particular, so a narrow set still runs.
+    allowed, calls = await run(worktree, tmp_path, turns, provisioned=READ_TIER, level="full")
+    assert len(calls) == 1 and allowed.status == "completed" and allowed.tools == ["read_file"]
+
+
+async def test_the_tools_the_attempt_got_are_recorded_on_a_finished_attempt(worktree, tmp_path) -> None:
+    result, _ = await run(
+        worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL
+    )
+    assert result.tools == ["bash", "read_file", "edit_file", "write_file", "search_scratch_context"]
 
 
 async def test_unknown_level_fails_before_any_model_call(worktree, tmp_path) -> None:
@@ -528,3 +571,20 @@ def test_workflow_modules_import_first_in_a_fresh_worker(module: str) -> None:
         capture_output=True, text=True, cwd=Path(__file__).resolve().parents[3], check=False,
     )
     assert done.returncode == 0, done.stderr[-600:]
+
+
+async def test_the_cost_basis_follows_the_models_provider_for_agent_hub_as_for_pi(worktree, tmp_path) -> None:
+    from app.services.workflow_runs.executor_common import load_defaults
+    from app.services.workflow_runs.usage import harness_basis
+
+    model = "opencode-go/deepseek-v4.1-flash"
+    turns = [assistant([TextContent(text=HANDOFF)], model="deepseek-v4.1-flash", provider="opencode-go")]
+    result, _ = await run(worktree, tmp_path, turns, model=model)
+    from app.constants.catalog import get_model_entry
+
+    entry = get_model_entry(model)
+    assert entry is not None
+    pi_basis = harness_basis(entry.provider, load_defaults()["usage"])
+    assert result.usage["cost_basis"] == pi_basis == "subscription_equiv"
+    # The adapter's spelling of the served model is the catalog id, so it is not shown as a switch.
+    assert result.served_models == [model]

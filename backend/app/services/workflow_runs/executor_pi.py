@@ -14,6 +14,7 @@ import json
 import time
 import uuid
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from .executor_common import (
     HarnessProcess,
     Progress,
     Usage,
+    argv_tools,
     as_int,
     build_handoff,
     child_env,
@@ -152,7 +154,7 @@ class PiExecutor:
             await self._drive(harness, state, packet.render(), on_event)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
-        return await self._result(state, harness, worktree)
+        return replace(await self._result(state, harness, worktree), tools=argv_tools(argv))
 
     async def _drive(
         self, harness: HarnessProcess, state: _Attempt, prompt: str, on_event: OnEvent

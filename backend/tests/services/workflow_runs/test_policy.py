@@ -149,6 +149,20 @@ def test_usage_limited_models_wait_for_the_earliest_reset_instead_of_exhausting_
     assert hard.reason == "chain_exhausted"
 
 
+TOOLS_ERROR = "tools_unavailable: project tier 'read' allows only [read_file]; this step needs bash"
+
+
+def test_an_attempt_refused_for_missing_tools_moves_to_the_next_chain_model_then_pauses_with_that_reason() -> None:
+    failed = AttemptResult("failed", error=TOOLS_ERROR)
+    moved = decide(OPUS, failed)
+    assert (moved.action, moved.next_model, moved.kind) == ("retry", CODEX, "error")
+    paused = decide(CODEX, failed, tried=[OPUS], chain=(OPUS, CODEX))
+    assert (paused.action, paused.reason) == ("needs_owner", "tools_unavailable")
+    # Other errors on the last model keep the generic reason.
+    other = decide(CODEX, AttemptResult("failed", error="agent_hub_error: boom"), tried=[OPUS], chain=(OPUS, CODEX))
+    assert other.reason == "chain_exhausted"
+
+
 def test_usage_limit_cooldown_runs_until_reset_or_the_policy_default() -> None:
     assert (
         usage_limit_cooldown(
