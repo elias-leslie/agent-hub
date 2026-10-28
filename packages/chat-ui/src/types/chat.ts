@@ -111,7 +111,8 @@ export interface StreamMessage {
   | "error"
   | "tool_use"
   | "tool_start"
-  | "tool_result";
+  | "tool_result"
+  | "turn_retry";
   /** Monotonic sequence number for ordering and dedup on reconnect */
   seq?: number;
   content?: string;
@@ -134,6 +135,10 @@ export interface StreamMessage {
   truncation_warning?: string;
   // Structured output fields (on 'done' when JSON mode)
   parsed_json?: Record<string, unknown>;
+  // Interrupted model turn being re-run (on 'turn_retry'); its partial output is void
+  attempt?: number;
+  max_retries?: number;
+  reason?: string;
   // Tool use fields (on 'tool_use')
   tool_name?: string;
   tool_input?: Record<string, unknown>;

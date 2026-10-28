@@ -13,6 +13,8 @@ export interface StreamState {
   tools: ToolExecution[];
   /** Last processed sequence number — events with seq <= this are skipped on reconnect */
   lastSeq: number;
+  /** Where the current model turn began; a turn_retry drops everything after it */
+  turnStart?: { content: number; thinking: number; tools: number };
 }
 
 /**

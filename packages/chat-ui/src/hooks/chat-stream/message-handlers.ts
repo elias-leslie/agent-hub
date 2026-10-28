@@ -138,6 +138,8 @@ export function handleStreamEvent(
             }
             : tool,
         );
+        // The next model turn starts after its tools' results.
+        state.turnStart = { content: state.content.length, thinking: state.thinking.length, tools: state.tools.length };
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
@@ -151,6 +153,28 @@ export function handleStreamEvent(
         );
       }
       break;
+
+    case "turn_retry": {
+      // The backend dropped an interrupted model turn and is re-running it: drop its partial output too.
+      const start = state.turnStart ?? { content: 0, thinking: 0, tools: 0 };
+      state.content = state.content.slice(0, start.content);
+      state.thinking = state.thinking.slice(0, start.thinking);
+      state.tools = state.tools.slice(0, start.tools);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+              ...m,
+              content: state.content,
+              thinking: state.thinking || undefined,
+              toolExecutions: [...state.tools],
+              statusLabel: `Retrying (${data.attempt ?? "?"}/${data.max_retries ?? "?"})`,
+            }
+            : m,
+        ),
+      );
+      break;
+    }
 
     case "error":
       throw new Error(data.error || "Unknown error");
