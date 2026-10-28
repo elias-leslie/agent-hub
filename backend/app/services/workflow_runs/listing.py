@@ -1,4 +1,4 @@
-"""Recent workflow runs for the list page: state, goal, step counts, activity and summed attempt usage."""
+"""Recent workflow runs for the list page: state, goal, step counts, activity and attempt usage totals split by cost basis."""
 
 from __future__ import annotations
 
@@ -10,40 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, WorkflowStep
 
+from .usage import usage_totals
+
 _FLAGGED_OUTCOMES = ("refused", "substituted", "usage_limit", "interrupted")
-
-
-def _cost_of(usage: dict[str, Any]) -> float | None:
-    """The attempt's reported cost (agent_hub: cost_usd, claude_code: total_cost_usd); None when unreported."""
-
-    for key in ("cost_usd", "total_cost_usd"):
-        value = usage.get(key)
-        if isinstance(value, int | float):
-            return float(value)
-    return None
-
-
-_TOKEN_PARTS = ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens")
-
-
-def _tokens_of(usage: dict[str, Any]) -> int | None:
-    """total_tokens when the executor reported it, else the sum of the token parts it did report."""
-
-    if isinstance(usage.get("total_tokens"), int):
-        return usage["total_tokens"]
-    parts = [usage[k] for k in _TOKEN_PARTS if isinstance(usage.get(k), int)]
-    return sum(parts) if parts else None
-
-
-def _usage_totals(attempts: list[dict[str, Any]]) -> dict[str, Any]:
-    # Unknown is not zero: tokens/cost stay null when no attempt reported them.
-    tokens = [t for t in (_tokens_of(a["usage"]) for a in attempts) if t is not None]
-    costs = [c for c in (_cost_of(a["usage"]) for a in attempts) if c is not None]
-    return {
-        "total_tokens": sum(tokens) if tokens else None,
-        "cost_usd": sum(costs) if costs else None,
-        "cost_reported_attempts": len(costs),
-    }
 
 
 async def list_runs(db: AsyncSession, *, limit: int = 50, offset: int = 0) -> dict[str, Any]:
@@ -111,7 +80,7 @@ async def list_runs(db: AsyncSession, *, limit: int = 50, offset: int = 0) -> di
                 "attempt_count": len(history),
                 "flagged_attempts": sum(1 for a in history if a["outcome"].get("kind") in _FLAGGED_OUTCOMES),
                 "served_models": list(dict.fromkeys(m for a in history for m in a["served"])),
-                **_usage_totals(history),
+                **usage_totals(a["usage"] for a in history),
             }
         )
     return {"runs": items, "total": total, "limit": limit, "offset": offset}

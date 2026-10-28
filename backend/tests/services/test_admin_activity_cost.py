@@ -235,7 +235,7 @@ async def test_query_is_bounded_preserves_ledger_denominator_and_old_active_sess
     with sqlite3.connect(":memory:") as sql:
         sql.executescript("""
             CREATE TABLE cost_logs (session_id TEXT, input_tokens INT, output_tokens INT,
-                cache_read_tokens INT, cache_write_tokens INT, created_at TEXT);
+                cache_read_tokens INT, cache_write_tokens INT, created_at TEXT, cost_note TEXT);
             CREATE TABLE sessions (id TEXT, provider TEXT, session_type TEXT);
             CREATE TABLE usage_calls (session_id TEXT, agent_id TEXT, provider TEXT,
                 input_tokens INT, cached_input_tokens INT, cache_write_tokens INT,

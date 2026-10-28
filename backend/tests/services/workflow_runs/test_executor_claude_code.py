@@ -162,6 +162,33 @@ async def test_usage_carries_the_subscription_window_use_the_cli_reported(fake_c
     fake_claude(stream)
     result, _ = await run(worktree, tmp_path)
     assert result.usage["rate_limit_windows"] == {"five_hour": 0.07, "seven_day": 0.5}
+    assert "rate_limit_resets" not in result.usage  # the CLI named no reset times
+    assert result.usage["rate_limit_observed_at"] > 0
+
+
+async def test_window_resets_come_from_the_window_or_the_event_that_names_it(fake_claude, worktree, tmp_path) -> None:
+    stream = success_stream(f"Done.\n{HANDOFF}")
+    windows = {"five_hour": {"utilization": 0.07, "resetsAt": 1793035965}, "seven_day": {"utilization": 0.5}}
+    info = {"status": "allowed", "unifiedWindows": windows, "rateLimitType": "seven_day", "resetsAt": 1793600626}
+    stream.insert(1, {"type": "rate_limit_event", "rate_limit_info": info})
+    fake_claude(stream)
+    result, _ = await run(worktree, tmp_path)
+    assert result.usage["rate_limit_resets"] == {"five_hour": 1793035965, "seven_day": 1793600626}
+
+
+async def test_claude_cost_is_the_clis_list_price_labelled_as_a_subscription_equivalent(
+    fake_claude, worktree, tmp_path, monkeypatch
+) -> None:
+    from types import SimpleNamespace
+
+    stream = success_stream(f"Done.\n{HANDOFF}")
+    next(e for e in stream if e["type"] == "result")["total_cost_usd"] = 0.0417
+    fake_claude(stream)
+    monkeypatch.setattr("app.constants.catalog.get_model_entry", lambda _m: SimpleNamespace(provider="claude", capabilities=None))
+    result, _ = await run(worktree, tmp_path)
+    usage = result.usage
+    assert usage["total_cost_usd"] == 0.0417  # the key earlier readers know stays
+    assert (usage["cost_usd"], usage["cost_basis"], usage["cost_source"]) == (0.0417, "subscription_equiv", "provider_reported")
 
 
 async def test_missing_handoff_block_falls_back_to_a_marked_note(fake_claude, worktree, tmp_path) -> None:

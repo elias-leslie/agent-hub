@@ -260,6 +260,11 @@ class NativeContinuationTurn(Base):
     )
 
 
+# Marks a workflow attempt's cost row whose harness transcript the usage collector already counts (Claude Code,
+# Codex). The row stays for per-attempt accounting; readers that also add the collector's totals leave it out.
+NATIVE_COUNTED_NOTE = "workflow attempt; native transcript counted by the usage collector"
+
+
 class CostLog(Base):
     """Token usage and cost tracking per request."""
 

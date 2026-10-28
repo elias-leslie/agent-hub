@@ -79,6 +79,8 @@ class SubscriptionUsageSnapshot(Base):
     resets_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     plan_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     credits_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Where the reading came from (claude_statusline | codex_session_log | workflow_attempt); null on older rows.
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("provider", "window_minutes", "observed_at", name="uq_subscription_usage_snapshot"),

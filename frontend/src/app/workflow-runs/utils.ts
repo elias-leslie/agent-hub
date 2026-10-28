@@ -1,4 +1,8 @@
+import { formatCost } from '@/app/sessions/utils'
 import type {
+  AttemptCost,
+  CostBasis,
+  CostTotals,
   RunPause,
   RunState,
   StepStatus,
@@ -159,9 +163,67 @@ export function attemptTokens(attempt: WorkflowAttempt): number | null {
   return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) : null
 }
 
-export function attemptCost(attempt: WorkflowAttempt): number | null {
+const BASIS_LABEL: Record<CostBasis, string> = {
+  metered: 'metered',
+  subscription_equiv: 'subscription equiv.',
+  unknown: 'basis unknown',
+}
+
+export function basisLabel(basis: CostBasis): string {
+  return BASIS_LABEL[basis]
+}
+
+/** The attempt's cost with its basis; usd is null when nothing could price it. */
+export function attemptCost(attempt: WorkflowAttempt): AttemptCost | null {
+  if (attempt.cost) return attempt.cost
   const usage = attempt.usage
-  return usage?.cost_usd ?? usage?.total_cost_usd ?? null
+  if (!usage) return null
+  if (usage.cost_basis) {
+    return {
+      usd: usage.cost_usd ?? null,
+      basis: usage.cost_basis,
+      source: usage.cost_source ?? null,
+    }
+  }
+  if (typeof usage.total_cost_usd === 'number') {
+    return {
+      usd: usage.total_cost_usd,
+      basis: 'subscription_equiv',
+      source: 'provider_reported',
+    }
+  }
+  if (typeof usage.cost_usd === 'number') {
+    return { usd: usage.cost_usd, basis: 'unknown', source: null }
+  }
+  return null
+}
+
+/** "$0.012 subscription equiv. (est.)", or "cost n/a" when it was not priced. */
+export function attemptCostText(attempt: WorkflowAttempt): string {
+  const cost = attemptCost(attempt)
+  if (!cost || cost.usd === null) return 'cost n/a'
+  const estimate = cost.source === 'catalog_estimate' ? ' (est.)' : ''
+  return `${formatCost(cost.usd)} ${basisLabel(cost.basis)}${estimate}`
+}
+
+const BASIS_ORDER: CostBasis[] = ['metered', 'subscription_equiv', 'unknown']
+
+/** One part per basis that has attempts, then the unpriced count; "cost n/a" when nothing was priced or used. */
+export function costTotalsParts(cost: CostTotals): string[] {
+  const parts: string[] = []
+  for (const basis of BASIS_ORDER) {
+    const row = cost.by_basis[basis]
+    if (row.usd !== null) {
+      parts.push(`${formatCost(row.usd)} ${basisLabel(basis)}`)
+    }
+  }
+  if (cost.unpriced_attempts > 0) {
+    parts.push(`${cost.unpriced_attempts} unpriced`)
+  }
+  if (cost.estimated_attempts > 0) {
+    parts.push(`${cost.estimated_attempts} estimated`)
+  }
+  return parts.length > 0 ? parts : ['cost n/a']
 }
 
 /** Wall-clock span of an attempt; null when it has not finished or timestamps are missing. */

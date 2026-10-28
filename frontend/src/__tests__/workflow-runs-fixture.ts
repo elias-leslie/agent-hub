@@ -1,4 +1,6 @@
 import type {
+  CostBasis,
+  CostTotals,
   WorkflowAttempt,
   WorkflowRunDetail,
   WorkflowRunListItem,
@@ -117,8 +119,28 @@ export function listItem(
     flagged_attempts: 0,
     served_models: [OPUS_55],
     total_tokens: 6000,
-    cost_usd: 0.06,
-    cost_reported_attempts: 5,
+    cost: costTotals({ subscription_equiv: 0.06 }),
     ...overrides,
+  }
+}
+
+/** Cost totals with a price on the given bases; the others have no priced attempt. */
+export function costTotals(
+  priced: Partial<Record<CostBasis, number>> = {},
+  unpriced = 0,
+): CostTotals {
+  const row = (basis: CostBasis) => ({
+    usd: priced[basis] ?? null,
+    attempts: priced[basis] === undefined ? 0 : 1,
+    unpriced_attempts: basis === 'unknown' ? unpriced : 0,
+  })
+  return {
+    by_basis: {
+      metered: row('metered'),
+      subscription_equiv: row('subscription_equiv'),
+      unknown: row('unknown'),
+    },
+    unpriced_attempts: unpriced,
+    estimated_attempts: 0,
   }
 }

@@ -16,6 +16,8 @@ import shutil
 import time
 import tomllib
 from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +38,7 @@ from .executor_common import (
 )
 from .executors import OnEvent, StepResult, register_executor
 from .packet import HandoffPacket
+from .usage import codex_windows, finish_usage, harness_basis
 
 
 def codex_home() -> Path:
@@ -56,14 +59,24 @@ def rollout_path(thread_id: str, home: Path | None = None) -> Path | None:
     return matches[-1] if matches else None
 
 
-def read_rollout(path: Path | None) -> tuple[list[str], str | None, dict[str, Any] | None]:
-    """(models in turn order, last error code, reroute) recorded in the rollout transcript."""
+@dataclass
+class Rollout:
+    """What Codex's own transcript of the attempt records beyond the ``exec --json`` stream."""
 
-    models: list[str] = []
-    info: str | None = None
+    models: list[str] = field(default_factory=list)  # in turn order
+    error_info: str | None = None
     reroute: dict[str, Any] | None = None
+    rate_limits: dict[str, Any] = field(default_factory=dict)  # as of the last token_count record
+    observed_at: float | None = None
+    tokens: dict[str, Any] = field(default_factory=dict)  # total_token_usage as of the last token_count record
+
+
+def read_rollout(path: Path | None) -> Rollout:
+    """The models, last error code, reroute, subscription windows and token totals recorded in the rollout."""
+
+    found = Rollout()
     if path is None:
-        return models, info, reroute
+        return found
     with contextlib.suppress(OSError):
         for line in path.read_text(errors="replace").splitlines():
             try:
@@ -75,13 +88,34 @@ def read_rollout(path: Path | None) -> tuple[list[str], str | None, dict[str, An
                 continue
             kind = str(payload.get("type") or record.get("type") or "")
             if record.get("type") == "turn_context" and payload.get("model"):
-                models.append(str(payload["model"]))
+                found.models.append(str(payload["model"]))
             if "reroute" in kind.lower().replace("_", ""):
-                reroute = dict(payload)
+                found.reroute = dict(payload)
             error = payload.get("error")
             if isinstance(error, Mapping) and error.get("codex_error_info"):
-                info = str(error["codex_error_info"])
-    return models, info, reroute
+                found.error_info = str(error["codex_error_info"])
+            if kind == "token_count":
+                info = payload.get("info")
+                if isinstance(info, Mapping) and isinstance(info.get("total_token_usage"), Mapping):
+                    found.tokens = dict(info["total_token_usage"])
+                limits = payload.get("rate_limits")
+                if isinstance(limits, Mapping) and limits:
+                    found.rate_limits = dict(limits)
+                    found.observed_at = _epoch_of(record.get("timestamp")) or found.observed_at
+    return found
+
+
+def _find_rollout(thread_id: str | None) -> tuple[Path | None, Rollout]:
+    path = rollout_path(thread_id) if thread_id else None
+    return path, read_rollout(path)
+
+
+def _epoch_of(value: Any) -> float | None:
+    if not isinstance(value, str):
+        return None
+    with contextlib.suppress(ValueError):
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    return None
 
 
 def reroute_outcome(requested: str, event: Mapping[str, Any]) -> ProviderOutcome:
@@ -177,14 +211,13 @@ class CodexExecutor:
             state.handle(event)
 
     async def _result(self, state: _Attempt, harness: HarnessProcess, worktree: Path) -> StepResult:
-        models, rollout_info, reroute = read_rollout(
-            rollout_path(state.thread_id) if state.thread_id else None
-        )
-        transcript = rollout_path(state.thread_id) if state.thread_id else None
+        # The rollout is found and read off the event loop: it can be many megabytes.
+        transcript, rollout = await asyncio.to_thread(_find_rollout, state.thread_id)
+        models, rollout_info, reroute = rollout.models, rollout.error_info, rollout.reroute
         served = [m for m in dict.fromkeys(models) if m] or [state.upstream]
         common: dict[str, Any] = {
             "served_models": served,
-            "usage": state.usage.as_dict(),
+            "usage": self._usage(state, rollout, served),
             "native_session_id": state.thread_id,
             "transcript_path": str(transcript) if transcript else None,
             "progress": tuple(state.progress.items),
@@ -208,6 +241,37 @@ class CodexExecutor:
                 )
         handoff = await build_handoff(state.final_text, worktree)
         return StepResult("completed", outcome=outcome, handoff=handoff, **common)
+
+    def _usage(self, state: _Attempt, rollout: Rollout, served: list[str]) -> dict[str, Any]:
+        """Stream tokens (the rollout's totals when the stream never reported a turn), a catalog-estimated list price
+        and the subscription windows Codex recorded; Codex reports no cost of its own."""
+
+        counts = state.usage
+        if not counts.as_dict()["total_tokens"] and rollout.tokens:
+            counts = Usage()
+            cached = as_int(rollout.tokens.get("cached_input_tokens"))
+            written = as_int(rollout.tokens.get("cache_write_input_tokens"))
+            counts.add(
+                as_int(rollout.tokens.get("input_tokens")) - cached - written,
+                cached,
+                written,
+                as_int(rollout.tokens.get("output_tokens")),
+                as_int(rollout.tokens.get("reasoning_output_tokens")),
+            )
+        entry = self._entry(state.model)
+        extra: dict[str, Any] = {}
+        windows, resets = codex_windows(rollout.rate_limits, self.defaults["usage"]["window_names"])
+        if windows:
+            extra["rate_limit_windows"] = windows
+            if resets:
+                extra["rate_limit_resets"] = resets
+            extra["rate_limit_observed_at"] = rollout.observed_at
+        return finish_usage(
+            counts.as_dict(),
+            basis=harness_basis(entry.provider if entry is not None else None, self.defaults["usage"]),
+            price_models=[*reversed(served), state.model],
+            extra=extra,
+        )
 
 
 class _Attempt:

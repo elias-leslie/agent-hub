@@ -14,6 +14,7 @@ import { createQueryClientWrapper } from './test-utils'
 import {
   attempt,
   CODEX,
+  costTotals,
   listItem,
   OPUS_48,
   OPUS_55,
@@ -77,7 +78,7 @@ describe('workflow runs list', () => {
           attempt_count: 0,
           served_models: [],
           total_tokens: null,
-          cost_usd: null,
+          cost: costTotals(),
         }),
       ],
       total: 2,
@@ -97,6 +98,9 @@ describe('workflow runs list', () => {
     expect(within(rows[1]).getByText('no attempts yet')).toBeInTheDocument()
     expect(within(rows[1]).getByText('tokens n/a')).toBeInTheDocument()
     expect(within(rows[1]).getByText('cost n/a')).toBeInTheDocument()
+    expect(
+      within(rows[0]).getByText('$0.060 subscription equiv.'),
+    ).toBeInTheDocument()
     expect(screen.getByTestId('workflow-runs-total')).toHaveTextContent(
       '2 runs',
     )
@@ -138,6 +142,36 @@ describe('workflow runs list', () => {
 })
 
 describe('workflow run detail', () => {
+  it('shows the run total split by basis, with unpriced attempts apart, and each attempt cost with its basis', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        usage_totals: {
+          total_tokens: 3000,
+          cost: costTotals({ metered: 0.01, subscription_equiv: 0.5 }, 1),
+        },
+        steps: [
+          step({
+            attempt_history: [
+              attempt({
+                usage: {
+                  total_tokens: 1000,
+                  cost_usd: 0.01,
+                  cost_basis: 'metered',
+                  cost_source: 'provider_reported',
+                },
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('run-cost')).toHaveTextContent(
+      '$0.010 metered · $0.500 subscription equiv. · 1 unpriced',
+    )
+    expect(screen.getByTestId('attempt')).toHaveTextContent('$0.010 metered')
+  })
+
   it('makes a substitution unmistakable and shows the handoff and session link', async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({

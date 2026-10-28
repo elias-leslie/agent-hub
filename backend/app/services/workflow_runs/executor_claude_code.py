@@ -33,6 +33,7 @@ from .executor_common import (
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
 from .packet import HandoffPacket
+from .usage import finish_usage, harness_basis
 
 
 def claude_home() -> Path:
@@ -138,9 +139,13 @@ class ClaudeCodeExecutor:
         observer = state.observer
         served = list(dict.fromkeys([*state.served, *sorted(observer.served)]))
         path = transcript_path(state.session_id, worktree)
+        from app.constants.catalog import get_model_entry
+
+        entry = get_model_entry(state.model)
+        basis = harness_basis(entry.provider if entry is not None else None, self.defaults["usage"])
         common: dict[str, Any] = {
             "served_models": served or [state.upstream],
-            "usage": state.usage_dict(),
+            "usage": state.usage_dict(basis, [*served, state.upstream, state.model]),
             "native_session_id": state.session_id,
             "transcript_path": str(path) if path else None,
             "progress": tuple(state.progress.items),
@@ -181,6 +186,8 @@ class _Attempt:
         self.returncode: int | None = None
         # Subscription window use (fraction of the limit) as of the last rate_limit_event the CLI emitted.
         self.windows: dict[str, float] = {}
+        self.resets: dict[str, int] = {}
+        self.observed_at: float | None = None
 
     def handle(self, event: dict[str, Any]) -> None:
         self.session_id = str(event.get("session_id") or self.session_id or "") or None
@@ -200,6 +207,13 @@ class _Attempt:
         for name, window in (windows or {}).items():
             if isinstance(window, Mapping) and isinstance(window.get("utilization"), int | float):
                 self.windows[str(name)] = float(window["utilization"])
+                self.observed_at = time.time()
+                # The window's own reset when it carries one, else the event's when it is about this window.
+                reset = window.get("resetsAt") or window.get("resets_at")
+                if reset is None and info.get("rateLimitType") == name:
+                    reset = info.get("resetsAt")
+                if isinstance(reset, int) and not isinstance(reset, bool):
+                    self.resets[str(name)] = reset
 
     def _assistant(self, message: Mapping[str, Any]) -> None:
         name = message.get("model")
@@ -217,7 +231,7 @@ class _Attempt:
             elif block.get("type") == "tool_use":
                 self.progress.add(f"{block.get('name')}: {clip(json.dumps(block.get('input'), default=str), self.output_chars)}")
 
-    def usage_dict(self) -> dict[str, Any]:
+    def usage_dict(self, basis: str, price_models: list[str]) -> dict[str, Any]:
         result = self.observer.result or {}
         raw = [result["usage"]] if isinstance(result.get("usage"), Mapping) else list(self.message_usage.values())
         usage = Usage()
@@ -230,15 +244,20 @@ class _Attempt:
                 as_int(item.get("output_tokens")),
                 as_int(details.get("thinking_tokens")) if isinstance(details, Mapping) else 0,
             )
-        out: dict[str, Any] = {**usage.as_dict()}
+        extra: dict[str, Any] = {}
         for key in ("total_cost_usd", "duration_ms", "num_turns"):
             if result.get(key) is not None:
-                out[key] = result[key]
+                extra[key] = result[key]
         if isinstance(result.get("modelUsage"), Mapping):
-            out["by_model"] = result["modelUsage"]
+            extra["by_model"] = result["modelUsage"]
         if self.windows:
-            out["rate_limit_windows"] = dict(self.windows)
-        return out
+            extra["rate_limit_windows"] = dict(self.windows)
+            if self.resets:
+                extra["rate_limit_resets"] = dict(self.resets)
+            extra["rate_limit_observed_at"] = self.observed_at
+        return finish_usage(
+            usage.as_dict(), basis=basis, price_models=price_models, reported=result.get("total_cost_usd"), extra=extra
+        )
 
 
 register_executor("claude_code", ClaudeCodeExecutor)

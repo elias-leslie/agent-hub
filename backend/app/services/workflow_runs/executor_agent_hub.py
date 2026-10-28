@@ -34,6 +34,7 @@ from .executor_common import Progress, Usage, build_handoff, clip, load_defaults
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
 from .packet import HandoffPacket
+from .usage import agent_hub_basis, finish_usage
 
 Complete = Callable[..., Awaitable[Any]]
 LoadAgent = Callable[[str], Awaitable[Any]]
@@ -249,7 +250,15 @@ class AgentHubExecutor:
         usage = Usage()
         for item in (m.usage for m in messages):
             usage.add(item.input, item.cache_read, item.cache_write, item.output, item.reasoning)
-        used = {**usage.as_dict(), "cost_usd": sum(m.usage.cost.total for m in messages)}
+        counts = usage.as_dict()
+        # The per-turn cost is the adapter's own catalog pricing, the same figure the attempt's cost rows carry.
+        used = finish_usage(
+            counts,
+            basis=agent_hub_basis(model, counts),
+            price_models=[*reversed(served), model],
+            reported=sum(m.usage.cost.total for m in messages),
+            reported_source="catalog_estimate",
+        )
         failed = injected or message.stop_reason in ("error", "aborted")
         # A refused turn never becomes progress for the next model.
         progress = Progress(self.defaults["progress_items"])

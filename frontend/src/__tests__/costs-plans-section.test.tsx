@@ -45,6 +45,8 @@ const data: CostAccountingResponse = {
           resets_at: '2099-01-01T00:00:00Z',
           observed_at: '2026-10-11T16:00:00Z',
           reset_since_observed: false,
+          source: 'workflow_attempt',
+          source_label: 'workflow run',
         },
       ],
     },
@@ -121,6 +123,7 @@ describe('PlansSection', () => {
     expect(await screen.findByText('$393')).toBeInTheDocument()
     expect(screen.getByText('Codex weekly limit 85% used')).toBeInTheDocument()
     expect(screen.getByText('weekly 85%')).toBeInTheDocument()
+    expect(screen.getByText(/workflow run ·/)).toBeInTheDocument()
     expect(screen.getByText(/Grant: 37,311 of 62,500 left/)).toBeInTheDocument()
     expect(screen.queryByText(/Not money spent/)).not.toBeInTheDocument()
   })

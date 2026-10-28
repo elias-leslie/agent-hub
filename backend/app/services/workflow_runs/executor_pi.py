@@ -34,6 +34,7 @@ from .executor_common import (
 )
 from .executors import OnEvent, StepResult, register_executor
 from .packet import HandoffPacket
+from .usage import finish_usage, harness_basis
 
 
 def message_text(message: Mapping[str, Any]) -> str:
@@ -132,9 +133,16 @@ class PiExecutor:
 
     async def _result(self, state: _Attempt, harness: HarnessProcess, worktree: Path) -> StepResult:
         served = list(dict.fromkeys(state.served)) or [state.upstream]
+        entry = self._entry(state.model)
+        usage = finish_usage(
+            state.usage.as_dict(),
+            basis=harness_basis(entry.provider if entry is not None else None, self.defaults["usage"]),
+            price_models=[*reversed(served), state.model],
+            reported=state.cost if state.cost_reported else None,
+        )
         common: dict[str, Any] = {
             "served_models": served,
-            "usage": state.usage.as_dict(),
+            "usage": usage,
             "native_session_id": state.session_id,
             "transcript_path": state.session_file,
             "progress": tuple(state.progress.items),
@@ -169,6 +177,8 @@ class _Attempt:
         self.session_file: str | None = None
         self.served: list[str] = []
         self.usage = Usage()
+        self.cost = 0.0  # Pi prices each assistant message from its own model table
+        self.cost_reported = False
         self.progress = Progress(defaults["progress_items"])
         self.output_chars = defaults["progress_output_chars"]
         self.last: Mapping[str, Any] | None = None  # last assistant message of the run
@@ -221,6 +231,10 @@ class _Attempt:
             as_int(usage.get("output")),
             as_int(usage.get("reasoning")),
         )
+        cost = usage.get("cost")
+        if isinstance(cost, Mapping) and isinstance(cost.get("total"), int | float):
+            self.cost += float(cost["total"])
+            self.cost_reported = True
         served = message.get("responseModel") or message.get("model")
         if served:
             self.served.append(str(served))

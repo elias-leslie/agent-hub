@@ -1,11 +1,7 @@
 import Link from 'next/link'
-import {
-  formatCost,
-  formatRelativeTime,
-  formatTokens,
-} from '@/app/sessions/utils'
+import { formatRelativeTime, formatTokens } from '@/app/sessions/utils'
 import type { WorkflowRunListItem } from '@/lib/api/workflow-runs'
-import { modelLabel, runStateLabel } from '../utils'
+import { costTotalsParts, modelLabel, runStateLabel } from '../utils'
 import { StatusDot } from './StatusDot'
 
 const GRID =
@@ -32,13 +28,16 @@ function stepsText(run: WorkflowRunListItem): string {
   return `${done} of ${run.step_total} done`
 }
 
-function usageText(run: WorkflowRunListItem): { tokens: string; cost: string } {
+function usageText(run: WorkflowRunListItem): {
+  tokens: string
+  cost: string[]
+} {
   return {
     tokens:
       run.total_tokens === null
         ? 'tokens n/a'
         : `${formatTokens(run.total_tokens)} tok`,
-    cost: run.cost_usd === null ? 'cost n/a' : formatCost(run.cost_usd),
+    cost: costTotalsParts(run.cost),
   }
 }
 
@@ -98,7 +97,9 @@ export function RunRow({ run }: { run: WorkflowRunListItem }) {
         </span>
         <span className="flex items-baseline gap-2 font-mono text-[12px] tabular-nums text-slate-300 lg:flex-col lg:items-end lg:gap-0">
           <span>{usage.tokens}</span>
-          <span>{usage.cost}</span>
+          {usage.cost.map((part) => (
+            <span key={part}>{part}</span>
+          ))}
         </span>
         <span
           className="text-[12px] text-slate-400 lg:text-right"

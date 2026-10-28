@@ -224,6 +224,28 @@ def test_failed_acceptance_retries_the_same_model_until_the_retry_limit_then_fai
     assert decide(OPUS, DONE).action == "complete"
 
 
+def test_acceptance_failure_on_a_substituted_answer_goes_back_to_the_requested_model_while_it_is_eligible() -> None:
+    substituted = AttemptResult(
+        "completed",
+        ProviderOutcome("substituted", OPUS, served_model=CODEX, category="cyber"),
+        has_handoff=True,
+        acceptance_passed=False,
+    )
+    back = decide(OPUS, substituted, attempts=1)
+    assert (back.action, back.reason, back.next_model, back.hop) == ("retry", "acceptance_failed", OPUS, None)
+    # The requested model is on cooldown: the retry takes the next chain model rather than pinning an unavailable one.
+    cooling = {OPUS: Unavailable("cooldown", 300.0)}
+    moved = decide(OPUS, substituted, attempts=1, unavailable=cooling)
+    assert (moved.action, moved.reason, moved.next_model) == ("retry", "acceptance_failed", CODEX)
+    assert moved.hop and moved.hop["kind"] == "acceptance"
+    # A plain failed acceptance behaves the same way.
+    plain = AttemptResult("completed", has_handoff=True, acceptance_passed=False)
+    assert decide(OPUS, plain, attempts=1, unavailable=cooling).next_model == CODEX
+    # The retry limit still ends it.
+    spent = decide(OPUS, substituted, attempts=3, acceptance_failures=POLICY.acceptance_retry_limit)
+    assert (spent.action, spent.reason) == ("fail", "acceptance_retry_limit")
+
+
 def test_completed_without_handoff_is_an_error() -> None:
     decision = decide(OPUS, AttemptResult("completed", has_handoff=False))
     assert (decision.action, decision.reason) == ("retry", "missing_handoff")

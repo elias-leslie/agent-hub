@@ -9,7 +9,7 @@ import {
   fetchCostAccounting,
   type ProviderUtilization,
 } from '@/lib/api'
-import { formatCurrency } from '@/lib/formatters'
+import { formatCurrency, formatRelativeTime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -178,6 +178,13 @@ function HeadroomCard({ utilization }: { utilization: ProviderUtilization[] }) {
                       </span>
                     </div>
                     <WindowBar used={w.used_percent} />
+                    <p
+                      className="mt-0.5 text-[11px] text-slate-500"
+                      title={new Date(w.observed_at).toLocaleString()}
+                    >
+                      {w.source_label ?? 'source unknown'} ·{' '}
+                      {formatRelativeTime(w.observed_at)}
+                    </p>
                   </div>
                 )
               })}

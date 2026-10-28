@@ -7,6 +7,11 @@
   "progress_output_chars": 1500,
   "default_thinking_level": "high",
   "thinking_levels": ["none", "minimal", "low", "medium", "high", "xhigh"],
+  "usage": {
+    "subscription_providers": ["claude", "codex", "opencode-go"],
+    "native_transcript_executors": ["claude_code", "codex"],
+    "window_names": {"300": "five_hour", "10080": "seven_day"}
+  },
   "codex": {
     "binary": "codex",
     "catalog_provider": "codex",

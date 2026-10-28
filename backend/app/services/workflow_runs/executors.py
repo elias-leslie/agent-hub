@@ -78,6 +78,7 @@ class FauxAction:
     write: Mapping[str, str] = field(default_factory=dict)  # worktree-relative path -> content
     summary: str | None = None
     progress: Sequence[str] = ()
+    usage: Mapping[str, Any] | None = None  # replaces the default token counts (e.g. to carry a cost and its basis)
 
 
 class FauxExecutor:
@@ -105,7 +106,7 @@ class FauxExecutor:
         await on_event({"type": "faux_started", "model": model, "at": time.time()})
         if action.kind == "crash":
             raise RuntimeError("faux executor crashed")
-        usage = {"input_tokens": 100, "output_tokens": 20}
+        usage = dict(action.usage) if action.usage is not None else {"input_tokens": 100, "output_tokens": 20}
         for relative, content in action.write.items():
             target = worktree / relative
             target.parent.mkdir(parents=True, exist_ok=True)

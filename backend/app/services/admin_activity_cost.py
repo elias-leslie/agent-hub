@@ -17,6 +17,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall
+from app.models.session import NATIVE_COUNTED_NOTE
 from app.services.activity_accounting import (
     argument_characters,
     returned_characters_expression,
@@ -708,6 +709,7 @@ async def build_activity_cost_snapshot(
         func.sum(CostLog.cost_usd).label("cash_usd"), func.count(CostLog.cost_usd).label("cash_known_calls"),
         func.sum(CostLog.cache_read_tokens).label("cache_read_tokens"), func.sum(CostLog.cache_write_tokens).label("cache_write_tokens"),
     ).where(CostLog.created_at >= cutoff, CostLog.created_at < now,
+            func.coalesce(CostLog.cost_note, "").not_like(f"{NATIVE_COUNTED_NOTE}%"),  # the usage collector counts those
             *([CostLog.session_id.in_(selected_sessions)] if filters else [])).group_by(CostLog.session_id))).all()
     # Collector root/agent identity is explicit. A root's child usage must never also count in its root.
     native_id = case((UsageCall.agent_id != "", UsageCall.agent_id), else_=UsageCall.session_id)

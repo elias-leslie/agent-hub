@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     CreditLot,
+    Session,
     SubscriptionUsageCursor,
     SubscriptionUsageDaily,
     SubscriptionUsageSnapshot,
@@ -54,6 +55,14 @@ CODEX_CREDIT_STATE = "@codex_credits"
 SNAPSHOT_STATE = "@snapshots"
 CLAUDE_STATUSLINE_STATE = "@claude_statusline"
 CLAUDE_WINDOWS = {"five_hour": 300, "seven_day": 10080}
+# Where a window reading came from. The newest reading of a window wins, whatever its source.
+SOURCE_CODEX_LOG = "codex_session_log"
+SOURCE_CLAUDE_STATUSLINE = "claude_statusline"
+SOURCE_WORKFLOW = "workflow_attempt"
+WORKFLOW_STATE = "@workflow_windows"
+WORKFLOW_PROVIDERS = ("claude", "codex")  # catalog providers whose workflow attempts record rate_limit_windows
+WORKFLOW_LOOKBACK = timedelta(days=8)
+WORKFLOW_OVERLAP_S = 120  # attempts commit a little after their finish time
 # Per-call ledger (usage_calls). A cursor without this version is re-read from the start once so its
 # history lands in the ledger; lines before the old offset feed only the ledger (rollups already have them).
 # A replay also prices calls stored without a rate whose model has since gained one in the catalog,
@@ -143,6 +152,7 @@ class SnapshotEvent:
     resets_at: datetime | None
     plan_type: str | None
     credits_balance: float | None
+    source: str | None = None  # where the reading came from: one of SNAPSHOT_SOURCES
 
 
 @dataclass
@@ -460,7 +470,7 @@ def _codex_rate_limits(
         if isinstance(minutes, int) and isinstance(used, (int, float)):
             result.snapshots.append(
                 SnapshotEvent("codex", ts, minutes, float(used), _epoch(window.get("resets_at")),
-                              limits.get("plan_type"), balance)
+                              limits.get("plan_type"), balance, SOURCE_CODEX_LOG)
             )
 
 
@@ -621,7 +631,8 @@ def _claude_statusline(state: dict[str, Any], result: PassResult) -> None:
         used = window.get("used_percentage")
         if isinstance(used, (int, float)):
             result.snapshots.append(
-                SnapshotEvent("claude", observed, minutes, float(used), _epoch(window.get("resets_at")), None, None)
+                SnapshotEvent("claude", observed, minutes, float(used), _epoch(window.get("resets_at")), None, None,
+                              SOURCE_CLAUDE_STATUSLINE)
             )
 
 
@@ -722,15 +733,21 @@ def apply_credit_draws(
 
 
 def select_snapshots(events: list[SnapshotEvent], state: dict[str, Any]) -> list[SnapshotEvent]:
-    """Keep monotonic readings per provider/window: a newer window, a higher reading, or a periodic heartbeat."""
+    """Keep monotonic readings per provider/window: a newer window, a higher reading, or a periodic heartbeat.
+
+    A reading that carries no reset time (a workflow attempt whose CLI did not say) takes the reset of the window
+    already on record when that window is still open at the reading; otherwise it starts a window of unknown reset.
+    """
     keep: list[SnapshotEvent] = []
     for ev in sorted(events, key=lambda e: e.ts):
         key = f"{ev.provider}:{ev.window_minutes}"
-        resets = ev.resets_at.timestamp() if ev.resets_at else 0.0
         prev = state.get(key)
+        if ev.resets_at is None and prev and prev[0] > ev.ts.timestamp():
+            ev.resets_at = datetime.fromtimestamp(prev[0], UTC)
+        resets = ev.resets_at.timestamp() if ev.resets_at else 0.0
         if prev:
             p_resets, p_used, p_ts, p_plan = prev
-            if resets < p_resets - 60:
+            if ev.resets_at is not None and resets < p_resets - 60:
                 continue  # stale session reporting an older window
             same_window = abs(resets - p_resets) <= 60
             if same_window and ev.used_percent <= p_used and ev.plan_type == p_plan and (
@@ -742,6 +759,41 @@ def select_snapshots(events: list[SnapshotEvent], state: dict[str, Any]) -> list
         state[key] = [resets, ev.used_percent, ev.ts.timestamp(), ev.plan_type]
         keep.append(ev)
     return keep
+
+
+async def workflow_snapshot_events(db: AsyncSession, state: dict[str, Any], now: datetime) -> list[SnapshotEvent]:
+    """Window readings workflow attempts recorded (``usage.rate_limit_windows``) since the last pass.
+
+    Headless Claude Code never updates the statusline file, so these are often the newest reading of the account's
+    windows. They enter the same selection as every other source: the newest reading wins.
+    """
+    since = float(state.get("since") or (now - WORKFLOW_LOOKBACK).timestamp())
+    attempt = Session.provider_metadata["workflow_attempt"]
+    usage = attempt["usage"]
+    finished = attempt["finished_at"].as_float()
+    rows = await db.execute(
+        select(Session.provider, usage["rate_limit_windows"], usage["rate_limit_resets"],
+               usage["rate_limit_observed_at"], finished)
+        .where(Session.provider.in_(WORKFLOW_PROVIDERS), usage["rate_limit_windows"].is_not(None),
+               finished > since - WORKFLOW_OVERLAP_S)
+        .order_by(finished)
+    )
+    events: list[SnapshotEvent] = []
+    newest = since
+    for provider, windows, resets, observed, finished_at in rows:
+        if not isinstance(windows, dict) or finished_at is None:
+            continue
+        newest = max(newest, float(finished_at))
+        at = datetime.fromtimestamp(float(observed) if isinstance(observed, (int, float)) else float(finished_at), UTC)
+        for name, fraction in windows.items():
+            minutes = CLAUDE_WINDOWS.get(name)
+            if minutes is None or not isinstance(fraction, (int, float)) or isinstance(fraction, bool):
+                continue
+            reset = _epoch(resets.get(name)) if isinstance(resets, dict) else None
+            events.append(SnapshotEvent(provider, at, minutes, round(float(fraction) * 100.0, 3), reset, None, None,
+                                        SOURCE_WORKFLOW))
+    state["since"] = newest
+    return events
 
 
 _lock = asyncio.Lock()
@@ -766,6 +818,9 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         credit_state = dict(cursors.get(CODEX_CREDIT_STATE, (0, {}))[1])
         new_lots = apply_credit_draws(result.balances, credit_state, [lot.granted_at for lot in lots], result)
         snap_state = dict(cursors.get(SNAPSHOT_STATE, (0, {}))[1])
+        workflow_state = dict(cursors.get(WORKFLOW_STATE, (0, {}))[1])
+        result.snapshots += await workflow_snapshot_events(db, workflow_state, datetime.now(UTC))
+        result.cursors[WORKFLOW_STATE] = (0, workflow_state)
         snapshots = select_snapshots(result.snapshots, snap_state)
         result.cursors[CODEX_CREDIT_STATE] = (0, credit_state)
         result.cursors[SNAPSHOT_STATE] = (0, snap_state)
@@ -796,7 +851,7 @@ async def _persist(
             pg_insert(SubscriptionUsageSnapshot)
             .values(provider=ev.provider, observed_at=ev.ts, window_minutes=ev.window_minutes,
                     used_percent=ev.used_percent, resets_at=ev.resets_at, plan_type=ev.plan_type,
-                    credits_balance=ev.credits_balance)
+                    credits_balance=ev.credits_balance, source=ev.source)
             .on_conflict_do_nothing(constraint="uq_subscription_usage_snapshot")
         )
     for ts, credits in new_lots:

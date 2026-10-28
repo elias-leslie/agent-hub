@@ -18,7 +18,7 @@ import contextlib
 import logging
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Collection
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -54,6 +54,7 @@ from .policy import (
 )
 from .schemas import OwnerDecision, RunDefinition
 from .settings import get_workflow_run_settings
+from .usage import cost_of, record_attempt_cost, usage_totals
 from .workspace import RunWorkspace, head_sha
 
 logger = logging.getLogger(__name__)
@@ -848,6 +849,8 @@ async def advance_run(run_id: str, *, deps: EngineDeps | None = None) -> dict[st
     unavailable = await deps.availability(
         [m for m in intent.chain if m not in {*intent.tried, intent.model}]
         + [m for m in dict.fromkeys(limited)]
+        # The requested model too: an acceptance retry goes back to it only while it is still eligible.
+        + [intent.model]
     )
     return await _commit_outcome(
         run_id,
@@ -907,6 +910,13 @@ async def _commit_outcome(
         )
         served = list(result.served_models) or [intent.model]
         _finish_attempt(attempt, intent, result, decision, served, info, now)
+        await record_attempt_cost(
+            db,
+            session_id=attempt.id,
+            model=served[-1],
+            executor=intent.executor,
+            usage=result.usage,
+        )
         steps = await _steps(db, run_id)
         scratch = _scratch(step)
         last = {
@@ -975,6 +985,13 @@ async def _commit_outcome(
         "action": decision.action,
         "run_state": state,
     }
+
+
+def _attempt_cost(usage: Mapping[str, Any] | None) -> dict[str, Any]:
+    """One attempt's cost with its basis and source, for display; ``usd`` is null when it could not be priced."""
+
+    cost, basis, source = cost_of(usage or {})
+    return {"usd": cost, "basis": basis, "source": source}
 
 
 def _finish_attempt(
@@ -1311,6 +1328,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "next_hop": detail.get("next_hop"),
                 "outcome": detail.get("outcome"),
                 "usage": detail.get("usage"),
+                "cost": _attempt_cost(detail.get("usage")),
                 "error": detail.get("error"),
                 "decision": detail.get("decision"),
                 "native_session_id": detail.get("native_session_id"),
@@ -1341,6 +1359,9 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "limits": _limits(policy),
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
+        "usage_totals": usage_totals(
+            (item["usage"] or {}) for history in attempts.values() for item in history
+        ),
         "steps": [
             {
                 "key": s.step_key,

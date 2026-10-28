@@ -402,6 +402,26 @@ def test_snapshot_selection_is_monotonic_within_a_window() -> None:
     assert older == []
 
 
+def test_snapshot_selection_lets_a_reading_without_a_reset_join_the_open_window_or_start_a_new_one() -> None:
+    t0 = datetime(2026, 10, 1, tzinfo=UTC)
+    reset = t0 + timedelta(hours=2)
+
+    def ev(minutes: int, used: float, resets: datetime | None, source: str) -> collector.SnapshotEvent:
+        return collector.SnapshotEvent("claude", t0 + timedelta(minutes=minutes), 300, used, resets, None, None, source)
+
+    state: dict = {}
+    kept = collector.select_snapshots(
+        [ev(0, 10, reset, "claude_statusline"), ev(30, 30, None, "workflow_attempt")], state
+    )
+    assert [(k.used_percent, k.resets_at, k.source) for k in kept] == [
+        (10, reset, "claude_statusline"),
+        (30, reset, "workflow_attempt"),
+    ]
+    # Three hours on, the recorded window is over: the reading has no reset to match and starts a window.
+    later = collector.select_snapshots([ev(180, 4, None, "workflow_attempt")], state)
+    assert [(k.used_percent, k.resets_at) for k in later] == [(4, None)]
+
+
 def _plan(provider: str, usd: float | None, start: datetime, end: datetime | None) -> SimpleNamespace:
     return SimpleNamespace(provider=provider, plan="p", monthly_usd=usd, effective_from=start, effective_to=end)
 

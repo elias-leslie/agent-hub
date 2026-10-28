@@ -13,6 +13,9 @@ export interface UsageWindow {
   resets_at: string | null
   observed_at: string
   reset_since_observed: boolean
+  /** Where the reading came from (null for readings stored before sources were recorded). */
+  source?: string | null
+  source_label?: string | null
 }
 
 export interface ProviderUtilization {

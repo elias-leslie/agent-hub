@@ -18,6 +18,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.session import NATIVE_COUNTED_NOTE
+
 RANGES: dict[str, tuple[timedelta, timedelta]] = {
     "1h": (timedelta(hours=1), timedelta(minutes=5)),
     "24h": (timedelta(hours=24), timedelta(hours=1)),
@@ -32,7 +34,7 @@ HISTORY_DAYS = 28
 # One row per call. cost_logs completions from Nightshift are routine; other app completions are "other".
 # Transcript sessions already replayed by Agent Hub's own providers never write transcripts, so nothing
 # is counted twice.
-_SPEND_CTE = """
+_SPEND_CTE = f"""
 spend AS (
     SELECT c.occurred_at AS ts,
            coalesce(c.api_equiv_usd, 0) AS usd,
@@ -68,6 +70,7 @@ spend AS (
     FROM cost_logs l
     LEFT JOIN sessions s ON s.id = l.session_id
     WHERE l.created_at >= :start AND l.created_at < :end
+      AND coalesce(l.cost_note, '') NOT LIKE '{NATIVE_COUNTED_NOTE}%'
 )
 """
 

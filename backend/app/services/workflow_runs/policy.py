@@ -264,14 +264,28 @@ def decide_after_attempt(
 
 
 def _acceptance_decision(
-    model: str, step: StepState, policy: RunPolicy, refusals: dict[str, int], outcome: ProviderOutcome | None
+    model: str,
+    step: StepState,
+    policy: RunPolicy,
+    refusals: dict[str, int],
+    outcome: ProviderOutcome | None,
+    unavailable: Mapping[str, Unavailable],
+    now: float,
 ) -> Decision:
-    """The step's work is done by its own account but an acceptance command failed: same model, once more."""
+    """The step's work is done by its own account but an acceptance command failed: the requested model, once more.
 
-    common = {"kind": "acceptance", "category": outcome.category if outcome else None, "refusals": refusals}
+    ``model`` is the model the attempt was sent to, also when another one answered it (a substitution): the retry
+    goes back to it while it is still eligible, and takes the next chain model only when it is not.
+    """
+
+    category = outcome.category if outcome else None
     if step.acceptance_failures >= policy.acceptance_retry_limit:
-        return Decision("fail", "acceptance_retry_limit", **common)
-    return Decision("retry", "acceptance_failed", next_model=model, **common)
+        return Decision("fail", "acceptance_retry_limit", kind="acceptance", category=category, refusals=refusals)
+    if model in unavailable:
+        return _move_on(model, "acceptance", category, "acceptance_failed", step, unavailable, now, refusals, policy)
+    return Decision(
+        "retry", "acceptance_failed", kind="acceptance", category=category, next_model=model, refusals=refusals
+    )
 
 
 def _decide(
@@ -318,7 +332,7 @@ def _decide(
         if finished and upcoming and outcome.served_model == upcoming:
             # The provider already ran the model the takeover would use.
             if acceptance_failed:
-                return _acceptance_decision(model, step, policy, refusals, outcome)
+                return _acceptance_decision(model, step, policy, refusals, outcome, unavailable, now)
             return Decision(
                 "complete",
                 "substituted_to_chain_model",
@@ -332,7 +346,7 @@ def _decide(
 
     if finished:
         if acceptance_failed:
-            return _acceptance_decision(model, step, policy, refusals, None)
+            return _acceptance_decision(model, step, policy, refusals, None, unavailable, now)
         return Decision("complete", "completed", refusals=refusals)
 
     reason = "missing_handoff" if result.status == "completed" else (result.error or "error")

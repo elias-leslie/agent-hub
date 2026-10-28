@@ -56,7 +56,7 @@ class StepDefinition(BaseModel):
     acceptance: list[AcceptanceCommand] = Field(default_factory=list)
     # Overrides the agent's thinking level for this step in every executor.
     effort: str | None = None
-    # Hard cap on attempts for the step; default is one attempt per chain model.
+    # Hard cap on attempts for the step. Unset, the run policy's max_total_attempts applies; this can only lower it.
     max_attempts: int | None = Field(None, ge=1)
     workflow_ids: list[str] = Field(default_factory=list)
     test_hooks: StepTestHooks | None = None

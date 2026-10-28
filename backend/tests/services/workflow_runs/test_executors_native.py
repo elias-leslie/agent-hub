@@ -158,6 +158,55 @@ async def test_codex_completed_run_command_usage_and_fallback_handoff(tmp_path, 
     assert [e["event"] for e in events][:2] == ["thread.started", "turn.started"]
 
 
+def token_count(at: str, primary: float, secondary: float, total: int) -> dict:
+    return {
+        "timestamp": at,
+        "type": "event_msg",
+        "payload": {
+            "type": "token_count",
+            "info": {"total_token_usage": {"input_tokens": total, "output_tokens": 5}},
+            "rate_limits": {
+                "limit_id": "codex",
+                "primary": {"used_percent": primary, "window_minutes": 300, "resets_at": 1793035965},
+                "secondary": {"used_percent": secondary, "window_minutes": 10080, "resets_at": 1793600626},
+                "credits": {"has_credits": True, "unlimited": False, "balance": "100"},
+            },
+        },
+    }
+
+
+async def test_codex_windows_are_read_from_the_attempts_own_rollout(tmp_path, codex_home, monkeypatch):
+    thread = "01a17faf-5736-7cc0-b39e-7ea0b0da7df6"  # the id the recorded stream announces
+    write_rollout(
+        codex_home,
+        thread,
+        {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+        token_count("2026-10-28T14:00:00.000Z", 38.0, 5.0, 100),
+        token_count("2026-10-28T14:00:10.500Z", 40.0, 6.0, 200),
+    )
+    binary, _ = stub(tmp_path, "codex_exec_completed.jsonl")
+    monkeypatch.setattr(
+        "app.services.workflow_runs.usage.estimate_list_cost",
+        lambda model, counts: 0.03 if model == "gpt-6.1-sol" else None,
+    )
+    result, _ = await run(executor("codex", binary), CODEX_MODEL, tmp_path)
+    usage = result.usage
+    assert usage["rate_limit_windows"] == {"five_hour": 0.4, "seven_day": 0.06}
+    assert usage["rate_limit_resets"] == {"five_hour": 1793035965, "seven_day": 1793600626}
+    assert usage["rate_limit_observed_at"] == pytest.approx(1793196010.5)
+    assert (usage["cost_usd"], usage["cost_basis"], usage["cost_source"]) == (0.03, "subscription_equiv", "catalog_estimate")
+
+
+async def test_codex_without_a_catalog_price_keeps_its_cost_unknown_not_zero(tmp_path, codex_home, monkeypatch):
+    monkeypatch.setattr("app.services.workflow_runs.usage.estimate_list_cost", lambda model, counts: None)
+    write_rollout(codex_home, "01a17faf-5736-7cc0-b39e-7ea0b0da7df6", {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}})
+    binary, _ = stub(tmp_path, "codex_exec_completed.jsonl")
+    result, _ = await run(executor("codex", binary), CODEX_MODEL, tmp_path)
+    usage = result.usage
+    assert usage["cost_usd"] is None and usage["cost_source"] is None and usage["cost_basis"] == "subscription_equiv"
+    assert "rate_limit_windows" not in usage  # no token_count record, so no reading to report
+
+
 async def test_codex_prefers_the_packet_handoff_block_and_passes_context(tmp_path, codex_home):
     config = codex_home / "config.toml"
     config.write_text('developer_instructions = "user rules"\n')
@@ -261,6 +310,9 @@ async def test_pi_completed_session(tmp_path):
     # Pi reports input without cache; both assistant messages add up.
     assert result.usage["input_tokens"] == 1980 + 225 and result.usage["cache_read_tokens"] == 1792
     assert result.usage["output_tokens"] == 22 + 13
+    # Pi's own per-message cost is kept (both messages), as a subscription equivalent: the login is a subscription.
+    assert result.usage["cost_usd"] == pytest.approx(0.00418 + 0.0007592)
+    assert (result.usage["cost_basis"], result.usage["cost_source"]) == ("subscription_equiv", "provider_reported")
     assert result.handoff["summary"] == "Created `hello.txt` containing `hi`." and FALLBACK_NOTE in result.handoff["decisions"]
     assert result.progress[0].startswith("tool write") and "hello.txt" in result.progress[0]
     assert events and events[-1]["event"] == "agent_settled"

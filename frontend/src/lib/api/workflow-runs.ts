@@ -25,8 +25,37 @@ export interface WorkflowRunListItem {
   served_models: string[]
   /** null when no attempt reported it (unknown is not zero). */
   total_tokens: number | null
-  cost_usd: number | null
-  cost_reported_attempts: number
+  cost: CostTotals
+}
+
+/** What a cost figure means: cash billed per token, the list-price value of subscription work, or unclassified. */
+export type CostBasis = 'metered' | 'subscription_equiv' | 'unknown'
+
+export interface BasisTotal {
+  /** null when no attempt on this basis had a price (unknown is not zero). */
+  usd: number | null
+  attempts: number
+  /** Attempts that used tokens but could not be priced. */
+  unpriced_attempts: number
+}
+
+/** Cost over a run's attempts, split by basis; bases are never summed together. */
+export interface CostTotals {
+  by_basis: Record<CostBasis, BasisTotal>
+  unpriced_attempts: number
+  /** Priced attempts whose figure is a catalog estimate rather than a provider-reported cost. */
+  estimated_attempts: number
+}
+
+export interface UsageTotals {
+  total_tokens: number | null
+  cost: CostTotals
+}
+
+export interface AttemptCost {
+  usd: number | null
+  basis: CostBasis
+  source: 'provider_reported' | 'catalog_estimate' | null
 }
 
 export interface WorkflowRunList {
@@ -55,8 +84,12 @@ export interface AttemptUsage {
   output_tokens?: number
   reasoning_tokens?: number
   total_tokens?: number
-  cost_usd?: number
+  cost_usd?: number | null
+  cost_basis?: CostBasis
+  cost_source?: AttemptCost['source']
   total_cost_usd?: number
+  /** Fraction (0-1) of each subscription window used, when the provider reported it. */
+  rate_limit_windows?: Record<string, number>
   duration_ms?: number
 }
 
@@ -107,6 +140,8 @@ export interface WorkflowAttempt {
   next_hop: Hop | null
   outcome: AttemptOutcome | null
   usage: AttemptUsage | null
+  /** Cost with its basis, from the server; absent on older responses. */
+  cost?: AttemptCost
   error: string | null
   decision: { action: string; reason: string } | null
   native_session_id: string | null
@@ -189,6 +224,8 @@ export interface WorkflowRunDetail {
   created_at: string | null
   last_activity_at: string | null
   steps: WorkflowStepView[]
+  /** Tokens and cost over every attempt, cost split by basis. */
+  usage_totals?: UsageTotals
 }
 
 export type ResumeAction = 'retry' | 'skip' | 'fail'

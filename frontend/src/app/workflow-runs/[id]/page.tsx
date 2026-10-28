@@ -3,42 +3,23 @@
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import {
-  formatCost,
-  formatDurationMs,
-  formatTokens,
-} from '@/app/sessions/utils'
+import { formatDurationMs, formatTokens } from '@/app/sessions/utils'
 import type { WorkflowRunDetail } from '@/lib/api/workflow-runs'
 import { ErrorAlert, LoadingState } from '../components/ListStates'
 import { PausePanel } from '../components/PausePanel'
 import { StatusDot } from '../components/StatusDot'
 import { StepCard } from '../components/StepCard'
 import { useWorkflowRun } from '../hooks/useWorkflowRuns'
-import { attemptCost, attemptTokens, runStateLabel } from '../utils'
+import { costTotalsParts, runStateLabel } from '../utils'
 
 function clock(ms: number): string {
   return ms ? new Date(ms).toLocaleTimeString() : ''
 }
 
-function totals(run: WorkflowRunDetail) {
-  const attempts = run.steps.flatMap((s) => s.attempt_history)
-  const tokens = attempts.flatMap((a) => {
-    const count = attemptTokens(a)
-    return count === null ? [] : [count]
-  })
-  const costs = attempts.flatMap((a) => {
-    const cost = attemptCost(a)
-    return cost === null ? [] : [cost]
-  })
-  return {
-    attempts: attempts.length,
-    tokens: tokens.length > 0 ? tokens.reduce((a, b) => a + b, 0) : null,
-    cost: costs.length > 0 ? costs.reduce((a, b) => a + b, 0) : null,
-  }
-}
-
 function RunSummary({ run }: { run: WorkflowRunDetail }) {
-  const sum = totals(run)
+  const attempts = run.steps.flatMap((s) => s.attempt_history).length
+  const tokens = run.usage_totals?.total_tokens ?? null
+  const cost = run.usage_totals ? costTotalsParts(run.usage_totals.cost) : null
   const finished = run.state === 'completed' || run.state === 'failed'
   const elapsed =
     finished && run.created_at && run.last_activity_at
@@ -61,9 +42,11 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
         {run.goal ?? 'No goal recorded'}
       </p>
       <p className="font-mono text-[12px] tabular-nums text-slate-400">
-        {sum.attempts} {sum.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
-        {sum.tokens === null ? 'tokens n/a' : `${formatTokens(sum.tokens)} tok`}{' '}
-        · {sum.cost === null ? 'cost n/a' : formatCost(sum.cost)}
+        {attempts} {attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
+        {tokens === null ? 'tokens n/a' : `${formatTokens(tokens)} tok`} ·{' '}
+        <span data-testid="run-cost">
+          {cost ? cost.join(' · ') : 'cost n/a'}
+        </span>
         {elapsed ? ` · ${elapsed}` : ''}
         {run.created_at
           ? ` · started ${new Date(run.created_at).toLocaleString()}`

@@ -7,18 +7,24 @@ import os
 import subprocess
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Enum, make_url, text, update
+from sqlalchemy import Enum, make_url, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
-from app.models import Session, SessionEvent, WorkflowStep
+from app.models import (
+    CostLog,
+    Session,
+    SessionEvent,
+    SubscriptionUsageSnapshot,
+    WorkflowStep,
+)
 from app.services.workflow_runs import engine as engine_module
 from app.services.workflow_runs.engine import (
     EngineDeps,
@@ -60,7 +66,13 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
         await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
 
         def create_tables(sync_connection: Any) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, WorkflowStep.__table__):
+            for table in (
+                Session.__table__,
+                SessionEvent.__table__,
+                WorkflowStep.__table__,
+                CostLog.__table__,
+                SubscriptionUsageSnapshot.__table__,
+            ):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)
@@ -512,16 +524,15 @@ async def test_list_runs_newest_first_with_counts_usage_and_served_models(
     assert listing["total"] == 2
     assert [r["id"] for r in listing["runs"]] == [second, first]
     fresh, done = listing["runs"]
-    assert (fresh["state"], fresh["attempt_count"], fresh["total_tokens"], fresh["cost_usd"]) == (
-        "running",
-        0,
-        None,
-        None,
-    )
+    assert (fresh["state"], fresh["attempt_count"], fresh["total_tokens"]) == ("running", 0, None)
+    assert fresh["cost"]["unpriced_attempts"] == 0
     assert fresh["step_total"] == 4 and fresh["step_counts"] == {"pending": 4}
     assert done["state"] == "completed" and done["step_counts"] == {"completed": 4}
     assert done["attempt_count"] == 6 and done["flagged_attempts"] == 3
-    assert done["total_tokens"] == 6 * 120 and done["cost_usd"] is None
+    assert done["total_tokens"] == 6 * 120
+    # The test executor reports no price: six unpriced attempts, none summed as zero.
+    assert done["cost"]["unpriced_attempts"] == 6
+    assert done["cost"]["by_basis"]["unknown"] == {"usd": None, "attempts": 6, "unpriced_attempts": 6}
     assert set(done["served_models"]) == {OPUS, CODEX, OPUS_OLD}
 
     attempt = (await view_of(pg_db, first))["steps"][0]["attempt_history"][0]
@@ -774,3 +785,208 @@ async def test_takeover_attempt_records_the_model_it_asked_for(pg_db, repo, worl
     assert second["effective_model"] == CODEX and second["fallback_used"] is True
     row = await pg_db.get(Session, second["session_id"])
     assert row.model == CODEX and row.provider_metadata["requested_model"] == CODEX
+
+
+# --- usage totals by cost basis, cost rows and acceptance on a substituted answer ---------------------
+
+
+def priced(usd: float | None, basis: str, source: str | None = "provider_reported") -> dict[str, Any]:
+    return {
+        "input_tokens": 1000,
+        "output_tokens": 100,
+        "total_tokens": 1100,
+        "cost_usd": usd,
+        "cost_basis": basis,
+        "cost_source": source,
+    }
+
+
+async def cost_rows(db: AsyncSession) -> list[CostLog]:
+    return list((await db.execute(select(CostLog).order_by(CostLog.id))).scalars())
+
+
+async def test_totals_split_attempts_by_basis_and_cost_rows_are_written_once_per_harness_attempt(
+    pg_db, repo, world_factory
+) -> None:
+    from app.services.workflow_runs.listing import list_runs
+
+    world = world_factory(
+        {
+            "plan": [FauxAction(usage=priced(0.5, "metered"))],
+            "implement": [FauxAction(usage=priced(2.0, "subscription_equiv"))],
+            "review": [FauxAction(usage=priced(None, "subscription_equiv", None))],
+            "fix": [FauxAction(usage=priced(1.0, "subscription_equiv", "catalog_estimate"))],
+        }
+    )
+    chains(world)
+    definition = example("plan-implement-review-fix", repo)
+    for step in definition.steps:
+        step.executor = "pi"  # a harness executor, so each attempt writes its cost row (the faux runs it)
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+
+    view = await view_of(pg_db, run_id)
+    by = view["usage_totals"]["cost"]["by_basis"]
+    assert (by["metered"]["usd"], by["subscription_equiv"]["usd"]) == (0.5, 3.0)
+    assert by["subscription_equiv"] == {"usd": 3.0, "attempts": 3, "unpriced_attempts": 1}
+    assert by["unknown"]["attempts"] == 0 and view["usage_totals"]["cost"]["estimated_attempts"] == 1
+    assert view["usage_totals"]["total_tokens"] == 4 * 1100
+    costs = [a["cost"] for s in view["steps"] for a in s["attempt_history"]]
+    assert costs[0] == {"usd": 0.5, "basis": "metered", "source": "provider_reported"}
+    assert costs[2] == {"usd": None, "basis": "subscription_equiv", "source": None}
+
+    listed = (await list_runs(pg_db, limit=5, offset=0))["runs"][0]
+    assert listed["cost"] == view["usage_totals"]["cost"] and listed["total_tokens"] == 4 * 1100
+
+    rows = await cost_rows(pg_db)
+    assert len(rows) == 4  # one per attempt
+    assert [(r.billing_mode, r.cost_usd, r.api_equiv_usd) for r in rows] == [
+        ("metered", 0.5, None),
+        ("subscription", 0.0, 2.0),
+        ("subscription", 0.0, None),
+        ("subscription", 0.0, 1.0),
+    ]
+    assert {r.session_id for r in rows} == {
+        a["session_id"] for s in view["steps"] for a in s["attempt_history"]
+    }
+    # Advancing a finished run writes nothing more.
+    await advance_run(run_id, deps=world.deps)
+    assert len(await cost_rows(pg_db)) == 4
+
+
+async def test_faux_and_agent_hub_attempts_write_no_cost_rows(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(run_id)
+    assert await cost_rows(pg_db) == []
+
+
+async def test_acceptance_failure_on_a_substituted_answer_retries_the_requested_model(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory(
+        {
+            "plan": [
+                FauxAction("substitute", served_model=CODEX, write={}),
+                FauxAction(write={"out.txt": "ok\n"}),
+            ]
+        }
+    )
+    chains(world)
+    definition = with_acceptance(example("plan-implement-review-fix", repo), CHECK)
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    plan = (await view_of(pg_db, run_id))["steps"][0]
+    first, second = plan["attempt_history"]
+    assert (first["served_models"], first["decision"]["reason"]) == ([CODEX], "acceptance_failed")
+    assert second["requested_model"] == OPUS  # not the substitute the first attempt was answered by
+    assert [c["model"] for c in world.faux.calls if c["step"] == "plan"] == [OPUS, OPUS]
+
+
+async def test_acceptance_retry_takes_the_next_model_when_the_requested_one_is_no_longer_eligible(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory(
+        {"plan": [FauxAction("substitute", served_model=CODEX), FauxAction(write={"out.txt": "ok\n"})]}
+    )
+    chains(world)
+    plain_availability = world.deps.availability
+
+    async def cooling_after_first_attempt(models: list[str]) -> dict[str, Unavailable]:
+        found = await plain_availability(models)
+        if world.faux.calls and OPUS in models:
+            found[OPUS] = Unavailable("cooldown", 600.0)
+        return found
+
+    world.deps.availability = cooling_after_first_attempt
+    definition = with_acceptance(example("plan-implement-review-fix", repo), CHECK)
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert [c["model"] for c in world.faux.calls if c["step"] == "plan"] == [OPUS, CODEX]
+
+
+# --- the subscription usage page prefers the newest window reading ----------------------------------
+
+
+def window_attempt(provider: str, finished_at: float, windows: dict[str, float], **extra: Any) -> Session:
+    usage = {"input_tokens": 1, "rate_limit_windows": windows, **extra}
+    return Session(
+        id=str(uuid4()),
+        project_id="p",
+        provider=provider,
+        model="m",
+        status="completed",
+        session_type="agent",
+        request_source="workflow_run",
+        provider_metadata={"workflow_attempt": {"usage": usage, "finished_at": finished_at, "step_key": "s"}},
+    )
+
+
+async def test_workflow_window_readings_beat_an_older_statusline_and_say_where_they_came_from(pg_db) -> None:
+    from app.services.subscription_accounting import collector
+    from app.services.subscription_accounting.summary import _utilization
+
+    t0 = datetime(2026, 10, 28, 12, tzinfo=UTC)
+    reset = t0 + timedelta(hours=3)
+    stale = collector.SnapshotEvent(
+        "claude", t0, 300, 8.0, reset, None, None, collector.SOURCE_CLAUDE_STATUSLINE
+    )
+    week = collector.SnapshotEvent(
+        "claude", t0, 10080, 50.0, t0 + timedelta(days=2), None, None, collector.SOURCE_CLAUDE_STATUSLINE
+    )
+    newer = (t0 + timedelta(minutes=40)).timestamp()
+    pg_db.add_all(
+        [
+            window_attempt("claude", newer, {"five_hour": 0.31, "seven_day": 0.52}, rate_limit_observed_at=newer),
+            window_attempt("codex", newer, {"five_hour": 0.4, "seven_day": 0.06}, rate_limit_resets={"five_hour": 1793035965}),
+            window_attempt("pi", newer, {"five_hour": 0.9}),  # not a subscription window source
+            window_attempt("claude", newer, {"hour": 0.1}),  # a window the page does not know
+        ]
+    )
+    await pg_db.flush()
+    state: dict = {}
+    events = await collector.workflow_snapshot_events(pg_db, state, t0 + timedelta(hours=1))
+    assert sorted((e.provider, e.window_minutes, e.used_percent, e.source) for e in events) == [
+        ("claude", 300, 31.0, "workflow_attempt"),
+        ("claude", 10080, 52.0, "workflow_attempt"),
+        ("codex", 300, 40.0, "workflow_attempt"),
+        ("codex", 10080, 6.0, "workflow_attempt"),
+    ]
+    assert state["since"] == newer
+    # A second pass over the same attempts reads them again but the selection keeps each reading once.
+    kept = collector.select_snapshots([stale, week, *events], {})
+    assert [(e.provider, e.window_minutes, e.source) for e in kept if e.provider == "claude"] == [
+        ("claude", 300, "claude_statusline"),
+        ("claude", 10080, "claude_statusline"),
+        ("claude", 300, "workflow_attempt"),
+        ("claude", 10080, "workflow_attempt"),
+    ]
+    # The attempt did not say when the window resets: it keeps the reset of the window already on record.
+    assert {e.resets_at for e in kept if e.source == "workflow_attempt" and e.provider == "claude"} == {
+        reset,
+        t0 + timedelta(days=2),
+    }
+    for e in kept:
+        pg_db.add(
+            SubscriptionUsageSnapshot(
+                provider=e.provider, observed_at=e.ts, window_minutes=e.window_minutes,
+                used_percent=e.used_percent, resets_at=e.resets_at, source=e.source,
+            )
+        )
+    await pg_db.flush()
+    page = {p["provider"]: p for p in await _utilization(pg_db, t0 + timedelta(hours=1))}
+    five = next(w for w in page["claude"]["windows"] if w["window_minutes"] == 300)
+    assert (five["used_percent"], five["source"], five["source_label"]) == (31.0, "workflow_attempt", "workflow run")
+    assert five["observed_at"] == (t0 + timedelta(minutes=40)).isoformat()
+    # A statusline reading newer than the workflow attempt wins instead.
+    pg_db.add(
+        SubscriptionUsageSnapshot(
+            provider="claude", observed_at=t0 + timedelta(minutes=50), window_minutes=300, used_percent=33.0,
+            resets_at=reset, source="claude_statusline",
+        )
+    )
+    await pg_db.flush()
+    page = {p["provider"]: p for p in await _utilization(pg_db, t0 + timedelta(hours=1))}
+    five = next(w for w in page["claude"]["windows"] if w["window_minutes"] == 300)
+    assert (five["used_percent"], five["source"]) == (33.0, "claude_statusline")

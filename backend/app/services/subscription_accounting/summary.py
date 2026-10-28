@@ -27,6 +27,7 @@ from app.models import (
     SubscriptionUsageDaily,
     SubscriptionUsageSnapshot,
 )
+from app.models.session import NATIVE_COUNTED_NOTE
 
 DAYS_PER_MONTH = 30.44
 WEEKLY_ALERT_PERCENT = 80.0
@@ -36,6 +37,11 @@ METERED_ANOMALY_RATIO = 2.0
 METERED_ANOMALY_MIN_USD = 1.0
 API_EQUIV_LABEL = "API-equivalent value at list price. Value received from flat fees, not spend."
 WINDOW_LABELS = {300: "5h", 10080: "weekly"}
+SOURCE_LABELS = {
+    "claude_statusline": "Claude statusline",
+    "codex_session_log": "Codex session log",
+    "workflow_attempt": "workflow run",
+}
 
 
 def _day_bounds(day: date) -> tuple[datetime, datetime]:
@@ -98,7 +104,11 @@ async def _hub_value(db: AsyncSession, start: datetime) -> tuple[list[dict], lis
     base = (
         select(func.sum(CostLog.api_equiv_usd), func.sum(CostLog.credits_used), func.count(CostLog.id))
         .join(Session, CostLog.session_id == Session.id)
-        .where(CostLog.created_at >= start, CostLog.billing_mode == "subscription")
+        .where(
+            CostLog.created_at >= start,
+            CostLog.billing_mode == "subscription",
+            func.coalesce(CostLog.cost_note, "").not_like(f"{NATIVE_COUNTED_NOTE}%"),  # the collector counts those
+        )
     )
     by_project = await db.execute(base.add_columns(Session.project_id, Session.provider).group_by(Session.project_id, Session.provider))
     by_agent = await db.execute(base.add_columns(Session.agent_slug).group_by(Session.agent_slug))
@@ -124,8 +134,8 @@ async def _utilization(db: AsyncSession, now: datetime) -> list[dict[str, Any]]:
     for r in rows:
         key = (r.provider, r.window_minutes)
         cur = best.get(key)
-        r_reset = r.resets_at or r.observed_at
-        if cur is None or (r_reset, r.used_percent) > (cur.resets_at or cur.observed_at, cur.used_percent):
+        # The newest reading of a window wins, whichever source it came from (a headless run updates no statusline).
+        if cur is None or (r.observed_at, r.used_percent) > (cur.observed_at, cur.used_percent):
             best[key] = r
         if r.plan_type and (r.provider not in plan or r.observed_at > plan[r.provider][0]):
             plan[r.provider] = (r.observed_at, r.plan_type)
@@ -139,6 +149,8 @@ async def _utilization(db: AsyncSession, now: datetime) -> list[dict[str, Any]]:
             "used_percent": 0.0 if reset_passed else round(r.used_percent, 1),
             "resets_at": None if reset_passed else (r.resets_at.isoformat() if r.resets_at else None),
             "observed_at": r.observed_at.isoformat(),
+            "source": r.source,
+            "source_label": SOURCE_LABELS.get(r.source or "", r.source),
             "reset_since_observed": reset_passed,
         })
     return list(out.values())

@@ -1,14 +1,10 @@
 import { ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import {
-  formatCost,
-  formatDurationMs,
-  formatTokens,
-} from '@/app/sessions/utils'
+import { formatDurationMs, formatTokens } from '@/app/sessions/utils'
 import type { AcceptanceResult, WorkflowAttempt } from '@/lib/api/workflow-runs'
 import { cn } from '@/lib/utils'
 import {
-  attemptCost,
+  attemptCostText,
   attemptDurationMs,
   attemptModels,
   attemptTokens,
@@ -146,7 +142,7 @@ export function AttemptCard({ attempt }: { attempt: WorkflowAttempt }) {
   const running = !finished && attempt.status === 'active'
   const duration = attemptDurationMs(attempt)
   const tokens = attemptTokens(attempt)
-  const cost = attemptCost(attempt)
+  const cost = attemptCostText(attempt)
   const hop = attempt.hop_from
   const next = attempt.next_hop
   const statusText = running
@@ -180,7 +176,7 @@ export function AttemptCard({ attempt }: { attempt: WorkflowAttempt }) {
             ? `${formatTokens(tokens)} tok`
             : 'tokens n/a'}
           {' · '}
-          {cost !== null ? formatCost(cost) : 'cost n/a'}
+          {cost}
         </span>
       </div>
 
