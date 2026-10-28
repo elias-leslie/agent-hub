@@ -44,7 +44,7 @@ async def test_automatic_requires_current_exact_benchmark_qualification(monkeypa
     with patch.object(model_selection, "route_preflight_error", new_callable=AsyncMock, return_value=None):
         result = await select_model(SelectionRequest(task_type="general", mode="automatic"))
         assert not result["automatic_eligible"] and not result["apply"]
-        candidate["qualification"]["local_route"] = dict(evidence, kind="local_route_qualification")
+        candidate["qualification"]["local_route"] = dict(evidence, kind="local_route_qualification", effective_effort="medium")
         result = await select_model(SelectionRequest(task_type="general", mode="automatic"))
         assert result["automatic_eligible"] and result["apply"]
         override = await select_model(SelectionRequest(task_type="general", mode="automatic", override_model="codex/gpt-6.1-sol", override_effort="medium"))
@@ -118,3 +118,18 @@ async def test_fallback_skips_unavailable_routes_but_override_is_a_pin() -> None
         pinned = await select_model(SelectionRequest(task_type="coding", override_model="codex/gpt-6.1-sol", override_effort="medium"))
         assert not pinned["available"] and len(pinned["candidates_checked"]) == 1
         assert pinned["model"] == "codex/gpt-6.1-sol"
+
+
+def test_effort_reports_adapter_mapping_and_unknown_harnesses() -> None:
+    from dataclasses import replace
+
+    from app.constants import catalog
+    terra = catalog.get_model_entry("codex/gpt-6.1-terra")
+    assert terra is not None
+    caps = replace(terra.capabilities, thinking_level_map={"medium": "high"})
+    catalog.MODEL_CATALOG_BY_ID[terra.id] = replace(terra, capabilities=caps)
+    details = model_selection._effort_details(terra.id, "medium")
+    assert (details["requested"], details["effective"]) == ("medium", "high")
+    assert model_selection._effort_details("gemini-3.8-flash", "medium")["effective"] == "medium"
+    assert model_selection._effort_details("claude-sonnet-5-5", "medium")["effective"] is None
+    assert "unsupported" in details["max_ultra"]

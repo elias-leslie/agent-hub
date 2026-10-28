@@ -11,6 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import settings
 from app.constants.catalog import get_model_entry, resolve_model
+from app.llm.model_resolver import resolve_llm_model
+from app.llm.providers.google import _get_thinking_level
+from app.llm.simple_options import clamp_reasoning
 from app.services.agent_routing_completion import route_preflight_error
 
 _POLICY_PATH = Path(__file__).parent / "model_selection_policy.json"
@@ -88,6 +91,28 @@ async def _unavailable(model: str, effort: str, *, tools: bool, vision: bool) ->
     return reasons
 
 
+def _effort_details(model: str, effort: str) -> dict:
+    """Describe the Agent Hub completion route, not a separate native harness."""
+    entry = get_model_entry(model)
+    effective = None
+    basis = "Provider or harness mapping not established"
+    if entry and effort in {"low", "medium", "high", "xhigh"}:
+        if entry.provider == "codex":
+            effective = (entry.capabilities.thinking_level_map or {}).get(effort, effort)
+            basis = "Agent Hub Codex Responses adapter and catalog map"
+        elif entry.provider in {"google", "gemini"}:
+            level = clamp_reasoning(effort)
+            if level is not None and level != "xhigh":
+                effective = _get_thinking_level(level, resolve_llm_model(model, entry.provider)).lower()
+                basis = "Agent Hub Google adapter and catalog map"
+    return {
+        "requested": effort, "effective": effective, "basis": basis,
+        "completion_request": "ultrathink" if effort == "xhigh" else effort,
+        "scope": "Agent Hub completion adapter; provider execution not independently observed",
+        "max_ultra": "unsupported by this selection and completion contract",
+    }
+
+
 async def select_model(request: SelectionRequest) -> dict:
     policy_data = await selection_policy()
     policy = policy_data["policies"].get(request.task_type)
@@ -107,6 +132,7 @@ async def select_model(request: SelectionRequest) -> dict:
             chosen = (candidate, model, effort)
             break
     candidate, model, effort = chosen if chosen else (candidates[0], resolve_model(candidates[0]["model"]), candidates[0]["effort"])
+    effort_details = _effort_details(model, effort)
     qualification = candidate.get("qualification") or {}
     benchmark = qualification.get("benchmark") or {}
     local = qualification.get("local_route") or {}
@@ -114,9 +140,12 @@ async def select_model(request: SelectionRequest) -> dict:
         chosen and not request.override_model
         and _current_evidence(benchmark, kind="task_benchmark", model=model, effort=effort, task_type=request.task_type)
         and _current_evidence(local, kind="local_route_qualification", model=model, effort=effort, task_type=request.task_type)
+        and effort_details["effective"] is not None
+        and local.get("effective_effort") == effort_details["effective"]
     )
     return {
         "task_type": request.task_type, "mode": request.mode, "model": model, "effort": effort,
+        "effort_details": effort_details,
         "override": request.override_model is not None, "available": chosen is not None,
         "unavailable_reasons": attempts[0]["reasons"] if not chosen else [], "candidates_checked": attempts,
         "checked_at": datetime.now(UTC).isoformat(),

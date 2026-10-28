@@ -116,6 +116,9 @@ Each policy has ordered `candidates`, each with `model`, `effort`, `rationale`,
 must identify `kind` (`task_benchmark` or `local_route_qualification`),
 `source`, `assessed_at`, `valid_until`, `task_type`, `model`, and `effort`.
 The dates are ISO dates. A qualification is scoped to that exact tuple and
-must be current. Configure policy changes atomically so readers never see a
+must be current. Local route evidence also supplies `effective_effort`, which
+must match the Agent Hub adapter mapping. The response distinguishes requested
+and effective effort when known; max and ultra are unsupported by this selection
+and completion contract. Configure policy changes atomically so readers never see a
 partial file. `apply` is an advisory decision for an opting-in caller; Agent
 Hub does not change assigned model chains or run the selection automatically.
