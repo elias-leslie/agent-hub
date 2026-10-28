@@ -155,6 +155,10 @@ async def complete_internal(
     ``ephemeral:<uuid>``. Canonical context is still loaded through a managed
     async session unless the caller explicitly declares that the messages
     already contain a verified canonical delivery.
+
+    Tool calls are checked against the project's permission tier, unless
+    ``permitted_tools`` names the tools the caller allows (a workflow run's
+    tool level); then that set is the permission.
     """
 
     if not is_workload_provider(provider):
