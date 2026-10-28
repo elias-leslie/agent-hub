@@ -1107,7 +1107,7 @@
       "release_date": null,
       "knowledge_cutoff": "2026-06-01",
       "family": "gpt",
-      "availability": "codex_oauth; advertised_2026-10-28; entitlement_unverified; low_medium_high_xhigh_max_ultra",
+      "availability": "codex_oauth; text_verified_2026-10-28; vision_tools_untested; low_medium_high_xhigh_max_ultra",
       "is_active": true,
       "sort_order": 16,
       "source": "seed"
