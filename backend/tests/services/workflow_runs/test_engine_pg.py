@@ -473,3 +473,67 @@ async def test_run_session_is_a_workflow_session_with_attempt_children(
         )
     ).scalar()
     assert events >= 8  # started + result per attempt on the run timeline
+
+
+async def test_list_runs_newest_first_with_counts_usage_and_served_models(
+    pg_db, repo, world_factory
+) -> None:
+    from app.services.workflow_runs.listing import list_runs
+
+    world = world_factory(
+        {
+            "plan": [FauxAction("refuse", category="cyber"), FauxAction("success")],
+            "implement": [FauxAction("substitute", served_model=OPUS_OLD, category="cyber")],
+        }
+    )
+    chains(world)
+    first, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    await world.run_to_stop(first)
+    second, _ = await create_run(
+        pg_db, example("plan-implement-review-fix", repo, request_id="second"), deps=world.deps
+    )
+
+    listing = await list_runs(pg_db, limit=10, offset=0)
+    assert listing["total"] == 2
+    assert [r["id"] for r in listing["runs"]] == [second, first]
+    fresh, done = listing["runs"]
+    assert (fresh["state"], fresh["attempt_count"], fresh["total_tokens"], fresh["cost_usd"]) == (
+        "running",
+        0,
+        None,
+        None,
+    )
+    assert fresh["step_total"] == 4 and fresh["step_counts"] == {"pending": 4}
+    assert done["state"] == "completed" and done["step_counts"] == {"completed": 4}
+    assert done["attempt_count"] == 5 and done["flagged_attempts"] == 2
+    assert done["total_tokens"] == 5 * 120 and done["cost_usd"] is None
+    assert done["served_models"][0] == CODEX and OPUS_OLD in done["served_models"]
+
+    page = await list_runs(pg_db, limit=1, offset=1)
+    assert [r["id"] for r in page["runs"]] == [first] and page["total"] == 2
+
+
+async def test_workflow_runs_endpoints_list_and_paginate(pg_db, repo, world_factory) -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api.workflow_runs import router
+    from app.db import get_db
+
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    app = FastAPI()
+    app.include_router(router)
+
+    async def override() -> AsyncGenerator[AsyncSession]:
+        yield pg_db
+
+    app.dependency_overrides[get_db] = override
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        body = (await client.get("/workflow-runs", params={"limit": 5})).json()
+        assert [r["id"] for r in body["runs"]] == [run_id] and body["limit"] == 5
+        empty = (await client.get("/workflow-runs", params={"offset": 5})).json()
+        assert empty["runs"] == [] and empty["total"] == 1
+        assert (await client.get("/workflow-runs", params={"limit": 0})).status_code == 422
+        assert (await client.get(f"/workflow-runs/{run_id}")).json()["id"] == run_id
