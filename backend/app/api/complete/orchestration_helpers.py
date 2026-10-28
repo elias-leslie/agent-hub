@@ -15,6 +15,7 @@ from app.api.complete.error_handlers import handle_completion_error
 from app.api.complete.execution import get_thinking_level
 from app.api.complete.handlers import process_completion_result
 from app.api.complete.helpers import validate_json_response
+from app.api.complete.request_metrics import persist_failed_requests
 from app.api.complete.request_setup import (
     build_message_list,
     check_cache,
@@ -96,6 +97,7 @@ async def process_result(
     # A provider failure is not a malformed caller request or a successful answer.
     # Check before schema validation and success persistence/cache writes.
     if cr.finish_reason in {"error", "aborted"}:
+        await persist_failed_requests(db, sid, cr, model_used or resolved_model, request.agent_slug)
         message = cr.error or cr.message.error_message or f"Provider returned finish_reason={cr.finish_reason}"
         upstream_status = re.match(r"^(429|503)\b", message)
         raise ProviderError(

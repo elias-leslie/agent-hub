@@ -203,6 +203,21 @@ async def mirror_stream_outcome_error(ctx: StreamContext, message: AssistantMess
     await _with_fresh_session(ctx.session_id, _update)
 
 
+async def mirror_stream_request_metrics(ctx: StreamContext, message: AssistantMessage) -> None:
+    """Persist a finished model request's liveness record and its retries."""
+    from .request_metrics import model_request_record, store_model_requests
+
+    if model_request_record(message) is None:
+        return
+
+    async def _update(_session: DBSession, db) -> None:
+        await store_model_requests(
+            db, ctx.session_id, [message], model_used=ctx.model_used or ctx.model, agent_id=ctx.agent_used,
+        )
+
+    await _with_fresh_session(ctx.session_id, _update)
+
+
 async def close_one_shot_session(session_id: str) -> None:
     """Mark a one-shot session as completed in the database."""
     try:

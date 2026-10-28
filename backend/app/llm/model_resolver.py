@@ -11,12 +11,24 @@ the transitional surface.
 
 from __future__ import annotations
 
+import logging
 from typing import cast
 from urllib.parse import urlparse
 
-from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
+from app.constants.catalog import (
+    INACTIVE_MODEL_CATALOG_BY_ID,
+    MODEL_CATALOG_BY_ID,
+    ModelEntry,
+    resolve_model,
+)
 from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
 from app.llm.types import Api, Model, ModelCost, OpenAICompletionsCompat, ThinkingLevelMap
+
+logger = logging.getLogger(__name__)
+
+# Stand-ins for a model the catalog does not know (logged when used).
+_UNCATALOGUED_CONTEXT_WINDOW = 128_000
+_UNCATALOGUED_MAX_TOKENS = 8192
 
 # Provider → API id mapping. Matches the three providers ported in Phase 1+2.
 _PROVIDER_API: dict[str, Api] = {
@@ -78,13 +90,19 @@ def resolve_llm_model(
     """
     resolved_id = resolve_model(model_id)
     upstream_id = upstream_model_id(resolved_id, provider)
-    entry = MODEL_CATALOG_BY_ID.get(resolved_id)
+    entry = _catalog_entry(resolved_id, model_id, provider)
+    if entry is not None and entry.upstream_id:
+        upstream_id = entry.upstream_id
     api = _PROVIDER_API.get(provider, "openai-completions")
     base_url = _resolve_base_url(provider)
     headers = _provider_headers(provider)
 
     if entry is None:
-        # Catalog miss — return a minimal Model so the adapter can still try.
+        # Catalog miss: nothing says what this model supports, so the adapter gets conservative stand-ins.
+        logger.warning(
+            "model %r (provider %s) is not in the model catalog; assuming context_window=%d and max_tokens=%d",
+            model_id, provider, _UNCATALOGUED_CONTEXT_WINDOW, _UNCATALOGUED_MAX_TOKENS,
+        )
         return Model(
             id=upstream_id,
             name=resolved_id,
@@ -94,8 +112,8 @@ def resolve_llm_model(
             reasoning=False,
             input=["text"],
             cost=ModelCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0),
-            context_window=128_000,
-            max_tokens=8192,
+            context_window=_UNCATALOGUED_CONTEXT_WINDOW,
+            max_tokens=_UNCATALOGUED_MAX_TOKENS,
             headers=headers,
         )
 
@@ -126,6 +144,18 @@ def resolve_llm_model(
         access_programs=entry.access_programs,
         compat=_provider_compat(provider, entry.family, base_url),
     )
+
+
+def _catalog_entry(resolved_id: str, model_id: str, provider: str) -> ModelEntry | None:
+    """The catalog row for a model: active, then inactive, then the one whose provider-side id matches."""
+    entry = MODEL_CATALOG_BY_ID.get(resolved_id) or INACTIVE_MODEL_CATALOG_BY_ID.get(resolved_id)
+    if entry is not None:
+        return entry
+    bare = model_id.removeprefix(f"{provider}/")
+    for candidate in (*MODEL_CATALOG_BY_ID.values(), *INACTIVE_MODEL_CATALOG_BY_ID.values()):
+        if candidate.provider == provider and bare in (candidate.upstream_id, candidate.id.removeprefix(f"{provider}/")):
+            return candidate
+    return None
 
 
 def _provider_headers(provider: str) -> dict[str, str] | None:

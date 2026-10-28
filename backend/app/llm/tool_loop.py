@@ -30,12 +30,15 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
+
 from .headroom_compress import compress_tool_results
 from .stream import stream_simple
 from .types import (
     AssistantMessage,
     AssistantMessageEvent,
     Context,
+    DoneEvent,
     ErrorEvent,
     Model,
     SimpleStreamOptions,
@@ -45,6 +48,7 @@ from .types import (
     UserMessage,
 )
 from .utils.outcomes import outcome_of
+from .utils.request_metrics import record_request_metrics, request_metrics_of
 from .utils.retry import retry_budget, retry_delay
 
 # Per-turn and per-tool timing at DEBUG (LOG_LEVELS=app.llm=DEBUG): what a slow run spent its time on.
@@ -176,21 +180,40 @@ async def _run_one(run_tool: ToolRunner, tool_call: ToolCall) -> tuple[ToolResul
         )
 
 
-async def _turn(
+def _close_metrics(message: AssistantMessage, started: float, retry_log: list[dict[str, Any]]) -> None:
+    """Complete the turn's ``request_metrics`` record: what the provider could not see (retries) and, for a
+    provider that records none, the outcome and duration."""
+    if request_metrics_of(message) is None:
+        failed = message.stop_reason in ("error", "aborted")
+        record_request_metrics(
+            message,
+            total_s=round(time.monotonic() - started, 2),
+            outcome=(message.error_message or message.stop_reason)[:200] if failed else "ok",
+        )
+    record_request_metrics(message, retries=len(retry_log), retry_log=retry_log)
+
+
+async def run_turn(
     model: Model[Any],
     context: Context,
     options: SimpleStreamOptions | None,
     sink: list[AssistantMessage],
 ) -> AsyncIterator[ToolLoopEvent]:
-    """One model turn. An interrupted stream (dead connection, stall, runaway tool call) is re-run from the
-    same context after a backoff, up to the retry budget; the partial message never reaches ``context``.
+    """One model turn, and the only place a model request is re-sent.
 
-    The provider is told not to retry on its own (``max_retries=0``), so this is the single place the
-    budget is spent. The turn's final message is appended to ``sink``.
+    A stream that died (connection reset or closed, HTTP 5xx, ``response.failed``/``error`` event, EOF before
+    completion; the provider tags it ``interrupted``) is re-run from the same context after an exponential
+    backoff, up to the retry budget; the partial message never reaches ``context``. Refusals, usage limits and
+    rate limits are not retried. Silence and elapsed time never end a request.
+
+    The provider is told not to retry on its own (``max_retries=0``), so the budget is spent once, visibly, as
+    ``TurnRetry`` events. The turn's final message is appended to ``sink`` carrying its ``request_metrics``.
     """
     retries = retry_budget(options)
     attempt_options = replace(options or SimpleStreamOptions(), max_retries=0)
+    retry_log: list[dict[str, Any]] = []
     for attempt in range(retries + 1):
+        started = time.monotonic()
         stream_handle = stream_simple(model, context, attempt_options)
         interrupted: ErrorEvent | None = None
         async for event in stream_handle:
@@ -199,12 +222,24 @@ async def _turn(
                 if outcome is not None and outcome.kind == "interrupted":
                     interrupted = event
                     continue
+            if isinstance(event, DoneEvent):
+                _close_metrics(event.message, started, retry_log)
+            elif isinstance(event, ErrorEvent):
+                _close_metrics(event.error, started, retry_log)
             yield event
         if interrupted is None:
             sink.append(await stream_handle.result())
             return
         reason = interrupted.error.error_message or "interrupted"
         delay = retry_delay(attempt)
+        failed = request_metrics_of(interrupted.error) or {}
+        retry_log.append(
+            {
+                "reason": reason[:300],
+                "delay_s": round(delay, 2),
+                **{key: failed[key] for key in ("max_gap_s", "keepalives", "total_s") if key in failed},
+            }
+        )
         logger.warning("turn interrupted (%s); retry %d/%d in %.1fs", reason, attempt + 1, retries, delay)
         yield TurnRetry(attempt=attempt + 1, max_retries=retries, reason=reason, delay_s=delay)
         await asyncio.sleep(delay)
@@ -215,7 +250,7 @@ async def run(
     context: Context,
     run_tool: ToolRunner,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     is_parallel_safe: ParallelSafe | None = None,
@@ -260,7 +295,7 @@ async def run(
 
         turn_start = time.monotonic()
         sunk: list[AssistantMessage] = []
-        async for event in _turn(model, context, options, sunk):
+        async for event in run_turn(model, context, options, sunk):
             yield event
         final = sunk[0]
         logger.debug(
@@ -339,7 +374,7 @@ async def run(
         )
     )
     sunk = []
-    async for event in _turn(model, context, options, sunk):
+    async for event in run_turn(model, context, options, sunk):
         yield event
     context.messages.append(sunk[0])
 
@@ -356,4 +391,5 @@ __all__ = [
     "ToolRunner",
     "TurnRetry",
     "run",
+    "run_turn",
 ]

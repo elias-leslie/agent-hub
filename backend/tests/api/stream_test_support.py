@@ -49,6 +49,7 @@ def patched_done_persistence(*, log_cost: bool = True) -> Iterator[SimpleNamespa
         "save_messages_to_db": "app.api.complete.streaming_persistence.save_messages_to_db",
         "track_citations": "app.api.complete.streaming_persistence._track_citations",
         "close_one_shot_session": "app.api.complete.streaming_persistence.close_one_shot_session",
+        "mirror_request_metrics": "app.api.complete.streaming_persistence.mirror_stream_request_metrics",
         "record_project_cost": "app.services.project_budget.record_project_cost",
     }
     if log_cost:

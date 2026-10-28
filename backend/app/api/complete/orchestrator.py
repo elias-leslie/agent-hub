@@ -32,9 +32,8 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from app.llm.event_stream import AssistantMessageEventStream
-from app.llm.stream import stream_simple as llm_stream
-from app.llm.tool_loop import ToolLoopEvent, ToolRunner
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
+from app.llm.tool_loop import ToolLoopEvent, ToolRunner, run_turn
 from app.llm.tool_loop import run as run_tool_loop
 from app.llm.types import (
     AssistantMessage,
@@ -202,7 +201,7 @@ async def run_completion(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     on_loop_event: Callable[[Any], None] | None = None,
@@ -255,12 +254,13 @@ async def run_completion(
             tool_calls_count=tool_calls_count, usage_messages=usage_messages,
         )
 
-    stream_handle = llm_stream(model, context, options)
-    # Drain the stream so all events fire (consumers may attach
-    # observers via callbacks before calling us).
-    async for _event in stream_handle:
-        pass
-    final = await stream_handle.result()
+    # One turn through the same re-send layer as the tool loop; drain it so every event fires
+    # (consumers attach observers through ``on_loop_event`` before calling us).
+    sunk: list[AssistantMessage] = []
+    async for event in run_turn(model, context, options, sunk):
+        if on_loop_event is not None:
+            on_loop_event(event)
+    final = sunk[0]
     return OrchestratorResult(message=final, turns=1, tool_calls_count=0, usage_messages=[final])
 
 
@@ -271,7 +271,7 @@ async def run_completion_stream(
     execute_tools: bool = False,
     run_tool: ToolRunner | None = None,
     options: SimpleStreamOptions | None = None,
-    max_turns: int = 32,
+    max_turns: int = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.
@@ -295,8 +295,8 @@ async def run_completion_stream(
             yield event
         return
 
-    stream_handle: AssistantMessageEventStream = llm_stream(model, context, options)
-    async for event in stream_handle:
+    sunk: list[AssistantMessage] = []
+    async for event in run_turn(model, context, options, sunk):
         yield event
 
 

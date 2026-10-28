@@ -25,6 +25,7 @@ from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 from app.llm.headroom_compress import compression_enabled_for
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.tool_loop import (
@@ -54,15 +55,15 @@ from .schemas import MessageInput
 from .sse_writer import SseWriter, tool_result_text
 from .streaming_context import StreamContext
 from .tool_provisioner import build_direct_tool_runner
+from .turn_budget import tool_loop_turns
 
 logger = logging.getLogger(__name__)
 
 # Heartbeat interval in seconds — keeps SSE connections alive through proxies
 _HEARTBEAT_INTERVAL_S = 15
 
-# Match CompletionRequest.max_turns default; the shared tool-budget resolver
-# lifts low values when tools are actually enabled.
-DEFAULT_MAX_TOOL_TURNS = 1
+# Tool execution is bounded only by the shared agentic headroom, as CompletionRequest does.
+DEFAULT_MAX_TOOL_TURNS = DEFAULT_AGENTIC_MAX_TURNS
 
 
 class _EarlyStreamProviderError(RuntimeError):
@@ -119,6 +120,12 @@ async def _record_stream_usage(ctx: StreamContext, message: AssistantMessage) ->
 
         await record_project_cost(ctx.project_id, cost)
     return cost
+
+
+async def _mirror_request_metrics(ctx: StreamContext, message: AssistantMessage) -> None:
+    from .streaming_persistence import mirror_stream_request_metrics
+
+    await mirror_stream_request_metrics(ctx, message)
 
 
 async def _persist_and_build_done_sse(
@@ -281,6 +288,7 @@ async def _emit_events(
         if isinstance(event, DoneEvent):
             usage_messages.append(event.message)
             total_cost_usd += await _record_stream_usage(ctx, event.message)
+            await _mirror_request_metrics(ctx, event.message)
             if tool_loop_active and event.reason == "toolUse":
                 continue
             yield await _persist_and_build_done_sse(
@@ -293,6 +301,7 @@ async def _emit_events(
             continue
         if isinstance(event, ErrorEvent):
             await _record_stream_usage(ctx, event.error)
+            await _mirror_request_metrics(ctx, event.error)
             if (outcome := outcome_usage(event.error)) is not None:
                 from .streaming_persistence import mirror_stream_outcome_error
 
@@ -477,7 +486,7 @@ async def stream_completion(
                     ),
                     execute_tools=execute_tools,
                     run_tool=run_tool,
-                    max_turns=max(max_tool_turns, 1) if execute_tools else 1,
+                    max_turns=tool_loop_turns(execute_tools, max_tool_turns),
                     compress_tool_results_enabled=(
                         execute_tools and compression_enabled_for(agent_used)
                     ),

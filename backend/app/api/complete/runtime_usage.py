@@ -93,6 +93,9 @@ async def persist_failed_attempt_usage(
     if not session_id or session_id.startswith("ephemeral:"):
         logger.warning("Cannot attribute failed %s attempt usage without a persisted session", model)
         return
+    from .request_metrics import store_model_requests
+
+    await store_model_requests(db, session_id, result.usage_messages, model_used=model, agent_id=agent_slug)
     total_cost = 0.0
     for index, message in enumerate(result.usage_messages):
         usage = message.usage

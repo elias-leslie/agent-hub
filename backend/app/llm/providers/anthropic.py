@@ -62,6 +62,7 @@ from ..types import (
 )
 from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
+from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
 
 # Re-export for downstream type-checkers that don't follow the `as` alias.
@@ -379,7 +380,8 @@ def build_params(
     params: dict[str, Any] = {
         "model": model.id,
         "messages": convert_messages(context.messages, model, cc),
-        "max_tokens": (options.max_tokens if options and options.max_tokens else (model.max_tokens // 3)),
+        # The catalog's output limit, as Claude Code uses; a smaller default silently truncates long answers.
+        "max_tokens": (options.max_tokens if options and options.max_tokens else model.max_tokens),
         "stream": True,
     }
 
@@ -405,9 +407,10 @@ def build_params(
 
     if model.reasoning and options and options.thinking_enabled:
         display: AnthropicThinkingDisplay = options.thinking_display or "summarized"
+        # Thinking counts against max_tokens, and the API requires the budget to stay below it.
         params["thinking"] = {
             "type": "enabled",
-            "budget_tokens": options.thinking_budget_tokens or 1024,
+            "budget_tokens": min(options.thinking_budget_tokens or 1024, max(params["max_tokens"] - 1, 1)),
             "display": display,
         }
     elif model.reasoning and options and options.thinking_enabled is False:
@@ -682,6 +685,8 @@ def stream_anthropic(
             aborted = bool(options and options.signal is not None and options.signal.is_set())
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) if str(exc) else type(exc).__name__
+            if not aborted:
+                tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()
 

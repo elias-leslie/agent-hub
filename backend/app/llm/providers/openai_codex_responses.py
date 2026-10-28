@@ -59,8 +59,7 @@ from ..types import (
 )
 from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
 from ..utils.refusal_codes import codex_refusal_category
-from ..utils.retry import retry_budget
-from ..utils.retry import retry_delay as _retry_delay
+from ..utils.request_metrics import record_request_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -297,25 +296,20 @@ def _tools(tools: list[Tool] | None) -> list[dict[str, Any]] | None:
 
 
 
-# Matches the OpenAI SDK default: a stalled stream (no bytes for this long)
-# fails instead of hanging the request forever.
-_DEFAULT_STREAM_TIMEOUT_S = 600.0
 _CONNECT_TIMEOUT_S = 30.0
 _KEEPALIVE = "keepalive"
 
 
-def _progress_timeout_s(options: SimpleStreamOptions | None) -> float:
-    """Seconds without a non-keepalive event that make a stream dead; options.timeout_ms overrides the setting."""
-    if options is not None and options.timeout_ms is not None:
-        return options.timeout_ms / 1000
-    return settings.llm_stream_progress_timeout_s
-
-
 def _stream_timeout(options: SimpleStreamOptions | None) -> httpx.Timeout:
-    seconds = _DEFAULT_STREAM_TIMEOUT_S
+    """Transport bound only: no bytes at all for this long (keepalives are bytes) means the connection is dead.
+
+    A slow model is never cut off by this; it ends a connection that stopped talking altogether.
+    """
+    seconds = settings.llm_stream_read_timeout_s
     if options is not None and options.timeout_ms is not None:
         seconds = options.timeout_ms / 1000
     return httpx.Timeout(seconds, connect=min(_CONNECT_TIMEOUT_S, seconds))
+
 
 def _body(
     model: Model[Any],
@@ -484,92 +478,79 @@ async def _authenticated_response(
 
 
 class _Timing:
-    """Where one request spent its time; logged at DEBUG (``LOG_LEVELS=app.llm=DEBUG``) to tell a slow model from a stall."""
+    """Where one request spent its time: the longest silence between frames, keepalives and tool-argument stream.
+
+    The record rides on the message (``request_metrics``) so it is persisted with the session; at DEBUG
+    (``LOG_LEVELS=app.llm=DEBUG``) it is logged too.
+    """
 
     def __init__(self) -> None:
-        self.start = self.last = time.monotonic()
+        self.start = self.last = self.last_event = time.monotonic()
         self.headers: float | None = None
         self.first: float | None = None
         self.max_gap = 0.0
+        self.max_event_gap = 0.0
         self.events = 0
         self.keepalives = 0
         self.max_tool_args = 0
         self.failure: str | None = None
 
-    def event(self) -> None:
+    def frame(self, keepalive: bool) -> None:
+        """One SSE frame arrived. Any frame, keepalives included, proves the connection is alive."""
         now = time.monotonic()
-        if self.first is None:
-            self.first = now - self.start
         self.max_gap = max(self.max_gap, now - self.last)
         self.last = now
+        if keepalive:
+            self.keepalives += 1
+            return
+        if self.first is None:
+            self.first = now - self.start
+        self.max_event_gap = max(self.max_event_gap, now - self.last_event)
+        self.last_event = now
         self.events += 1
 
-    def log(self, model: str, attempt_failed: bool) -> None:
-        if not logger.isEnabledFor(logging.DEBUG):
-            return
-        logger.debug(
-            "codex request model=%s headers_s=%s first_event_s=%s max_gap_s=%.2f events=%d keepalives=%d "
-            "max_tool_args=%d total_s=%.2f outcome=%s",
-            model,
-            None if self.headers is None else round(self.headers, 2),
-            None if self.first is None else round(self.first, 2),
-            self.max_gap,
-            self.events,
-            self.keepalives,
-            self.max_tool_args,
-            time.monotonic() - self.start,
-            self.failure if attempt_failed else "ok",
-        )
+    def metrics(self) -> dict[str, Any]:
+        return {
+            "headers_s": None if self.headers is None else round(self.headers, 2),
+            "first_event_s": None if self.first is None else round(self.first, 2),
+            "max_gap_s": round(self.max_gap, 2),
+            "max_event_gap_s": round(self.max_event_gap, 2),
+            "events": self.events,
+            "keepalives": self.keepalives,
+            "max_tool_args": self.max_tool_args,
+            "total_s": round(time.monotonic() - self.start, 2),
+            "outcome": self.failure or "ok",
+        }
 
-
-class _Retry(Exception):
-    """A failed attempt that streamed nothing to the caller, so it can be sent again."""
+    def finish(self, model: str, message: AssistantMessage) -> None:
+        metrics = self.metrics()
+        record_request_metrics(message, **metrics)
+        logger.debug("codex request model=%s %s", model, " ".join(f"{k}={v}" for k, v in metrics.items()))
 
 
 class _Interrupted(Exception):
-    """A stream that stopped making progress: silent past the progress timeout, or a runaway tool call."""
+    """A stream that died before completing: EOF before ``response.completed``, or a failed response a re-send can fix."""
 
 
 def _retryable(exc: BaseException) -> bool:
-    if isinstance(exc, _Interrupted | httpx.TransportError):  # stall, dropped or refused connection, read timeout
+    if isinstance(exc, _Interrupted | httpx.TransportError):  # EOF, dropped or refused connection, read timeout
         return True
     # A rate limit goes to the shared cooldown and fallback instead.
     return isinstance(exc, ProviderError) and exc.retriable and not isinstance(exc, RateLimitError)
 
 
-async def _progress_events(source: Any, timeout_s: float, timing: _Timing):
-    """Events of ``source`` without keepalives; no real event within ``timeout_s`` raises ``_Interrupted``.
+def _failed_response(event: dict[str, Any], message: str) -> Exception:
+    """The exception for a ``response.failed``/``error`` event: a refusal, a fatal error, or an interruption.
 
-    Keepalives arrive every ~30s on a dead stream too, so they are counted but never reset the clock
-    (they do reset httpx's read timeout, which is why that alone cannot catch this).
+    Like Codex CLI, a failed response is re-sent unless its code says a re-send cannot help.
     """
-    iterator = aiter(source)
-    deadline = time.monotonic() + timeout_s
-    try:
-        while True:
-            try:
-                event = await asyncio.wait_for(anext(iterator), max(0.0, deadline - time.monotonic()))
-            except StopAsyncIteration:
-                return
-            except TimeoutError:
-                raise _Interrupted(f"no progress for {timeout_s:g}s ({timing.keepalives} keepalives)") from None
-            if event.get("type") == _KEEPALIVE:
-                timing.keepalives += 1
-                continue
-            deadline = time.monotonic() + timeout_s
-            yield event
-    finally:
-        if hasattr(iterator, "aclose"):
-            await iterator.aclose()
-
-
-def _runaway(name: str, args: str, timing: _Timing) -> _Interrupted:
-    sample = f"head={args[:200]!r} tail={args[-200:]!r}"
-    logger.warning(
-        "codex tool call %r streamed %d argument chars after %.1fs, over the %d cap; %s",
-        name, len(args), time.monotonic() - timing.start, settings.llm_tool_args_max_chars, sample,
-    )
-    return _Interrupted(f"tool call {name!r} arguments passed {settings.llm_tool_args_max_chars} chars")
+    code = _event_error_code(event)
+    category = codex_refusal_category(code)
+    if category:
+        return _CodexRefusal(message, category)
+    if str(code or "").lower() in {c.lower() for c in settings.llm_fatal_error_codes}:
+        return RuntimeError(message)
+    return _Interrupted(message)
 
 
 async def _run(
@@ -578,36 +559,8 @@ async def _run(
     context: Context,
     options: SimpleStreamOptions | None,
 ) -> None:
-    """One streamed response. A failure before any text or tool call reached the caller is retried with backoff.
-
-    The tool loop sets ``max_retries=0`` and re-runs the whole turn itself (also after output), so the
-    budget is spent in one place; this keeps plain completions covered.
-    """
-    retries = retry_budget(options)
-    attempt = 0
-    while True:
-        try:
-            await _attempt(stream, model, context, options, first=attempt == 0, may_retry=attempt < retries)
-            return
-        except _Retry as retry:
-            delay = _retry_delay(attempt)
-            logger.warning(
-                "codex stream for %s failed before any output (%r); retry %d/%d in %.1fs",
-                model.id, retry.__cause__, attempt + 1, retries, delay,
-            )
-            await asyncio.sleep(delay)
-            attempt += 1
-
-
-async def _attempt(
-    stream: AssistantMessageEventStream,
-    model: Model[Any],
-    context: Context,
-    options: SimpleStreamOptions | None,
-    *,
-    first: bool,
-    may_retry: bool,
-) -> None:
+    """One streamed response. It never re-sends: a death is reported as an ``interrupted`` outcome and
+    ``tool_loop.run_turn`` re-runs the turn, so the retry budget is spent in exactly one place."""
     started_text = False
     current_text_index: int | None = None
     current_message_item_id: str | None = None
@@ -616,7 +569,6 @@ async def _attempt(
     thinking_by_id: dict[str, list[str]] = {}
     reasoning_items: dict[str, dict[str, Any]] = {}
     tool_args_by_call_id: dict[str, str] = {}
-    tool_names_by_call_id: dict[str, str] = {}
     tool_calls: list[ToolCall] = []
     output = AssistantMessage(
         content=[],
@@ -627,8 +579,7 @@ async def _attempt(
         stop_reason="stop",
         timestamp=int(time.time() * 1000),
     )
-    if first:
-        stream.push(StartEvent(partial=output))
+    stream.push(StartEvent(partial=output))
 
     timing = _Timing()
     try:
@@ -641,20 +592,21 @@ async def _attempt(
                 if response.status_code >= 400:
                     error_body = (await response.aread()).decode("utf-8", errors="replace")
                     _raise_codex_http_error(response.status_code, error_body, response.headers)
-                async for event in _progress_events(_parse_sse_lines(response), _progress_timeout_s(options), timing):
-                    timing.event()
+                async for event in _parse_sse_lines(response):
+                    timing.frame(event.get("type") == _KEEPALIVE)
                     if options is not None and options.signal is not None and options.signal.is_set():
                         error = replace(output, stop_reason="aborted", error_message="Request was aborted")
+                        timing.failure = "aborted"
+                        timing.finish(model.id, error)
                         stream.push(ErrorEvent(reason="aborted", error=error))
                         return
                     error_message = _event_error_message(event)
                     if error_message:
-                        category = codex_refusal_category(_event_error_code(event))
-                        if category:
-                            raise _CodexRefusal(error_message, category)
-                        raise RuntimeError(error_message)
+                        raise _failed_response(event, error_message)
 
                     event_type = event.get("type", "")
+                    if event_type == _KEEPALIVE:
+                        continue
                     if event_type == "response.output_text.delta":
                         delta = str(event.get("delta") or "")
                         if delta and not started_text:
@@ -682,7 +634,6 @@ async def _attempt(
                             call_id = str(item.get("call_id") or "")
                             if call_id:
                                 tool_args_by_call_id[call_id] = str(item.get("arguments") or "")
-                                tool_names_by_call_id[call_id] = str(item.get("name") or "")
                     elif event_type == "response.reasoning_summary_text.delta":
                         item_id = str(event.get("item_id") or "")
                         targets = [item_id] if item_id in thinking_by_id else list(thinking_by_id)[-1:]
@@ -694,10 +645,7 @@ async def _attempt(
                         if targets:
                             call_id = targets[0]
                             tool_args_by_call_id[call_id] += str(event.get("delta") or "")
-                            size = len(tool_args_by_call_id[call_id])
-                            timing.max_tool_args = max(timing.max_tool_args, size)
-                            if size > settings.llm_tool_args_max_chars:
-                                raise _runaway(tool_names_by_call_id.get(call_id, ""), tool_args_by_call_id[call_id], timing)
+                            timing.max_tool_args = max(timing.max_tool_args, len(tool_args_by_call_id[call_id]))
                     elif event_type == "response.output_item.done":
                         item = _as_dict(event.get("item"))
                         if item.get("type") == "reasoning":
@@ -753,13 +701,13 @@ async def _attempt(
                             )
                         output.content[0:0] = _thinking_blocks(thinking_by_id, reasoning_items)
                         output.stop_reason = "toolUse" if tool_calls else "stop"
+                        timing.finish(model.id, output)
                         stream.push(DoneEvent(reason="toolUse" if tool_calls else "stop", message=output))
                         return
-        stream.push(DoneEvent(reason="stop", message=output))
+        # The stream ended without response.completed: a partial message is not an answer.
+        raise _Interrupted("stream ended before response.completed")
     except Exception as exc:
         timing.failure = repr(exc)[:200]
-        if may_retry and not started_text and not tool_calls and _retryable(exc):
-            raise _Retry from exc
         error = replace(output, stop_reason="error", error_message=str(exc))
         if isinstance(exc, _CodexRefusal):
             record_outcome(
@@ -777,9 +725,8 @@ async def _attempt(
                 error,
                 ProviderOutcome(kind="interrupted", requested_model=model.id, explanation=str(exc) or type(exc).__name__),
             )
+        timing.finish(model.id, error)
         stream.push(ErrorEvent(reason="error", error=error))
-    finally:
-        timing.log(model.id, timing.failure is not None)
 
 
 class _OpenAICodexResponsesProvider:

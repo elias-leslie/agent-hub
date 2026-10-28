@@ -161,7 +161,11 @@ class Settings(BaseSettings):
     workflow_test_hooks_enabled: bool = False
 
     @field_validator(
-        "cors_origins", "agent_hub_trusted_hosts", "workflow_owner_only_refusal_categories", mode="before"
+        "cors_origins",
+        "agent_hub_trusted_hosts",
+        "workflow_owner_only_refusal_categories",
+        "llm_fatal_error_codes",
+        mode="before",
     )
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
@@ -193,18 +197,31 @@ class Settings(BaseSettings):
     opencode_go_usage_cache_seconds: float = Field(default=60.0, ge=0)
     opencode_go_usage_timeout_seconds: float = Field(default=10.0, gt=0)
 
-    # Model stream resilience (app/llm/providers/openai_codex_responses.py, app/llm/tool_loop.py).
-    # Re-sends of an interrupted request/turn; a request's options.max_retries overrides it.
-    llm_stream_max_retries: int = Field(default=2, ge=0)
-    # Seconds without a non-keepalive event before a stream counts as dead. Measured on gpt-6.1-sol
-    # (108 healthy requests, low and high effort): max gap 20.4s, p95 4.9s. 90s leaves ~4x headroom
-    # for slower xhigh reasoning while a dead stream still recovers in about a minute and a half;
-    # Codex CLI's idle timeout is 300s. options.timeout_ms overrides it per request.
-    llm_stream_progress_timeout_s: float = Field(default=90.0, gt=0)
-    # Characters of arguments one streamed tool call may reach before the attempt is cut off. A
-    # runaway call was seen streaming ~32,000 argument deltas; 64Ki chars (~16k tokens) is far
-    # beyond any single legitimate edit or write, which the model should split.
-    llm_tool_args_max_chars: int = Field(default=65_536, gt=0)
+    # Model stream resilience (app/llm/utils/retry.py, app/llm/tool_loop.py, openai_codex_responses.py).
+    # A model call ends only on a definite death signal: connection reset or closed, HTTP error,
+    # response.failed/error event, or EOF before completion. Silence and elapsed time never end one:
+    # a model can think for many minutes (Codex xhigh waits of 30 minutes were measured).
+    # Re-sends of an interrupted request/turn (Codex CLI: 5 stream + 4 request retries, Pi: 3);
+    # a request's options.max_retries overrides it.
+    llm_stream_max_retries: int = Field(default=5, ge=0)
+    # Exponential backoff between re-sends: base * 2**attempt, capped, scaled by +-jitter.
+    llm_retry_base_delay_s: float = Field(default=2.0, gt=0)
+    llm_retry_max_delay_s: float = Field(default=60.0, gt=0)
+    llm_retry_jitter: float = Field(default=0.2, ge=0, lt=1)
+    # Transport read bound: seconds with no bytes at all (SSE keepalives count as bytes) before the
+    # connection counts as dead. Codex CLI, Pi and Claude Code all wait 300s. options.timeout_ms
+    # overrides it per request.
+    llm_stream_read_timeout_s: float = Field(default=300.0, gt=0)
+    # Codex error codes (response.failed / error events) that a re-send cannot fix: the request is
+    # invalid, over quota or over the context window. Any other failed response is re-sent.
+    llm_fatal_error_codes: Annotated[list[str], NoDecode] = [
+        "context_length_exceeded",
+        "insufficient_quota",
+        "usage_not_included",
+        "usage_limit_reached",
+        "rate_limit_exceeded",
+        "invalid_prompt",
+    ]
 
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"

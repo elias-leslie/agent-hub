@@ -69,6 +69,7 @@ from ..types import (
 )
 from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
+from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
 
 __all__ = [
@@ -814,6 +815,8 @@ def create_client(
         base_url=model.base_url,
         default_headers=headers,
         http_client=http_client,
+        # Re-sends belong to the shared layer (llm/utils/retry.py), which keeps them visible and budgeted.
+        max_retries=0,
     )
 
 
@@ -1165,6 +1168,8 @@ def stream_openai_completions(
             aborted = bool(options and options.signal is not None and options.signal.is_set())
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) or type(exc).__name__
+            if not aborted:
+                tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()
 

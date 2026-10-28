@@ -60,6 +60,7 @@ from ..types import (
     Usage,
     UsageCost,
 )
+from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
 
 __all__ = [
@@ -475,6 +476,8 @@ def stream_google(
                     )
             output.stop_reason = "aborted" if aborted else "error"
             output.error_message = str(exc) or type(exc).__name__
+            if not aborted:
+                tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()
 

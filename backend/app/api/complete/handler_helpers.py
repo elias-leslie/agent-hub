@@ -21,6 +21,7 @@ from app.services.token_counter import build_output_usage, estimate_cost, estima
 from .event_helpers import save_events
 from .execution_observability import persist_execution_observability
 from .helpers import is_error_response
+from .request_metrics import store_model_requests
 from .runtime_usage import accounting_model, outcome_usage, served_model
 from .schemas import (
     CacheInfo,
@@ -95,6 +96,10 @@ async def save_and_track(
         agent_id=request.agent_slug, duration_ms=duration_ms,
         source_metadata=source_metadata,
         usage=outcome_usage(final_message),
+    )
+    await store_model_requests(
+        db, session_id, getattr(result, "usage_messages", None) or ([final_message] if final_message else []),
+        model_used=answered_by, agent_id=request.agent_slug,
     )
     if publish_messages:
         for msg in request.messages:

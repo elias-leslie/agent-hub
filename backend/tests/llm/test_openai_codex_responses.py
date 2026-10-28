@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.adapters.codex_auth import CodexCredentials
+from app.config import settings
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers import openai_codex_responses
 from app.llm.providers.openai_codex_responses import (
@@ -19,9 +20,7 @@ from app.llm.providers.openai_codex_responses import (
 from app.llm.types import (
     AssistantMessage,
     Context,
-    SimpleStreamOptions,
     TextContent,
-    ThinkingContent,
     ToolCall,
     ToolResultMessage,
     Usage,
@@ -304,9 +303,9 @@ async def test_completion_preserves_observed_model_and_separates_cached_input(
     assert result.usage.cost.total == pytest.approx((40 * 2 + 60 * 0.1 + 20 * 10) / 1_000_000)
 
 
-def test_codex_stream_timeout_is_bounded_by_default() -> None:
+def test_codex_stream_timeout_is_the_transport_bound_from_settings() -> None:
     timeout = openai_codex_responses._stream_timeout(None)
-    assert timeout.read == 600.0
+    assert timeout.read == settings.llm_stream_read_timeout_s == 300.0
     assert timeout.connect == 30.0
 
 
@@ -372,110 +371,21 @@ async def test_codex_safety_failures_are_typed_refusals(
 
 
 @pytest.mark.asyncio
-async def test_other_codex_failures_stay_untyped(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_a_fatal_codex_failure_is_not_marked_interrupted(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = await _run_events(
+        monkeypatch,
+        [{"type": "response.failed", "response": {"error": {"code": "context_length_exceeded", "message": "too long"}}}],
+    )
+
+    assert (result.stop_reason, result.error_message, outcome_of(result)) == ("error", "too long", None)
+
+
+@pytest.mark.asyncio
+async def test_other_codex_failures_are_interrupted_so_the_turn_is_resent(monkeypatch: pytest.MonkeyPatch) -> None:
     result = await _run_events(
         monkeypatch, [{"type": "response.failed", "response": {"error": {"code": "server_error", "message": "boom"}}}],
     )
 
-    assert (result.stop_reason, result.error_message, outcome_of(result)) == ("error", "boom", None)
-
-
-def test_session_requests_carry_cache_key_affinity_and_encrypted_reasoning() -> None:
-    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
-    options = SimpleStreamOptions(session_id="s" * 80, reasoning="high")
-
-    body = openai_codex_responses._body(model, Context(messages=[]), options)
-    headers = openai_codex_responses._headers(
-        CodexCredentials(access_token="t", refresh_token=None, account_id="a"), openai_codex_responses._cache_key(options)
-    )
-
-    assert body["prompt_cache_key"] == "s" * 64
-    assert body["include"] == ["reasoning.encrypted_content"]
-    assert headers["session-id"] == headers["x-client-request-id"] == "s" * 64
-
-
-def test_cache_retention_none_sends_no_cache_key() -> None:
-    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
-    options = SimpleStreamOptions(session_id="session-1", cache_retention="none")
-
-    assert "prompt_cache_key" not in openai_codex_responses._body(model, Context(messages=[]), options)
-    assert "session-id" not in openai_codex_responses._headers(CodexCredentials(access_token="t", refresh_token=None, account_id="a"))
-
-
-@pytest.mark.asyncio
-async def test_encrypted_reasoning_replays_to_the_same_model_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    reasoning = {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "opaque"}
-    result = await _run_events(
-        monkeypatch,
-        [
-            {"type": "response.output_item.added", "item": {"type": "reasoning", "id": "rs_1"}},
-            {"type": "response.reasoning_summary_text.delta", "item_id": "rs_1", "delta": "plan"},
-            {"type": "response.output_item.done", "item": reasoning},
-            {"type": "response.completed", "response": {"model": "gpt-6.1-sol"}},
-        ],
-    )
-    assert isinstance(result.content[0], ThinkingContent)
-    assert result.content[0].thinking == "plan"
-
-    replayed = replace(result, content=[*result.content, TextContent(text="done")])
-    same, _ = _input_from_context(Context(messages=[replayed]), resolve_llm_model("codex/gpt-6.1-sol", "codex"))
-    other, _ = _input_from_context(Context(messages=[replayed]), replace(resolve_llm_model("codex/gpt-6.1-sol", "codex"), id="gpt-5.4"))
-
-    assert same[0] == reasoning
-    assert same[1]["type"] == "message"
-    assert all(item.get("type") != "reasoning" for item in other)
-
-
-async def _run_attempts(monkeypatch: pytest.MonkeyPatch, attempts: list[list], **options) -> tuple[AssistantMessage, list, int]:
-    """Each attempt's SSE items in order; an exception item is raised where it stands (a stall or dropped stream)."""
-    import httpx  # noqa: F401  (attempt lists hold httpx errors)
-
-    model = resolve_llm_model("codex/gpt-6.1-sol", "codex")
-    calls = 0
-
-    @asynccontextmanager
-    async def authenticated_response(*_args):
-        yield SimpleNamespace(status_code=200)
-
-    async def sse_lines(_response):
-        nonlocal calls
-        calls += 1
-        for item in attempts[calls - 1]:
-            if isinstance(item, BaseException):
-                raise item
-            yield item
-
-    monkeypatch.setattr(openai_codex_responses, "_authenticated_response", authenticated_response)
-    monkeypatch.setattr(openai_codex_responses, "_parse_sse_lines", sse_lines)
-    monkeypatch.setattr(openai_codex_responses, "_retry_delay", lambda _attempt: 0)
-    stream = openai_codex_responses.openai_codex_responses_provider.stream_simple(
-        model, Context(messages=[]), SimpleStreamOptions(**options),
-    )
-    events = [event async for event in stream]
-    return await stream.result(), events, calls
-
-
-@pytest.mark.asyncio
-async def test_a_stream_that_stalls_before_any_output_is_sent_again(monkeypatch: pytest.MonkeyPatch) -> None:
-    import httpx
-
-    text = [{"type": "response.output_text.delta", "delta": "hi"}, {"type": "response.completed", "response": {}}]
-    result, events, calls = await _run_attempts(
-        monkeypatch, [[httpx.ReadTimeout("stalled")], [{"type": "response.created"}, httpx.RemoteProtocolError("dropped")], text],
-    )
-
-    assert calls == 3 and result.stop_reason == "stop"
-    assert [b.text for b in result.content if isinstance(b, TextContent)] == ["hi"]
-    assert [e.type for e in events].count("start") == 1
-
-
-@pytest.mark.asyncio
-async def test_a_stream_that_fails_after_output_or_past_the_retry_budget_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    import httpx
-
-    after_text = [{"type": "response.output_text.delta", "delta": "half"}, httpx.ReadTimeout("stalled")]
-    result, _, calls = await _run_attempts(monkeypatch, [after_text, []])
-    assert (calls, result.stop_reason) == (1, "error")
-
-    result, _, calls = await _run_attempts(monkeypatch, [[httpx.ReadTimeout("stalled")]] * 2, max_retries=1)
-    assert (calls, result.stop_reason, result.error_message) == (2, "error", "stalled")
+    outcome = outcome_of(result)
+    assert (result.stop_reason, result.error_message) == ("error", "boom")
+    assert outcome is not None and outcome.kind == "interrupted"

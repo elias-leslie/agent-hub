@@ -44,6 +44,7 @@ from .session_repo import (
 )
 from .streaming import stream_completion  # re-export for back-compat callers
 from .tool_provisioner import build_direct_tool_runner
+from .turn_budget import tool_loop_turns
 from .types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
@@ -222,7 +223,7 @@ async def complete_internal(
         options=completion_options(temperature, thinking_level, session_id=session_id),
         execute_tools=execute_tools,
         run_tool=run_tool,
-        max_turns=max_turns,
+        max_turns=tool_loop_turns(execute_tools, max_turns),
         compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_slug),
         compression_stats_sink=compression_stats,
         on_loop_event=on_loop_event,

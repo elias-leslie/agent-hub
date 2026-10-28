@@ -1,9 +1,9 @@
-"""A dead Codex stream is cut off, typed as interrupted, and re-run instead of hanging."""
+"""A model call ends only on a definite death signal; thinking, silence and big payloads never end one."""
 
 from __future__ import annotations
 
 import asyncio
-import logging
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -12,7 +12,6 @@ from typing import Any
 import httpx
 import pytest
 
-from app.config import settings
 from app.llm import tool_loop
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers import openai_codex_responses as codex
@@ -26,12 +25,12 @@ from app.llm.types import (
     UserMessage,
 )
 from app.llm.utils.outcomes import outcome_of
-
-STALL = "stall"  # keepalives forever, no real event
-RUNAWAY = "runaway"  # argument deltas forever for one tool call
+from app.llm.utils.request_metrics import request_metrics_of
 
 KEEPALIVE = {"type": "keepalive"}
 TEXT = [{"type": "response.output_text.delta", "delta": "hi"}, {"type": "response.completed", "response": {}}]
+# Text, then the connection closes without response.completed.
+EOF_AFTER_TEXT = [{"type": "response.output_text.delta", "delta": "half"}]
 TOOL_CALL = [
     {"type": "response.output_item.added", "item": {"type": "function_call", "call_id": "c1", "name": "bash"}},
     {"type": "response.function_call_arguments.delta", "call_id": "c1", "delta": '{"command":"ls"}'},
@@ -41,15 +40,11 @@ TOOL_CALL = [
     },
     {"type": "response.completed", "response": {}},
 ]
-PARTIAL_THEN_STALL = [{"type": "response.output_text.delta", "delta": "half"}, STALL]
 
 
 @pytest.fixture
 def sse(monkeypatch: pytest.MonkeyPatch):
     """Script the SSE items of each request in order; returns the request counter."""
-    monkeypatch.setattr(settings, "llm_stream_progress_timeout_s", 0.1)
-    monkeypatch.setattr(settings, "llm_tool_args_max_chars", 100)
-    monkeypatch.setattr(codex, "_retry_delay", lambda _attempt: 0)
     monkeypatch.setattr(tool_loop, "retry_delay", lambda _attempt: 0)
 
     def script(*requests: list[Any]) -> list[int]:
@@ -63,18 +58,9 @@ def sse(monkeypatch: pytest.MonkeyPatch):
             index = calls[0]
             calls[0] += 1
             for item in requests[index]:
-                if item == STALL:
-                    while True:
-                        await asyncio.sleep(0.01)
-                        yield KEEPALIVE
-                elif item == RUNAWAY:
-                    yield TOOL_CALL[0]
-                    while True:
-                        yield {"type": "response.function_call_arguments.delta", "call_id": "c1", "delta": "x" * 30}
-                elif isinstance(item, BaseException):
+                if isinstance(item, BaseException):
                     raise item
-                else:
-                    yield item
+                yield item
 
         monkeypatch.setattr(codex, "_authenticated_response", authenticated_response)
         monkeypatch.setattr(codex, "_parse_sse_lines", lines)
@@ -98,35 +84,67 @@ async def _complete(**options) -> tuple[AssistantMessage, list]:
     return await stream.result(), events
 
 
+async def _turn(**options) -> tuple[list, list[AssistantMessage]]:
+    sunk: list[AssistantMessage] = []
+    events = [e async for e in tool_loop.run_turn(_model(), Context(messages=[]), SimpleStreamOptions(**options), sunk)]
+    return events, sunk
+
+
 @pytest.mark.asyncio
-async def test_keepalives_do_not_reset_the_progress_clock(sse) -> None:
-    calls = sse([KEEPALIVE, STALL])
+async def test_a_keepalive_only_stream_longer_than_the_old_timeout_is_not_ended(
+    sse, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(codex, "time", SimpleNamespace(monotonic=lambda: clock[0], time=lambda: 0.0))
+    calls = sse([])
+
+    async def thinking(_response) -> AsyncIterator[dict]:
+        calls[0] += 1
+        for _ in range(8):  # 8 keepalives 30s apart: 240s of silence from the model, past the old 90s limit
+            clock[0] += 30
+            yield KEEPALIVE
+            await asyncio.sleep(0.01)
+        yield TEXT[0]
+        yield TEXT[1]
+
+    monkeypatch.setattr(codex, "_parse_sse_lines", thinking)
 
     result, _ = await _complete(max_retries=0)
 
-    assert (calls[0], result.stop_reason) == (1, "error")
-    assert "no progress" in (result.error_message or "")
-    assert _kind(result) == "interrupted"
+    assert (calls[0], result.stop_reason, outcome_of(result)) == (1, "stop", None)
+    metrics = request_metrics_of(result)
+    assert metrics is not None
+    assert (metrics["keepalives"], metrics["max_gap_s"], metrics["outcome"]) == (8, 30.0, "ok")
+    assert metrics["max_event_gap_s"] == 240.0
 
 
 @pytest.mark.asyncio
-async def test_a_stall_before_output_is_resent_by_the_provider(sse) -> None:
-    calls = sse([STALL], TEXT)
+async def test_a_long_silence_between_events_is_not_a_death(sse, monkeypatch: pytest.MonkeyPatch) -> None:
+    sse(TEXT)
 
-    result, _ = await _complete(max_retries=1)
+    async def slow(_response) -> AsyncIterator[dict]:
+        yield {"type": "response.created"}
+        await asyncio.sleep(0.3)  # no frame at all: the transport bound (httpx read timeout) is the only judge
+        for item in TEXT:
+            yield item
 
-    assert (calls[0], result.stop_reason) == (2, "stop")
-    assert outcome_of(result) is None
+    monkeypatch.setattr(codex, "_parse_sse_lines", slow)
+
+    result, _ = await _complete(max_retries=0)
+
+    assert result.stop_reason == "stop"
 
 
 @pytest.mark.asyncio
-async def test_a_stall_after_text_is_an_interrupted_error(sse) -> None:
-    calls = sse(PARTIAL_THEN_STALL, TEXT)
+async def test_eof_before_completion_is_an_interrupted_error_not_a_partial_answer(sse) -> None:
+    sse(EOF_AFTER_TEXT)
 
-    result, _ = await _complete(max_retries=2)
+    result, events = await _complete()
 
-    assert (calls[0], result.stop_reason) == (1, "error")
+    assert result.stop_reason == "error"
+    assert result.error_message == "stream ended before response.completed"
     assert _kind(result) == "interrupted"
+    assert "done" not in [e.type for e in events]
 
 
 @pytest.mark.asyncio
@@ -140,88 +158,133 @@ async def test_a_dropped_connection_is_interrupted(sse) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_healthy_stream_with_keepalives_between_events_is_unaffected(sse, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "llm_stream_progress_timeout_s", 0.15)
-
-    async def paced(_response) -> AsyncIterator[dict]:
-        for item in [*TEXT[:1], *TEXT[:1], *TEXT[:1], TEXT[1]]:  # 4 real events 0.08s apart: 0.32s total, over the 0.15s limit
-            for _ in range(4):
-                await asyncio.sleep(0.02)
-                yield KEEPALIVE
-            yield item
-
-    sse(TEXT)
-    monkeypatch.setattr(codex, "_parse_sse_lines", paced)
+async def test_a_large_tool_call_passes_through_untouched(sse) -> None:
+    content = "x" * 200_000  # well past the old 65,536-char cap
+    arguments = json.dumps({"content": content})
+    deltas = [
+        {"type": "response.function_call_arguments.delta", "call_id": "c1", "delta": arguments[i : i + 4096]}
+        for i in range(0, len(arguments), 4096)
+    ]
+    done = {
+        "type": "response.output_item.done",
+        "item": {"type": "function_call", "call_id": "c1", "id": "fc_1", "name": "write", "arguments": arguments},
+    }
+    calls = sse([TOOL_CALL[0], *deltas, done, TOOL_CALL[3]])
 
     result, _ = await _complete(max_retries=0)
 
-    assert result.stop_reason == "stop" and outcome_of(result) is None
-    assert [b.text for b in result.content if isinstance(b, TextContent)] == ["hihihi"]
+    assert calls[0] == 1 and result.stop_reason == "toolUse"
+    call = next(b for b in result.content if isinstance(b, ToolCall))
+    assert call.arguments == {"content": content}
+    metrics = request_metrics_of(result)
+    assert metrics is not None and metrics["max_tool_args"] == len(arguments)
 
 
 @pytest.mark.asyncio
-async def test_a_runaway_tool_call_is_cut_off_and_logged(sse, caplog: pytest.LogCaptureFixture) -> None:
-    calls = sse([RUNAWAY])
+async def test_the_request_metrics_record_is_compact_and_complete(sse) -> None:
+    sse([KEEPALIVE, KEEPALIVE, *TOOL_CALL])
 
-    with caplog.at_level(logging.WARNING, logger=codex.logger.name):
-        result, _ = await _complete(max_retries=0)
+    result, _ = await _complete(max_retries=0)
 
-    assert calls[0] == 1 and result.stop_reason == "error"
-    assert _kind(result) == "interrupted"
-    assert not any(isinstance(b, ToolCall) for b in result.content)
-    warning = next(r.getMessage() for r in caplog.records if "argument chars" in r.getMessage())
-    assert "'bash'" in warning and "xxxx" in warning
+    metrics = request_metrics_of(result)
+    assert metrics is not None
+    assert {"max_gap_s", "max_event_gap_s", "keepalives", "max_tool_args", "events", "total_s", "outcome"} <= metrics.keys()
+    assert (metrics["keepalives"], metrics["max_tool_args"], metrics["outcome"]) == (2, len('{"command":"ls"}'), "ok")
 
 
-async def _run_loop(options: SimpleStreamOptions | None = None) -> tuple[list, Context]:
+@pytest.mark.asyncio
+async def test_the_provider_never_resends_on_its_own(sse) -> None:
+    calls = sse([httpx.ReadTimeout("stalled")], TEXT)
+
+    result, _ = await _complete(max_retries=5)
+
+    assert (calls[0], result.stop_reason, _kind(result)) == (1, "error", "interrupted")
+
+
+@pytest.mark.asyncio
+async def test_a_turn_cut_off_by_eof_is_resent_and_the_partial_is_voided(sse) -> None:
+    calls = sse(EOF_AFTER_TEXT, TEXT)
+
+    events, sunk = await _turn()
+
+    assert calls[0] == 2 and sunk[0].stop_reason == "stop"
+    retries = [e for e in events if isinstance(e, tool_loop.TurnRetry)]
+    assert [(r.attempt, r.max_retries) for r in retries] == [(1, 5)]
+    assert retries[0].reason == "stream ended before response.completed"
+    kinds = [e.type for e in events]
+    assert kinds.index("turn_retry") > kinds.index("text_delta") and "error" not in kinds
+    assert [b.text for b in sunk[0].content if isinstance(b, TextContent)] == ["hi"]
+    metrics = request_metrics_of(sunk[0])
+    assert metrics is not None and metrics["retries"] == 1
+    assert metrics["retry_log"][0]["reason"] == "stream ended before response.completed"
+
+
+@pytest.mark.asyncio
+async def test_the_loop_surfaces_the_error_once_the_retry_budget_is_spent(sse) -> None:
+    calls = sse(*[[httpx.ReadTimeout("stalled")]] * 3)
+
+    events, sunk = await _turn(max_retries=1)
+
+    assert calls[0] == 2
+    assert [type(e).__name__ for e in events].count("TurnRetry") == 1
+    assert events[-1].type == "error" and _kind(events[-1].error) == "interrupted"
+    assert _kind(sunk[0]) == "interrupted" and [e.type for e in events].count("error") == 1
+    metrics = request_metrics_of(sunk[0])
+    assert metrics is not None and metrics["retries"] == 1 and metrics["outcome"].startswith("ReadTimeout")
+
+
+@pytest.mark.asyncio
+async def test_the_default_budget_comes_from_settings(sse, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "llm_stream_max_retries", 3)
+    calls = sse(*[[httpx.ReadTimeout("stalled")]] * 6)
+
+    events, _ = await _turn()
+
+    assert calls[0] == 4 and [type(e).__name__ for e in events].count("TurnRetry") == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"type": "response.failed", "response": {"error": {"code": "cyber_policy", "message": "flagged"}}},
+        {"type": "response.failed", "response": {"error": {"code": "usage_limit_reached", "message": "limit"}}},
+        {"type": "response.failed", "response": {"error": {"code": "context_length_exceeded", "message": "long"}}},
+    ],
+)
+async def test_refusals_and_fatal_errors_are_not_resent(sse, event: dict) -> None:
+    calls = sse([event], TEXT)
+
+    events, sunk = await _turn()
+
+    assert calls[0] == 1 and sunk[0].stop_reason == "error"
+    assert not [e for e in events if isinstance(e, tool_loop.TurnRetry)]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_response_with_a_server_error_code_is_resent(sse) -> None:
+    calls = sse([{"type": "response.failed", "response": {"error": {"code": "server_error", "message": "boom"}}}], TEXT)
+
+    _, sunk = await _turn()
+
+    assert calls[0] == 2 and sunk[0].stop_reason == "stop"
+
+
+@pytest.mark.asyncio
+async def test_the_tool_loop_reruns_an_interrupted_turn_and_drops_the_partial(sse) -> None:
+    calls = sse(EOF_AFTER_TEXT, TOOL_CALL, TEXT)
     context = Context(messages=[UserMessage(content="go", timestamp=0)])
 
     async def run_tool(call: ToolCall) -> ToolResultMessage:
         return ToolResultMessage(tool_call_id=call.id, tool_name=call.name, content=[TextContent(text="ok")], is_error=False, timestamp=0)
 
-    events = [e async for e in tool_loop.run(_model(), context, run_tool, options)]
-    return events, context
-
-
-@pytest.mark.asyncio
-async def test_the_tool_loop_reruns_an_interrupted_turn_and_drops_the_partial(sse) -> None:
-    calls = sse(PARTIAL_THEN_STALL, TOOL_CALL, TEXT)
-
-    events, context = await _run_loop()
+    events = [e async for e in tool_loop.run(_model(), context, run_tool)]
 
     assert calls[0] == 3
-    retries = [e for e in events if isinstance(e, tool_loop.TurnRetry)]
-    assert [(r.attempt, r.max_retries) for r in retries] == [(1, 2)]
-    assert "no progress" in retries[0].reason
-    kinds = [e.type for e in events]
-    assert kinds.index("turn_retry") > kinds.index("text_delta")  # the partial was streamed, then voided
-    assert "error" not in kinds
+    assert [type(e).__name__ for e in events].count("TurnRetry") == 1
+    assert "error" not in [e.type for e in events]
     assert [type(m).__name__ for m in context.messages] == ["UserMessage", "AssistantMessage", "ToolResultMessage", "AssistantMessage"]
     assert all(outcome_of(m) is None for m in context.messages if isinstance(m, AssistantMessage))
     assert all("half" not in str(m.content) for m in context.messages if isinstance(m, AssistantMessage))
-
-
-@pytest.mark.asyncio
-async def test_the_loop_surfaces_the_error_once_the_retry_budget_is_spent(sse) -> None:
-    calls = sse([STALL], [STALL], [STALL])
-
-    events, context = await _run_loop(SimpleStreamOptions(max_retries=1))
-
-    assert calls[0] == 2  # the provider never retries on its own inside the loop
-    assert [type(e).__name__ for e in events].count("TurnRetry") == 1
-    error = events[-1]
-    assert error.type == "error" and _kind(error.error) == "interrupted"
-    assert _kind(context.messages[-1]) == "interrupted"
-    assert [e.type for e in events].count("error") == 1
-
-
-@pytest.mark.asyncio
-async def test_a_runaway_turn_is_rerun_by_the_loop(sse) -> None:
-    calls = sse([RUNAWAY], TEXT)
-
-    events, context = await _run_loop()
-
-    assert calls[0] == 2
-    assert [type(e).__name__ for e in events].count("TurnRetry") == 1
-    last = context.messages[-1]
-    assert isinstance(last, AssistantMessage) and last.stop_reason == "stop"

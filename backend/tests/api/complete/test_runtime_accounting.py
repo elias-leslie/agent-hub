@@ -164,6 +164,7 @@ async def test_sync_tool_loop_persists_each_calls_model_and_usage(error: bool) -
         patch("app.api.complete.handler_helpers.persist_execution_observability", new_callable=AsyncMock),
         patch("app.api.complete.handler_helpers.log_token_usage", new_callable=AsyncMock) as log_usage,
         patch("app.api.complete.handler_helpers.publish_complete", new_callable=AsyncMock) as complete,
+        patch("app.api.complete.handler_helpers.store_model_requests", new_callable=AsyncMock) as requests,
         patch("app.services.project_budget.record_project_cost", new_callable=AsyncMock) as budget,
     ):
         await save_and_track(
@@ -175,6 +176,7 @@ async def test_sync_tool_loop_persists_each_calls_model_and_usage(error: bool) -
     assert [call.args[2:5] for call in log_usage.await_args_list] == [
         (GEMINI_2_5_FLASH, 100, 10), (DEFAULT_GEMINI_MODEL, 200, 20),
     ]
+    assert requests.await_args is not None and requests.await_args.args[2] == messages  # one record per model request
     total_cost = sum(_expected_cost(message) for message in messages)
     assert complete.await_args is not None
     assert budget.await_args is not None
