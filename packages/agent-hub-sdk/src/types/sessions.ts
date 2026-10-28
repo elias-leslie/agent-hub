@@ -116,6 +116,20 @@ export interface CloseSessionResult {
     message: string;
 }
 
+export interface ForkSessionRequest {
+    /** The turn to fork at; omitted forks at the current state. */
+    fork_at_turn?: number | null;
+}
+
+export interface ForkSessionResult {
+    /** The new session. */
+    id: string;
+    parent_session_id: string;
+    fork_point_turn: number;
+    message_count: number;
+    branch_status: string;
+}
+
 export interface SessionEventsParams {
     event_type?: string;
     turn?: number;

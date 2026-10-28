@@ -102,7 +102,7 @@ if (outcome === 'needs_owner') {
 counts; a usage-limit wait that clears itself does not), `step_done`, `step_ended`, `changed`.
 
 The rest of the surface: `workflowRuns.list` (filters `launched_by`, `coordinator`), `workflowRuns.get/revise/addSteps/reviseStep/removeStep/cancel/cancelStep`,
-`sessions.create/get/list/close/messages/events`, `models.list()`, `agents.list()`, and
+`sessions.create/get/list/close/fork/messages/events`, `models.list()`, `agents.list()`, and
 `events.subscribe(handler, { sessionIds, eventTypes })` for the owner-only live WebSocket (reconnects by default;
 browsers cannot send headers on a WebSocket, so there it relies on same-origin access).
 

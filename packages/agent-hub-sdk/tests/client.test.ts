@@ -66,6 +66,7 @@ describe('sessions, models, agents', () => {
         await sessions.get('s 1', { includeMessages: false });
         await sessions.close('s 1');
         await sessions.events('s 1', { page_size: 50, order: 'desc' });
+        await sessions.fork('s 1', { fork_at_turn: 2 });
         expect(await sessions.messages('s 1')).toHaveLength(1);
         expect(fetch.requests.map((r) => [r.method, r.url.replace('http://hub.test', '')])).toEqual([
             ['POST', '/api/sessions'],
@@ -73,6 +74,7 @@ describe('sessions, models, agents', () => {
             ['GET', '/api/sessions/s%201?include_events=false'],
             ['POST', '/api/sessions/s%201/close'],
             ['GET', '/api/sessions/s%201/events?page_size=50&order=desc'],
+            ['POST', '/api/sessions/s%201/fork'],
             ['GET', '/api/sessions/s%201'],
         ]);
     });
