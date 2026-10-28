@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import logging
 import time
 import uuid
@@ -37,6 +39,7 @@ from . import acceptance as acceptance_runner
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .live import LiveStatus, current_live
 from .packet import AttemptRef, GitState, HandoffPacket, PriorStep, build_packet, normalize_handoff
+from .plan import Schedule, context_order, schedule
 from .policy import (
     AttemptResult,
     Decision,
@@ -420,11 +423,16 @@ def _describe_hop(hop: dict[str, Any]) -> str:
 async def create_run(
     db: AsyncSession, definition: RunDefinition, *, deps: EngineDeps | None = None
 ) -> tuple[str, bool]:
-    """Create a run and its steps. Returns (run_id, created); a repeated request_id returns the first run."""
+    """Create a run and its steps. Returns (run_id, created).
+
+    A repeated request_id returns the first run when the definition is the same; a different definition under the
+    same request_id is refused (``request_id_conflict``) instead of quietly handing back the old run.
+    """
 
     deps = deps or EngineDeps()
+    fingerprint = definition_fingerprint(definition)
     if definition.request_id:
-        existing = await _run_for_request(db, definition)
+        existing = await _run_for_request(db, definition, fingerprint)
         if existing:
             return existing, False
     policy = load_policy(definition.policy)
@@ -452,6 +460,12 @@ async def create_run(
         "policy": policy.as_dict(),
         "refusals": {},
         "pause": None,
+        "launched_by": definition.launched_by,
+        "coordinator": definition.coordinator,
+        "request_id": definition.request_id,
+        "definition_hash": fingerprint,
+        "plan_revision": 0,
+        "plan_history": [],
     }
     db.add(
         Session(
@@ -490,46 +504,80 @@ async def create_run(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        existing = await _run_for_request(db, definition)
+        existing = await _run_for_request(db, definition, fingerprint)
         if existing:
             return existing, False
         raise
     return run_id, True
 
 
-async def _run_for_request(db: AsyncSession, definition: RunDefinition) -> str | None:
-    first = definition.steps[0].key
-    return await db.scalar(
-        select(WorkflowStep.run_session_id).where(
-            WorkflowStep.request_id == f"{definition.request_id}:{first}"
-        )
+def definition_fingerprint(definition: RunDefinition) -> str:
+    """Hash of everything the caller asked for except the request id, so a repeat can be told from a different request."""
+
+    body = json.dumps(
+        definition.model_dump(mode="json", exclude={"request_id"}), sort_keys=True, separators=(",", ":")
     )
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+async def _run_for_request(db: AsyncSession, definition: RunDefinition, fingerprint: str) -> str | None:
+    """The run already created for this request id; raises when it was created from a different definition."""
+
+    request_id = definition.request_id
+    found = (
+        await db.execute(
+            select(Session.id, Session.provider_metadata["workflow"]["definition_hash"].as_string())
+            .where(
+                Session.session_type == "workflow",
+                Session.provider_metadata["workflow"]["request_id"].as_string() == request_id,
+            )
+            .limit(1)
+        )
+    ).first()
+    if found is None:  # runs made before the request id was kept on the run: keyed on the first step
+        legacy = await db.scalar(
+            select(WorkflowStep.run_session_id).where(
+                WorkflowStep.request_id == f"{request_id}:{definition.steps[0].key}"
+            )
+        )
+        return legacy
+    run_id, stored = found
+    if stored is not None and stored != fingerprint:
+        raise WorkflowRunError(
+            "request_id_conflict",
+            f"request_id {request_id!r} already created run {run_id} from a different definition; "
+            "use a new request_id for a changed definition",
+            run_id=run_id,
+        )
+    return run_id
 
 
 # --- advance ---------------------------------------------------------------------------------------
 
 
-def _start_sha(steps: list[WorkflowStep], step: WorkflowStep, meta: dict[str, Any]) -> str | None:
-    done = [
-        s
-        for s in steps
-        if s.position < step.position and s.status == "completed" and s.checkpoint_sha
-    ]
+def _start_sha(steps: list[WorkflowStep], meta: dict[str, Any]) -> str | None:
+    """The worktree's last checkpoint: the newest completed step's, whatever its position (the plan can grow)."""
+
+    done = [s for s in steps if s.status == "completed" and s.checkpoint_sha]
+    done.sort(key=lambda s: (_scratch(s).get("completed_at", 0.0), s.position))
     return done[-1].checkpoint_sha if done else meta.get("base_sha")
 
 
 def _prior(steps: list[WorkflowStep], step: WorkflowStep) -> list[PriorStep]:
+    """Handoffs of the step's transitive dependencies, dependencies first. ``position`` is the place in that order."""
+
+    by_key = {s.step_key: s for s in steps}
     return [
         PriorStep(
             key=s.step_key,
-            position=s.position,
+            position=index,
             status=s.status,
             model=_scratch(s).get("last", {}).get("served_model") or s.chosen_model,
             handoff=s.handoff,
             notes_path=_scratch(s).get("notes_path"),
         )
-        for s in steps
-        if s.position < step.position and s.status == "completed"
+        for index, key in enumerate(context_order(steps, step))
+        if (s := by_key[key]).status == "completed"
     ]
 
 
@@ -683,6 +731,17 @@ class _Intent:
     acceptance_note: str | None = None
 
 
+def blocked_pause(plan: Schedule) -> dict[str, Any]:
+    """The pause for a run whose pending steps can never start, naming each step and what blocks it."""
+
+    blocked = plan.blocked
+    return {
+        "reason": "blocked_dependencies",
+        "step_key": next(iter(blocked), None),
+        "blocked": {key: r.as_dict() for key, r in blocked.items()},
+    }
+
+
 def _pause_for_step(
     run: Session, step: WorkflowStep, meta: dict[str, Any], reason: str, now: float, **extra: Any
 ) -> None:
@@ -704,11 +763,18 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         steps = await _steps(db, run_id)
         if any(s.status == "running" for s in steps):
             return {"next": "stop", "reason": "step_running"}, None
-        step = next((s for s in steps if s.status == "pending"), None)
-        if step is None:
+        if not any(s.status == "pending" for s in steps):
             _complete_run(run, meta, now)
             await db.commit()
             return {"next": "stop", "reason": "completed"}, None
+        plan = schedule(steps)
+        if not plan.start:
+            # Nothing can start: every pending step waits on one that will never complete. The owner or coordinator
+            # revises the plan (the step is skipped, cancelled or failed; point its dependents elsewhere or remove them).
+            _pause_run(run, meta, blocked_pause(plan), now)
+            await db.commit()
+            return {"next": "stop", "reason": "blocked_dependencies"}, None
+        step = plan.start[0]
         scratch = _scratch(step)
         if not scratch.get("chain"):
             try:
@@ -815,7 +881,7 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
             reset=reset,
             hop=hop,
             partial_path=partial_path,
-            start_sha=_start_sha(steps, step, meta),
+            start_sha=_start_sha(steps, meta),
             meta=meta,
             prior=_prior(steps, step),
             project_id=run.project_id,
@@ -1145,7 +1211,7 @@ async def _commit_outcome(
         step.heartbeat_at = _dt(now)
         if decision.action == "complete":
             step.status, step.handoff, step.checkpoint_sha = "completed", handoff, checkpoint
-            scratch.update(hop=None, partial_path=None, pinned_model=None)
+            scratch.update(hop=None, partial_path=None, pinned_model=None, completed_at=now)
         elif decision.action == "retry":
             step.status = "pending"
             scratch.update(hop=decision.hop, pinned_model=decision.next_model)
@@ -1487,6 +1553,13 @@ async def resume_run(
         raise WorkflowRunError(
             "not_paused", f"run is {meta.get('state')}, not waiting for the owner"
         )
+    if (meta.get("pause") or {}).get("reason") == "blocked_dependencies":
+        raise WorkflowRunError(
+            "blocked_dependencies",
+            "the run is blocked on dependencies, not on a step decision; revise the plan "
+            "(change a step's depends_on or remove the blocked steps), or cancel the run",
+            blocked=(meta.get("pause") or {}).get("blocked"),
+        )
     steps = await _steps(db, run_id)
     key = decision.step_key or (meta.get("pause") or {}).get("step_key")
     step = next((s for s in steps if s.step_key == key and s.status == "needs_owner"), None)
@@ -1703,6 +1776,7 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
     meta = _meta(run)
     policy = load_policy(meta["policy"])
     steps = await _steps(db, run_id)
+    plan = schedule(steps)
     children = (
         (
             await db.execute(
@@ -1783,6 +1857,10 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
         "cancel": meta.get("cancel"),
         "cancelling": meta.get("state") == "running" and meta.get("cancel") is not None,
         "refusals": meta.get("refusals", {}),
+        "launched_by": meta.get("launched_by"),
+        "coordinator": meta.get("coordinator"),
+        "plan_revision": meta.get("plan_revision", 0),
+        "plan_history": meta.get("plan_history", []),
         "limits": _limits(policy),
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "last_activity_at": run.last_activity_at.isoformat() if run.last_activity_at else None,
@@ -1796,6 +1874,9 @@ async def get_run_view(db: AsyncSession, run_id: str) -> dict[str, Any] | None:
                 "status": s.status,
                 "agent_slug": s.definition["agent_slug"],
                 "chain": _scratch(s).get("chain"),
+                "depends_on": plan.deps[s.step_key],
+                "depends_on_explicit": s.definition.get("depends_on") is not None,
+                "readiness": plan.readiness[s.step_key].as_dict() if s.step_key in plan.readiness else None,
                 "attempts": s.attempts,
                 "attempt_limit": attempt_limit(
                     s.definition.get("max_attempts"), policy, _extra_attempts(_scratch(s))

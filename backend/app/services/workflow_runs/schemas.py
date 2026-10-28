@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .executor_common import load_defaults
 from .executors import EXECUTOR_KINDS
+from .plan import validate_graph
 
 
 class StepTestHooks(BaseModel):
@@ -60,6 +61,9 @@ class StepDefinition(BaseModel):
     max_attempts: int | None = Field(None, ge=1)
     workflow_ids: list[str] = Field(default_factory=list)
     test_hooks: StepTestHooks | None = None
+    # Keys of the steps that must complete first; their handoffs are this step's context. Unset, the step depends on
+    # the one before it by position. An empty list means it depends on nothing.
+    depends_on: list[str] | None = None
 
     @field_validator("executor")
     @classmethod
@@ -96,13 +100,14 @@ class RunDefinition(BaseModel):
     task_id: str | None = Field(None, max_length=200)
     request_id: str | None = Field(None, max_length=150)
     policy: dict[str, Any] = Field(default_factory=dict)
+    # Who started the run: an opaque id (e.g. an Aico session) and an optional label for the coordinating agent.
+    launched_by: str | None = Field(None, max_length=200)
+    coordinator: str | None = Field(None, max_length=100)
     steps: list[StepDefinition] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def _unique_keys(self) -> RunDefinition:
-        keys = [step.key for step in self.steps]
-        if len(set(keys)) != len(keys):
-            raise ValueError("step keys must be unique")
+    def _valid_plan(self) -> RunDefinition:
+        validate_graph((step.key, step.depends_on) for step in self.steps)
         return self
 
 
@@ -136,3 +141,63 @@ class CancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = Field(None, max_length=2000)
+
+
+class PlanChange(BaseModel):
+    """Who asked for a plan change and why, kept in the run's plan history with the change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    changed_by: str | None = Field(None, max_length=200)
+    reason: str | None = Field(None, max_length=2000)
+
+
+class AddSteps(PlanChange):
+    """Add steps to a run. They take the next positions, in order.
+
+    ``after`` is shorthand for depending on that step: the first added step without its own ``depends_on`` depends on it.
+    A step with neither depends on the step before it, as in a new run. ``depends_on`` may name steps added in the
+    same call.
+    """
+
+    steps: list[StepDefinition] = Field(min_length=1)
+    after: str | None = None
+
+
+class StepRevision(PlanChange):
+    """Changes to a pending step. Only the fields sent change; a field sent as null is cleared."""
+
+    instructions: str | None = Field(None, min_length=1)
+    agent_slug: str | None = Field(None, min_length=1, max_length=50)
+    model_override: str | None = None
+    allowed_models: list[str] | None = Field(None, min_length=1)
+    executor: str | None = None
+    level: str | None = None
+    effort: str | None = None
+    acceptance: list[AcceptanceCommand] | None = None
+    max_attempts: int | None = Field(None, ge=1)
+    depends_on: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _required_fields_not_null(self) -> StepRevision:
+        for name in ("instructions", "agent_slug", "acceptance"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be cleared")
+        return self
+
+    def changes(self) -> dict[str, Any]:
+        """The step fields this revision sets, as plain data (nested models dumped)."""
+
+        out: dict[str, Any] = {}
+        for name in self.model_fields_set - set(PlanChange.model_fields):
+            value = getattr(self, name)
+            out[name] = (
+                [c.model_dump() for c in value] if name == "acceptance" and value is not None else value
+            )
+        return out
+
+
+class RemoveStep(PlanChange):
+    """Remove a pending step. Steps that depend on it must be revised in the same call (``revise``, by step key)."""
+
+    revise: dict[str, StepRevision] = Field(default_factory=dict)

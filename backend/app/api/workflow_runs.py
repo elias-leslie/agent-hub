@@ -6,6 +6,9 @@ GET  /workflow-runs/{id}          run, steps, attempts (requested vs served mode
 POST /workflow-runs/{id}/resume   resolve a run paused for the owner (retry, skip or fail the waiting step)
 POST /workflow-runs/{id}/cancel   stop the whole run (optional reason; who asked and when are kept)
 POST /workflow-runs/{id}/steps/{key}/cancel   stop one step; the run carries on with its other steps
+POST   /workflow-runs/{id}/steps        add steps (optional after / depends_on); reopens a completed run
+PATCH  /workflow-runs/{id}/steps/{key}  change a pending step; 409 when it has started
+DELETE /workflow-runs/{id}/steps/{key}  remove a pending step nothing depends on (or revise its dependents in the call)
 """
 
 from __future__ import annotations
@@ -26,7 +29,15 @@ from app.services.workflow_runs.engine import (
     resume_run,
 )
 from app.services.workflow_runs.listing import list_runs
-from app.services.workflow_runs.schemas import CancelRequest, OwnerDecision, RunDefinition
+from app.services.workflow_runs.revisions import add_steps, remove_step, revise_step
+from app.services.workflow_runs.schemas import (
+    AddSteps,
+    CancelRequest,
+    OwnerDecision,
+    RemoveStep,
+    RunDefinition,
+    StepRevision,
+)
 
 router = APIRouter(prefix="/workflow-runs", tags=["workflow-runs"])
 
@@ -39,6 +50,13 @@ _STATUS = {
     "unknown_agent": 422,
     "empty_chain": 422,
     "attempt_limit": 409,
+    "blocked_dependencies": 409,
+    "request_id_conflict": 409,
+    "duplicate_step": 409,
+    "step_not_pending": 409,
+    "step_has_attempts": 409,
+    "has_dependents": 409,
+    "invalid_plan": 422,
 }
 
 
@@ -158,3 +176,70 @@ async def cancel_workflow_step(
     if result["state"] == "running" and not result["cancelling"]:
         await _enqueue(run_id)  # the cancelled step may have been the last thing the run waited for
     return result
+
+
+@router.post("/{run_id}/steps")
+async def add_workflow_steps(
+    run_id: str,
+    body: AddSteps,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    client_id, source = _requester(request)
+    try:
+        result = await add_steps(db, run_id, body, requested_by=client_id, request_source=source)
+    except WorkflowRunError as error:
+        raise _http(error) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return await _after_revision(db, run_id, result)
+
+
+@router.patch("/{run_id}/steps/{step_key}")
+async def revise_workflow_step(
+    run_id: str,
+    step_key: str,
+    body: StepRevision,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    client_id, source = _requester(request)
+    try:
+        result = await revise_step(
+            db, run_id, step_key, body, requested_by=client_id, request_source=source
+        )
+    except WorkflowRunError as error:
+        raise _http(error) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return await _after_revision(db, run_id, result)
+
+
+@router.delete("/{run_id}/steps/{step_key}")
+async def remove_workflow_step(
+    run_id: str,
+    step_key: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    body: RemoveStep | None = None,
+) -> dict[str, Any]:
+    client_id, source = _requester(request)
+    try:
+        result = await remove_step(
+            db, run_id, step_key, body, requested_by=client_id, request_source=source
+        )
+    except WorkflowRunError as error:
+        raise _http(error) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return await _after_revision(db, run_id, result)
+
+
+async def _after_revision(db: AsyncSession, run_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Queue an advance when the change left the run with work and nothing running, then return the run view."""
+
+    enqueue = result.pop("enqueue", False)
+    if enqueue:
+        await _enqueue(run_id)
+    view = await get_run_view(db, run_id)
+    return {**result, "run": view}

@@ -44,11 +44,15 @@ from app.services.workflow_runs.executors import FauxAction, FauxExecutor, StepR
 from app.services.workflow_runs.live import note_live
 from app.services.workflow_runs.policy import Unavailable
 from app.services.workflow_runs.processes import MARKER_ENV, identify, read_stat
+from app.services.workflow_runs.revisions import add_steps, remove_step, revise_step
 from app.services.workflow_runs.schemas import (
     AcceptanceCommand,
+    AddSteps,
     CancelRequest,
     OwnerDecision,
+    RemoveStep,
     RunDefinition,
+    StepRevision,
     StepTestHooks,
 )
 from app.services.workflow_runs.workspace import RunWorkspace
@@ -131,7 +135,13 @@ class World:
                 yield pg_db
 
         async def resolve(_db: AsyncSession, definition: dict[str, Any]) -> list[str]:
-            return list(self.chains[definition["agent_slug"]])
+            chain = list(self.chains[definition["agent_slug"]])
+            override = definition.get("model_override")
+            if override:
+                chain = [override, *(m for m in chain if m != override)]
+            if definition.get("allowed_models"):
+                chain = [m for m in chain if m in definition["allowed_models"]]
+            return chain
 
         async def availability(models: list[str]) -> dict[str, Unavailable]:
             return {m: self.unavailable[m] for m in models if m in self.unavailable}
@@ -1446,3 +1456,422 @@ async def test_an_equal_workflow_window_reading_refreshes_source_and_time() -> N
         (None, t0, 31.0),
         (collector.SOURCE_WORKFLOW, t0 + timedelta(minutes=2), 31.0),
     ]
+
+
+# --- the plan as a dependency graph, and revising it while the run goes -----------------------------
+
+
+def graph(repo: Path, *steps: dict[str, Any], **extra: Any) -> RunDefinition:
+    """A run of faux steps: each dict is a step (key, optional depends_on / agent_slug ...)."""
+
+    return RunDefinition(
+        goal="graph",
+        project_id="p",
+        repo_path=str(repo),
+        policy={"heartbeat_interval_seconds": 3600},
+        steps=[
+            {"instructions": f"do {s['key']}", "agent_slug": "coder", "executor": "faux", **s}
+            for s in steps
+        ],
+        **extra,
+    )
+
+
+def order(world: World) -> list[str]:
+    return [c["step"] for c in world.faux.calls]
+
+
+def context_of(world: World, key: str) -> str:
+    """The earlier-steps part of the packet the step got: only handoffs the step was given."""
+
+    packet = next(c["packet"] for c in world.faux.calls if c["step"] == key)
+    return packet.split("# Earlier steps", 1)[1] if "# Earlier steps" in packet else ""
+
+
+class Gate:
+    """An executor that holds one step open until released, so the test can act while it runs."""
+
+    def __init__(self, faux: FauxExecutor, step: str) -> None:
+        self.faux, self.step = faux, step
+        self.started, self.release = asyncio.Event(), asyncio.Event()
+
+    async def run(self, packet, model, worktree, run_dir, on_event) -> StepResult:
+        if packet.step_key == self.step:
+            self.started.set()
+            await self.release.wait()
+        return await self.faux.run(packet, model, worktree, run_dir, on_event)
+
+
+async def test_default_chain_depends_on_the_previous_step_and_keeps_its_context(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert [s["depends_on"] for s in view["steps"]] == [[], ["plan"], ["implement"], ["review"]]
+    assert [s["readiness"]["state"] for s in view["steps"]] == ["ready", "waiting", "waiting", "waiting"]
+    assert view["steps"][2]["readiness"]["reason"] == "waiting for implement"
+    assert (view["plan_revision"], view["plan_history"]) == (0, [])
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert order(world) == ["plan", "implement", "review", "fix"]
+    ctx = context_of(world, "fix")
+    assert [ctx.index(f"## {k} (") for k in ("plan", "implement", "review")] == sorted(
+        ctx.index(f"## {k} (") for k in ("plan", "implement", "review")
+    ) and ctx.count("## ") == 3
+
+
+async def test_diamond_runs_in_topological_order_with_context_from_dependencies_only(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    definition = graph(
+        repo,
+        {"key": "d", "depends_on": ["b", "c"]},  # declared first: position does not decide the order
+        {"key": "b", "depends_on": ["a"]},
+        {"key": "c", "depends_on": ["a"]},
+        {"key": "a", "depends_on": []},
+        {"key": "side", "depends_on": []},
+    )
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert {s["key"]: s["readiness"]["state"] for s in view["steps"]} == {
+        "d": "waiting",
+        "b": "waiting",
+        "c": "waiting",
+        "a": "ready",
+        "side": "ready",
+    }
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    # One at a time, the first ready step by position each time: a and side are ready, a is first; then b, c, d.
+    assert order(world) == ["a", "b", "c", "d", "side"]
+    ctx_d = context_of(world, "d")
+    assert all(f"## {k} (" in ctx_d for k in ("a", "b", "c")) and "## side (" not in ctx_d
+    assert context_of(world, "b").count("## ") == 1 and "## a (" in context_of(world, "b")
+    assert context_of(world, "side") == "" and context_of(world, "a") == ""
+
+
+async def test_a_cycle_or_unknown_dependency_is_rejected(pg_db, repo, world_factory) -> None:
+    with pytest.raises(ValueError, match="cycle"):
+        graph(repo, {"key": "a", "depends_on": ["b"]}, {"key": "b", "depends_on": ["a"]})
+    with pytest.raises(ValueError, match="unknown step"):
+        graph(repo, {"key": "a"}, {"key": "b", "depends_on": ["nope"]})
+    with pytest.raises(ValueError, match="cycle"):
+        graph(repo, {"key": "a", "depends_on": ["a"]})
+    # An explicit dependency on a later step makes the default chain after it circular.
+    with pytest.raises(ValueError, match="cycle"):
+        graph(repo, {"key": "a", "depends_on": ["b"]}, {"key": "b"})
+
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}), deps=world.deps)
+    with pytest.raises(WorkflowRunError) as unknown:
+        await add_steps(pg_db, run_id, AddSteps(steps=[{"key": "c", "instructions": "x", "agent_slug": "coder", "depends_on": ["zz"]}]), deps=world.deps)
+    assert unknown.value.code == "invalid_plan"
+    with pytest.raises(WorkflowRunError) as cycle:
+        await revise_step(pg_db, run_id, "a", StepRevision(depends_on=["b"]), deps=world.deps)
+    assert cycle.value.code == "invalid_plan" and "cycle" in str(cycle.value)
+    assert (await view_of(pg_db, run_id))["plan_revision"] == 0
+
+
+async def test_a_step_added_mid_run_runs_with_its_dependencies_context(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "one"}, {"key": "two"}), deps=world.deps)
+    assert (await advance_run(run_id, deps=world.deps))["next"] == "continue"  # step one done
+    added = await add_steps(
+        pg_db,
+        run_id,
+        AddSteps(
+            steps=[{"key": "extra", "instructions": "more", "agent_slug": "coder", "executor": "faux"}],
+            after="one",
+            changed_by="aico-1",
+            reason="found more work",
+        ),
+        requested_by="summitflow",
+        request_source="test",
+        deps=world.deps,
+    )
+    assert (added["plan_revision"], added["added"], added["reopened"], added["enqueue"]) == (1, ["extra"], False, True)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert order(world) == ["one", "two", "extra"]  # first ready by position; extra depends only on one
+    assert "## one (" in context_of(world, "extra") and "## two (" not in context_of(world, "extra")
+    view = await view_of(pg_db, run_id)
+    (entry,) = view["plan_history"]
+    assert view["plan_revision"] == 1 and entry["action"] == "add_steps" and entry["reason"] == "found more work"
+    assert entry["by"] == {"changed_by": "aico-1", "client_id": "summitflow", "request_source": "test"}
+    assert entry["at"] == NOW and entry["changes"][0]["step"] == "extra" and entry["changes"][0]["before"] is None
+    assert entry["changes"][0]["after"]["depends_on"] == ["one"]
+    with pytest.raises(WorkflowRunError) as clash:
+        await add_steps(pg_db, run_id, AddSteps(steps=[{"key": "one", "instructions": "x", "agent_slug": "coder"}]), deps=world.deps)
+    assert clash.value.code == "duplicate_step"
+
+
+async def test_revising_a_pending_step_changes_its_model_and_clears_the_cached_chain(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"b": [FauxAction("refuse", category="cyber"), FauxAction("success")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}), deps=world.deps)
+    await advance_run(run_id, deps=world.deps)  # a
+    await advance_run(run_id, deps=world.deps)  # b refused on OPUS: pending again, chain cached, OPUS tried
+    row = (await pg_db.execute(select(WorkflowStep).where(WorkflowStep.step_key == "b"))).scalar_one()
+    assert row.status == "pending" and row.outcome["chain"] == [OPUS, CODEX, OPUS_OLD] and row.outcome["tried"] == [OPUS]
+
+    result = await revise_step(
+        pg_db, run_id, "b", StepRevision(model_override=OPUS_OLD, instructions="do b differently", effort="high"), deps=world.deps
+    )
+    assert (result["changed"], result["plan_revision"], result["enqueue"]) == (True, 1, True)
+    await pg_db.refresh(row)
+    assert "chain" not in row.outcome and row.outcome["tried"] == [] and row.definition["model_override"] == OPUS_OLD
+    same = await revise_step(pg_db, run_id, "b", StepRevision(effort="high"), deps=world.deps)
+    assert same["changed"] is False and same["plan_revision"] == 1  # nothing differs: no new revision
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert [c["model"] for c in world.faux.calls if c["step"] == "b"] == [OPUS, OPUS_OLD]
+    assert "do b differently" in next(c["packet"] for c in reversed(world.faux.calls) if c["step"] == "b")
+    view = await view_of(pg_db, run_id)
+    (entry,) = view["plan_history"]
+    (change,) = entry["changes"]
+    assert entry["action"] == "revise_step" and change["before"]["model_override"] is None
+    assert change["after"] == {"model_override": OPUS_OLD, "instructions": "do b differently", "effort": "high"}
+
+
+async def test_revising_a_step_that_has_started_is_refused_with_its_state(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    gate = Gate(world.faux, "a")
+    world.deps.get_executor = lambda _kind: gate
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}), deps=world.deps)
+    advancing = asyncio.create_task(world.run_to_stop(run_id))
+    await asyncio.wait_for(gate.started.wait(), 20)
+    async with world.lock:
+        with pytest.raises(WorkflowRunError) as running:
+            await revise_step(pg_db, run_id, "a", StepRevision(effort="low"), deps=world.deps)
+        assert (running.value.code, running.value.extra["step_status"], running.value.extra["state"]) == (
+            "step_not_pending",
+            "running",
+            "running",
+        )
+        with pytest.raises(WorkflowRunError) as removal:
+            await remove_step(pg_db, run_id, "a", deps=world.deps)
+        assert removal.value.code == "step_not_pending"
+        # A pending step can be revised while another runs, and the run takes no extra advance for it.
+        ok = await revise_step(pg_db, run_id, "b", StepRevision(effort="low"), deps=world.deps)
+        assert ok["changed"] and ok["enqueue"] is False
+    gate.release.set()
+    assert (await asyncio.wait_for(advancing, 30))["reason"] == "completed"
+    with pytest.raises(WorkflowRunError) as done:
+        await revise_step(pg_db, run_id, "a", StepRevision(effort="low"), deps=world.deps)
+    assert done.value.code == "already_finished"  # the run is complete
+    view = await view_of(pg_db, run_id)
+    assert view["plan_revision"] == 1
+
+
+async def test_removing_a_step_others_depend_on_is_refused_unless_they_are_revised_in_the_call(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    definition = graph(repo, {"key": "a"}, {"key": "b", "depends_on": ["a"]}, {"key": "c", "depends_on": ["b"]})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    with pytest.raises(WorkflowRunError) as refused:
+        await remove_step(pg_db, run_id, "b", deps=world.deps)
+    assert refused.value.code == "has_dependents" and refused.value.extra["dependents"] == ["c"]
+    with pytest.raises(WorkflowRunError) as dangling:
+        await remove_step(pg_db, run_id, "b", RemoveStep(revise={"c": StepRevision(depends_on=["b"])}), deps=world.deps)
+    assert dangling.value.code == "invalid_plan"
+    assert [s["key"] for s in (await view_of(pg_db, run_id))["steps"]] == ["a", "b", "c"]
+
+    done = await remove_step(
+        pg_db, run_id, "b", RemoveStep(revise={"c": StepRevision(depends_on=["a"])}, changed_by="aico-1"), deps=world.deps
+    )
+    assert (done["removed"], done["plan_revision"]) == ("b", 1)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert order(world) == ["a", "c"]
+    view = await view_of(pg_db, run_id)
+    (entry,) = view["plan_history"]
+    assert [(c["step"], c["op"]) for c in entry["changes"]] == [("b", "remove"), ("c", "revise")]
+    assert entry["changes"][0]["before"]["key"] == "b" and entry["changes"][1]["after"] == {"depends_on": ["a"]}
+
+
+async def test_removing_a_step_on_the_default_chain_relinks_the_next_one(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}, {"key": "c"}), deps=world.deps)
+    result = await remove_step(pg_db, run_id, "b", deps=world.deps)
+    assert result["relinked"] == ["c"]
+    view = await view_of(pg_db, run_id)
+    assert [(s["key"], s["depends_on"]) for s in view["steps"]] == [("a", []), ("c", ["a"])]
+
+
+async def test_adding_to_a_completed_run_reopens_it_and_a_failed_or_cancelled_run_refuses(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    run = await pg_db.get(Session, run_id)
+    assert run.status == "completed" and (await view_of(pg_db, run_id))["state"] == "completed"
+
+    result = await add_steps(
+        pg_db, run_id, AddSteps(steps=[{"key": "more", "instructions": "again", "agent_slug": "coder", "executor": "faux"}]), deps=world.deps
+    )
+    assert (result["state"], result["reopened"], result["enqueue"]) == ("running", True, True)
+    await pg_db.refresh(run)
+    assert run.status == "active" and (await view_of(pg_db, run_id))["state"] == "running"
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert order(world) == ["a", "more"] and "## a (" in context_of(world, "more")
+    assert (await view_of(pg_db, run_id))["state"] == "completed"
+
+    cancelled, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="c1"), deps=world.deps)
+    await cancel_run(pg_db, cancelled, CancelRequest(), deps=world.deps)
+    with pytest.raises(WorkflowRunError) as refused:
+        await add_steps(pg_db, cancelled, AddSteps(steps=[{"key": "z", "instructions": "x", "agent_slug": "coder"}]), deps=world.deps)
+    assert (refused.value.code, refused.value.extra["state"]) == ("already_finished", "cancelled")
+
+    failing = world_factory({"a": [FauxAction("refuse", category="cyber")]})
+    chains(failing)
+    failed, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="f1"), deps=failing.deps)
+    assert (await failing.run_to_stop(failed))["reason"] == "chain_exhausted"
+    await resume_run(pg_db, failed, OwnerDecision(action="fail"), deps=failing.deps)
+    with pytest.raises(WorkflowRunError) as refused_failed:
+        await revise_step(pg_db, failed, "a", StepRevision(effort="low"), deps=failing.deps)
+    assert refused_failed.value.extra["state"] == "failed"
+
+
+async def test_a_dependency_that_will_never_complete_blocks_its_dependents_and_a_revision_unblocks_them(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"a": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    definition = graph(repo, {"key": "a"}, {"key": "b", "depends_on": ["a"]}, {"key": "c", "depends_on": []})
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "chain_exhausted"
+    await resume_run(pg_db, run_id, OwnerDecision(action="skip"), deps=world.deps)
+    result = await world.run_to_stop(run_id)
+    assert (result["reason"], order(world)[-1]) == ("blocked_dependencies", "c")
+    view = await view_of(pg_db, run_id)
+    b = view["steps"][1]
+    assert (view["state"], view["pause"]["reason"], view["pause"]["step_key"]) == ("needs_owner", "blocked_dependencies", "b")
+    assert b["readiness"]["state"] == "blocked" and b["readiness"]["reason"] == "blocked by a (skipped)"
+    with pytest.raises(WorkflowRunError, match="blocked on dependencies") as not_a_step_decision:
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert not_a_step_decision.value.code == "blocked_dependencies"
+    with pytest.raises(WorkflowRunError, match="skipped"):  # no new dependency on a dead step
+        await revise_step(pg_db, run_id, "b", StepRevision(depends_on=["a", "c"]), deps=world.deps)
+
+    fixed = await revise_step(pg_db, run_id, "b", StepRevision(depends_on=["c"]), deps=world.deps)
+    assert (fixed["state"], fixed["enqueue"]) == ("running", True)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert order(world)[-1] == "b"
+
+
+async def test_a_default_dependency_looks_through_a_skipped_step(pg_db, repo, world_factory) -> None:
+    world = world_factory({"b": [FauxAction("refuse", category="cyber")]})
+    chains(world)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}, {"key": "c"}), deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "chain_exhausted"
+    await resume_run(pg_db, run_id, OwnerDecision(action="skip"), deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert view["steps"][2]["depends_on"] == ["a"] and view["steps"][2]["readiness"]["state"] == "ready"
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    assert "## a (" in context_of(world, "c") and "## b (" not in context_of(world, "c")
+
+
+async def test_request_id_with_a_different_definition_is_refused_and_the_same_one_returns_the_run(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({})
+    chains(world)
+    first, created = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}, request_id="r1"), deps=world.deps)
+    same, again = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}, request_id="r1"), deps=world.deps)
+    assert (created, again, same) == (True, False, first)
+    for changed in (
+        graph(repo, {"key": "a"}, {"key": "b", "instructions": "something else"}, request_id="r1"),  # later step
+        graph(repo, {"key": "a"}, {"key": "b", "depends_on": []}, request_id="r1"),
+        graph(repo, {"key": "x"}, request_id="r1"),  # different first step
+    ):
+        with pytest.raises(WorkflowRunError) as conflict:
+            await create_run(pg_db, changed, deps=world.deps)
+        assert conflict.value.code == "request_id_conflict" and conflict.value.extra["run_id"] == first
+    # Revising the run afterwards does not make the original request a different one.
+    await revise_step(pg_db, first, "b", StepRevision(effort="low"), deps=world.deps)
+    assert (await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}, request_id="r1"), deps=world.deps))[1] is False
+    assert await pg_db.scalar(select(WorkflowStep.id).where(WorkflowStep.step_key == "x")) is None
+
+
+async def test_the_run_records_who_launched_it(pg_db, repo, world_factory) -> None:
+    world = world_factory({})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db, graph(repo, {"key": "a"}, launched_by="aico-session-7", coordinator="claude-code"), deps=world.deps
+    )
+    view = await view_of(pg_db, run_id)
+    assert (view["launched_by"], view["coordinator"]) == ("aico-session-7", "claude-code")
+    from app.services.workflow_runs.listing import list_runs
+
+    (item,) = (await list_runs(pg_db))["runs"]
+    assert (item["launched_by"], item["coordinator"], item["plan_revision"]) == ("aico-session-7", "claude-code", 0)
+    plain, _ = await create_run(pg_db, graph(repo, {"key": "a"}, request_id="p"), deps=world.deps)
+    assert (await view_of(pg_db, plain))["launched_by"] is None
+
+
+async def test_plan_revision_endpoints_answer_409_for_a_started_step_and_queue_an_advance(
+    pg_db, repo, world_factory, monkeypatch
+) -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api import workflow_runs as api
+    from app.db import get_db
+    from app.services.workflow_runs import revisions as revisions_module
+
+    queued: list[str] = []
+
+    async def enqueue(run_id: str) -> None:
+        queued.append(run_id)
+
+    world = world_factory({})
+    chains(world)
+    monkeypatch.setattr(api, "_enqueue", enqueue)
+    monkeypatch.setattr(revisions_module, "EngineDeps", lambda: world.deps)
+    run_id, _ = await create_run(pg_db, graph(repo, {"key": "a"}, {"key": "b"}), deps=world.deps)
+    await advance_run(run_id, deps=world.deps)  # a completed; b pending
+    app = FastAPI()
+    app.include_router(api.router)
+
+    async def override() -> AsyncGenerator[AsyncSession]:
+        yield pg_db
+
+    app.dependency_overrides[get_db] = override
+    headers = {"X-Client-Id": "summitflow", "X-Request-Source": "proof"}
+    base = f"/workflow-runs/{run_id}/steps"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        added = await client.post(
+            base,
+            json={"steps": [{"key": "c", "instructions": "x", "agent_slug": "coder", "executor": "faux"}], "after": "a", "changed_by": "aico-9"},
+            headers=headers,
+        )
+        body = added.json()
+        assert added.status_code == 200 and body["added"] == ["c"] and body["plan_revision"] == 1
+        assert queued == [run_id] and body["run"]["plan_history"][0]["by"]["client_id"] == "summitflow"
+        assert [s["depends_on"] for s in body["run"]["steps"]] == [[], ["a"], ["a"]]
+
+        patched = await client.patch(f"{base}/b", json={"effort": "high", "reason": "harder than it looked"})
+        assert patched.status_code == 200 and patched.json()["run"]["steps"][1]["effort"] == "high"
+        assert (await client.patch(f"{base}/a", json={"effort": "low"})).status_code == 409  # completed
+        refused = await client.patch(f"{base}/a", json={"effort": "low"})
+        assert refused.json()["detail"]["code"] == "step_not_pending" and refused.json()["detail"]["step_status"] == "completed"
+        assert (await client.patch(f"{base}/b", json={"depends_on": ["c", "b"]})).status_code == 422
+        assert (await client.patch(f"{base}/b", json={"bogus": 1})).status_code == 422
+        assert (await client.patch(f"{base}/nope", json={"effort": "low"})).status_code == 404
+        assert (await client.post(base, json={"steps": [{"key": "c", "instructions": "x", "agent_slug": "coder"}]})).status_code == 409
+
+        removed = await client.request("DELETE", f"{base}/b")
+        assert removed.status_code == 200  # nothing names b explicitly: c depends on a
+        assert (await client.request("DELETE", f"{base}/a")).status_code == 409  # a is completed
+        assert (await client.request("DELETE", "/workflow-runs/missing/steps/a")).status_code == 404
+        final = await client.get(f"/workflow-runs/{run_id}")
+        assert final.json()["plan_revision"] == 3 and [s["key"] for s in final.json()["steps"]] == ["a", "c"]
