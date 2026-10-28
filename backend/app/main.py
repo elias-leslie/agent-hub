@@ -78,6 +78,15 @@ async def _startup() -> None:
     logger.info("Usage tracker started")
 
     try:
+        from app.services.turn_runs import interrupt_orphaned_turns
+
+        interrupted_turns = await interrupt_orphaned_turns()
+        if interrupted_turns:
+            logger.warning("Ended %d chat turn(s) left running by a previous process as interrupted", interrupted_turns)
+    except Exception as e:
+        logger.warning("Failed to end orphaned chat turns at startup: %s", e)
+
+    try:
         from app.constants.projects import refresh_project_ids_cache
         project_ids = await refresh_project_ids_cache()
         logger.info("Loaded %d valid project IDs", len(project_ids))
@@ -188,7 +197,10 @@ async def _shutdown() -> None:
     from app.llm.provider_support.claude_sessions import shutdown_claude_sessions
     from app.services.codex_credentials import drain_codex_credential_refreshes
     from app.services.native_continuation_runtime import shutdown_native_runtime_manager
+    from app.services.turn_runs import registry as turn_registry
 
+    await turn_registry.shutdown()
+    logger.info("Running chat turns ended as interrupted")
     await shutdown_native_runtime_manager()
     await shutdown_claude_sessions()
     await drain_codex_credential_refreshes()

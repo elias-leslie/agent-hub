@@ -36,6 +36,7 @@ from app.services.session_health import retained_request_errors
 from app.services.session_live_activity import build_live_activity_response
 from app.services.session_roles import session_work_role
 from app.services.session_scope import resolve_scope_confidence
+from app.services.turn_runs import turn_state_for
 
 # Re-export private helpers with underscore names for backward compatibility
 _resolve_model_display_name = resolve_model_display_name
@@ -116,6 +117,7 @@ def _session_summary_kwargs(
         has_specialist_lane=session.id in (specialist_session_ids or set()),
     )
     status_source, status_matches_live = _status_provenance(session, live_activity)
+    turn_state, turn_phase = turn_state_for(session.id)
     return {
         "id": session.id,
         "project_id": session.project_id,
@@ -158,6 +160,8 @@ def _session_summary_kwargs(
         "observed_write_paths": scope_list(session.observed_write_paths),
         "scope_confidence": _resolved_scope_confidence(session),
         "live_activity": live_activity,
+        "turn_state": turn_state,
+        "turn_phase": turn_phase,
         "created_at": session.created_at,
         "updated_at": session.updated_at,
         "status_source": status_source,

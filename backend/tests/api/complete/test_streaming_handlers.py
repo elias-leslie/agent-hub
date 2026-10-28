@@ -21,9 +21,11 @@ from app.services.llm_messages import Message
 from app.services.memory.context_builder import ProgressiveContext
 from app.services.memory.context_injector_ops import inject_memory_block
 from app.services.memory.context_resilience import CanonicalContextInjectionFailed
+from app.services.turn_runs import registry as turn_registry
 
 
-def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> None:
+@pytest.mark.asyncio
+async def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="hello")],
         project_id="agent-hub",
@@ -64,9 +66,13 @@ def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> N
 
     assert isinstance(response, StreamingResponse)
     assert mock_stream_completion.call_args.kwargs["max_tool_turns"] == 37
+    run = turn_registry.get("sess-1")
+    assert run is not None
+    await run.finished.wait()
 
 
-def test_build_sse_response_forwards_source_metadata() -> None:
+@pytest.mark.asyncio
+async def test_build_sse_response_forwards_source_metadata() -> None:
     request = CompletionRequest(
         messages=[MessageInput(role="user", content="hello")],
         project_id="agent-hub",
@@ -107,6 +113,9 @@ def test_build_sse_response_forwards_source_metadata() -> None:
         "pane_id": "pane-1",
         "source_client": "agent-hub/work-chats",
     }
+    run = turn_registry.get("sess-1")
+    assert run is not None
+    await run.finished.wait()
 
 
 @pytest.mark.asyncio
@@ -268,3 +277,37 @@ async def test_agent_stream_aborts_before_response_without_verified_context() ->
         )
 
     build_response.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_session_runs_one_turn_at_a_time_and_a_cancelled_turn_is_waited_out() -> None:
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from app.api.complete.streaming_handlers import _claim_session_turn
+    from app.services.turn_runs import DONE_CHUNK
+
+    gate = asyncio.Event()
+
+    async def source():
+        await gate.wait()
+        yield 'data: {"type":"done","seq":1}\n\n'
+        yield DONE_CHUNK
+
+    run = turn_registry.start("busy-session", source(), persist=False)
+    await _claim_session_turn(None)
+    await _claim_session_turn("another-session")
+    with pytest.raises(HTTPException) as busy:
+        await _claim_session_turn("busy-session")
+    assert busy.value.status_code == 409
+    assert busy.value.detail["error"] == "turn_running"
+    assert busy.value.detail["details"] == {"session_id": "busy-session", "turn_id": run.turn_id}
+
+    turn_registry.note_cancel_requested("busy-session")
+    waiting = asyncio.create_task(_claim_session_turn("busy-session"))
+    await asyncio.sleep(0.01)
+    assert not waiting.done()
+    gate.set()
+    await asyncio.wait_for(waiting, 2)
+    assert not run.running

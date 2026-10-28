@@ -1,6 +1,7 @@
 """Session API schemas - Request/Response models."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -298,6 +299,14 @@ class SessionSummaryFields(BaseModel):
     scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
     live_activity: LiveActivityResponse | None = Field(
         default=None, description="Current live execution state"
+    )
+    turn_state: Literal["running", "idle"] = Field(
+        default="idle",
+        description="running while a server-owned chat turn is in flight for this session, else idle",
+    )
+    turn_phase: str | None = Field(
+        default=None,
+        description="Where the running turn is: waiting_for_model, thinking, responding, running_tool[:name] or retrying",
     )
     message_count: int | None = Field(
         default=None,

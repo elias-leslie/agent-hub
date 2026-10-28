@@ -96,6 +96,9 @@ class StreamContext:
         if ctx is None or ctx.cancel_event is None:
             return False
         ctx.cancel_event.set()
+        from app.services.turn_runs import registry
+
+        registry.note_cancel_requested(session_id)
         return True
 
     def close(self) -> None:

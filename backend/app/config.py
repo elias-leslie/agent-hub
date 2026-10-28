@@ -257,6 +257,14 @@ class Settings(BaseSettings):
     claude_session_idle_seconds: float = Field(default=600.0, gt=0)
     claude_session_pool_max: int = Field(default=8, ge=1)
 
+    # Durable chat turns (app/services/turn_runs.py). A running turn keeps its event log in memory for as
+    # long as it runs; this caps one turn's log, oldest events dropped first (a reattach from before the
+    # oldest kept event is refused). Finished turns keep their log for late reattachers, newest N sessions.
+    turn_log_max_bytes: int = Field(default=32 * 1024 * 1024, ge=1_000_000)
+    turn_log_retained_finished: int = Field(default=32, ge=0)
+    # Silence on a streaming connection before a comment line keeps proxies from closing it.
+    stream_heartbeat_seconds: float = Field(default=15.0, gt=0)
+
 
 
 @lru_cache

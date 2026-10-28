@@ -33,6 +33,8 @@ from app.services.memory.context_resilience import (
 )
 from app.services.session_bindings import bind_request_context
 from app.services.session_live_activity import mark_session_execution_start
+from app.services.turn_runs import TurnRun, TurnRunning
+from app.services.turn_runs import registry as turn_registry
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -208,6 +210,32 @@ async def _compact_streaming_context(
     ]
 
 
+def _turn_running_error(run: TurnRun) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "error": "turn_running",
+            "details": {"session_id": run.session_id, "turn_id": run.turn_id},
+            "message": (
+                "This session already has a running turn. Follow it with "
+                f"GET /api/sessions/{run.session_id}/stream, or cancel it first."
+            ),
+        },
+    )
+
+
+async def _claim_session_turn(session_id: str | None) -> None:
+    """A session runs one turn at a time. A cancelled one is waited out; any other refuses the new request."""
+    if not session_id:
+        return
+    run = turn_registry.running(session_id)
+    if run is None:
+        return
+    if not run.cancel_requested:
+        raise _turn_running_error(run)
+    await run.finished.wait()
+
+
 def _build_sse_response(
     messages: list[Message],
     resolved_model: str,
@@ -229,33 +257,43 @@ def _build_sse_response(
         if request.source_metadata is not None
         else None
     )
+    turn_id = str(uuid.uuid4())
+    stream = stream_completion(
+        messages=messages,
+        model=resolved_model,
+        provider=provider,
+        temperature=request.temperature,
+        session_id=session_id,
+        thinking_level=thinking_level,
+        agent_used=agent_used,
+        model_used=model_used,
+        fallback_used=fallback_used,
+        db=db,
+        user_messages=request.messages,
+        is_new_session=is_new_session,
+        is_one_shot=not request.session_id,
+        tools=tools,
+        project_id=request.project_id,
+        max_tool_turns=request.max_turns,
+        working_dir=request.working_dir,
+        source_metadata=source_metadata,
+        fallback_models=fallback_models,
+        turn_id=turn_id,
+    )
+    # The turn belongs to the server; this response is its first subscriber.
+    try:
+        run = turn_registry.start(session_id, stream, turn_id=turn_id, persist=db is not None)
+    except TurnRunning as exc:
+        raise _turn_running_error(exc.run) from exc
     return StreamingResponse(
-        stream_completion(
-            messages=messages,
-            model=resolved_model,
-            provider=provider,
-            temperature=request.temperature,
-            session_id=session_id,
-            thinking_level=thinking_level,
-            agent_used=agent_used,
-            model_used=model_used,
-            fallback_used=fallback_used,
-            db=db,
-            user_messages=request.messages,
-            is_new_session=is_new_session,
-            is_one_shot=not request.session_id,
-            tools=tools,
-            project_id=request.project_id,
-            max_tool_turns=request.max_turns,
-            working_dir=request.working_dir,
-            source_metadata=source_metadata,
-            fallback_models=fallback_models,
-        ),
+        run.follow(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Session-Id": session_id,
+            "X-Turn-Id": turn_id,
         },
     )
 
@@ -281,6 +319,7 @@ async def handle_streaming_request(
             detail="Cannot combine async_execution with stream mode.",
         )
 
+    await _claim_session_turn(request.session_id)
     session_id, context_messages, is_new_session = await _setup_streaming_session(
         request, provider, resolved_model, resolved_agent, db, client_id, request_source
     )

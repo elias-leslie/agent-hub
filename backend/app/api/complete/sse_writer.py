@@ -64,7 +64,9 @@ class SseWriter:
 
     # -- discrete event helpers --------------------------------------------
 
-    def connected(self, *, model: str | None = None, provider: str | None = None) -> str:
+    def connected(
+        self, *, model: str | None = None, provider: str | None = None, turn_id: str | None = None
+    ) -> str:
         payload: dict[str, Any] = {
             "type": "connected",
             "seq": self.next_seq(),
@@ -74,6 +76,8 @@ class SseWriter:
             payload["model"] = model
         if provider is not None:
             payload["provider"] = provider
+        if turn_id is not None:
+            payload["turn_id"] = turn_id
         return _format_sse(payload)
 
     def content(self, delta: str) -> str:

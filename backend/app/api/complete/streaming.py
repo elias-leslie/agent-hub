@@ -394,6 +394,7 @@ async def stream_completion(
     working_dir: str | None = None,
     source_metadata: dict[str, object] | None = None,
     fallback_models: list[str] | None = None,
+    turn_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format via the unified pi-mono pipeline.
 
@@ -401,6 +402,9 @@ async def stream_completion(
     15-second heartbeat to keep connections alive through reverse
     proxies. When tools are provided, the universal tool loop drives the
     multi-turn exchange.
+
+    The caller owns the iteration: the HTTP route drives it from a server-side turn task
+    (``app.services.turn_runs``), so a client going away does not reach this generator.
     """
     ctx = StreamContext.open(
         session_id=session_id,
@@ -420,7 +424,7 @@ async def stream_completion(
     _attach_routing(writer, ctx)
     content_buf: list[str] = [""]
 
-    yield writer.connected(model=model, provider=provider)
+    yield writer.connected(model=model, provider=provider, turn_id=turn_id)
     try:
         context = build_context_from_messages(messages_to_dicts(messages), tools=tools)
         execute_tools = bool(tools)
@@ -459,19 +463,23 @@ async def stream_completion(
                 _attach_routing(writer, ctx)
                 writer.attach_routing(fallback_reason=primary_failure)
                 if db is not None:
+                    from app.db import async_session
+
                     from .session_repo import get_or_create_session
 
-                    await get_or_create_session(
-                        db,
-                        session_id,
-                        project_id or "",
-                        candidate_provider,
-                        candidate_model,
-                        agent_slug=agent_used,
-                        requested_provider=provider,
-                        requested_model=model,
-                    )
-                    await db.commit()
+                    # The request's own session may be closed by now; the turn outlives the request.
+                    async with async_session() as turn_db:
+                        await get_or_create_session(
+                            turn_db,
+                            session_id,
+                            project_id or "",
+                            candidate_provider,
+                            candidate_model,
+                            agent_slug=agent_used,
+                            requested_provider=provider,
+                            requested_model=model,
+                        )
+                        await turn_db.commit()
             try:
                 llm_model = resolve_llm_model(candidate_model, candidate_provider)
                 events = run_completion_stream(
@@ -517,7 +525,7 @@ async def stream_completion(
         logger.error("Streaming error: %s", exc)
         yield writer.error(_synthetic_error_message(model, provider, str(exc)))
     finally:
-        # Client disconnects close this generator; stop the provider request too.
+        # The turn is over (finished, cancelled or failed); stop any provider request still open.
         if ctx.cancel_event is not None:
             ctx.cancel_event.set()
         ctx.close()
