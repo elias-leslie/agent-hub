@@ -1873,20 +1873,30 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             return False
         scratch = _scratch(step)
         cancel = _cancel_request(meta, step)
+        # An attempt that outlived the advance task's execution deadline was ended by the orchestrator, not by a stall:
+        # it says so and does not use up a restart.
+        started = ((attempt.provider_metadata or {}).get("workflow_attempt") or {}).get("started_at") if attempt else None
+        deadline_hit = isinstance(started, int | float) and now >= started + policy.advance_task_execution_timeout_hours * 3600
+        end_reason = "orchestration_deadline" if deadline_hit else "stale_heartbeat"
         verdict = decide_stale_step(
-            restarts=step.restarts,
+            restarts=0 if deadline_hit else step.restarts,
             attempts=step.attempts,
             max_attempts=step.definition.get("max_attempts"),
             policy=policy,
             cancelled=cancel is not None,
             extra_attempts=_extra_attempts(scratch),
         )
-        if verdict == "retry":
+        if verdict == "retry" and not deadline_hit:
             step.restarts += 1  # restarts counts the ones actually used
         stopped = [o for o in orphans if o["recovery"] in ("terminated", "killed")]
         note = f"; stopped the old process group {', '.join(sorted({str(o['pgid']) for o in stopped}))}" if stopped else ""
         if verdict == "cancelled":
             reason = "cancelled (the worker stopped before it saw the request)"
+        elif deadline_hit:
+            reason = (
+                f"orchestration_deadline (the advance task's {policy.advance_task_execution_timeout_hours} hour "
+                "execution deadline passed; not counted as a stall)"
+            )
         elif verdict == "retry":
             reason = f"stale_heartbeat (restart {step.restarts}/{policy.restart_limit})"
         else:
@@ -1900,7 +1910,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
                 "error": None if verdict == "cancelled" else reason + note,
                 "decision": {
                     "action": verdict,
-                    "reason": "cancelled" if verdict == "cancelled" else "stale_heartbeat",
+                    "reason": "cancelled" if verdict == "cancelled" else end_reason,
                 },
                 "finished_at": now,
             }
@@ -1918,7 +1928,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
                 "workflow_attempt": detail,
             }
             attempt.status = "failed"
-            attempt.health_detail = "cancelled" if verdict == "cancelled" else "stale_heartbeat"
+            attempt.health_detail = "cancelled" if verdict == "cancelled" else end_reason
             await store_child_session_lifecycle_event(
                 db, attempt, SessionEventType.CHILD_SESSION_RESULT
             )
@@ -1926,7 +1936,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             "attempt": step.attempts,
             "model": step.chosen_model,
             "status": "failed",
-            "reason": "cancelled" if verdict == "cancelled" else "stale_heartbeat",
+            "reason": "cancelled" if verdict == "cancelled" else end_reason,
             "kind": "cancelled" if verdict == "cancelled" else "crash",
             "error": None if verdict in ("retry", "cancelled") else reason + note,
             "attempt_session_id": step.current_attempt_session_id,

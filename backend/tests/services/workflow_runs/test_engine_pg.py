@@ -42,7 +42,7 @@ from app.services.workflow_runs.engine import (
 from app.services.workflow_runs.executor_common import HarnessProcess, child_env, load_defaults
 from app.services.workflow_runs.executors import FauxAction, FauxExecutor, StepResult
 from app.services.workflow_runs.live import note_live
-from app.services.workflow_runs.policy import Unavailable
+from app.services.workflow_runs.policy import Unavailable, load_policy
 from app.services.workflow_runs.processes import MARKER_ENV, identify, read_stat
 from app.services.workflow_runs.revisions import add_steps, remove_step, revise_run, revise_step
 from app.services.workflow_runs.schemas import (
@@ -518,6 +518,27 @@ async def test_stale_heartbeat_restarts_from_checkpoint_then_fails_at_the_limit(
     assert "no restart left: 2/2 used" in str(view["pause"]["failed"])
     assert view["steps"][3]["status"] == "pending" and view["steps"][3]["readiness"]["state"] == "blocked"
     assert view["limits"]["restart_limit"] == 2
+
+
+async def test_an_attempt_past_the_advance_task_deadline_ends_as_orchestration_deadline_and_uses_no_restart(
+    pg_db, repo, world_factory
+) -> None:
+    world = world_factory({"a": [FauxAction("success")]})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db, graph(repo, {"key": "a"}, policy={"stale_after_seconds": 100, "restart_limit": 1}), deps=world.deps
+    )
+    hours = load_policy(None).advance_task_execution_timeout_hours
+    for round_ in (1, 2):  # a second one would be past the restart limit of 1 if it counted
+        _early, intent = await engine_module._commit_intent(run_id, world.deps)
+        assert intent is not None
+        world.clock += hours * 3600 + 500
+        assert await recover_stale_steps(world.deps) == [run_id]
+        step = (await view_of(pg_db, run_id))["steps"][0]
+        assert (step["status"], step["restarts"], step["attempts"]) == ("pending", 0, round_)
+        last = step["attempt_history"][-1]
+        assert last["decision"]["reason"] == "orchestration_deadline" and "not counted as a stall" in last["error"]
+        assert step["outcome"]["reason"] == "orchestration_deadline"
 
 
 async def test_attempt_abandoned_after_recovery_does_not_overwrite_the_step(
