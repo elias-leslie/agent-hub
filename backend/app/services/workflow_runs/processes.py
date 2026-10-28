@@ -322,6 +322,16 @@ class ProcessTracker:
         except Exception:
             logger.warning("could not record %s process %s", tracked.kind, tracked.identity.pid, exc_info=True)
 
+    async def release(self, tracked: TrackedProcess) -> None:
+        """Forget a finished process whose group is empty; one still holding members stays for the final stop."""
+
+        if tracked.identity is None or tracked.process.returncode is None:
+            return
+        if await asyncio.to_thread(_live_members, tracked.identity.pgid):
+            return
+        if tracked in self.processes:
+            self.processes.remove(tracked)
+
     def harness(self) -> TrackedProcess | None:
         """The attempt's harness process (the latest one started), if it has started one."""
 

@@ -111,6 +111,11 @@ async def create_process(
     )
 
 
+def bash_argv(command: str) -> tuple[str, str, str]:
+    """The absolute-path bash invocation for ``command`` (a login shell running one command string)."""
+    return (_require_executable("bash", "/bin/bash"), "-lc", command)
+
+
 async def create_bash_process(
     command: str,
     *,
@@ -118,9 +123,8 @@ async def create_bash_process(
     env: dict[str, str],
 ) -> asyncio.subprocess.Process:
     """Start a bash command through absolute exec argv, not shell spawning."""
-    bash_executable = _require_executable("bash", "/bin/bash")
     return await asyncio.create_subprocess_exec(
-        *_env_command((bash_executable, "-lc", command), working_dir=working_dir),
+        *_env_command(bash_argv(command), working_dir=working_dir),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=env,

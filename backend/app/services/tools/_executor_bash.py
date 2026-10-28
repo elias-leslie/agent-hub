@@ -15,7 +15,8 @@ from pathlib import Path
 
 from app.config import settings
 from app.services.tools.command_guard import get_command_guard_block_reason
-from app.utils.safe_subprocess import create_bash_process
+from app.services.workflow_runs.processes import current_tracker, start_tracked
+from app.utils.safe_subprocess import bash_argv, create_bash_process
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +44,19 @@ async def run_bash(
         return guard_block_reason
 
     process = None
+    tracked = None
     try:
-        process = await create_bash_process(
-            command,
-            working_dir=working_dir,
-            env=env,
-        )
+        if current_tracker.get() is not None:
+            # A workflow attempt's command: recorded with the attempt (identity, marker, parent-death signal), so
+            # a cancel or a crash recovery can stop it and anything it left behind.
+            tracked = await start_tracked(*bash_argv(command), kind="tool", working_dir=working_dir, env=env)
+            process = tracked.process
+        else:
+            process = await create_bash_process(
+                command,
+                working_dir=working_dir,
+                env=env,
+            )
 
         stdout, stderr = await process.communicate()
 
@@ -72,6 +80,11 @@ async def run_bash(
         raise
     except Exception as e:
         return f"Error executing command: {e}"
+    finally:
+        if tracked is not None:
+            tracker = current_tracker.get()
+            if tracker is not None:
+                await asyncio.shield(tracker.release(tracked))
 
 
 async def _terminate_cancelled_process(process: asyncio.subprocess.Process) -> None:
