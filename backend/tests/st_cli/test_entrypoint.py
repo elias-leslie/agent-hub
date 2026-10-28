@@ -75,14 +75,14 @@ def test_shipped_agents_manifest_discovers_local_credential_commands() -> None:
         )
 
 
-def test_shipped_workflow_manifest_lists_every_command_with_the_coordinator_guide() -> None:
+def test_shipped_workflow_manifest_lists_every_command_and_a_guide_command() -> None:
     root = Path(__file__).resolve().parents[3]
     manifest = json.loads((root / "st-extensions/workflow.json").read_text())
     assert manifest["id"] == "agent-hub.workflow"
     for command in ("create", "get", "wait", "add-step", "revise", "remove-step", "cancel", "resume", "list"):
         assert command in manifest["help"]
     surfaces = {usage["surface"]: usage for usage in manifest["usage"]}
-    assert surfaces["st.workflow"]["precautions"] and surfaces["st.workflow"]["on_demand"]
+    assert surfaces["st.workflow"]["cmd"] == "st workflow guide"
     assert all(usage.get("on_demand") for usage in surfaces.values())
 
 

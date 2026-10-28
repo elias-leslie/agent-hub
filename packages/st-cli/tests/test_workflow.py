@@ -350,13 +350,22 @@ def test_wait_command_exits_with_the_wait_code() -> None:
     assert runner.invoke(workflow.app, ["wait", "run-1", "--until", "later"]).exit_code == 2
 
 
-def test_guide_stays_short_and_names_every_command() -> None:
-    from agent_hub_st.workflow_guide import GUIDE
+def test_guide_command_prints_a_short_reference_that_names_every_command() -> None:
+    result = runner.invoke(workflow.app, ["guide"])
+    assert result.exit_code == 0
+    lines = result.output.strip().splitlines()
+    assert 0 < len(lines) <= 40
+    for command in ("create", "wait", "get", "revise", "add-step", "remove-step", "resume", "cancel", "list --mine"):
+        assert command in result.output
 
-    assert len(GUIDE) <= 40
-    joined = " ".join(GUIDE)
-    for command in ("create", "wait", "revise", "add-step", "resume", "cancel", "get"):
-        assert f"st workflow {command}" in joined or command in joined
+
+def test_usage_lines_stay_terse_and_the_guide_is_not_in_the_manifest() -> None:
+    from agent_hub_st.__main__ import OWNED_APPS
+    from st_sdk.runtime import describe_app
+
+    for spec in describe_app(OWNED_APPS["workflow"], "workflow")["usage"]:
+        text = " — ".join([spec["cmd"], spec.get("when", ""), "; ".join(spec.get("precautions", ()))])
+        assert len(text) // 4 <= 120, spec["surface"]  # the line cap every ST manifest line must fit
 
 
 def test_shipped_manifest_matches_the_command_tree() -> None:

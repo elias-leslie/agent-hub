@@ -201,16 +201,16 @@ def build_revision_payload(
 
 
 @app.callback()
-@usage(
-    surface="st.workflow",
-    cmd="st workflow create|get|wait|add-step|revise|remove-step|cancel|resume|list",
-    when="run a multi-step, multi-model job on Agent Hub's durable runner and keep coordinating it across chat restarts",
-    precautions=GUIDE,
-    task_types=("agent-admin", "orchestration"),
-    on_demand="autonomous operations",
-)
 def workflow_group() -> None:
     """Create, watch and steer durable multi-model workflow runs."""
+
+
+@app.command("guide")
+@usage(surface="st.workflow", cmd="st workflow guide", when="before first use of the durable runner: plan, wait, revise, end",
+       task_types=("agent-admin", "orchestration"), on_demand="autonomous operations")
+def guide() -> None:
+    """How a coordinator plans, runs and ends a workflow."""
+    typer.echo("\n".join(GUIDE))
 
 
 @app.command("create")
