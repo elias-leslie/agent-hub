@@ -30,6 +30,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
+from app.config import settings
 from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
 from .headroom_compress import compress_tool_results
@@ -285,6 +286,7 @@ async def run(
 
     turns = 0
     tool_calls_count = 0
+    empty_tool_use = 0
 
     while max_turns is None or turns < max_turns:
         turns += 1
@@ -330,8 +332,18 @@ async def run(
         if not tool_calls:
             # Provider claimed toolUse but no tool call parsed (observed:
             # kimi ending turn 1 with empty content — the user saw an empty
-            # reply). Nudge the model to retry or answer directly; max_turns
-            # still bounds the loop.
+            # reply). Nudge the model to retry or answer directly; a run of
+            # such replies ends the loop as an error (there may be no turn budget).
+            empty_tool_use += 1
+            limit = settings.llm_empty_tool_use_limit
+            if empty_tool_use >= limit:
+                final.stop_reason = "error"
+                final.error_message = (
+                    f"empty_tool_use: {empty_tool_use} replies in a row stopped for tool use "
+                    "without a parseable tool call"
+                )
+                logger.warning("tool loop ended: %s", final.error_message)
+                return
             import time as _time
 
             context.messages.append(
@@ -346,6 +358,7 @@ async def run(
                 )
             )
             continue
+        empty_tool_use = 0
 
         parallel_safe = is_parallel_safe or getattr(run_tool, "is_parallel_safe", None)
         writes = file_target or getattr(run_tool, "file_target", None)

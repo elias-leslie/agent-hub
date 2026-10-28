@@ -246,6 +246,43 @@ async def test_tool_loop_nudges_on_tooluse_without_parseable_calls(
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_ends_as_an_error_after_repeated_tooluse_without_calls_even_with_no_turn_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no turn budget, a model that keeps stopping for tool use with nothing parseable must not loop forever."""
+
+    model = _claude_model()
+
+    def empty() -> AssistantMessage:
+        return AssistantMessage(
+            content=[], api=model.api, provider=model.provider, model=model.id,
+            usage=Usage(input=10, output=0, total_tokens=10), stop_reason="toolUse", timestamp=0,
+        )
+
+    calls = 0
+
+    def always_empty(m: Model[Any], context: Context, options: SimpleStreamOptions | None = None):
+        nonlocal calls
+        calls += 1
+        return _fake_provider_factory(turn1_message=empty(), turn2_message=empty())(m, context, options)
+
+    monkeypatch.setattr(tool_loop, "stream_simple", always_empty)
+    monkeypatch.setattr(tool_loop.settings, "llm_empty_tool_use_limit", 3)
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:  # pragma: no cover - not reached
+        raise AssertionError("no tool should execute")
+
+    context = Context(messages=[UserMessage(content="hi", timestamp=0)])
+    [event async for event in tool_loop.run(model, context, run_tool, options=SimpleStreamOptions(), max_turns=None)]
+
+    assert calls == 3
+    final = context.messages[-1]
+    assert isinstance(final, AssistantMessage)
+    assert final.stop_reason == "error"
+    assert (final.error_message or "").startswith("empty_tool_use: 3 replies in a row")
+
+
+@pytest.mark.asyncio
 async def test_tool_loop_forces_final_answer_when_cap_exhausted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

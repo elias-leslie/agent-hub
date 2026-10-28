@@ -215,6 +215,9 @@ class Settings(BaseSettings):
     # connection counts as dead. Codex CLI, Pi and Claude Code all wait 300s. options.timeout_ms
     # overrides it per request.
     llm_stream_read_timeout_s: float = Field(default=300.0, gt=0)
+    # Consecutive replies that stop for tool use but carry no parseable tool call before the turn
+    # ends as an error. A protocol fault, not a time or turn budget: any valid reply resets it.
+    llm_empty_tool_use_limit: int = Field(default=3, ge=1)
     # Codex error codes (response.failed / error events) that a re-send cannot fix: the request is
     # invalid, over quota or over the context window. Any other failed response is re-sent.
     llm_fatal_error_codes: Annotated[list[str], NoDecode] = [
